@@ -9,7 +9,7 @@ import uvicorn
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from app import logger
+from app import app, logger #noqa
 from config import DEBUG, UVICORN_HOST, UVICORN_PORT, UVICORN_SSL_CERTFILE, UVICORN_SSL_KEYFILE, UVICORN_UDS
 
 
