@@ -6,9 +6,10 @@ from app import xray
 from app.models.proxy import ProxyTypes
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-FRAGMENT_PATTERN = re.compile(r'^((\d{1,4}-\d{1,4})|(\d{1,4})),((\d{1,3}-\d{1,3})|(\d{1,3})),(tlshello|\d|\d\-\d)$')
+FRAGMENT_PATTERN = re.compile(r"^((\d{1,4}-\d{1,4})|(\d{1,4})),((\d{1,3}-\d{1,3})|(\d{1,3})),(tlshello|\d|\d\-\d)$")
 NOISE_PATTERN = re.compile(
-    r'^(rand:(\d{1,4}-\d{1,4}|\d{1,4})|str:.+|base64:.+)(,(\d{1,4}-\d{1,4}|\d{1,4}))?(&(rand:(\d{1,4}-\d{1,4}|\d{1,4})|str:.+|base64:.+)(,(\d{1,4}-\d{1,4}|\d{1,4}))?)*$')
+    r"^(rand:(\d{1,4}-\d{1,4}|\d{1,4})|str:.+|base64:.+)(,(\d{1,4}-\d{1,4}|\d{1,4}))?(&(rand:(\d{1,4}-\d{1,4}|\d{1,4})|str:.+|base64:.+)(,(\d{1,4}-\d{1,4}|\d{1,4}))?)*$"
+)
 
 
 class ProxyHostSecurity(str, Enum):
@@ -72,7 +73,7 @@ class BaseHost(BaseModel):
     use_sni_as_host: Union[bool, None] = None
 
     model_config = ConfigDict(from_attributes=True)
- 
+
 
 class CreateHost(BaseHost):
     @field_validator("remark", mode="after")
@@ -83,7 +84,7 @@ class CreateHost(BaseHost):
             raise ValueError("Invalid formatting variables")
 
         return v
-    
+
     @field_validator("inbound_tag", mode="after")
     def validate_inbound(cls, v):
         if xray.config.get_inbound(v) is None:
@@ -103,9 +104,7 @@ class CreateHost(BaseHost):
     @classmethod
     def validate_fragment(cls, v):
         if v and not FRAGMENT_PATTERN.match(v):
-            raise ValueError(
-                "Fragment setting must be like this: length,interval,packet (10-100,100-200,tlshello)."
-            )
+            raise ValueError("Fragment setting must be like this: length,interval,packet (10-100,100-200,tlshello).")
         return v
 
     @field_validator("noise_setting", check_fields=False)
@@ -113,13 +112,9 @@ class CreateHost(BaseHost):
     def validate_noise(cls, v):
         if v:
             if not NOISE_PATTERN.match(v):
-                raise ValueError(
-                    "Noise setting must be like this: packet,delay (rand:10-20,100-200)."
-                )
+                raise ValueError("Noise setting must be like this: packet,delay (rand:10-20,100-200).")
             if len(v) > 2000:
-                raise ValueError(
-                    "Noise can't be longer that 2000 character"
-                )
+                raise ValueError("Noise can't be longer that 2000 character")
         return v
 
 
