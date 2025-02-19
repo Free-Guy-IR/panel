@@ -17,9 +17,7 @@ router = APIRouter(tags=["System"], prefix="/api", responses={401: responses._40
 
 
 @router.get("/system", response_model=SystemStats)
-def get_system_stats(
-        db: Session = Depends(get_db), admin: Admin = Depends(Admin.get_current)
-):
+def get_system_stats(db: Session = Depends(get_db), admin: Admin = Depends(Admin.get_current)):
     """Fetch system stats including memory, CPU, and user metrics."""
     mem = memory_usage()
     cpu = cpu_usage()
@@ -27,21 +25,11 @@ def get_system_stats(
     dbadmin: Union[Admin, None] = crud.get_admin(db, admin.username)
 
     total_user = crud.get_users_count(db, admin=dbadmin if not admin.is_sudo else None)
-    users_active = crud.get_users_count(
-        db, status=UserStatus.active, admin=dbadmin if not admin.is_sudo else None
-    )
-    users_disabled = crud.get_users_count(
-        db, status=UserStatus.disabled, admin=dbadmin if not admin.is_sudo else None
-    )
-    users_on_hold = crud.get_users_count(
-        db, status=UserStatus.on_hold, admin=dbadmin if not admin.is_sudo else None
-    )
-    users_expired = crud.get_users_count(
-        db, status=UserStatus.expired, admin=dbadmin if not admin.is_sudo else None
-    )
-    users_limited = crud.get_users_count(
-        db, status=UserStatus.limited, admin=dbadmin if not admin.is_sudo else None
-    )
+    users_active = crud.get_users_count(db, status=UserStatus.active, admin=dbadmin if not admin.is_sudo else None)
+    users_disabled = crud.get_users_count(db, status=UserStatus.disabled, admin=dbadmin if not admin.is_sudo else None)
+    users_on_hold = crud.get_users_count(db, status=UserStatus.on_hold, admin=dbadmin if not admin.is_sudo else None)
+    users_expired = crud.get_users_count(db, status=UserStatus.expired, admin=dbadmin if not admin.is_sudo else None)
+    users_limited = crud.get_users_count(db, status=UserStatus.limited, admin=dbadmin if not admin.is_sudo else None)
     online_users = crud.count_online_users(db, timedelta(minutes=2))
     realtime_bandwidth_stats = realtime_bandwidth()
 

@@ -28,7 +28,6 @@ def add_user(
     bg: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.get_current),
-    
 ):
     """
     Add a new user
@@ -54,14 +53,12 @@ def add_user(
                 status_code=400,
                 detail=f"Protocol {proxy_type} is disabled on your server",
             )
-            
+
     if new_user.next_plan != None and new_user.next_plan.user_template_id != None:
         get_user_template(new_user.next_plan.user_template_id)
 
     try:
-        dbuser = crud.create_user(
-            db, new_user, admin=crud.get_admin(db, admin.username)
-        )
+        dbuser = crud.create_user(db, new_user, admin=crud.get_admin(db, admin.username))
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="User already exists")
@@ -79,7 +76,11 @@ def get_user(dbuser: UserResponse = Depends(get_validated_user)):
     return dbuser
 
 
-@router.put("/user/{username}", response_model=UserResponse, responses={400: responses._400, 403: responses._403, 404: responses._404})
+@router.put(
+    "/user/{username}",
+    response_model=UserResponse,
+    responses={400: responses._400, 403: responses._403, 404: responses._404},
+)
 def modify_user(
     modified_user: UserModify,
     bg: BackgroundTasks,
@@ -111,7 +112,7 @@ def modify_user(
                 status_code=400,
                 detail=f"Protocol {proxy_type} is disabled on your server",
             )
-    
+
     if modified_user.next_plan != None and modified_user.next_plan.user_template_id != None:
         get_user_template(modified_user.next_plan.user_template_id)
 
@@ -137,9 +138,7 @@ def modify_user(
             user_admin=dbuser.admin,
             by=admin,
         )
-        logger.info(
-            f'User "{dbuser.username}" status changed from {old_status.value} to {user.status.value}'
-        )
+        logger.info(f'User "{dbuser.username}" status changed from {old_status.value} to {user.status.value}')
 
     return user
 
@@ -155,15 +154,15 @@ def remove_user(
     crud.remove_user(db, dbuser)
     bg.add_task(xray.operations.remove_user, dbuser=dbuser)
 
-    bg.add_task(
-        report.user_deleted, username=dbuser.username, user_admin=Admin.model_validate(dbuser.admin), by=admin
-    )
+    bg.add_task(report.user_deleted, username=dbuser.username, user_admin=Admin.model_validate(dbuser.admin), by=admin)
 
     logger.info(f'User "{dbuser.username}" deleted')
     return {"detail": "User successfully deleted"}
 
 
-@router.post("/user/{username}/reset", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
+@router.post(
+    "/user/{username}/reset", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
+)
 def reset_user_data_usage(
     bg: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -176,15 +175,15 @@ def reset_user_data_usage(
         bg.add_task(xray.operations.add_user, dbuser=dbuser)
 
     user = UserResponse.model_validate(dbuser)
-    bg.add_task(
-        report.user_data_usage_reset, user=user, user_admin=dbuser.admin, by=admin
-    )
+    bg.add_task(report.user_data_usage_reset, user=user, user_admin=dbuser.admin, by=admin)
 
     logger.info(f'User "{dbuser.username}"\'s usage was reset')
     return dbuser
 
 
-@router.post("/user/{username}/revoke_sub", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
+@router.post(
+    "/user/{username}/revoke_sub", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
+)
 def revoke_user_subscription(
     bg: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -197,16 +196,16 @@ def revoke_user_subscription(
     if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
         bg.add_task(xray.operations.update_user, dbuser=dbuser)
     user = UserResponse.model_validate(dbuser)
-    bg.add_task(
-        report.user_subscription_revoked, user=user, user_admin=dbuser.admin, by=admin
-    )
+    bg.add_task(report.user_subscription_revoked, user=user, user_admin=dbuser.admin, by=admin)
 
     logger.info(f'User "{dbuser.username}" subscription revoked')
 
     return user
 
 
-@router.get("/users", response_model=UsersResponse, responses={400: responses._400, 403: responses._403, 404: responses._404})
+@router.get(
+    "/users", response_model=UsersResponse, responses={400: responses._400, 403: responses._403, 404: responses._404}
+)
 def get_users(
     offset: int = None,
     limit: int = None,
@@ -226,9 +225,7 @@ def get_users(
             try:
                 sort.append(crud.UsersSortingOptions[opt])
             except KeyError:
-                raise HTTPException(
-                    status_code=400, detail=f'"{opt}" is not a valid sort option'
-                )
+                raise HTTPException(status_code=400, detail=f'"{opt}" is not a valid sort option')
 
     users, count = crud.get_users(
         db=db,
@@ -246,9 +243,7 @@ def get_users(
 
 
 @router.post("/users/reset", responses={403: responses._403, 404: responses._404})
-def reset_users_data_usage(
-    db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)
-):
+def reset_users_data_usage(db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)):
     """Reset all users data usage"""
     dbadmin = crud.get_admin(db, admin.username)
     crud.reset_all_users_data_usage(db=db, admin=dbadmin)
@@ -260,7 +255,9 @@ def reset_users_data_usage(
     return {"detail": "Users successfully reset."}
 
 
-@router.get("/user/{username}/usage", response_model=UserUsagesResponse, responses={403: responses._403, 404: responses._404})
+@router.get(
+    "/user/{username}/usage", response_model=UserUsagesResponse, responses={403: responses._403, 404: responses._404}
+)
 def get_user_usage(
     start: str = "",
     end: str = "",
@@ -275,7 +272,9 @@ def get_user_usage(
     return {"usages": usages, "username": dbuser.username}
 
 
-@router.post("/user/{username}/active-next", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
+@router.post(
+    "/user/{username}/active-next", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
+)
 def active_next_plan(
     bg: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -296,7 +295,9 @@ def active_next_plan(
 
     user = UserResponse.model_validate(dbuser)
     bg.add_task(
-        report.user_data_reset_by_next, user=user, user_admin=dbuser.admin,
+        report.user_data_reset_by_next,
+        user=user,
+        user_admin=dbuser.admin,
     )
 
     logger.info(f'User "{dbuser.username}"\'s usage was reset by next plan')
@@ -314,9 +315,7 @@ def get_users_usage(
     """Get all users usage"""
     start, end = validate_dates(start, end)
 
-    usages = crud.get_all_users_usages(
-        db=db, start=start, end=end, admin=owner if admin.is_sudo else [admin.username]
-    )
+    usages = crud.get_all_users_usages(db=db, start=start, end=end, admin=owner if admin.is_sudo else [admin.username])
 
     return {"usages": usages}
 
@@ -384,9 +383,7 @@ def delete_expired_users(
     removed_users = [u.username for u in expired_users]
 
     if not removed_users:
-        raise HTTPException(
-            status_code=404, detail="No expired users found in the specified date range"
-        )
+        raise HTTPException(status_code=404, detail="No expired users found in the specified date range")
 
     crud.remove_users(db, expired_users)
 
@@ -395,9 +392,7 @@ def delete_expired_users(
         bg.add_task(
             report.user_deleted,
             username=removed_user,
-            user_admin=next(
-                (u.admin for u in expired_users if u.username == removed_user), None
-            ),
+            user_admin=next((u.admin for u in expired_users if u.username == removed_user), None),
             by=admin,
         )
 
