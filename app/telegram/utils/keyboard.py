@@ -148,7 +148,7 @@ class BotKeyboard:
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton(text="Yes", callback_data=f"confirm:{action}:{username}"),
-            types.InlineKeyboardButton(text="No", callback_data=f"cancel"),
+            types.InlineKeyboardButton(text="No", callback_data="cancel"),
         )
         return keyboard
 
@@ -210,10 +210,10 @@ class BotKeyboard:
         keyboard = types.InlineKeyboardMarkup()
 
         if action == "edit":
-            keyboard.add(types.InlineKeyboardButton(text="⚠️ Data Limit:", callback_data=f"help_edit"))
+            keyboard.add(types.InlineKeyboardButton(text="⚠️ Data Limit:", callback_data="help_edit"))
             keyboard.add(
                 types.InlineKeyboardButton(
-                    text=f"{readable_size(data_limit) if data_limit else 'Unlimited'}", callback_data=f"help_edit"
+                    text=f"{readable_size(data_limit) if data_limit else 'Unlimited'}", callback_data="help_edit"
                 ),
                 types.InlineKeyboardButton(text="✏️ Edit", callback_data=f"edit_user:{username}:data"),
             )
@@ -244,11 +244,11 @@ class BotKeyboard:
                     ),
                 )
             else:
-                keyboard.add(types.InlineKeyboardButton(text="📅 Expire Date:", callback_data=f"help_edit"))
+                keyboard.add(types.InlineKeyboardButton(text="📅 Expire Date:", callback_data="help_edit"))
                 keyboard.add(
                     types.InlineKeyboardButton(
                         text=f"{expire_date.strftime('%Y-%m-%d') if expire_date else 'Never'}",
-                        callback_data=f"help_edit",
+                        callback_data="help_edit",
                     ),
                     types.InlineKeyboardButton(text="✏️ Edit", callback_data=f"edit_user:{username}:expire"),
                 )

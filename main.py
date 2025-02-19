@@ -9,7 +9,7 @@ import uvicorn
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from app import app, logger
+from app import logger
 from config import DEBUG, UVICORN_HOST, UVICORN_PORT, UVICORN_SSL_CERTFILE, UVICORN_SSL_KEYFILE, UVICORN_UDS
 
 
@@ -49,7 +49,7 @@ def check_and_modify_ip(ip_address: str) -> str:
         else:
             return "localhost"
 
-    except ValueError as e:
+    except ValueError:
         return "localhost"
 
 

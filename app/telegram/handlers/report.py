@@ -1,5 +1,3 @@
-import datetime
-
 from app import logger
 from app.db.models import User
 from app.telegram import bot

@@ -12,7 +12,7 @@ statics_dir = build_dir / "statics"
 
 
 def build_api_interface():
-    proc = subprocess.Popen(
+    subprocess.Popen(
         ["pnpm", "run", "wait-port-gen-api"],
         env={**os.environ, "UVICORN_PORT": str(UVICORN_PORT)},
         cwd=base_dir,

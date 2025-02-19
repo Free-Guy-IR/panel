@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import List, Optional, Union
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -54,7 +54,7 @@ def add_user(
                 detail=f"Protocol {proxy_type} is disabled on your server",
             )
 
-    if new_user.next_plan != None and new_user.next_plan.user_template_id != None:
+    if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
         get_user_template(new_user.next_plan.user_template_id)
 
     try:
@@ -113,7 +113,7 @@ def modify_user(
                 detail=f"Protocol {proxy_type} is disabled on your server",
             )
 
-    if modified_user.next_plan != None and modified_user.next_plan.user_template_id != None:
+    if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
         get_user_template(modified_user.next_plan.user_template_id)
 
     old_status = dbuser.status
@@ -285,7 +285,7 @@ def active_next_plan(
     if dbuser is None or dbuser.next_plan is None:
         raise HTTPException(
             status_code=404,
-            detail=f"User doesn't have next plan",
+            detail="User doesn't have next plan",
         )
 
     dbuser = crud.reset_user_by_next(db=db, dbuser=dbuser)
