@@ -19,7 +19,9 @@ def validate_admin(db: Session, username: str, password: str) -> Optional[AdminV
 
     dbadmin = crud.get_admin(db, username)
     if dbadmin and AdminInDB.model_validate(dbadmin).verify_password(password):
-        return AdminValidationResult(username=dbadmin.username, is_sudo=dbadmin.is_sudo, is_disabled=dbadmin.is_disabled)
+        return AdminValidationResult(
+            username=dbadmin.username, is_sudo=dbadmin.is_sudo, is_disabled=dbadmin.is_disabled
+        )
 
     return None
 
@@ -44,8 +46,9 @@ def validate_dates(start: Optional[Union[str, datetime]], end: Optional[Union[st
     """Validate if start and end dates are correct and if end is after start."""
     try:
         if start:
-            start_date = start if isinstance(start, datetime) else datetime.fromisoformat(
-                start).astimezone(timezone.utc)
+            start_date = (
+                start if isinstance(start, datetime) else datetime.fromisoformat(start).astimezone(timezone.utc)
+            )
         else:
             start_date = datetime.now(timezone.utc) - timedelta(days=30)
         if end:
@@ -68,28 +71,23 @@ def get_user_template(template_id: int, db: Session = Depends(get_db)):
     return dbuser_template
 
 
-def get_validated_sub(
-        token: str,
-        db: Session = Depends(get_db)
-) -> UserResponse:
+def get_validated_sub(token: str, db: Session = Depends(get_db)) -> UserResponse:
     sub = get_subscription_payload(token)
     if not sub:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    dbuser = crud.get_user(db, sub['username'])
-    if not dbuser or dbuser.created_at > sub['created_at']:
+    dbuser = crud.get_user(db, sub["username"])
+    if not dbuser or dbuser.created_at > sub["created_at"]:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    if dbuser.sub_revoked_at and dbuser.sub_revoked_at > sub['created_at']:
+    if dbuser.sub_revoked_at and dbuser.sub_revoked_at > sub["created_at"]:
         raise HTTPException(status_code=404, detail="Not Found")
 
     return dbuser
 
 
 def get_validated_user(
-        username: str,
-        admin: Admin = Depends(Admin.get_current),
-        db: Session = Depends(get_db)
+    username: str, admin: Admin = Depends(Admin.get_current), db: Session = Depends(get_db)
 ) -> UserResponse:
     dbuser = crud.get_user(db, username)
     if not dbuser:
@@ -101,20 +99,13 @@ def get_validated_user(
     return dbuser
 
 
-def get_expired_users_list(db: Session, admin: Admin, expired_after: datetime = None,
-                           expired_before: datetime = None):
-
+def get_expired_users_list(db: Session, admin: Admin, expired_after: datetime = None, expired_before: datetime = None):
     dbadmin = crud.get_admin(db, admin.username)
     dbusers = crud.get_users(
-        db=db,
-        status=[UserStatus.expired, UserStatus.limited],
-        admin=dbadmin if not admin.is_sudo else None
+        db=db, status=[UserStatus.expired, UserStatus.limited], admin=dbadmin if not admin.is_sudo else None
     )
 
-    return [
-        u for u in dbusers
-        if u.expire and expired_after <= u.expire <= expired_before
-    ]
+    return [u for u in dbusers if u.expire and expired_after <= u.expire <= expired_before]
 
 
 def get_host(host_id: int, db: Session = Depends(get_db)) -> ProxyHost:
@@ -127,5 +118,8 @@ def get_host(host_id: int, db: Session = Depends(get_db)) -> ProxyHost:
 
 def get_v2ray_links(user: UserResponse) -> list:
     return generate_v2ray_links(
-        user.proxies, user.inbounds, extra_data=user.model_dump(), reverse=False,
+        user.proxies,
+        user.inbounds,
+        extra_data=user.model_dump(),
+        reverse=False,
     )
