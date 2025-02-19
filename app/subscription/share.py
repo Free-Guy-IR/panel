@@ -52,7 +52,7 @@ def generate_v2ray_links(proxies: dict, inbounds: dict, extra_data: dict, revers
 
 
 def generate_clash_subscription(
-        proxies: dict, inbounds: dict, extra_data: dict, reverse: bool, is_meta: bool = False
+    proxies: dict, inbounds: dict, extra_data: dict, reverse: bool, is_meta: bool = False
 ) -> str:
     if is_meta is True:
         conf = ClashMetaConfiguration()
@@ -60,49 +60,45 @@ def generate_clash_subscription(
         conf = ClashConfiguration()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(
-        inbounds, proxies, format_variables, conf=conf, reverse=reverse
-    )
+    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_singbox_subscription(
-        proxies: dict, inbounds: dict, extra_data: dict, reverse: bool
-) -> str:
+def generate_singbox_subscription(proxies: dict, inbounds: dict, extra_data: dict, reverse: bool) -> str:
     conf = SingBoxConfiguration()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(
-        inbounds, proxies, format_variables, conf=conf, reverse=reverse
-    )
+    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
 def generate_outline_subscription(
-        proxies: dict, inbounds: dict, extra_data: dict, reverse: bool,
+    proxies: dict,
+    inbounds: dict,
+    extra_data: dict,
+    reverse: bool,
 ) -> str:
     conf = OutlineConfiguration()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(
-        inbounds, proxies, format_variables, conf=conf, reverse=reverse
-    )
+    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
 def generate_v2ray_json_subscription(
-        proxies: dict, inbounds: dict, extra_data: dict, reverse: bool,
+    proxies: dict,
+    inbounds: dict,
+    extra_data: dict,
+    reverse: bool,
 ) -> str:
     conf = V2rayJsonConfig()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(
-        inbounds, proxies, format_variables, conf=conf, reverse=reverse
-    )
+    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
 def generate_subscription(
-        user: "UserResponse",
-        config_format: Literal["v2ray", "clash-meta", "clash", "sing-box", "outline", "v2ray-json"],
-        as_base64: bool,
-        reverse: bool,
+    user: "UserResponse",
+    config_format: Literal["v2ray", "clash-meta", "clash", "sing-box", "outline", "v2ray-json"],
+    as_base64: bool,
+    reverse: bool,
 ) -> str:
     kwargs = {
         "proxies": user.proxies,
@@ -229,18 +225,18 @@ def setup_format_variables(extra_data: dict) -> dict:
 
 
 def process_inbounds_and_tags(
-        inbounds: dict,
-        proxies: dict,
-        format_variables: dict,
-        conf: Union[
-            V2rayShareLink,
-            V2rayJsonConfig,
-            SingBoxConfiguration,
-            ClashConfiguration,
-            ClashMetaConfiguration,
-            OutlineConfiguration
-        ],
-        reverse=False,
+    inbounds: dict,
+    proxies: dict,
+    format_variables: dict,
+    conf: Union[
+        V2rayShareLink,
+        V2rayJsonConfig,
+        SingBoxConfiguration,
+        ClashConfiguration,
+        ClashMetaConfiguration,
+        OutlineConfiguration,
+    ],
+    reverse=False,
 ) -> Union[List, str]:
     for _, host in xray.hosts.items():
         tag = host["inbound_tag"]
@@ -274,9 +270,9 @@ def process_inbounds_and_tags(
 
         address = ""
         address_list = host["address"]
-        if host['address']:
+        if host["address"]:
             salt = secrets.token_hex(8)
-            address = random.choice(address_list).replace('*', salt)
+            address = random.choice(address_list).replace("*", salt)
 
         if sids := host_inbound.get("sids"):
             host_inbound["sid"] = random.choice(sids)
@@ -298,8 +294,7 @@ def process_inbounds_and_tags(
                 "alpn": host["alpn"] if host["alpn"] else None,
                 "path": path,
                 "fp": host["fingerprint"] or host_inbound.get("fp", ""),
-                "ais": host["allowinsecure"]
-                or host_inbound.get("allowinsecure", ""),
+                "ais": host["allowinsecure"] or host_inbound.get("allowinsecure", ""),
                 "mux_enable": host["mux_enable"],
                 "fragment_setting": host["fragment_setting"],
                 "noise_setting": host["noise_setting"],
@@ -311,7 +306,7 @@ def process_inbounds_and_tags(
             remark=host["remark"].format_map(format_variables),
             address=address.format_map(format_variables),
             inbound=host_inbound,
-            settings=settings.dict(no_obj=True)
+            settings=settings.dict(no_obj=True),
         )
 
     return conf.render(reverse=reverse)
