@@ -16,39 +16,35 @@ check-python:
 		echo "Python $(PYTHON_VERSION) is installed."; \
 	fi
 
-# Create a virtual environment if it doesn't exist
-.PHONY: create-venv
-create-venv: check-python
-	@if [ ! -d "$(VENV_DIR)" ]; then \
-		echo "Creating virtual environment..."; \
-		python${PYTHON_VERSION} -m venv $(VENV_DIR); \
+.PHONY: install_uv
+install_uv:
+	@if ! uv --help >/dev/null 2>&1; then \
+		echo "uv not found. Installing..."; \
+		curl -LsSf https://astral.sh/uv/install.sh | sh; \
+		echo "uv installed. Ensure ~/.cargo/bin is in your PATH."; \
+	else \
+		echo "uv is already installed."; \
 	fi
 
-# Install Python and set up the environment
-.PHONY: setup
-setup: create-venv
-	@echo "Environment setup complete. To activate the virtual environment, run:"
-	@echo "source $(VENV_DIR)/bin/activate"
-
-# Install Python dependencies from requirements.txt
+# Install Python dependencies from pyproject.toml
 .PHONY: requirements
 requirements:
-	@$(VENV_DIR)/bin/pip install -r requirements.txt 
+	@uv sync
 
 # Install frontend dependencies (Node.js packages)
 .PHONY: install-front
 install-front:
-	@cd app/dashboard && npm i 
+	@cd app/dashboard && pnpm i 
 
 # Run database migrations using Alembic
 .PHONY: run-migration
 run-migration:
-	@alembic upgrade head 
+	@uv run alembic upgrade head 
 
 # run marzban
 .PHONY: run
 run:
-	@python main.py
+	@uv run main.py
 
 # Run marzban with watchfiles
 .PHONY: run-watch
@@ -67,3 +63,6 @@ clean:
 	@rm -rf $(VENV_DIR)
 	@echo "Virtual environment removed."
 
+# Setup environment: check Python, install uv, and sync requirements
+.PHONY: setup
+setup: check-python install_uv requirements
