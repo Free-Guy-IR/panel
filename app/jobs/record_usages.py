@@ -5,7 +5,7 @@ from operator import attrgetter
 from typing import Union
 
 from pymysql.err import OperationalError
-from sqlalchemy import and_, bindparam, insert, select,  update
+from sqlalchemy import and_, bindparam, insert, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.dml import Insert
 
@@ -22,9 +22,9 @@ from xray_api import exc as xray_exc
 
 
 def safe_execute(db: Session, stmt, params=None):
-    if db.bind.name == 'mysql':
+    if db.bind.name == "mysql":
         if isinstance(stmt, Insert):
-            stmt = stmt.prefix_with('IGNORE')
+            stmt = stmt.prefix_with("IGNORE")
 
         tries = 0
         done = False
@@ -45,41 +45,44 @@ def safe_execute(db: Session, stmt, params=None):
         db.commit()
 
 
-def record_user_stats(params: list, node_id: Union[int, None],
-                      consumption_factor: int = 1):
+def record_user_stats(params: list, node_id: Union[int, None], consumption_factor: int = 1):
     if not params:
         return
 
-    created_at = datetime.fromisoformat(datetime.utcnow().strftime('%Y-%m-%dT%H:00:00'))
+    created_at = datetime.fromisoformat(datetime.utcnow().strftime("%Y-%m-%dT%H:00:00"))
 
     with GetDB() as db:
         # make user usage row if doesn't exist
-        select_stmt = select(NodeUserUsage.user_id) \
-            .where(and_(NodeUserUsage.node_id == node_id, NodeUserUsage.created_at == created_at))
+        select_stmt = select(NodeUserUsage.user_id).where(
+            and_(NodeUserUsage.node_id == node_id, NodeUserUsage.created_at == created_at)
+        )
         existings = [r[0] for r in db.execute(select_stmt).fetchall()]
         uids_to_insert = set()
 
         for p in params:
-            uid = int(p['uid'])
+            uid = int(p["uid"])
             if uid in existings:
                 continue
             uids_to_insert.add(uid)
 
         if uids_to_insert:
             stmt = insert(NodeUserUsage).values(
-                user_id=bindparam('uid'),
-                created_at=created_at,
-                node_id=node_id,
-                used_traffic=0
+                user_id=bindparam("uid"), created_at=created_at, node_id=node_id, used_traffic=0
             )
-            safe_execute(db, stmt, [{'uid': uid} for uid in uids_to_insert])
+            safe_execute(db, stmt, [{"uid": uid} for uid in uids_to_insert])
 
         # record
-        stmt = update(NodeUserUsage) \
-            .values(used_traffic=NodeUserUsage.used_traffic + bindparam('value') * consumption_factor) \
-            .where(and_(NodeUserUsage.user_id == bindparam('uid'),
-                        NodeUserUsage.node_id == node_id,
-                        NodeUserUsage.created_at == created_at))
+        stmt = (
+            update(NodeUserUsage)
+            .values(used_traffic=NodeUserUsage.used_traffic + bindparam("value") * consumption_factor)
+            .where(
+                and_(
+                    NodeUserUsage.user_id == bindparam("uid"),
+                    NodeUserUsage.node_id == node_id,
+                    NodeUserUsage.created_at == created_at,
+                )
+            )
+        )
         safe_execute(db, stmt, params)
 
 
@@ -87,22 +90,24 @@ def record_node_stats(params: dict, node_id: Union[int, None]):
     if not params:
         return
 
-    created_at = datetime.fromisoformat(datetime.utcnow().strftime('%Y-%m-%dT%H:00:00'))
+    created_at = datetime.fromisoformat(datetime.utcnow().strftime("%Y-%m-%dT%H:00:00"))
 
     with GetDB() as db:
-
         # make node usage row if doesn't exist
-        select_stmt = select(NodeUsage.node_id). \
-            where(and_(NodeUsage.node_id == node_id, NodeUsage.created_at == created_at))
+        select_stmt = select(NodeUsage.node_id).where(
+            and_(NodeUsage.node_id == node_id, NodeUsage.created_at == created_at)
+        )
         notfound = db.execute(select_stmt).first() is None
         if notfound:
             stmt = insert(NodeUsage).values(created_at=created_at, node_id=node_id, uplink=0, downlink=0)
             safe_execute(db, stmt)
 
         # record
-        stmt = update(NodeUsage). \
-            values(uplink=NodeUsage.uplink + bindparam('up'), downlink=NodeUsage.downlink + bindparam('down')). \
-            where(and_(NodeUsage.node_id == node_id, NodeUsage.created_at == created_at))
+        stmt = (
+            update(NodeUsage)
+            .values(uplink=NodeUsage.uplink + bindparam("up"), downlink=NodeUsage.downlink + bindparam("down"))
+            .where(and_(NodeUsage.node_id == node_id, NodeUsage.created_at == created_at))
+        )
 
         safe_execute(db, stmt, params)
 
@@ -110,8 +115,8 @@ def record_node_stats(params: dict, node_id: Union[int, None]):
 def get_users_stats(api: XRayAPI):
     try:
         params = defaultdict(int)
-        for stat in filter(attrgetter('value'), api.get_users_stats(reset=True, timeout=30)):
-            params[stat.name.split('.', 1)[0]] += stat.value
+        for stat in filter(attrgetter("value"), api.get_users_stats(reset=True, timeout=30)):
+            params[stat.name.split(".", 1)[0]] += stat.value
         params = list({"uid": uid, "value": value} for uid, value in params.items())
         return params
     except xray_exc.XrayError:
@@ -120,8 +125,10 @@ def get_users_stats(api: XRayAPI):
 
 def get_outbounds_stats(api: XRayAPI):
     try:
-        params = [{"up": stat.value, "down": 0} if stat.link == "uplink" else {"up": 0, "down": stat.value}
-                  for stat in filter(attrgetter('value'), api.get_outbounds_stats(reset=True, timeout=10))]
+        params = [
+            {"up": stat.value, "down": 0} if stat.link == "uplink" else {"up": 0, "down": stat.value}
+            for stat in filter(attrgetter("value"), api.get_outbounds_stats(reset=True, timeout=10))
+        ]
         return params
     except xray_exc.XrayError:
         return []
@@ -144,7 +151,7 @@ def record_user_usages():
     for node_id, params in api_params.items():
         coefficient = usage_coefficient.get(node_id, 1)  # get the usage coefficient for the node
         for param in params:
-            users_usage[param['uid']] += int(param['value'] * coefficient)  # apply the usage coefficient
+            users_usage[param["uid"]] += int(param["value"] * coefficient)  # apply the usage coefficient
     users_usage = list({"uid": uid, "value": value} for uid, value in users_usage.items())
     if not users_usage:
         return
@@ -160,20 +167,21 @@ def record_user_usages():
 
     # record users usage
     with GetDB() as db:
-        stmt = update(User). \
-            where(User.id == bindparam('uid')). \
-            values(
-                used_traffic=User.used_traffic + bindparam('value'),
-                online_at=datetime.utcnow()
+        stmt = (
+            update(User)
+            .where(User.id == bindparam("uid"))
+            .values(used_traffic=User.used_traffic + bindparam("value"), online_at=datetime.utcnow())
         )
 
         safe_execute(db, stmt, users_usage)
 
         admin_data = [{"admin_id": admin_id, "value": value} for admin_id, value in admin_usage.items()]
         if admin_data:
-            admin_update_stmt = update(Admin). \
-                where(Admin.id == bindparam('admin_id')). \
-                values(users_usage=Admin.users_usage + bindparam('value'))
+            admin_update_stmt = (
+                update(Admin)
+                .where(Admin.id == bindparam("admin_id"))
+                .values(users_usage=Admin.users_usage + bindparam("value"))
+            )
             safe_execute(db, admin_update_stmt, admin_data)
 
     if DISABLE_RECORDING_NODE_USAGE:
@@ -197,17 +205,14 @@ def record_node_usages():
     total_down = 0
     for node_id, params in api_params.items():
         for param in params:
-            total_up += param['up']
-            total_down += param['down']
+            total_up += param["up"]
+            total_down += param["down"]
     if not (total_up or total_down):
         return
 
     # record nodes usage
     with GetDB() as db:
-        stmt = update(System).values(
-            uplink=System.uplink + total_up,
-            downlink=System.downlink + total_down
-        )
+        stmt = update(System).values(uplink=System.uplink + total_up, downlink=System.downlink + total_down)
         safe_execute(db, stmt)
 
     if DISABLE_RECORDING_NODE_USAGE:
@@ -217,9 +222,9 @@ def record_node_usages():
         record_node_stats(params, node_id)
 
 
-scheduler.add_job(record_user_usages, 'interval',
-                  seconds=JOB_RECORD_USER_USAGES_INTERVAL,
-                  coalesce=True, max_instances=1)
-scheduler.add_job(record_node_usages, 'interval',
-                  seconds=JOB_RECORD_NODE_USAGES_INTERVAL,
-                  coalesce=True, max_instances=1)
+scheduler.add_job(
+    record_user_usages, "interval", seconds=JOB_RECORD_USER_USAGES_INTERVAL, coalesce=True, max_instances=1
+)
+scheduler.add_job(
+    record_node_usages, "interval", seconds=JOB_RECORD_NODE_USAGES_INTERVAL, coalesce=True, max_instances=1
+)

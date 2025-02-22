@@ -38,7 +38,8 @@ Backend is built using FastAPI and uses SQLAlchemy as the ORM for database opera
 ### Python Code Formatting
 To maintain consistency in the codebase, we require all code to be formatted using
 ```bash
-autopep8 <file> --max-line-length 120
+ruff check .
+ruff format .
 ```
 
 ## Frontend

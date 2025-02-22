@@ -33,15 +33,15 @@ XRAY_FALLBACKS_INBOUND_TAG = config("XRAY_FALLBACKS_INBOUND_TAG", cast=str, defa
 )
 XRAY_EXECUTABLE_PATH = config("XRAY_EXECUTABLE_PATH", default="/usr/local/bin/xray")
 XRAY_ASSETS_PATH = config("XRAY_ASSETS_PATH", default="/usr/local/share/xray")
-XRAY_EXCLUDE_INBOUND_TAGS = config("XRAY_EXCLUDE_INBOUND_TAGS", default='').split()
+XRAY_EXCLUDE_INBOUND_TAGS = config("XRAY_EXCLUDE_INBOUND_TAGS", default="").split()
 XRAY_SUBSCRIPTION_URL_PREFIX = config("XRAY_SUBSCRIPTION_URL_PREFIX", default="").strip("/")
 XRAY_SUBSCRIPTION_PATH = config("XRAY_SUBSCRIPTION_PATH", default="sub").strip("/")
 
 TELEGRAM_API_TOKEN = config("TELEGRAM_API_TOKEN", default="")
 TELEGRAM_ADMIN_ID = config(
-    'TELEGRAM_ADMIN_ID',
+    "TELEGRAM_ADMIN_ID",
     default="",
-    cast=lambda v: [int(i) for i in filter(str.isdigit, (s.strip() for s in v.split(',')))]
+    cast=lambda v: [int(i) for i in filter(str.isdigit, (s.strip() for s in v.split(",")))],
 )
 TELEGRAM_PROXY_URL = config("TELEGRAM_PROXY_URL", default="")
 TELEGRAM_LOGGER_CHANNEL_ID = config("TELEGRAM_LOGGER_CHANNEL_ID", cast=int, default=0)
@@ -68,8 +68,9 @@ USER_AGENT_TEMPLATE = config("USER_AGENT_TEMPLATE", default="user_agent/default.
 GRPC_USER_AGENT_TEMPLATE = config("GRPC_USER_AGENT_TEMPLATE", default="user_agent/grpc.json")
 
 EXTERNAL_CONFIG = config("EXTERNAL_CONFIG", default="", cast=str)
-LOGIN_NOTIFY_WHITE_LIST = [ip.strip() for ip in config("LOGIN_NOTIFY_WHITE_LIST",
-                                                       default="", cast=str).split(",") if ip.strip()]
+LOGIN_NOTIFY_WHITE_LIST = [
+    ip.strip() for ip in config("LOGIN_NOTIFY_WHITE_LIST", default="", cast=str).split(",") if ip.strip()
+]
 
 USE_CUSTOM_JSON_DEFAULT = config("USE_CUSTOM_JSON_DEFAULT", default=False, cast=bool)
 USE_CUSTOM_JSON_FOR_V2RAYN = config("USE_CUSTOM_JSON_FOR_V2RAYN", default=False, cast=bool)
@@ -99,15 +100,15 @@ USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS = config("USER_AUTODELETE_INCLUDE_LIMIT
 
 
 # USERNAME: PASSWORD
-SUDOERS = {config("SUDO_USERNAME"): config("SUDO_PASSWORD")} \
-    if config("SUDO_USERNAME", default='') and config("SUDO_PASSWORD", default='') \
+SUDOERS = (
+    {config("SUDO_USERNAME"): config("SUDO_PASSWORD")}
+    if config("SUDO_USERNAME", default="") and config("SUDO_PASSWORD", default="")
     else {}
+)
 
 
 WEBHOOK_ADDRESS = config(
-    'WEBHOOK_ADDRESS',
-    default="",
-    cast=lambda v: [address.strip() for address in v.split(',')] if v else []
+    "WEBHOOK_ADDRESS", default="", cast=lambda v: [address.strip() for address in v.split(",")] if v else []
 )
 WEBHOOK_SECRET = config("WEBHOOK_SECRET", default=None)
 
@@ -120,16 +121,12 @@ NUMBER_OF_RECURRENT_NOTIFICATIONS = config("NUMBER_OF_RECURRENT_NOTIFICATIONS", 
 
 # sends a notification when the user uses this much of thier data
 NOTIFY_REACHED_USAGE_PERCENT = config(
-    "NOTIFY_REACHED_USAGE_PERCENT",
-    default="80",
-    cast=lambda v: [int(p.strip()) for p in v.split(',')] if v else []
+    "NOTIFY_REACHED_USAGE_PERCENT", default="80", cast=lambda v: [int(p.strip()) for p in v.split(",")] if v else []
 )
 
 # sends a notification when there is n days left of their service
 NOTIFY_DAYS_LEFT = config(
-    "NOTIFY_DAYS_LEFT",
-    default="3",
-    cast=lambda v: [int(d.strip()) for d in v.split(',')] if v else []
+    "NOTIFY_DAYS_LEFT", default="3", cast=lambda v: [int(d.strip()) for d in v.split(",")] if v else []
 )
 
 DISABLE_RECORDING_NODE_USAGE = config("DISABLE_RECORDING_NODE_USAGE", cast=bool, default=False)

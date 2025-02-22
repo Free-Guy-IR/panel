@@ -10,14 +10,13 @@
 		"python.analysis.inlayHints.pytestParameters": true,
 		"python.analysis.inlayHints.callArgumentNames": "all",
 		"python.analysis.inlayHints.functionReturnTypes": true,
+		
 		"[python]": {
-			"editor.defaultFormatter": "ms-python.autopep8",
-			"editor.formatOnSave": true,
+	  		"editor.defaultFormatter": "charliermarsh.ruff",
+  			"editor.formatOnSave": true,
 		},
-		"autopep8.args": [
-			"--max-line-length",
-			"120"
-		],
+		"ruff.configuration": "pyproject.toml",
+		 
 		"editor.codeActionsOnSave": {
 			"source.organizeImports": "never"
 		},
@@ -85,7 +84,8 @@
 			"ms-vscode.vscode-typescript-next",
 			"yoavbls.pretty-ts-errors",
 			"dbaeumer.vscode-eslint",
-			"esbenp.prettier-vscode"
+			"esbenp.prettier-vscode",
+			"charliermarsh.ruff"
 		]
 	},
 }

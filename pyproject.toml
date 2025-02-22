@@ -49,3 +49,15 @@ dependencies = [
     "websocket-client==1.7.0",
     "websockets==12.0"
 ]
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    "xray_api",
+    "app/db/migrations",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.7",
+]
