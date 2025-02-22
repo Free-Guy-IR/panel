@@ -56,3 +56,8 @@ exclude = [
     "xray_api",
     "app/db/migrations",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.7",
+]
