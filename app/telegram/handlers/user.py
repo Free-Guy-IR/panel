@@ -29,10 +29,10 @@ def usage_command(message):
 ┌─{statuses[user.status]} <b>Status:</b> <code>{user.status.title()}</code>
 │          └─<b>Username:</b> <code>{user.username}</code>
 │
-├─🔋 <b>Data limit:</b> <code>{readable_size(user.data_limit) if user.data_limit else 'Unlimited'}</code>
+├─🔋 <b>Data limit:</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
 │          └─<b>Data Used:</b> <code>{readable_size(user.used_traffic) if user.used_traffic else "-"}</code>
 │
-└─📅 <b>Expiry Date:</b> <code>{datetime.fromtimestamp(user.expire).date() if user.expire else 'Never'}</code>
-            └─<b>Days left:</b> <code>{(datetime.fromtimestamp(user.expire or 0) - datetime.now()).days if user.expire else '-'}</code>"""
+└─📅 <b>Expiry Date:</b> <code>{datetime.fromtimestamp(user.expire).date() if user.expire else "Never"}</code>
+            └─<b>Days left:</b> <code>{(datetime.fromtimestamp(user.expire or 0) - datetime.now()).days if user.expire else "-"}</code>"""
 
     return bot.reply_to(message, text, parse_mode="HTML")

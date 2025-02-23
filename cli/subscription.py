@@ -57,12 +57,11 @@ def get_config(
                 out_file.write(conf)
 
             utils.success(
-                f'{username}\'s configuration in "{config_format.value}" format'
-                f' successfully save to "{output_file}".'
+                f'{username}\'s configuration in "{config_format.value}" format successfully save to "{output_file}".'
             )
         else:
             utils.success(
-                "No output file specified." f' using pager for {username}\'s config in "{config_format}" format.',
+                f'No output file specified. using pager for {username}\'s config in "{config_format}" format.',
                 auto_exit=False,
             )
             utils.paginate(conf)

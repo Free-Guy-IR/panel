@@ -264,7 +264,7 @@ def add_data_step(message):
     msg = bot.send_message(
         message.chat.id,
         f"⚠️ Are you sure? this will change Data limit of all users according to <b>"
-        f"{'+' if data_limit > 0 else '-'}{readable_size(abs(data_limit * 1024*1024*1024))}</b>",
+        f"{'+' if data_limit > 0 else '-'}{readable_size(abs(data_limit * 1024 * 1024 * 1024))}</b>",
         parse_mode="html",
         reply_markup=BotKeyboard.confirm_action("add_data", data_limit),
     )
@@ -742,7 +742,8 @@ def genqr_command(call: types.CallbackQuery):
             time_left = time_to_string(datetime.fromtimestamp(user.expire)) if user.expire else "-"
             if user.status == UserStatus.on_hold:
                 expiry_text = f"⏰ <b>On Hold Duration:</b> <code>{on_hold_duration} days</code> (auto start at <code>{
-                    on_hold_timeout}</code>)"
+                    on_hold_timeout
+                }</code>)"
             else:
                 expiry_text = f"📅 <b>Expiry Date:</b> <code>{expiry_date}</code> ({time_left})"
             text = f"""\
@@ -849,12 +850,12 @@ def template_charge_command(call: types.CallbackQuery):
 <u><b>Last status</b></u>
 <b>├Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
 <b>├Expire Date :</b> <code>\
-{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>
+{datetime.fromtimestamp(user.expire).strftime("%H:%M:%S %Y-%m-%d") if user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <u><b>New status</b></u>
 <b>├Traffic Limit :</b> <code>{readable_size(db_user.data_limit) if db_user.data_limit else "Unlimited"}</code>
 <b>├Expire Date :</b> <code>\
-{db_user.expire.strftime('%H:%M:%S %Y-%m-%d') if db_user.expire else "Never"}</code>
+{db_user.expire.strftime("%H:%M:%S %Y-%m-%d") if db_user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={call.from_user.id}">{call.from_user.full_name}</a>"""
                 try:
@@ -1069,7 +1070,8 @@ def add_user_from_template_username_step(message: types.Message):
             wait_msg = bot.send_message(
                 message.chat.id,
                 f"❌ Username can't be generated because is shorter than 32 characters! username: <code>{
-                    username}</code>",
+                    username
+                }</code>",
                 parse_mode="HTML",
             )
             schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
@@ -1078,7 +1080,8 @@ def add_user_from_template_username_step(message: types.Message):
             wait_msg = bot.send_message(
                 message.chat.id,
                 f"❌ Username can't be generated because is longer than 32 characters! username: <code>{
-                    username}</code>",
+                    username
+                }</code>",
                 parse_mode="HTML",
             )
             schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
@@ -1542,7 +1545,7 @@ def confirm_user_command(call: types.CallbackQuery):
 <b>Username :</b> <code>{db_user.username}</code>
 <b>Traffic Limit :</b> <code>{readable_size(db_user.data_limit) if db_user.data_limit else "Unlimited"}</code>
 <b>Expire Date :</b> <code>\
-{db_user.expire.strftime('%H:%M:%S %Y-%m-%d') if db_user.expire else "Never"}</code>
+{db_user.expire.strftime("%H:%M:%S %Y-%m-%d") if db_user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>"""
             try:
@@ -1689,7 +1692,7 @@ def confirm_user_command(call: types.CallbackQuery):
             )
             if TELEGRAM_LOGGER_CHANNEL_ID:
                 text = f"""\
-🔋 <b>#Charged #{data.split('_')[1].title()} #From_Bot</b>
+🔋 <b>#Charged #{data.split("_")[1].title()} #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Template :</b> <code>{template.name}</code>
 <b>Username :</b> <code>{user.username}</code>
@@ -1697,12 +1700,12 @@ def confirm_user_command(call: types.CallbackQuery):
 <u><b>Last status</b></u>
 <b>├Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
 <b>├Expire Date :</b> <code>\
-{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>
+{datetime.fromtimestamp(user.expire).strftime("%H:%M:%S %Y-%m-%d") if user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <u><b>New status</b></u>
 <b>├Traffic Limit :</b> <code>{readable_size(db_user.data_limit) if db_user.data_limit else "Unlimited"}</code>
 <b>├Expire Date :</b> <code>\
-{db_user.expire.strftime('%H:%M:%S %Y-%m-%d') if db_user.expire else "Never"}</code>
+{db_user.expire.strftime("%H:%M:%S %Y-%m-%d") if db_user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>\
 """
@@ -1799,9 +1802,9 @@ def confirm_user_command(call: types.CallbackQuery):
 ➖➖➖➖➖➖➖➖➖
 <b>Username :</b> <code>{user.username}</code>
 <b>Last Expire Date :</b> <code>\
-{datetime.fromtimestamp(last_user.expire).strftime('%H:%M:%S %Y-%m-%d') if last_user.expire else "Never"}</code>
+{datetime.fromtimestamp(last_user.expire).strftime("%H:%M:%S %Y-%m-%d") if last_user.expire else "Never"}</code>
 <b>New Expire Date :</b> <code>\
-{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>{tag}"""
+{datetime.fromtimestamp(user.expire).strftime("%H:%M:%S %Y-%m-%d") if user.expire else "Never"}</code>{tag}"""
                 try:
                     bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, "HTML")
                 except ApiTelegramException:
@@ -1921,12 +1924,12 @@ def confirm_user_command(call: types.CallbackQuery):
 🆕 <b>#Created #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Username :</b> <code>{user.username}</code>
-<b>Status :</b> <code>{'Active' if user_status == 'active' else 'On Hold'}</code>
+<b>Status :</b> <code>{"Active" if user_status == "active" else "On Hold"}</code>
 <b>Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
 """
                 if user_status == "onhold":
                     text += f"""\
-<b>On Hold Expire Duration :</b> <code>{new_user.on_hold_expire_duration // (24*60*60)} days</code>
+<b>On Hold Expire Duration :</b> <code>{new_user.on_hold_expire_duration // (24 * 60 * 60)} days</code>
 <b>On Hold Timeout :</b> <code>{new_user.on_hold_timeout.strftime("%H:%M:%S %Y-%m-%d") if new_user.on_hold_timeout else "-"}</code>"""
                 else:
                     text += f"""<b>Expire Date :</b> \
@@ -1948,7 +1951,7 @@ def confirm_user_command(call: types.CallbackQuery):
             depleted_users = crud.get_users(
                 db, status=[UserStatus.limited if data == "delete_limited" else UserStatus.expired]
             )
-            file_name = f"{data[8:]}_users_{int(now.timestamp()*1000)}.txt"
+            file_name = f"{data[8:]}_users_{int(now.timestamp() * 1000)}.txt"
             with open(file_name, "w") as f:
                 f.write("USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n")
                 deleted = 0
@@ -1958,11 +1961,11 @@ def confirm_user_command(call: types.CallbackQuery):
                         xray.operations.remove_user(user)
                         deleted += 1
                         f.write(
-                            f'{user.username}\
-\t{user.expire if user.expire else "never"}\
+                            f"{user.username}\
+\t{user.expire if user.expire else 'never'}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
-/{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
-\t{user.status}\n'
+/{readable_size(user.data_limit) if user.data_limit else 'Unlimited'}\
+\t{user.status}\n"
                         )
                     except sqlalchemy.exc.IntegrityError:
                         db.rollback()
@@ -1993,7 +1996,7 @@ def confirm_user_command(call: types.CallbackQuery):
         with GetDB() as db:
             users = crud.get_users(db)
             counter = 0
-            file_name = f"new_data_limit_users_{int(now.timestamp()*1000)}.txt"
+            file_name = f"new_data_limit_users_{int(now.timestamp() * 1000)}.txt"
             with open(file_name, "w") as f:
                 f.write("USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n")
                 for user in users:
@@ -2002,19 +2005,20 @@ def confirm_user_command(call: types.CallbackQuery):
                             user = crud.update_user(db, user, UserModify(data_limit=(user.data_limit + data_limit)))
                             counter += 1
                             f.write(
-                                f'{user.username}\
-\t{user.expire if user.expire else "never"}\
+                                f"{user.username}\
+\t{user.expire if user.expire else 'never'}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
-/{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
-\t{user.status}\n'
+/{readable_size(user.data_limit) if user.data_limit else 'Unlimited'}\
+\t{user.status}\n"
                             )
                     except sqlalchemy.exc.IntegrityError:
                         db.rollback()
             cleanup_messages(chat_id)
             bot.send_message(
                 chat_id,
-                f'✅ <b>{counter}/{len(users)} Users</b> Data Limit according to <code>{"+" if data_limit >
-                                                                                       0 else "-"}{readable_size(abs(data_limit))}</code>',
+                f"✅ <b>{counter}/{len(users)} Users</b> Data Limit according to <code>{'+' if data_limit > 0 else '-'}{
+                    readable_size(abs(data_limit))
+                }</code>",
                 "HTML",
                 reply_markup=BotKeyboard.main_menu(),
             )
@@ -2040,7 +2044,7 @@ def confirm_user_command(call: types.CallbackQuery):
         with GetDB() as db:
             users = crud.get_users(db)
             counter = 0
-            file_name = f"new_expiry_users_{int(now.timestamp()*1000)}.txt"
+            file_name = f"new_expiry_users_{int(now.timestamp() * 1000)}.txt"
             with open(file_name, "w") as f:
                 f.write("USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n")
                 for user in users:
@@ -2051,11 +2055,11 @@ def confirm_user_command(call: types.CallbackQuery):
                             )
                             counter += 1
                             f.write(
-                                f'{user.username}\
-\t{user.expire if user.expire else "never"}\
+                                f"{user.username}\
+\t{user.expire if user.expire else 'never'}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
-/{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
-\t{user.status}\n'
+/{readable_size(user.data_limit) if user.data_limit else 'Unlimited'}\
+\t{user.status}\n"
                             )
                     except sqlalchemy.exc.IntegrityError:
                         db.rollback()
@@ -2185,7 +2189,7 @@ def search_user(message: types.Message):
     if not args:
         return bot.reply_to(
             message,
-            "❌ You must pass some usernames\n\n" "<b>Usage:</b> <code>/user username1 username2</code>",
+            "❌ You must pass some usernames\n\n<b>Usage:</b> <code>/user username1 username2</code>",
             parse_mode="HTML",
         )
 

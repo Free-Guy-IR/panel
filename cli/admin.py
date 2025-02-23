@@ -208,7 +208,7 @@ def import_from_env(yes_to_all: bool = typer.Option(False, *utils.FLAGS["yes_to_
 
     if not (username and password):
         utils.error(
-            "Unable to retrieve username and password.\n" "Make sure both SUDO_USERNAME and SUDO_PASSWORD are set."
+            "Unable to retrieve username and password.\nMake sure both SUDO_USERNAME and SUDO_PASSWORD are set."
         )
 
     with GetDB() as db:

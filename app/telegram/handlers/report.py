@@ -16,8 +16,12 @@ def report(text: str, chat_id: int = None, parse_mode="html", keyboard=None):
         try:
             if TELEGRAM_LOGGER_CHANNEL_ID:
                 if TELEGRAM_LOGGER_TOPIC_ID:
-                    bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, parse_mode=parse_mode,
-                                     message_thread_id=TELEGRAM_LOGGER_TOPIC_ID)
+                    bot.send_message(
+                        TELEGRAM_LOGGER_CHANNEL_ID,
+                        text,
+                        parse_mode=parse_mode,
+                        message_thread_id=TELEGRAM_LOGGER_TOPIC_ID,
+                    )
                 else:
                     bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, parse_mode=parse_mode)
             else:

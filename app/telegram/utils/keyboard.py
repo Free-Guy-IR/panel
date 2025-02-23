@@ -266,7 +266,7 @@ class BotKeyboard:
                         keyboard.add(
                             types.InlineKeyboardButton(
                                 text=f"«{inbound['tag']}» {'✅' if inbound['tag'] in selected_protocols[protocol] else '❌'}",
-                                callback_data=f'select_inbound:{inbound["tag"]}:{action}',
+                                callback_data=f"select_inbound:{inbound['tag']}:{action}",
                             )
                         )
 

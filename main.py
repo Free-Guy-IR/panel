@@ -9,7 +9,7 @@ import uvicorn
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from app import app, logger #noqa
+from app import app, logger  # noqa
 from config import DEBUG, UVICORN_HOST, UVICORN_PORT, UVICORN_SSL_CERTFILE, UVICORN_SSL_KEYFILE, UVICORN_UDS
 
 
@@ -102,9 +102,9 @@ if __name__ == "__main__":
             ip = check_and_modify_ip(UVICORN_HOST)
 
             logger.warning(f"""
-{click.style('IMPORTANT!', blink=True, bold=True, fg="yellow")}
-You're running Marzban without specifying {click.style('UVICORN_SSL_CERTFILE', italic=True, fg="magenta")} and {click.style('UVICORN_SSL_KEYFILE', italic=True, fg="magenta")}.
-The application will only be accessible through localhost. This means that {click.style('Marzban and subscription URLs will not be accessible externally', bold=True)}.
+{click.style("IMPORTANT!", blink=True, bold=True, fg="yellow")}
+You're running Marzban without specifying {click.style("UVICORN_SSL_CERTFILE", italic=True, fg="magenta")} and {click.style("UVICORN_SSL_KEYFILE", italic=True, fg="magenta")}.
+The application will only be accessible through localhost. This means that {click.style("Marzban and subscription URLs will not be accessible externally", bold=True)}.
 
 If you need external access, please provide the SSL files to allow the server to bind to 0.0.0.0. Alternatively, you can run the server on localhost or a Unix socket and use a reverse proxy, such as Nginx or Caddy, to handle SSL termination and provide external access.
 
@@ -112,9 +112,9 @@ If you wish to continue without SSL, you can use SSH port forwarding to access t
 
 Use the following command:
 
-{click.style(f'ssh -L {UVICORN_PORT}:localhost:{UVICORN_PORT} user@server', italic=True, fg="cyan")}
+{click.style(f"ssh -L {UVICORN_PORT}:localhost:{UVICORN_PORT} user@server", italic=True, fg="cyan")}
 
-Then, navigate to {click.style(f'http://{ip}:{UVICORN_PORT}', bold=True)} on your computer.
+Then, navigate to {click.style(f"http://{ip}:{UVICORN_PORT}", bold=True)} on your computer.
             """)
 
             bind_args["host"] = ip
