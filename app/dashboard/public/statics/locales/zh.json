@@ -47,6 +47,10 @@
   "deleteNode.deleteSuccess": "节点 {{name}} 删除成功",
   "deleteNode.prompt": "您确实要删除 <b>{{name}}</b> 节点吗？",
   "deleteNode.title": "删除节点",
+  "deleteHost.title": "删除主机",
+  "deleteHost.prompt": "您确定要删除 <b>{{name}}</b> 主机吗？",
+  "deleteHost.deleteSuccess": "主机 {{name}} 已成功删除",
+  "deleteHost.deleteFailed": "无法删除主机 {{name}}",
   "editNode.editSuccess": "节点 {{name}} 已成功更新",
   "editNode.title": "编辑节点",
   "deleteUser.deleteSuccess": "{{username}} 删除成功。",
@@ -221,5 +225,9 @@
   "usersTable.noUserMatched": "没有找到您搜索的用户",
   "usersTable.status": "状态",
   "usersTable.sortByExpire": "按过期时间排序",
-  "usersTable.total": "总共"
+  "usersTable.total": "总共",
+  "statistics.system": "系统",
+  "statistics.realTimeBandwidth": "实时带宽",
+  "statistics.ramUsage": "RAM 使用情况",
+  "statistics.cpuUsage": "CPU 使用情况"
 }

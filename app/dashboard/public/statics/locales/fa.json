@@ -53,6 +53,10 @@
   "deleteNode.deleteSuccess": "گره {{name}} با موفقیت حذف شد",
   "deleteNode.prompt": "از حذف گره <b>{{name}}</b> مطمئن هستید؟",
   "deleteNode.title": "حذف گره",
+  "deleteHost.title": "حذف هاست",
+  "deleteHost.prompt": "آیا مطمئن هستید که می‌خواهید هاست <b>{{name}}</b> را حذف کنید؟",
+  "deleteHost.deleteSuccess": "هاست {{name}} با موفقیت حذف شد",
+  "deleteHost.deleteFailed": "حذف هاست {{name}} ناموفق بود",
   "editNode.editSuccess": "گره {{name}} با موفقیت بروزرسانی شد",
   "editNode.title": "ویرایش گره",
   "deleteUser.deleteSuccess": "{{username}} با موفقیت حذف شد.",
@@ -226,5 +230,9 @@
   "usersTable.noUser": "کاربری افزوده نشده است",
   "usersTable.noUserMatched": "به‌نظر میرسه کاربری که جستجو کردید، وجود ندارد",
   "usersTable.status": "وضعیت",
-  "usersTable.total": "مجموع"
+  "usersTable.total": "مجموع",
+  "statistics.system": "سیستم",
+  "statistics.realTimeBandwidth": "پهنای باند لحظه‌ای",
+  "statistics.ramUsage": "استفاده از RAM",
+  "statistics.cpuUsage": "استفاده از CPU"
 }

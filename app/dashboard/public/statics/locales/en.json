@@ -48,6 +48,10 @@
   "deleteNode.deleteSuccess": "Node {{name}} removed successfully",
   "deleteNode.prompt": "Are you sure you want to delete the <b>{{name}}</b> node?",
   "deleteNode.title": "Delete Node",
+  "deleteHost.title": "Delete Host",
+  "deleteHost.prompt": "Are you sure you want to delete the <b>{{name}}</b> host?",
+  "deleteHost.deleteSuccess": "Host {{name}} removed successfully",
+  "deleteHost.deleteFailed": "Failed to delete host {{name}}",
   "editNode.editSuccess": "Node {{name}} has been successfully updated",
   "editNode.title": "Edit Node",
   "deleteUser.deleteSuccess": "{{username}} deleted successfully.",
@@ -220,5 +224,9 @@
   "usersTable.noUser": "There is no user added to the system",
   "usersTable.noUserMatched": "It seems there is no user matched with what you are looking for",
   "usersTable.status": "status",
-  "usersTable.total": "Total"
+  "usersTable.total": "Total",
+  "statistics.system": "System",
+  "statistics.realTimeBandwidth": "Realtime Bandwidth",
+  "statistics.ramUsage": "RAM Usage",
+  "statistics.cpuUsage": "CPU Usage"
 }
