@@ -1,22 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { MoreVertical, Pencil, Copy, Trash2, Power } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Card, CardContent } from "@/components/ui/card"
-
-import { HostResponse, ProxyHostFingerprint } from "@/service/api"
+import { HostResponse, modifyHosts, ProxyHostFingerprint } from "@/service/api"
 import AddHostModal from "../dialogs/AddHostModal"
+import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
+import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
+import SortableHost from "./SortableHost"
+import { useQuery } from "@tanstack/react-query"
 
 const hostFormSchema = z.object({
     remark: z.string().min(1, "Remark is required"),
@@ -61,54 +54,25 @@ const hostFormSchema = z.object({
 export type HostFormValues = z.infer<typeof hostFormSchema>;
 
 interface HostsProps {
+    data: HostResponse[] | undefined;
     onAddHost: (open: boolean) => void
     isDialogOpen: boolean
 }
 
-export default function Hosts({ onAddHost, isDialogOpen }: HostsProps) {
-    const [hosts, setHosts] = useState<HostResponse[]>([
-        {
-            inbound_tag: "inbound1",
-            remark: "Main Node",
-            address: "192.168.1.1",
-            port: 443,
-            sni: "example.com",
-            host: "host.example.com",
-            path: "/ws",
-            security: "tls",
-            alpn: "h2",
-            fingerprint: "random",
-            allowinsecure: false,
-            is_disabled: false,
-            mux_enable: true,
-            fragment_setting: "default",
-            random_user_agent: true,
-            noise_setting: "enabled",
-            use_sni_as_host: false,
-            id: 1,
-        },
-        {
-            inbound_tag: "inbound2",
-            remark: "Backup Node",
-            address: "10.10.10.10",
-            port: 8080,
-            sni: "backup.com",
-            host: "backup.host.com",
-            path: "/grpc",
-            security: "none",
-            alpn: "",
-            fingerprint: "chrome",
-            allowinsecure: true,
-            is_disabled: false,
-            mux_enable: false,
-            fragment_setting: "optimized",
-            random_user_agent: false,
-            noise_setting: "disabled",
-            use_sni_as_host: true,
-            id: 2,
-        },
-    ]);
+export default function Hosts({ data, onAddHost, isDialogOpen }: HostsProps) {
+    const [hosts, setHosts] = useState<HostResponse[] | undefined>();
     const [editingHost, setEditingHost] = useState<HostResponse | null>(null);
+    const [debouncedHosts, setDebouncedHosts] = useState<HostResponse[] | undefined>([]);
+
+    // useQuery({
+    //     queryKey: ["modifyHosts", debouncedHosts],
+    //     queryFn: () => modifyHosts(debouncedHosts ?? []),
+    //     enabled: !!debouncedHosts,
+    // });    
+
+    useEffect(() => {
+        setHosts(data ?? [])
+    }, [data])    
 
     const form = useForm<HostFormValues>({
         resolver: zodResolver(hostFormSchema),
@@ -133,17 +97,18 @@ export default function Hosts({ onAddHost, isDialogOpen }: HostsProps) {
     });
 
     const handleDelete = (id: number) => {
-        setHosts(hosts.filter((host) => host.id !== id));
+        setHosts(hosts?.filter((host) => host.id !== id));
     };
 
     const handleDuplicate = (host: HostResponse) => {
-        const newHost = { ...host, id: Math.max(...hosts.map((h) => h.id), 0) + 1 };
-        setHosts([...hosts, newHost]);
+        const newHost = { ...host, id: Math.max(...(hosts?.map((h) => h.id) ?? [0]), 0) + 1 };
+        setHosts([...hosts ?? [], newHost]);
     };
+
 
     const toggleHostStatus = (id: number) => {
         setHosts(
-            hosts.map((host) =>
+            hosts?.map((host) =>
                 host.id === id ? { ...host, is_disabled: !host.is_disabled } : host
             )
         );
@@ -152,7 +117,7 @@ export default function Hosts({ onAddHost, isDialogOpen }: HostsProps) {
     const onSubmit = (data: HostFormValues) => {
         const newHost: HostResponse = {
             ...data,
-            id: Math.max(...hosts.map((h) => h.id), 0) + 1,
+            id: Math.max(...(hosts?.map((h) => h.id) ?? [0]), 0) + 1,
             fingerprint: data.fingerprint as ProxyHostFingerprint,
             fragment_setting: typeof data.fragment_setting === "string" ? data.fragment_setting : undefined,
             noise_setting: typeof data.noise_setting === "string" ? data.noise_setting : undefined,
@@ -160,61 +125,70 @@ export default function Hosts({ onAddHost, isDialogOpen }: HostsProps) {
         };
 
         if (editingHost) {
-            const updatedHosts = hosts.map((host) =>
+            const updatedHosts = hosts?.map((host) =>
                 host.id === editingHost.id ? { ...host, ...newHost } : host
             );
             setHosts(updatedHosts);
         } else {
-            setHosts([...hosts, newHost]);
+            setHosts([...hosts ?? [], newHost]);
         }
 
         setEditingHost(null);
         form.reset();
     };
 
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        }),
+    )
+
+    function handleDragEnd(event: DragEndEvent) {
+        const { active, over } = event
+
+        if (over && active.id !== over.id) {
+            setHosts((hosts) => {
+                if (!hosts) return [];
+                const oldIndex = hosts?.findIndex((item) => item.id === active.id)
+                const newIndex = hosts?.findIndex((item) => item.id === over.id)
+                return arrayMove(hosts, oldIndex, newIndex)
+            })
+        }
+    }
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedHosts(hosts);
+        }, 1500);
+
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [hosts]);
+
+    useEffect(() => {
+        if (debouncedHosts) {            
+            modifyHosts(debouncedHosts)
+        }
+    }, [debouncedHosts]);
+
 
     return (
         <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {hosts.map((host) => (
-                    <Card className="py-2" key={host.id}>
-                        <CardContent className="flex items-center justify-between p-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`h-2 w-2 rounded-full ${host.is_disabled ? "bg-gray-400" : "bg-green-500"}`} />
-                                <div>
-                                    <div className="font-medium">{host.remark}</div>
-                                    <div className="text-sm text-muted-foreground">{host.address}</div>
-                                </div>
+            <div>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={hosts ?? []} strategy={rectSortingStrategy}>
+                        <div className="max-w-screen-[2000px] min-h-screen overflow-hidden">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {hosts?.map((host) => (
+                                    <SortableHost key={host.id} host={host} />
+                                ))}
                             </div>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                        <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => toggleHostStatus(host.id)}>
-                                        <Power className="h-4 w-4 mr-2" />
-                                        {host.is_disabled ? "Enable" : "Disable"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem>
-                                        <Pencil className="h-4 w-4 mr-2" />
-                                        Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => handleDuplicate(host)}>
-                                        <Copy className="h-4 w-4 mr-2" />
-                                        Duplicate
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive" onSelect={() => handleDelete(host.id)}>
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Trash
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </CardContent>
-                    </Card>
-                ))}
+                        </div>
+                    </SortableContext>
+                </DndContext>
             </div>
 
             {/* add props */}

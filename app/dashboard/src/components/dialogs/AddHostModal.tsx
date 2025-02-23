@@ -8,6 +8,8 @@ import { useState } from "react"
 import { Button } from "../ui/button"
 import { HostFormValues } from "../hosts/Hosts"
 import { Cable, ChevronsLeftRightEllipsis, FileKey, GlobeLock, Lock } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { getInbounds, GetInbounds200, ProxyTypes } from "@/service/api"
 
 interface AddHostModalProps {
     isDialogOpen: boolean;
@@ -29,6 +31,16 @@ const AddHostModal: React.FC<AddHostModalProps> = ({
 
         setOpenSection((prevSection) => (prevSection === value ? undefined : value));
     };
+    const { data, error, isLoading } = useQuery({
+        queryKey: ["getGetInboundsQueryKey"],
+        queryFn: () => getInbounds(),
+    });
+
+    const inbounds: GetInbounds200 = data ?? {}
+    const keys = inbounds ? Object.keys(inbounds) : [];
+    const protocol: "vmess" | "vless" | "trojan" | "shadowsocks" = "vmess";
+
+
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -50,8 +62,18 @@ const AddHostModal: React.FC<AddHostModalProps> = ({
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="inbound1">Inbound 1</SelectItem>
-                                            <SelectItem value="inbound2">Inbound 2</SelectItem>
+                                            {keys.map((key) => {
+                                                const protocolData = inbounds[key as keyof GetInbounds200]; // Assert that key is a valid key of GetInbounds200
+
+                                                return protocolData ? (
+
+                                                    protocolData.map((item) => (
+
+                                                        <SelectItem value={item.tag} key={key}>{item.tag}</SelectItem>
+                                                    ))
+
+                                                ) : null;
+                                            })}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
