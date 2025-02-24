@@ -32,12 +32,12 @@ def upgrade() -> None:
 
     connection = op.get_bind()
     session = Session(bind=connection)
-    # remove hosts with old inbound tag
-    session.query(ProxyHost).filter(ProxyHost.inbound_tag.notin_(inbounds)).delete(synchronize_session=False)
-
-    # Commit the changes
-    session.commit()
-
+    try:
+        # remove hosts with old inbound tag
+        session.query(ProxyHost).filter(ProxyHost.inbound_tag.notin_(inbounds)).delete(synchronize_session=False)
+        session.commit()
+    finally:
+        session.close()
 
 def downgrade() -> None:
     pass
