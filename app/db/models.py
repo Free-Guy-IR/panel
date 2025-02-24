@@ -242,7 +242,7 @@ class ProxyHost(Base):
         server_default=ProxyHostSecurity.none.name,
     )
 
-    inbound_tag = Column(String(256), ForeignKey("inbounds.tag"), nullable=False)
+    inbound_tag = Column(String(256), ForeignKey("inbounds.tag"), nullable=True)
     inbound = relationship("ProxyInbound", back_populates="hosts")
     allowinsecure = Column(Boolean, nullable=True)
     is_disabled = Column(Boolean, nullable=True, default=False)
@@ -251,6 +251,7 @@ class ProxyHost(Base):
     noise_setting = Column(String(2000), nullable=True)
     random_user_agent = Column(Boolean, nullable=False, default=False, server_default="0")
     use_sni_as_host = Column(Boolean, nullable=False, default=False, server_default="0")
+    priority = Column(Integer, nullable=False)
 
 
 class System(Base):

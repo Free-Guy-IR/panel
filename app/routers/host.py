@@ -104,12 +104,7 @@ def modify_hosts(
 ):
     """
     Modify proxy hosts and update the configuration.
-
-    **host.id** will be replaced by index+1
     """
-    for id, host in enumerate(modified_hosts, start=1):
-        host.id = id
-
     crud.update_hosts(db, modified_hosts)
 
     xray.hosts.update()

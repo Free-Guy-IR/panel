@@ -80,10 +80,22 @@ def get_or_create_inbound(db: Session, inbound_tag: str) -> ProxyInbound:
     return inbound
 
 
+ProxyHostSortingOptions = Enum(
+    "ProxyHostSortingOptions",
+    {
+        "priority": ProxyHost.priority.asc(),
+        "id": ProxyHost.id.asc(),
+        "-priority": ProxyHost.priority.desc(),
+        "-id": ProxyHost.id.desc(),
+    },
+)
+
+
 def get_hosts(
     db: Session,
     offset: Optional[int] = 0,
     limit: Optional[int] = 0,
+    sort: ProxyHostSortingOptions = "priority",
 ) -> List[ProxyHost]:
     """
     Retrieves hosts.
@@ -97,6 +109,9 @@ def get_hosts(
         List[ProxyHost]: List of hosts for the inbound.
     """
     query = db.query(ProxyHost)
+
+    if sort:
+        query = query.order_by(sort)
 
     if offset:
         query = query.offset(offset)
@@ -132,64 +147,53 @@ def add_host(db: Session, host: ProxyHostModify) -> ProxyHost:
         ProxyHost: The retrieved or newly created proxy host.
     """
     inbound = get_or_create_inbound(db, host.inbound_tag)
-    db_host = ProxyHost(
-        remark=host.remark,
-        address=host.address,
-        port=host.port,
-        path=host.path,
-        sni=host.sni,
-        host=host.host,
-        inbound=inbound,
-        security=host.security,
-        alpn=host.alpn,
-        fingerprint=host.fingerprint,
-        allowinsecure=host.allowinsecure,
-        is_disabled=host.is_disabled,
-        mux_enable=host.mux_enable,
-        fragment_setting=host.fragment_setting,
-        random_user_agent=host.random_user_agent,
-        noise_setting=host.noise_setting,
-    )
+    host_data = host.model_dump(exclude={"inbound_tag"})
 
+    db_host = ProxyHost(inbound=inbound, **host_data)
     db.add(db_host)
     db.commit()
-    db.refresh(inbound)
+    db.refresh(db_host)
     return db_host
 
 
 def update_host(db: Session, db_host: ProxyHost, modified_host: ProxyHostModify):
-    inbound = get_or_create_inbound(db, modified_host.inbound_tag)
+    """Update existing ProxyHost with optimized data handling."""
+    # Check if inbound needs update
+    if db_host.inbound_tag != modified_host.inbound_tag:
+        db_host.inbound = get_or_create_inbound(db, modified_host.inbound_tag)
 
-    db_host.remark = modified_host.remark
-    db_host.address = modified_host.address
-    db_host.port = modified_host.port
-    db_host.path = modified_host.path
-    db_host.sni = modified_host.sni
-    db_host.host = modified_host.host
-    db_host.inbound = inbound
-    db_host.security = modified_host.security
-    db_host.alpn = modified_host.alpn
-    db_host.fingerprint = modified_host.fingerprint
-    db_host.allowinsecure = modified_host.allowinsecure
-    db_host.is_disabled = modified_host.is_disabled
-    db_host.mux_enable = modified_host.mux_enable
-    db_host.fragment_setting = modified_host.fragment_setting
-    db_host.random_user_agent = modified_host.random_user_agent
-    db_host.noise_setting = modified_host.noise_setting
+    # Get update data excluding inbound_tag
+    update_data = modified_host.model_dump(
+        exclude={"inbound_tag"},
+    )
+
+    # Update attributes dynamically
+    for key, value in update_data.items():
+        setattr(db_host, key, value)
 
     db.commit()
-    db.refresh(inbound)
+    db.refresh(db_host)
     return db_host
 
 
 def update_hosts(db: Session, modified_hosts: List[ProxyHostModify]):
-    db.query(ProxyHost).delete()
+    for host in modified_hosts:
+        update_data = host.model_dump(
+            exclude={"inbound_tag"},
+        )
 
-    for host_data in modified_hosts:
-        inbound = get_or_create_inbound(db, host_data.inbound_tag)
+        old_host: ProxyHost | None = None
+        if host.id is not None:
+            old_host = get_host_by_id(db, host.id)
 
-        new_host = ProxyHost(inbound=inbound, **host_data.model_dump(exclude={"inbound_tag"}))
-        db.add(new_host)
+        inbound = get_or_create_inbound(db, host.inbound_tag)
+
+        if old_host is None:
+            new_host = ProxyHost(inbound=inbound, **update_data)
+            db.add(new_host)
+        else:
+            for key, value in update_data.items():
+                setattr(old_host, key, value)
 
     db.commit()
     return modified_hosts

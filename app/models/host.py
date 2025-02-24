@@ -72,6 +72,7 @@ class BaseHost(BaseModel):
     random_user_agent: bool | None = None
     noise_setting: Optional[str] = Field(None, nullable=True)
     use_sni_as_host: bool | None = None
+    priority: int
 
     model_config = ConfigDict(from_attributes=True)
 
