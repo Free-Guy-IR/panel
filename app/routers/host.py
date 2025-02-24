@@ -6,14 +6,14 @@ from app import xray, logger
 from app.db import Session, crud, get_db
 from app.db.models import ProxyHost
 from app.models.admin import Admin
-from app.models.host import HostResponse, CreateHost
+from app.models.host import BaseHost, CreateHost
 from app.utils import responses
 from app.dependencies import get_host
 
 router = APIRouter(tags=["Host"], prefix="/api/host", responses={401: responses._401, 403: responses._403})
 
 
-@router.post("/", response_model=HostResponse)
+@router.post("/", response_model=BaseHost)
 def add_host(
     new_host: CreateHost,
     db: Session = Depends(get_db),
@@ -32,9 +32,9 @@ def add_host(
     return db_host
 
 
-@router.put("/{host_id}", response_model=HostResponse, responses={404: responses._404})
+@router.put("/{host_id}", response_model=BaseHost, responses={404: responses._404})
 def modify_host(
-    modified_host: HostResponse,
+    modified_host: CreateHost,
     db_host: ProxyHost = Depends(get_host),
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
@@ -71,9 +71,9 @@ def remove_host(
     return {}
 
 
-@router.get("/{host_id}", response_model=HostResponse)
+@router.get("/{host_id}", response_model=BaseHost)
 def get_host(
-    db_host: HostResponse = Depends(get_host),
+    db_host: BaseHost = Depends(get_host),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
@@ -83,7 +83,7 @@ def get_host(
     return db_host
 
 
-@router.get("s", response_model=List[HostResponse])
+@router.get("s", response_model=List[BaseHost])
 def get_hosts(
     offset: int = 0,
     limit: int = 0,
@@ -96,25 +96,21 @@ def get_hosts(
     return crud.get_hosts(db, offset, limit)
 
 
-@router.put("s", response_model=List[HostResponse])
+@router.put("s", response_model=List[BaseHost])
 def modify_hosts(
-    modified_hosts: List[HostResponse],
+    modified_hosts: List[CreateHost],
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
     Modify proxy hosts and update the configuration.
 
-    if **host.id** doesn't exist, create new host
+    **host.id** will be replaced by index+1
     """
-    for host in modified_hosts:
-        db_host = crud.get_host_by_id(db, host.id)
-        if db_host:
-            crud.update_host(db, db_host, host)
-            logger.info(f'Host "{db_host.id}" modified')
-        else:
-            db_host = crud.add_host(db, host)
-            logger.info(f'Host "{db_host.id}" added')
+    for id, host in enumerate(modified_hosts, start=1):
+        host.id = id
+
+    crud.update_hosts(db, modified_hosts)
 
     xray.hosts.update()
 

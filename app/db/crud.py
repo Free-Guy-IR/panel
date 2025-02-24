@@ -182,6 +182,19 @@ def update_host(db: Session, db_host: ProxyHost, modified_host: ProxyHostModify)
     return db_host
 
 
+def update_hosts(db: Session, modified_hosts: List[ProxyHostModify]):
+    db.query(ProxyHost).delete()
+
+    for host_data in modified_hosts:
+        inbound = get_or_create_inbound(db, host_data.inbound_tag)
+
+        new_host = ProxyHost(inbound=inbound, **host_data.model_dump(exclude={"inbound_tag"}))
+        db.add(new_host)
+
+    db.commit()
+    return modified_hosts
+
+
 def remove_host(db: Session, db_host: ProxyHost) -> ProxyHost:
     """
     Removes a proxy Host from the database.
