@@ -31,16 +31,17 @@ def upgrade():
 
     # Add temporary columns with the DateTime data type
     op.add_column('users', sa.Column('expire_temp', sa.DateTime, nullable=True))
+    try:
+        with op.batch_alter_table('users') as batch_op:
+            users_table = sa.Table('users', sa.MetaData(), autoload_with=bind)
+            expire_to_datetime(users_table)
 
-    with op.batch_alter_table('users') as batch_op:
-        users_table = sa.Table('users', sa.MetaData(), autoload_with=bind)
-        expire_to_datetime(users_table)
+            batch_op.drop_column('expire')
+            batch_op.alter_column('expire_temp', new_column_name='expire', existing_type=sa.DateTime)
 
-        batch_op.drop_column('expire')
-        batch_op.alter_column('expire_temp', new_column_name='expire', existing_type=sa.DateTime)
-
-    session.commit()
-
+        session.commit()
+    finally:
+        session.close()
 
 def downgrade():
     bind = op.get_bind()
@@ -57,14 +58,17 @@ def downgrade():
             )
 
     op.add_column('users', sa.Column('expire_temp', sa.Integer, nullable=True))
+    try:
+        # Add temporary columns with the BigInteger data type
+        with op.batch_alter_table('users') as batch_op:
+            # Fetch all rows and update the temporary column
+            users_table = sa.Table('users', sa.MetaData(), autoload_with=bind)
+            expire_to_integer(users_table)
 
-    # Add temporary columns with the BigInteger data type
-    with op.batch_alter_table('users') as batch_op:
-        # Fetch all rows and update the temporary column
-        users_table = sa.Table('users', sa.MetaData(), autoload_with=bind)
-        expire_to_integer(users_table)
+            batch_op.drop_column('expire')
+            batch_op.alter_column('expire_temp', new_column_name='expire', existing_type=sa.Integer)
 
-        batch_op.drop_column('expire')
-        batch_op.alter_column('expire_temp', new_column_name='expire', existing_type=sa.Integer)
-
-    session.commit()
+        session.commit()
+    finally:
+        session.close()
+    
