@@ -147,7 +147,7 @@ def add_host(db: Session, host: ProxyHostModify) -> ProxyHost:
         ProxyHost: The retrieved or newly created proxy host.
     """
     inbound = get_or_create_inbound(db, host.inbound_tag)
-    host_data = host.model_dump(exclude={"inbound_tag"})
+    host_data = host.model_dump(exclude={"inbound_tag", "id"})
 
     db_host = ProxyHost(inbound=inbound, **host_data)
     db.add(db_host)
@@ -164,7 +164,7 @@ def update_host(db: Session, db_host: ProxyHost, modified_host: ProxyHostModify)
 
     # Get update data excluding inbound_tag
     update_data = modified_host.model_dump(
-        exclude={"inbound_tag"},
+        exclude={"inbound_tag", "id"},
     )
 
     # Update attributes dynamically
@@ -179,7 +179,7 @@ def update_host(db: Session, db_host: ProxyHost, modified_host: ProxyHostModify)
 def update_hosts(db: Session, modified_hosts: List[ProxyHostModify]):
     for host in modified_hosts:
         update_data = host.model_dump(
-            exclude={"inbound_tag"},
+            exclude={"inbound_tag", "id"},
         )
 
         old_host: ProxyHost | None = None

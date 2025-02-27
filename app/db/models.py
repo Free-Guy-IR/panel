@@ -242,7 +242,7 @@ class ProxyHost(Base):
         server_default=ProxyHostSecurity.none.name,
     )
 
-    inbound_tag = Column(String(256), ForeignKey("inbounds.tag"), nullable=True)
+    inbound_tag = Column(String(256), ForeignKey("inbounds.tag", ondelete="SET NULL", onupdate="CASCADE"), nullable=True)
     inbound = relationship("ProxyInbound", back_populates="hosts")
     allowinsecure = Column(Boolean, nullable=True)
     is_disabled = Column(Boolean, nullable=True, default=False)
