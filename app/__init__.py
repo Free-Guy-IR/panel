@@ -45,7 +45,6 @@ async def lifespan(app: FastAPI):
     yield
 
     for func in shutdown_functions:
-        print("Running ", func.__name__)
         if callable(func):
             if hasattr(func, "__await__"):
                 if "app" in func.__code__.co_varnames:
