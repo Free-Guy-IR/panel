@@ -33,7 +33,7 @@ const getWebsocketUrl = (nodeID: string) => {
 
         return (
             (baseURL.protocol === "https:" ? "wss://" : "ws://") +
-            joinPaths([baseURL.host + baseURL.pathname, !nodeID ? "api/core/logs" : `/node/${nodeID}/logs`]) +
+            joinPaths([baseURL.host + baseURL.pathname, !nodeID ? "core/logs" : `/node/${nodeID}/logs`]) +
             "?interval=1&token=" +
             getAuthToken()
         );
