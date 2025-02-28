@@ -1,12 +1,16 @@
-import requests
 from datetime import datetime
-from app.db.models import User
-from app.utils.system import readable_size
-from app.models.user import UserDataLimitResetStrategy
-from app.models.admin import Admin
+
+import requests
 from telebot.formatting import escape_html
-from app import logger
+
+from app.db.models import User
+from app.models.admin import Admin
+from app.models.user import UserDataLimitResetStrategy
+from app.utils.logger import get_logger
+from app.utils.system import readable_size
 from config import DISCORD_WEBHOOK_URL
+
+logger = get_logger("discord")
 
 
 def send_webhooks(json_data, admin_webhook: str = None):
@@ -24,7 +28,7 @@ def send_webhook(json_data, webhook):
     except requests.exceptions.HTTPError as err:
         logger.error(err)
     else:
-        logger.debug("Discord payload delivered successfully, code {}.".format(result.status_code))
+        logger.debug("Payload delivered successfully, code {}.".format(result.status_code))
 
 
 def report_status_change(username: str, status: str, admin: Admin = None):

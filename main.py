@@ -1,10 +1,10 @@
-import click
+import ipaddress
 import logging
 import os
-import ssl
-import ipaddress
 import socket
+import ssl
 
+import click
 import uvicorn
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend

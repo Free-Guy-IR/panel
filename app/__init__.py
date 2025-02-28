@@ -1,5 +1,3 @@
-import logging
-
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -8,9 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
+from app.utils.logger import get_logger
 from config import ALLOWED_ORIGINS, DOCS, XRAY_SUBSCRIPTION_PATH
 
 __version__ = "0.8.4"
+
 
 app = FastAPI(
     title="MarzbanAPI",
@@ -21,7 +21,8 @@ app = FastAPI(
 )
 
 scheduler = BackgroundScheduler({"apscheduler.job_defaults.max_instances": 20}, timezone="UTC")
-logger = logging.getLogger("uvicorn.error")
+logger = get_logger()
+
 
 app.add_middleware(
     CORSMiddleware,

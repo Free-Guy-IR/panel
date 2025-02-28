@@ -1,11 +1,14 @@
 import time
 import traceback
 
-from app import app, logger, scheduler, xray
+from app import app, scheduler, xray
 from app.db import GetDB, crud
 from app.models.node import NodeStatus
+from app.utils.logger import get_logger
 from config import JOB_CORE_HEALTH_CHECK_INTERVAL
 from xray_api import exc as xray_exc
+
+logger = get_logger("xray-core")
 
 
 def core_health_check():
@@ -36,21 +39,21 @@ def core_health_check():
 
 @app.on_event("startup")
 def start_core():
-    logger.info("Generating Xray core config")
+    logger.info("Generating config...")
 
     start_time = time.time()
     config = xray.config.include_db_users()
-    logger.info(f"Xray core config generated in {(time.time() - start_time):.2f} seconds")
+    logger.info(f"Config generated in {(time.time() - start_time):.2f} seconds")
+
+    logger.info("Starting main and nodes' cores...")
 
     # main core
-    logger.info("Starting main Xray core")
     try:
         xray.core.start(config)
     except Exception:
         traceback.print_exc()
 
     # nodes' core
-    logger.info("Starting nodes Xray core")
     with GetDB() as db:
         dbnodes = crud.get_nodes(db=db, enabled=True)
         node_ids = [dbnode.id for dbnode in dbnodes]
@@ -67,10 +70,9 @@ def start_core():
 
 @app.on_event("shutdown")
 def app_shutdown():
-    logger.info("Stopping main Xray core")
+    logger.info("Stopping main and nodes' cores...")
     xray.core.stop()
 
-    logger.info("Stopping nodes Xray core")
     for node in list(xray.nodes.values()):
         try:
             node.disconnect()

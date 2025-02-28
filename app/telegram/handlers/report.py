@@ -1,14 +1,18 @@
-from app import logger
-from app.db.models import User
-from app.telegram import bot
-from telebot.apihelper import ApiTelegramException
 from datetime import datetime
-from app.telegram.utils.keyboard import BotKeyboard
-from app.utils.system import readable_size
-from config import TELEGRAM_ADMIN_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_LOGGER_TOPIC_ID
+
+from telebot.apihelper import ApiTelegramException
 from telebot.formatting import escape_html
+
+from app.db.models import User
 from app.models.admin import Admin
 from app.models.user import UserDataLimitResetStrategy
+from app.telegram import bot
+from app.telegram.utils.keyboard import BotKeyboard
+from app.utils.logger import get_logger
+from app.utils.system import readable_size
+from config import TELEGRAM_ADMIN_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_LOGGER_TOPIC_ID
+
+logger = get_logger("telegram")
 
 
 def report(text: str, chat_id: int = None, parse_mode="html", keyboard=None):

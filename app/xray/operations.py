@@ -8,9 +8,12 @@ from app.db import GetDB, crud
 from app.models.node import NodeStatus
 from app.models.user import UserResponse
 from app.utils.concurrency import threaded_function
+from app.utils.logger import get_logger
 from app.xray.node import XRayNode
 from xray_api import XRay as XRayAPI
 from xray_api.types.account import Account, XTLSFlows
+
+xray_logger = get_logger("xray-core")
 
 if TYPE_CHECKING:
     from app.db import User as DBUser
@@ -244,13 +247,13 @@ def restart_node(node_id, config=None):
         return connect_node(node_id, config)
 
     try:
-        logger.info(f'Restarting Xray core of "{dbnode.name}" node')
+        xray_logger.info(f'Restarting core of "{dbnode.name}" node')
 
         if config is None:
             config = xray.config.include_db_users()
 
         node.restart(config)
-        logger.info(f'Xray core of "{dbnode.name}" node restarted')
+        xray_logger.info(f'The core of node "{dbnode.name}" has restarted')
     except Exception as e:
         _change_node_status(node_id, NodeStatus.error, message=str(e))
         logger.info(f"Unable to restart node {node_id}")

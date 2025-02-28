@@ -5,9 +5,11 @@ import threading
 from collections import deque
 from contextlib import contextmanager
 
-from app import logger
+from app.utils.logger import get_logger
 from app.xray.config import XRayConfig
 from config import DEBUG
+
+logger = get_logger("xray-core")
 
 
 class XRayCore:
@@ -115,7 +117,7 @@ class XRayCore:
         self.process.stdin.write(config.to_json())
         self.process.stdin.flush()
         self.process.stdin.close()
-        logger.warning(f"Xray core {self.version} started")
+        logger.info(f"Core version {self.version} has started")
 
         self.__capture_process_logs()
 
@@ -129,7 +131,7 @@ class XRayCore:
 
         self.process.terminate()
         self.process = None
-        logger.warning("Xray core stopped")
+        logger.warning("Core has stopped!")
 
         # execute on stop functions
         for func in self._on_stop_funcs:
@@ -141,7 +143,7 @@ class XRayCore:
 
         try:
             self.restarting = True
-            logger.warning("Restarting Xray core...")
+            logger.warning("Core is restarting")
             self.stop()
             self.start(config)
         finally:
