@@ -2,9 +2,11 @@ import atexit
 import os
 import subprocess
 from pathlib import Path
-from app import app
-from config import DEBUG, VITE_BASE_API, DASHBOARD_PATH, UVICORN_PORT
+
 from fastapi.staticfiles import StaticFiles
+
+from app import app, on_startup
+from config import DASHBOARD_PATH, DEBUG, UVICORN_PORT, VITE_BASE_API
 
 base_dir = Path(__file__).parent
 build_dir = base_dir / "build"
@@ -52,8 +54,8 @@ def run_build():
     app.mount("/statics/", StaticFiles(directory=statics_dir, html=True), name="statics")
 
 
-@app.on_event("startup")
-def startup():
+@on_startup
+def run_dashboard():
     if DEBUG:
         run_dev()
     else:

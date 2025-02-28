@@ -1,7 +1,7 @@
 import time
 import traceback
 
-from app import app, scheduler, xray
+from app import on_shutdown, on_startup, scheduler, xray
 from app.db import GetDB, crud
 from app.models.node import NodeStatus
 from app.utils.logger import get_logger
@@ -37,8 +37,8 @@ def core_health_check():
             xray.operations.connect_node(node_id, config)
 
 
-@app.on_event("startup")
-def start_core():
+@on_startup
+def initialize_cores():
     logger.info("Generating config...")
 
     start_time = time.time()
@@ -68,8 +68,8 @@ def start_core():
     )
 
 
-@app.on_event("shutdown")
-def app_shutdown():
+@on_shutdown
+def shutdown_cores():
     logger.info("Stopping main and nodes' cores...")
     xray.core.stop()
 

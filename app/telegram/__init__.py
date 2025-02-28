@@ -1,10 +1,11 @@
 import importlib.util
 from os.path import dirname
 from threading import Thread
-from config import TELEGRAM_API_TOKEN, TELEGRAM_PROXY_URL
-from app import app
+
 from telebot import TeleBot, apihelper
 
+from app import on_startup
+from config import TELEGRAM_API_TOKEN, TELEGRAM_PROXY_URL
 
 bot = None
 if TELEGRAM_API_TOKEN:
@@ -14,8 +15,8 @@ if TELEGRAM_API_TOKEN:
 handler_names = ["admin", "report", "user"]
 
 
-@app.on_event("startup")
-def start_bot():
+@on_startup
+def initialize_telegram_bot():
     if bot:
         handler_dir = dirname(__file__) + "/handlers/"
         for name in handler_names:

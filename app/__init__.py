@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -11,11 +13,57 @@ from config import ALLOWED_ORIGINS, DOCS, XRAY_SUBSCRIPTION_PATH
 
 __version__ = "0.8.4"
 
+startup_functions = []
+shutdown_functions = []
+
+
+def on_startup(func):
+    startup_functions.append(func)
+    return func
+
+
+def on_shutdown(func):
+    shutdown_functions.append(func)
+    return func
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for func in startup_functions:
+        if callable(func):
+            if hasattr(func, "__await__"):
+                if "app" in func.__code__.co_varnames:
+                    await func(app)
+                else:
+                    await func()
+            else:
+                if "app" in func.__code__.co_varnames:
+                    func(app)
+                else:
+                    func()
+
+    yield
+
+    for func in shutdown_functions:
+        print("Running ", func.__name__)
+        if callable(func):
+            if hasattr(func, "__await__"):
+                if "app" in func.__code__.co_varnames:
+                    await func(app)
+                else:
+                    await func()
+            else:
+                if "app" in func.__code__.co_varnames:
+                    func(app)
+                else:
+                    func()
+
 
 app = FastAPI(
     title="MarzbanAPI",
     description="Unified GUI Censorship Resistant Solution Powered by Xray",
     version=__version__,
+    lifespan=lifespan,
     docs_url="/docs" if DOCS else None,
     redoc_url="/redoc" if DOCS else None,
 )
@@ -46,18 +94,16 @@ def use_route_names_as_operation_ids(app: FastAPI) -> None:
 use_route_names_as_operation_ids(app)
 
 
-@app.on_event("startup")
-def on_startup():
+@on_startup
+def validate_paths():
     paths = [f"{r.path}/" for r in app.routes]
     paths.append("/api/")
     if f"/{XRAY_SUBSCRIPTION_PATH}/" in paths:
         raise ValueError(f"you can't use /{XRAY_SUBSCRIPTION_PATH}/ as subscription path it reserved for {app.title}")
-    scheduler.start()
 
 
-@app.on_event("shutdown")
-def on_shutdown():
-    scheduler.shutdown()
+on_startup(scheduler.start)
+on_shutdown(scheduler.shutdown)
 
 
 @app.exception_handler(RequestValidationError)

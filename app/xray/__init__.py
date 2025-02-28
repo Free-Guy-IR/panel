@@ -1,7 +1,7 @@
 from random import randint
 from typing import Dict
 
-from app import app
+from app import on_startup
 from app.models.host import ProxyHostSecurity
 from app.utils.store import DictStorage
 from app.utils.system import check_port
@@ -64,9 +64,7 @@ def hosts(storage: dict):
             }
 
 
-@app.on_event("startup")
-def on_startup():
-    hosts.update()
+on_startup(hosts.update)
 
 
 __all__ = [
