@@ -13,7 +13,7 @@ from app.db import GetDB
 from app.db import models as db_models
 from app.models.proxy import ProxyTypes
 from app.models.user import UserStatus
-from app.utils.crypto import get_cert_SANs
+from app.utils.crypto import get_cert_SANs, get_x25519_public_key
 from config import DEBUG, XRAY_EXCLUDE_INBOUND_TAGS, XRAY_FALLBACKS_INBOUND_TAG
 
 
@@ -191,24 +191,15 @@ class XRayConfig(dict):
                     settings["tls"] = "reality"
                     settings["sni"] = tls_settings.get("serverNames", [])
 
-                    try:
-                        settings["pbk"] = tls_settings["publicKey"]
-                    except KeyError:
-                        pvk = tls_settings.get("privateKey")
-                        if not pvk:
-                            raise ValueError(f"You need to provide privateKey in realitySettings of {inbound['tag']}")
+                    pvk = tls_settings.get('privateKey')
+                    if not pvk:
+                        raise ValueError(
+                            f"You need to provide privateKey in realitySettings of {inbound['tag']}")
 
-                        try:
-                            from app.xray import core
-
-                            x25519 = core.get_x25519(pvk)
-                            settings["pbk"] = x25519["public_key"]
-                        except ImportError:
-                            pass
-
-                        if not settings.get("pbk"):
-                            raise ValueError(f"You need to provide publicKey in realitySettings of {inbound['tag']}")
-
+                    settings['pbk'] = get_x25519_public_key(pvk)
+                    if not settings.get('pbk'):
+                        raise ValueError(
+                            f"You need to provide publicKey in realitySettings of {inbound['tag']}")
                     try:
                         settings["sids"] = tls_settings.get("shortIds")
                         settings["sids"][0]  # check if there is any shortIds
@@ -375,6 +366,7 @@ class XRayConfig(dict):
 
                 for inbound in inbounds:
                     clients = config.get_inbound(inbound["tag"])["settings"]["clients"]
+
 
                     for row in rows:
                         user_id, username, settings, excluded_inbound_tags = row

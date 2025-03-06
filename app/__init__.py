@@ -63,8 +63,7 @@ app = FastAPI(
     description="Unified GUI Censorship Resistant Solution Powered by Xray",
     version=__version__,
     lifespan=lifespan,
-    docs_url="/docs" if DOCS else None,
-    redoc_url="/redoc" if DOCS else None,
+    openapi_url="/openapi.json" if DOCS else None,
 )
 
 scheduler = BackgroundScheduler({"apscheduler.job_defaults.max_instances": 20}, timezone="UTC")
