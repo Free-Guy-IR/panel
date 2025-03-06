@@ -191,15 +191,13 @@ class XRayConfig(dict):
                     settings["tls"] = "reality"
                     settings["sni"] = tls_settings.get("serverNames", [])
 
-                    pvk = tls_settings.get('privateKey')
+                    pvk = tls_settings.get("privateKey")
                     if not pvk:
-                        raise ValueError(
-                            f"You need to provide privateKey in realitySettings of {inbound['tag']}")
+                        raise ValueError(f"You need to provide privateKey in realitySettings of {inbound['tag']}")
 
-                    settings['pbk'] = get_x25519_public_key(pvk)
-                    if not settings.get('pbk'):
-                        raise ValueError(
-                            f"You need to provide publicKey in realitySettings of {inbound['tag']}")
+                    settings["pbk"] = get_x25519_public_key(pvk)
+                    if not settings.get("pbk"):
+                        raise ValueError(f"You need to provide publicKey in realitySettings of {inbound['tag']}")
                     try:
                         settings["sids"] = tls_settings.get("shortIds")
                         settings["sids"][0]  # check if there is any shortIds
@@ -366,7 +364,6 @@ class XRayConfig(dict):
 
                 for inbound in inbounds:
                     clients = config.get_inbound(inbound["tag"])["settings"]["clients"]
-
 
                     for row in rows:
                         user_id, username, settings, excluded_inbound_tags = row
