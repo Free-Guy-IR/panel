@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app import logger, scheduler, xray
+from app import logger, scheduler, backend
 from app.db import crud, GetDB, get_users
 from app.models.user import UserDataLimitResetStrategy, UserStatus
 
@@ -34,7 +34,7 @@ def reset_user_data_usage():
             crud.reset_user_data_usage(db, user)
             # make user active if limited on usage reset
             if user.status == UserStatus.limited:
-                xray.operations.add_user(user)
+                backend.operations.add_user(user)
 
             logger.info(f'User data usage reset for User "{user.username}"')
 

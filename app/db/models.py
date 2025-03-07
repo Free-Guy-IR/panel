@@ -20,7 +20,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.expression import select, text
 
-from app import xray
+from app import backend
 from app.db.base import Base
 from app.models.host import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity
 from app.models.node import NodeStatus
@@ -127,7 +127,7 @@ class User(Base):
         for proxy in self.proxies:
             _[proxy.type] = []
             excluded_tags = [i.tag for i in proxy.excluded_inbounds]
-            for inbound in xray.config.inbounds_by_protocol.get(proxy.type, []):
+            for inbound in backend.config.inbounds_by_protocol.get(proxy.type, []):
                 if inbound["tag"] not in excluded_tags:
                     _[proxy.type].append(inbound["tag"])
 

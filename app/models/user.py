@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app import xray
+from app import backend
 from app.models.admin import Admin
 from app.models.proxy import ProxySettings, ProxyTypes
 from app.utils.jwt import create_subscription_token
@@ -164,7 +164,7 @@ class UserCreate(User):
         excluded = {}
         for proxy_type in self.proxies:
             excluded[proxy_type] = []
-            for inbound in xray.config.inbounds_by_protocol.get(proxy_type, []):
+            for inbound in backend.config.inbounds_by_protocol.get(proxy_type, []):
                 if inbound["tag"] not in self.inbounds.get(proxy_type, []):
                     excluded[proxy_type].append(inbound["tag"])
 
@@ -185,14 +185,14 @@ class UserCreate(User):
 
             if tags:
                 for tag in tags:
-                    if tag not in xray.config.inbounds_by_tag:
+                    if tag not in backend.config.inbounds_by_tag:
                         raise ValueError(f"Inbound {tag} doesn't exist")
 
             # elif isinstance(tags, list) and not tags:
             #     raise ValueError(f"{proxy_type} inbounds cannot be empty")
 
             else:
-                inbounds[proxy_type] = [i["tag"] for i in xray.config.inbounds_by_protocol.get(proxy_type, [])]
+                inbounds[proxy_type] = [i["tag"] for i in backend.config.inbounds_by_protocol.get(proxy_type, [])]
 
         return inbounds
 
@@ -239,7 +239,7 @@ class UserModify(User):
         excluded = {}
         for proxy_type in self.inbounds:
             excluded[proxy_type] = []
-            for inbound in xray.config.inbounds_by_protocol.get(proxy_type, []):
+            for inbound in backend.config.inbounds_by_protocol.get(proxy_type, []):
                 if inbound["tag"] not in self.inbounds.get(proxy_type, []):
                     excluded[proxy_type].append(inbound["tag"])
 
@@ -255,7 +255,7 @@ class UserModify(User):
                 #     raise ValueError(f"{proxy_type} inbounds cannot be empty")
 
                 for tag in tags:
-                    if tag not in xray.config.inbounds_by_tag:
+                    if tag not in backend.config.inbounds_by_tag:
                         raise ValueError(f"Inbound {tag} doesn't exist")
 
         return inbounds

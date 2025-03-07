@@ -3,7 +3,7 @@ from typing import Dict, List, Union
 
 from fastapi import APIRouter, Depends
 
-from app import __version__, xray
+from app import __version__, backend
 from app.db import Session, crud, get_db
 from app.models.admin import Admin
 from app.models.host import ProxyInbound
@@ -56,4 +56,4 @@ def get_system_stats(db: Session = Depends(get_db), admin: Admin = Depends(Admin
 @router.get("/inbounds", response_model=Dict[ProxyTypes, List[ProxyInbound]])
 def get_inbounds(_: Admin = Depends(Admin.get_current)):
     """Retrieve inbound configurations grouped by protocol."""
-    return xray.config.inbounds_by_protocol
+    return backend.config.inbounds_by_protocol

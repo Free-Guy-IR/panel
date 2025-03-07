@@ -9,7 +9,7 @@ from sqlalchemy import and_, bindparam, insert, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.dml import Insert
 
-from app import scheduler, xray
+from app import scheduler, backend
 from app.db import GetDB
 from app.db.models import Admin, NodeUsage, NodeUserUsage, System, User
 from config import (
@@ -135,10 +135,10 @@ def get_outbounds_stats(api: XRayAPI):
 
 
 def record_user_usages():
-    api_instances = {None: xray.api}
+    api_instances = {None: backend.api}
     usage_coefficient = {None: 1}  # default usage coefficient for the main api instance
 
-    for node_id, node in list(xray.nodes.items()):
+    for node_id, node in list(backend.nodes.items()):
         if node.connected and node.started:
             api_instances[node_id] = node.api
             usage_coefficient[node_id] = node.usage_coefficient  # fetch the usage coefficient
@@ -192,8 +192,8 @@ def record_user_usages():
 
 
 def record_node_usages():
-    api_instances = {None: xray.api}
-    for node_id, node in list(xray.nodes.items()):
+    api_instances = {None: backend.api}
+    for node_id, node in list(backend.nodes.items()):
         if node.connected and node.started:
             api_instances[node_id] = node.api
 

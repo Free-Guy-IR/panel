@@ -1,18 +1,15 @@
-from typing import Dict
+# from typing import Dict
 
 from app import on_startup
 from app.models.host import ProxyHostSecurity
 from app.utils.store import DictStorage
-from app.xray import operations
-from app.xray.config import XRayConfig
-from app.xray.core import XRayCore
-from app.xray.node import XRayNode
+from app.backend.config import XRayConfig
 from config import XRAY_JSON
 
 
 config = XRayConfig(XRAY_JSON)
 
-nodes: Dict[int, XRayNode] = {}
+# nodes: Dict[int, XRayNode] = {}
 
 
 @DictStorage
@@ -58,8 +55,5 @@ __all__ = [
     "config",
     "hosts",
     "nodes",
-    "operations",
     "XRayConfig",
-    "XRayCore",
-    "XRayNode",
 ]

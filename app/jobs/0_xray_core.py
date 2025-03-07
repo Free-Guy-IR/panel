@@ -1,7 +1,7 @@
 import time
 import traceback
 
-from app import on_shutdown, on_startup, scheduler, xray
+from app import on_shutdown, on_startup, scheduler, backend
 from app.db import GetDB, crud
 from app.models.node import NodeStatus
 from app.utils.logger import get_logger
@@ -15,26 +15,26 @@ def core_health_check():
     config = None
 
     # main core
-    if not xray.core.started:
+    if not backend.core.started:
         if not config:
-            config = xray.config.include_db_users()
-        xray.core.restart(config)
+            config = backend.config.include_db_users()
+        backend.core.restart(config)
 
     # nodes' core
-    for node_id, node in list(xray.nodes.items()):
+    for node_id, node in list(backend.nodes.items()):
         if node.connected:
             try:
                 assert node.started
                 node.api.get_sys_stats(timeout=2)
             except (ConnectionError, xray_exc.XrayError, AssertionError):
                 if not config:
-                    config = xray.config.include_db_users()
-                xray.operations.restart_node(node_id, config)
+                    config = backend.config.include_db_users()
+                backend.operations.restart_node(node_id, config)
 
         if not node.connected:
             if not config:
-                config = xray.config.include_db_users()
-            xray.operations.connect_node(node_id, config)
+                config = backend.config.include_db_users()
+            backend.operations.connect_node(node_id, config)
 
 
 @on_startup
@@ -42,14 +42,14 @@ def initialize_cores():
     logger.info("Generating config...")
 
     start_time = time.time()
-    config = xray.config.include_db_users()
+    config = backend.config.include_db_users()
     logger.info(f"Config generated in {(time.time() - start_time):.2f} seconds")
 
     logger.info("Starting main and nodes' cores...")
 
     # main core
     try:
-        xray.core.start(config)
+        backend.core.start(config)
     except Exception:
         traceback.print_exc()
 
@@ -61,7 +61,7 @@ def initialize_cores():
             crud.update_node_status(db, dbnode, NodeStatus.connecting)
 
     for node_id in node_ids:
-        xray.operations.connect_node(node_id, config)
+        backend.operations.connect_node(node_id, config)
 
     scheduler.add_job(
         core_health_check, "interval", seconds=JOB_CORE_HEALTH_CHECK_INTERVAL, coalesce=True, max_instances=1
@@ -71,9 +71,9 @@ def initialize_cores():
 @on_shutdown
 def shutdown_cores():
     logger.info("Stopping main and nodes' cores...")
-    xray.core.stop()
+    backend.core.stop()
 
-    for node in list(xray.nodes.values()):
+    for node in list(backend.nodes.values()):
         try:
             node.disconnect()
         except Exception:

@@ -6,12 +6,12 @@ import commentjson
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from app import xray
+from app import backend
 from app.db import Session, get_db
 from app.models.admin import Admin
 from app.models.core import CoreStats
 from app.utils import responses
-from app.xray import XRayConfig
+from app.backend import XRayConfig
 from config import XRAY_JSON
 
 router = APIRouter(tags=["Core"], prefix="/api", responses={401: responses._401})
@@ -40,7 +40,7 @@ async def core_logs(websocket: WebSocket, db: Session = Depends(get_db)):
 
     cache = ""
     last_sent_ts = 0
-    with xray.core.get_logs() as logs:
+    with backend.core.get_logs() as logs:
         while True:
             if interval and time.time() - last_sent_ts >= interval and cache:
                 try:
@@ -75,8 +75,8 @@ async def core_logs(websocket: WebSocket, db: Session = Depends(get_db)):
 def get_core_stats(admin: Admin = Depends(Admin.get_current)):
     """Retrieve core statistics such as version and uptime."""
     return CoreStats(
-        version=xray.core.version,
-        started=xray.core.started,
+        version=backend.core.version,
+        started=backend.core.started,
         logs_websocket=router.url_path_for("core_logs"),
     )
 
@@ -84,12 +84,12 @@ def get_core_stats(admin: Admin = Depends(Admin.get_current)):
 @router.post("/core/restart", responses={403: responses._403})
 def restart_core(admin: Admin = Depends(Admin.check_sudo_admin)):
     """Restart the core and all connected nodes."""
-    startup_config = xray.config.include_db_users()
-    xray.core.restart(startup_config)
+    startup_config = backend.config.include_db_users()
+    backend.core.restart(startup_config)
 
-    for node_id, node in list(xray.nodes.items()):
+    for node_id, node in list(backend.nodes.items()):
         if node.connected:
-            xray.operations.restart_node(node_id, startup_config)
+            backend.operations.restart_node(node_id, startup_config)
 
     return {}
 
@@ -107,20 +107,20 @@ def get_core_config(admin: Admin = Depends(Admin.check_sudo_admin)) -> dict:
 def modify_core_config(payload: dict, admin: Admin = Depends(Admin.check_sudo_admin)) -> dict:
     """Modify the core configuration and restart the core."""
     try:
-        config = XRayConfig(payload, api_port=xray.config.api_port)
+        config = XRayConfig(payload, api_port=backend.config.api_port)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
 
-    xray.config = config
+    backend.config = config
     with open(XRAY_JSON, "w") as f:
         f.write(json.dumps(payload, indent=4))
 
-    startup_config = xray.config.include_db_users()
-    xray.core.restart(startup_config)
-    for node_id, node in list(xray.nodes.items()):
+    startup_config = backend.config.include_db_users()
+    backend.core.restart(startup_config)
+    for node_id, node in list(backend.nodes.items()):
         if node.connected:
-            xray.operations.restart_node(node_id, startup_config)
+            backend.operations.restart_node(node_id, startup_config)
 
-    xray.hosts.update()
+    backend.hosts.update()
 
     return payload

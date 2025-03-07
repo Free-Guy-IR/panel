@@ -14,7 +14,7 @@ from telebot import types
 from telebot.apihelper import ApiTelegramException
 from telebot.util import extract_arguments, user_link
 
-from app import xray
+from app import backend
 from app.db import GetDB, crud
 from app.dependencies import get_v2ray_links
 from app.models.proxy import ProxyTypes
@@ -312,7 +312,7 @@ def inbound_command(call: types.CallbackQuery):
         call.message.chat.id,
         call.message.message_id,
         parse_mode="markdown",
-        reply_markup=BotKeyboard.inbounds_menu(call.data, xray.config.inbounds_by_tag),
+        reply_markup=BotKeyboard.inbounds_menu(call.data, backend.config.inbounds_by_tag),
     )
 
 
@@ -831,7 +831,7 @@ def template_charge_command(call: types.CallbackQuery):
                 data_limit=template.data_limit,
             )
             db_user = crud.update_user(db, db_user, modify)
-            xray.operations.add_user(db_user)
+            backend.operations.add_user(db_user)
             bot.answer_callback_query(call.id, "🔋 User Successfully Charged!")
             bot.edit_message_text(
                 get_user_info_text(db_user),
@@ -1454,7 +1454,7 @@ def select_inbounds(call: types.CallbackQuery):
         return bot.answer_callback_query(call.id, "❌ No user selected.", show_alert=True)
     protocols: dict[str, list[str]] = mem_store.get(f"{call.message.chat.id}:protocols", {})
     _, inbound, action = call.data.split(":")
-    for protocol, inbounds in xray.config.inbounds_by_protocol.items():
+    for protocol, inbounds in backend.config.inbounds_by_protocol.items():
         for i in inbounds:
             if i["tag"] != inbound:
                 continue
@@ -1497,7 +1497,7 @@ def select_protocols(call: types.CallbackQuery):
     if protocol in protocols:
         del protocols[protocol]
     else:
-        protocols.update({protocol: [inbound["tag"] for inbound in xray.config.inbounds_by_protocol[protocol]]})
+        protocols.update({protocol: [inbound["tag"] for inbound in backend.config.inbounds_by_protocol[protocol]]})
     mem_store.set(f"{call.message.chat.id}:protocols", protocols)
 
     if action in ["edit", "create_from_template"]:
@@ -1533,7 +1533,7 @@ def confirm_user_command(call: types.CallbackQuery):
         with GetDB() as db:
             db_user = crud.get_user(db, username)
             crud.remove_user(db, db_user)
-            xray.operations.remove_user(db_user)
+            backend.operations.remove_user(db_user)
 
         bot.edit_message_text(
             "✅ User deleted.", call.message.chat.id, call.message.message_id, reply_markup=BotKeyboard.main_menu()
@@ -1557,7 +1557,7 @@ def confirm_user_command(call: types.CallbackQuery):
         with GetDB() as db:
             db_user = crud.get_user(db, username)
             crud.update_user(db, db_user, UserModify(status=UserStatusModify.disabled))
-            xray.operations.remove_user(db_user)
+            backend.operations.remove_user(db_user)
             bot.edit_message_text(
                 get_user_info_text(db_user),
                 call.message.chat.id,
@@ -1581,7 +1581,7 @@ def confirm_user_command(call: types.CallbackQuery):
         with GetDB() as db:
             db_user = crud.get_user(db, username)
             crud.update_user(db, db_user, UserModify(status=UserStatusModify.active))
-            xray.operations.add_user(db_user)
+            backend.operations.add_user(db_user)
             bot.edit_message_text(
                 get_user_info_text(db_user),
                 call.message.chat.id,
@@ -1606,7 +1606,7 @@ def confirm_user_command(call: types.CallbackQuery):
             db_user = crud.get_user(db, username)
             crud.reset_user_data_usage(db, db_user)
             if db_user.status in [UserStatus.active, UserStatus.on_hold]:
-                xray.operations.add_user(db_user)
+                backend.operations.add_user(db_user)
             user = UserResponse.model_validate(db_user)
             bot.edit_message_text(
                 get_user_info_text(db_user),
@@ -1628,11 +1628,11 @@ def confirm_user_command(call: types.CallbackQuery):
                 pass
     elif data == "restart":
         m = bot.edit_message_text("🔄 Restarting XRay core...", call.message.chat.id, call.message.message_id)
-        config = xray.config.include_db_users()
-        xray.core.restart(config)
-        for node_id, node in list(xray.nodes.items()):
+        config = backend.config.include_db_users()
+        backend.core.restart(config)
+        for node_id, node in list(backend.nodes.items()):
             if node.connected:
-                xray.operations.restart_node(node_id, config)
+                backend.operations.restart_node(node_id, config)
         bot.edit_message_text(
             "✅ XRay core restarted successfully.", m.chat.id, m.message_id, reply_markup=BotKeyboard.main_menu()
         )
@@ -1653,7 +1653,7 @@ def confirm_user_command(call: types.CallbackQuery):
             inbounds = template.inbounds
             proxies = {p.type.value: p.settings for p in db_user.proxies}
 
-            for protocol in xray.config.inbounds_by_protocol:
+            for protocol in backend.config.inbounds_by_protocol:
                 if protocol in inbounds and protocol not in db_user.inbounds:
                     proxies.update({protocol: {}})
                 elif protocol in db_user.inbounds and protocol not in inbounds:
@@ -1681,7 +1681,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     data_limit=(user.data_limit or 0) - user.used_traffic + template.data_limit,
                 )
             db_user = crud.update_user(db, db_user, modify)
-            xray.operations.add_user(db_user)
+            backend.operations.add_user(db_user)
             bot.answer_callback_query(call.id, "🔋 User Successfully Charged!")
             bot.edit_message_text(
                 get_user_info_text(db_user),
@@ -1738,7 +1738,7 @@ def confirm_user_command(call: types.CallbackQuery):
 
             proxies = {p.type.value: p.settings for p in db_user.proxies}
 
-            for protocol in xray.config.inbounds_by_protocol:
+            for protocol in backend.config.inbounds_by_protocol:
                 if protocol in inbounds and protocol not in db_user.inbounds:
                     proxies.update(
                         {
@@ -1773,7 +1773,7 @@ def confirm_user_command(call: types.CallbackQuery):
             user = UserResponse.model_validate(db_user)
 
             if user.status == UserStatus.active:
-                xray.operations.update_user(db_user)
+                backend.operations.update_user(db_user)
 
             bot.answer_callback_query(call.id, "✅ User updated successfully.")
             bot.edit_message_text(
@@ -1885,7 +1885,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     inbounds=inbounds,
                 )
             for proxy_type in new_user.proxies:
-                if not xray.config.inbounds_by_protocol.get(proxy_type):
+                if not backend.config.inbounds_by_protocol.get(proxy_type):
                     return bot.answer_callback_query(
                         call.id, f"❌ Protocol {proxy_type} is disabled on your server", show_alert=True
                     )
@@ -1894,7 +1894,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     db_user = crud.create_user(db, new_user)
                     proxies = db_user.proxies
                     user = UserResponse.model_validate(db_user)
-                    xray.operations.add_user(db_user)
+                    backend.operations.add_user(db_user)
                     if mem_store.get(f"{call.message.chat.id}:is_bulk", False):
                         schedule_delete_message(call.message.chat.id, call.message.id)
                         cleanup_messages(call.message.chat.id)
@@ -1958,7 +1958,7 @@ def confirm_user_command(call: types.CallbackQuery):
                 for user in depleted_users:
                     try:
                         crud.remove_user(db, user)
-                        xray.operations.remove_user(user)
+                        backend.operations.remove_user(user)
                         deleted += 1
                         f.write(
                             f"{user.username}\
@@ -2095,7 +2095,7 @@ def confirm_user_command(call: types.CallbackQuery):
             unsuccessful = 0
             for user in users:
                 inbound_tags = [j for i in user.inbounds for j in user.inbounds[i]]
-                protocol = xray.config.inbounds_by_tag[inbound]["protocol"]
+                protocol = backend.config.inbounds_by_tag[inbound]["protocol"]
                 new_inbounds = user.inbounds
                 if data == "inbound_add":
                     if inbound not in inbound_tags:
@@ -2113,7 +2113,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     data == "inbound_add" and inbound not in inbound_tags
                 ):
                     proxies = {p.type.value: p.settings for p in user.proxies}
-                    for protocol in xray.config.inbounds_by_protocol:
+                    for protocol in backend.config.inbounds_by_protocol:
                         if protocol in new_inbounds and protocol not in user.inbounds:
                             proxies.update(
                                 {
@@ -2127,7 +2127,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     try:
                         user = crud.update_user(db, user, UserModify(inbounds=new_inbounds, proxies=proxies))
                         if user.status == UserStatus.active:
-                            xray.operations.update_user(user)
+                            backend.operations.update_user(user)
                     except Exception:
                         db.rollback()
                         unsuccessful += 1

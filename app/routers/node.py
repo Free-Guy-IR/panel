@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocke
 from sqlalchemy.exc import IntegrityError
 from starlette.websockets import WebSocketDisconnect
 
-from app import logger, xray
+from app import logger, backend
 from app.db import Session, crud, get_db
 from app.dependencies import get_dbnode, validate_dates
 from app.models.admin import Admin
@@ -44,7 +44,7 @@ def add_node(
         db.rollback()
         raise HTTPException(status_code=409, detail=f'Node "{new_node.name}" already exists')
 
-    bg.add_task(xray.operations.connect_node, node_id=dbnode.id)
+    bg.add_task(backend.operations.connect_node, node_id=dbnode.id)
 
     logger.info(f'New node "{dbnode.name}" added')
     return dbnode
@@ -69,10 +69,10 @@ async def node_logs(node_id: int, websocket: WebSocket, db: Session = Depends(ge
     if not admin.is_sudo:
         return await websocket.close(reason="You're not allowed", code=4403)
 
-    if not xray.nodes.get(node_id):
+    if not backend.nodes.get(node_id):
         return await websocket.close(reason="Node not found", code=4404)
 
-    if not xray.nodes[node_id].connected:
+    if not backend.nodes[node_id].connected:
         return await websocket.close(reason="Node is not connected", code=4400)
 
     interval = websocket.query_params.get("interval")
@@ -88,10 +88,10 @@ async def node_logs(node_id: int, websocket: WebSocket, db: Session = Depends(ge
 
     cache = ""
     last_sent_ts = 0
-    node = xray.nodes[node_id]
+    node = backend.nodes[node_id]
     with node.get_logs() as logs:
         while True:
-            if not node == xray.nodes[node_id]:
+            if not node == backend.nodes[node_id]:
                 break
 
             if interval and time.time() - last_sent_ts >= interval and cache:
@@ -139,9 +139,9 @@ def modify_node(
 ):
     """Update a node's details. Only accessible to sudo admins."""
     updated_node = crud.update_node(db, dbnode, modified_node)
-    xray.operations.remove_node(updated_node.id)
+    backend.operations.remove_node(updated_node.id)
     if updated_node.status != NodeStatus.disabled:
-        bg.add_task(xray.operations.connect_node, node_id=updated_node.id)
+        bg.add_task(backend.operations.connect_node, node_id=updated_node.id)
 
     logger.info(f'Node "{dbnode.name}" modified')
     return dbnode
@@ -154,7 +154,7 @@ def reconnect_node(
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
-    bg.add_task(xray.operations.connect_node, node_id=dbnode.id)
+    bg.add_task(backend.operations.connect_node, node_id=dbnode.id)
     return {"detail": "Reconnection task scheduled"}
 
 
@@ -166,7 +166,7 @@ def remove_node(
 ):
     """Delete a node and remove it from xray in the background."""
     crud.remove_node(db, dbnode)
-    xray.operations.remove_node(dbnode.id)
+    backend.operations.remove_node(dbnode.id)
 
     logger.info(f'Node "{dbnode.name}" deleted')
     return {}
