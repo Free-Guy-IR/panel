@@ -17,17 +17,8 @@ from app.utils.crypto import get_cert_SANs, get_x25519_public_key
 from config import DEBUG, XRAY_EXCLUDE_INBOUND_TAGS, XRAY_FALLBACKS_INBOUND_TAG
 
 
-def merge_dicts(a, b):  # B will override A dictionary key and values
-    for key, value in b.items():
-        if isinstance(value, dict) and key in a and isinstance(a[key], dict):
-            merge_dicts(a[key], value)  # Recursively merge nested dictionaries
-        else:
-            a[key] = value
-    return a
-
-
 class XRayConfig(dict):
-    def __init__(self, config: Union[dict, str, PosixPath] = {}, api_host: str = "127.0.0.1", api_port: int = 8080):
+    def __init__(self, config: Union[dict, str, PosixPath] = {}):
         if isinstance(config, str):
             try:
                 # considering string as json
@@ -44,9 +35,6 @@ class XRayConfig(dict):
         if isinstance(config, dict):
             config = deepcopy(config)
 
-        self.api_host = api_host
-        self.api_port = api_port
-
         super().__init__(config)
         self._validate()
 
@@ -55,51 +43,6 @@ class XRayConfig(dict):
         self.inbounds_by_tag = {}
         self._fallbacks_inbound = self.get_inbound(XRAY_FALLBACKS_INBOUND_TAG)
         self._resolve_inbounds()
-
-        self._apply_api()
-
-    def _apply_api(self):
-        api_inbound = self.get_inbound("API_INBOUND")
-        if api_inbound:
-            api_inbound["listen"] = self.api_host
-            api_inbound["listen"]["address"] = self.api_host
-            api_inbound["port"] = self.api_port
-            return
-
-        self["api"] = {"services": ["HandlerService", "StatsService", "LoggerService"], "tag": "API"}
-        self["stats"] = {}
-        forced_policies = {
-            "levels": {"0": {"statsUserUplink": True, "statsUserDownlink": True}},
-            "system": {
-                "statsInboundDownlink": False,
-                "statsInboundUplink": False,
-                "statsOutboundDownlink": True,
-                "statsOutboundUplink": True,
-            },
-        }
-        if self.get("policy"):
-            self["policy"] = merge_dicts(self.get("policy"), forced_policies)
-        else:
-            self["policy"] = forced_policies
-        inbound = {
-            "listen": self.api_host,
-            "port": self.api_port,
-            "protocol": "dokodemo-door",
-            "settings": {"address": self.api_host},
-            "tag": "API_INBOUND",
-        }
-        try:
-            self["inbounds"].insert(0, inbound)
-        except KeyError:
-            self["inbounds"] = []
-            self["inbounds"].insert(0, inbound)
-
-        rule = {"inboundTag": ["API_INBOUND"], "outboundTag": "API", "type": "field"}
-        try:
-            self["routing"]["rules"].insert(0, rule)
-        except KeyError:
-            self["routing"] = {"rules": []}
-            self["routing"]["rules"].insert(0, rule)
 
     def _validate(self):
         if not self.get("inbounds"):

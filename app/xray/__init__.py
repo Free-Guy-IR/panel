@@ -1,31 +1,16 @@
-from random import randint
 from typing import Dict
 
 from app import on_startup
 from app.models.host import ProxyHostSecurity
 from app.utils.store import DictStorage
-from app.utils.system import check_port
 from app.xray import operations
 from app.xray.config import XRayConfig
 from app.xray.core import XRayCore
 from app.xray.node import XRayNode
-from config import XRAY_ASSETS_PATH, XRAY_EXECUTABLE_PATH, XRAY_JSON
-from xray_api import XRay as XRayAPI
-from xray_api import exceptions, types
-from xray_api import exceptions as exc
+from config import XRAY_JSON
 
-core = XRayCore(XRAY_EXECUTABLE_PATH, XRAY_ASSETS_PATH)
 
-# Search for a free API port
-try:
-    for api_port in range(randint(10000, 60000), 65536):
-        if not check_port(api_port):
-            break
-finally:
-    config = XRayConfig(XRAY_JSON, api_port=api_port)
-    del api_port
-
-api = XRayAPI(config.api_host, config.api_port)
+config = XRayConfig(XRAY_JSON)
 
 nodes: Dict[int, XRayNode] = {}
 
@@ -72,13 +57,8 @@ on_startup(hosts.update)
 __all__ = [
     "config",
     "hosts",
-    "core",
-    "api",
     "nodes",
     "operations",
-    "exceptions",
-    "exc",
-    "types",
     "XRayConfig",
     "XRayCore",
     "XRayNode",
