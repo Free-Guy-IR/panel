@@ -5,14 +5,6 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from app.utils.system import random_password
-from xray_api.types.account import (
-    ShadowsocksAccount,
-    ShadowsocksMethods,
-    TrojanAccount,
-    VLESSAccount,
-    VMessAccount,
-    XTLSFlows,
-)
 
 
 class ProxyTypes(str, Enum):
@@ -22,17 +14,6 @@ class ProxyTypes(str, Enum):
     VLESS = "vless"
     Trojan = "trojan"
     Shadowsocks = "shadowsocks"
-
-    @property
-    def account_model(self):
-        if self == self.VMess:
-            return VMessAccount
-        if self == self.VLESS:
-            return VLESSAccount
-        if self == self.Trojan:
-            return TrojanAccount
-        if self == self.Shadowsocks:
-            return ShadowsocksAccount
 
     @property
     def settings_model(self):
@@ -64,6 +45,11 @@ class VMessSettings(ProxySettings):
         self.id = uuid4()
 
 
+class XTLSFlows(Enum):
+    NONE = ''
+    VISION = 'xtls-rprx-vision'
+
+
 class VLESSSettings(ProxySettings):
     id: UUID = Field(default_factory=uuid4)
     flow: XTLSFlows = XTLSFlows.NONE
@@ -78,6 +64,12 @@ class TrojanSettings(ProxySettings):
 
     def revoke(self):
         self.password = random_password()
+
+
+class ShadowsocksMethods(Enum):
+    AES_128_GCM = 'aes-128-gcm'
+    AES_256_GCM = 'aes-256-gcm'
+    CHACHA20_POLY1305 = 'chacha20-ietf-poly1305'
 
 
 class ShadowsocksSettings(ProxySettings):
