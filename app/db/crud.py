@@ -28,10 +28,11 @@ from app.db.models import (
     User,
     UserTemplate,
     UserUsageResetLogs,
+    NodeStatus,
 )
 from app.models.admin import AdminCreate, AdminModify, AdminPartialModify
 from app.models.host import CreateHost as ProxyHostModify
-from app.models.node import NodeCreate, NodeModify, NodeStatus, NodeUsageResponse
+from app.models.node import NodeCreate, NodeModify, NodeUsageResponse
 from app.models.user import (
     ReminderType,
     UserCreate,
@@ -402,7 +403,7 @@ def get_users_count(db: Session, status: UserStatus = None, admin: Admin = None)
     return query.count()
 
 
-def create_user(db: Session, user: UserCreate, admin: Admin = None) -> User:
+def create_user(db: Session, user: User) -> User:
     """
     Creates a new user with provided details.
 
@@ -414,43 +415,13 @@ def create_user(db: Session, user: UserCreate, admin: Admin = None) -> User:
     Returns:
         User: The created user object.
     """
-    excluded_inbounds_tags = user.excluded_inbounds
-    proxies = []
-    for proxy_type, settings in user.proxies.items():
-        excluded_inbounds = [get_or_create_inbound(db, tag) for tag in excluded_inbounds_tags[proxy_type]]
-        proxies.append(
-            Proxy(type=proxy_type.value, settings=settings.dict(no_obj=True), excluded_inbounds=excluded_inbounds)
-        )
-
-    dbuser = User(
-        username=user.username,
-        proxies=proxies,
-        status=user.status,
-        data_limit=(user.data_limit or None),
-        expire=(user.expire or None),
-        admin=admin,
-        data_limit_reset_strategy=user.data_limit_reset_strategy,
-        note=user.note,
-        on_hold_expire_duration=(user.on_hold_expire_duration or None),
-        on_hold_timeout=(user.on_hold_timeout or None),
-        auto_delete_in_days=user.auto_delete_in_days,
-        next_plan=NextPlan(
-            user_template_id=user.next_plan.user_template_id,
-            data_limit=user.next_plan.data_limit,
-            expire=user.next_plan.expire,
-            add_remaining_traffic=user.next_plan.add_remaining_traffic,
-            fire_on_either=user.next_plan.fire_on_either,
-        )
-        if user.next_plan
-        else None,
-    )
-    db.add(dbuser)
+    db.add(user)
     db.commit()
-    db.refresh(dbuser)
-    return dbuser
+    db.refresh(user)
+    return user
 
 
-def remove_user(db: Session, dbuser: User) -> User:
+def remove_user(db: Session, db_user: User) -> User:
     """
     Removes a user from the database.
 
@@ -461,9 +432,9 @@ def remove_user(db: Session, dbuser: User) -> User:
     Returns:
         User: The removed user object.
     """
-    db.delete(dbuser)
+    db.delete(db_user)
     db.commit()
-    return dbuser
+    return db_user
 
 
 def remove_users(db: Session, dbusers: List[User]):
@@ -505,13 +476,13 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
         for proxy in dbuser.proxies:
             if proxy.type not in modify.proxies:
                 db.delete(proxy)
-    if modify.inbounds:
-        for proxy_type, tags in modify.excluded_inbounds.items():
-            dbproxy = db.query(Proxy).where(
-                Proxy.user == dbuser, Proxy.type == proxy_type
-            ).first() or added_proxies.get(proxy_type)
-            if dbproxy:
-                dbproxy.excluded_inbounds = [get_or_create_inbound(db, tag) for tag in tags]
+    # if modify.inbounds:
+    #    for proxy_type, tags in modify.excluded_inbounds.items():
+    #        dbproxy = db.query(Proxy).where(
+    #            Proxy.user == dbuser, Proxy.type == proxy_type
+    #        ).first() or added_proxies.get(proxy_type)
+    #        if dbproxy:
+    #            dbproxy.excluded_inbounds = [get_or_create_inbound(db, tag) for tag in tags]
 
     if modify.status is not None:
         dbuser.status = modify.status
@@ -579,14 +550,14 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
     elif dbuser.next_plan is not None:
         db.delete(dbuser.next_plan)
 
-    dbuser.edit_at = datetime.utcnow()
+    dbuser.edit_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(dbuser)
     return dbuser
 
 
-def reset_user_data_usage(db: Session, dbuser: User) -> User:
+def reset_user_data_usage(db: Session, db_user: User) -> User:
     """
     Resets the data usage of a user and logs the reset.
 
@@ -598,24 +569,24 @@ def reset_user_data_usage(db: Session, dbuser: User) -> User:
         User: The updated user object.
     """
     usage_log = UserUsageResetLogs(
-        user=dbuser,
-        used_traffic_at_reset=dbuser.used_traffic,
+        user=db_user,
+        used_traffic_at_reset=db_user.used_traffic,
     )
     db.add(usage_log)
 
-    dbuser.used_traffic = 0
-    dbuser.node_usages.clear()
-    if dbuser.status not in [UserStatus.expired, UserStatus.disabled]:
-        dbuser.status = UserStatus.active.value
+    db_user.used_traffic = 0
+    db_user.node_usages.clear()
+    if db_user.status not in [UserStatus.expired, UserStatus.disabled]:
+        db_user.status = UserStatus.active.value
 
-    if dbuser.next_plan:
-        db.delete(dbuser.next_plan)
-        dbuser.next_plan = None
-    db.add(dbuser)
+    if db_user.next_plan:
+        db.delete(db_user.next_plan)
+        db_user.next_plan = None
+    db.add(db_user)
 
     db.commit()
-    db.refresh(dbuser)
-    return dbuser
+    db.refresh(db_user)
+    return db_user
 
 
 def reset_user_by_next(db: Session, dbuser: User) -> User:
@@ -664,28 +635,28 @@ def reset_user_by_next(db: Session, dbuser: User) -> User:
     return dbuser
 
 
-def revoke_user_sub(db: Session, dbuser: User) -> User:
+def revoke_user_sub(db: Session, db_user: User) -> User:
     """
     Revokes the subscription of a user and updates proxies settings.
 
     Args:
         db (Session): Database session.
-        dbuser (User): The user object whose subscription is to be revoked.
+        db_user (User): The user object whose subscription is to be revoked.
 
     Returns:
         User: The updated user object.
     """
-    dbuser.sub_revoked_at = datetime.utcnow()
+    db_user.sub_revoked_at = datetime.now(timezone.utc)
 
-    user = UserResponse.model_validate(dbuser)
+    user = UserResponse.model_validate(db_user)
     for proxy_type, settings in user.proxies.copy().items():
         settings.revoke()
         user.proxies[proxy_type] = settings
-    dbuser = update_user(db, dbuser, user)
+    db_user = update_user(db, db_user, user)
 
     db.commit()
-    db.refresh(dbuser)
-    return dbuser
+    db.refresh(db_user)
+    return db_user
 
 
 def update_user_sub(db: Session, dbuser: User, user_agent: str) -> User:
@@ -1309,13 +1280,19 @@ def get_node_by_id(db: Session, node_id: int) -> Optional[Node]:
     return db.query(Node).filter(Node.id == node_id).first()
 
 
-def get_nodes(db: Session, status: Optional[Union[NodeStatus, list]] = None, enabled: bool = None) -> List[Node]:
+def get_nodes(
+    db: Session,
+    status: Optional[Union[NodeStatus, list]] = None,
+    enabled: bool = None,
+    offset: int | None = None,
+    limit: int | None = None,
+) -> list[Node]:
     """
     Retrieves nodes based on optional status and enabled filters.
 
     Args:
         db (Session): The database session.
-        status (Optional[Union[NodeStatus, list]]): The status or list of statuses to filter by.
+        status (Optional[Union[app.db.models.NodeStatus, list]]): The status or list of statuses to filter by.
         enabled (bool): If True, excludes disabled nodes.
 
     Returns:
@@ -1332,10 +1309,15 @@ def get_nodes(db: Session, status: Optional[Union[NodeStatus, list]] = None, ena
     if enabled:
         query = query.filter(Node.status != NodeStatus.disabled)
 
+    if offset:
+        query = query.offset(offset)
+    if limit:
+        query = query.limit(limit)
+
     return query.all()
 
 
-def get_nodes_usage(db: Session, start: datetime, end: datetime) -> List[NodeUsageResponse]:
+def get_nodes_usage(db: Session, start: datetime, end: datetime) -> list[NodeUsageResponse]:
     """
     Retrieves usage data for all nodes within a specified time range.
 
@@ -1368,7 +1350,7 @@ def get_nodes_usage(db: Session, start: datetime, end: datetime) -> List[NodeUsa
     return list(usages.values())
 
 
-def create_node(db: Session, node: NodeCreate) -> Node:
+def create_node(db: Session, node: Node) -> Node:
     """
     Creates a new node in the database.
 
@@ -1379,22 +1361,13 @@ def create_node(db: Session, node: NodeCreate) -> Node:
     Returns:
         Node: The newly created Node object.
     """
-
-    dbnode = Node(
-        name=node.name,
-        address=node.address,
-        port=node.port,
-        api_port=node.api_port,
-        usage_coefficient=node.usage_coefficient,
-    )
-
-    db.add(dbnode)
+    db.add(node)
     db.commit()
-    db.refresh(dbnode)
-    return dbnode
+    db.refresh(node)
+    return node
 
 
-def remove_node(db: Session, dbnode: Node) -> Node:
+def remove_node(db: Session, db_node: Node) -> Node:
     """
     Removes a node from the database.
 
@@ -1405,12 +1378,12 @@ def remove_node(db: Session, dbnode: Node) -> Node:
     Returns:
         Node: The removed Node object.
     """
-    db.delete(dbnode)
+    db.delete(db_node)
     db.commit()
-    return dbnode
+    return db_node
 
 
-def update_node(db: Session, dbnode: Node, modify: NodeModify) -> Node:
+def update_node(db: Session, db_node: Node) -> Node:
     """
     Updates an existing node with new information.
 
@@ -1422,41 +1395,26 @@ def update_node(db: Session, dbnode: Node, modify: NodeModify) -> Node:
     Returns:
         Node: The updated Node object.
     """
-    if modify.name is not None:
-        dbnode.name = modify.name
-
-    if modify.address is not None:
-        dbnode.address = modify.address
-
-    if modify.port is not None:
-        dbnode.port = modify.port
-
-    if modify.api_port is not None:
-        dbnode.api_port = modify.api_port
-
-    if modify.status is NodeStatus.disabled:
-        dbnode.status = modify.status
-        dbnode.xray_version = None
-        dbnode.message = None
-    else:
-        dbnode.status = NodeStatus.connecting
-
-    if modify.usage_coefficient:
-        dbnode.usage_coefficient = modify.usage_coefficient
-
     db.commit()
-    db.refresh(dbnode)
-    return dbnode
+    db.refresh(db_node)
+    return db_node
 
 
-def update_node_status(db: Session, dbnode: Node, status: NodeStatus, message: str = None, version: str = None) -> Node:
+def update_node_status(
+    db: Session,
+    dbnode: Node,
+    status: NodeStatus,
+    message: str = None,
+    xray_version: str = None,
+    node_version: str = None,
+) -> Node:
     """
     Updates the status of a node.
 
     Args:
         db (Session): The database session.
         dbnode (Node): The Node object to be updated.
-        status (NodeStatus): The new status of the node.
+        status (app.db.models.NodeStatus): The new status of the node.
         message (str, optional): A message associated with the status update.
         version (str, optional): The version of the node software.
 
@@ -1465,8 +1423,9 @@ def update_node_status(db: Session, dbnode: Node, status: NodeStatus, message: s
     """
     dbnode.status = status
     dbnode.message = message
-    dbnode.xray_version = version
-    dbnode.last_status_change = datetime.utcnow()
+    dbnode.xray_version = xray_version
+    dbnode.node_version = node_version
+    dbnode.last_status_change = datetime.now(timezone.utc)
     db.commit()
     db.refresh(dbnode)
     return dbnode

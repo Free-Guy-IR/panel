@@ -1,20 +1,16 @@
 from __future__ import annotations
+from functools import lru_cache
 
 import json
-from collections import defaultdict
 from copy import deepcopy
 from pathlib import PosixPath
 from typing import Union
 
 import commentjson
-from sqlalchemy import func
 
-from app.db import GetDB
-from app.db import models as db_models
 from app.models.proxy import ProxyTypes
-from app.models.user import UserStatus
 from app.utils.crypto import get_cert_SANs, get_x25519_public_key
-from config import DEBUG, XRAY_EXCLUDE_INBOUND_TAGS, XRAY_FALLBACKS_INBOUND_TAG
+from config import XRAY_EXCLUDE_INBOUND_TAGS, XRAY_FALLBACKS_INBOUND_TAG
 
 
 class XRayConfig(dict):
@@ -235,7 +231,7 @@ class XRayConfig(dict):
                     elif host and isinstance(host, list):
                         settings["host"] = host[0]
 
-            self.inbounds.append(settings)
+            self.inbounds.append(inbound["tag"])
             self.inbounds_by_tag[inbound["tag"]] = settings
 
             try:
@@ -253,84 +249,9 @@ class XRayConfig(dict):
             if outbound["tag"] == tag:
                 return outbound
 
+    @lru_cache(maxsize=None)
     def to_json(self, **json_kwargs):
         return json.dumps(self, **json_kwargs)
 
     def copy(self):
         return deepcopy(self)
-
-    def include_db_users(self) -> XRayConfig:
-        config = self.copy()
-
-        with GetDB() as db:
-            query = (
-                db.query(
-                    db_models.User.id,
-                    db_models.User.username,
-                    func.lower(db_models.Proxy.type).label("type"),
-                    db_models.Proxy.settings,
-                    func.group_concat(db_models.excluded_inbounds_association.c.inbound_tag).label(
-                        "excluded_inbound_tags"
-                    ),
-                )
-                .join(db_models.Proxy, db_models.User.id == db_models.Proxy.user_id)
-                .outerjoin(
-                    db_models.excluded_inbounds_association,
-                    db_models.Proxy.id == db_models.excluded_inbounds_association.c.proxy_id,
-                )
-                .filter(db_models.User.status.in_([UserStatus.active, UserStatus.on_hold]))
-                .group_by(
-                    func.lower(db_models.Proxy.type),
-                    db_models.User.id,
-                    db_models.User.username,
-                    db_models.Proxy.settings,
-                )
-            )
-            result = query.all()
-
-            grouped_data = defaultdict(list)
-
-            for row in result:
-                grouped_data[row.type].append(
-                    (
-                        row.id,
-                        row.username,
-                        row.settings,
-                        [i for i in row.excluded_inbound_tags.split(",") if i] if row.excluded_inbound_tags else None,
-                    )
-                )
-
-            for proxy_type, rows in grouped_data.items():
-                inbounds = self.inbounds_by_protocol.get(proxy_type)
-                if not inbounds:
-                    continue
-
-                for inbound in inbounds:
-                    clients = config.get_inbound(inbound["tag"])["settings"]["clients"]
-
-                    for row in rows:
-                        user_id, username, settings, excluded_inbound_tags = row
-
-                        if excluded_inbound_tags and inbound["tag"] in excluded_inbound_tags:
-                            continue
-
-                        client = {"email": f"{user_id}.{username}", **settings}
-
-                        # XTLS currently only supports transmission methods of TCP and mKCP
-                        if client.get("flow") and (
-                            inbound.get("network", "tcp") not in ("tcp", "raw", "kcp")
-                            or (
-                                inbound.get("network", "tcp") in ("tcp", "raw", "kcp")
-                                and inbound.get("tls") not in ("tls", "reality")
-                            )
-                            or inbound.get("header_type") == "http"
-                        ):
-                            del client["flow"]
-
-                        clients.append(client)
-
-        if DEBUG:
-            with open("generated_config-debug.json", "w") as f:
-                f.write(config.to_json(indent=4))
-
-        return config

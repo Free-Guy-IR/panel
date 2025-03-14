@@ -1,15 +1,11 @@
-# from typing import Dict
-
 from app import on_startup
 from app.models.host import ProxyHostSecurity
 from app.utils.store import DictStorage
-from app.backend.config import XRayConfig
+from app.backend.xray import XRayConfig
 from config import XRAY_JSON
 
 
 config = XRayConfig(XRAY_JSON)
-
-# nodes: Dict[int, XRayNode] = {}
 
 
 @DictStorage
@@ -51,9 +47,4 @@ def hosts(storage: dict):
 on_startup(hosts.update)
 
 
-__all__ = [
-    "config",
-    "hosts",
-    "nodes",
-    "XRayConfig",
-]
+__all__ = ["config", "hosts", "nodes", "XRayConfig"]

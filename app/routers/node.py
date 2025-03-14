@@ -1,65 +1,55 @@
 import asyncio
 import time
-from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from app import logger, backend
-from app.db import Session, crud, get_db
-from app.dependencies import get_dbnode, validate_dates
+from app import backend
+from app.db import Session, get_db
 from app.models.admin import Admin
 from app.models.node import (
     NodeCreate,
     NodeModify,
     NodeResponse,
     NodeSettings,
-    NodeStatus,
     NodesUsageResponse,
 )
+from app.operation.node import NodeOperator
+from app.operation import OperatorType
 from app.utils import responses
 
-router = APIRouter(tags=["Node"], prefix="/api", responses={401: responses._401, 403: responses._403})
+
+node_operator = NodeOperator(operator_type=OperatorType.API)
+router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses._401, 403: responses._403})
 
 
-@router.get("/node/settings", response_model=NodeSettings)
-def get_node_settings(db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)):
+@router.get("/settings", response_model=NodeSettings)
+async def get_node_settings(_: Admin = Depends(Admin.check_sudo_admin)):
     """Retrieve the current node settings, including TLS certificate."""
-    tls = crud.get_tls_certificate(db)
-    return NodeSettings(certificate=tls.certificate)
+    return await node_operator.get_node_settings()
 
 
-@router.post("/node", response_model=NodeResponse, responses={409: responses._409})
-def add_node(
+@router.post("", response_model=NodeResponse, responses={409: responses._409})
+async def add_node(
     new_node: NodeCreate,
-    bg: BackgroundTasks,
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Add a new node to the database and optionally add it as a host."""
-    try:
-        dbnode = crud.create_node(db, new_node)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail=f'Node "{new_node.name}" already exists')
-
-    bg.add_task(backend.operations.connect_node, node_id=dbnode.id)
-
-    logger.info(f'New node "{dbnode.name}" added')
-    return dbnode
+    return await node_operator.add_node(db, new_node)
 
 
-@router.get("/node/{node_id}", response_model=NodeResponse)
-def get_node(
-    dbnode: NodeResponse = Depends(get_dbnode),
+@router.get("/{node_id}", response_model=NodeResponse)
+async def get_node(
+    node_id: int,
+    db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Retrieve details of a specific node by its ID."""
-    return dbnode
+    return await node_operator.get_db_node(db=db, node_id=node_id)
 
 
-@router.websocket("/node/{node_id}/logs")
+@router.websocket("/{node_id}/logs")
 async def node_logs(node_id: int, websocket: WebSocket, db: Session = Depends(get_db)):
     token = websocket.query_params.get("token") or websocket.headers.get("Authorization", "").removeprefix("Bearer ")
     admin = Admin.get_admin(token, db)
@@ -123,65 +113,53 @@ async def node_logs(node_id: int, websocket: WebSocket, db: Session = Depends(ge
                 break
 
 
-@router.get("/nodes", response_model=List[NodeResponse])
-def get_nodes(db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)):
+@router.get("s", response_model=list[NodeResponse])
+async def get_nodes(
+    offset: int = None, limit: int = None, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)
+):
     """Retrieve a list of all nodes. Accessible only to sudo admins."""
-    return crud.get_nodes(db)
+    return await node_operator.get_db_nodes(db=db, offset=offset, limit=limit)
 
 
-@router.put("/node/{node_id}", response_model=NodeResponse)
-def modify_node(
+@router.put("/{node_id}", response_model=NodeResponse)
+async def modify_node(
     modified_node: NodeModify,
-    bg: BackgroundTasks,
-    dbnode: NodeResponse = Depends(get_node),
+    node_id: int,
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Update a node's details. Only accessible to sudo admins."""
-    updated_node = crud.update_node(db, dbnode, modified_node)
-    backend.operations.remove_node(updated_node.id)
-    if updated_node.status != NodeStatus.disabled:
-        bg.add_task(backend.operations.connect_node, node_id=updated_node.id)
-
-    logger.info(f'Node "{dbnode.name}" modified')
-    return dbnode
+    return await node_operator.modify_node(db, node_id=node_id, modified_node=modified_node)
 
 
-@router.post("/node/{node_id}/reconnect")
-def reconnect_node(
-    bg: BackgroundTasks,
-    dbnode: NodeResponse = Depends(get_node),
+@router.post("/{node_id}/reconnect")
+async def reconnect_node(
+    node_id: int,
+    db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
-    bg.add_task(backend.operations.connect_node, node_id=dbnode.id)
-    return {"detail": "Reconnection task scheduled"}
-
-
-@router.delete("/node/{node_id}")
-def remove_node(
-    dbnode: NodeResponse = Depends(get_node),
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
-    """Delete a node and remove it from xray in the background."""
-    crud.remove_node(db, dbnode)
-    backend.operations.remove_node(dbnode.id)
-
-    logger.info(f'Node "{dbnode.name}" deleted')
+    await node_operator.restart_node(db=db, node_id=node_id)
     return {}
 
 
-@router.get("/nodes/usage", response_model=NodesUsageResponse)
-def get_usage(
+@router.delete("/{node_id}")
+async def remove_node(
+    node_id: int,
+    db: Session = Depends(get_db),
+    _: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Delete a node and remove it from xray in the background."""
+    await node_operator.remove_node(db=db, node_id=node_id)
+    return {}
+
+
+@router.get("s/usage", response_model=NodesUsageResponse)
+async def get_usage(
     db: Session = Depends(get_db),
     start: str = "",
     end: str = "",
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Retrieve usage statistics for nodes within a specified date range."""
-    start, end = validate_dates(start, end)
-
-    usages = crud.get_nodes_usage(db, start, end)
-
-    return {"usages": usages}
+    return await node_operator.get_usage(db=db, start=start, end=end)

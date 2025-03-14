@@ -35,7 +35,7 @@ class ProxySettings(BaseModel, use_enum_values=True):
     def dict(self, *, no_obj=False, **kwargs):
         if no_obj:
             return json.loads(self.json())
-        return super().dict(**kwargs)
+        return super().model_dump(**kwargs)
 
 
 class VMessSettings(ProxySettings):
@@ -46,8 +46,8 @@ class VMessSettings(ProxySettings):
 
 
 class XTLSFlows(Enum):
-    NONE = ''
-    VISION = 'xtls-rprx-vision'
+    NONE = ""
+    VISION = "xtls-rprx-vision"
 
 
 class VLESSSettings(ProxySettings):
@@ -60,16 +60,16 @@ class VLESSSettings(ProxySettings):
 
 class TrojanSettings(ProxySettings):
     password: str = Field(default_factory=random_password)
-    flow: XTLSFlows = XTLSFlows.NONE
 
     def revoke(self):
         self.password = random_password()
 
 
 class ShadowsocksMethods(Enum):
-    AES_128_GCM = 'aes-128-gcm'
-    AES_256_GCM = 'aes-256-gcm'
-    CHACHA20_POLY1305 = 'chacha20-ietf-poly1305'
+    AES_128_GCM = "aes-128-gcm"
+    AES_256_GCM = "aes-256-gcm"
+    CHACHA20_POLY1305 = "chacha20-ietf-poly1305"
+    XCHACHA20_POLY1305 = "xchacha20-poly1305"
 
 
 class ShadowsocksSettings(ProxySettings):
