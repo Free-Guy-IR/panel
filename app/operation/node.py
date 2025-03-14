@@ -60,6 +60,7 @@ class NodeOperator(BaseOperator):
                     config=config.to_json(),
                     backend_type=0,
                     users=await backend_users(inbounds=config.inbounds),
+                    keep_alive=db_node.keep_alive,
                     timeout=10,
                 )
                 update_node_status(
