@@ -1,10 +1,9 @@
 import asyncio
-import time
+from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, WebSocket
-from starlette.websockets import WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 
-from app import backend
 from app.db import Session, get_db
 from app.models.admin import Admin
 from app.models.node import (
@@ -49,68 +48,44 @@ async def get_node(
     return await node_operator.get_db_node(db=db, node_id=node_id)
 
 
-@router.websocket("/{node_id}/logs")
-async def node_logs(node_id: int, websocket: WebSocket, db: Session = Depends(get_db)):
-    token = websocket.query_params.get("token") or websocket.headers.get("Authorization", "").removeprefix("Bearer ")
-    admin = Admin.get_admin(token, db)
-    if not admin:
-        return await websocket.close(reason="Unauthorized", code=4401)
+@router.get("/{node_id}/logs")
+async def node_logs(
+    node_id: int,
+    request: Request,
+    _: Admin = Depends(Admin.check_sudo_admin),
+) -> StreamingResponse:
+    """
+    Stream logs for a specific node as Server-Sent Events.
+    """
+    log_queue = await node_operator.get_logs(node_id=node_id)
 
-    if not admin.is_sudo:
-        return await websocket.close(reason="You're not allowed", code=4403)
-
-    if not backend.nodes.get(node_id):
-        return await websocket.close(reason="Node not found", code=4404)
-
-    if not backend.nodes[node_id].connected:
-        return await websocket.close(reason="Node is not connected", code=4400)
-
-    interval = websocket.query_params.get("interval")
-    if interval:
+    async def event_generator() -> AsyncGenerator[str, None]:
         try:
-            interval = float(interval)
-        except ValueError:
-            return await websocket.close(reason="Invalid interval value", code=4400)
-        if interval > 10:
-            return await websocket.close(reason="Interval must be more than 0 and at most 10 seconds", code=4400)
-
-    await websocket.accept()
-
-    cache = ""
-    last_sent_ts = 0
-    node = backend.nodes[node_id]
-    with node.get_logs() as logs:
-        while True:
-            if not node == backend.nodes[node_id]:
-                break
-
-            if interval and time.time() - last_sent_ts >= interval and cache:
-                try:
-                    await websocket.send_text(cache)
-                except (WebSocketDisconnect, RuntimeError):
-                    break
-                cache = ""
-                last_sent_ts = time.time()
-
-            if not logs:
-                try:
-                    await asyncio.wait_for(websocket.receive(), timeout=0.2)
-                    continue
-                except asyncio.TimeoutError:
-                    continue
-                except (WebSocketDisconnect, RuntimeError):
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
                     break
 
-            log = logs.popleft()
+                try:
+                    log = await log_queue.get()
+                    if log is None:
+                        break
+                    yield f"{log}\n"
 
-            if interval:
-                cache += f"{log}\n"
-                continue
+                except Exception as e:
+                    yield f"Error retrieving logs: {str(e)}\n"
+                    break
+        except asyncio.CancelledError:
+            pass
 
-            try:
-                await websocket.send_text(log)
-            except (WebSocketDisconnect, RuntimeError):
-                break
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("s", response_model=list[NodeResponse])
@@ -139,7 +114,7 @@ async def reconnect_node(
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
-    await node_operator.restart_node(db=db, node_id=node_id)
+    await node_operator.restart_node(node_id=node_id)
     return {}
 
 

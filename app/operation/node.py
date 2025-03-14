@@ -43,7 +43,7 @@ class NodeOperator(BaseOperator):
         return get_nodes(db=db, offset=offset, limit=limit)
 
     async def connect_node(self, node_id: int) -> None:
-        gozargah_node: GozargahNode = await node_manager.get_node(node_id)
+        gozargah_node: GozargahNode | None = await node_manager.get_node(node_id)
         if gozargah_node is None:
             return
 
@@ -53,6 +53,7 @@ class NodeOperator(BaseOperator):
             if db_node is None:
                 return
 
+            logger.info(f'Connecting to "{db_node.name}" node')
             update_node_status(db, db_node, NodeStatus.connecting)
 
             try:
@@ -69,6 +70,9 @@ class NodeOperator(BaseOperator):
                     status=NodeStatus.connected,
                     xray_version=info.core_version,
                     node_version=info.node_version,
+                )
+                logger.info(
+                    f'Connected to "{db_node.name}" node v{info.node_version}, xray run on v{info.core_version}'
                 )
             except NodeAPIError as e:
                 logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}: {e.detail}")
@@ -141,7 +145,7 @@ class NodeOperator(BaseOperator):
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" deleted')
 
-    async def restart_node(self, db: Session, node_id: Node) -> None:
+    async def restart_node(self, node_id: Node) -> None:
         asyncio.create_task(self.connect_node(node_id))
 
     async def restart_all_node(self, db: Session) -> None:
@@ -153,3 +157,11 @@ class NodeOperator(BaseOperator):
         usages = get_nodes_usage(db, start, end)
 
         return {"usages": usages}
+
+    async def get_logs(self, node_id: Node) -> asyncio.Queue:
+        node = await node_manager.get_node(node_id)
+
+        if node is None:
+            self.raise_error(message="Node not found", code=404)
+
+        return await node.get_logs()
