@@ -59,7 +59,7 @@ class NodeOperator(BaseOperator):
                 info = await gozargah_node.start(
                     config=config.to_json(),
                     backend_type=0,
-                    users= await backend_users(inbounds=config.inbounds),
+                    users=await backend_users(inbounds=config.inbounds),
                     timeout=10,
                 )
                 update_node_status(

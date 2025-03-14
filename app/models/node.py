@@ -58,24 +58,24 @@ class NodeCreate(Node):
             raise ValueError("Certificate too large (max 2048 characters)")
 
         try:
-            load_pem_x509_certificate(v.encode('utf-8'))
+            load_pem_x509_certificate(v.encode("utf-8"))
             pass
         except Exception:
-            raise ValueError(f"Invalid certificate structure")
+            raise ValueError("Invalid certificate structure")
 
         return v
 
 
 class NodeModify(NodeCreate):
     name: str | None = Field(None, nullable=True)
-    address: str | None  = Field(None, nullable=True)
-    port: int | None  = Field(None, nullable=True)
-    api_port: int | None  = Field(None, nullable=True)
-    status: NodeStatus | None  = Field(None, nullable=True)
-    usage_coefficient: float | None  = Field(None, nullable=True)
-    server_ca: str | None  = Field(None)
-    connection_type: NodeConnectionType | None  = Field(None)
-    keep_alive: int | None  = Field(None)
+    address: str | None = Field(None, nullable=True)
+    port: int | None = Field(None, nullable=True)
+    api_port: int | None = Field(None, nullable=True)
+    status: NodeStatus | None = Field(None, nullable=True)
+    usage_coefficient: float | None = Field(None, nullable=True)
+    server_ca: str | None = Field(None)
+    connection_type: NodeConnectionType | None = Field(None)
+    keep_alive: int | None = Field(None)
 
     model_config = ConfigDict(
         json_schema_extra={

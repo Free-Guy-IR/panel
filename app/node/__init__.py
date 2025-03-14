@@ -7,7 +7,6 @@ from aiorwlock import RWLock
 from app.db import GetDB, get_tls_certificate
 from app.db.models import Node, NodeConnectionType, User
 from app.node.user import serialize_user_for_node, backend_users
-from app.backend import config
 
 
 @lru_cache(maxsize=None)
