@@ -12,6 +12,7 @@ from app.models.node import (
     NodeResponse,
     NodeSettings,
     NodesUsageResponse,
+    NodeStats,
 )
 from app.operation.node import NodeOperator
 from app.operation import OperatorType
@@ -103,7 +104,6 @@ async def modify_node(
 @router.post("/{node_id}/reconnect")
 async def reconnect_node(
     node_id: int,
-    db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
@@ -131,3 +131,20 @@ async def get_usage(
 ):
     """Retrieve usage statistics for nodes within a specified date range."""
     return await node_operator.get_usage(db=db, start=start, end=end)
+
+
+@router.get("/{node_id}/stats")
+async def node_stats(
+    node_id: int,
+    _: Admin = Depends(Admin.check_sudo_admin),
+) -> NodeStats:
+    """Retrieve node real-time statistics."""
+    return await node_operator.get_node_system_stats(node_id=node_id)
+
+
+@router.get("s/stats")
+async def nodes_stats(
+    _: Admin = Depends(Admin.check_sudo_admin),
+) -> dict[int, NodeStats | None]:
+    """Retrieve nodes real-time statistics."""
+    return await node_operator.get_nodes_system_stats()

@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from GozargahNodeBridge import GozargahNode, NodeAPIError
 
 from app.operation import BaseOperator
-from app.models.node import NodeCreate, NodeResponse, NodeSettings, NodesUsageResponse, NodeModify
+from app.models.node import NodeCreate, NodeResponse, NodeSettings, NodesUsageResponse, NodeModify, NodeStats
 from app.db.models import Node, NodeStatus
 from app.db.crud import (
     create_node,
@@ -167,6 +167,52 @@ class NodeOperator(BaseOperator):
         try:
             logs_queue = await node.get_logs()
         except NodeAPIError as e:
-            self.raise_error(message=e.detail, code=409)
+            self.raise_error(message=e.detail, code=e.code)
 
         return logs_queue
+
+    async def get_node_system_stats(self, node_id: Node) -> NodeStats:
+        node = await node_manager.get_node(node_id)
+
+        if node is None:
+            self.raise_error(message="Node not found", code=404)
+
+        try:
+            stats = await node.get_system_stats()
+        except NodeAPIError as e:
+            self.raise_error(message=e.detail, code=e.code)
+
+        if stats is None:
+            self.raise_error(message="Node stats not found", code=404)
+
+        return NodeStats(
+            mem_total=stats.mem_total,
+            mem_used=stats.mem_used,
+            cpu_cores=stats.cpu_cores,
+            cpu_usage=stats.cpu_usage,
+            incoming_bandwidth_speed=stats.incoming_bandwidth_speed,
+            outgoing_bandwidth_speed=stats.outgoing_bandwidth_speed,
+        )
+
+    async def get_nodes_system_stats(self) -> dict[int, NodeStats | None]:
+        nodes = await node_manager.get_healthy_nodes()
+        stats_tasks = {id: asyncio.create_task(self._get_node_stats_safe(id)) for id, _ in nodes}
+
+        await asyncio.gather(*stats_tasks.values(), return_exceptions=True)
+
+        results = {}
+        for node_id, task in stats_tasks.items():
+            if task.exception():
+                results[node_id] = None
+            else:
+                results[node_id] = task.result()
+
+        return results
+
+    async def _get_node_stats_safe(self, node_id: Node) -> NodeStats | None:
+        """Wrapper method that returns None instead of raising exceptions"""
+        try:
+            return await self.get_node_system_stats(node_id)
+        except Exception as e:
+            logger.error(f"Error getting system stats for node {node_id}: {e}")
+            return None

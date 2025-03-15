@@ -47,7 +47,7 @@ class NodeCreate(Node):
     def validate_certificate(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        
+
         v = v.strip()
 
         # Check for PEM certificate format
@@ -127,3 +127,12 @@ class NodeUsageResponse(BaseModel):
 
 class NodesUsageResponse(BaseModel):
     usages: list[NodeUsageResponse]
+
+
+class NodeStats(BaseModel):
+    mem_total: int
+    mem_used: int
+    cpu_cores: int
+    cpu_usage: float
+    incoming_bandwidth_speed: int
+    outgoing_bandwidth_speed: int

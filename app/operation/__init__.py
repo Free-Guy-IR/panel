@@ -18,6 +18,9 @@ class BaseOperator:
         self.operator_type = operator_type
 
     def raise_error(self, message: str, code: int):
+        """Raise an error based on the operator type."""
+        if code <= 0:
+            code = 408
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             raise HTTPException(status_code=code, detail=message)
         else:
