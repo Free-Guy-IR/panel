@@ -24,6 +24,7 @@ class Node(BaseModel):
     connection_type: NodeConnectionType
     server_ca: str
     keep_alive: int
+    max_logs: int
 
 
 class NodeCreate(Node):
@@ -43,7 +44,10 @@ class NodeCreate(Node):
 
     @field_validator("server_ca")
     @classmethod
-    def validate_certificate(cls, v: str) -> str:
+    def validate_certificate(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        
         v = v.strip()
 
         # Check for PEM certificate format
@@ -65,17 +69,29 @@ class NodeCreate(Node):
 
         return v
 
+    @field_validator("max_logs")
+    @classmethod
+    def validate_max_logs(cls, v: int | None) -> int | None:
+        if v is None:
+            return None
+
+        if v < 1:
+            raise ValueError("Max logs cant be lower than 1")
+
+        return v
+
 
 class NodeModify(NodeCreate):
-    name: str | None = Field(None, nullable=True)
-    address: str | None = Field(None, nullable=True)
-    port: int | None = Field(None, nullable=True)
-    api_port: int | None = Field(None, nullable=True)
-    status: NodeStatus | None = Field(None, nullable=True)
-    usage_coefficient: float | None = Field(None, nullable=True)
-    server_ca: str | None = Field(None)
-    connection_type: NodeConnectionType | None = Field(None)
-    keep_alive: int | None = Field(None)
+    name: str | None = None
+    address: str | None = None
+    port: int | None = None
+    api_port: int | None = None
+    status: NodeStatus | None = None
+    usage_coefficient: float | None = None
+    server_ca: str | None = None
+    connection_type: NodeConnectionType | None = None
+    keep_alive: int | None = None
+    max_logs: int | None = None
 
     model_config = ConfigDict(
         json_schema_extra={

@@ -164,4 +164,9 @@ class NodeOperator(BaseOperator):
         if node is None:
             self.raise_error(message="Node not found", code=404)
 
-        return await node.get_logs()
+        try:
+            logs_queue = await node.get_logs()
+        except NodeAPIError as e:
+            self.raise_error(message=e.detail, code=409)
+
+        return logs_queue

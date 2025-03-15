@@ -2,7 +2,7 @@ import asyncio
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
 from app.db import Session, get_db
 from app.models.admin import Admin
@@ -34,7 +34,7 @@ async def add_node(
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
-    """Add a new node to the database and optionally add it as a host."""
+    """Add a new node to the database."""
     return await node_operator.add_node(db, new_node)
 
 
@@ -53,7 +53,7 @@ async def node_logs(
     node_id: int,
     request: Request,
     _: Admin = Depends(Admin.check_sudo_admin),
-) -> StreamingResponse:
+):
     """
     Stream logs for a specific node as Server-Sent Events.
     """
@@ -78,14 +78,7 @@ async def node_logs(
         except asyncio.CancelledError:
             pass
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
+    return EventSourceResponse(event_generator())
 
 
 @router.get("s", response_model=list[NodeResponse])

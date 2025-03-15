@@ -330,6 +330,7 @@ class Node(Base):
     )
     server_ca = Column(String(2048), nullable=False)
     keep_alive = Column(Integer, unique=False, nullable=False, default=0)
+    max_logs = Column(BigInteger, unique=False, nullable=False, default=1000, server_default=text("1000"))
 
 
 class NodeUserUsage(Base):

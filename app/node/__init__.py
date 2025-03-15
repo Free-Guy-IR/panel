@@ -47,6 +47,7 @@ class NodeManager:
                 client_cert=tls.certificate,
                 client_key=tls.key,
                 server_ca=node.server_ca,
+                max_logs=node.max_logs,
                 extra={"id": node.id, "usage_coefficient": node.usage_coefficient},
             )
 
