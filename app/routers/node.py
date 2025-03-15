@@ -133,18 +133,18 @@ async def get_usage(
     return await node_operator.get_usage(db=db, start=start, end=end)
 
 
-@router.get("/{node_id}/stats")
+@router.get("/{node_id}/stats", response_model=NodeStats)
 async def node_stats(
     node_id: int,
     _: Admin = Depends(Admin.check_sudo_admin),
-) -> NodeStats:
+):
     """Retrieve node real-time statistics."""
     return await node_operator.get_node_system_stats(node_id=node_id)
 
 
-@router.get("s/stats")
+@router.get("s/stats", response_model=dict[int, NodeStats | None])
 async def nodes_stats(
     _: Admin = Depends(Admin.check_sudo_admin),
-) -> dict[int, NodeStats | None]:
+):
     """Retrieve nodes real-time statistics."""
     return await node_operator.get_nodes_system_stats()
