@@ -4,6 +4,7 @@ import commentjson
 from fastapi import APIRouter, Depends, HTTPException
 
 from app import backend
+from app.db import Session, get_db
 from app.models.admin import Admin
 from app.utils import responses
 from app.backend import XRayConfig
@@ -26,7 +27,9 @@ def get_core_config(_: Admin = Depends(Admin.check_sudo_admin)) -> dict:
 
 
 @router.put("", responses={403: responses._403})
-async def modify_core_config(payload: dict, _: Admin = Depends(Admin.check_sudo_admin)) -> dict:
+async def modify_core_config(
+    payload: dict, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)
+) -> dict:
     """Modify the core configuration and restart the core."""
     try:
         config = XRayConfig(payload)
@@ -37,7 +40,7 @@ async def modify_core_config(payload: dict, _: Admin = Depends(Admin.check_sudo_
     with open(XRAY_JSON, "w") as f:
         f.write(json.dumps(payload, indent=4))
 
-    await node_operator.restart_all_node()
+    await node_operator.restart_all_node(db)
 
     backend.hosts.update()
 

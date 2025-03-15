@@ -148,3 +148,25 @@ async def nodes_stats(
 ):
     """Retrieve nodes real-time statistics."""
     return await node_operator.get_nodes_system_stats()
+
+
+@router.get("/{node_id}/stats/{username}", response_model=dict[int, int])
+async def user_online_stats(
+    node_id: int,
+    username: str,
+    db: Session = Depends(get_db),
+    _: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Retrieve user online stats by node."""
+    return await node_operator.get_user_online_stats_by_node(db=db, node_id=node_id, username=username)
+
+
+@router.get("/{node_id}/stats/{username}/ip", response_model=dict[int, dict[str, int]])
+async def user_online_ip_list(
+    node_id: int,
+    username: str,
+    db: Session = Depends(get_db),
+    _: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Retrieve user ips by node."""
+    return await node_operator.get_user_ip_list_by_node(db=db, node_id=node_id, username=username)

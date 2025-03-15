@@ -15,6 +15,7 @@ from app.db.crud import (
     remove_node,
     get_nodes_usage,
     update_node,
+    get_user
 )
 from app.db.base import GetDB
 from app.backend import config
@@ -150,7 +151,7 @@ class NodeOperator(BaseOperator):
 
     async def restart_all_node(self, db: Session) -> None:
         for db_node in get_nodes(db=db, enabled=True):
-            await asyncio.create_task(self.connect_node(db_node))
+            await asyncio.create_task(self.connect_node(db_node.id))
 
     async def get_usage(self, db: Session, start: str = "", end: str = "") -> NodesUsageResponse:
         start, end = self.validate_dates(start, end)
@@ -183,7 +184,7 @@ class NodeOperator(BaseOperator):
             self.raise_error(message=e.detail, code=e.code)
 
         if stats is None:
-            self.raise_error(message="Node stats not found", code=404)
+            self.raise_error(message="Stats not found", code=404)
 
         return NodeStats(
             mem_total=stats.mem_total,
@@ -216,3 +217,43 @@ class NodeOperator(BaseOperator):
         except Exception as e:
             logger.error(f"Error getting system stats for node {node_id}: {e}")
             return None
+
+    async def get_user_online_stats_by_node(self, db: Session, node_id: Node, username: str) -> dict[int, int]:
+        db_user = get_user(db, username=username)
+        if db_user is None:
+            self.raise_error(message="User not found", code=404)
+
+        node = await node_manager.get_node(node_id)
+
+        if node is None:
+            self.raise_error(message="Node not found", code=404)
+
+        try:
+            stats = await node.get_user_online_stats(email=f"{db_user.id}.{db_user.username}")
+        except NodeAPIError as e:
+            self.raise_error(message=e.detail, code=e.code)
+
+        if stats is None:
+            self.raise_error(message="Stats not found", code=404)
+
+        return {node_id: stats.value}
+
+    async def get_user_ip_list_by_node(self, db: Session, node_id: Node, username: str) -> dict[int, dict[str, int]]:
+        db_user = get_user(db, username=username)
+        if db_user is None:
+            self.raise_error(message="User not found", code=404)
+
+        node = await node_manager.get_node(node_id)
+
+        if node is None:
+            self.raise_error(message="Node not found", code=404)
+
+        try:
+            stats = await node.get_user_online_ip_list(email=f"{db_user.id}.{db_user.username}")
+        except NodeAPIError as e:
+            self.raise_error(message=e.detail, code=e.code)
+
+        if stats is None:
+            self.raise_error(message="Stats not found", code=404)
+
+        return {node_id: stats.ips}
