@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
+import asyncio
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -31,7 +34,7 @@ def on_shutdown(func):
 async def lifespan(app: FastAPI):
     for func in startup_functions:
         if callable(func):
-            if hasattr(func, "__await__"):
+            if asyncio.iscoroutinefunction(func):  # Better way to check if it's async
                 if "app" in func.__code__.co_varnames:
                     await func(app)
                 else:
@@ -41,12 +44,11 @@ async def lifespan(app: FastAPI):
                     func(app)
                 else:
                     func()
-
     yield
 
     for func in shutdown_functions:
         if callable(func):
-            if hasattr(func, "__await__"):
+            if asyncio.iscoroutinefunction(func):
                 if "app" in func.__code__.co_varnames:
                     await func(app)
                 else:
@@ -67,6 +69,7 @@ app = FastAPI(
 )
 
 scheduler = BackgroundScheduler({"apscheduler.job_defaults.max_instances": 20}, timezone="UTC")
+async_scheduler = AsyncIOScheduler(job_defaults={"max_instances": 20}, timezone="UTC")
 logger = get_logger()
 
 
@@ -77,7 +80,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-from app import dashboard, jobs, routers, telegram  # noqa
+from app import dashboard, routers, telegram, jobs  # noqa
 from app.routers import api_router  # noqa
 
 app.include_router(api_router)
@@ -102,6 +105,9 @@ def validate_paths():
 
 on_startup(scheduler.start)
 on_shutdown(scheduler.shutdown)
+
+on_startup(async_scheduler.start)
+on_shutdown(async_scheduler.shutdown)
 
 
 @app.exception_handler(RequestValidationError)

@@ -1,15 +1,19 @@
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+import asyncio
+from datetime import datetime, timezone
 from operator import attrgetter
-from typing import Union
 
 from pymysql.err import OperationalError
 from sqlalchemy import and_, bindparam, insert, select, update
+
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.dml import Insert
+from GozargahNodeBridge import GozargahNode, NodeAPIError
 
-from app import scheduler, xray
+# from app import scheduler, node
+from app import async_scheduler as scheduler
+from app.node import manager as node_manager
+from app.utils.logger import get_logger
 from app.db import GetDB
 from app.db.models import Admin, NodeUsage, NodeUserUsage, System, User
 from config import (
@@ -17,11 +21,12 @@ from config import (
     JOB_RECORD_NODE_USAGES_INTERVAL,
     JOB_RECORD_USER_USAGES_INTERVAL,
 )
-from xray_api import XRay as XRayAPI
-from xray_api import exc as xray_exc
 
 
-def safe_execute(db: Session, stmt, params=None):
+logger = get_logger("record-usages")
+
+
+async def safe_execute(db: Session, stmt, params=None):
     if db.bind.name == "mysql":
         if isinstance(stmt, Insert):
             stmt = stmt.prefix_with("IGNORE")
@@ -45,11 +50,11 @@ def safe_execute(db: Session, stmt, params=None):
         db.commit()
 
 
-def record_user_stats(params: list, node_id: Union[int, None], consumption_factor: int = 1):
+async def record_user_stats(params: list, node_id: int, consumption_factor: int = 1):
     if not params:
         return
 
-    created_at = datetime.fromisoformat(datetime.utcnow().strftime("%Y-%m-%dT%H:00:00"))
+    created_at = datetime.fromisoformat(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:00:00"))
 
     with GetDB() as db:
         # make user usage row if doesn't exist
@@ -69,7 +74,7 @@ def record_user_stats(params: list, node_id: Union[int, None], consumption_facto
             stmt = insert(NodeUserUsage).values(
                 user_id=bindparam("uid"), created_at=created_at, node_id=node_id, used_traffic=0
             )
-            safe_execute(db, stmt, [{"uid": uid} for uid in uids_to_insert])
+            await safe_execute(db, stmt, [{"uid": uid} for uid in uids_to_insert])
 
         # record
         stmt = (
@@ -83,14 +88,14 @@ def record_user_stats(params: list, node_id: Union[int, None], consumption_facto
                 )
             )
         )
-        safe_execute(db, stmt, params)
+        await safe_execute(db, stmt, params)
 
 
-def record_node_stats(params: dict, node_id: Union[int, None]):
+async def record_node_stats(params: dict, node_id: int):
     if not params:
         return
 
-    created_at = datetime.fromisoformat(datetime.utcnow().strftime("%Y-%m-%dT%H:00:00"))
+    created_at = datetime.fromisoformat(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:00:00"))
 
     with GetDB() as db:
         # make node usage row if doesn't exist
@@ -100,7 +105,7 @@ def record_node_stats(params: dict, node_id: Union[int, None]):
         notfound = db.execute(select_stmt).first() is None
         if notfound:
             stmt = insert(NodeUsage).values(created_at=created_at, node_id=node_id, uplink=0, downlink=0)
-            safe_execute(db, stmt)
+            await safe_execute(db, stmt)
 
         # record
         stmt = (
@@ -109,43 +114,49 @@ def record_node_stats(params: dict, node_id: Union[int, None]):
             .where(and_(NodeUsage.node_id == node_id, NodeUsage.created_at == created_at))
         )
 
-        safe_execute(db, stmt, params)
+        await safe_execute(db, stmt, params)
 
 
-def get_users_stats(api: XRayAPI):
+async def get_users_stats(node: GozargahNode):
     try:
+        stats_respons = await node.get_users_stats(reset=True, timeout=30)
         params = defaultdict(int)
-        for stat in filter(attrgetter("value"), api.get_users_stats(reset=True, timeout=30)):
+        for stat in filter(attrgetter("value"), stats_respons.stats):
             params[stat.name.split(".", 1)[0]] += stat.value
         params = list({"uid": uid, "value": value} for uid, value in params.items())
         return params
-    except xray_exc.XrayError:
+    except NodeAPIError as e:
+        logger.error("Failed to get outbounds stats, error: %s", e.detail)
+        return []
+    except Exception as e:
+        logger.error("Failed to get outbounds stats, unknown error: %s", e)
         return []
 
 
-def get_outbounds_stats(api: XRayAPI):
+async def get_outbounds_stats(node: GozargahNode):
     try:
+        stats_respons = await node.get_outbounds_stats(reset=True, timeout=10)
         params = [
             {"up": stat.value, "down": 0} if stat.link == "uplink" else {"up": 0, "down": stat.value}
-            for stat in filter(attrgetter("value"), api.get_outbounds_stats(reset=True, timeout=10))
+            for stat in filter(attrgetter("value"), stats_respons.stats)
         ]
         return params
-    except xray_exc.XrayError:
+    except NodeAPIError as e:
+        logger.error("Failed to get outbounds stats, error: %s", e.detail)
+        return []
+    except Exception as e:
+        logger.error("Failed to get outbounds stats, unknown error: %s", e)
         return []
 
 
-def record_user_usages():
-    api_instances = {None: xray.api}
-    usage_coefficient = {None: 1}  # default usage coefficient for the main api instance
+async def record_user_usages():
+    nodes: tuple[int, GozargahNode] = await node_manager.get_healthy_nodes()
+    tasks = {node_id: asyncio.create_task(get_users_stats(node)) for node_id, node in nodes}
+    usage_coefficient = {node_id: (await node.get_extra()).get("usage_coefficient", 1) for node_id, node in nodes}
 
-    for node_id, node in list(xray.nodes.items()):
-        if node.connected and node.started:
-            api_instances[node_id] = node.api
-            usage_coefficient[node_id] = node.usage_coefficient  # fetch the usage coefficient
+    await asyncio.gather(*tasks.values())
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {node_id: executor.submit(get_users_stats, api) for node_id, api in api_instances.items()}
-    api_params = {node_id: future.result() for node_id, future in futures.items()}
+    api_params = {node_id: task.result() for node_id, task in tasks.items()}
 
     users_usage = defaultdict(int)
     for node_id, params in api_params.items():
@@ -173,7 +184,7 @@ def record_user_usages():
             .values(used_traffic=User.used_traffic + bindparam("value"), online_at=datetime.utcnow())
         )
 
-        safe_execute(db, stmt, users_usage)
+        await safe_execute(db, stmt, users_usage)
 
         admin_data = [{"admin_id": admin_id, "value": value} for admin_id, value in admin_usage.items()]
         if admin_data:
@@ -182,24 +193,26 @@ def record_user_usages():
                 .where(Admin.id == bindparam("admin_id"))
                 .values(users_usage=Admin.users_usage + bindparam("value"))
             )
-            safe_execute(db, admin_update_stmt, admin_data)
+            await safe_execute(db, admin_update_stmt, admin_data)
 
     if DISABLE_RECORDING_NODE_USAGE:
         return
 
     for node_id, params in api_params.items():
-        record_user_stats(params, node_id, usage_coefficient[node_id])
+        await record_user_stats(params, node_id, usage_coefficient[node_id])
 
 
-def record_node_usages():
-    api_instances = {None: xray.api}
-    for node_id, node in list(xray.nodes.items()):
-        if node.connected and node.started:
-            api_instances[node_id] = node.api
+async def record_node_usages():
+    # Create tasks for all nodes
+    tasks = {
+        node_id: asyncio.create_task(get_outbounds_stats(node))
+        for node_id, node in await node_manager.get_healthy_nodes()
+    }
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {node_id: executor.submit(get_outbounds_stats, api) for node_id, api in api_instances.items()}
-    api_params = {node_id: future.result() for node_id, future in futures.items()}
+    await asyncio.gather(*tasks.values())
+
+    # Collect results
+    api_params = {node_id: task.result() for node_id, task in tasks.items()}
 
     total_up = 0
     total_down = 0
@@ -213,13 +226,13 @@ def record_node_usages():
     # record nodes usage
     with GetDB() as db:
         stmt = update(System).values(uplink=System.uplink + total_up, downlink=System.downlink + total_down)
-        safe_execute(db, stmt)
+        await safe_execute(db, stmt)
 
     if DISABLE_RECORDING_NODE_USAGE:
         return
 
     for node_id, params in api_params.items():
-        record_node_stats(params, node_id)
+        await record_node_stats(params, node_id)
 
 
 scheduler.add_job(

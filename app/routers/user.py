@@ -2,11 +2,10 @@ from datetime import datetime
 from typing import List, Optional, Union
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy.exc import IntegrityError
 
-from app import logger, xray
+from app import logger, backend
 from app.db import Session, crud, get_db
-from app.dependencies import get_expired_users_list, get_validated_user, validate_dates, get_user_template
+from app.dependencies import get_expired_users_list, get_validated_user, validate_dates
 from app.models.admin import Admin
 from app.models.user import (
     UserCreate,
@@ -18,14 +17,17 @@ from app.models.user import (
     UserUsagesResponse,
 )
 from app.utils import report, responses
+from app.operation import OperatorType
+from app.operation.user import UserOperator
 
+
+user_operator = UserOperator(operator_type=OperatorType.API)
 router = APIRouter(tags=["User"], prefix="/api", responses={401: responses._401})
 
 
 @router.post("/user", response_model=UserResponse, responses={400: responses._400, 409: responses._409})
-def add_user(
+async def add_user(
     new_user: UserCreate,
-    bg: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.get_current),
 ):
@@ -45,35 +47,17 @@ def add_user(
     - **next_plan**: Next user plan (resets after use).
     """
 
-    # TODO expire should be datetime instead of timestamp
-
-    for proxy_type in new_user.proxies:
-        if not xray.config.inbounds_by_protocol.get(proxy_type):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Protocol {proxy_type} is disabled on your server",
-            )
-
-    if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
-        get_user_template(new_user.next_plan.user_template_id)
-
-    try:
-        dbuser = crud.create_user(db, new_user, admin=crud.get_admin(db, admin.username))
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="User already exists")
-
-    bg.add_task(xray.operations.add_user, dbuser=dbuser)
-    user = UserResponse.model_validate(dbuser)
-    report.user_created(user=user, user_id=dbuser.id, by=admin, user_admin=dbuser.admin)
-    logger.info(f'New user "{dbuser.username}" added')
-    return user
+    return await user_operator.add_user(db, new_user=new_user, admin=admin)
 
 
 @router.get("/user/{username}", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
-def get_user(dbuser: UserResponse = Depends(get_validated_user)):
+async def get_user(
+    username: str,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.get_current),
+):
     """Get user information"""
-    return dbuser
+    return UserResponse.model_validate(await user_operator.get_validated_user(db=db, username=username, admin=admin))
 
 
 @router.put(
@@ -81,11 +65,10 @@ def get_user(dbuser: UserResponse = Depends(get_validated_user)):
     response_model=UserResponse,
     responses={400: responses._400, 403: responses._403, 404: responses._404},
 )
-def modify_user(
+async def modify_user(
+    username: str,
     modified_user: UserModify,
-    bg: BackgroundTasks,
     db: Session = Depends(get_db),
-    dbuser: UsersResponse = Depends(get_validated_user),
     admin: Admin = Depends(Admin.get_current),
 ):
     """
@@ -105,102 +88,41 @@ def modify_user(
 
     Note: Fields set to `null` or omitted will not be modified.
     """
-
-    for proxy_type in modified_user.proxies:
-        if not xray.config.inbounds_by_protocol.get(proxy_type):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Protocol {proxy_type} is disabled on your server",
-            )
-
-    if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
-        get_user_template(modified_user.next_plan.user_template_id)
-
-    old_status = dbuser.status
-    dbuser = crud.update_user(db, dbuser, modified_user)
-    user = UserResponse.model_validate(dbuser)
-
-    if user.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.update_user, dbuser=dbuser)
-    else:
-        bg.add_task(xray.operations.remove_user, dbuser=dbuser)
-
-    bg.add_task(report.user_updated, user=user, user_admin=dbuser.admin, by=admin)
-
-    logger.info(f'User "{user.username}" modified')
-
-    if user.status != old_status:
-        bg.add_task(
-            report.status_change,
-            username=user.username,
-            status=user.status,
-            user=user,
-            user_admin=dbuser.admin,
-            by=admin,
-        )
-        logger.info(f'User "{dbuser.username}" status changed from {old_status.value} to {user.status.value}')
-
-    return user
+    return await user_operator.modify_user(db, username=username, modified_user=modified_user, admin=admin)
 
 
 @router.delete("/user/{username}", responses={403: responses._403, 404: responses._404})
-def remove_user(
-    bg: BackgroundTasks,
+async def remove_user(
+    username: str,
     db: Session = Depends(get_db),
-    dbuser: UserResponse = Depends(get_validated_user),
     admin: Admin = Depends(Admin.get_current),
 ):
     """Remove a user"""
-    crud.remove_user(db, dbuser)
-    bg.add_task(xray.operations.remove_user, dbuser=dbuser)
-
-    bg.add_task(report.user_deleted, username=dbuser.username, user_admin=Admin.model_validate(dbuser.admin), by=admin)
-
-    logger.info(f'User "{dbuser.username}" deleted')
-    return {"detail": "User successfully deleted"}
+    return await user_operator.remove_user(db, username=username, admin=admin)
 
 
 @router.post(
     "/user/{username}/reset", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
 )
-def reset_user_data_usage(
-    bg: BackgroundTasks,
+async def reset_user_data_usage(
+    username: str,
     db: Session = Depends(get_db),
-    dbuser: UserResponse = Depends(get_validated_user),
     admin: Admin = Depends(Admin.get_current),
 ):
     """Reset user data usage"""
-    dbuser = crud.reset_user_data_usage(db=db, dbuser=dbuser)
-    if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.add_user, dbuser=dbuser)
-
-    user = UserResponse.model_validate(dbuser)
-    bg.add_task(report.user_data_usage_reset, user=user, user_admin=dbuser.admin, by=admin)
-
-    logger.info(f'User "{dbuser.username}"\'s usage was reset')
-    return dbuser
+    return await user_operator.reset_user_data_usage(db, username=username, admin=admin)
 
 
 @router.post(
     "/user/{username}/revoke_sub", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
 )
-def revoke_user_subscription(
-    bg: BackgroundTasks,
+async def revoke_user_subscription(
+    username: str,
     db: Session = Depends(get_db),
-    dbuser: UserResponse = Depends(get_validated_user),
     admin: Admin = Depends(Admin.get_current),
 ):
     """Revoke users subscription (Subscription link and proxies)"""
-    dbuser = crud.revoke_user_sub(db=db, dbuser=dbuser)
-
-    if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.update_user, dbuser=dbuser)
-    user = UserResponse.model_validate(dbuser)
-    bg.add_task(report.user_subscription_revoked, user=user, user_admin=dbuser.admin, by=admin)
-
-    logger.info(f'User "{dbuser.username}" subscription revoked')
-
-    return user
+    return await user_operator.revoke_user_sub(db, username=username, admin=admin)
 
 
 @router.get(
@@ -247,11 +169,11 @@ def reset_users_data_usage(db: Session = Depends(get_db), admin: Admin = Depends
     """Reset all users data usage"""
     dbadmin = crud.get_admin(db, admin.username)
     crud.reset_all_users_data_usage(db=db, admin=dbadmin)
-    startup_config = xray.config.include_db_users()
-    xray.core.restart(startup_config)
-    for node_id, node in list(xray.nodes.items()):
+    startup_config = backend.config.include_db_users()
+    backend.core.restart(startup_config)
+    for node_id, node in list(backend.nodes.items()):
         if node.connected:
-            xray.operations.restart_node(node_id, startup_config)
+            backend.operations.restart_node(node_id, startup_config)
     return {"detail": "Users successfully reset."}
 
 
@@ -291,7 +213,7 @@ def active_next_plan(
     dbuser = crud.reset_user_by_next(db=db, dbuser=dbuser)
 
     if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.add_user, dbuser=dbuser)
+        bg.add_task(backend.operations.add_user, dbuser=dbuser)
 
     user = UserResponse.model_validate(dbuser)
     bg.add_task(

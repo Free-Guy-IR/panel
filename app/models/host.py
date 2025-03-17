@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Union
-from app import xray
+from app import backend
 from app.models.proxy import ProxyTypes
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -222,7 +222,7 @@ class CreateHost(BaseHost):
 
     @field_validator("inbound_tag", mode="after")
     def validate_inbound(cls, v):
-        if xray.config.get_inbound(v) is None:
+        if backend.config.get_inbound(v) is None:
             raise ValueError(f"Inbound {v} doesn't exist")
         return v
 

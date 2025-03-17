@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from enum import Enum
 
 from sqlalchemy import (
     JSON,
@@ -7,7 +8,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    Enum,
+    Enum as SQLEnum,
     Float,
     ForeignKey,
     Integer,
@@ -20,10 +21,8 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.expression import select, text
 
-from app import xray
 from app.db.base import Base
 from app.models.host import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity
-from app.models.node import NodeStatus
 from app.models.proxy import ProxyTypes
 from app.models.user import ReminderType, UserDataLimitResetStrategy, UserStatus
 
@@ -65,13 +64,13 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(34, collation="NOCASE"), unique=True, index=True)
     proxies = relationship("Proxy", back_populates="user", cascade="all, delete-orphan")
-    status = Column(Enum(UserStatus), nullable=False, default=UserStatus.active)
+    status = Column(SQLEnum(UserStatus), nullable=False, default=UserStatus.active)
     used_traffic = Column(BigInteger, default=0)
     node_usages = relationship("NodeUserUsage", back_populates="user", cascade="all, delete-orphan")
     notification_reminders = relationship("NotificationReminder", back_populates="user", cascade="all, delete-orphan")
     data_limit = Column(BigInteger, nullable=True)
     data_limit_reset_strategy = Column(
-        Enum(UserDataLimitResetStrategy),
+        SQLEnum(UserDataLimitResetStrategy),
         nullable=False,
         default=UserDataLimitResetStrategy.no_reset,
     )
@@ -125,17 +124,24 @@ class User(Base):
             _[proxy.type] = [i.tag for i in proxy.excluded_inbounds]
         return _
 
-    @property
-    def inbounds(self):
-        _ = {}
+    def inbounds(self, active_inbounds: list[str]) -> list[str]:
+        """Returns a flat list of all included inbound tags across all proxies"""
+        included_tags = []
         for proxy in self.proxies:
-            _[proxy.type] = []
-            excluded_tags = [i.tag for i in proxy.excluded_inbounds]
-            for inbound in xray.config.inbounds_by_protocol.get(proxy.type, []):
-                if inbound["tag"] not in excluded_tags:
-                    _[proxy.type].append(inbound["tag"])
+            excluded_tags = {inbound.tag for inbound in proxy.excluded_inbounds}
 
-        return _
+            for inbound in active_inbounds:
+                if inbound not in excluded_tags:
+                    included_tags.append(inbound)
+        return included_tags
+
+    @property
+    def proxy_settings(self):
+        settings_dict = {}
+        for proxy in self.proxies:
+            proxy_type = proxy.type.value
+            settings_dict[proxy_type] = proxy.settings
+        return settings_dict
 
 
 excluded_inbounds_association = Table(
@@ -199,7 +205,7 @@ class Proxy(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User", back_populates="proxies")
-    type = Column(Enum(ProxyTypes), nullable=False)
+    type = Column(SQLEnum(ProxyTypes), nullable=False)
     settings = Column(JSON, nullable=False)
     excluded_inbounds = relationship("ProxyInbound", secondary=excluded_inbounds_association)
 
@@ -226,20 +232,20 @@ class ProxyHost(Base):
     sni = Column(String(1000), unique=False, nullable=True)
     host = Column(String(1000), unique=False, nullable=True)
     security = Column(
-        Enum(ProxyHostSecurity),
+        SQLEnum(ProxyHostSecurity),
         unique=False,
         nullable=False,
         default=ProxyHostSecurity.inbound_default,
     )
     alpn = Column(
-        Enum(ProxyHostALPN),
+        SQLEnum(ProxyHostALPN),
         unique=False,
         nullable=False,
         default=ProxyHostSecurity.none,
         server_default=ProxyHostSecurity.none.name,
     )
     fingerprint = Column(
-        Enum(ProxyHostFingerprint),
+        SQLEnum(ProxyHostFingerprint),
         unique=False,
         nullable=False,
         default=ProxyHostSecurity.none,
@@ -285,6 +291,18 @@ class TLS(Base):
     certificate = Column(String(2048), nullable=False)
 
 
+class NodeConnectionType(str, Enum):
+    grpc = "grpc"
+    rest = "rest"
+
+
+class NodeStatus(str, Enum):
+    connected = "connected"
+    connecting = "connecting"
+    error = "error"
+    disabled = "disabled"
+
+
 class Node(Base):
     __tablename__ = "nodes"
 
@@ -292,9 +310,8 @@ class Node(Base):
     name = Column(String(256, collation="NOCASE"), unique=True)
     address = Column(String(256), unique=False, nullable=False)
     port = Column(Integer, unique=False, nullable=False)
-    api_port = Column(Integer, unique=False, nullable=False)
     xray_version = Column(String(32), nullable=True)
-    status = Column(Enum(NodeStatus), nullable=False, default=NodeStatus.connecting)
+    status = Column(SQLEnum(NodeStatus), nullable=False, default=NodeStatus.connecting)
     last_status_change = Column(DateTime, default=datetime.utcnow)
     message = Column(String(1024), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -303,6 +320,17 @@ class Node(Base):
     user_usages = relationship("NodeUserUsage", back_populates="node", cascade="all, delete-orphan")
     usages = relationship("NodeUsage", back_populates="node", cascade="all, delete-orphan")
     usage_coefficient = Column(Float, nullable=False, server_default=text("1.0"), default=1)
+    node_version = Column(String(32), nullable=True)
+    connection_type = Column(
+        SQLEnum(NodeConnectionType),
+        unique=False,
+        nullable=False,
+        default=NodeConnectionType.grpc,
+        server_default=NodeConnectionType.grpc.name,
+    )
+    server_ca = Column(String(2048), nullable=False)
+    keep_alive = Column(Integer, unique=False, nullable=False, default=0)
+    max_logs = Column(BigInteger, unique=False, nullable=False, default=1000, server_default=text("1000"))
 
 
 class NodeUserUsage(Base):
@@ -336,7 +364,7 @@ class NotificationReminder(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User", back_populates="notification_reminders")
-    type = Column(Enum(ReminderType), nullable=False)
+    type = Column(SQLEnum(ReminderType), nullable=False)
     threshold = Column(Integer, nullable=True)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

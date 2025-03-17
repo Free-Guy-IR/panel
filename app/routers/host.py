@@ -2,7 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 
-from app import xray, logger
+from app import backend, logger
 from app.db import Session, crud, get_db
 from app.db.models import ProxyHost
 from app.models.admin import Admin
@@ -27,7 +27,7 @@ def add_host(
     db_host = crud.add_host(db, new_host)
     logger.info(f'Host "{db_host.id}" added')
 
-    xray.hosts.update()
+    backend.hosts.update()
 
     return db_host
 
@@ -48,7 +48,7 @@ def modify_host(
     db_host = crud.update_host(db, db_host, modified_host)
     logger.info(f'Host "{db_host.id}" modified')
 
-    xray.hosts.update()
+    backend.hosts.update()
 
     return db_host
 
@@ -66,7 +66,7 @@ def remove_host(
     crud.remove_host(db, db_host)
     logger.info(f'Host "{db_host.id}" deleted')
 
-    xray.hosts.update()
+    backend.hosts.update()
 
     return {}
 
@@ -107,6 +107,6 @@ def modify_hosts(
     """
     crud.update_hosts(db, modified_hosts)
 
-    xray.hosts.update()
+    backend.hosts.update()
 
     return crud.get_hosts(db)

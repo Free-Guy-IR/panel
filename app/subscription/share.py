@@ -1,5 +1,4 @@
 import base64
-import math
 import random
 import secrets
 from collections import defaultdict
@@ -10,7 +9,7 @@ from typing import TYPE_CHECKING, List, Literal, Union
 
 from jdatetime import date as jd
 
-from app import xray
+from app import backend
 from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 
 from . import (
@@ -259,9 +258,9 @@ def process_inbounds_and_tags(
     ],
     reverse=False,
 ) -> Union[List, str]:
-    for _, host in xray.hosts.items():
+    for _, host in backend.hosts.items():
         tag = host["inbound_tag"]
-        host_inbound = deepcopy(xray.config.inbounds_by_tag[tag])
+        host_inbound = deepcopy(backend.config.inbounds_by_tag[tag])
 
         protocol = host_inbound["protocol"]
         tags = inbounds.get(protocol)

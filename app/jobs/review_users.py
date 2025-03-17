@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
-from app import logger, scheduler, xray
+from app import logger, scheduler, backend
 from app.db import (
     GetDB,
     get_notification_reminder,
@@ -53,7 +53,7 @@ def add_notification_reminders(db: Session, user: "User") -> None:
 def reset_user_by_next_report(db: Session, user: "User"):
     user = reset_user_by_next(db, user)
 
-    xray.operations.update_user(user)
+    backend.operations.update_user(user)
 
     report.user_data_reset_by_next(user=UserResponse.model_validate(user), user_admin=user.admin)
 
@@ -84,7 +84,7 @@ def review():
                     add_notification_reminders(db, user)
                 continue
 
-            xray.operations.remove_user(user)
+            backend.operations.remove_user(user)
             update_user_status(db, user, status)
 
             report.status_change(

@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app import xray
 from app.models.admin import Admin
 from app.models.proxy import ProxySettings, ProxyTypes
 from app.utils.jwt import create_subscription_token
@@ -61,7 +60,6 @@ class User(BaseModel):
     expire: datetime | int | None = Field(None, nullable=True)
     data_limit: Optional[int] = Field(ge=0, default=None, description="data_limit can be 0 or greater")
     data_limit_reset_strategy: UserDataLimitResetStrategy = UserDataLimitResetStrategy.no_reset
-    inbounds: Dict[ProxyTypes, List[str]] = {}
     note: Optional[str] = Field(None, nullable=True)
     sub_updated_at: Optional[datetime] = Field(None, nullable=True)
     sub_last_user_agent: Optional[str] = Field(None, nullable=True)
@@ -159,42 +157,41 @@ class UserCreate(User):
         }
     )
 
-    @property
-    def excluded_inbounds(self):
-        excluded = {}
-        for proxy_type in self.proxies:
-            excluded[proxy_type] = []
-            for inbound in xray.config.inbounds_by_protocol.get(proxy_type, []):
-                if inbound["tag"] not in self.inbounds.get(proxy_type, []):
-                    excluded[proxy_type].append(inbound["tag"])
+    # @property
+    # def excluded_inbounds(self):
+    #    excluded = {}
+    #    for proxy_type in self.proxies:
+    #        excluded[proxy_type] = []
+    #        for inbound in backend.config.inbounds_by_protocol.get(proxy_type, []):
+    #            if inbound["tag"] not in self.inbounds.get(proxy_type, []):
+    #                excluded[proxy_type].append(inbound["tag"])
+    #    return excluded
 
-        return excluded
-
-    @field_validator("inbounds", mode="before")
-    def validate_inbounds(cls, inbounds, values, **kwargs):
-        proxies = values.data.get("proxies", [])
-
-        # delete inbounds that are for protocols not activated
-        for proxy_type in inbounds.copy():
-            if proxy_type not in proxies:
-                del inbounds[proxy_type]
-
-        # check by proxies to ensure that every protocol has inbounds set
-        for proxy_type in proxies:
-            tags = inbounds.get(proxy_type)
-
-            if tags:
-                for tag in tags:
-                    if tag not in xray.config.inbounds_by_tag:
-                        raise ValueError(f"Inbound {tag} doesn't exist")
-
-            # elif isinstance(tags, list) and not tags:
-            #     raise ValueError(f"{proxy_type} inbounds cannot be empty")
-
-            else:
-                inbounds[proxy_type] = [i["tag"] for i in xray.config.inbounds_by_protocol.get(proxy_type, [])]
-
-        return inbounds
+    # @field_validator("inbounds", mode="before")
+    # def validate_inbounds(cls, inbounds, values, **kwargs):
+    #    proxies = values.data.get("proxies", [])
+    #
+    #    # delete inbounds that are for protocols not activated
+    #    for proxy_type in inbounds.copy():
+    #        if proxy_type not in proxies:
+    #            del inbounds[proxy_type]
+    #
+    #    # check by proxies to ensure that every protocol has inbounds set
+    #    for proxy_type in proxies:
+    #        tags = inbounds.get(proxy_type)
+    #
+    #        if tags:
+    #            for tag in tags:
+    #                if tag not in backend.config.inbounds_by_tag:
+    #                    raise ValueError(f"Inbound {tag} doesn't exist")
+    #
+    #        # elif isinstance(tags, list) and not tags:
+    #        #     raise ValueError(f"{proxy_type} inbounds cannot be empty")
+    #
+    #        else:
+    #            inbounds[proxy_type] = [i["tag"] for i in backend.config.inbounds_by_protocol.get(proxy_type, [])]
+    #
+    #    return inbounds
 
     @field_validator("status", mode="before")
     def validate_status(cls, status, values):
@@ -234,31 +231,31 @@ class UserModify(User):
         }
     )
 
-    @property
-    def excluded_inbounds(self):
-        excluded = {}
-        for proxy_type in self.inbounds:
-            excluded[proxy_type] = []
-            for inbound in xray.config.inbounds_by_protocol.get(proxy_type, []):
-                if inbound["tag"] not in self.inbounds.get(proxy_type, []):
-                    excluded[proxy_type].append(inbound["tag"])
-
-        return excluded
-
-    @field_validator("inbounds", mode="before")
-    def validate_inbounds(cls, inbounds, values, **kwargs):
-        # check with inbounds, "proxies" is optional on modifying
-        # so inbounds particularly can be modified
-        if inbounds:
-            for proxy_type, tags in inbounds.items():
-                # if not tags:
-                #     raise ValueError(f"{proxy_type} inbounds cannot be empty")
-
-                for tag in tags:
-                    if tag not in xray.config.inbounds_by_tag:
-                        raise ValueError(f"Inbound {tag} doesn't exist")
-
-        return inbounds
+    # @property
+    # def excluded_inbounds(self):
+    #    excluded = {}
+    #    for proxy_type in self.inbounds:
+    #        excluded[proxy_type] = []
+    #        for inbound in backend.config.inbounds_by_protocol.get(proxy_type, []):
+    #            if inbound["tag"] not in self.inbounds.get(proxy_type, []):
+    #                excluded[proxy_type].append(inbound["tag"])
+    #
+    #    return excluded
+    #
+    # @field_validator("inbounds", mode="before")
+    # def validate_inbounds(cls, inbounds, values, **kwargs):
+    #    # check with inbounds, "proxies" is optional on modifying
+    #    # so inbounds particularly can be modified
+    #    if inbounds:
+    #        for proxy_type, tags in inbounds.items():
+    #            # if not tags:
+    #            #     raise ValueError(f"{proxy_type} inbounds cannot be empty")
+    #
+    #            for tag in tags:
+    #                if tag not in backend.config.inbounds_by_tag:
+    #                    raise ValueError(f"Inbound {tag} doesn't exist")
+    #
+    #    return inbounds
 
     @field_validator("proxies", mode="before")
     def validate_proxies(cls, v):
