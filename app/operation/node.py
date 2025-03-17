@@ -15,7 +15,7 @@ from app.db.crud import (
     remove_node,
     get_nodes_usage,
     update_node,
-    get_user
+    get_user,
 )
 from app.db.base import GetDB
 from app.backend import config
