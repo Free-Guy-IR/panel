@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.12"
 
 [[package]]
@@ -537,6 +538,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "gozargah-node-bridge" },
     { name = "httptools" },
+    { name = "httpx" },
     { name = "jdatetime" },
     { name = "jinja2" },
     { name = "markupsafe" },
@@ -591,6 +593,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.115.2" },
     { name = "gozargah-node-bridge", specifier = ">=0.0.25" },
     { name = "httptools", specifier = "==0.6.4" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "jdatetime", specifier = "==4.1.1" },
     { name = "jinja2", specifier = "==3.1.4" },
     { name = "markupsafe", specifier = "==2.1.1" },

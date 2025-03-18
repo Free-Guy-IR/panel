@@ -197,14 +197,14 @@ class BaseHost(BaseModel):
     alpn: ProxyHostALPN = ProxyHostALPN.none
     fingerprint: ProxyHostFingerprint = ProxyHostFingerprint.none
     allowinsecure: bool | None = None
-    is_disabled: bool | None = None
+    is_disabled: bool = False
     http_headers: dict[str, str] | None = None
     transport_settings: TransportSettings | None = None
     mux_settings: MuxSettings | None = None
     fragment_settings: FragmentSettings | None = None
     noise_settings: NoiseSettings | None = None
-    random_user_agent: bool | None = None
-    use_sni_as_host: bool | None = None
+    random_user_agent: bool = False
+    use_sni_as_host: bool = False
     priority: int
 
     model_config = ConfigDict(from_attributes=True)

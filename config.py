@@ -39,14 +39,15 @@ XRAY_SUBSCRIPTION_PATH = config("XRAY_SUBSCRIPTION_PATH", default="sub").strip("
 
 TELEGRAM_API_TOKEN = config("TELEGRAM_API_TOKEN", default="")
 TELEGRAM_ADMIN_ID = config(
-    "TELEGRAM_ADMIN_ID",
-    default="",
-    cast=lambda v: [int(i) for i in filter(str.isdigit, (s.strip() for s in v.split(",")))],
+    "TELEGRAM_ADMIN_ID", default="", cast=lambda v: int(v.split(",")[0].strip()) if v.strip() else None
 )
 TELEGRAM_PROXY_URL = config("TELEGRAM_PROXY_URL", default="")
 TELEGRAM_LOGGER_CHANNEL_ID = config("TELEGRAM_LOGGER_CHANNEL_ID", cast=int, default=0)
 TELEGRAM_LOGGER_TOPIC_ID = config("TELEGRAM_LOGGER_TOPIC_ID", cast=int, default=0)
 TELEGRAM_DEFAULT_VLESS_FLOW = config("TELEGRAM_DEFAULT_VLESS_FLOW", default="")
+TELEGRAM_NOTIFY = config("TELEGRAM_NOTIFY", cast=bool, default=False)
+
+NOTIFICATION_PROXY_URL = config("NOTIFICATION_PROXY_URL", cast=str, default="")
 
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = config("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", cast=int, default=1440)
 

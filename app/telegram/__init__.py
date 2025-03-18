@@ -1,10 +1,5 @@
-import importlib.util
-from os.path import dirname
-from threading import Thread
-
 from telebot import TeleBot, apihelper
 
-from app import on_startup
 from config import TELEGRAM_API_TOKEN, TELEGRAM_PROXY_URL
 
 bot = None
@@ -13,22 +8,6 @@ if TELEGRAM_API_TOKEN:
     bot = TeleBot(TELEGRAM_API_TOKEN)
 
 handler_names = ["admin", "report", "user"]
-
-
-@on_startup
-def initialize_telegram_bot():
-    if bot:
-        handler_dir = dirname(__file__) + "/handlers/"
-        for name in handler_names:
-            spec = importlib.util.spec_from_file_location(name, f"{handler_dir}{name}.py")
-            spec.loader.exec_module(importlib.util.module_from_spec(spec))
-
-        from app.telegram import utils  # setup custom handlers
-
-        utils.setup()
-
-        thread = Thread(target=bot.infinity_polling, daemon=True)
-        thread.start()
 
 
 from .handlers.report import (  # noqa

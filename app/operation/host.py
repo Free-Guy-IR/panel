@@ -1,3 +1,5 @@
+import asyncio
+
 from app.operation import BaseOperator
 
 from app.utils.logger import get_logger
@@ -7,6 +9,7 @@ from app.db.crud import add_host, get_or_create_inbound, get_host_by_id, remove_
 from app.models.host import CreateHost, BaseHost
 from app.models.admin import Admin
 from app.backend import hosts
+from app import notification
 
 
 logger = get_logger("host-operator")
@@ -40,9 +43,13 @@ class HostOperator(BaseOperator):
 
         logger.info(f'Host "{db_host.id}" added by admin "{admin.username}"')
 
+        host = BaseHost.model_validate(db_host)
+
+        asyncio.create_task(notification.add_host(host, admin.username))
+
         hosts.update()
 
-        return BaseHost.model_validate(db_host)
+        return host
 
     async def modify_host(
         self,
@@ -69,9 +76,13 @@ class HostOperator(BaseOperator):
 
         logger.info(f'Host "{db_host.id}" modified by admin "{admin.username}"')
 
+        host = BaseHost.model_validate(db_host)
+
+        asyncio.create_task(notification.modify_host(host, admin.username))
+
         hosts.update()
 
-        return BaseHost.model_validate(db_host)
+        return host
 
     async def remove_host(
         self,
@@ -82,6 +93,10 @@ class HostOperator(BaseOperator):
         db_host: ProxyHost = await self.get_host(db, host_id)
         remove_host(db, db_host)
         logger.info(f'Host "{db_host.id}" deleted by admin "{admin.username}"')
+
+        host = BaseHost.model_validate(db_host)
+
+        asyncio.create_task(notification.remove_host(host, admin.username))
 
         hosts.update()
 
@@ -107,5 +122,7 @@ class HostOperator(BaseOperator):
         db.commit()
 
         logger.info(f'Host\'s has been modified by admin "{admin.username}"')
+
+        asyncio.create_task(notification.update_hosts(admin.username))
 
         return get_hosts(db=db)
