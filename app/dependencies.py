@@ -56,7 +56,7 @@ def validate_dates(
         raise HTTPException(status_code=400, detail="Invalid date range or format")
 
 
-def get_user_template(template_id: int, db: Session = Depends(get_db)):
+def get_validated_user_template(template_id: int, db: Session = Depends(get_db)):
     """Fetch a User Template by its ID, raise 404 if not found."""
     dbuser_template = crud.get_user_template(db, template_id)
     if not dbuser_template:
@@ -103,8 +103,16 @@ def get_expired_users_list(db: Session, admin: Admin, expired_after: datetime = 
 
 def get_v2ray_links(user: UserResponse) -> list:
     return generate_v2ray_links(
-        user.proxies,
+        user.proxy_settings,
         user.inbounds,
         extra_data=user.model_dump(),
         reverse=False,
     )
+
+
+def get_validated_group(group_id: int, admin: Admin = Depends(Admin.get_current), db: Session = Depends(get_db)):
+    dbgroup = crud.get_group_by_id(db, group_id)
+    if not dbgroup:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    return dbgroup

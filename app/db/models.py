@@ -23,8 +23,21 @@ from sqlalchemy.sql.expression import select, text
 
 from app.db.base import Base
 from app.models.host import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity
-from app.models.proxy import ProxyTypes
 from app.models.user import ReminderType, UserDataLimitResetStrategy, UserStatus
+
+inbounds_groups_association = Table(
+    "inbounds_groups_association",
+    Base.metadata,
+    Column("inbound_id", ForeignKey("inbounds.id"), primary_key=True),
+    Column("group_id", ForeignKey("groups.id"), primary_key=True),
+)
+
+users_groups_association = Table(
+    "users_groups_association",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id"), primary_key=True),
+    Column("groups_id", ForeignKey("groups.id"), primary_key=True),
+)
 
 
 class Admin(Base):
@@ -63,7 +76,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     username = Column(String(34, collation="NOCASE"), unique=True, index=True)
-    proxies = relationship("Proxy", back_populates="user", cascade="all, delete-orphan")
+    proxy_settings = Column(JSON(True), nullable=False, server_default=text("'{}'"), default=lambda: {})
     status = Column(SQLEnum(UserStatus), nullable=False, default=UserStatus.active)
     used_traffic = Column(BigInteger, default=0)
     node_usages = relationship("NodeUserUsage", back_populates="user", cascade="all, delete-orphan")
@@ -96,6 +109,7 @@ class User(Base):
     last_status_change = Column(DateTime, default=datetime.utcnow, nullable=True)
 
     next_plan = relationship("NextPlan", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    groups = relationship("Group", secondary=users_groups_association, back_populates="users", lazy="joined")
 
     @hybrid_property
     def reseted_usage(self) -> int:
@@ -117,45 +131,30 @@ class User(Base):
     def last_traffic_reset_time(self):
         return self.usage_logs[-1].reset_at if self.usage_logs else self.created_at
 
-    @property
-    def excluded_inbounds(self):
-        _ = {}
-        for proxy in self.proxies:
-            _[proxy.type] = [i.tag for i in proxy.excluded_inbounds]
-        return _
-
     def inbounds(self, active_inbounds: list[str]) -> list[str]:
         """Returns a flat list of all included inbound tags across all proxies"""
         included_tags = []
-        for proxy in self.proxies:
-            excluded_tags = {inbound.tag for inbound in proxy.excluded_inbounds}
-
+        for group in self.groups:
+            tags = group.inbound_tags
             for inbound in active_inbounds:
-                if inbound not in excluded_tags:
+                if inbound in tags:
                     included_tags.append(inbound)
         return included_tags
 
     @property
-    def proxy_settings(self):
-        settings_dict = {}
-        for proxy in self.proxies:
-            proxy_type = proxy.type.value
-            settings_dict[proxy_type] = proxy.settings
-        return settings_dict
+    def group_ids(self):
+        return [group.id for group in self.groups]
+
+    @property
+    def group_names(self):
+        return [group.name for group in self.groups]
 
 
-excluded_inbounds_association = Table(
-    "exclude_inbounds_association",
-    Base.metadata,
-    Column("proxy_id", ForeignKey("proxies.id")),
-    Column("inbound_tag", ForeignKey("inbounds.tag")),
-)
-
-template_inbounds_association = Table(
-    "template_inbounds_association",
+template_group_association = Table(
+    "template_group_association",
     Base.metadata,
     Column("user_template_id", ForeignKey("user_templates.id")),
-    Column("inbound_tag", ForeignKey("inbounds.tag")),
+    Column("group_id", ForeignKey("groups.id")),
 )
 
 
@@ -184,9 +183,16 @@ class UserTemplate(Base):
     username_prefix = Column(String(20), nullable=True)
     username_suffix = Column(String(20), nullable=True)
 
-    inbounds = relationship("ProxyInbound", secondary=template_inbounds_association)
-
     next_plans = relationship("NextPlan", back_populates="user_template", cascade="all, delete-orphan")
+    groups = relationship(
+        "Group",
+        secondary=template_group_association,
+        back_populates="templates",
+    )
+
+    @property
+    def group_ids(self):
+        return [group.id for group in self.groups]
 
 
 class UserUsageResetLogs(Base):
@@ -199,23 +205,13 @@ class UserUsageResetLogs(Base):
     reset_at = Column(DateTime, default=datetime.utcnow)
 
 
-class Proxy(Base):
-    __tablename__ = "proxies"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User", back_populates="proxies")
-    type = Column(SQLEnum(ProxyTypes), nullable=False)
-    settings = Column(JSON, nullable=False)
-    excluded_inbounds = relationship("ProxyInbound", secondary=excluded_inbounds_association)
-
-
 class ProxyInbound(Base):
     __tablename__ = "inbounds"
 
     id = Column(Integer, primary_key=True)
     tag = Column(String(256), unique=True, nullable=False, index=True)
     hosts = relationship("ProxyHost", back_populates="inbound", cascade="all, delete-orphan")
+    groups = relationship("Group", secondary=inbounds_groups_association, back_populates="inbounds")
 
 
 class ProxyHost(Base):
@@ -368,3 +364,27 @@ class NotificationReminder(Base):
     threshold = Column(Integer, nullable=True)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64))
+    is_disabled = Column(Boolean, nullable=False, server_default="0", default=False)
+
+    users = relationship("User", secondary=users_groups_association, back_populates="groups")
+    inbounds = relationship("ProxyInbound", secondary=inbounds_groups_association, back_populates="groups")
+    templates = relationship("UserTemplate", secondary=template_group_association, back_populates="groups")
+
+    @property
+    def inbound_ids(self):
+        return [inbound.id for inbound in self.inbounds]
+
+    @property
+    def inbound_tags(self):
+        return [inbound.tag for inbound in self.inbounds]
+
+    @property
+    def total_users(self):
+        return len(self.users)

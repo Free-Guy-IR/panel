@@ -1,9 +1,6 @@
-from typing import Dict, List, Optional
+from typing import Optional
 
-from pydantic import field_validator, ConfigDict, BaseModel, Field
-
-from app import backend
-from app.models.proxy import ProxyTypes
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserTemplate(BaseModel):
@@ -14,8 +11,7 @@ class UserTemplate(BaseModel):
     )
     username_prefix: Optional[str] = Field(max_length=20, min_length=1, default=None)
     username_suffix: Optional[str] = Field(max_length=20, min_length=1, default=None)
-
-    inbounds: Dict[ProxyTypes, List[str]] = {}
+    group_ids: list[int] | None = Field(default_factory=list)
 
 
 class UserTemplateCreate(UserTemplate):
@@ -25,12 +21,19 @@ class UserTemplateCreate(UserTemplate):
                 "name": "my template 1",
                 "username_prefix": None,
                 "username_suffix": None,
-                "inbounds": {"vmess": ["VMESS_INBOUND"], "vless": ["VLESS_INBOUND"]},
+                "group_ids": [1, 3, 5],
                 "data_limit": 0,
                 "expire_duration": 0,
             }
         }
     )
+
+    @field_validator("group_ids", mode="after")
+    @classmethod
+    def group_ids_validator(cls, v):
+        if v and len(v) < 1:
+            raise ValueError("you must select at least one group")
+        return v
 
 
 class UserTemplateModify(UserTemplate):
@@ -40,7 +43,7 @@ class UserTemplateModify(UserTemplate):
                 "name": "my template 1",
                 "username_prefix": None,
                 "username_suffix": None,
-                "inbounds": {"vmess": ["VMESS_INBOUND"], "vless": ["VLESS_INBOUND"]},
+                "group_ids": [1, 3, 5],
                 "data_limit": 0,
                 "expire_duration": 0,
             }
@@ -50,19 +53,5 @@ class UserTemplateModify(UserTemplate):
 
 class UserTemplateResponse(UserTemplate):
     id: int
-
-    @field_validator("inbounds", mode="before")
-    @classmethod
-    def validate_inbounds(cls, v):
-        final = {}
-        inbound_tags = [i.tag for i in v]
-        for protocol, inbounds in backend.config.inbounds_by_protocol.items():
-            for inbound in inbounds:
-                if inbound["tag"] in inbound_tags:
-                    if protocol in final:
-                        final[protocol].append(inbound["tag"])
-                    else:
-                        final[protocol] = [inbound["tag"]]
-        return final
 
     model_config = ConfigDict(from_attributes=True)

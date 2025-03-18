@@ -1,5 +1,4 @@
 from __future__ import annotations
-from functools import lru_cache
 
 import json
 from copy import deepcopy
@@ -249,7 +248,6 @@ class XRayConfig(dict):
             if outbound["tag"] == tag:
                 return outbound
 
-    @lru_cache(maxsize=None)
     def to_json(self, **json_kwargs):
         return json.dumps(self, **json_kwargs)
 

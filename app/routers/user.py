@@ -39,8 +39,8 @@ async def add_user(
     - **expire**: UTC datetime for account expiration. Use `0` for unlimited.
     - **data_limit**: Max data usage in bytes (e.g., `1073741824` for 1GB). `0` means unlimited.
     - **data_limit_reset_strategy**: Defines how/if data limit resets. `no_reset` means it never resets.
-    - **proxies**: Dictionary of protocol settings (e.g., `vmess`, `vless`).
-    - **inbounds**: Dictionary of protocol tags to specify inbound connections.
+    - **proxy_settings**: Dictionary of protocol settings (e.g., `vmess`, `vless`) will generate data for all protocol by default.
+    - **group_ids**: List of group IDs to assign to the user.
     - **note**: Optional text field for additional user information or notes.
     - **on_hold_timeout**: UTC timestamp when `on_hold` status should start or end.
     - **on_hold_expire_duration**: Duration (in seconds) for how long the user should stay in `on_hold` status.
@@ -80,7 +80,7 @@ async def modify_user(
     - **data_limit**: New max data usage in bytes (e.g., `1073741824` for 1GB). Set to `0` for unlimited, `null` for no change.
     - **data_limit_reset_strategy**: New strategy for data limit reset. Options include 'daily', 'weekly', 'monthly', or 'no_reset'.
     - **proxies**: Dictionary of new protocol settings (e.g., `vmess`, `vless`). Empty dictionary means no change.
-    - **inbounds**: Dictionary of new protocol tags to specify inbound connections. Empty dictionary means no change.
+    - **group_ids**: List of new group IDs to assign to the user. Empty list means no change.
     - **note**: New optional text for additional user information or notes. `null` means no change.
     - **on_hold_timeout**: New UTC timestamp for when `on_hold` status should start or end. Only applicable if status is changed to 'on_hold'.
     - **on_hold_expire_duration**: New duration (in seconds) for how long the user should stay in `on_hold` status. Only applicable if status is changed to 'on_hold'.
