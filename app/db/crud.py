@@ -37,7 +37,6 @@ from app.models.user import (
     ReminderType,
     UserDataLimitResetStrategy,
     UserModify,
-    UserResponse,
     UserStatus,
     UserUsageResponse,
 )
@@ -147,6 +146,18 @@ def add_host(db: Session, db_host: ProxyHost) -> ProxyHost:
         ProxyHost: The retrieved or newly created proxy host.
     """
     db.add(db_host)
+    db.commit()
+    db.refresh(db_host)
+    return db_host
+
+
+def modify_host(db: Session, db_host: ProxyHost, modified_host: ProxyHost) -> ProxyHost:
+    excluded_fields = ["id"]
+
+    for key, value in modified_host.__dict__.items():
+        if not key.startswith("_") and key not in excluded_fields:
+            setattr(db_host, key, value)
+
     db.commit()
     db.refresh(db_host)
     return db_host

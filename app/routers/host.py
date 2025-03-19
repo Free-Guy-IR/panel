@@ -21,7 +21,7 @@ async def get_host(
     """
     get host by **id**
     """
-    return await host_operator.get_host(db=db, host_id=host_id)
+    return await host_operator.get_validated_host(db=db, host_id=host_id)
 
 
 @router.get("s", response_model=list[BaseHost])

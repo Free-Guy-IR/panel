@@ -3,6 +3,10 @@ from datetime import timezone, timedelta, datetime as dt
 
 from fastapi import HTTPException
 
+from app.db import Session
+from app.db.models import ProxyHost
+from app.db.crud import get_host_by_id
+
 
 class OperatorType(IntEnum):
     SYSTEM = 0
@@ -43,3 +47,9 @@ class BaseOperator:
             return start_date, end_date
         except ValueError:
             self.raise_error(message="Invalid date range or format", code=400)
+
+    async def get_validated_host(self, db: Session, host_id: int) -> ProxyHost:
+        db_host = get_host_by_id(db, host_id)
+        if db_host is None:
+            self.raise_error(message="Host not found", code=404)
+        return db_host

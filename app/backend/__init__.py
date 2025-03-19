@@ -10,7 +10,7 @@ config = XRayConfig(XRAY_JSON)
 @DictStorage
 def hosts(storage: dict):
     from app.db import GetDB, crud
-    from app.models.host import ProxyHostSecurity
+    from app.db.models import ProxyHostSecurity
 
     storage.clear()
     with GetDB() as db:

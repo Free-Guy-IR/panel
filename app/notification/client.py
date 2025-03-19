@@ -8,21 +8,25 @@ client = httpx.AsyncClient(
     http2=True,
     timeout=httpx.Timeout(10),
     limits=httpx.Limits(max_keepalive_connections=1),
-    proxy=NOTIFICATION_PROXY_URL,
+    proxy=NOTIFICATION_PROXY_URL if NOTIFICATION_PROXY_URL else None,
 )
 
 logger = get_logger("Notification")
 
 
 async def send_discord_webhook(json_data, webhook):
-    result = await client.post(webhook, json=json_data)
-
     try:
-        result.raise_for_status()
+        response = await client.post(webhook, json=json_data)
+        if response.status_code == 200:
+            logger.debug(f"Discord webhook payload delivered successfully, code {response.status_code}.")
+            return
+        else:
+            response_text = response.text
+            logger.error(f"Discord webhook failed: {response.status_code} - {response_text}")
+            return
     except Exception as err:
-        logger.error("Discord webhook failed:" + str(err))
-    else:
-        logger.debug("Discord webhook payload delivered successfully, code {}.".format(result.status_code))
+        logger.error(f"Discord webhook failed: {str(err)}")
+        return
 
 
 async def send_telegram_message(message, chat_id=0, channel_id=0, topic_id=0):
