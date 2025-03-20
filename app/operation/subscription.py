@@ -29,8 +29,8 @@ client_config = {
     "clash-meta": {"config_format": "clash-meta", "media_type": "text/yaml", "as_base64": False},
     "sing-box": {"config_format": "sing-box", "media_type": "application/json", "as_base64": False},
     "clash": {"config_format": "clash", "media_type": "text/yaml", "as_base64": False},
-    "v2ray": {"config_format": "v2ray", "media_type": "text/plain", "as_base64": True},
-    "links": {"config_format": "v2ray", "media_type": "text/plain", "as_base64": False},
+    "links-base64": {"config_format": "links", "media_type": "text/plain", "as_base64": True},
+    "links": {"config_format": "links", "media_type": "text/plain", "as_base64": False},
     "outline": {"config_format": "outline", "media_type": "application/json", "as_base64": False},
     "xray": {"config_format": "xray", "media_type": "application/json", "as_base64": False},
 }
@@ -62,7 +62,7 @@ class SubscriptionOperator(BaseOperator):
             if parse(version_str) >= parse("6.40"):
                 return "xray"
             else:
-                return "v2ray"
+                return "links-base64"
 
         # v2rayNG
         elif (USE_CUSTOM_JSON_DEFAULT or USE_CUSTOM_JSON_FOR_V2RAYNG): 
@@ -70,14 +70,14 @@ class SubscriptionOperator(BaseOperator):
             if parse(version_str) >= parse("1.8.18"):
                 return "xray"
             else:
-                return "v2ray"
+                return "links-base64"
 
         # Streisand
         elif re.match(r"^[Ss]treisand", user_agent):
             if USE_CUSTOM_JSON_DEFAULT or USE_CUSTOM_JSON_FOR_STREISAND:
                 return "xray"
             else:
-                return "v2ray"
+                return "links-base64"
 
         # Happ
         elif (USE_CUSTOM_JSON_DEFAULT or USE_CUSTOM_JSON_FOR_HAPP) and re.match(r"^Happ/(\d+\.\d+\.\d+)", user_agent):
@@ -85,18 +85,18 @@ class SubscriptionOperator(BaseOperator):
             if parse(version_str) >= parse("1.11.0"):
                 return "xray"
             else:
-                return "v2ray"
+                return "links-base64"
 
         # NPVTunnel
         elif USE_CUSTOM_JSON_DEFAULT or USE_CUSTOM_JSON_FOR_NPVTUNNEL:
             if "ktor-client" in user_agent:
                 return "xray"
             else:
-                return "v2ray"
+                return "links-base64"
 
-        # Default to v2ray
+        # Default to links-base64
         else:
-            return "v2ray"
+            return "links-base64"
 
     @staticmethod
     def create_response_headers(user: User, request_url: str) -> dict:

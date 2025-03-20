@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException
 from app.db import Session, crud, get_db
 from app.models.admin import Admin, AdminInDB, AdminValidationResult
 from app.models.user import UserResponse, UserStatus
-from app.subscription.share import generate_v2ray_links
+from app.subscription.share import generate_standard_links
 from app.utils.jwt import get_subscription_payload
 from config import SUDOERS
 
@@ -102,7 +102,7 @@ def get_expired_users_list(db: Session, admin: Admin, expired_after: datetime = 
 
 
 def get_v2ray_links(user: UserResponse) -> list:
-    return generate_v2ray_links(
+    return generate_standard_links(
         user.proxy_settings,
         user.inbounds,
         extra_data=user.model_dump(),

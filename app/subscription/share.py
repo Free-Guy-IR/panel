@@ -12,7 +12,7 @@ from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 from app.db.models import User, UserStatus
 
 from . import (
-    V2rayShareLink,
+    StandardLinks,
     XrayConfig,
     SingBoxConfiguration,
     ClashConfiguration,
@@ -48,9 +48,9 @@ STATUS_TEXTS = {
 }
 
 
-def generate_v2ray_links(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> list:
+def generate_standard_links(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> list:
     format_variables = setup_format_variables(extra_data)
-    conf = V2rayShareLink()
+    conf = StandardLinks()
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
@@ -73,36 +73,21 @@ def generate_singbox_subscription(proxies: dict, inbounds: list[str], extra_data
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_outline_subscription(
-    proxies: dict,
-    inbounds: list[str],
-    extra_data: dict,
-    reverse: bool,
-) -> str:
+def generate_outline_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
     conf = OutlineConfiguration()
 
     format_variables = setup_format_variables(extra_data)
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_xray_subscription(
-    proxies: dict,
-    inbounds: list[str],
-    extra_data: dict,
-    reverse: bool,
-) -> str:
+def generate_xray_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
     conf = XrayConfig()
 
     format_variables = setup_format_variables(extra_data)
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_subscription(
-    user: User,
-    config_format: str,
-    as_base64: bool,
-    reverse: bool = False,
-) -> str:
+def generate_subscription(user: User, config_format: str, as_base64: bool, reverse: bool = False) -> str:
     kwargs = {
         "proxies": user.proxy_settings,
         "inbounds": user.inbounds(backend.config.inbounds),
@@ -110,8 +95,8 @@ def generate_subscription(
         "reverse": reverse,
     }
 
-    if config_format == "v2ray":
-        config = "\n".join(generate_v2ray_links(**kwargs))
+    if config_format == "links":
+        config = "\n".join(generate_standard_links(**kwargs))
     elif config_format == "clash-meta":
         config = generate_clash_subscription(**kwargs, is_meta=True)
     elif config_format == "clash":
@@ -242,7 +227,7 @@ def process_inbounds_and_tags(
     inbounds: list[str],
     proxies: dict,
     format_variables: dict,
-    conf: V2rayShareLink
+    conf: StandardLinks
     | XrayConfig
     | SingBoxConfiguration
     | ClashConfiguration

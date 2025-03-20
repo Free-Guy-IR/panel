@@ -10,7 +10,7 @@ from app.subscription.funcs import get_grpc_gun, get_grpc_multi
 from config import EXTERNAL_CONFIG
 
 
-class V2rayShareLink(BaseSubscription):
+class StandardLinks(BaseSubscription):
     def __init__(self):
         super().__init__()
         self.links = []

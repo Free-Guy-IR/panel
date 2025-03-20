@@ -41,7 +41,7 @@ async def user_get_usage(token: str, start: str = "", end: str = "", db: Session
 async def user_subscription_with_client_type(
     request: Request,
     token: str,
-    client_type: str = Path(..., regex="sing-box|clash-meta|clash|outline|v2ray|xray"),
+    client_type: str = Path(..., regex="sing-box|clash-meta|clash|outline|links|links-base64|xray"),
     db: Session = Depends(get_db),
 ):
     """Provides a subscription link based on the specified client type (e.g., Clash, V2Ray)."""
