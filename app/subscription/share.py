@@ -3,26 +3,22 @@ import random
 import secrets
 from collections import defaultdict
 from copy import deepcopy
-from datetime import datetime as dt
+from datetime import timezone, datetime as dt
 from datetime import timedelta
-from typing import TYPE_CHECKING, List, Literal, Union
-
 from jdatetime import date as jd
 
 from app import backend
 from app.utils.system import get_public_ip, get_public_ipv6, readable_size
+from app.db.models import User, UserStatus
 
 from . import (
     V2rayShareLink,
-    V2rayJsonConfig,
+    XrayConfig,
     SingBoxConfiguration,
     ClashConfiguration,
     ClashMetaConfiguration,
     OutlineConfiguration,
 )
-
-if TYPE_CHECKING:
-    from app.models.user import UserResponse
 
 from config import (
     ACTIVE_STATUS_TEXT,
@@ -52,14 +48,14 @@ STATUS_TEXTS = {
 }
 
 
-def generate_v2ray_links(proxies: dict, inbounds: dict, extra_data: dict, reverse: bool) -> list:
+def generate_v2ray_links(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> list:
     format_variables = setup_format_variables(extra_data)
     conf = V2rayShareLink()
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
 def generate_clash_subscription(
-    proxies: dict, inbounds: dict, extra_data: dict, reverse: bool, is_meta: bool = False
+    proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool, is_meta: bool = False
 ) -> str:
     if is_meta is True:
         conf = ClashMetaConfiguration()
@@ -70,7 +66,7 @@ def generate_clash_subscription(
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_singbox_subscription(proxies: dict, inbounds: dict, extra_data: dict, reverse: bool) -> str:
+def generate_singbox_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
     conf = SingBoxConfiguration()
 
     format_variables = setup_format_variables(extra_data)
@@ -79,7 +75,7 @@ def generate_singbox_subscription(proxies: dict, inbounds: dict, extra_data: dic
 
 def generate_outline_subscription(
     proxies: dict,
-    inbounds: dict,
+    inbounds: list[str],
     extra_data: dict,
     reverse: bool,
 ) -> str:
@@ -89,27 +85,27 @@ def generate_outline_subscription(
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_v2ray_json_subscription(
+def generate_xray_subscription(
     proxies: dict,
-    inbounds: dict,
+    inbounds: list[str],
     extra_data: dict,
     reverse: bool,
 ) -> str:
-    conf = V2rayJsonConfig()
+    conf = XrayConfig()
 
     format_variables = setup_format_variables(extra_data)
     return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
 def generate_subscription(
-    user: "UserResponse",
-    config_format: Literal["v2ray", "clash-meta", "clash", "sing-box", "outline", "v2ray-json"],
+    user: User,
+    config_format: str,
     as_base64: bool,
-    reverse: bool,
+    reverse: bool = False,
 ) -> str:
     kwargs = {
         "proxies": user.proxy_settings,
-        "inbounds": user.inbounds,
+        "inbounds": user.inbounds(backend.config.inbounds),
         "extra_data": user.__dict__,
         "reverse": reverse,
     }
@@ -124,8 +120,8 @@ def generate_subscription(
         config = generate_singbox_subscription(**kwargs)
     elif config_format == "outline":
         config = generate_outline_subscription(**kwargs)
-    elif config_format == "v2ray-json":
-        config = generate_v2ray_json_subscription(**kwargs)
+    elif config_format == "xray":
+        config = generate_xray_subscription(**kwargs)
     else:
         raise ValueError(f'Unsupported format "{config_format}"')
 
@@ -159,12 +155,10 @@ def format_time_left(seconds_left: int) -> str:
 
 
 def setup_format_variables(extra_data: dict) -> dict:
-    from app.models.user import UserStatus
-
     user_status = extra_data.get("status")
     expire = extra_data.get("expire")
     on_hold_expire_duration = extra_data.get("on_hold_expire_duration")
-    now = dt.utcnow()
+    now = dt.now(timezone.utc)
 
     if user_status != UserStatus.on_hold:
         if expire is not None:
@@ -245,29 +239,24 @@ def setup_format_variables(extra_data: dict) -> dict:
 
 
 def process_inbounds_and_tags(
-    inbounds: dict,
+    inbounds: list[str],
     proxies: dict,
     format_variables: dict,
-    conf: Union[
-        V2rayShareLink,
-        V2rayJsonConfig,
-        SingBoxConfiguration,
-        ClashConfiguration,
-        ClashMetaConfiguration,
-        OutlineConfiguration,
-    ],
+    conf: V2rayShareLink
+    | XrayConfig
+    | SingBoxConfiguration
+    | ClashConfiguration
+    | ClashMetaConfiguration
+    | OutlineConfiguration,
     reverse=False,
-) -> Union[List, str]:
+) -> list | str:
     for _, host in backend.hosts.items():
         tag = host["inbound_tag"]
         host_inbound = deepcopy(backend.config.inbounds_by_tag[tag])
 
         protocol = host_inbound["protocol"]
-        tags = inbounds.get(protocol)
-        if tags is None:
-            continue
 
-        if tag not in tags:
+        if tag not in inbounds:
             continue
 
         settings = proxies.get(protocol)
@@ -323,7 +312,7 @@ def process_inbounds_and_tags(
             }
         )
         if ts := host["transport_settings"]:
-            for _, v in ts.items():
+            for v in ts.values():
                 if v:
                     host_inbound.update(v)
 
@@ -331,7 +320,7 @@ def process_inbounds_and_tags(
             remark=host["remark"].format_map(format_variables),
             address=address.format_map(format_variables),
             inbound=host_inbound,
-            settings=settings.dict(no_obj=True),
+            settings=settings,
         )
 
     return conf.render(reverse=reverse)
