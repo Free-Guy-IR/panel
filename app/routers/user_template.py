@@ -8,11 +8,11 @@ from app.operation import OperatorType
 from app.operation.user_template import UserTemplateOperation
 
 
-router = APIRouter(tags=["User Template"], prefix="/api")
+router = APIRouter(tags=["User Template"], prefix="/api/user_template")
 template_operator = UserTemplateOperation(OperatorType.API)
 
 
-@router.post("/user_template", response_model=UserTemplateResponse)
+@router.post("", response_model=UserTemplateResponse)
 async def add_user_template(
     new_user_template: UserTemplateCreate, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ):
@@ -27,13 +27,13 @@ async def add_user_template(
     return await template_operator.add_user_template(db, new_user_template, admin)
 
 
-@router.get("/user_template/{template_id}", response_model=UserTemplateResponse)
+@router.get("/{template_id}", response_model=UserTemplateResponse)
 async def get_user_template_endpoint(template_id: int, db: Session = Depends(get_db), _: Admin = Depends(get_current)):
     """Get User Template information with id"""
     return await template_operator.get_validated_user_template(db, template_id)
 
 
-@router.put("/user_template/{template_id}", response_model=UserTemplateResponse)
+@router.put("/{template_id}", response_model=UserTemplateResponse)
 async def modify_user_template(
     template_id: int,
     modify_user_template: UserTemplateModify,
@@ -51,7 +51,7 @@ async def modify_user_template(
     return await template_operator.modify_user_template(db, template_id, modify_user_template, admin)
 
 
-@router.delete("/user_template/{template_id}")
+@router.delete("/{template_id}")
 async def remove_user_template(
     template_id: int, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ):
@@ -60,7 +60,7 @@ async def remove_user_template(
     return {}
 
 
-@router.get("/user_template", response_model=list[UserTemplateResponse])
+@router.get("", response_model=list[UserTemplateResponse])
 async def get_user_templates(
     offset: int = None, limit: int = None, db: Session = Depends(get_db), _: Admin = Depends(get_current)
 ):
