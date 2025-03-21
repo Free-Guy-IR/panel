@@ -13,7 +13,9 @@ operator = UserTemplateOperation(OperatorType.API)
 
 @router.post("/user_template", response_model=UserTemplateResponse)
 async def add_user_template(
-    new_user_template: UserTemplateCreate, db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)
+    new_user_template: UserTemplateCreate,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
     Add a new user template
@@ -23,7 +25,7 @@ async def add_user_template(
     - **expire_duration** must be in seconds and larger or equat to 0
     - **group_ids** list of group ids
     """
-    return await operator.add_user_template(db, new_user_template)
+    return await operator.add_user_template(db, new_user_template, admin)
 
 
 @router.get("/user_template/{template_id}", response_model=UserTemplateResponse)
@@ -39,7 +41,7 @@ async def modify_user_template(
     template_id: int,
     modify_user_template: UserTemplateModify,
     db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
     Modify User Template
@@ -49,17 +51,17 @@ async def modify_user_template(
     - **expire_duration** must be in seconds and larger or equat to 0
     - **group_ids** list of group ids
     """
-    return await operator.modify_user_template(db, template_id, modify_user_template)
+    return await operator.modify_user_template(db, template_id, modify_user_template, admin)
 
 
 @router.delete("/user_template/{template_id}")
 async def remove_user_template(
     template_id: int,
     db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Remove a User Template by its ID"""
-    await operator.remove_user_template(db, template_id)
+    await operator.remove_user_template(db, template_id, admin)
     return {}
 
 

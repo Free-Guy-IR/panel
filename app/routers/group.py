@@ -35,7 +35,9 @@ operator = GroupOperation(OperatorType.API)
         403: responses._403,
     },
 )
-async def add_group(new_group: GroupCreate, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)):
+async def add_group(
+    new_group: GroupCreate, db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)
+):
     """
     Create a new group in the system.
 
@@ -53,7 +55,7 @@ async def add_group(new_group: GroupCreate, db: Session = Depends(get_db), _: Ad
         401: Unauthorized - If not authenticated
         403: Forbidden - If not sudo admin
     """
-    return await operator.add_group(db, new_group)
+    return await operator.add_group(db, new_group, admin)
 
 
 @router.get(
@@ -136,7 +138,7 @@ async def modify_group(
     group_id: int,
     modified_group: GroupModify,
     db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
     Update an existing group's information.
@@ -156,7 +158,7 @@ async def modify_group(
         403: Forbidden - If not sudo admin
         404: Not Found - If group doesn't exist
     """
-    return await operator.modify_group(db, group_id, modified_group)
+    return await operator.modify_group(db, group_id, modified_group, admin)
 
 
 @router.delete(
@@ -174,7 +176,7 @@ async def modify_group(
 async def delete_group(
     group_id: int,
     db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
     Delete a group by its **ID**.
@@ -187,5 +189,5 @@ async def delete_group(
         403: Forbidden - If not sudo admin
         404: Not Found - If group doesn't exist
     """
-    await operator.delete_group(db, group_id)
+    await operator.delete_group(db, group_id, admin)
     return {}
