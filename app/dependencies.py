@@ -6,31 +6,20 @@ from fastapi import Depends, HTTPException
 from app.db import Session, crud, get_db
 from app.models.admin import Admin, AdminInDB, AdminValidationResult
 from app.models.user import UserResponse, UserStatus
-from app.subscription.share import generate_standard_links
-from app.utils.jwt import get_subscription_payload
 from config import SUDOERS
 
 
-def validate_admin(db: Session, username: str, password: str) -> Optional[AdminValidationResult]:
+def validate_admin(db: Session, username: str, password: str) -> AdminValidationResult | None:
     """Validate admin credentials with environment variables or database."""
-    if SUDOERS.get(username) == password:
-        return AdminValidationResult(username=username, is_sudo=True, is_disabled=False)
 
-    dbadmin = crud.get_admin(db, username)
-    if dbadmin and AdminInDB.model_validate(dbadmin).verify_password(password):
+    db_admin = crud.get_admin(db, username)
+    if db_admin and AdminInDB.model_validate(db_admin).verify_password(password):
         return AdminValidationResult(
-            username=dbadmin.username, is_sudo=dbadmin.is_sudo, is_disabled=dbadmin.is_disabled
+            username=db_admin.username, is_sudo=db_admin.is_sudo, is_disabled=db_admin.is_disabled
         )
 
-    return None
-
-
-def get_admin_by_username(username: str, db: Session = Depends(get_db)):
-    """Fetch an admin by username from the database."""
-    dbadmin = crud.get_admin(db, username)
-    if not dbadmin:
-        raise HTTPException(status_code=404, detail="Admin not found")
-    return dbadmin
+    if not db_admin and SUDOERS.get(username) == password:
+        return AdminValidationResult(username=username, is_sudo=True, is_disabled=False)
 
 
 def validate_dates(
@@ -64,21 +53,6 @@ def get_validated_user_template(template_id: int, db: Session = Depends(get_db))
     return dbuser_template
 
 
-def get_validated_sub(token: str, db: Session = Depends(get_db)) -> UserResponse:
-    sub = get_subscription_payload(token)
-    if not sub:
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    dbuser = crud.get_user(db, sub["username"])
-    if not dbuser or dbuser.created_at > sub["created_at"]:
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    if dbuser.sub_revoked_at and dbuser.sub_revoked_at > sub["created_at"]:
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    return dbuser
-
-
 def get_validated_user(
     username: str, admin: Admin = Depends(Admin.get_current), db: Session = Depends(get_db)
 ) -> UserResponse:
@@ -99,15 +73,6 @@ def get_expired_users_list(db: Session, admin: Admin, expired_after: datetime = 
     )
 
     return [u for u in dbusers if u.expire and expired_after <= u.expire <= expired_before]
-
-
-def get_v2ray_links(user: UserResponse) -> list:
-    return generate_standard_links(
-        user.proxy_settings,
-        user.inbounds,
-        extra_data=user.model_dump(),
-        reverse=False,
-    )
 
 
 def get_validated_group(group_id: int, admin: Admin = Depends(Admin.get_current), db: Session = Depends(get_db)):

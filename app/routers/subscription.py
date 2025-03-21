@@ -21,7 +21,11 @@ async def user_subscription(
 ):
     """Provides a subscription link based on the user agent (Clash, V2Ray, etc.)."""
     return await subscription_operator.user_subscription(
-        db, token=token, accept_header=request.headers.get("Accept", ""), user_agent=user_agent, request_url=str(request.url)
+        db,
+        token=token,
+        accept_header=request.headers.get("Accept", ""),
+        user_agent=user_agent,
+        request_url=str(request.url),
     )
 
 

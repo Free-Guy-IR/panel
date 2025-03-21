@@ -65,7 +65,7 @@ class SubscriptionOperator(BaseOperator):
                 return "links-base64"
 
         # v2rayNG
-        elif (USE_CUSTOM_JSON_DEFAULT or USE_CUSTOM_JSON_FOR_V2RAYNG): 
+        elif USE_CUSTOM_JSON_DEFAULT or USE_CUSTOM_JSON_FOR_V2RAYNG:
             version_str = re.match(r"^v2rayNG/(\d+\.\d+\.\d+)", user_agent).group(1)
             if parse(version_str) >= parse("1.8.18"):
                 return "xray"
@@ -120,7 +120,7 @@ class SubscriptionOperator(BaseOperator):
             "profile-update-interval": SUB_UPDATE_INTERVAL,
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
         }
-    
+
     async def fetch_config(self, db: Session, token: str, client_type: str) -> tuple[str, str, User]:
         db_user: User = await self.get_validated_sub(db, token=token)
 
@@ -128,11 +128,15 @@ class SubscriptionOperator(BaseOperator):
         config = client_config.get(client_type)
 
         # Generate subscription content
-        return generate_subscription(
-            user=db_user,
-            config_format=config["config_format"],
-            as_base64=config["as_base64"],
-        ), config["media_type"], db_user
+        return (
+            generate_subscription(
+                user=db_user,
+                config_format=config["config_format"],
+                as_base64=config["as_base64"],
+            ),
+            config["media_type"],
+            db_user,
+        )
 
     async def user_subscription(
         self,
@@ -173,7 +177,7 @@ class SubscriptionOperator(BaseOperator):
         response_headers = self.create_response_headers(db_user, request_url)
 
         return Response(content=conf, media_type=media_type, headers=response_headers)
-    
+
     async def user_subscription_info(self, db: Session, token: str) -> UserResponse:
         """Retrieves detailed information about the user's subscription."""
         return await self.get_validated_sub(db, token=token)
@@ -187,4 +191,3 @@ class SubscriptionOperator(BaseOperator):
         usages = get_user_usages(db, db_user, start, end)
 
         return {"usages": usages, "username": db_user.username}
-

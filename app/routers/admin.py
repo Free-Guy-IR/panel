@@ -1,17 +1,17 @@
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.exc import IntegrityError
 
-from app import backend
-from app.db import Session, crud, get_db
-from app.dependencies import get_admin_by_username, validate_admin
+from app.db import Session, get_db
+from app.dependencies import validate_admin
 from app.models.admin import Admin, AdminCreate, AdminModify, Token
 from app.utils import responses
 from app.utils.jwt import create_admin_token
+from app.operation import OperatorType
+from app.operation.admin import AdminOperation
 
-router = APIRouter(tags=["Admin"], prefix="/api", responses={401: responses._401})
+
+router = APIRouter(tags=["Admin"], prefix="/api/admin", responses={401: responses._401, 403: responses._403})
+admin_operator = AdminOperation(operator_type=OperatorType.API)
 
 
 def get_client_ip(request: Request) -> str:
@@ -24,7 +24,7 @@ def get_client_ip(request: Request) -> str:
     return "Unknown"
 
 
-@router.post("/admin/token", response_model=Token)
+@router.post("/token", response_model=Token)
 def admin_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -33,166 +33,106 @@ def admin_token(
     """Authenticate an admin and issue a token."""
     # client_ip = get_client_ip(request)
 
-    dbadmin = validate_admin(db, form_data.username, form_data.password)
-    # if not dbadmin:
-    #    report.login(form_data.username, form_data.password, client_ip, False)
-    #    raise HTTPException(
-    #        status_code=status.HTTP_401_UNAUTHORIZED,
-    #        detail="Incorrect username or password",
-    #        headers={"WWW-Authenticate": "Bearer"},
-    #    )
-    # if dbadmin.is_disabled:
-    #    report.login(form_data.username, form_data.password, client_ip, False)
-    #    raise HTTPException(
-    #        status_code=status.HTTP_403_FORBIDDEN,
-    #        detail="your account has been disabled",
-    #        headers={"WWW-Authenticate": "Bearer"},
-    #    )
-    #
+    db_admin = validate_admin(db, form_data.username, form_data.password)
+    if not db_admin:
+        # report.login(form_data.username, form_data.password, client_ip, False)
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if db_admin.is_disabled:
+        # report.login(form_data.username, form_data.password, client_ip, False)
+        raise HTTPException(
+            status_code=403,
+            detail="your account has been disabled",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # if client_ip not in LOGIN_NOTIFY_WHITE_LIST:
-    #    report.login(form_data.username, "🔒", client_ip, True)
+    #   report.login(form_data.username, "🔒", client_ip, True)
 
-    return Token(access_token=create_admin_token(form_data.username, dbadmin.is_sudo))
+    return Token(access_token=create_admin_token(form_data.username, db_admin.is_sudo))
 
 
-@router.post(
-    "/admin",
-    response_model=Admin,
-    responses={403: responses._403, 409: responses._409},
-)
-def create_admin(
+@router.post("", response_model=Admin, responses={409: responses._409})
+async def create_admin(
     new_admin: AdminCreate,
     db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Create a new admin if the current admin has sudo privileges."""
-    try:
-        dbadmin = crud.create_admin(db, new_admin)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="Admin already exists")
-
-    return dbadmin
+    return await admin_operator.create_admin(db, new_admin=new_admin, admin=admin)
 
 
-@router.put(
-    "/admin/{username}",
-    response_model=Admin,
-    responses={403: responses._403},
-)
-def modify_admin(
+@router.put("/{username}", response_model=Admin)
+async def modify_admin(
+    username: str,
     modified_admin: AdminModify,
-    dbadmin: Admin = Depends(get_admin_by_username),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Modify an existing admin's details."""
-    if (dbadmin.username != current_admin.username) and dbadmin.is_sudo:
-        raise HTTPException(
-            status_code=403,
-            detail="You're not allowed to edit another sudoer's account. Use marzban-cli instead.",
-        )
-
-    updated_admin = crud.update_admin(db, dbadmin, modified_admin)
-
-    return updated_admin
+    return await admin_operator.modify_admin(
+        db, username=username, modified_admin=modified_admin, current_admin=current_admin
+    )
 
 
-@router.delete(
-    "/admin/{username}",
-    responses={403: responses._403},
-)
-def remove_admin(
-    dbadmin: Admin = Depends(get_admin_by_username),
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(Admin.check_sudo_admin),
+@router.delete("/{username}")
+async def remove_admin(
+    username: str, db: Session = Depends(get_db), current_admin: Admin = Depends(Admin.check_sudo_admin)
 ):
     """Remove an admin from the database."""
-    if dbadmin.is_sudo:
-        raise HTTPException(
-            status_code=403,
-            detail="You're not allowed to delete sudo accounts. Use marzban-cli instead.",
-        )
-
-    crud.remove_admin(db, dbadmin)
-    return {"detail": "Admin removed successfully"}
+    await admin_operator.remove_admin(db, username=username, current_admin=current_admin)
+    return {}
 
 
-@router.get("/admin", response_model=Admin)
+@router.get("", response_model=Admin)
 def get_current_admin(admin: Admin = Depends(Admin.get_current)):
     """Retrieve the current authenticated admin."""
     return admin
 
 
-@router.get(
-    "/admins",
-    response_model=List[Admin],
-    responses={403: responses._403},
-)
-def get_admins(
-    offset: Optional[int] = None,
-    limit: Optional[int] = None,
-    username: Optional[str] = None,
+@router.get("s", response_model=list[Admin])
+async def get_admins(
+    username: str | None = None,
+    offset: int | None = None,
+    limit: int | None = None,
     db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+    _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Fetch a list of admins with optional filters for pagination and username."""
-    return crud.get_admins(db, offset, limit, username)
+    return await admin_operator.get_admins(db, username=username, offset=offset, limit=limit)
 
 
-@router.post("/admin/{username}/users/disable", responses={403: responses._403, 404: responses._404})
-def disable_all_active_users(
-    dbadmin: Admin = Depends(get_admin_by_username),
+@router.post("/{username}/users/disable", responses={404: responses._404})
+async def disable_all_active_users(
+    username: str,
     db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Disable all active users under a specific admin"""
-    crud.disable_all_active_users(db=db, admin=dbadmin)
-    startup_config = backend.config.include_db_users()
-    backend.core.restart(startup_config)
-    for node_id, node in list(backend.nodes.items()):
-        if node.connected:
-            backend.operations.restart_node(node_id, startup_config)
-    return {"detail": "Users successfully disabled"}
+    await admin_operator.disable_all_active_users(db, username=username, admin=admin)
+    return {}
 
 
-@router.post("/admin/{username}/users/activate", responses={403: responses._403, 404: responses._404})
-def activate_all_disabled_users(
-    dbadmin: Admin = Depends(get_admin_by_username),
+@router.post("/{username}/users/activate", responses={404: responses._404})
+async def activate_all_disabled_users(
+    username: str,
     db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Activate all disabled users under a specific admin"""
-    crud.activate_all_disabled_users(db=db, admin=dbadmin)
-    startup_config = backend.config.include_db_users()
-    backend.core.restart(startup_config)
-    for node_id, node in list(backend.nodes.items()):
-        if node.connected:
-            backend.operations.restart_node(node_id, startup_config)
-    return {"detail": "Users successfully activated"}
+    await admin_operator.activate_all_disabled_users(db, username=username, admin=admin)
+    return {}
 
 
-@router.post(
-    "/admin/usage/reset/{username}",
-    response_model=Admin,
-    responses={403: responses._403},
-)
-def reset_admin_usage(
-    dbadmin: Admin = Depends(get_admin_by_username),
+@router.post("/{username}/reset", response_model=Admin)
+async def reset_admin_usage(
+    username: str,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(Admin.check_sudo_admin),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Resets usage of admin."""
-    return crud.reset_admin_usage(db, dbadmin)
-
-
-@router.get(
-    "/admin/usage/{username}",
-    response_model=int,
-    responses={403: responses._403},
-)
-def get_admin_usage(
-    dbadmin: Admin = Depends(get_admin_by_username), current_admin: Admin = Depends(Admin.check_sudo_admin)
-):
-    """Retrieve the usage of given admin."""
-    return dbadmin.users_usage
+    await admin_operator.reset_admin_usage(db, username=username, admin=admin)
+    return {}

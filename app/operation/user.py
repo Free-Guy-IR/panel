@@ -49,7 +49,6 @@ class UserOperator(BaseOperator):
         user_data = new_user.model_dump(
             exclude={"next_plan", "expire", "proxy_settings", "group_ids"}, exclude_none=True
         )
-        print("before", new_user.proxy_settings)
         all_groups = []
         if new_user.group_ids:
             for group_id in new_user.group_ids:
@@ -59,13 +58,12 @@ class UserOperator(BaseOperator):
         db_admin = get_admin(db, admin.username)
         db_user = User(
             **user_data,
-            proxy_settings=new_user.proxy_settings.dict(no_obj=True),
+            proxy_settings=new_user.proxy_settings.dict(),
             expire=(new_user.expire or None),
             admin=db_admin,
             groups=all_groups,
             next_plan=NextPlan(**new_user.next_plan.model_dump()) if new_user.next_plan else None,
         )
-        print("after", db_user.proxy_settings)
         try:
             db_user = create_user(db, db_user)
         except IntegrityError:
@@ -92,9 +90,9 @@ class UserOperator(BaseOperator):
         user = UserResponse.model_validate(db_user)
 
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
-            await node_manager.update_user(db_user, inbounds=config.inbounds)
+            asyncio.create_task(node_manager.update_user(db_user, inbounds=config.inbounds))
         else:
-            await node_manager.remove_user(db_user)
+            asyncio.create_task(node_manager.remove_user(db_user))
 
         logger.info(f'User "{user.username}" with id "{db_user.id}" modified by admin "{admin.username}"')
 

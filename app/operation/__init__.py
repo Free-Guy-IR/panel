@@ -4,8 +4,8 @@ from datetime import timezone, timedelta, datetime as dt
 from fastapi import HTTPException
 
 from app.db import Session
-from app.db.models import ProxyHost, User
-from app.db.crud import get_host_by_id, get_user
+from app.db.models import ProxyHost, User, Admin as DBAdmin
+from app.db.crud import get_host_by_id, get_user, get_admin
 from app.utils.jwt import get_subscription_payload
 from app.models.admin import Admin
 
@@ -71,11 +71,17 @@ class BaseOperator:
         return db_user
 
     async def get_validated_user(self, db: Session, username: str, admin: Admin) -> User:
-        dbuser = get_user(db, username)
-        if not dbuser:
+        db_user = get_user(db, username)
+        if not db_user:
             self.raise_error(message="User not found", code=404)
 
-        if not (admin.is_sudo or (dbuser.admin and dbuser.admin.username == admin.username)):
+        if not (admin.is_sudo or (db_user.admin and db_user.admin.username == admin.username)):
             self.raise_error(message="You're not allowed", code=403)
 
-        return dbuser
+        return db_user
+
+    async def get_validated_admin(self, db: Session, username: str) -> DBAdmin:
+        db_admin = get_admin(db, username)
+        if not db_admin:
+            self.raise_error(message="Admin not found", code=404)
+        return db_admin

@@ -98,14 +98,14 @@ class NodeManager:
             return nodes
 
     async def update_user(self, user: UserResponse, inbounds: list[str] = None):
-        proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings, inbounds)
+        proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings.dict(), inbounds)
 
         async with self._lock.reader_lock:
             add_tasks = [node.update_user(proto_user) for node in self._nodes.values()]
             await asyncio.gather(*add_tasks, return_exceptions=True)
 
     async def remove_user(self, user: UserResponse):
-        proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings)
+        proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings.dict())
 
         async with self._lock.reader_lock:
             remove_tasks = [node.update_user(proto_user) for node in self._nodes.values()]

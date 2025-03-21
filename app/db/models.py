@@ -59,6 +59,22 @@ class Admin(Base):
     profile_title = Column(String(512), nullable=True, default=None)
     support_url = Column(String(1024), nullable=True, default=None)
 
+    @hybrid_property
+    def reseted_usage(self) -> int:
+        return int(sum([log.used_traffic_at_reset for log in self.usage_logs]))
+
+    @reseted_usage.expression
+    def reseted_usage(cls):
+        return (
+            select(func.sum(AdminUsageLogs.used_traffic_at_reset))
+            .where(AdminUsageLogs.user_id == cls.id)
+            .label("reseted_usage")
+        )
+
+    @property
+    def lifetime_used_traffic(self) -> int:
+        return self.reseted_usage + self.users_usage
+
 
 class AdminUsageLogs(Base):
     __tablename__ = "admin_usage_logs"

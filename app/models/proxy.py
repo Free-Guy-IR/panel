@@ -85,7 +85,7 @@ class ProxyTable(BaseModel):
     trojan: TrojanSettings = Field(default_factory=TrojanSettings)
     shadowsocks: ShadowsocksSettings = Field(default_factory=ShadowsocksSettings)
 
-    def dict(self, *, no_obj=False, **kwargs):
+    def dict(self, *, no_obj=True, **kwargs):
         if no_obj:
             return json.loads(self.model_dump_json())
         return super().model_dump(**kwargs)

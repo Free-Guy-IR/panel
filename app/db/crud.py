@@ -30,7 +30,7 @@ from app.db.models import (
     Group,
 )
 from app.models.proxy import ProxyTable
-from app.models.admin import AdminCreate, AdminModify, AdminPartialModify
+from app.models.admin import AdminPartialModify
 from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse
 from app.models.user import (
@@ -427,7 +427,7 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
         User: The updated user object.
     """
     if modify.proxy_settings:
-        dbuser.proxy_settings = modify.proxy_settings.dict(no_obj=True)
+        dbuser.proxy_settings = modify.proxy_settings.dict()
     if modify.group_ids:
         dbuser.groups = get_groups_by_ids(db, modify.group_ids)
     # if modify.inbounds:
@@ -657,7 +657,7 @@ def reset_all_users_data_usage(db: Session, admin: Optional[Admin] = None):
     db.commit()
 
 
-def disable_all_active_users(db: Session, admin: Optional[Admin] = None):
+def disable_all_active_users(db: Session, admin_id: int):
     """
     Disable all active users or users under a specific admin.
 
@@ -666,17 +666,17 @@ def disable_all_active_users(db: Session, admin: Optional[Admin] = None):
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
     query = db.query(User).filter(User.status.in_((UserStatus.active, UserStatus.on_hold)))
-    if admin:
-        query = query.filter(User.admin == admin)
+    query = query.filter(User.admin_id == admin_id)
 
     query.update(
-        {User.status: UserStatus.disabled, User.last_status_change: datetime.utcnow()}, synchronize_session=False
+        {User.status: UserStatus.disabled, User.last_status_change: datetime.now(timezone.utc)},
+        synchronize_session=False,
     )
 
     db.commit()
 
 
-def activate_all_disabled_users(db: Session, admin: Optional[Admin] = None):
+def activate_all_disabled_users(db: Session, admin_id: int):
     """
     Activate all disabled users or users under a specific admin.
 
@@ -690,18 +690,17 @@ def activate_all_disabled_users(db: Session, admin: Optional[Admin] = None):
             User.status == UserStatus.disabled,
             User.expire.is_(None),
             User.on_hold_expire_duration.isnot(None),
-            User.online_at.is_(None),
         )
     )
-    if admin:
-        query_for_active_users = query_for_active_users.filter(User.admin == admin)
-        query_for_on_hold_users = query_for_on_hold_users.filter(User.admin == admin)
+    query_for_active_users = query_for_active_users.filter(User.admin_id == admin_id)
+    query_for_on_hold_users = query_for_on_hold_users.filter(User.admin_id == admin_id)
 
     query_for_on_hold_users.update(
-        {User.status: UserStatus.on_hold, User.last_status_change: datetime.utcnow()}, synchronize_session=False
+        {User.status: UserStatus.on_hold, User.last_status_change: datetime.now(timezone.utc)},
+        synchronize_session=False,
     )
     query_for_active_users.update(
-        {User.status: UserStatus.active, User.last_status_change: datetime.utcnow()}, synchronize_session=False
+        {User.status: UserStatus.active, User.last_status_change: datetime.now(timezone.utc)}, synchronize_session=False
     )
 
     db.commit()
@@ -898,7 +897,7 @@ def get_admin(db: Session, username: str) -> Admin:
     return db.query(Admin).filter(Admin.username == username).first()
 
 
-def create_admin(db: Session, admin: AdminCreate) -> Admin:
+def create_admin(db: Session, db_admin: Admin) -> Admin:
     """
     Creates a new admin in the database.
 
@@ -909,24 +908,13 @@ def create_admin(db: Session, admin: AdminCreate) -> Admin:
     Returns:
         Admin: The created admin object.
     """
-    dbadmin = Admin(
-        username=admin.username,
-        hashed_password=admin.hashed_password,
-        is_sudo=admin.is_sudo,
-        telegram_id=admin.telegram_id if admin.telegram_id else None,
-        discord_webhook=admin.discord_webhook if admin.discord_webhook else None,
-        sub_template=admin.sub_template,
-        sub_domain=admin.sub_domain,
-        profile_title=admin.profile_title,
-        support_url=admin.support_url,
-    )
-    db.add(dbadmin)
+    db.add(db_admin)
     db.commit()
-    db.refresh(dbadmin)
-    return dbadmin
+    db.refresh(db_admin)
+    return db_admin
 
 
-def update_admin(db: Session, dbadmin: Admin, modified_admin: AdminModify) -> Admin:
+def update_admin(db: Session, db_admin: Admin, modified_admin: Admin) -> Admin:
     """
     Updates an admin's details.
 
@@ -939,28 +927,28 @@ def update_admin(db: Session, dbadmin: Admin, modified_admin: AdminModify) -> Ad
         Admin: The updated admin object.
     """
     if modified_admin.is_sudo:
-        dbadmin.is_sudo = modified_admin.is_sudo
+        db_admin.is_sudo = modified_admin.is_sudo
     if modified_admin.is_disabled is not None:
-        dbadmin.is_disabled = modified_admin.is_disabled
-    if modified_admin.password is not None and dbadmin.hashed_password != modified_admin.hashed_password:
-        dbadmin.hashed_password = modified_admin.hashed_password
-        dbadmin.password_reset_at = datetime.utcnow()
+        db_admin.is_disabled = modified_admin.is_disabled
+    if modified_admin.hashed_password is not None and db_admin.hashed_password != modified_admin.hashed_password:
+        db_admin.hashed_password = modified_admin.hashed_password
+        db_admin.password_reset_at = datetime.now(timezone.utc)
     if modified_admin.telegram_id:
-        dbadmin.telegram_id = modified_admin.telegram_id
+        db_admin.telegram_id = modified_admin.telegram_id
     if modified_admin.discord_webhook:
-        dbadmin.discord_webhook = modified_admin.discord_webhook
+        db_admin.discord_webhook = modified_admin.discord_webhook
     if modified_admin.sub_template:
-        dbadmin.sub_template = modified_admin.sub_template
+        db_admin.sub_template = modified_admin.sub_template
     if modified_admin.sub_domain:
-        dbadmin.sub_domain = modified_admin.sub_domain
+        db_admin.sub_domain = modified_admin.sub_domain
     if modified_admin.support_url:
-        dbadmin.support_url = modified_admin.support_url
+        db_admin.support_url = modified_admin.support_url
     if modified_admin.profile_title:
-        dbadmin.profile_title = modified_admin.profile_title
+        db_admin.profile_title = modified_admin.profile_title
 
     db.commit()
-    db.refresh(dbadmin)
-    return dbadmin
+    db.refresh(db_admin)
+    return db_admin
 
 
 def partial_update_admin(db: Session, dbadmin: Admin, modified_admin: AdminPartialModify) -> Admin:
@@ -981,7 +969,7 @@ def partial_update_admin(db: Session, dbadmin: Admin, modified_admin: AdminParti
         dbadmin.is_disabled = modified_admin.is_disabled
     if modified_admin.password is not None and dbadmin.hashed_password != modified_admin.hashed_password:
         dbadmin.hashed_password = modified_admin.hashed_password
-        dbadmin.password_reset_at = datetime.utcnow()
+        dbadmin.password_reset_at = datetime.now(timezone.utc)
     if modified_admin.telegram_id is not None:
         dbadmin.telegram_id = modified_admin.telegram_id
     if modified_admin.discord_webhook is not None:
@@ -1045,8 +1033,8 @@ def get_admin_by_telegram_id(db: Session, telegram_id: int) -> Admin:
 
 
 def get_admins(
-    db: Session, offset: Optional[int] = None, limit: Optional[int] = None, username: Optional[str] = None
-) -> List[Admin]:
+    db: Session, offset: int | None = None, limit: int | None = None, username: str | None = None
+) -> list[Admin]:
     """
     Retrieves a list of admins with optional filters and pagination.
 
@@ -1069,7 +1057,7 @@ def get_admins(
     return query.all()
 
 
-def reset_admin_usage(db: Session, dbadmin: Admin) -> int:
+def reset_admin_usage(db: Session, db_admin: Admin) -> int:
     """
     Retrieves an admin's usage by their username.
     Args:
@@ -1078,16 +1066,16 @@ def reset_admin_usage(db: Session, dbadmin: Admin) -> int:
     Returns:
         Admin: The updated admin.
     """
-    if dbadmin.users_usage == 0:
-        return dbadmin
+    if db_admin.users_usage == 0:
+        return db_admin
 
-    usage_log = AdminUsageLogs(admin=dbadmin, used_traffic_at_reset=dbadmin.users_usage)
+    usage_log = AdminUsageLogs(admin=db_admin, used_traffic_at_reset=db_admin.users_usage)
     db.add(usage_log)
-    dbadmin.users_usage = 0
+    db_admin.users_usage = 0
 
     db.commit()
-    db.refresh(dbadmin)
-    return dbadmin
+    db.refresh(db_admin)
+    return db_admin
 
 
 def create_user_template(db: Session, user_template: UserTemplateCreate) -> UserTemplate:

@@ -29,6 +29,8 @@ class Admin(BaseModel):
     sub_domain: str | None = None
     profile_title: str | None = None
     support_url: str | None = None
+    users_usage: int | None = None
+    lifetime_used_traffic: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -101,23 +103,6 @@ class Admin(BaseModel):
         return admin
 
 
-class AdminCreate(Admin):
-    password: str
-    telegram_id: int | None = None
-    discord_webhook: str | None = None
-
-    @property
-    def hashed_password(self):
-        return pwd_context.hash(self.password)
-
-    @field_validator("discord_webhook")
-    @classmethod
-    def validate_discord_webhook(cls, value):
-        if value and not value.startswith("https://discord.com"):
-            raise ValueError("Discord webhook must start with 'https://discord.com'")
-        return value
-
-
 class AdminModify(BaseModel):
     password: str | None = None
     is_sudo: bool
@@ -142,12 +127,16 @@ class AdminModify(BaseModel):
         return value
 
 
+class AdminCreate(AdminModify):
+    username: str
+    password: str
+
+
 class AdminPartialModify(AdminModify):
     __annotations__ = {k: Optional[v] for k, v in AdminModify.__annotations__.items()}
 
 
 class AdminInDB(Admin):
-    username: str
     hashed_password: str
 
     def verify_password(self, plain_password):
