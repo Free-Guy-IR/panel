@@ -150,6 +150,8 @@ class User(Base):
         """Returns a flat list of all included inbound tags across all proxies"""
         included_tags = []
         for group in self.groups:
+            if group.is_disabled:
+                continue
             tags = group.inbound_tags
             for inbound in active_inbounds:
                 if inbound in tags:

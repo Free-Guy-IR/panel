@@ -73,11 +73,3 @@ def get_expired_users_list(db: Session, admin: Admin, expired_after: datetime = 
     )
 
     return [u for u in dbusers if u.expire and expired_after <= u.expire <= expired_before]
-
-
-def get_validated_group(group_id: int, admin: Admin = Depends(Admin.get_current), db: Session = Depends(get_db)):
-    dbgroup = crud.get_group_by_id(db, group_id)
-    if not dbgroup:
-        raise HTTPException(status_code=404, detail="Group not found")
-
-    return dbgroup

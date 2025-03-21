@@ -1,9 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from app.db import Session, get_db
-from app.dependencies import get_validated_group
 from app.models.admin import Admin
 from app.models.group import (
-    Group,
     GroupCreate,
     GroupModify,
     GroupResponse,
@@ -102,7 +100,7 @@ async def get_all_groups(
         404: {"description": "Group not found"},
     },
 )
-async def get_validated_group(dbgroup: Group = Depends(get_validated_group)):
+async def get_group(group_id: int, db: Session = Depends(get_db), _: Admin = Depends(Admin.get_current)):
     """
     Get a specific group by its **ID**.
 
@@ -119,7 +117,7 @@ async def get_validated_group(dbgroup: Group = Depends(get_validated_group)):
     Raises:
         404: Not Found - If group doesn't exist
     """
-    return dbgroup
+    return await operator.get_validated_group(db, group_id)
 
 
 @router.put(
@@ -135,10 +133,10 @@ async def get_validated_group(dbgroup: Group = Depends(get_validated_group)):
     },
 )
 async def modify_group(
+    group_id: int,
     modified_group: GroupModify,
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
-    dbgroup: Group = Depends(get_validated_group),
 ):
     """
     Update an existing group's information.
@@ -158,7 +156,7 @@ async def modify_group(
         403: Forbidden - If not sudo admin
         404: Not Found - If group doesn't exist
     """
-    return await operator.modify_group(db, dbgroup, modified_group)
+    return await operator.modify_group(db, group_id, modified_group)
 
 
 @router.delete(
@@ -174,8 +172,8 @@ async def modify_group(
     },
 )
 async def delete_group(
+    group_id: int,
     db: Session = Depends(get_db),
-    dbgroup: Group = Depends(get_validated_group),
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
@@ -189,5 +187,5 @@ async def delete_group(
         403: Forbidden - If not sudo admin
         404: Not Found - If group doesn't exist
     """
-    await operator.delete_group(db, dbgroup)
+    await operator.delete_group(db, group_id)
     return {}

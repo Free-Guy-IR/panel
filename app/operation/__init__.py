@@ -1,13 +1,13 @@
+from datetime import datetime as dt
+from datetime import timedelta, timezone
 from enum import IntEnum
-from datetime import timezone, timedelta, datetime as dt
-
 from fastapi import HTTPException
-
 from app.db import Session
-from app.db.models import ProxyHost, User, Admin as DBAdmin
-from app.db.crud import get_host_by_id, get_user, get_admin
-from app.utils.jwt import get_subscription_payload
+from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user
+from app.db.models import Admin as DBAdmin
+from app.db.models import Group, ProxyHost, User
 from app.models.admin import Admin
+from app.utils.jwt import get_subscription_payload
 
 
 class OperatorType(IntEnum):
@@ -85,3 +85,9 @@ class BaseOperator:
         if not db_admin:
             self.raise_error(message="Admin not found", code=404)
         return db_admin
+
+    async def get_validated_group(self, db: Session, group_id: int) -> Group:
+        db_group = get_group_by_id(db, group_id)
+        if not db_group:
+            self.raise_error("Group not found", 404)
+        return db_group
