@@ -30,6 +30,7 @@ from app.db.models import (
     Group,
 )
 from app.models.proxy import ProxyTable
+from app.models.host import CreateHost
 from app.models.admin import AdminPartialModify
 from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
@@ -134,29 +135,31 @@ def get_host_by_id(db: Session, id: int) -> ProxyHost:
     return db.query(ProxyHost).filter(ProxyHost.id == id).first()
 
 
-def add_host(db: Session, db_host: ProxyHost) -> ProxyHost:
+def add_host(db: Session, new_host: CreateHost) -> ProxyHost:
     """
     Creates a proxy Host based on the host.
 
     Args:
         db (Session): Database session.
-        host (ProxyHostModify): The new host to add.
+        host (CreateHost): The new host to add.
 
     Returns:
         ProxyHost: The retrieved or newly created proxy host.
     """
+    db_host = ProxyHost(**new_host.model_dump(exclude={"inbound_tag", "id"}))
+    db_host.inbound = get_or_create_inbound(db, new_host.inbound_tag)
+
     db.add(db_host)
     db.commit()
     db.refresh(db_host)
     return db_host
 
 
-def modify_host(db: Session, db_host: ProxyHost, modified_host: ProxyHost) -> ProxyHost:
-    excluded_fields = ["id"]
+def modify_host(db: Session, db_host: ProxyHost, modified_host: CreateHost) -> ProxyHost:
+    node_data = modified_host.model_dump(exclude={"id"})
 
-    for key, value in modified_host.__dict__.items():
-        if not key.startswith("_") and key not in excluded_fields:
-            setattr(db_host, key, value)
+    for key, value in node_data.items():
+        setattr(db_host, key, value)
 
     db.commit()
     db.refresh(db_host)
