@@ -1334,10 +1334,7 @@ def update_node(db: Session, db_node: Node, modify: NodeModify) -> Node:
         Node: The updated Node object.
     """
 
-    node_data = modify.model_dump(
-            exclude={"id"},
-            exclude_none=True
-        )
+    node_data = modify.model_dump(exclude={"id"}, exclude_none=True)
 
     for key, value in node_data.items():
         setattr(db_node, key, value)
@@ -1347,7 +1344,7 @@ def update_node(db: Session, db_node: Node, modify: NodeModify) -> Node:
     db_node.node_version = None
 
     if db_node.status != NodeStatus.disabled:
-        db_node.status = NodeStatus.connecting        
+        db_node.status = NodeStatus.connecting
 
     db.commit()
     db.refresh(db_node)

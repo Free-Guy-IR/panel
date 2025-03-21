@@ -45,7 +45,6 @@ def validate_dates(
         raise HTTPException(status_code=400, detail="Invalid date range or format")
 
 
-
 def get_validated_user(
     username: str, admin: Admin = Depends(Admin.get_current), db: Session = Depends(get_db)
 ) -> UserResponse:
