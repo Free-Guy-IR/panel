@@ -29,24 +29,56 @@ async def get_node_settings(_: Admin = Depends(Admin.check_sudo_admin)):
     return await node_operator.get_node_settings()
 
 
-@router.post("", response_model=NodeResponse, responses={409: responses._409})
-async def add_node(
-    new_node: NodeCreate,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+@router.get("/{node_id}", response_model=NodeResponse)
+async def get_node(node_id: int, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)):
+    """Retrieve details of a specific node by its ID."""
+    return await node_operator.get_validated_node(db=db, node_id=node_id)
+
+
+@router.get("s", response_model=list[NodeResponse])
+async def get_nodes(
+    offset: int = None, limit: int = None, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)
 ):
+    """Retrieve a list of all nodes. Accessible only to sudo admins."""
+    return await node_operator.get_db_nodes(db=db, offset=offset, limit=limit)
+
+
+@router.post("", response_model=NodeResponse, responses={409: responses._409})
+async def add_node(new_node: NodeCreate, db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)):
     """Add a new node to the database."""
     return await node_operator.add_node(db, new_node, admin)
 
 
-@router.get("/{node_id}", response_model=NodeResponse)
-async def get_node(
+@router.put("/{node_id}", response_model=NodeResponse)
+async def modify_node(
+    modified_node: NodeModify,
     node_id: int,
     db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
-    """Retrieve details of a specific node by its ID."""
-    return await node_operator.get_db_node(db=db, node_id=node_id)
+    """Update a node's details. Only accessible to sudo admins."""
+    return await node_operator.modify_node(db, node_id=node_id, modified_node=modified_node, admin=admin)
+
+
+@router.post("/{node_id}/reconnect")
+async def reconnect_node(node_id: int, admin: Admin = Depends(Admin.check_sudo_admin)):
+    """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
+    await node_operator.restart_node(node_id=node_id, admin=admin)
+    return {}
+
+
+@router.put("/{node_id}/sync")
+async def sync_node(
+    node_id: int, flush_users: bool = False, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)
+):
+    return await node_operator.sync_node_users(db, node_id=node_id, flush_users=flush_users)
+
+
+@router.delete("/{node_id}")
+async def remove_node(node_id: int, db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)):
+    """Delete a node and remove it from xray in the background."""
+    await node_operator.remove_node(db=db, node_id=node_id, admin=admin)
+    return {}
 
 
 @router.get("/{node_id}/logs")
@@ -80,46 +112,6 @@ async def node_logs(
             pass
 
     return EventSourceResponse(event_generator())
-
-
-@router.get("s", response_model=list[NodeResponse])
-async def get_nodes(
-    offset: int = None, limit: int = None, db: Session = Depends(get_db), _: Admin = Depends(Admin.check_sudo_admin)
-):
-    """Retrieve a list of all nodes. Accessible only to sudo admins."""
-    return await node_operator.get_db_nodes(db=db, offset=offset, limit=limit)
-
-
-@router.put("/{node_id}", response_model=NodeResponse)
-async def modify_node(
-    modified_node: NodeModify,
-    node_id: int,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
-    """Update a node's details. Only accessible to sudo admins."""
-    return await node_operator.modify_node(db, node_id=node_id, modified_node=modified_node, admin=admin)
-
-
-@router.post("/{node_id}/reconnect")
-async def reconnect_node(
-    node_id: int,
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
-    """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
-    await node_operator.restart_node(node_id=node_id, admin=admin)
-    return {}
-
-
-@router.delete("/{node_id}")
-async def remove_node(
-    node_id: int,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
-    """Delete a node and remove it from xray in the background."""
-    await node_operator.remove_node(db=db, node_id=node_id, admin=admin)
-    return {}
 
 
 @router.get("s/usage", response_model=NodesUsageResponse)

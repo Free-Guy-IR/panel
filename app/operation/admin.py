@@ -22,7 +22,7 @@ logger = get_logger("admin-operator")
 class AdminOperation(BaseOperator):
     @staticmethod
     def create_db_admin(admin: AdminCreate | AdminModify) -> DBAdmin:
-        return DBAdmin(**admin.model_dump(exclude={"id", "password"}), hashed_password=admin.hashed_password)
+        return DBAdmin(**admin.model_dump(exclude={"password"}), hashed_password=admin.hashed_password)
 
     async def create_admin(self, db: Session, new_admin: AdminCreate, admin: Admin) -> Admin:
         """Create a new admin if the current admin has sudo privileges."""
@@ -45,7 +45,7 @@ class AdminOperation(BaseOperator):
                 message="You're not allowed to edit another sudoer's account. Use marzban-cli instead.", code=403
             )
 
-        updated_admin = update_admin(db, db_admin, modified_admin)
+        updated_admin = update_admin(db, db_admin, self.create_db_admin(modified_admin))
 
         logger.info(f'Admin "{db_admin.username}" with id "{db_admin.id}" modified by admin "{current_admin.username}"')
 

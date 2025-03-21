@@ -15,7 +15,6 @@ from app.db.crud import (
     update_user,
 )
 from app.db.models import NextPlan, User
-from app.dependencies import get_validated_group
 from app.models.admin import Admin
 from app.models.user import UserCreate, UserModify, UserResponse, UserStatus
 from app.node import manager as node_manager
@@ -52,7 +51,7 @@ class UserOperator(BaseOperator):
         all_groups = []
         if new_user.group_ids:
             for group_id in new_user.group_ids:
-                db_group = get_validated_group(group_id, admin, db)
+                db_group = self.get_validated_group(group_id, admin, db)
                 all_groups.append(db_group)
 
         db_admin = get_admin(db, admin.username)

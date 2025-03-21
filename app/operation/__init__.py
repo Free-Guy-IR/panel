@@ -3,9 +3,9 @@ from datetime import timedelta, timezone
 from enum import IntEnum
 from fastapi import HTTPException
 from app.db import Session
-from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template
-from app.db.models import Admin as DBAdmin, UserTemplate
-from app.db.models import Group, ProxyHost, User
+from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template, get_node_by_id
+from app.db.models import Admin as DBAdmin
+from app.db.models import Group, ProxyHost, User, Node, UserTemplate
 from app.models.admin import Admin
 from app.utils.jwt import get_subscription_payload
 
@@ -97,3 +97,10 @@ class BaseOperator:
         if not dbuser_template:
             self.raise_error("User Template not found", 404)
         return dbuser_template
+
+    async def get_validated_node(self, db: Session, node_id) -> Node:
+        """Dependency: Fetch node or return not found error."""
+        db_node = get_node_by_id(db, node_id)
+        if not db_node:
+            self.raise_error(message="Node not found", code=404)
+        return db_node

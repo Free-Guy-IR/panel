@@ -31,20 +31,11 @@ class NodeOperator(BaseOperator):
     async def get_node_settings(self) -> NodeSettings:
         return NodeSettings(certificate=get_tls().certificate)
 
-    async def get_node(self, db: Session, node_id: int) -> Node:
-        """Dependency: Fetch node or return not found error."""
-        db_node = get_node_by_id(db, node_id)
-        if not db_node:
-            self.raise_error(message="Node not found", code=404)
-        return db_node
-
-    async def get_db_node(self, db: Session, node_id: Node) -> NodeResponse:
-        return NodeResponse.model_validate(await self.get_node(db=db, node_id=node_id))
-
     async def get_db_nodes(self, db: Session, offset: int | None, limit: int | None) -> list[NodeResponse]:
         return get_nodes(db=db, offset=offset, limit=limit)
 
-    async def connect_node(self, node_id: int) -> None:
+    @staticmethod
+    async def connect_node(node_id: int) -> None:
         gozargah_node: GozargahNode | None = await node_manager.get_node(node_id)
         if gozargah_node is None:
             return
@@ -81,23 +72,11 @@ class NodeOperator(BaseOperator):
                 if e.code == -4:
                     return
 
-                update_node_status(
-                    db=db,
-                    dbnode=db_node,
-                    status=NodeStatus.error,
-                    message=e.detail,
-                )
+                update_node_status(db=db, dbnode=db_node, status=NodeStatus.error, message=e.detail)
 
     async def add_node(self, db: Session, new_node: NodeCreate, admin: Admin) -> NodeResponse:
         try:
-            db_node = create_node(
-                db,
-                Node(
-                    **new_node.model_dump(
-                        exclude={"id"},
-                    )
-                ),
-            )
+            db_node = create_node(db, new_node)
         except IntegrityError:
             db.rollback()
             self.raise_error(message=f'Node "{new_node.name}" already exists', code=409)
@@ -110,37 +89,26 @@ class NodeOperator(BaseOperator):
 
         return NodeResponse.model_validate(db_node)
 
-    async def modify_node(self, db: Session, node_id: Node, modified_node: NodeModify, admin: Admin) -> NodeResponse:
-        db_node: Node = await self.get_node(db=db, node_id=node_id)
+    async def modify_node(self, db: Session, node_id: Node, modified_node: NodeModify, admin: Admin) -> Node:
+        db_node: Node = await self.get_validated_node(db=db, node_id=node_id)
+        try:
+            db_node = update_node(db, db_node, modified_node)
+        except IntegrityError:
+            db.rollback()
+            self.raise_error(message=f'Node "{db_node.name}" already exists', code=409)
 
-        node_data = modified_node.model_dump(
-            exclude={"id"},
-            exclude_none=True,
-        )
-
-        for key, value in node_data.items():
-            setattr(db_node, key, value)
-
-        if db_node.status == NodeStatus.disabled:
-            db_node.xray_version = None
-            db_node.message = None
-        else:
-            db_node.status = NodeStatus.connecting
-
-        updated_node = update_node(db, db_node)
-
-        if updated_node.status is NodeStatus.disabled:
-            await node_manager.remove_node(updated_node.id)
+        if db_node.status is NodeStatus.disabled:
+            await node_manager.remove_node(db_node.id)
         else:
             await node_manager.update_node(db_node)
             asyncio.create_task(self.connect_node(node_id=db_node.id))
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" modified by admin "{admin.username}"')
 
-        return NodeResponse.model_validate(updated_node)
+        return db_node
 
     async def remove_node(self, db: Session, node_id: Node, admin: Admin) -> None:
-        db_node: Node = await self.get_node(db=db, node_id=node_id)
+        db_node: Node = await self.get_validated_node(db=db, node_id=node_id)
 
         await node_manager.remove_node(db_node.id)
         remove_node(db=db, db_node=db_node)
@@ -260,3 +228,21 @@ class NodeOperator(BaseOperator):
             self.raise_error(message="Stats not found", code=404)
 
         return {node_id: stats.ips}
+
+    async def sync_node_users(self, db: Session, node_id: int, flush_users: bool = False) -> NodeResponse:
+        db_node: Node = await self.get_validated_node(db, node_id=node_id)
+
+        if db_node.status != NodeStatus.connected:
+            self.raise_error(message="Node is not connected", code=406)
+
+        gozargah_node: GozargahNode | None = await node_manager.get_node(node_id)
+        if gozargah_node is None:
+            self.raise_error(message="Node is not connected", code=409)
+
+        try:
+            await gozargah_node.sync_users(await backend_users(config.inbounds), flush_queue=flush_users)
+        except NodeAPIError as e:
+            update_node_status(db=db, dbnode=db_node, status=NodeStatus.error, message=e.detail)
+            self.raise_error(message=e.detail, code=e.code)
+
+        return NodeResponse.model_validate(db_node)

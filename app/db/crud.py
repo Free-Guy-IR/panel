@@ -32,7 +32,7 @@ from app.db.models import (
 from app.models.proxy import ProxyTable
 from app.models.admin import AdminPartialModify
 from app.models.group import GroupCreate, GroupModify
-from app.models.node import NodeUsageResponse
+from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
 from app.models.user import (
     ReminderType,
     UserDataLimitResetStrategy,
@@ -1286,7 +1286,7 @@ def get_nodes_usage(db: Session, start: datetime, end: datetime) -> list[NodeUsa
     return list(usages.values())
 
 
-def create_node(db: Session, node: Node) -> Node:
+def create_node(db: Session, node: NodeCreate) -> Node:
     """
     Creates a new node in the database.
 
@@ -1297,10 +1297,12 @@ def create_node(db: Session, node: Node) -> Node:
     Returns:
         Node: The newly created Node object.
     """
-    db.add(node)
+    db_node = Node(**node.model_dump(exclude={"id"}))
+
+    db.add(db_node)
     db.commit()
-    db.refresh(node)
-    return node
+    db.refresh(db_node)
+    return db_node
 
 
 def remove_node(db: Session, db_node: Node) -> Node:
@@ -1319,7 +1321,7 @@ def remove_node(db: Session, db_node: Node) -> Node:
     return db_node
 
 
-def update_node(db: Session, db_node: Node) -> Node:
+def update_node(db: Session, db_node: Node, modify: NodeModify) -> Node:
     """
     Updates an existing node with new information.
 
@@ -1331,6 +1333,22 @@ def update_node(db: Session, db_node: Node) -> Node:
     Returns:
         Node: The updated Node object.
     """
+
+    node_data = modify.model_dump(
+            exclude={"id"},
+            exclude_none=True
+        )
+
+    for key, value in node_data.items():
+        setattr(db_node, key, value)
+
+    db_node.xray_version = None
+    db_node.message = None
+    db_node.node_version = None
+
+    if db_node.status != NodeStatus.disabled:
+        db_node.status = NodeStatus.connecting        
+
     db.commit()
     db.refresh(db_node)
     return db_node
