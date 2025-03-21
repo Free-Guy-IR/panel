@@ -7,6 +7,7 @@ from app import backend
 from app.db import Session, get_db
 from app.models.admin import Admin
 from app.utils import responses
+from .authentication import check_sudo_admin
 from app.backend import XRayConfig
 from app.operation import OperatorType
 from app.operation.node import NodeOperator
@@ -18,7 +19,7 @@ router = APIRouter(tags=["Backend"], prefix="/api/backend", responses={401: resp
 
 
 @router.get("", responses={403: responses._403})
-def get_core_config(_: Admin = Depends(Admin.check_sudo_admin)) -> dict:
+def get_core_config(_: Admin = Depends(check_sudo_admin)) -> dict:
     """Get the current core configuration."""
     with open(XRAY_JSON, "r") as f:
         config = commentjson.loads(f.read())
@@ -28,7 +29,7 @@ def get_core_config(_: Admin = Depends(Admin.check_sudo_admin)) -> dict:
 
 @router.put("", responses={403: responses._403})
 async def modify_core_config(
-    payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)
+    payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ) -> dict:
     """Modify the core configuration and restart the core."""
     try:

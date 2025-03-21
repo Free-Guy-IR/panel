@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.db import Session, get_db
 from app.models.admin import Admin
+from .authentication import check_sudo_admin
 from app.models.host import BaseHost, CreateHost
 from app.operation import OperatorType
 from app.operation.host import HostOperator
@@ -13,11 +14,7 @@ router = APIRouter(tags=["Host"], prefix="/api/host", responses={401: responses.
 
 
 @router.get("/{host_id}", response_model=BaseHost)
-async def get_host(
-    host_id: int,
-    db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
-):
+async def get_host(host_id: int, db: Session = Depends(get_db), _: Admin = Depends(check_sudo_admin)):
     """
     get host by **id**
     """
@@ -26,10 +23,7 @@ async def get_host(
 
 @router.get("s", response_model=list[BaseHost])
 async def get_hosts(
-    offset: int = 0,
-    limit: int = 0,
-    db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    offset: int = 0, limit: int = 0, db: Session = Depends(get_db), _: Admin = Depends(check_sudo_admin)
 ):
     """
     Get proxy hosts.
@@ -38,11 +32,7 @@ async def get_hosts(
 
 
 @router.post("/", response_model=BaseHost)
-async def add_host(
-    new_host: CreateHost,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
+async def add_host(new_host: CreateHost, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """
     add a new host
 
@@ -53,10 +43,7 @@ async def add_host(
 
 @router.put("/{host_id}", response_model=BaseHost, responses={404: responses._404})
 async def modify_host(
-    host_id: int,
-    modified_host: CreateHost,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+    host_id: int, modified_host: CreateHost, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ):
     """
     modify host by **id**
@@ -67,11 +54,7 @@ async def modify_host(
 
 
 @router.delete("/{host_id}", responses={404: responses._404})
-async def remove_host(
-    host_id: int,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
+async def remove_host(host_id: int, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """
     remove host by **id**
     """
@@ -81,9 +64,7 @@ async def remove_host(
 
 @router.put("s", response_model=list[BaseHost])
 async def modify_hosts(
-    modified_hosts: list[CreateHost],
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+    modified_hosts: list[CreateHost], db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ):
     """
     Modify proxy hosts and update the configuration.

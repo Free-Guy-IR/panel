@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.db import Session, get_db
-from app.dependencies import validate_admin
+from .authentication import validate_admin, check_sudo_admin, get_current
 from app.models.admin import Admin, AdminCreate, AdminModify, Token
 from app.utils import responses
 from app.utils.jwt import create_admin_token
@@ -25,15 +25,13 @@ def get_client_ip(request: Request) -> str:
 
 
 @router.post("/token", response_model=Token)
-def admin_token(
-    request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
+async def admin_token(
+    request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
     """Authenticate an admin and issue a token."""
     # client_ip = get_client_ip(request)
 
-    db_admin = validate_admin(db, form_data.username, form_data.password)
+    db_admin = await validate_admin(db, form_data.username, form_data.password)
     if not db_admin:
         # report.login(form_data.username, form_data.password, client_ip, False)
         raise HTTPException(
@@ -56,11 +54,7 @@ def admin_token(
 
 
 @router.post("", response_model=Admin, responses={409: responses._409})
-async def create_admin(
-    new_admin: AdminCreate,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
+async def create_admin(new_admin: AdminCreate, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """Create a new admin if the current admin has sudo privileges."""
     return await admin_operator.create_admin(db, new_admin=new_admin, admin=admin)
 
@@ -70,7 +64,7 @@ async def modify_admin(
     username: str,
     modified_admin: AdminModify,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(Admin.check_sudo_admin),
+    current_admin: Admin = Depends(check_sudo_admin),
 ):
     """Modify an existing admin's details."""
     return await admin_operator.modify_admin(
@@ -79,16 +73,14 @@ async def modify_admin(
 
 
 @router.delete("/{username}")
-async def remove_admin(
-    username: str, db: Session = Depends(get_db), current_admin: Admin = Depends(Admin.check_sudo_admin)
-):
+async def remove_admin(username: str, db: Session = Depends(get_db), current_admin: Admin = Depends(check_sudo_admin)):
     """Remove an admin from the database."""
     await admin_operator.remove_admin(db, username=username, current_admin=current_admin)
     return {}
 
 
 @router.get("", response_model=Admin)
-def get_current_admin(admin: Admin = Depends(Admin.get_current)):
+def get_current_admin(admin: Admin = Depends(get_current)):
     """Retrieve the current authenticated admin."""
     return admin
 
@@ -99,7 +91,7 @@ async def get_admins(
     offset: int | None = None,
     limit: int | None = None,
     db: Session = Depends(get_db),
-    _: Admin = Depends(Admin.check_sudo_admin),
+    _: Admin = Depends(check_sudo_admin),
 ):
     """Fetch a list of admins with optional filters for pagination and username."""
     return await admin_operator.get_admins(db, username=username, offset=offset, limit=limit)
@@ -107,9 +99,7 @@ async def get_admins(
 
 @router.post("/{username}/users/disable", responses={404: responses._404})
 async def disable_all_active_users(
-    username: str,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+    username: str, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ):
     """Disable all active users under a specific admin"""
     await admin_operator.disable_all_active_users(db, username=username, admin=admin)
@@ -118,9 +108,7 @@ async def disable_all_active_users(
 
 @router.post("/{username}/users/activate", responses={404: responses._404})
 async def activate_all_disabled_users(
-    username: str,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+    username: str, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
 ):
     """Activate all disabled users under a specific admin"""
     await admin_operator.activate_all_disabled_users(db, username=username, admin=admin)
@@ -128,11 +116,7 @@ async def activate_all_disabled_users(
 
 
 @router.post("/{username}/reset", response_model=Admin)
-async def reset_admin_usage(
-    username: str,
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
-):
+async def reset_admin_usage(username: str, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """Resets usage of admin."""
     await admin_operator.reset_admin_usage(db, username=username, admin=admin)
     return {}

@@ -4,22 +4,8 @@ from typing import Optional, Union
 from fastapi import Depends, HTTPException
 
 from app.db import Session, crud, get_db
-from app.models.admin import Admin, AdminInDB, AdminValidationResult
+from app.models.admin import Admin
 from app.models.user import UserResponse, UserStatus
-from config import SUDOERS
-
-
-def validate_admin(db: Session, username: str, password: str) -> AdminValidationResult | None:
-    """Validate admin credentials with environment variables or database."""
-
-    db_admin = crud.get_admin(db, username)
-    if db_admin and AdminInDB.model_validate(db_admin).verify_password(password):
-        return AdminValidationResult(
-            username=db_admin.username, is_sudo=db_admin.is_sudo, is_disabled=db_admin.is_disabled
-        )
-
-    if not db_admin and SUDOERS.get(username) == password:
-        return AdminValidationResult(username=username, is_sudo=True, is_disabled=False)
 
 
 def validate_dates(

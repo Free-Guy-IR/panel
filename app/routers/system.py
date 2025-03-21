@@ -10,6 +10,7 @@ from app.models.host import ProxyInbound
 from app.models.proxy import ProxyTypes
 from app.models.system import SystemStats
 from app.models.user import UserStatus
+from .authentication import get_current
 from app.utils import responses
 from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
 
@@ -17,7 +18,7 @@ router = APIRouter(tags=["System"], prefix="/api", responses={401: responses._40
 
 
 @router.get("/system", response_model=SystemStats)
-def get_system_stats(db: Session = Depends(get_db), admin: Admin = Depends(Admin.get_current)):
+def get_system_stats(db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
     """Fetch system stats including memory, CPU, and user metrics."""
     mem = memory_usage()
     cpu = cpu_usage()
@@ -54,6 +55,6 @@ def get_system_stats(db: Session = Depends(get_db), admin: Admin = Depends(Admin
 
 
 @router.get("/inbounds", response_model=Dict[ProxyTypes, List[ProxyInbound]])
-def get_inbounds(_: Admin = Depends(Admin.get_current)):
+def get_inbounds(_: Admin = Depends(get_current)):
     """Retrieve inbound configurations grouped by protocol."""
     return backend.config.inbounds_by_protocol
