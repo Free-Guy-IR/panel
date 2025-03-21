@@ -11,7 +11,7 @@ class UserTemplate(BaseModel):
     )
     username_prefix: Optional[str] = Field(max_length=20, min_length=1, default=None)
     username_suffix: Optional[str] = Field(max_length=20, min_length=1, default=None)
-    group_ids: list[int] | None = Field(default_factory=list)
+    group_ids: list[int] = []
 
 
 class UserTemplateCreate(UserTemplate):
@@ -37,6 +37,7 @@ class UserTemplateCreate(UserTemplate):
 
 
 class UserTemplateModify(UserTemplate):
+    group_ids: list[int] | None = None
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

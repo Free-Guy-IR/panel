@@ -36,9 +36,10 @@ async def get_user_template_endpoint(
 
 @router.put("/user_template/{template_id}", response_model=UserTemplateResponse)
 async def modify_user_template(
+    template_id: int,
     modify_user_template: UserTemplateModify,
     db: Session = Depends(get_db),
-    admin: Admin = Depends(Admin.check_sudo_admin),
+    _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """
     Modify User Template
@@ -48,7 +49,7 @@ async def modify_user_template(
     - **expire_duration** must be in seconds and larger or equat to 0
     - **group_ids** list of group ids
     """
-    return await operator.modify_user_template(db, dbuser_template, modify_user_template, admin)
+    return await operator.modify_user_template(db, template_id, modify_user_template)
 
 
 @router.delete("/user_template/{template_id}")

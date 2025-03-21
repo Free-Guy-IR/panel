@@ -18,8 +18,9 @@ class UserTemplateOperation(BaseOperator):
         self, db: Session, template_id: int, modify_user_template: UserTemplateModify
     ) -> UserTemplateResponse:
         dbuser_template = self.get_validated_user_template(db, template_id)
-        for group_id in modify_user_template.group_ids:
-            self.get_validated_group(db, group_id)
+        if modify_user_template.group_ids:
+            for group_id in modify_user_template.group_ids:
+                self.get_validated_group(db, group_id)
         try:
             return crud.update_user_template(db, dbuser_template, modify_user_template)
         except IntegrityError:
