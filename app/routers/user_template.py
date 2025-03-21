@@ -59,7 +59,8 @@ async def remove_user_template(
     _: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Remove a User Template by its ID"""
-    return await operator.remove_user_template(db, template_id)
+    await operator.remove_user_template(db, template_id)
+    return {}
 
 
 @router.get("/user_template", response_model=List[UserTemplateResponse])
