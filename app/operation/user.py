@@ -1,21 +1,16 @@
 import asyncio
-
 from sqlalchemy.exc import IntegrityError
-
 from app.backend import config
 from app.db import Session
 from app.db.crud import (
     create_user,
     get_admin,
-    get_user,
-    get_user_template,
     remove_user,
     reset_user_data_usage,
     revoke_user_sub,
     update_user,
 )
-from app.db.models import NextPlan, User
-from app.dependencies import get_validated_group
+from app.db.models import Group, NextPlan, User
 from app.models.admin import Admin
 from app.models.user import UserCreate, UserModify, UserResponse, UserStatus
 from app.node import manager as node_manager
@@ -26,34 +21,14 @@ logger = get_logger("user-operator")
 
 
 class UserOperator(BaseOperator):
-    async def get_validated_user(self, db: Session, username: str, admin: Admin) -> User:
-        db_user = get_user(db, username)
-        if db_user is None:
-            self.raise_error(message="User not found", code=404)
-
-        if not (admin.is_sudo or (db_user.admin and db_user.admin.username == admin.username)):
-            self.raise_error(message="You're not allowed", code=403)
-
-        return db_user
-
-    async def get_user_template(self, template_id: int, db: Session):
-        dbuser_template = get_user_template(db, template_id)
-        if not dbuser_template:
-            self.raise_error(message="User Template not found", code=404)
-        return dbuser_template
-
     async def add_user(self, db: Session, new_user: UserCreate, admin: Admin) -> UserResponse:
         if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
-            get_user_template(new_user.next_plan.user_template_id)
+            await self.get_validated_user_template(db, new_user.next_plan.user_template_id)
 
         user_data = new_user.model_dump(
             exclude={"next_plan", "expire", "proxy_settings", "group_ids"}, exclude_none=True
         )
-        all_groups = []
-        if new_user.group_ids:
-            for group_id in new_user.group_ids:
-                db_group = get_validated_group(group_id, admin, db)
-                all_groups.append(db_group)
+        all_groups = await self.validate_all_groups(db, new_user)
 
         db_admin = get_admin(db, admin.username)
         db_user = User(
@@ -78,21 +53,32 @@ class UserOperator(BaseOperator):
 
         return user
 
+    async def validate_all_groups(self, db, user: UserResponse) -> list[Group]:
+        all_groups = []
+        if user.group_ids:
+            for group_id in user.group_ids:
+                db_group = await self.get_validated_group(db, group_id)
+                all_groups.append(db_group)
+        return all_groups
+
     async def modify_user(self, db: Session, username: str, modified_user: UserModify, admin: Admin) -> UserResponse:
         db_user: User = await self.get_validated_user(db, username, admin)
+        if modified_user.group_ids:
+            await self.validate_all_groups(db, modified_user)
 
         if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
-            get_user_template(modified_user.next_plan.user_template_id)
+            await self.get_validated_user_template(db, modified_user.next_plan.user_template_id)
 
         old_status = db_user.status
         logger.info(modified_user.proxy_settings)
+
         db_user = update_user(db, db_user, modified_user)
         user = UserResponse.model_validate(db_user)
 
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
-            asyncio.create_task(node_manager.update_user(db_user, inbounds=config.inbounds))
+            asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
         else:
-            asyncio.create_task(node_manager.remove_user(db_user))
+            asyncio.create_task(node_manager.remove_user(user))
 
         logger.info(f'User "{user.username}" with id "{db_user.id}" modified by admin "{admin.username}"')
 
@@ -102,32 +88,34 @@ class UserOperator(BaseOperator):
         return user
 
     async def remove_user(self, db: Session, username: str, admin: Admin):
-        db_user: User = self.get_validated_user(db, username, admin)
+        db_user: User = await self.get_validated_user(db, username, admin)
 
         remove_user(db, db_user)
-        asyncio.create_task(node_manager.remove_user(UserResponse.model_validate(db_user)))
+        user = UserResponse.model_validate(db_user)
+        asyncio.create_task(node_manager.remove_user(user))
 
         logger.info(f'User "{db_user.username}" with id "{db_user.id}" deleted by admin "{admin.username}"')
         return {}
 
     async def reset_user_data_usage(self, db: Session, username: str, admin: Admin):
-        db_user: User = self.get_validated_user(db, username, admin)
+        db_user: User = await self.get_validated_user(db, username, admin)
 
         db_user = reset_user_data_usage(db=db, db_user=db_user)
+        user = UserResponse.model_validate(db_user)
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
-            await node_manager.update_user(db_user, inbounds=config.inbounds)
+            asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
 
         logger.info(f'User "{db_user.username}" usage was reset by admin "{admin.username}"')
 
         return {}
 
     async def revoke_user_sub(self, db: Session, username: str, admin: Admin):
-        db_user: User = self.get_validated_user(db, username, admin)
+        db_user: User = await self.get_validated_user(db, username, admin)
 
         db_user = revoke_user_sub(db=db, db_user=db_user)
-
+        user = UserResponse.model_validate(db_user)
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
-            await node_manager.update_user(db_user, inbounds=config.inbounds)
+            asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
 
         logger.info(f'User "{db_user.username}" subscription was revoked by admin "{admin.username}"')
 
