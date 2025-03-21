@@ -31,7 +31,7 @@ from app.db.models import (
 )
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
-from app.models.admin import AdminPartialModify
+from app.models.admin import AdminPartialModify, AdminCreate, AdminModify
 from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
 from app.models.user import (
@@ -900,7 +900,7 @@ def get_admin(db: Session, username: str) -> Admin:
     return db.query(Admin).filter(Admin.username == username).first()
 
 
-def create_admin(db: Session, db_admin: Admin) -> Admin:
+def create_admin(db: Session, admin: AdminCreate) -> Admin:
     """
     Creates a new admin in the database.
 
@@ -911,13 +911,14 @@ def create_admin(db: Session, db_admin: Admin) -> Admin:
     Returns:
         Admin: The created admin object.
     """
+    db_admin = Admin(**admin.model_dump(exclude={"password"}), hashed_password=admin.hashed_password)
     db.add(db_admin)
     db.commit()
     db.refresh(db_admin)
     return db_admin
 
 
-def update_admin(db: Session, db_admin: Admin, modified_admin: Admin) -> Admin:
+def update_admin(db: Session, db_admin: Admin, modified_admin: AdminModify) -> Admin:
     """
     Updates an admin's details.
 
