@@ -3,8 +3,8 @@ from datetime import timedelta, timezone
 from enum import IntEnum
 from fastapi import HTTPException
 from app.db import Session
-from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user
-from app.db.models import Admin as DBAdmin
+from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template
+from app.db.models import Admin as DBAdmin, UserTemplate
 from app.db.models import Group, ProxyHost, User
 from app.models.admin import Admin
 from app.utils.jwt import get_subscription_payload
@@ -91,3 +91,9 @@ class BaseOperator:
         if not db_group:
             self.raise_error("Group not found", 404)
         return db_group
+
+    async def get_validated_user_template(self, db: Session, template_id: int) -> UserTemplate:
+        dbuser_template = get_user_template(db, template_id)
+        if not dbuser_template:
+            self.raise_error("User Template not found", 404)
+        return dbuser_template

@@ -3,7 +3,6 @@ from fastapi import Depends, APIRouter
 from app.db import Session, get_db
 from app.models.admin import Admin
 from app.models.user_template import UserTemplateCreate, UserTemplateModify, UserTemplateResponse
-from app.dependencies import get_validated_user_template
 from app.operation import OperatorType
 from app.operation.user_template import UserTemplateOperation
 
@@ -24,15 +23,15 @@ async def add_user_template(
     - **expire_duration** must be in seconds and larger or equat to 0
     - **group_ids** list of group ids
     """
-    return await operator.add_user_template(db, new_user_template, admin)
+    return await operator.add_user_template(db, new_user_template)
 
 
 @router.get("/user_template/{template_id}", response_model=UserTemplateResponse)
-def get_user_template_endpoint(
-    dbuser_template: UserTemplateResponse = Depends(get_validated_user_template), _: Admin = Depends(Admin.get_current)
+async def get_user_template_endpoint(
+    template_id: int, db: Session = Depends(get_db), _: Admin = Depends(Admin.get_current)
 ):
     """Get User Template information with id"""
-    return dbuser_template
+    return await operator.get_validated_user_template(db, template_id)
 
 
 @router.put("/user_template/{template_id}", response_model=UserTemplateResponse)
@@ -40,7 +39,6 @@ async def modify_user_template(
     modify_user_template: UserTemplateModify,
     db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.check_sudo_admin),
-    dbuser_template: UserTemplateResponse = Depends(get_validated_user_template),
 ):
     """
     Modify User Template
@@ -55,17 +53,17 @@ async def modify_user_template(
 
 @router.delete("/user_template/{template_id}")
 async def remove_user_template(
+    template_id: int,
     db: Session = Depends(get_db),
     _: Admin = Depends(Admin.check_sudo_admin),
-    dbuser_template: UserTemplateResponse = Depends(get_validated_user_template),
 ):
     """Remove a User Template by its ID"""
-    return await operator.remove_user_template(db, dbuser_template)
+    return await operator.remove_user_template(db, template_id)
 
 
 @router.get("/user_template", response_model=List[UserTemplateResponse])
 async def get_user_templates(
-    offset: int = None, limit: int = None, db: Session = Depends(get_db), admin: Admin = Depends(Admin.get_current)
+    offset: int = None, limit: int = None, db: Session = Depends(get_db), _: Admin = Depends(Admin.get_current)
 ):
     """Get a list of User Templates with optional pagination"""
-    return await operator.get_user_templates(db, offset, limit, admin)
+    return await operator.get_user_templates(db, offset, limit)
