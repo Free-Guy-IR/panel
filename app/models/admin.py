@@ -1,12 +1,10 @@
 from typing import Optional
 
-from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/token")  # Admin view url
 
 
 class Token(BaseModel):
