@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from passlib.context import CryptContext
@@ -60,6 +61,44 @@ class AdminModify(BaseModel):
     def validate_discord_webhook(cls, value):
         if value and not value.startswith("https://discord.com"):
             raise ValueError("Discord webhook must start with 'https://discord.com'")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str | None):
+        if value is None:
+            return value  # Allow None for optional passwords in AdminModify
+
+        errors = []
+
+        # Length check
+        if len(value) < 12:
+            errors.append("Password must be at least 12 characters long")
+
+        # At least 2 digits
+        if len(re.findall(r"\d", value)) < 2:
+            errors.append("Password must contain at least 2 digits")
+
+        # At least 2 uppercase letters
+        if len(re.findall(r"[A-Z]", value)) < 2:
+            errors.append("Password must contain at least 2 uppercase letters")
+
+        # At least 2 lowercase letters
+        if len(re.findall(r"[a-z]", value)) < 2:
+            errors.append("Password must contain at least 2 lowercase letters")
+
+        # At least 1 special character
+        if not re.search(r"[!@#$%^&*()\-_=+\[\]{}|;:,.<>?/~`]", value):
+            errors.append("Password must contain at least one special character")
+
+        # Check if password contains the username
+        if cls.model_fields.get("username") and hasattr(cls.model_fields["username"], "default"):
+            username = cls.model_fields["username"].default
+            if username and username.lower() in value.lower():
+                errors.append("Password cannot contain the username")
+
+        if errors:
+            raise ValueError("; ".join(errors))
         return value
 
 
