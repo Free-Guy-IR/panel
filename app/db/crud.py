@@ -40,6 +40,7 @@ from app.models.user import (
     UserModify,
     UserStatus,
     UserUsageResponse,
+    UserCreate,
 )
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
@@ -315,6 +316,58 @@ def get_users(
     return query.all()
 
 
+def expired_users_query(
+    db: Session,
+    expired_after: datetime | None = None,
+    expired_before: datetime | None = None,
+    admin_id: int | None = None,
+):
+    query = db.query(User).filter(User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None))
+
+    if expired_after:
+        print("expired after:", expired_after)
+        query = query.filter(User.expire >= expired_after)
+    if expired_before:
+        print("expired after:", expired_before)
+        query = query.filter(User.expire <= expired_before)
+    if admin_id:
+        query = query.filter(User.admin_id == admin_id)
+
+    return query
+
+
+def get_expired_users(
+    db: Session,
+    expired_after: datetime | None = None,
+    expired_before: datetime | None = None,
+    admin_id: int | None = None,
+) -> list[str]:
+    subquery = expired_users_query(db, expired_after, expired_before, admin_id).subquery()
+
+    username_select = db.query(subquery.c.username)
+
+    return [row[0] for row in username_select.all()]
+
+
+def delete_expired_users(
+    db: Session,
+    expired_after: datetime | None = None,
+    expired_before: datetime | None = None,
+    admin_id: int | None = None,
+) -> tuple[list[str], int]:
+    subquery = expired_users_query(db, expired_after, expired_before, admin_id).subquery()
+
+    username_select = db.query(subquery.c.username)
+
+    usernames_to_delete = [row[0] for row in username_select.all()]
+
+    deleted_count = expired_users_query(db, expired_after, expired_before, admin_id).delete(synchronize_session=False)
+
+    db.commit()
+
+    return usernames_to_delete, deleted_count
+
+
 def get_user_usages(db: Session, dbuser: User, start: datetime, end: datetime) -> List[UserUsageResponse]:
     """
     Retrieves user usages within a specified date range.
@@ -369,7 +422,7 @@ def get_users_count(db: Session, status: UserStatus = None, admin: Admin = None)
     return query.count()
 
 
-def create_user(db: Session, user: User) -> User:
+def create_user(db: Session, new_user: UserCreate, groups: list[Group], admin: Admin) -> User:
     """
     Creates a new user with provided details.
 
@@ -381,10 +434,19 @@ def create_user(db: Session, user: User) -> User:
     Returns:
         User: The created user object.
     """
-    db.add(user)
+    user_data = new_user.model_dump(exclude={"next_plan", "expire", "proxy_settings", "group_ids"}, exclude_none=True)
+    db_user = User(
+        **user_data,
+        proxy_settings=new_user.proxy_settings.dict(),
+        expire=(new_user.expire or None),
+        admin=admin,
+        groups=groups,
+        next_plan=NextPlan(**new_user.next_plan.model_dump()) if new_user.next_plan else None,
+    )
+    db.add(db_user)
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(db_user)
+    return db_user
 
 
 def remove_user(db: Session, db_user: User) -> User:
@@ -433,13 +495,6 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
         dbuser.proxy_settings = modify.proxy_settings.dict()
     if modify.group_ids:
         dbuser.groups = get_groups_by_ids(db, modify.group_ids)
-    # if modify.inbounds:
-    #    for proxy_type, tags in modify.excluded_inbounds.items():
-    #        dbproxy = db.query(Proxy).where(
-    #            Proxy.user == dbuser, Proxy.type == proxy_type
-    #        ).first() or added_proxies.get(proxy_type)
-    #        if dbproxy:
-    #            dbproxy.excluded_inbounds = [get_or_create_inbound(db, tag) for tag in tags]
 
     if modify.status is not None:
         dbuser.status = modify.status
@@ -470,7 +525,7 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
     elif modify.expire is not None:
         dbuser.expire = modify.expire
         if dbuser.status in [UserStatus.active, UserStatus.expired]:
-            if not dbuser.expire or dbuser.expire > datetime.utcnow():
+            if not dbuser.expire or dbuser.expire > datetime.now(timezone.utc):
                 dbuser.status = UserStatus.active
                 for days_left in sorted(NOTIFY_DAYS_LEFT):
                     if not dbuser.expire or (calculate_expiration_days(dbuser.expire) > days_left):
@@ -750,7 +805,7 @@ def autodelete_expired_users(db: Session, include_limited_users: bool = False) -
     return expired_users
 
 
-def get_all_users_usages(db: Session, admin: Admin, start: datetime, end: datetime) -> List[UserUsageResponse]:
+def get_all_users_usages(db: Session, admin: str, start: datetime, end: datetime) -> list[UserUsageResponse]:
     """
     Retrieves usage data for all users associated with an admin within a specified time range.
 

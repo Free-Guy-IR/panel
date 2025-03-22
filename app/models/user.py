@@ -272,3 +272,8 @@ class UserUsagesResponse(BaseModel):
 
 class UsersUsagesResponse(BaseModel):
     usages: list[UserUsageResponse]
+
+
+class RemoveUsersResponse(BaseModel):
+    users: list[str]
+    count: int

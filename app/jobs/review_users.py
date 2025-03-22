@@ -1,18 +1,21 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+import asyncio
 
 from sqlalchemy.orm import Session
 
-from app import logger, scheduler, backend
-from app.db import (
-    GetDB,
+from app import async_scheduler as scheduler
+from app.db import GetDB
+from app.db.crud import (
     get_notification_reminder,
     get_users,
     reset_user_by_next,
     start_user_expire,
     update_user_status,
 )
+from app.db.models import User
+from app.node import manager as node_manager
 from app.models.user import ReminderType, UserResponse, UserStatus
+from app.utils.logger import get_logger
 from app.utils import report
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
 from config import (
@@ -22,8 +25,8 @@ from config import (
     WEBHOOK_ADDRESS,
 )
 
-if TYPE_CHECKING:
-    from app.db.models import User
+
+logger = get_logger("review-users")
 
 
 def add_notification_reminders(db: Session, user: "User") -> None:
@@ -50,29 +53,31 @@ def add_notification_reminders(db: Session, user: "User") -> None:
                 break
 
 
-def reset_user_by_next_report(db: Session, user: "User"):
-    user = reset_user_by_next(db, user)
+async def reset_user_by_next_report(db: Session, db_user: User):
+    db_user = reset_user_by_next(db, db_user)
 
-    backend.operations.update_user(user)
+    user = UserResponse.model_validate(db_user)
 
-    report.user_data_reset_by_next(user=UserResponse.model_validate(user), user_admin=user.admin)
+    asyncio.create_task(node_manager.update_user(user))
+
+    report.user_data_reset_by_next(user, user_admin=user.admin)
 
 
-def review():
+async def review():
     now = datetime.now(timezone.utc)
     with GetDB() as db:
-        for user in get_users(db, status=UserStatus.active):
-            limited = user.data_limit and user.used_traffic >= user.data_limit
-            expired = user.expire and user.expire.replace(tzinfo=timezone.utc) <= now
+        for db_user in get_users(db, status=UserStatus.active):
+            limited = db_user.data_limit and db_user.used_traffic >= db_user.data_limit
+            expired = db_user.expire and db_user.expire.replace(tzinfo=timezone.utc) <= now
 
-            if (limited or expired) and user.next_plan is not None:
-                if user.next_plan is not None:
-                    if user.next_plan.fire_on_either:
-                        reset_user_by_next_report(db, user)
+            if (limited or expired) and db_user.next_plan is not None:
+                if db_user.next_plan is not None:
+                    if db_user.next_plan.fire_on_either:
+                        await reset_user_by_next_report(db, db_user)
                         continue
 
                     elif limited and expired:
-                        reset_user_by_next_report(db, user)
+                        await reset_user_by_next_report(db, db_user)
                         continue
 
             if limited:
@@ -81,42 +86,42 @@ def review():
                 status = UserStatus.expired
             else:
                 if WEBHOOK_ADDRESS:
-                    add_notification_reminders(db, user)
+                    add_notification_reminders(db, db_user)
                 continue
 
-            backend.operations.remove_user(user)
-            update_user_status(db, user, status)
+            update_user_status(db, db_user, status)
 
-            report.status_change(
-                username=user.username, status=status, user=UserResponse.model_validate(user), user_admin=user.admin
-            )
+            user = UserResponse.model_validate(db_user)
+            asyncio.create_task(node_manager.update_user(user))
 
-            logger.info(f'User "{user.username}" status changed to {status.value}')
+            report.status_change(username=db_user.username, status=status, user=user, user_admin=db_user.admin)
 
-        for user in get_users(db, status=UserStatus.on_hold):
-            if user.edit_at:
-                base_time = user.edit_at
+            logger.info(f'User "{db_user.username}" status changed to {status.value}')
+
+        for db_user in get_users(db, status=UserStatus.on_hold):
+            if db_user.edit_at:
+                base_time = db_user.edit_at
             else:
-                base_time = user.created_at
+                base_time = db_user.created_at
 
             # Check if the user is online After or at 'base_time'
-            if user.online_at and base_time <= user.online_at:
+            if db_user.online_at and base_time <= db_user.online_at:
                 status = UserStatus.active
 
-            elif user.on_hold_timeout and (user.on_hold_timeout <= now):
+            elif db_user.on_hold_timeout and (db_user.on_hold_timeout <= now):
                 # If the user didn't connect within the timeout period, change status to "Active"
                 status = UserStatus.active
 
             else:
                 continue
 
-            update_user_status(db, user, status)
-            start_user_expire(db, user)
-            user = UserResponse.model_validate(user)
+            update_user_status(db, db_user, status)
+            start_user_expire(db, db_user)
+            db_user = UserResponse.model_validate(db_user)
 
-            report.status_change(username=user.username, status=status, user=user, user_admin=user.admin)
+            report.status_change(username=db_user.username, status=status, user=db_user, user_admin=db_user.admin)
 
-            logger.info(f'User "{user.username}" status changed to {status.value}')
+            logger.info(f'User "{db_user.username}" status changed to {status.value}')
 
 
 scheduler.add_job(review, "interval", seconds=JOB_REVIEW_USERS_INTERVAL, coalesce=True, max_instances=1)

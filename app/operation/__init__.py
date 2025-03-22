@@ -1,12 +1,15 @@
 from datetime import datetime as dt
 from datetime import timedelta, timezone
 from enum import IntEnum
+
 from fastapi import HTTPException
+
 from app.db import Session
 from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template, get_node_by_id
 from app.db.models import Admin as DBAdmin
 from app.db.models import Group, ProxyHost, User, Node, UserTemplate
 from app.models.admin import Admin
+from app.models.user import UserCreate, UserModify
 from app.utils.jwt import get_subscription_payload
 
 
@@ -91,6 +94,14 @@ class BaseOperator:
         if not db_group:
             self.raise_error("Group not found", 404)
         return db_group
+
+    async def validate_all_groups(self, db, user: UserCreate | UserModify) -> list[Group]:
+        all_groups: list[Group] = []
+        if user.group_ids:
+            for group_id in user.group_ids:
+                db_group = await self.get_validated_group(db, group_id)
+                all_groups.append(db_group)
+        return all_groups
 
     async def get_validated_user_template(self, db: Session, template_id: int) -> UserTemplate:
         dbuser_template = get_user_template(db, template_id)
