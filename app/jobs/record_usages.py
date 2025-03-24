@@ -12,7 +12,7 @@ from GozargahNodeBridge import GozargahNode, NodeAPIError
 
 # from app import scheduler, node
 from app import async_scheduler as scheduler
-from app.node import manager as node_manager
+from app.node import node_manager as node_manager
 from app.utils.logger import get_logger
 from app.db import GetDB
 from app.db.models import Admin, NodeUsage, NodeUserUsage, System, User

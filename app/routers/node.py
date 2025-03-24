@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.db import Session, get_db
+from app.db import AsyncSession, get_db
 from app.models.admin import Admin
 from .authentication import check_sudo_admin
 from app.models.node import (
@@ -31,21 +31,21 @@ async def get_node_settings(_: Admin = Depends(check_sudo_admin)):
 
 
 @router.get("/{node_id}", response_model=NodeResponse)
-async def get_node(node_id: int, db: Session = Depends(get_db), _: Admin = Depends(check_sudo_admin)):
+async def get_node(node_id: int, db: AsyncSession = Depends(get_db), _: Admin = Depends(check_sudo_admin)):
     """Retrieve details of a specific node by its ID."""
     return await node_operator.get_validated_node(db=db, node_id=node_id)
 
 
 @router.get("s", response_model=list[NodeResponse])
 async def get_nodes(
-    offset: int = None, limit: int = None, db: Session = Depends(get_db), _: Admin = Depends(check_sudo_admin)
+    offset: int = None, limit: int = None, db: AsyncSession = Depends(get_db), _: Admin = Depends(check_sudo_admin)
 ):
     """Retrieve a list of all nodes. Accessible only to sudo admins."""
     return await node_operator.get_db_nodes(db=db, offset=offset, limit=limit)
 
 
 @router.post("", response_model=NodeResponse, responses={409: responses._409})
-async def add_node(new_node: NodeCreate, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
+async def add_node(new_node: NodeCreate, db: AsyncSession = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """Add a new node to the database."""
     return await node_operator.add_node(db, new_node, admin)
 
@@ -54,7 +54,7 @@ async def add_node(new_node: NodeCreate, db: Session = Depends(get_db), admin: A
 async def modify_node(
     modified_node: NodeModify,
     node_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     admin: Admin = Depends(check_sudo_admin),
 ):
     """Update a node's details. Only accessible to sudo admins."""
@@ -70,13 +70,13 @@ async def reconnect_node(node_id: int, admin: Admin = Depends(check_sudo_admin))
 
 @router.put("/{node_id}/sync")
 async def sync_node(
-    node_id: int, flush_users: bool = False, db: Session = Depends(get_db), _: Admin = Depends(check_sudo_admin)
+    node_id: int, flush_users: bool = False, db: AsyncSession = Depends(get_db), _: Admin = Depends(check_sudo_admin)
 ):
     return await node_operator.sync_node_users(db, node_id=node_id, flush_users=flush_users)
 
 
 @router.delete("/{node_id}")
-async def remove_node(node_id: int, db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
+async def remove_node(node_id: int, db: AsyncSession = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """Delete a node and remove it from xray in the background."""
     await node_operator.remove_node(db=db, node_id=node_id, admin=admin)
     return {}
@@ -117,7 +117,7 @@ async def node_logs(
 
 @router.get("s/usage", response_model=NodesUsageResponse)
 async def get_usage(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     start: str = "",
     end: str = "",
     _: Admin = Depends(check_sudo_admin),
@@ -147,7 +147,7 @@ async def nodes_stats(
 async def user_online_stats(
     node_id: int,
     username: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: Admin = Depends(check_sudo_admin),
 ):
     """Retrieve user online stats by node."""
@@ -158,7 +158,7 @@ async def user_online_stats(
 async def user_online_ip_list(
     node_id: int,
     username: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: Admin = Depends(check_sudo_admin),
 ):
     """Retrieve user ips by node."""

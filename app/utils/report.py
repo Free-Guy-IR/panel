@@ -2,7 +2,7 @@ from datetime import datetime as dt
 from typing import Optional
 
 from app import telegram
-from app.db import Session, create_notification_reminder
+from app.db import AsyncSession, create_notification_reminder
 from app.db.models import UserStatus
 from app.models.admin import Admin
 from app.models.user import ReminderType, UserResponse
@@ -179,7 +179,7 @@ def user_subscription_revoked(user: UserResponse, by: Admin, user_admin: Admin =
 
 
 def data_usage_percent_reached(
-    db: Session,
+    db: AsyncSession,
     percent: float,
     user: UserResponse,
     user_id: int,
@@ -193,7 +193,7 @@ def data_usage_percent_reached(
         )
 
 
-def expire_days_reached(db: Session, days: int, user: UserResponse, user_id: int, expire: dt, threshold=None) -> None:
+def expire_days_reached(db: AsyncSession, days: int, user: UserResponse, user_id: int, expire: dt, threshold=None) -> None:
     notify(ReachedDaysLeft(username=user.username, user=user, days_left=days))
     if NOTIFY_IF_DAYS_LEFT_REACHED:
         create_notification_reminder(

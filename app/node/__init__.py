@@ -1,8 +1,8 @@
-from functools import lru_cache
 import asyncio
 
 from GozargahNodeBridge import GozargahNode, create_node, Health, NodeType
 from aiorwlock import RWLock
+from aiocache import cached
 
 from app.db import GetDB, get_tls_certificate
 from app.db.models import Node, NodeConnectionType
@@ -10,10 +10,10 @@ from app.node.user import serialize_user_for_node, backend_users
 from app.models.user import UserResponse
 
 
-@lru_cache(maxsize=None)
-def get_tls():
-    with GetDB() as db:
-        tls = get_tls_certificate(db)
+@cached()
+async def get_tls():
+    async with GetDB() as db:
+        tls = await get_tls_certificate(db)
         return tls
 
 
@@ -112,7 +112,7 @@ class NodeManager:
             await asyncio.gather(*remove_tasks, return_exceptions=True)
 
 
-manager: NodeManager = NodeManager()
+node_manager: NodeManager = NodeManager()
 
 
 __all__ = ["backend_users"]

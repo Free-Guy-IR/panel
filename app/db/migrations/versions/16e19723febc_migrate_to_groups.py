@@ -160,9 +160,7 @@ def upgrade() -> None:
                     template.groups.append(dbgroup)
                     session.add(template)
             counter += 1
-        inbounds = [inbound['tag'] for inbound in config['inbounds'] if 'tag' in inbound]
-        session.query(ProxyInbound).filter(ProxyInbound.tag.notin_(inbounds)).delete(synchronize_session=False)
-        session.commit()
+
         if template_count > 0:
             dbtemplates = session.query(UserTemplate).options(joinedload(UserTemplate.groups)).all()
             for dbtemplate in dbtemplates:

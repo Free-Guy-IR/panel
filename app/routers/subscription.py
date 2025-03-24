@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, Path, Request
 
-from app.db import Session, get_db
+from app.db import AsyncSession, get_db
 from app.models.user import SubscriptionUserResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperator
@@ -16,7 +16,7 @@ subscription_operator = SubscriptionOperator(operator_type=OperatorType.API)
 async def user_subscription(
     request: Request,
     token: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user_agent: str = Header(default=""),
 ):
     """Provides a subscription link based on the user agent (Clash, V2Ray, etc.)."""
@@ -30,13 +30,13 @@ async def user_subscription(
 
 
 @router.get("/{token}/info", response_model=SubscriptionUserResponse)
-async def user_subscription_info(token: str, db: Session = Depends(get_db)):
+async def user_subscription_info(token: str, db: AsyncSession = Depends(get_db)):
     """Retrieves detailed information about the user's subscription."""
     return await subscription_operator.user_subscription_info(db, token=token)
 
 
 @router.get("/{token}/usage")
-async def user_get_usage(token: str, start: str = "", end: str = "", db: Session = Depends(get_db)):
+async def user_get_usage(token: str, start: str = "", end: str = "", db: AsyncSession = Depends(get_db)):
     """Fetches the usage statistics for the user within a specified date range."""
     return await subscription_operator.user_get_usage(db, token=token, start=start, end=end)
 
@@ -46,7 +46,7 @@ async def user_subscription_with_client_type(
     request: Request,
     token: str,
     client_type: str = Path(..., regex="sing-box|clash-meta|clash|outline|links|links-base64|xray"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Provides a subscription link based on the specified client type (e.g., Clash, V2Ray)."""
     return await subscription_operator.user_subscription_with_client_type(

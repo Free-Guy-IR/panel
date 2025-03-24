@@ -1,15 +1,14 @@
 import re
-import secrets
+import asyncio
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.admin import Admin
 from app.models.proxy import ProxyTable
-from app.utils.jwt import create_subscription_token
-from config import XRAY_SUBSCRIPTION_PATH, XRAY_SUBSCRIPTION_URL_PREFIX
+
 
 USERNAME_REGEXP = re.compile(r"^(?=\w{3,32}\b)[a-zA-Z0-9-_@.]+(?:_[a-zA-Z0-9-_@.]+)*$")
 
@@ -212,19 +211,7 @@ class UserResponse(User):
     subscription_url: str = ""
     admin: Optional[Admin] = None
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def validate_subscription_url(self):
-        if not self.subscription_url:
-            salt = secrets.token_hex(8)
-            url_prefix = (
-                self.admin.sub_domain.replace("*", salt)
-                if self.admin and self.admin.sub_domain
-                else (XRAY_SUBSCRIPTION_URL_PREFIX).replace("*", salt)
-            )
-            token = create_subscription_token(self.username)
-            self.subscription_url = f"{url_prefix}/{XRAY_SUBSCRIPTION_PATH}/{token}"
-        return self
+    
 
     @field_validator("used_traffic", "lifetime_used_traffic", mode="before")
     def cast_to_int(cls, v):
@@ -247,6 +234,14 @@ class SubscriptionUserResponse(UserResponse):
 class UsersResponse(BaseModel):
     users: list[UserResponse]
     total: int
+
+    async def load_subscriptions(self, gen_sub_func):
+
+        tasks = [gen_sub_func(user) for user in self.users]
+        urls = await asyncio.gather(*tasks)
+        
+        for user, url in zip(self.users, urls):
+            user.subscription_url = url
 
 
 class UserUsageResponse(BaseModel):

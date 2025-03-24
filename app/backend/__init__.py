@@ -1,6 +1,7 @@
 from app import on_startup
 from app.utils.store import DictStorage
 from app.backend.xray import XRayConfig
+from app.db import GetDB
 from config import XRAY_JSON
 
 
@@ -8,13 +9,13 @@ config = XRayConfig(XRAY_JSON)
 
 
 @DictStorage
-def hosts(storage: dict):
-    from app.db import GetDB, crud
+async def hosts(storage: dict):
     from app.db.models import ProxyHostSecurity
+    from app.db.crud import get_hosts
 
     storage.clear()
-    with GetDB() as db:
-        db_hosts = crud.get_hosts(db)
+    async with GetDB() as db:
+        db_hosts = await get_hosts(db)
 
         for host in db_hosts:
             if host.is_disabled or (config.get_inbound(host.inbound_tag) is None):

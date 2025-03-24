@@ -48,13 +48,13 @@ STATUS_TEXTS = {
 }
 
 
-def generate_standard_links(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> list:
+async def generate_standard_links(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> list:
     format_variables = setup_format_variables(extra_data)
     conf = StandardLinks()
-    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
+    return await process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_clash_subscription(
+async def generate_clash_subscription(
     proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool, is_meta: bool = False
 ) -> str:
     if is_meta is True:
@@ -63,31 +63,31 @@ def generate_clash_subscription(
         conf = ClashConfiguration()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
+    return await process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_singbox_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
+async def generate_singbox_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
     conf = SingBoxConfiguration()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
+    return await process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_outline_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
+async def generate_outline_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
     conf = OutlineConfiguration()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
+    return await process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_xray_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
+async def generate_xray_subscription(proxies: dict, inbounds: list[str], extra_data: dict, reverse: bool) -> str:
     conf = XrayConfig()
 
     format_variables = setup_format_variables(extra_data)
-    return process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
+    return await process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
 
 
-def generate_subscription(user: User, config_format: str, as_base64: bool, reverse: bool = False) -> str:
+async def generate_subscription(user: User, config_format: str, as_base64: bool, reverse: bool = False) -> str:
     kwargs = {
         "proxies": user.proxy_settings,
         "inbounds": user.inbounds(backend.config.inbounds),
@@ -223,7 +223,7 @@ def setup_format_variables(extra_data: dict) -> dict:
     return format_variables
 
 
-def process_inbounds_and_tags(
+async def process_inbounds_and_tags(
     inbounds: list[str],
     proxies: dict,
     format_variables: dict,

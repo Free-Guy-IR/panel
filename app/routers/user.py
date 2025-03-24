@@ -2,7 +2,7 @@ from datetime import datetime as dt
 
 from fastapi import APIRouter, Depends, Query
 
-from app.db import Session, get_db
+from app.db import AsyncSession, get_db
 from .authentication import check_sudo_admin, get_current
 from app.models.admin import Admin
 from app.models.user import (
@@ -27,7 +27,7 @@ router = APIRouter(tags=["User"], prefix="/api/user", responses={401: responses.
 
 
 @router.post("", response_model=UserResponse, responses={400: responses._400, 409: responses._409})
-async def add_user(new_user: UserCreate, db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
+async def add_user(new_user: UserCreate, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)):
     """
     Add a new user
 
@@ -53,7 +53,7 @@ async def add_user(new_user: UserCreate, db: Session = Depends(get_db), admin: A
     responses={400: responses._400, 403: responses._403, 404: responses._404},
 )
 async def modify_user(
-    username: str, modified_user: UserModify, db: Session = Depends(get_db), admin: Admin = Depends(get_current)
+    username: str, modified_user: UserModify, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)
 ):
     """
     Modify an existing user
@@ -76,13 +76,13 @@ async def modify_user(
 
 
 @router.delete("/{username}", responses={403: responses._403, 404: responses._404})
-async def remove_user(username: str, db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
+async def remove_user(username: str, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)):
     """Remove a user"""
     return await user_operator.remove_user(db, username=username, admin=admin)
 
 
 @router.post("/{username}/reset", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
-async def reset_user_data_usage(username: str, db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
+async def reset_user_data_usage(username: str, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)):
     """Reset user data usage"""
     return await user_operator.reset_user_data_usage(db, username=username, admin=admin)
 
@@ -90,13 +90,13 @@ async def reset_user_data_usage(username: str, db: Session = Depends(get_db), ad
 @router.post(
     "/{username}/revoke_sub", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
 )
-async def revoke_user_subscription(username: str, db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
+async def revoke_user_subscription(username: str, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)):
     """Revoke users subscription (Subscription link and proxies)"""
     return await user_operator.revoke_user_sub(db, username=username, admin=admin)
 
 
 @router.post("s/reset", responses={403: responses._403, 404: responses._404})
-async def reset_users_data_usage(db: Session = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
+async def reset_users_data_usage(db: AsyncSession = Depends(get_db), admin: Admin = Depends(check_sudo_admin)):
     """Reset all users data usage"""
     await user_operator.reset_users_data_usage(db, admin)
     await node_operator.restart_all_node(db, admin=admin)
@@ -107,7 +107,7 @@ async def reset_users_data_usage(db: Session = Depends(get_db), admin: Admin = D
 async def set_owner(
     username: str,
     admin_username: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     admin: Admin = Depends(check_sudo_admin),
 ):
     """Set a new owner (admin) for a user."""
@@ -117,16 +117,16 @@ async def set_owner(
 @router.post(
     "/{username}/active-next", response_model=UserResponse, responses={403: responses._403, 404: responses._404}
 )
-async def active_next_plan(username: str, db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
+async def active_next_plan(username: str, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)):
     """Reset user by next plan"""
 
     return user_operator.active_next_plan(db, username=username, admin=admin)
 
 
 @router.get("/{username}", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
-async def get_user(username: str, db: Session = Depends(get_db), admin: Admin = Depends(get_current)):
+async def get_user(username: str, db: AsyncSession = Depends(get_db), admin: Admin = Depends(get_current)):
     """Get user information"""
-    return await user_operator.get_validated_user(db=db, username=username, admin=admin)
+    return await user_operator.get_user(db=db, username=username, admin=admin)
 
 
 @router.get(
@@ -140,7 +140,8 @@ async def get_users(
     owner: list[str] | None = Query(None, alias="admin"),
     status: UserStatus | None = None,
     sort: str | None = None,
-    db: Session = Depends(get_db),
+    load_sub: bool = False,
+    db: AsyncSession = Depends(get_db),
     admin: Admin = Depends(get_current),
 ):
     """Get all users"""
@@ -154,6 +155,7 @@ async def get_users(
         owner=owner,
         status=status,
         sort=sort,
+        load_sub=load_sub,
     )
 
 
@@ -164,7 +166,7 @@ async def get_user_usage(
     username: str,
     start: dt | None = Query(None, example="2024-01-01T00:00:00"),
     end: dt | None = Query(None, example="2024-01-31T23:59:59"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     admin: Admin = Depends(get_current),
 ):
     """Get users usage"""
@@ -175,7 +177,7 @@ async def get_user_usage(
 async def get_users_usage(
     start: dt | None = Query(None, example="2024-01-01T00:00:00"),
     end: dt | None = Query(None, example="2024-01-31T23:59:59"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     owner: list[str] | None = Query(None, alias="admin"),
     admin: Admin = Depends(get_current),
 ):
@@ -185,7 +187,7 @@ async def get_users_usage(
 
 @router.get("s/expired", response_model=list[str])
 async def get_expired_users(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     admin: Admin = Depends(get_current),
     expired_after: dt | None = Query(None, example="2024-01-01T00:00:00"),
     expired_before: dt | None = Query(None, example="2024-01-31T23:59:59"),
@@ -204,7 +206,7 @@ async def get_expired_users(
 
 @router.delete("s/expired", response_model=RemoveUsersResponse)
 async def delete_expired_users(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     admin: Admin = Depends(get_current),
     expired_after: dt | None = Query(None, example="2024-01-01T00:00:00"),
     expired_before: dt | None = Query(None, example="2024-01-31T23:59:59"),

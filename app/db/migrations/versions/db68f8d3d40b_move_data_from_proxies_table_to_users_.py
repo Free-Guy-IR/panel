@@ -31,6 +31,8 @@ def upgrade() -> None:
         sa.column('type', sa.String),
         sa.column('settings', sa.JSON)
     )
+    existing_users = set(db.execute(sa.select(User.id)).scalars().all())
+    
     count_result = db.query(proxy_table).count()
     if count_result <= 0:
         return
@@ -60,6 +62,7 @@ def upgrade() -> None:
     updates = [
         {'id': user_id, 'proxy_settings': settings}
         for user_id, settings in user_proxy_map.items()
+        if user_id in existing_users
     ]
 
     db.bulk_update_mappings(User, updates)

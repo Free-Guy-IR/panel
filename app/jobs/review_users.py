@@ -13,7 +13,7 @@ from app.db.crud import (
     update_user_status,
 )
 from app.db.models import User
-from app.node import manager as node_manager
+from app.node import node_manager as node_manager
 from app.models.user import ReminderType, UserResponse, UserStatus
 from app.utils.logger import get_logger
 from app.utils import report
@@ -29,13 +29,13 @@ from config import (
 logger = get_logger("review-users")
 
 
-def add_notification_reminders(db: Session, user: "User") -> None:
+async def add_notification_reminders(db: Session, user: User) -> None:
     if user.data_limit:
         usage_percent = calculate_usage_percent(user.used_traffic, user.data_limit)
 
         for percent in sorted(NOTIFY_REACHED_USAGE_PERCENT, reverse=True):
             if usage_percent >= percent:
-                if not get_notification_reminder(db, user.id, ReminderType.data_usage, threshold=percent):
+                if not await get_notification_reminder(db, user.id, ReminderType.data_usage, threshold=percent):
                     report.data_usage_percent_reached(
                         db, usage_percent, UserResponse.model_validate(user), user.id, user.expire, threshold=percent
                     )
@@ -46,7 +46,7 @@ def add_notification_reminders(db: Session, user: "User") -> None:
 
         for days_left in sorted(NOTIFY_DAYS_LEFT):
             if expire_days <= days_left:
-                if not get_notification_reminder(db, user.id, ReminderType.expiration_date, threshold=days_left):
+                if not await get_notification_reminder(db, user.id, ReminderType.expiration_date, threshold=days_left):
                     report.expire_days_reached(
                         db, expire_days, UserResponse.model_validate(user), user.id, user.expire, threshold=days_left
                     )
@@ -54,7 +54,7 @@ def add_notification_reminders(db: Session, user: "User") -> None:
 
 
 async def reset_user_by_next_report(db: Session, db_user: User):
-    db_user = reset_user_by_next(db, db_user)
+    db_user = await reset_user_by_next(db, db_user)
 
     user = UserResponse.model_validate(db_user)
 
@@ -65,8 +65,8 @@ async def reset_user_by_next_report(db: Session, db_user: User):
 
 async def review():
     now = datetime.now(timezone.utc)
-    with GetDB() as db:
-        for db_user in get_users(db, status=UserStatus.active):
+    async with GetDB() as db:
+        for db_user in await get_users(db, status=UserStatus.active):
             limited = db_user.data_limit and db_user.used_traffic >= db_user.data_limit
             expired = db_user.expire and db_user.expire.replace(tzinfo=timezone.utc) <= now
 
@@ -86,7 +86,7 @@ async def review():
                 status = UserStatus.expired
             else:
                 if WEBHOOK_ADDRESS:
-                    add_notification_reminders(db, db_user)
+                    await add_notification_reminders(db, db_user)
                 continue
 
             update_user_status(db, db_user, status)
@@ -98,7 +98,7 @@ async def review():
 
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
 
-        for db_user in get_users(db, status=UserStatus.on_hold):
+        for db_user in await get_users(db, status=UserStatus.on_hold):
             if db_user.edit_at:
                 base_time = db_user.edit_at
             else:
@@ -116,7 +116,7 @@ async def review():
                 continue
 
             update_user_status(db, db_user, status)
-            start_user_expire(db, db_user)
+            await start_user_expire(db, db_user)
             db_user = UserResponse.model_validate(db_user)
 
             report.status_change(username=db_user.username, status=status, user=db_user, user_admin=db_user.admin)

@@ -8,5 +8,5 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-def base():
+async def base():
     return render_template(HOME_PAGE_TEMPLATE)

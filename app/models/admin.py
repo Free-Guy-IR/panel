@@ -24,7 +24,6 @@ class Admin(BaseModel):
     sub_domain: str | None = None
     profile_title: str | None = None
     support_url: str | None = None
-    users_usage: int | None = None
     lifetime_used_traffic: int | None = None
 
     model_config = ConfigDict(from_attributes=True)

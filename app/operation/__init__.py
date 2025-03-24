@@ -4,7 +4,7 @@ from enum import IntEnum
 
 from fastapi import HTTPException
 
-from app.db import Session
+from app.db import AsyncSession
 from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template, get_node_by_id
 from app.db.models import Admin as DBAdmin
 from app.db.models import Group, ProxyHost, User, Node, UserTemplate
@@ -53,18 +53,18 @@ class BaseOperator:
         except ValueError:
             self.raise_error(message="Invalid date range or format", code=400)
 
-    async def get_validated_host(self, db: Session, host_id: int) -> ProxyHost:
-        db_host = get_host_by_id(db, host_id)
+    async def get_validated_host(self, db: AsyncSession, host_id: int) -> ProxyHost:
+        db_host = await get_host_by_id(db, host_id)
         if db_host is None:
             self.raise_error(message="Host not found", code=404)
         return db_host
 
-    async def get_validated_sub(self, db: Session, token: str) -> User:
+    async def get_validated_sub(self, db: AsyncSession, token: str) -> User:
         sub = get_subscription_payload(token)
         if not sub:
             self.raise_error(message="Not Found", code=404)
 
-        db_user = get_user(db, sub["username"])
+        db_user = await get_user(db, sub["username"])
         if not db_user or db_user.created_at > sub["created_at"]:
             self.raise_error(message="Not Found", code=404)
 
@@ -73,8 +73,8 @@ class BaseOperator:
 
         return db_user
 
-    async def get_validated_user(self, db: Session, username: str, admin: Admin) -> User:
-        db_user = get_user(db, username)
+    async def get_validated_user(self, db: AsyncSession, username: str, admin: Admin) -> User:
+        db_user = await get_user(db, username)
         if not db_user:
             self.raise_error(message="User not found", code=404)
 
@@ -83,14 +83,14 @@ class BaseOperator:
 
         return db_user
 
-    async def get_validated_admin(self, db: Session, username: str) -> DBAdmin:
-        db_admin = get_admin(db, username)
+    async def get_validated_admin(self, db: AsyncSession, username: str) -> DBAdmin:
+        db_admin = await get_admin(db, username)
         if not db_admin:
             self.raise_error(message="Admin not found", code=404)
         return db_admin
 
-    async def get_validated_group(self, db: Session, group_id: int) -> Group:
-        db_group = get_group_by_id(db, group_id)
+    async def get_validated_group(self, db: AsyncSession, group_id: int) -> Group:
+        db_group = await get_group_by_id(db, group_id)
         if not db_group:
             self.raise_error("Group not found", 404)
         return db_group
@@ -103,15 +103,15 @@ class BaseOperator:
                 all_groups.append(db_group)
         return all_groups
 
-    async def get_validated_user_template(self, db: Session, template_id: int) -> UserTemplate:
-        dbuser_template = get_user_template(db, template_id)
+    async def get_validated_user_template(self, db: AsyncSession, template_id: int) -> UserTemplate:
+        dbuser_template = await get_user_template(db, template_id)
         if not dbuser_template:
             self.raise_error("User Template not found", 404)
         return dbuser_template
 
-    async def get_validated_node(self, db: Session, node_id) -> Node:
+    async def get_validated_node(self, db: AsyncSession, node_id) -> Node:
         """Dependency: Fetch node or return not found error."""
-        db_node = get_node_by_id(db, node_id)
+        db_node = await get_node_by_id(db, node_id)
         if not db_node:
             self.raise_error(message="Node not found", code=404)
         return db_node

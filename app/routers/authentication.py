@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from app.db import Session, get_db
+from app.db import AsyncSession, get_db
 from app.db.crud import get_admin as get_admin_by_username
 from app.models.admin import Admin, AdminValidationResult, AdminInDB
 from app.utils.jwt import get_admin_payload
@@ -11,12 +11,12 @@ from config import SUDOERS
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/token")
 
 
-async def get_admin(db: Session, token: str) -> Admin | None:
-    payload = get_admin_payload(token)
+async def get_admin(db: AsyncSession, token: str) -> Admin | None:
+    payload = await get_admin_payload(token)
     if not payload:
         return
 
-    db_admin = get_admin_by_username(db, payload["username"])
+    db_admin = await get_admin_by_username(db, payload["username"])
     if db_admin:
         if db_admin.password_reset_at:
             if not payload.get("created_at"):
@@ -30,7 +30,7 @@ async def get_admin(db: Session, token: str) -> Admin | None:
         return Admin(username=payload["username"], is_sudo=True)
 
 
-async def get_current(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+async def get_current(db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)):
     admin: Admin | None = await get_admin(db, token)
     if not admin:
         raise HTTPException(
@@ -48,7 +48,7 @@ async def get_current(db: Session = Depends(get_db), token: str = Depends(oauth2
     return admin
 
 
-async def check_sudo_admin(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+async def check_sudo_admin(db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)):
     admin: Admin | None = await get_admin(db, token)
     if not admin:
         raise HTTPException(
@@ -67,10 +67,10 @@ async def check_sudo_admin(db: Session = Depends(get_db), token: str = Depends(o
     return admin
 
 
-async def validate_admin(db: Session, username: str, password: str) -> AdminValidationResult | None:
+async def validate_admin(db: AsyncSession, username: str, password: str) -> AdminValidationResult | None:
     """Validate admin credentials with environment variables or database."""
 
-    db_admin = get_admin_by_username(db, username)
+    db_admin = await get_admin_by_username(db, username)
     if db_admin and AdminInDB.model_validate(db_admin).verify_password(password):
         return AdminValidationResult(
             username=db_admin.username, is_sudo=db_admin.is_sudo, is_disabled=db_admin.is_disabled

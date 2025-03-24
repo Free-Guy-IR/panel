@@ -3,9 +3,10 @@ import asyncio
 from GozargahNodeBridge import NodeAPIError, GozargahNode
 
 from app import on_shutdown, on_startup, async_scheduler as scheduler
-from app.db import GetDB, crud
+from app.db import GetDB
 from app.db.models import Node
-from app.node import manager as node_manager
+from app.db.crud import get_nodes
+from app.node import node_manager
 from app.utils.logger import get_logger
 from app.operation.node import NodeOperator
 from app.operation import OperatorType
@@ -40,8 +41,8 @@ async def node_health_check():
 async def initialize_nodes():
     logger.info("Starting main and nodes' cores...")
 
-    with GetDB() as db:
-        db_nodes = crud.get_nodes(db=db, enabled=True)
+    async with GetDB() as db:
+        db_nodes = await get_nodes(db=db, enabled=True)
 
         async def start_node(node: Node):
             await node_manager.update_node(node)

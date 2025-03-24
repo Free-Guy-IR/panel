@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .base import Base, GetDB, get_db  # noqa
 
@@ -69,5 +69,5 @@ __all__ = [
     "System",
     "JWT",
     "Base",
-    "Session",
+    "AsyncSession",
 ]

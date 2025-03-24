@@ -1,28 +1,48 @@
 import os
 from datetime import datetime
 from enum import Enum
-
+from typing import List, Optional, Dict, Any
 from sqlalchemy import (
     JSON,
     BigInteger,
-    Boolean,
     Column,
-    DateTime,
     Enum as SQLEnum,
     Float,
     ForeignKey,
-    Integer,
     String,
     Table,
     UniqueConstraint,
     func,
+    event,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.expression import select, text
-
+from sqlalchemy.ext.compiler import compiles
 from app.db.base import Base
 from app.models.user import ReminderType, UserDataLimitResetStrategy, UserStatus
+
+
+class CaseSensitiveString(String):
+    def __init__(self, length=None):
+        super(CaseSensitiveString, self).__init__(length)
+
+
+# Modify how this type is handled for each dialect
+@compiles(CaseSensitiveString, "sqlite")
+def compile_cs_sqlite(element, compiler, **kw):
+    return f"VARCHAR({element.length}) COLLATE BINARY"  # BINARY is case-sensitive in SQLite
+
+
+@compiles(CaseSensitiveString, "postgresql")
+def compile_cs_postgresql(element, compiler, **kw):
+    return f'VARCHAR({element.length}) COLLATE "C"'  # "C" collation is case-sensitive
+
+
+@compiles(CaseSensitiveString, "mysql")
+def compile_cs_mysql(element, compiler, **kw):
+    return f"VARCHAR({element.length}) COLLATE utf8mb4_bin"  # utf8mb4_bin is case-sensitive
+
 
 inbounds_groups_association = Table(
     "inbounds_groups_association",
@@ -42,22 +62,22 @@ users_groups_association = Table(
 class Admin(Base):
     __tablename__ = "admins"
 
-    id = Column(Integer, primary_key=True)
-    username = Column(String(34), unique=True, index=True)
-    hashed_password = Column(String(128))
-    users = relationship("User", back_populates="admin")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_sudo = Column(Boolean, default=False)
-    password_reset_at = Column(DateTime, nullable=True)
-    telegram_id = Column(BigInteger, nullable=True, default=None)
-    discord_webhook = Column(String(1024), nullable=True, default=None)
-    users_usage = Column(BigInteger, nullable=False, default=0)
-    is_disabled = Column(Boolean, nullable=False, server_default="0", default=False)
-    usage_logs = relationship("AdminUsageLogs", back_populates="admin")
-    sub_template = Column(String(1024), nullable=True, default=None)
-    sub_domain = Column(String(256), nullable=True, default=None)
-    profile_title = Column(String(512), nullable=True, default=None)
-    support_url = Column(String(1024), nullable=True, default=None)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(34), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(128))
+    users: Mapped[List["User"]] = relationship(back_populates="admin")
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    is_sudo: Mapped[bool] = mapped_column(default=False)
+    password_reset_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
+    discord_webhook: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
+    users_usage: Mapped[int] = mapped_column(BigInteger, default=0)
+    is_disabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin")
+    sub_template: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
+    sub_domain: Mapped[Optional[str]] = mapped_column(String(256), default=None)
+    profile_title: Mapped[Optional[str]] = mapped_column(String(512), default=None)
+    support_url: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
 
     @hybrid_property
     def reseted_usage(self) -> int:
@@ -67,7 +87,7 @@ class Admin(Base):
     def reseted_usage(cls):
         return (
             select(func.sum(AdminUsageLogs.used_traffic_at_reset))
-            .where(AdminUsageLogs.user_id == cls.id)
+            .where(AdminUsageLogs.admin_id == cls.id)
             .label("reseted_usage")
         )
 
@@ -79,52 +99,54 @@ class Admin(Base):
 class AdminUsageLogs(Base):
     __tablename__ = "admin_usage_logs"
 
-    id = Column(Integer, primary_key=True)
-    admin_id = Column(Integer, ForeignKey("admins.id"))
-    admin = relationship("Admin", back_populates="usage_logs")
-    used_traffic_at_reset = Column(BigInteger, nullable=False)
-    reset_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id"))
+    admin: Mapped["Admin"] = relationship(back_populates="usage_logs")
+    used_traffic_at_reset: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reset_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-    username = Column(String(34, collation="NOCASE"), unique=True, index=True)
-    proxy_settings = Column(JSON(True), nullable=False, server_default=text("'{}'"), default=lambda: {})
-    status = Column(SQLEnum(UserStatus), nullable=False, default=UserStatus.active)
-    used_traffic = Column(BigInteger, default=0)
-    node_usages = relationship("NodeUserUsage", back_populates="user", cascade="all, delete-orphan")
-    notification_reminders = relationship("NotificationReminder", back_populates="user", cascade="all, delete-orphan")
-    data_limit = Column(BigInteger, nullable=True)
-    data_limit_reset_strategy = Column(
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(CaseSensitiveString(34), unique=True, index=True)
+    proxy_settings: Mapped[Dict[str, Any]] = mapped_column(JSON(True), server_default=text("'{}'"), default=lambda: {})
+    status: Mapped[UserStatus] = mapped_column(SQLEnum(UserStatus), default=UserStatus.active)
+    used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
+    node_usages: Mapped[List["NodeUserUsage"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", lazy="joined"
+    )
+    notification_reminders: Mapped[List["NotificationReminder"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", lazy="joined"
+    )
+    data_limit: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
+    data_limit_reset_strategy: Mapped[UserDataLimitResetStrategy] = mapped_column(
         SQLEnum(UserDataLimitResetStrategy),
-        nullable=False,
         default=UserDataLimitResetStrategy.no_reset,
     )
-    usage_logs = relationship("UserUsageResetLogs", back_populates="user")  # maybe rename it to reset_usage_logs?
-    expire = Column(DateTime, nullable=True)
-    admin_id = Column(Integer, ForeignKey("admins.id"))
-    admin = relationship("Admin", back_populates="users")
-    sub_revoked_at = Column(DateTime, nullable=True, default=None)
-    sub_updated_at = Column(DateTime, nullable=True, default=None)
-    sub_last_user_agent = Column(String(512), nullable=True, default=None)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    note = Column(String(500), nullable=True, default=None)
-    online_at = Column(DateTime, nullable=True, default=None)
-    on_hold_expire_duration = Column(BigInteger, nullable=True, default=None)
-    on_hold_timeout = Column(DateTime, nullable=True, default=None)
+    usage_logs: Mapped[List["UserUsageResetLogs"]] = relationship(back_populates="user", lazy="selectin")
+    expire: Mapped[Optional[datetime]] = mapped_column(default=None)
+    admin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admins.id"), default=None)
+    admin: Mapped["Admin"] = relationship(back_populates="users", lazy="selectin")
+    sub_revoked_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    sub_updated_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    sub_last_user_agent: Mapped[Optional[str]] = mapped_column(String(512), default=None)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    note: Mapped[Optional[str]] = mapped_column(String(500), default=None)
+    online_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    on_hold_expire_duration: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
+    on_hold_timeout: Mapped[Optional[datetime]] = mapped_column(default=None)
+    auto_delete_in_days: Mapped[Optional[int]] = mapped_column(default=None)
+    edit_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    last_status_change: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow)
 
-    # * Positive values: User will be deleted after the value of this field in days automatically.
-    # * Negative values: User won't be deleted automatically at all.
-    # * NULL: Uses global settings.
-    auto_delete_in_days = Column(Integer, nullable=True, default=None)
-
-    edit_at = Column(DateTime, nullable=True, default=None)
-    last_status_change = Column(DateTime, default=datetime.utcnow, nullable=True)
-
-    next_plan = relationship("NextPlan", uselist=False, back_populates="user", cascade="all, delete-orphan")
-    groups = relationship("Group", secondary=users_groups_association, back_populates="users", lazy="joined")
+    next_plan: Mapped[Optional["NextPlan"]] = relationship(
+        uselist=False, back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
+    groups: Mapped[List["Group"]] = relationship(
+        secondary=users_groups_association, back_populates="users", lazy="selectin"
+    )
 
     @hybrid_property
     def reseted_usage(self) -> int:
@@ -178,31 +200,30 @@ template_group_association = Table(
 class NextPlan(Base):
     __tablename__ = "next_plans"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user_template_id = Column(Integer, ForeignKey("user_templates.id"), nullable=True)
-    data_limit = Column(BigInteger, nullable=False)
-    expire = Column(Integer, nullable=True)
-    add_remaining_traffic = Column(Boolean, nullable=False, default=False, server_default="0")
-    fire_on_either = Column(Boolean, nullable=False, default=True, server_default="0")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_template_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_templates.id"))
+    data_limit: Mapped[int] = mapped_column(BigInteger, default=0)
+    expire: Mapped[Optional[int]] = mapped_column(default=None)
+    add_remaining_traffic: Mapped[bool] = mapped_column(default=False, server_default="0")
+    fire_on_either: Mapped[bool] = mapped_column(default=True, server_default="0")
 
-    user = relationship("User", back_populates="next_plan")
-    user_template = relationship("UserTemplate", back_populates="next_plans")
+    user: Mapped["User"] = relationship(back_populates="next_plan")
+    user_template: Mapped[Optional["UserTemplate"]] = relationship(back_populates="next_plans")
 
 
 class UserTemplate(Base):
     __tablename__ = "user_templates"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(64), nullable=False, unique=True)
-    data_limit = Column(BigInteger, default=0)
-    expire_duration = Column(BigInteger, default=0)  # in seconds
-    username_prefix = Column(String(20), nullable=True)
-    username_suffix = Column(String(20), nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True)
+    data_limit: Mapped[int] = mapped_column(BigInteger, default=0)
+    expire_duration: Mapped[int] = mapped_column(BigInteger, default=0)  # in seconds
+    username_prefix: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    username_suffix: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
-    next_plans = relationship("NextPlan", back_populates="user_template", cascade="all, delete-orphan")
-    groups = relationship(
-        "Group",
+    next_plans: Mapped[List["NextPlan"]] = relationship(back_populates="user_template", cascade="all, delete-orphan")
+    groups: Mapped[List["Group"]] = relationship(
         secondary=template_group_association,
         back_populates="templates",
     )
@@ -215,20 +236,27 @@ class UserTemplate(Base):
 class UserUsageResetLogs(Base):
     __tablename__ = "user_usage_logs"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User", back_populates="usage_logs")
-    used_traffic_at_reset = Column(BigInteger, nullable=False)
-    reset_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user: Mapped["User"] = relationship(back_populates="usage_logs")
+    used_traffic_at_reset: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reset_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
 class ProxyInbound(Base):
     __tablename__ = "inbounds"
 
-    id = Column(Integer, primary_key=True)
-    tag = Column(String(256), unique=True, nullable=False, index=True)
-    hosts = relationship("ProxyHost", back_populates="inbound", cascade="all, delete-orphan")
-    groups = relationship("Group", secondary=inbounds_groups_association, back_populates="inbounds")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tag: Mapped[str] = mapped_column(String(256), unique=True, index=True)
+    hosts: Mapped[List["ProxyHost"]] = relationship(back_populates="inbound", cascade="all, delete-orphan")
+    groups: Mapped[List["Group"]] = relationship(secondary=inbounds_groups_association, back_populates="inbounds")
+
+
+@event.listens_for(ProxyInbound, "after_delete")
+def delete_association_rows(mapper, connection, target):
+    connection.execute(
+        inbounds_groups_association.delete().where(inbounds_groups_association.c.inbound_id == target.id)
+    )
 
 
 class ProxyHostSecurity(str, Enum):
@@ -269,75 +297,69 @@ ProxyHostFingerprint = Enum(
 
 class ProxyHost(Base):
     __tablename__ = "hosts"
-    # __table_args__ = (
-    #     UniqueConstraint('inbound_tag', 'remark'),
-    # )
 
-    id = Column(Integer, primary_key=True)
-    remark = Column(String(256), unique=False, nullable=False)
-    address = Column(String(256), unique=False, nullable=False)
-    port = Column(Integer, nullable=True)
-    path = Column(String(256), unique=False, nullable=True)
-    sni = Column(String(1000), unique=False, nullable=True)
-    host = Column(String(1000), unique=False, nullable=True)
-    security = Column(
+    id: Mapped[int] = mapped_column(primary_key=True)
+    remark: Mapped[str] = mapped_column(String(256), unique=False, nullable=False)
+    address: Mapped[str] = mapped_column(String(256), unique=False, nullable=False)
+    port: Mapped[Optional[int]] = mapped_column(nullable=True)
+    path: Mapped[Optional[str]] = mapped_column(String(256), unique=False, nullable=True)
+    sni: Mapped[Optional[str]] = mapped_column(String(1000), unique=False, nullable=True)
+    host: Mapped[Optional[str]] = mapped_column(String(1000), unique=False, nullable=True)
+    security: Mapped[ProxyHostSecurity] = mapped_column(
         SQLEnum(ProxyHostSecurity),
         unique=False,
-        nullable=False,
         default=ProxyHostSecurity.inbound_default,
     )
-    alpn = Column(
+    alpn: Mapped[ProxyHostALPN] = mapped_column(
         SQLEnum(ProxyHostALPN),
         unique=False,
-        nullable=False,
         default=ProxyHostSecurity.none,
         server_default=ProxyHostSecurity.none.name,
     )
-    fingerprint = Column(
+    fingerprint: Mapped[ProxyHostFingerprint] = mapped_column(
         SQLEnum(ProxyHostFingerprint),
         unique=False,
-        nullable=False,
         default=ProxyHostSecurity.none,
         server_default=ProxyHostSecurity.none.name,
     )
 
-    inbound_tag = Column(
+    inbound_tag: Mapped[Optional[str]] = mapped_column(
         String(256), ForeignKey("inbounds.tag", ondelete="SET NULL", onupdate="CASCADE"), nullable=True
     )
-    inbound = relationship("ProxyInbound", back_populates="hosts")
-    allowinsecure = Column(Boolean, nullable=True)
-    is_disabled = Column(Boolean, nullable=True, default=False)
-    fragment_settings = Column(JSON(none_as_null=True), nullable=True, default=None)
-    noise_settings = Column(JSON(none_as_null=True), nullable=True, default=None)
-    random_user_agent = Column(Boolean, nullable=False, default=False, server_default="0")
-    use_sni_as_host = Column(Boolean, nullable=False, default=False, server_default="0")
-    priority = Column(Integer, nullable=False)
-    http_headers = Column(JSON(none_as_null=True), nullable=True, default=None)
-    transport_settings = Column(JSON(none_as_null=True), nullable=True, default=None)
-    mux_settings = Column(JSON(none_as_null=True), nullable=True, default=None)
+    inbound: Mapped[Optional["ProxyInbound"]] = relationship(back_populates="hosts")
+    allowinsecure: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    is_disabled: Mapped[Optional[bool]] = mapped_column(default=False)
+    fragment_settings: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON(none_as_null=True), default=None)
+    noise_settings: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON(none_as_null=True), default=None)
+    random_user_agent: Mapped[bool] = mapped_column(default=False, server_default="0")
+    use_sni_as_host: Mapped[bool] = mapped_column(default=False, server_default="0")
+    priority: Mapped[int] = mapped_column(nullable=False)
+    http_headers: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON(none_as_null=True), default=None)
+    transport_settings: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON(none_as_null=True), default=None)
+    mux_settings: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON(none_as_null=True), default=None)
 
 
 class System(Base):
     __tablename__ = "system"
 
-    id = Column(Integer, primary_key=True)
-    uplink = Column(BigInteger, default=0)
-    downlink = Column(BigInteger, default=0)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    uplink: Mapped[int] = mapped_column(BigInteger, default=0)
+    downlink: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 class JWT(Base):
     __tablename__ = "jwt"
 
-    id = Column(Integer, primary_key=True)
-    secret_key = Column(String(64), nullable=False, default=lambda: os.urandom(32).hex())
+    id: Mapped[int] = mapped_column(primary_key=True)
+    secret_key: Mapped[str] = mapped_column(String(64), default=lambda: os.urandom(32).hex())
 
 
 class TLS(Base):
     __tablename__ = "tls"
 
-    id = Column(Integer, primary_key=True)
-    key = Column(String(4096), nullable=False)
-    certificate = Column(String(2048), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(4096), nullable=False)
+    certificate: Mapped[str] = mapped_column(String(2048), nullable=False)
 
 
 class NodeConnectionType(str, Enum):
@@ -355,80 +377,83 @@ class NodeStatus(str, Enum):
 class Node(Base):
     __tablename__ = "nodes"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(256, collation="NOCASE"), unique=True)
-    address = Column(String(256), unique=False, nullable=False)
-    port = Column(Integer, unique=False, nullable=False)
-    xray_version = Column(String(32), nullable=True)
-    status = Column(SQLEnum(NodeStatus), nullable=False, default=NodeStatus.connecting)
-    last_status_change = Column(DateTime, default=datetime.utcnow)
-    message = Column(String(1024), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    uplink = Column(BigInteger, default=0)
-    downlink = Column(BigInteger, default=0)
-    user_usages = relationship("NodeUserUsage", back_populates="node", cascade="all, delete-orphan")
-    usages = relationship("NodeUsage", back_populates="node", cascade="all, delete-orphan")
-    usage_coefficient = Column(Float, nullable=False, server_default=text("1.0"), default=1)
-    node_version = Column(String(32), nullable=True)
-    connection_type = Column(
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(CaseSensitiveString(256), unique=True)
+    address: Mapped[str] = mapped_column(String(256), unique=False, nullable=False)
+    port: Mapped[int] = mapped_column(unique=False, nullable=False)
+    xray_version: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    status: Mapped[NodeStatus] = mapped_column(SQLEnum(NodeStatus), default=NodeStatus.connecting)
+    last_status_change: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow)
+    message: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    uplink: Mapped[int] = mapped_column(BigInteger, default=0)
+    downlink: Mapped[int] = mapped_column(BigInteger, default=0)
+    user_usages: Mapped[List["NodeUserUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan")
+    usages: Mapped[List["NodeUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan")
+    usage_coefficient: Mapped[float] = mapped_column(Float, server_default=text("1.0"), default=1)
+    node_version: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    connection_type: Mapped[NodeConnectionType] = mapped_column(
         SQLEnum(NodeConnectionType),
         unique=False,
-        nullable=False,
         default=NodeConnectionType.grpc,
         server_default=NodeConnectionType.grpc.name,
     )
-    server_ca = Column(String(2048), nullable=False)
-    keep_alive = Column(Integer, unique=False, nullable=False, default=0)
-    max_logs = Column(BigInteger, unique=False, nullable=False, default=1000, server_default=text("1000"))
+    server_ca: Mapped[str] = mapped_column(String(2048), nullable=False)
+    keep_alive: Mapped[int] = mapped_column(unique=False, default=0)
+    max_logs: Mapped[int] = mapped_column(BigInteger, unique=False, default=1000, server_default=text("1000"))
 
 
 class NodeUserUsage(Base):
     __tablename__ = "node_user_usages"
     __table_args__ = (UniqueConstraint("created_at", "user_id", "node_id"),)
 
-    id = Column(Integer, primary_key=True)
-    created_at = Column(DateTime, unique=False, nullable=False)  # one hour per record
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User", back_populates="node_usages")
-    node_id = Column(Integer, ForeignKey("nodes.id"))
-    node = relationship("Node", back_populates="user_usages")
-    used_traffic = Column(BigInteger, default=0)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(unique=False)  # one hour per record
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user: Mapped["User"] = relationship(back_populates="node_usages")
+    node_id: Mapped[Optional[int]] = mapped_column(ForeignKey("nodes.id"))
+    node: Mapped["Node"] = relationship(back_populates="user_usages")
+    used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 class NodeUsage(Base):
     __tablename__ = "node_usages"
     __table_args__ = (UniqueConstraint("created_at", "node_id"),)
 
-    id = Column(Integer, primary_key=True)
-    created_at = Column(DateTime, unique=False, nullable=False)  # one hour per record
-    node_id = Column(Integer, ForeignKey("nodes.id"))
-    node = relationship("Node", back_populates="usages")
-    uplink = Column(BigInteger, default=0)
-    downlink = Column(BigInteger, default=0)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(unique=False)  # one hour per record
+    node_id: Mapped[Optional[int]] = mapped_column(ForeignKey("nodes.id"))
+    node: Mapped["Node"] = relationship(back_populates="usages")
+    uplink: Mapped[int] = mapped_column(BigInteger, default=0)
+    downlink: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 class NotificationReminder(Base):
     __tablename__ = "notification_reminders"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User", back_populates="notification_reminders")
-    type = Column(SQLEnum(ReminderType), nullable=False)
-    threshold = Column(Integer, nullable=True)
-    expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user: Mapped["User"] = relationship(back_populates="notification_reminders")
+    type: Mapped[ReminderType] = mapped_column(SQLEnum(ReminderType))
+    threshold: Mapped[Optional[int]] = mapped_column(default=None)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
 class Group(Base):
     __tablename__ = "groups"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(64))
-    is_disabled = Column(Boolean, nullable=False, server_default="0", default=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64))
+    is_disabled: Mapped[bool] = mapped_column(server_default="0", default=False)
 
-    users = relationship("User", secondary=users_groups_association, back_populates="groups")
-    inbounds = relationship("ProxyInbound", secondary=inbounds_groups_association, back_populates="groups")
-    templates = relationship("UserTemplate", secondary=template_group_association, back_populates="groups")
+    users: Mapped[List["User"]] = relationship(secondary=users_groups_association, back_populates="groups")
+    inbounds: Mapped[List["ProxyInbound"]] = relationship(
+        secondary=inbounds_groups_association, back_populates="groups"
+    )
+    templates: Mapped[List["UserTemplate"]] = relationship(
+        secondary=template_group_association, back_populates="groups"
+    )
 
     @property
     def inbound_ids(self):
