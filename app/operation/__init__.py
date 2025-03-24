@@ -8,7 +8,7 @@ from app.db import AsyncSession
 from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template, get_node_by_id
 from app.db.models import Admin as DBAdmin
 from app.db.models import Group, ProxyHost, User, Node, UserTemplate
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.user import UserCreate, UserModify
 from app.utils.jwt import get_subscription_payload
 
@@ -73,7 +73,7 @@ class BaseOperator:
 
         return db_user
 
-    async def get_validated_user(self, db: AsyncSession, username: str, admin: Admin) -> User:
+    async def get_validated_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> User:
         db_user = await get_user(db, username)
         if not db_user:
             self.raise_error(message="User not found", code=404)

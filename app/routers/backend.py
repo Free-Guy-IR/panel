@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app import backend
 from app.db import AsyncSession, get_db
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.utils import responses
 from .authentication import check_sudo_admin
 from app.backend import XRayConfig
@@ -19,7 +19,7 @@ router = APIRouter(tags=["Backend"], prefix="/api/backend", responses={401: resp
 
 
 @router.get("", responses={403: responses._403})
-async def get_core_config(_: Admin = Depends(check_sudo_admin)) -> dict:
+async def get_core_config(_: AdminDetails = Depends(check_sudo_admin)) -> dict:
     """Get the current core configuration."""
     with open(XRAY_JSON, "r") as f:
         config = commentjson.loads(f.read())
@@ -29,7 +29,7 @@ async def get_core_config(_: Admin = Depends(check_sudo_admin)) -> dict:
 
 @router.put("", responses={403: responses._403})
 async def modify_core_config(
-    payload: dict, db: AsyncSession = Depends(get_db), admin: Admin = Depends(check_sudo_admin)
+    payload: dict, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ) -> dict:
     """Modify the core configuration and restart the core."""
     try:

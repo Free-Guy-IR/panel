@@ -4,7 +4,7 @@ import asyncio
 from . import BaseOperator
 from app import __version__
 from app.db import AsyncSession, crud
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.system import SystemStats
 from app.models.user import UserStatus
 from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
@@ -12,7 +12,7 @@ from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
 
 class SystemOperator(BaseOperator):
     @staticmethod
-    async def get_system_stats(db: AsyncSession, admin: Admin) -> SystemStats:
+    async def get_system_stats(db: AsyncSession, admin: AdminDetails) -> SystemStats:
         """Fetch system stats including memory, CPU, and user metrics."""
         # Run sync functions
         mem = memory_usage()

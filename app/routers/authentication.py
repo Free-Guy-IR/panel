@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app.db import AsyncSession, get_db
 from app.db.crud import get_admin as get_admin_by_username
-from app.models.admin import Admin, AdminValidationResult, AdminInDB
+from app.models.admin import AdminDetails, AdminValidationResult, AdminInDB
 from app.utils.jwt import get_admin_payload
 from config import SUDOERS
 
@@ -11,7 +11,7 @@ from config import SUDOERS
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/token")
 
 
-async def get_admin(db: AsyncSession, token: str) -> Admin | None:
+async def get_admin(db: AsyncSession, token: str) -> AdminDetails | None:
     payload = await get_admin_payload(token)
     if not payload:
         return
@@ -24,14 +24,14 @@ async def get_admin(db: AsyncSession, token: str) -> Admin | None:
             if db_admin.password_reset_at > payload.get("created_at"):
                 return
 
-        return Admin.model_validate(db_admin)
+        return AdminDetails.model_validate(db_admin)
 
     elif payload["username"] in SUDOERS and payload["is_sudo"] is True:
-        return Admin(username=payload["username"], is_sudo=True)
+        return AdminDetails(username=payload["username"], is_sudo=True)
 
 
 async def get_current(db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    admin: Admin | None = await get_admin(db, token)
+    admin: AdminDetails | None = await get_admin(db, token)
     if not admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -49,7 +49,7 @@ async def get_current(db: AsyncSession = Depends(get_db), token: str = Depends(o
 
 
 async def check_sudo_admin(db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    admin: Admin | None = await get_admin(db, token)
+    admin: AdminDetails | None = await get_admin(db, token)
     if not admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -6,7 +6,7 @@ from typing import Type
 from pydantic import BaseModel
 
 from config import WEBHOOK_ADDRESS
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.user import UserResponse
 
 queue = deque()
@@ -51,19 +51,19 @@ class ReachedDaysLeft(UserNotification):
 
 class UserCreated(UserNotification):
     action: Notification.Type = Notification.Type.user_created
-    by: Admin
+    by: AdminDetails
     user: UserResponse
 
 
 class UserUpdated(UserNotification):
     action: Notification.Type = Notification.Type.user_updated
-    by: Admin
+    by: AdminDetails
     user: UserResponse
 
 
 class UserDeleted(UserNotification):
     action: Notification.Type = Notification.Type.user_deleted
-    by: Admin
+    by: AdminDetails
 
 
 class UserLimited(UserNotification):
@@ -78,20 +78,20 @@ class UserExpired(UserNotification):
 
 class UserEnabled(UserNotification):
     action: Notification.Type = Notification.Type.user_enabled
-    by: Admin | None = None
+    by: AdminDetails | None = None
     user: UserResponse
 
 
 class UserDisabled(UserNotification):
     action: Notification.Type = Notification.Type.user_disabled
-    by: Admin | None = None
+    by: AdminDetails | None = None
     user: UserResponse
     reason: str | None = None
 
 
 class UserDataUsageReset(UserNotification):
     action: Notification.Type = Notification.Type.data_usage_reset
-    by: Admin
+    by: AdminDetails
     user: UserResponse
 
 
@@ -102,7 +102,7 @@ class UserDataResetByNext(UserNotification):
 
 class UserSubscriptionRevoked(UserNotification):
     action: Notification.Type = Notification.Type.subscription_revoked
-    by: Admin
+    by: AdminDetails
     user: UserResponse
 
 

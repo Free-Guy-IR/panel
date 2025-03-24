@@ -4,7 +4,7 @@ import requests
 from telebot.formatting import escape_html
 
 from app.db.models import User
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.user import UserDataLimitResetStrategy
 from app.utils.logger import get_logger
 from app.utils.system import readable_size
@@ -31,7 +31,7 @@ def send_webhook(json_data, webhook):
         logger.debug("Payload delivered successfully, code {}.".format(result.status_code))
 
 
-def report_status_change(username: str, status: str, admin: Admin = None):
+def report_status_change(username: str, status: str, admin: AdminDetails = None):
     _status = {
         "active": "**:white_check_mark: Activated**",
         "disabled": "**:x: Disabled**",
@@ -67,7 +67,7 @@ def report_new_user(
     proxies: list,
     has_next_plan: bool,
     data_limit_reset_strategy: UserDataLimitResetStrategy,
-    admin: Admin = None,
+    admin: AdminDetails = None,
 ):
     data_limit = readable_size(data_limit) if data_limit else "Unlimited"
     expire_date = datetime.fromtimestamp(expire_date).strftime("%H:%M:%S %Y-%m-%d") if expire_date else "Never"
@@ -103,7 +103,7 @@ def report_user_modification(
     by: str,
     has_next_plan: bool,
     data_limit_reset_strategy: UserDataLimitResetStrategy,
-    admin: Admin = None,
+    admin: AdminDetails = None,
 ):
     data_limit = readable_size(data_limit) if data_limit else "Unlimited"
     expire_date = datetime.fromtimestamp(expire_date).strftime("%H:%M:%S %Y-%m-%d") if expire_date else "Never"
@@ -131,7 +131,7 @@ def report_user_modification(
     )
 
 
-def report_user_deletion(username: str, by: str, admin: Admin = None):
+def report_user_deletion(username: str, by: str, admin: AdminDetails = None):
     userDeletion = {
         "content": "",
         "embeds": [
@@ -148,7 +148,7 @@ def report_user_deletion(username: str, by: str, admin: Admin = None):
     )
 
 
-def report_user_usage_reset(username: str, by: str, admin: Admin = None):
+def report_user_usage_reset(username: str, by: str, admin: AdminDetails = None):
     userUsageReset = {
         "content": "",
         "embeds": [
@@ -165,7 +165,7 @@ def report_user_usage_reset(username: str, by: str, admin: Admin = None):
     )
 
 
-def report_user_data_reset_by_next(user: User, admin: Admin = None):
+def report_user_data_reset_by_next(user: User, admin: AdminDetails = None):
     userUsageReset = {
         "content": "",
         "embeds": [
@@ -185,7 +185,7 @@ def report_user_data_reset_by_next(user: User, admin: Admin = None):
     )
 
 
-def report_user_subscription_revoked(username: str, by: str, admin: Admin = None):
+def report_user_subscription_revoked(username: str, by: str, admin: AdminDetails = None):
     subscriptionRevoked = {
         "content": "",
         "embeds": [

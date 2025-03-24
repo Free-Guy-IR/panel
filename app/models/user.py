@@ -6,7 +6,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.admin import Admin
+from app.models.admin import AdminBaseInfo
 from app.models.proxy import ProxyTable
 
 
@@ -209,9 +209,8 @@ class UserResponse(User):
     lifetime_used_traffic: int = 0
     created_at: datetime
     subscription_url: str = ""
-    admin: Optional[Admin] = None
+    admin: Optional[AdminBaseInfo] = None
     model_config = ConfigDict(from_attributes=True)
-    
 
     @field_validator("used_traffic", "lifetime_used_traffic", mode="before")
     def cast_to_int(cls, v):
@@ -225,7 +224,7 @@ class UserResponse(User):
 
 
 class SubscriptionUserResponse(UserResponse):
-    admin: Admin | None = Field(default=None, exclude=True)
+    admin: AdminBaseInfo | None = Field(default=None, exclude=True)
     note: str | None = Field(None, exclude=True)
     auto_delete_in_days: int | None = Field(None, exclude=True)
     model_config = ConfigDict(from_attributes=True)
@@ -236,10 +235,9 @@ class UsersResponse(BaseModel):
     total: int
 
     async def load_subscriptions(self, gen_sub_func):
-
         tasks = [gen_sub_func(user) for user in self.users]
         urls = await asyncio.gather(*tasks)
-        
+
         for user, url in zip(self.users, urls):
             user.subscription_url = url
 

@@ -5,7 +5,7 @@ from GozargahNodeBridge import GozargahNode, NodeAPIError
 
 from app.operation import BaseOperator
 from app.models.node import NodeCreate, NodeResponse, NodeSettings, NodesUsageResponse, NodeModify, NodeStats
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.db.models import Node, NodeStatus
 from app.db import AsyncSession
 from app.db.crud import (
@@ -74,7 +74,7 @@ class NodeOperator(BaseOperator):
 
                 await update_node_status(db=db, dbnode=db_node, status=NodeStatus.error, message=e.detail)
 
-    async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: Admin) -> NodeResponse:
+    async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         try:
             db_node = await create_node(db, new_node)
         except IntegrityError:
@@ -89,7 +89,9 @@ class NodeOperator(BaseOperator):
 
         return NodeResponse.model_validate(db_node)
 
-    async def modify_node(self, db: AsyncSession, node_id: Node, modified_node: NodeModify, admin: Admin) -> Node:
+    async def modify_node(
+        self, db: AsyncSession, node_id: Node, modified_node: NodeModify, admin: AdminDetails
+    ) -> Node:
         db_node: Node = await self.get_validated_node(db=db, node_id=node_id)
         try:
             db_node = await update_node(db, db_node, modified_node)
@@ -107,7 +109,7 @@ class NodeOperator(BaseOperator):
 
         return db_node
 
-    async def remove_node(self, db: AsyncSession, node_id: Node, admin: Admin) -> None:
+    async def remove_node(self, db: AsyncSession, node_id: Node, admin: AdminDetails) -> None:
         db_node: Node = await self.get_validated_node(db=db, node_id=node_id)
 
         await node_manager.remove_node(db_node.id)
@@ -115,11 +117,11 @@ class NodeOperator(BaseOperator):
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" deleted by admin "{admin.username}"')
 
-    async def restart_node(self, node_id: Node, admin: Admin) -> None:
+    async def restart_node(self, node_id: Node, admin: AdminDetails) -> None:
         asyncio.create_task(self.connect_node(node_id))
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
-    async def restart_all_node(self, db: AsyncSession, admin: Admin) -> None:
+    async def restart_all_node(self, db: AsyncSession, admin: AdminDetails) -> None:
         for db_node in await get_nodes(db=db, enabled=True):
             await asyncio.create_task(self.connect_node(db_node.id))
         logger.info(f'All Node\'s restarted by admin "{admin.username}"')

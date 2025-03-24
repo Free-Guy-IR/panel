@@ -2,7 +2,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.utils.logger import get_logger
 from app.operation import BaseOperator
-from app.models.admin import Admin, AdminCreate, AdminModify
+from app.models.admin import AdminDetails, AdminCreate, AdminModify
 from app.db import AsyncSession
 from app.db.models import Admin as DBAdmin
 from app.db.crud import (
@@ -20,7 +20,7 @@ logger = get_logger("admin-operator")
 
 
 class AdminOperation(BaseOperator):
-    async def create_admin(self, db: AsyncSession, new_admin: AdminCreate, admin: Admin) -> Admin:
+    async def create_admin(self, db: AsyncSession, new_admin: AdminCreate, admin: AdminDetails) -> AdminDetails:
         """Create a new admin if the current admin has sudo privileges."""
         try:
             db_admin = await create_admin(db, new_admin)
@@ -32,8 +32,8 @@ class AdminOperation(BaseOperator):
         return db_admin
 
     async def modify_admin(
-        self, db: AsyncSession, username: str, modified_admin: AdminModify, current_admin: Admin
-    ) -> Admin:
+        self, db: AsyncSession, username: str, modified_admin: AdminModify, current_admin: AdminDetails
+    ) -> AdminDetails:
         """Modify an existing admin's details."""
         db_admin = await self.get_validated_admin(db, username=username)
         if (db_admin.username == current_admin.username) and db_admin.is_sudo:
@@ -47,7 +47,7 @@ class AdminOperation(BaseOperator):
 
         return updated_admin
 
-    async def remove_admin(self, db: AsyncSession, username: str, current_admin: Admin):
+    async def remove_admin(self, db: AsyncSession, username: str, current_admin: AdminDetails):
         """Remove an admin from the database."""
         db_admin = await self.get_validated_admin(db, username=username)
         if (db_admin.username == current_admin.username) and db_admin.is_sudo:
@@ -61,7 +61,7 @@ class AdminOperation(BaseOperator):
     ) -> list[DBAdmin]:
         return await get_admins(db, offset, limit, username)
 
-    async def disable_all_active_users(self, db: AsyncSession, username: str, admin: Admin):
+    async def disable_all_active_users(self, db: AsyncSession, username: str, admin: AdminDetails):
         """Disable all active users under a specific admin"""
         db_admin: DBAdmin = await self.get_validated_admin(db, username=username)
 
@@ -74,7 +74,7 @@ class AdminOperation(BaseOperator):
 
         logger.info(f'Admin "{db_admin.username}" users has been disabled by admin "{admin.username}"')
 
-    async def activate_all_disabled_users(self, db: AsyncSession, username: str, admin: Admin):
+    async def activate_all_disabled_users(self, db: AsyncSession, username: str, admin: AdminDetails):
         """Enable all active users under a specific admin"""
         db_admin: DBAdmin = await self.get_validated_admin(db, username=username)
 
@@ -87,11 +87,11 @@ class AdminOperation(BaseOperator):
 
         logger.info(f'Admin "{db_admin.username}" users has been activated by admin "{admin.username}"')
 
-    async def reset_admin_usage(self, db: AsyncSession, username: str, admin: Admin) -> Admin:
+    async def reset_admin_usage(self, db: AsyncSession, username: str, admin: AdminDetails) -> AdminDetails:
         db_admin: DBAdmin = await self.get_validated_admin(db, username=username)
 
         db_admin = await reset_admin_usage(db, db_admin=db_admin)
 
         logger.info(f'Admin "{db_admin.username}" usage has been reset by admin "{admin.username}"')
 
-        return Admin.model_validate(db_admin)
+        return AdminDetails.model_validate(db_admin)

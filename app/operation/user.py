@@ -24,7 +24,7 @@ from app.db.crud import (
     UsersSortingOptions,
 )
 from app.db.models import User
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.user import (
     UserCreate,
     UserModify,
@@ -56,13 +56,13 @@ class UserOperator(BaseOperator):
         )
         token = await create_subscription_token(user.username)
         return f"{url_prefix}/{XRAY_SUBSCRIPTION_PATH}/{token}"
-    
+
     async def validate_user(self, user: User) -> UserResponse:
         user = UserResponse.model_validate(user)
         user.subscription_url = await self.generate_subscription_url(user)
         return user
 
-    async def add_user(self, db: AsyncSession, new_user: UserCreate, admin: Admin) -> UserResponse:
+    async def add_user(self, db: AsyncSession, new_user: UserCreate, admin: AdminDetails) -> UserResponse:
         if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
             await self.get_validated_user_template(db, new_user.next_plan.user_template_id)
 
@@ -84,7 +84,7 @@ class UserOperator(BaseOperator):
         return user
 
     async def modify_user(
-        self, db: AsyncSession, username: str, modified_user: UserModify, admin: Admin
+        self, db: AsyncSession, username: str, modified_user: UserModify, admin: AdminDetails
     ) -> UserResponse:
         db_user = await self.get_validated_user(db, username, admin)
         if modified_user.group_ids:
@@ -110,7 +110,7 @@ class UserOperator(BaseOperator):
 
         return user
 
-    async def remove_user(self, db: AsyncSession, username: str, admin: Admin):
+    async def remove_user(self, db: AsyncSession, username: str, admin: AdminDetails):
         db_user = await self.get_validated_user(db, username, admin)
 
         await remove_user(db, db_user)
@@ -120,7 +120,7 @@ class UserOperator(BaseOperator):
         logger.info(f'User "{db_user.username}" with id "{db_user.id}" deleted by admin "{admin.username}"')
         return {}
 
-    async def reset_user_data_usage(self, db: AsyncSession, username: str, admin: Admin):
+    async def reset_user_data_usage(self, db: AsyncSession, username: str, admin: AdminDetails):
         db_user = await self.get_validated_user(db, username, admin)
 
         db_user = await reset_user_data_usage(db=db, db_user=db_user)
@@ -132,7 +132,7 @@ class UserOperator(BaseOperator):
 
         return user
 
-    async def revoke_user_sub(self, db: AsyncSession, username: str, admin: Admin) -> UserResponse:
+    async def revoke_user_sub(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserResponse:
         db_user = await self.get_validated_user(db, username, admin)
 
         db_user = await revoke_user_sub(db=db, db_user=db_user)
@@ -144,12 +144,12 @@ class UserOperator(BaseOperator):
 
         return user
 
-    async def reset_users_data_usage(self, db: AsyncSession, admin: Admin):
+    async def reset_users_data_usage(self, db: AsyncSession, admin: AdminDetails):
         """Reset all users data usage"""
         db_admin = await self.get_validated_admin(db, admin.username)
         await reset_all_users_data_usage(db=db, admin=db_admin)
 
-    async def active_next_plan(self, db: AsyncSession, username: str, admin: Admin) -> UserResponse:
+    async def active_next_plan(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserResponse:
         """Reset user by next plan"""
         db_user = await self.get_validated_user(db, username, admin)
 
@@ -166,7 +166,9 @@ class UserOperator(BaseOperator):
 
         return user
 
-    async def set_owner(self, db: AsyncSession, username: str, admin_username: str, admin: Admin) -> UserResponse:
+    async def set_owner(
+        self, db: AsyncSession, username: str, admin_username: str, admin: AdminDetails
+    ) -> UserResponse:
         """Set a new owner (admin) for a user."""
         new_admin = await self.get_validated_admin(db, username=admin_username)
         db_user = await self.get_validated_user(db, username, admin)
@@ -178,7 +180,7 @@ class UserOperator(BaseOperator):
         return user
 
     async def get_user_usage(
-        self, db: AsyncSession, username: str, admin: Admin, start: str = "", end: str = ""
+        self, db: AsyncSession, username: str, admin: AdminDetails, start: str = "", end: str = ""
     ) -> UserUsagesResponse:
         start, end = self.validate_dates(start, end)
         db_user = await self.get_validated_user(db, username, admin)
@@ -187,14 +189,14 @@ class UserOperator(BaseOperator):
 
         return UserUsagesResponse(username=username, usages=usages)
 
-    async def get_user(self, db: AsyncSession, username: str, admin: Admin) -> UserResponse:
+    async def get_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserResponse:
         db_user = await self.get_validated_user(db, username, admin)
         return await self.validate_user(db_user)
 
     async def get_users(
         self,
         db: AsyncSession,
-        admin: Admin,
+        admin: AdminDetails,
         offset: int = None,
         limit: int = None,
         username: list[str] = None,
@@ -235,7 +237,7 @@ class UserOperator(BaseOperator):
     async def get_users_usage(
         self,
         db: AsyncSession,
-        admin: Admin,
+        admin: AdminDetails,
         start: str = "",
         end: str = "",
         owner: list[str] | None = None,
@@ -255,7 +257,7 @@ class UserOperator(BaseOperator):
             logger.info(f'User "{user}" deleted by admin "{by}"')
 
     async def get_expired_users(
-        self, db: AsyncSession, admin: Admin, expired_after: dt | None = None, expired_before: dt | None = None
+        self, db: AsyncSession, admin: AdminDetails, expired_after: dt | None = None, expired_before: dt | None = None
     ) -> list[str]:
         """
         Get users who have expired within the specified date range.
@@ -275,7 +277,7 @@ class UserOperator(BaseOperator):
         return await get_expired_users(db, expired_after, expired_before, id)
 
     async def delete_expired_users(
-        self, db: AsyncSession, admin: Admin, expired_after: dt | None = None, expired_before: dt | None = None
+        self, db: AsyncSession, admin: AdminDetails, expired_after: dt | None = None, expired_before: dt | None = None
     ) -> RemoveUsersResponse:
         """
         Delete users who have expired within the specified date range.

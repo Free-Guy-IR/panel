@@ -73,7 +73,7 @@ class Admin(Base):
     discord_webhook: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
     users_usage: Mapped[int] = mapped_column(BigInteger, default=0)
     is_disabled: Mapped[bool] = mapped_column(server_default="0", default=False)
-    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin")
+    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin", lazy="selectin")
     sub_template: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
     sub_domain: Mapped[Optional[str]] = mapped_column(String(256), default=None)
     profile_title: Mapped[Optional[str]] = mapped_column(String(512), default=None)
@@ -226,6 +226,7 @@ class UserTemplate(Base):
     groups: Mapped[List["Group"]] = relationship(
         secondary=template_group_association,
         back_populates="templates",
+        lazy="selectin"
     )
 
     @property
@@ -388,7 +389,7 @@ class Node(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     uplink: Mapped[int] = mapped_column(BigInteger, default=0)
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
-    user_usages: Mapped[List["NodeUserUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan")
+    user_usages: Mapped[List["NodeUserUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan", lazy="selectin")
     usages: Mapped[List["NodeUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan")
     usage_coefficient: Mapped[float] = mapped_column(Float, server_default=text("1.0"), default=1)
     node_version: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)

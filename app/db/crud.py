@@ -189,7 +189,7 @@ async def remove_host(db: AsyncSession, db_host: ProxyHost) -> ProxyHost:
 
 def get_user_queryset() -> Query:
     return select(User).options(
-        selectinload(User.admin).options(selectinload(Admin.usage_logs)),
+        selectinload(User.admin),
         selectinload(User.next_plan),
         selectinload(User.usage_logs),
         selectinload(User.groups),
@@ -892,6 +892,7 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     """
     db_user.admin = admin
     await db.commit()
+    await db.refresh(db_user)
     return await get_user(db, db_user.username)
 
 
@@ -983,6 +984,7 @@ async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
     db_admin = Admin(**admin.model_dump(exclude={"password"}), hashed_password=admin.hashed_password)
     db.add(db_admin)
     await db.commit()
+    await db.refresh(db_admin)  # Ensure the admin object is refreshed after commit
     return await get_admin(db, db_admin.username)
 
 
@@ -1147,8 +1149,10 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> int:
     await db.commit()
     return await get_admin(db, db_admin.username)
 
+
 def get_user_template_queryset() -> Query:
     return select(UserTemplate).options(selectinload(UserTemplate.groups))
+
 
 async def create_user_template(db: AsyncSession, user_template: UserTemplateCreate) -> UserTemplate:
     """
@@ -1257,6 +1261,7 @@ async def get_user_templates(
         dbuser_templates = dbuser_templates.limit(limit)
 
     return (await db.execute(dbuser_templates)).scalars().all()
+
 
 def get_node_queryset() -> Query:
     return select(Node).options(
@@ -1595,6 +1600,7 @@ async def create_group(db: AsyncSession, group: GroupCreate) -> Group:
     db.add(dbgroup)
     await db.commit()
     return await get_group_by_id(db, dbgroup.id)
+
 
 def get_group_queryset() -> Query:
     return select(Group).options(

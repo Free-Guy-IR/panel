@@ -4,7 +4,7 @@ from typing import Optional
 from app import telegram
 from app.db import AsyncSession, create_notification_reminder
 from app.db.models import UserStatus
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.user import ReminderType, UserResponse
 from app.utils.notification import (
     Notification,
@@ -38,7 +38,7 @@ from config import (
 
 
 def status_change(
-    username: str, status: UserStatus, user: UserResponse, user_admin: Admin = None, by: Admin = None
+    username: str, status: UserStatus, user: UserResponse, user_admin: AdminDetails = None, by: AdminDetails = None
 ) -> None:
     if NOTIFY_STATUS_CHANGE:
         try:
@@ -59,7 +59,7 @@ def status_change(
             pass
 
 
-def user_created(user: UserResponse, user_id: int, by: Admin, user_admin: Admin = None) -> None:
+def user_created(user: UserResponse, user_id: int, by: AdminDetails, user_admin: AdminDetails = None) -> None:
     if NOTIFY_USER_CREATED:
         try:
             telegram.report_new_user(
@@ -91,7 +91,7 @@ def user_created(user: UserResponse, user_id: int, by: Admin, user_admin: Admin 
             pass
 
 
-def user_updated(user: UserResponse, by: Admin, user_admin: Admin = None) -> None:
+def user_updated(user: UserResponse, by: AdminDetails, user_admin: AdminDetails = None) -> None:
     if NOTIFY_USER_UPDATED:
         try:
             telegram.report_user_modification(
@@ -122,7 +122,7 @@ def user_updated(user: UserResponse, by: Admin, user_admin: Admin = None) -> Non
             pass
 
 
-def user_deleted(username: str, by: Admin, user_admin: Admin = None) -> None:
+def user_deleted(username: str, by: AdminDetails, user_admin: AdminDetails = None) -> None:
     if NOTIFY_USER_DELETED:
         try:
             telegram.report_user_deletion(username=username, by=by.username, admin=user_admin)
@@ -135,7 +135,7 @@ def user_deleted(username: str, by: Admin, user_admin: Admin = None) -> None:
             pass
 
 
-def user_data_usage_reset(user: UserResponse, by: Admin, user_admin: Admin = None) -> None:
+def user_data_usage_reset(user: UserResponse, by: AdminDetails, user_admin: AdminDetails = None) -> None:
     if NOTIFY_USER_DATA_USED_RESET:
         try:
             telegram.report_user_usage_reset(username=user.username, by=by.username, admin=user_admin)
@@ -148,7 +148,7 @@ def user_data_usage_reset(user: UserResponse, by: Admin, user_admin: Admin = Non
             pass
 
 
-def user_data_reset_by_next(user: UserResponse, user_admin: Admin = None) -> None:
+def user_data_reset_by_next(user: UserResponse, user_admin: AdminDetails = None) -> None:
     if NOTIFY_USER_DATA_USED_RESET:
         try:
             telegram.report_user_data_reset_by_next(user=user, admin=user_admin)
@@ -161,7 +161,7 @@ def user_data_reset_by_next(user: UserResponse, user_admin: Admin = None) -> Non
             pass
 
 
-def user_subscription_revoked(user: UserResponse, by: Admin, user_admin: Admin = None) -> None:
+def user_subscription_revoked(user: UserResponse, by: AdminDetails, user_admin: AdminDetails = None) -> None:
     if NOTIFY_USER_SUB_REVOKED:
         try:
             telegram.report_user_subscription_revoked(username=user.username, by=by.username, admin=user_admin)
@@ -193,7 +193,9 @@ def data_usage_percent_reached(
         )
 
 
-def expire_days_reached(db: AsyncSession, days: int, user: UserResponse, user_id: int, expire: dt, threshold=None) -> None:
+def expire_days_reached(
+    db: AsyncSession, days: int, user: UserResponse, user_id: int, expire: dt, threshold=None
+) -> None:
     notify(ReachedDaysLeft(username=user.username, user=user, days_left=days))
     if NOTIFY_IF_DAYS_LEFT_REACHED:
         create_notification_reminder(

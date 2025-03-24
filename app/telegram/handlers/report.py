@@ -4,7 +4,7 @@ from telebot.apihelper import ApiTelegramException
 from telebot.formatting import escape_html
 
 from app.db.models import User
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from app.models.user import UserDataLimitResetStrategy
 from app.telegram import bot
 from app.telegram.utils.keyboard import BotKeyboard
@@ -46,7 +46,7 @@ def report_new_user(
     proxies: list,
     has_next_plan: bool,
     data_limit_reset_strategy: UserDataLimitResetStrategy,
-    admin: Admin = None,
+    admin: AdminDetails = None,
 ):
     text = """\
 🆕 <b>#Created</b>
@@ -85,7 +85,7 @@ def report_user_modification(
     has_next_plan: bool,
     by: str,
     data_limit_reset_strategy: UserDataLimitResetStrategy,
-    admin: Admin = None,
+    admin: AdminDetails = None,
 ):
     text = """\
 ✏️ <b>#Modified</b>
@@ -117,7 +117,7 @@ def report_user_modification(
     )
 
 
-def report_user_deletion(username: str, by: str, admin: Admin = None):
+def report_user_deletion(username: str, by: str, admin: AdminDetails = None):
     text = """\
 🗑 <b>#Deleted</b>
 ➖➖➖➖➖➖➖➖➖
@@ -131,7 +131,7 @@ def report_user_deletion(username: str, by: str, admin: Admin = None):
     return report(chat_id=admin.telegram_id if admin and admin.telegram_id else None, text=text)
 
 
-def report_status_change(username: str, status: str, admin: Admin = None):
+def report_status_change(username: str, status: str, admin: AdminDetails = None):
     _status = {
         "active": "✅ <b>#Activated</b>",
         "disabled": "❌ <b>#Disabled</b>",
@@ -149,7 +149,7 @@ def report_status_change(username: str, status: str, admin: Admin = None):
     return report(chat_id=admin.telegram_id if admin and admin.telegram_id else None, text=text)
 
 
-def report_user_usage_reset(username: str, by: str, admin: Admin = None):
+def report_user_usage_reset(username: str, by: str, admin: AdminDetails = None):
     text = """  
 🔁 <b>#Reset</b>
 ➖➖➖➖➖➖➖➖➖
@@ -163,7 +163,7 @@ def report_user_usage_reset(username: str, by: str, admin: Admin = None):
     return report(chat_id=admin.telegram_id if admin and admin.telegram_id else None, text=text)
 
 
-def report_user_data_reset_by_next(user: User, admin: Admin = None):
+def report_user_data_reset_by_next(user: User, admin: AdminDetails = None):
     text = """  
 🔁 <b>#AutoReset</b>
 ➖➖➖➖➖➖➖➖➖
@@ -179,7 +179,7 @@ def report_user_data_reset_by_next(user: User, admin: Admin = None):
     return report(chat_id=admin.telegram_id if admin and admin.telegram_id else None, text=text)
 
 
-def report_user_subscription_revoked(username: str, by: str, admin: Admin = None):
+def report_user_subscription_revoked(username: str, by: str, admin: AdminDetails = None):
     text = """  
 🔁 <b>#Revoked</b>
 ➖➖➖➖➖➖➖➖➖
