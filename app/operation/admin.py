@@ -63,7 +63,7 @@ class AdminOperation(BaseOperator):
 
     async def disable_all_active_users(self, db: AsyncSession, username: str, admin: AdminDetails):
         """Disable all active users under a specific admin"""
-        db_admin: DBAdmin = await self.get_validated_admin(db, username=username)
+        db_admin = await self.get_validated_admin(db, username=username)
 
         if db_admin.is_sudo:
             self.raise_error(message="You're not allowed to disable sudo admin users.", code=403)
@@ -72,11 +72,11 @@ class AdminOperation(BaseOperator):
 
         # TODO: sync node users
 
-        logger.info(f'Admin "{db_admin.username}" users has been disabled by admin "{admin.username}"')
+        logger.info(f'Admin "{username}" users has been disabled by admin "{admin.username}"')
 
     async def activate_all_disabled_users(self, db: AsyncSession, username: str, admin: AdminDetails):
         """Enable all active users under a specific admin"""
-        db_admin: DBAdmin = await self.get_validated_admin(db, username=username)
+        db_admin = await self.get_validated_admin(db, username=username)
 
         if db_admin.is_sudo:
             self.raise_error(message="You're not allowed to enable sudo admin users.", code=403)
@@ -85,13 +85,13 @@ class AdminOperation(BaseOperator):
 
         # TODO: sync node users
 
-        logger.info(f'Admin "{db_admin.username}" users has been activated by admin "{admin.username}"')
+        logger.info(f'Admin "{username}" users has been activated by admin "{admin.username}"')
 
     async def reset_admin_usage(self, db: AsyncSession, username: str, admin: AdminDetails) -> AdminDetails:
-        db_admin: DBAdmin = await self.get_validated_admin(db, username=username)
+        db_admin = await self.get_validated_admin(db, username=username)
 
         db_admin = await reset_admin_usage(db, db_admin=db_admin)
 
-        logger.info(f'Admin "{db_admin.username}" usage has been reset by admin "{admin.username}"')
+        logger.info(f'Admin "{username}" usage has been reset by admin "{admin.username}"')
 
         return AdminDetails.model_validate(db_admin)

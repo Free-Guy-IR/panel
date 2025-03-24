@@ -985,7 +985,7 @@ async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
     db.add(db_admin)
     await db.commit()
     await db.refresh(db_admin)  # Ensure the admin object is refreshed after commit
-    return await get_admin(db, db_admin.username)
+    return db_admin
 
 
 async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminModify) -> Admin:
@@ -1021,7 +1021,8 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
         db_admin.profile_title = modified_admin.profile_title
 
     await db.commit()
-    return await get_admin(db, db_admin.username)
+    await db.refresh(db_admin)
+    return db_admin
 
 
 async def partial_update_admin(db: AsyncSession, dbadmin: Admin, modified_admin: AdminPartialModify) -> Admin:
@@ -1147,7 +1148,8 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> int:
     db_admin.users_usage = 0
 
     await db.commit()
-    return await get_admin(db, db_admin.username)
+    await db.refresh(db_admin)
+    return db_admin
 
 
 def get_user_template_queryset() -> Query:

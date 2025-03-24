@@ -124,5 +124,4 @@ async def reset_admin_usage(
     username: str, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
     """Resets usage of admin."""
-    await admin_operator.reset_admin_usage(db, username=username, admin=admin)
-    return {}
+    return await admin_operator.reset_admin_usage(db, username=username, admin=admin)
