@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .validators import ListValidator
+
 
 class UserTemplate(BaseModel):
     name: str | None = None
@@ -29,9 +31,7 @@ class UserTemplateCreate(UserTemplate):
     @field_validator("group_ids", mode="after")
     @classmethod
     def group_ids_validator(cls, v):
-        if not v or len(v) < 1:
-            raise ValueError("you must select at least one group")
-        return v
+        return ListValidator.not_null_list(v, "group")
 
 
 class UserTemplateModify(UserTemplate):
@@ -48,6 +48,11 @@ class UserTemplateModify(UserTemplate):
             }
         }
     )
+
+    @field_validator("group_ids", mode="after")
+    @classmethod
+    def group_ids_validator(cls, v):
+        return ListValidator.nullable_list(v, "group")
 
 
 class UserTemplateResponse(UserTemplate):

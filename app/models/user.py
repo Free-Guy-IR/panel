@@ -5,7 +5,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .validators import NumericValidatorMixin
+from .validators import NumericValidatorMixin, ListValidator
 from app.db.models import UserStatus, UserDataLimitResetStrategy
 from app.models.admin import AdminBaseInfo
 from app.models.proxy import ProxyTable
@@ -126,9 +126,7 @@ class UserCreate(UserWithValidator):
     @field_validator("group_ids", mode="after")
     @classmethod
     def group_ids_validator(cls, v):
-        if not v or len(v) < 1:
-            raise ValueError("you must select at least one group")
-        return v
+        return ListValidator.not_null_list(v, "group")
 
 
 class UserModify(UserWithValidator):
@@ -156,9 +154,7 @@ class UserModify(UserWithValidator):
     @field_validator("group_ids", mode="after")
     @classmethod
     def group_ids_validator(cls, v):
-        if v and len(v) < 1:
-            raise ValueError("you must select at least one group")
-        return v
+        return ListValidator.nullable_list(v, "group")
 
 
 class UserResponse(User):

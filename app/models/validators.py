@@ -20,3 +20,17 @@ class NumericValidatorMixin:
         if isinstance(v, int):  # Allow integers directly
             return v
         raise ValueError("must be an integer or a float, not a string")  # Reject strings
+
+
+class ListValidator:
+    @staticmethod
+    def nullable_list(list: list | None, name: str) -> list:
+        if list and len(list) < 1:
+            raise ValueError(f"you must select at least one {name}")
+        return list
+
+    @staticmethod
+    def not_null_list(list: list, name: str) -> list:
+        if not list or len(list) < 1:
+            raise ValueError(f"you must select at least one {name}")
+        return list

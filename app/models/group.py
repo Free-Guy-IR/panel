@@ -2,6 +2,8 @@ import re
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from .validators import ListValidator
+
 
 GROUPNAME_REGEXP = re.compile(r"^(?=\w{3,64}\b)[a-zA-Z0-9]+(?:[a-zA-Z0-9]+)*$")
 
@@ -15,7 +17,7 @@ class Group(BaseModel):
         from_attributes=True,
         json_schema_extra={
             "example": {
-                "name": "group_1",
+                "name": "group1",
                 "inbound_tags": ["VMess TCP", "VMess Websocket"],
             }
         },
@@ -30,25 +32,28 @@ class Group(BaseModel):
 
 
 class GroupCreate(Group):
-    inbound_tags: list[str] = []
+    inbound_tags: list[str]
 
     @field_validator("inbound_tags", mode="after")
     @classmethod
     def inbound_tags_validator(cls, v):
-        if not v or len(v) < 1:
-            raise ValueError("you must select at least one inbound")
-        return v
+        return ListValidator.not_null_list(v, "inbound")
 
 
 class GroupModify(Group):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "name": "group_1",
+                "name": "group1",
                 "inbound_tags": ["VMess TCP", "VMess Websocket"],
             }
         }
     )
+
+    @field_validator("inbound_tags", mode="after")
+    @classmethod
+    def inbound_tags_validator(cls, v):
+        return ListValidator.nullable_list(v, "inbound")
 
 
 class GroupResponse(Group):
