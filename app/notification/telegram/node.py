@@ -3,9 +3,9 @@ from app.models.node import NodeResponse
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
-async def add_node(node: NodeResponse, by: str):
+async def create_node(node: NodeResponse, by: str):
     data = (
-        "*Add Node*\n"
+        "*Create Node*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**ID:** {node.id}\n"
         + f"**Name:** {node.name}\n"

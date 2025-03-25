@@ -28,7 +28,7 @@ class UserTemplateOperation(BaseOperator):
 
         user_template = UserTemplateResponse.model_validate(db_user_template)
 
-        asyncio.create_task(notification.add_user_template(user_template, admin.username))
+        asyncio.create_task(notification.create_user_template(user_template, admin.username))
 
         logger.info(f'User template "{db_user_template.name}" created by admin "{admin.username}"')
         return db_user_template

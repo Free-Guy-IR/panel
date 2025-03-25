@@ -48,7 +48,7 @@ async def admin_token(
             detail="your account has been disabled",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    asyncio.create_task(notification.admin_login(form_data.username, form_data.password, client_ip, True))
+    asyncio.create_task(notification.admin_login(db_admin.username, "", client_ip, True))
     return Token(access_token=await create_admin_token(form_data.username, db_admin.is_sudo))
 
 

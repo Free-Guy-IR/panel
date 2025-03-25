@@ -3,9 +3,9 @@ from app.models.user_template import UserTemplateResponse
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
-async def add_user_template(user_template: UserTemplateResponse, by: str):
+async def create_user_template(user_template: UserTemplateResponse, by: str):
     data = (
-        "*Add User Template*\n"
+        "*Create User Template*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Name:** {user_template.name}\n"
         + f"**Data Limit:** {user_template.data_limit}\n"

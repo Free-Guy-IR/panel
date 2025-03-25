@@ -90,7 +90,7 @@ class NodeOperator(BaseOperator):
 
         node = NodeResponse.model_validate(db_node)
 
-        asyncio.create_task(notification.add_node(node, admin.username))
+        asyncio.create_task(notification.create_node(node, admin.username))
 
         return node
 

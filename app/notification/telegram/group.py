@@ -3,9 +3,9 @@ from app.models.group import GroupResponse
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
-async def add_group(group: GroupResponse, by: str):
+async def create_group(group: GroupResponse, by: str):
     data = (
-        "*Add Group*\n"
+        "*Create Group*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Name:** {group.name}\n"
         + f"**Inbound Tags:** {group.inbound_tags}\n"
@@ -20,7 +20,7 @@ async def add_group(group: GroupResponse, by: str):
 
 async def modify_group(group: GroupResponse, by: str):
     data = (
-        "*Add Group*\n"
+        "*Modify Group*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Name:** {group.name}\n"
         + f"**Inbound Tags:** {group.inbound_tags}\n"

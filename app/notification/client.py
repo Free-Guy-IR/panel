@@ -17,7 +17,7 @@ logger = get_logger("Notification")
 async def send_discord_webhook(json_data, webhook):
     try:
         response = await client.post(webhook, json=json_data)
-        if response.status_code == 200:
+        if response.status_code in [200, 204]:
             logger.debug(f"Discord webhook payload delivered successfully, code {response.status_code}.")
             return
         else:

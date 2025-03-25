@@ -3,9 +3,9 @@ from app.models.admin import AdminDetails
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
-async def add_admin(admin: AdminDetails, by: str):
+async def create_admin(admin: AdminDetails, by: str):
     data = (
-        "*Add Admin*\n"
+        "*Create Admin*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Username:** {admin.username}\n"
         + f"**Is Sudo:** {admin.is_sudo}\n"
@@ -46,23 +46,10 @@ async def admin_reset_usage(admin: AdminDetails, by: str):
 
 
 async def admin_login(username: str, password: str, client_ip: str, success: bool):
-    data = {
-        "content": "",
-        "embeds": [
-            {
-                "title": "Login Attempt",
-                "description": f"**Username:** {username}\n"
-                + f"**Password:** {'🔒' if success else password}\n"
-                + f"**IP:** {client_ip}",
-                "color": int("00ff00", 16) if success else int("ff0000", 16),
-            }
-        ],
-    }
     data = (
-        "Successful "
-        if success
-        else "Failed"
-        + "*Login Attempt*\n"
+        "*Login Attempt*\n"
+        + "*Status*: "
+        + ("Successful\n" if success else "Failed\n")
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Username:** {username}\n"
         + f"**Password:** {'🔒' if success else password}\n"

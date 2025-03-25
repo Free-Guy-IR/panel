@@ -25,7 +25,7 @@ class HostOperator(BaseOperator):
         logger.info(f'Host "{db_host.id}" added by admin "{admin.username}"')
 
         host = BaseHost.model_validate(db_host)
-        asyncio.create_task(notification.add_host(host, admin.username))
+        asyncio.create_task(notification.create_host(host, admin.username))
 
         await hosts.update()
 

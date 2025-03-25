@@ -3,18 +3,18 @@ from config import DISCORD_WEBHOOK_URL
 from app.models.user_template import UserTemplateResponse
 
 
-async def add_user_template(user_tempelate: UserTemplateResponse, by: str):
+async def create_user_template(user_tempelate: UserTemplateResponse, by: str):
     data = {
         "content": "",
         "embeds": [
             {
-                "title": "Add User Template",
+                "title": "Create User Template",
                 "description": f"**Name:** {user_tempelate.name}\n"
                 + f"**Data Limit**: {user_tempelate.data_limit}\n"
                 + f"**Expire Duration**: {user_tempelate.expire_duration}\n"
                 + f"**Username Prefix**: {user_tempelate.username_prefix}\n"
                 + f"**Username Suffix**: {user_tempelate.username_suffix}\n",
-                "color": int("00ff00", 16),
+                "color": 0x00ff00,
                 "footer": {"text": f"By: {by}"},
             }
         ],
@@ -34,7 +34,7 @@ async def modify_user_template(user_template: UserTemplateResponse, by: str):
                 + f"**Expire Duration**: {user_template.expire_duration}\n"
                 + f"**Username Prefix**: {user_template.username_prefix}\n"
                 + f"**Username Suffix**: {user_template.username_suffix}\n",
-                "color": int("ffff00", 16),
+                "color": 0xffff00,
                 "footer": {"text": f"By: {by}"},
             }
         ],
@@ -50,7 +50,7 @@ async def remove_user_template(name: str, by: str):
             {
                 "title": "Remove User Template",
                 "description": f"**Name:** {name}\n",
-                "color": int("ff0000", 16),
+                "color": 0xff0000,
                 "footer": {"text": f"By: {by}"},
             }
         ],

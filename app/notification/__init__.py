@@ -9,8 +9,8 @@ from app.models.group import GroupResponse
 from app.models.admin import AdminDetails
 
 
-async def add_host(host: BaseHost, by: str):
-    asyncio.gather(ds.add_host(host, by), tg.add_host(host, by))
+async def create_host(host: BaseHost, by: str):
+    asyncio.gather(ds.create_host(host, by), tg.create_host(host, by))
 
 
 async def modify_host(host: BaseHost, by: str):
@@ -25,8 +25,8 @@ async def update_hosts(by: str):
     asyncio.gather(ds.update_hosts(by), tg.update_hosts(by))
 
 
-async def add_user_template(user: UserTemplateResponse, by: str):
-    asyncio.gather(ds.add_user_template(user, by), tg.add_user_template(user, by))
+async def create_user_template(user: UserTemplateResponse, by: str):
+    asyncio.gather(ds.create_user_template(user, by), tg.create_user_template(user, by))
 
 
 async def modify_user_template(user: UserTemplateResponse, by: str):
@@ -37,8 +37,8 @@ async def remove_user_template(name: str, by: str):
     asyncio.gather(ds.remove_user_template(name, by), tg.remove_user_template(name, by))
 
 
-async def add_node(node: NodeResponse, by: str):
-    asyncio.gather(ds.add_node(node, by), tg.add_node(node, by))
+async def create_node(node: NodeResponse, by: str):
+    asyncio.gather(ds.create_node(node, by), tg.create_node(node, by))
 
 
 async def modify_node(node: NodeResponse, by: str):
@@ -49,8 +49,8 @@ async def remove_node(node: NodeResponse, by: str):
     asyncio.gather(ds.remove_node(node, by), tg.remove_node(node, by))
 
 
-async def add_group(group: GroupResponse, by: str):
-    asyncio.gather(ds.add_group(group, by), tg.add_group(group, by))
+async def create_group(group: GroupResponse, by: str):
+    asyncio.gather(ds.create_group(group, by), tg.create_group(group, by))
 
 
 async def modify_group(group: GroupResponse, by: str):
@@ -61,8 +61,8 @@ async def remove_group(group_id: int, by: str):
     asyncio.gather(ds.remove_group(group_id, by), tg.remove_group(group_id, by))
 
 
-async def add_admin(admin: AdminDetails, by: str):
-    asyncio.gather(ds.add_admin(admin, by), tg.add_admin(admin, by))
+async def create_admin(admin: AdminDetails, by: str):
+    asyncio.gather(ds.create_admin(admin, by), tg.create_admin(admin, by))
 
 
 async def modify_admin(admin: AdminDetails, by: str):

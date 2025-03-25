@@ -25,7 +25,7 @@ class GroupOperation(BaseOperator):
 
         group = GroupResponse.model_validate(db_group)
 
-        asyncio.create_task(notification.add_group(group, admin.username))
+        asyncio.create_task(notification.create_group(group, admin.username))
 
         logger.info(f'Group "{group.name}" created by admin "{admin.username}"')
         return group

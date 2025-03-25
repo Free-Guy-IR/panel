@@ -3,16 +3,16 @@ from app.notification.client import send_discord_webhook
 from app.models.group import GroupResponse
 
 
-async def add_group(group: GroupResponse, by: str):
+async def create_group(group: GroupResponse, by: str):
     data = {
         "content": "",
         "embeds": [
             {
-                "title": "Add Group",
+                "title": "Create Group",
                 "description": f"**Name:** {group.name}\n"
                 + f"**Inbound Tags:** {group.inbound_tags}\n"
                 + f"**Is Disabled:** {group.is_disabled}\n",
-                "color": int("00ff00", 16),
+                "color": 0x00ff00,
                 "footer": {"text": f"ID: {group.id}\nBy: {by}"},
             }
         ],
@@ -30,7 +30,7 @@ async def modify_group(group: GroupResponse, by: str):
                 "description": f"**Name:** {group.name}\n"
                 + f"**Inbound Tags:** {group.inbound_tags}\n"
                 + f"**Is Disabled:** {group.is_disabled}\n",
-                "color": int("ffff00", 16),
+                "color": 0xffff00,
                 "footer": {"text": f"ID: {group.id}\nBy: {by}"},
             }
         ],
@@ -46,7 +46,7 @@ async def remove_group(group_id: int, by: str):
             {
                 "title": "Remove Group",
                 "description": f"**ID:** {group_id}",
-                "color": int("ff0000", 16),
+                "color": 0xff0000,
                 "footer": {"text": f"By: {by}"},
             }
         ],

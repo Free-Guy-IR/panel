@@ -33,7 +33,7 @@ class AdminOperation(BaseOperator):
 
         new_admin = AdminDetails.model_validate(db_admin)
 
-        asyncio.create_task(notification.add_admin(new_admin, admin.username))
+        asyncio.create_task(notification.create_admin(new_admin, admin.username))
 
         return db_admin
 

@@ -3,9 +3,9 @@ from app.models.host import BaseHost
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
-async def add_host(host: BaseHost, by: str):
+async def create_host(host: BaseHost, by: str):
     data = (
-        "*Add Host*\n"
+        "*Create Host*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Remark:** {host.remark}\n"
         + f"**Address:** {host.address}\n"
