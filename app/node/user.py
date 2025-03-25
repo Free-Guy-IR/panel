@@ -1,8 +1,9 @@
-from sqlalchemy.orm import load_only
-
+from sqlalchemy.orm import load_only, selectinload
+from sqlalchemy import select
 from GozargahNodeBridge import create_user, create_proxy
 
-from app.db import GetDB, User
+from app.db import AsyncSession
+from app.db.models import ProxyInbound, Group, User
 from app.db.models import UserStatus
 
 
@@ -26,22 +27,22 @@ def serialize_user_for_node(id: int, username: str, user_settings: dict, inbound
     )
 
 
-async def backend_users(inbounds: list[str]):
-    with GetDB() as db:
-        query = (
-            db.query(User)
-            .options(
-                load_only(User.id, User.username, User.proxy_settings),
-            )
-            .filter(User.status.in_([UserStatus.active, UserStatus.on_hold]))
+async def backend_users(db: AsyncSession, inbounds: list[str]):
+    stmt = (
+        select(User)
+        .options(
+            load_only(User.id, User.username, User.proxy_settings),
+            selectinload(User.groups),
+            selectinload(User.groups).selectinload(Group.inbounds).load_only(ProxyInbound.tag),
         )
+        .filter(User.status.in_([UserStatus.active, UserStatus.on_hold]))
+    )
+    users = (await db.execute(stmt)).unique().scalars().all()
+    bridge_users: list = []
 
-        users = query.all()
-        bridge_users: list = []
+    for user in users:
+        inbounds_list = user.inbounds(active_inbounds=inbounds)
+        if len(inbounds_list) > 0:
+            bridge_users.append(serialize_user_for_node(user.id, user.username, user.proxy_settings, inbounds_list))
 
-        for user in users:
-            inbounds_list = user.inbounds(active_inbounds=inbounds)
-            if len(inbounds_list) > 0:
-                bridge_users.append(serialize_user_for_node(user.id, user.username, user.proxy_settings, inbounds_list))
-
-        return bridge_users
+    return bridge_users

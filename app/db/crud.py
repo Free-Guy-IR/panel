@@ -29,6 +29,7 @@ from app.db.models import (
     UserUsageResetLogs,
     NodeStatus,
     Group,
+    users_groups_association
 )
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
@@ -328,8 +329,27 @@ async def get_users(
 def expired_users_query(
     expired_after: datetime | None = None, expired_before: datetime | None = None, admin_id: int | None = None
 ):
-    query = select(User).where(User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None))
+    query = select(User.username, User.id).where(
+        User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None)
+    )
+    if expired_after:
+        query = query.where(User.expire >= expired_after)
+    if expired_before:
+        query = query.where(User.expire <= expired_before)
+    if admin_id:
+        query = query.where(User.admin_id == admin_id)
+    return query
 
+
+async def get_expired_users_ids(
+    db: AsyncSession,
+    expired_after: datetime | None = None,
+    expired_before: datetime | None = None,
+    admin_id: int | None = None,
+) -> list[str]:
+    query = select(User.id).where(
+        User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None)
+    )
     if expired_after:
         query = query.where(User.expire >= expired_after)
     if expired_before:
@@ -337,20 +357,30 @@ def expired_users_query(
     if admin_id:
         query = query.where(User.admin_id == admin_id)
 
-    return query
+    result = await db.execute(query)
+    return [row[0] for row in result.all()]
 
 
-async def get_expired_users(
+async def get_expired_users_username(
     db: AsyncSession,
     expired_after: datetime | None = None,
     expired_before: datetime | None = None,
     admin_id: int | None = None,
 ) -> list[str]:
-    subquery = await expired_users_query(expired_after, expired_before, admin_id).subquery()
+    query = select(User.username).where(
+        User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None)
+    )
+    if expired_after:
+        query = query.where(User.expire >= expired_after)
+    if expired_before:
+        query = query.where(User.expire <= expired_before)
+    if admin_id:
+        query = query.where(User.admin_id == admin_id)
 
-    username_select = db.query(subquery.c.username)
+    query = expired_users_query(expired_after, expired_before, admin_id)
 
-    return [row[0] for row in await username_select.all()]
+    result = await db.execute(query)
+    return [row[0] for row in result.all()]
 
 
 async def delete_expired_users(
@@ -359,19 +389,22 @@ async def delete_expired_users(
     expired_before: datetime | None = None,
     admin_id: int | None = None,
 ) -> tuple[list[str], int]:
-    subquery = await expired_users_query(expired_after, expired_before, admin_id).subquery()
-
-    username_select = db.query(subquery.c.username)
-
-    usernames_to_delete = [row[0] for row in await username_select.all()]
-
-    deleted_count = await expired_users_query(db, expired_after, expired_before, admin_id).delete(
-        synchronize_session=False
+    usernames_to_delete = await get_expired_users_username(db, expired_after, expired_before, admin_id)
+    user_ids_to_delete = await get_expired_users_ids(db, expired_after, expired_before, admin_id)
+   
+    if not user_ids_to_delete:
+        return [], 0
+   
+    delete_association_stmt = users_groups_association.delete().where(
+        users_groups_association.c.user_id.in_(user_ids_to_delete)
     )
-
+    await db.execute(delete_association_stmt)
+    
+    delete_users_stmt = delete(User).where(User.id.in_(user_ids_to_delete))
+    result = await db.execute(delete_users_stmt)
     await db.commit()
-
-    return usernames_to_delete, deleted_count
+   
+    return usernames_to_delete, result.rowcount
 
 
 async def get_user_usages(db: AsyncSession, dbuser: User, start: datetime, end: datetime) -> List[UserUsageResponse]:
@@ -1167,7 +1200,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
     Returns:
         UserTemplate: The created user template object.
     """
-    dbuser_template = UserTemplate(
+    db_user_template = UserTemplate(
         name=user_template.name,
         data_limit=user_template.data_limit,
         expire_duration=user_template.expire_duration,
@@ -1176,12 +1209,14 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
         groups=await get_groups_by_ids(db, user_template.group_ids) if user_template.group_ids else None,
     )
 
-    db.add(dbuser_template)
+    db.add(db_user_template)
     await db.commit()
+    await db.refresh(db_user_template)
+    return db_user_template
 
 
 async def update_user_template(
-    db: AsyncSession, dbuser_template: UserTemplate, modified_user_template: UserTemplateModify
+    db: AsyncSession, db_user_template: UserTemplate, modified_user_template: UserTemplateModify
 ) -> UserTemplate:
     """
     Updates a user template's details.
@@ -1195,24 +1230,24 @@ async def update_user_template(
         UserTemplate: The updated user template object.
     """
     if modified_user_template.name is not None:
-        dbuser_template.name = modified_user_template.name
+        db_user_template.name = modified_user_template.name
     if modified_user_template.data_limit is not None:
-        dbuser_template.data_limit = modified_user_template.data_limit
+        db_user_template.data_limit = modified_user_template.data_limit
     if modified_user_template.expire_duration is not None:
-        dbuser_template.expire_duration = modified_user_template.expire_duration
+        db_user_template.expire_duration = modified_user_template.expire_duration
     if modified_user_template.username_prefix is not None:
-        dbuser_template.username_prefix = modified_user_template.username_prefix
+        db_user_template.username_prefix = modified_user_template.username_prefix
     if modified_user_template.username_suffix is not None:
-        dbuser_template.username_suffix = modified_user_template.username_suffix
+        db_user_template.username_suffix = modified_user_template.username_suffix
     if modified_user_template.group_ids:
-        dbuser_template.groups = await get_groups_by_ids(db, modified_user_template.group_ids)
+        db_user_template.groups = await get_groups_by_ids(db, modified_user_template.group_ids)
 
     await db.commit()
-    await db.refresh(dbuser_template)
-    return dbuser_template
+    await db.refresh(db_user_template)
+    return db_user_template
 
 
-async def remove_user_template(db: AsyncSession, dbuser_template: UserTemplate):
+async def remove_user_template(db: AsyncSession, db_user_template: UserTemplate):
     """
     Removes a user template from the database.
 
@@ -1220,7 +1255,7 @@ async def remove_user_template(db: AsyncSession, dbuser_template: UserTemplate):
         db (AsyncSession): Database session.
         dbuser_template (UserTemplate): The user template object to be removed.
     """
-    await db.delete(dbuser_template)
+    await db.delete(db_user_template)
     await db.commit()
 
 
@@ -1385,7 +1420,8 @@ async def create_node(db: AsyncSession, node: NodeCreate) -> Node:
 
     db.add(db_node)
     await db.commit()
-    return await get_node_by_id(db, db_node.id)
+    await db.refresh(db_node)
+    return db_node
 
 
 async def remove_node(db: AsyncSession, db_node: Node) -> Node:
@@ -1429,12 +1465,13 @@ async def update_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
         db_node.status = NodeStatus.connecting
 
     await db.commit()
-    return await get_node_by_id(db, db_node.id)
+    await db.refresh(db_node)
+    return db_node
 
 
 async def update_node_status(
     db: AsyncSession,
-    dbnode: Node,
+    db_node: Node,
     status: NodeStatus,
     message: str = None,
     xray_version: str = None,
@@ -1453,13 +1490,14 @@ async def update_node_status(
     Returns:
         Node: The updated Node object.
     """
-    dbnode.status = status
-    dbnode.message = message
-    dbnode.xray_version = xray_version
-    dbnode.node_version = node_version
-    dbnode.last_status_change = datetime.now(timezone.utc)
+    db_node.status = status
+    db_node.message = message
+    db_node.xray_version = xray_version
+    db_node.node_version = node_version
+    db_node.last_status_change = datetime.now(timezone.utc)
     await db.commit()
-    return await get_node_by_id(db, dbnode.id)
+    await db.refresh(db_node)
+    return db_node
 
 
 async def create_notification_reminder(
@@ -1583,6 +1621,28 @@ async def get_inbounds_by_tags(db: AsyncSession, tags: list[str]) -> list[ProxyI
     return (await db.execute(select(ProxyInbound).where(ProxyInbound.tag.in_(tags)))).scalars().all()
 
 
+def get_group_queryset() -> Query:
+    return select(Group).options(
+        selectinload(Group.inbounds),
+        selectinload(Group.users),
+        selectinload(Group.templates),
+    )
+
+
+async def get_group_by_id(db: AsyncSession, group_id: int) -> Group | None:
+    """
+    Retrieves a group by its ID.
+
+    Args:
+        db (AsyncSession): The database session.
+        group_id (int): The ID of the group to retrieve.
+
+    Returns:
+        Optional[Group]: The Group object if found, None otherwise.
+    """
+    return (await db.execute(get_group_queryset().where(Group.id == group_id))).unique().scalar_one_or_none()
+
+
 async def create_group(db: AsyncSession, group: GroupCreate) -> Group:
     """
     Creates a new group in the database.
@@ -1594,22 +1654,15 @@ async def create_group(db: AsyncSession, group: GroupCreate) -> Group:
     Returns:
         Group: The newly created Group object.
     """
-    dbgroup = Group(
+    db_group = Group(
         name=group.name,
         inbounds=await get_inbounds_by_tags(db, group.inbound_tags),
         is_disabled=group.is_disabled,
     )
-    db.add(dbgroup)
+    db.add(db_group)
     await db.commit()
-    return await get_group_by_id(db, dbgroup.id)
-
-
-def get_group_queryset() -> Query:
-    return select(Group).options(
-        selectinload(Group.inbounds),
-        selectinload(Group.users),
-        selectinload(Group.templates),
-    )
+    await db.refresh(db_group, ["id", "name", "is_disabled", "users", "inbounds"])
+    return db_group
 
 
 async def get_group(db: AsyncSession, offset: int = None, limit: int = None) -> tuple[list[Group], int]:
@@ -1636,20 +1689,6 @@ async def get_group(db: AsyncSession, offset: int = None, limit: int = None) -> 
     return all_groups, len(all_groups)
 
 
-async def get_group_by_id(db: AsyncSession, group_id: int) -> Group | None:
-    """
-    Retrieves a group by its ID.
-
-    Args:
-        db (AsyncSession): The database session.
-        group_id (int): The ID of the group to retrieve.
-
-    Returns:
-        Optional[Group]: The Group object if found, None otherwise.
-    """
-    return (await db.execute(get_group_queryset().where(Group.id == group_id))).unique().scalar_one_or_none()
-
-
 async def get_groups_by_ids(db: AsyncSession, group_ids: list[int]) -> list[Group]:
     """
     Retrieves a list of groups by their IDs.
@@ -1664,7 +1703,7 @@ async def get_groups_by_ids(db: AsyncSession, group_ids: list[int]) -> list[Grou
     return (await db.execute(get_group_queryset().where(Group.id.in_(group_ids)))).scalars().all()
 
 
-async def update_group(db: AsyncSession, dbgroup: Group, modified_group: GroupModify) -> Group:
+async def update_group(db: AsyncSession, db_group: Group, modified_group: GroupModify) -> Group:
     """
     Updates an existing group with new information.
 
@@ -1676,15 +1715,15 @@ async def update_group(db: AsyncSession, dbgroup: Group, modified_group: GroupMo
     Returns:
         Group: The updated Group object.
     """
-    if dbgroup.name != modified_group.name:
-        dbgroup.name = modified_group.name
+    if db_group.name != modified_group.name:
+        db_group.name = modified_group.name
     if modified_group.inbound_tags is not None:
-        dbgroup.inbounds = await get_inbounds_by_tags(db, modified_group.inbound_tags)
+        db_group.inbounds = await get_inbounds_by_tags(db, modified_group.inbound_tags)
     if modified_group.is_disabled is not None:
-        dbgroup.is_disabled = modified_group.is_disabled
+        db_group.is_disabled = modified_group.is_disabled
     await db.commit()
-
-    return await get_group_by_id(db, dbgroup.id)
+    await db.refresh(db_group)
+    return db_group
 
 
 async def remove_group(db: AsyncSession, dbgroup: Group):

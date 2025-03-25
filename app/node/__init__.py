@@ -40,7 +40,7 @@ class NodeManager:
                 finally:
                     del self._nodes[node.id]
 
-            tls = get_tls()
+            tls = await get_tls()
             new_node = create_node(
                 connection=type_map[node.connection_type],
                 address=node.address,

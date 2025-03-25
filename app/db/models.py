@@ -450,10 +450,10 @@ class Group(Base):
 
     users: Mapped[List["User"]] = relationship(secondary=users_groups_association, back_populates="groups")
     inbounds: Mapped[List["ProxyInbound"]] = relationship(
-        secondary=inbounds_groups_association, back_populates="groups"
+        secondary=inbounds_groups_association, back_populates="groups", lazy="selectin"
     )
     templates: Mapped[List["UserTemplate"]] = relationship(
-        secondary=template_group_association, back_populates="groups"
+        secondary=template_group_association, back_populates="groups", lazy="selectin"
     )
 
     @property

@@ -30,7 +30,7 @@ async def add_user_template(
 
 
 @router.get("/{template_id}", response_model=UserTemplateResponse)
-async def get_user_template_endpoint(
+async def get_user_template(
     template_id: int, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(get_current)
 ):
     """Get User Template information with id"""

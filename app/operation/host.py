@@ -77,4 +77,4 @@ class HostOperator(BaseOperator):
 
         asyncio.create_task(notification.update_hosts(admin.username))
 
-        return get_hosts(db=db)
+        return await get_hosts(db=db)

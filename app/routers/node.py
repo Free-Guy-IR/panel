@@ -114,7 +114,7 @@ async def node_logs(
                     log = await log_queue.get()
                     if log is None:
                         break
-                    yield f"{log}\n"
+                    yield f"{log}"
 
                 except Exception as e:
                     yield f"Error retrieving logs: {str(e)}\n"

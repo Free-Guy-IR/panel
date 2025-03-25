@@ -19,7 +19,7 @@ from app.db.crud import (
     reset_user_by_next,
     set_owner,
     get_all_users_usages,
-    get_expired_users,
+    get_expired_users_username,
     delete_expired_users,
     UsersSortingOptions,
 )
@@ -274,7 +274,7 @@ class UserOperator(BaseOperator):
         else:
             id = None
 
-        return await get_expired_users(db, expired_after, expired_before, id)
+        return await get_expired_users_username(db, expired_after, expired_before, id)
 
     async def delete_expired_users(
         self, db: AsyncSession, admin: AdminDetails, expired_after: dt | None = None, expired_before: dt | None = None

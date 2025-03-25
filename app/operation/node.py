@@ -40,26 +40,26 @@ class NodeOperator(BaseOperator):
         if gozargah_node is None:
             return
 
-        with GetDB() as db:
+        async with GetDB() as db:
             db_node = await get_node_by_id(db, node_id)
 
             if db_node is None:
                 return
 
             logger.info(f'Connecting to "{db_node.name}" node')
-            update_node_status(db, db_node, NodeStatus.connecting)
+            await update_node_status(db, db_node, NodeStatus.connecting)
 
             try:
                 info = await gozargah_node.start(
                     config=config.to_json(),
                     backend_type=0,
-                    users=await backend_users(inbounds=config.inbounds),
+                    users=await backend_users(db=db, inbounds=config.inbounds),
                     keep_alive=db_node.keep_alive,
                     timeout=10,
                 )
                 await update_node_status(
                     db=db,
-                    dbnode=db_node,
+                    db_node=db_node,
                     status=NodeStatus.connected,
                     xray_version=info.core_version,
                     node_version=info.node_version,
@@ -72,7 +72,7 @@ class NodeOperator(BaseOperator):
                 if e.code == -4:
                     return
 
-                await update_node_status(db=db, dbnode=db_node, status=NodeStatus.error, message=e.detail)
+                await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
 
     async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         try:
@@ -244,9 +244,9 @@ class NodeOperator(BaseOperator):
             self.raise_error(message="Node is not connected", code=409)
 
         try:
-            await gozargah_node.sync_users(await backend_users(config.inbounds), flush_queue=flush_users)
+            await gozargah_node.sync_users(await backend_users(db=db, inbounds=config.inbounds), flush_queue=flush_users)
         except NodeAPIError as e:
-            await update_node_status(db=db, dbnode=db_node, status=NodeStatus.error, message=e.detail)
+            await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
             self.raise_error(message=e.detail, code=e.code)
 
         return NodeResponse.model_validate(db_node)

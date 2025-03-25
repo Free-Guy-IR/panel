@@ -1,16 +1,14 @@
-from typing import Optional
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserTemplate(BaseModel):
-    name: Optional[str] = Field(None, nullable=True)
-    data_limit: Optional[int] = Field(ge=0, default=None, description="data_limit can be 0 or greater")
-    expire_duration: Optional[int] = Field(
+    name: str | None = None
+    data_limit: int | None = Field(ge=0, default=None, description="data_limit can be 0 or greater")
+    expire_duration: int | None = Field(
         ge=0, default=None, description="expire_duration can be 0 or greater in seconds"
     )
-    username_prefix: Optional[str] = Field(max_length=20, min_length=1, default=None)
-    username_suffix: Optional[str] = Field(max_length=20, min_length=1, default=None)
+    username_prefix: str | None = Field(max_length=20, min_length=1, default=None)
+    username_suffix: str | None = Field(max_length=20, min_length=1, default=None)
     group_ids: list[int] = []
 
 
@@ -31,7 +29,7 @@ class UserTemplateCreate(UserTemplate):
     @field_validator("group_ids", mode="after")
     @classmethod
     def group_ids_validator(cls, v):
-        if v and len(v) < 1:
+        if not v or len(v) < 1:
             raise ValueError("you must select at least one group")
         return v
 
