@@ -10,11 +10,11 @@ from app.models.user import (
     UserModify,
     UserResponse,
     UsersResponse,
-    UserStatus,
     UsersUsagesResponse,
     UserUsagesResponse,
     RemoveUsersResponse,
 )
+from app.db.models import UserStatus
 from app.utils import responses
 from app.operation import OperatorType
 from app.operation.user import UserOperator

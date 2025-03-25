@@ -3,7 +3,8 @@ from datetime import datetime as dt
 
 from dateutil.relativedelta import relativedelta
 
-from app.models.user import User, UserResponse, UserStatus
+from app.models.user import User, UserResponse
+from app.db.models import UserStatus
 from app.models.user_template import UserTemplate
 from app.utils.system import readable_size
 

@@ -3,8 +3,7 @@ from sqlalchemy import select
 from GozargahNodeBridge import create_user, create_proxy
 
 from app.db import AsyncSession
-from app.db.models import ProxyInbound, Group, User
-from app.db.models import UserStatus
+from app.db.models import ProxyInbound, Group, User, UserStatus
 
 
 def serialize_user_for_node(id: int, username: str, user_settings: dict, inbounds: list[str] = None):

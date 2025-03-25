@@ -14,7 +14,7 @@ async def create_user_template(user_tempelate: UserTemplateResponse, by: str):
                 + f"**Expire Duration**: {user_tempelate.expire_duration}\n"
                 + f"**Username Prefix**: {user_tempelate.username_prefix}\n"
                 + f"**Username Suffix**: {user_tempelate.username_suffix}\n",
-                "color": 0x00ff00,
+                "color": 0x00FF00,
                 "footer": {"text": f"By: {by}"},
             }
         ],
@@ -34,7 +34,7 @@ async def modify_user_template(user_template: UserTemplateResponse, by: str):
                 + f"**Expire Duration**: {user_template.expire_duration}\n"
                 + f"**Username Prefix**: {user_template.username_prefix}\n"
                 + f"**Username Suffix**: {user_template.username_suffix}\n",
-                "color": 0xffff00,
+                "color": 0xFFFF00,
                 "footer": {"text": f"By: {by}"},
             }
         ],
@@ -50,7 +50,7 @@ async def remove_user_template(name: str, by: str):
             {
                 "title": "Remove User Template",
                 "description": f"**Name:** {name}\n",
-                "color": 0xff0000,
+                "color": 0xFF0000,
                 "footer": {"text": f"By: {by}"},
             }
         ],

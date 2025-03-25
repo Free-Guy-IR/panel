@@ -13,7 +13,7 @@ async def create_admin(admin: AdminDetails, by: str):
                 + f"**Is Sudo:** {admin.is_sudo}\n"
                 + f"**Is Disabled:** {admin.is_disabled}\n"
                 + f"**Users Usage:** {admin.users_usage}\n",
-                "color": 0x00ff00,
+                "color": 0x00FF00,
                 "footer": {"text": f"By: {by}"},
             }
         ],
@@ -32,7 +32,7 @@ async def modify_admin(admin: AdminDetails, by: str):
                 + f"**Is Sudo:** {admin.is_sudo}\n"
                 + f"**Is Disabled:** {admin.is_disabled}\n"
                 + f"**Users Usage:** {admin.users_usage}\n",
-                "color": 0xffff00,
+                "color": 0xFFFF00,
                 "footer": {"text": f"By: {by}"},
             }
         ],
@@ -48,7 +48,7 @@ async def remove_admin(username: str, by: str):
             {
                 "title": "Remove Admin",
                 "description": f"**Username:** {username}\n",
-                "color": 0xff0000,
+                "color": 0xFF0000,
                 "footer": {"text": f"By: {by}"},
             }
         ],

@@ -10,7 +10,7 @@ async def create_node(node: NodeResponse, by: str):
             {
                 "title": "Create Node",
                 "description": f"**Name:** {node.name}\n" + f"**Address:** {node.address}\n" + f"**Port:** {node.port}",
-                "color": 0x00ff00,
+                "color": 0x00FF00,
                 "footer": {"text": f"ID: {node.id}\nBy: {by}"},
             }
         ],
@@ -26,7 +26,7 @@ async def modify_node(node: NodeResponse, by: str):
             {
                 "title": "Modify Node",
                 "description": f"**Name:** {node.name}\n" + f"**Address:** {node.address}\n" + f"**Port:** {node.port}",
-                "color": 0xffff00,
+                "color": 0xFFFF00,
                 "footer": {"text": f"ID: {node.id}\nBy: {by}"},
             }
         ],
@@ -42,7 +42,7 @@ async def remove_node(node: NodeResponse, by: str):
             {
                 "title": "Remove Node",
                 "description": f"**Name:** {node.name}\n" + f"**Address:** {node.address}\n" + f"**Port:** {node.port}",
-                "color": 0xff0000,
+                "color": 0xFF0000,
                 "footer": {"text": f"ID: {node.id}\nBy: {by}"},
             }
         ],

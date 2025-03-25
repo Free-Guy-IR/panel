@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.expression import select, text
 from sqlalchemy.ext.compiler import compiles
 from app.db.base import Base
-from app.models.user import ReminderType, UserDataLimitResetStrategy, UserStatus
+from app.models.user import UserDataLimitResetStrategy
 
 
 class CaseSensitiveString(String):
@@ -104,6 +104,19 @@ class AdminUsageLogs(Base):
     admin: Mapped["Admin"] = relationship(back_populates="usage_logs")
     used_traffic_at_reset: Mapped[int] = mapped_column(BigInteger, nullable=False)
     reset_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class ReminderType(str, Enum):
+    expiration_date = "expiration_date"
+    data_usage = "data_usage"
+
+
+class UserStatus(str, Enum):
+    active = "active"
+    disabled = "disabled"
+    limited = "limited"
+    expired = "expired"
+    on_hold = "on_hold"
 
 
 class User(Base):

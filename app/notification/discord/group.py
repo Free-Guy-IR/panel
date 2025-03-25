@@ -12,7 +12,7 @@ async def create_group(group: GroupResponse, by: str):
                 "description": f"**Name:** {group.name}\n"
                 + f"**Inbound Tags:** {group.inbound_tags}\n"
                 + f"**Is Disabled:** {group.is_disabled}\n",
-                "color": 0x00ff00,
+                "color": 0x00FF00,
                 "footer": {"text": f"ID: {group.id}\nBy: {by}"},
             }
         ],
@@ -30,7 +30,7 @@ async def modify_group(group: GroupResponse, by: str):
                 "description": f"**Name:** {group.name}\n"
                 + f"**Inbound Tags:** {group.inbound_tags}\n"
                 + f"**Is Disabled:** {group.is_disabled}\n",
-                "color": 0xffff00,
+                "color": 0xFFFF00,
                 "footer": {"text": f"ID: {group.id}\nBy: {by}"},
             }
         ],
@@ -46,7 +46,7 @@ async def remove_group(group_id: int, by: str):
             {
                 "title": "Remove Group",
                 "description": f"**ID:** {group_id}",
-                "color": 0xff0000,
+                "color": 0xFF0000,
                 "footer": {"text": f"By: {by}"},
             }
         ],

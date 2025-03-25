@@ -13,7 +13,7 @@ async def create_host(host: BaseHost, by: str):
                 + f"**Address:** {host.address}\n"
                 + f"**Inbound Tag:** {host.inbound_tag}\n"
                 + f"**Port:** {host.port}",
-                "color": 0x00ff00,
+                "color": 0x00FF00,
                 "footer": {"text": f"ID: {host.id}\nBy: {by}"},
             }
         ],
@@ -32,7 +32,7 @@ async def modify_host(host: BaseHost, by: str):
                 + f"**Address:** {host.address}\n"
                 + f"**Inbound Tag:** {host.inbound_tag}\n"
                 + f"**Port:** {host.port}",
-                "color": 0xffff00,
+                "color": 0xFFFF00,
                 "footer": {"text": f"ID: {host.id}\nBy: {by}"},
             }
         ],
@@ -48,7 +48,7 @@ async def remove_host(host: BaseHost, by: str):
             {
                 "title": "Remove Host",
                 "description": f"**Remark:** {host.remark}",
-                "color": 0xff0000,
+                "color": 0xFF0000,
                 "footer": {"text": f"ID: {host.id}\nBy: {by}"},
             }
         ],
@@ -64,7 +64,7 @@ async def update_hosts(by: str):
             {
                 "title": "Update Hosts",
                 "description": f"All hosts has been updated by **{by}**",
-                "color": 0x00ffff,
+                "color": 0x00FFFF,
             }
         ],
     }

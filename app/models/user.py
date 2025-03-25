@@ -6,24 +6,12 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.db.models import UserStatus
 from app.models.admin import AdminBaseInfo
 from app.models.proxy import ProxyTable
 
 
 USERNAME_REGEXP = re.compile(r"^(?=\w{3,32}\b)[a-zA-Z0-9-_@.]+(?:_[a-zA-Z0-9-_@.]+)*$")
-
-
-class ReminderType(str, Enum):
-    expiration_date = "expiration_date"
-    data_usage = "data_usage"
-
-
-class UserStatus(str, Enum):
-    active = "active"
-    disabled = "disabled"
-    limited = "limited"
-    expired = "expired"
-    on_hold = "on_hold"
 
 
 class UserStatusModify(str, Enum):

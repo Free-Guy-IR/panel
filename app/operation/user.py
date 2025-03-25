@@ -23,13 +23,12 @@ from app.db.crud import (
     delete_expired_users,
     UsersSortingOptions,
 )
-from app.db.models import User
+from app.db.models import User, UserStatus
 from app.models.admin import AdminDetails
 from app.models.user import (
     UserCreate,
     UserModify,
     UserResponse,
-    UserStatus,
     UsersResponse,
     UserUsagesResponse,
     UsersUsagesResponse,

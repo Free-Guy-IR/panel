@@ -29,7 +29,9 @@ from app.db.models import (
     UserUsageResetLogs,
     NodeStatus,
     Group,
-    users_groups_association
+    users_groups_association,
+    ReminderType,
+    UserStatus,
 )
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
@@ -37,10 +39,8 @@ from app.models.admin import AdminPartialModify, AdminCreate, AdminModify
 from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
 from app.models.user import (
-    ReminderType,
     UserDataLimitResetStrategy,
     UserModify,
-    UserStatus,
     UserUsageResponse,
     UserCreate,
 )
@@ -269,7 +269,7 @@ async def get_users(
         limit (Optional[int]): Number of records to retrieve.
         usernames (Optional[List[str]]): List of usernames to filter by.
         search (Optional[str]): Search term for username.
-        status (Optional[Union[UserStatus, list]]): User status filter.
+        status (Optional[Union[app.db.models.UserStatus, list]]): User status filter.
         sort (Optional[List[UsersSortingOptions]]): Sort options.
         admin (Optional[Admin]): Admin filter.
         admins (Optional[List[str]]): List of admin usernames to filter by.
@@ -347,9 +347,7 @@ async def get_expired_users_ids(
     expired_before: datetime | None = None,
     admin_id: int | None = None,
 ) -> list[str]:
-    query = select(User.id).where(
-        User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None)
-    )
+    query = select(User.id).where(User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None))
     if expired_after:
         query = query.where(User.expire >= expired_after)
     if expired_before:
@@ -391,19 +389,19 @@ async def delete_expired_users(
 ) -> tuple[list[str], int]:
     usernames_to_delete = await get_expired_users_username(db, expired_after, expired_before, admin_id)
     user_ids_to_delete = await get_expired_users_ids(db, expired_after, expired_before, admin_id)
-   
+
     if not user_ids_to_delete:
         return [], 0
-   
+
     delete_association_stmt = users_groups_association.delete().where(
         users_groups_association.c.user_id.in_(user_ids_to_delete)
     )
     await db.execute(delete_association_stmt)
-    
+
     delete_users_stmt = delete(User).where(User.id.in_(user_ids_to_delete))
     result = await db.execute(delete_users_stmt)
     await db.commit()
-   
+
     return usernames_to_delete, result.rowcount
 
 
@@ -901,7 +899,7 @@ async def update_user_status(db: AsyncSession, dbuser: User, status: UserStatus)
     Args:
         db (AsyncSession): Database session.
         dbuser (User): The user to update.
-        status (UserStatus): The new status.
+        status (app.db.models.UserStatus): The new status.
 
     Returns:
         User: The updated user object.
@@ -1508,7 +1506,7 @@ async def create_notification_reminder(
 
     Args:
         db (AsyncSession): The database session.
-        reminder_type (ReminderType): The type of reminder.
+        reminder_type (app.db.models.ReminderType): The type of reminder.
         expires_at (datetime): The expiration time of the reminder.
         user_id (int): The ID of the user associated with the reminder.
         threshold (Optional[int]): The threshold value to check for (e.g., days left or usage percent).
@@ -1534,7 +1532,7 @@ async def get_notification_reminder(
     Args:
         db (AsyncSession): The database session.
         user_id (int): The ID of the user.
-        reminder_type (ReminderType): The type of reminder to retrieve.
+        reminder_type (app.db.models.ReminderType): The type of reminder to retrieve.
         threshold (Optional[int]): The threshold value to check for (e.g., days left or usage percent).
 
     Returns:
@@ -1571,7 +1569,7 @@ async def delete_notification_reminder_by_type(
     Args:
         db (AsyncSession): The database session.
         user_id (int): The ID of the user.
-        reminder_type (ReminderType): The type of reminder to delete.
+        reminder_type (app.db.models.ReminderType): The type of reminder to delete.
         threshold (Optional[int]): The threshold to delete (e.g., days left or usage percent). If not provided, deletes all reminders of that type.
     """
     stmt = delete(NotificationReminder).where(

@@ -12,9 +12,9 @@ from app.db.crud import (
     start_user_expire,
     update_user_status,
 )
-from app.db.models import User
+from app.db.models import User, ReminderType, UserStatus
 from app.node import node_manager as node_manager
-from app.models.user import ReminderType, UserResponse, UserStatus
+from app.models.user import UserResponse
 from app.utils.logger import get_logger
 from app.utils import report
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent

@@ -16,15 +16,14 @@ from telebot.util import extract_arguments, user_link
 
 from app import backend
 from app.db import GetDB, crud
-from app.dependencies import get_v2ray_links
 from app.models.proxy import ProxyTypes
 from app.models.user import (
     UserCreate,
     UserModify,
     UserResponse,
-    UserStatus,
     UserStatusModify,
 )
+from app.db.models import UserStatus
 from app.models.user_template import UserTemplateResponse
 from app.telegram import bot
 from app.telegram.utils.custom_filters import cb_query_equals, cb_query_startswith

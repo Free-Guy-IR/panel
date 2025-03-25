@@ -4,7 +4,7 @@ import typer
 from rich.table import Table
 
 from app.db import GetDB, crud
-from app.db.models import User
+from app.db.models import User, UserStatus
 from app.utils.system import readable_size
 
 from . import utils
@@ -18,7 +18,7 @@ def list_users(
     limit: Optional[int] = typer.Option(None, *utils.FLAGS["limit"]),
     username: Optional[List[str]] = typer.Option(None, *utils.FLAGS["username"], help="Search by username(s)"),
     search: Optional[str] = typer.Option(None, *utils.FLAGS["search"], help="Search by username/note"),
-    status: Optional[crud.UserStatus] = typer.Option(None, *utils.FLAGS["status"]),
+    status: Optional[UserStatus] = typer.Option(None, *utils.FLAGS["status"]),
     admins: Optional[List[str]] = typer.Option(None, *utils.FLAGS["admin"], help="Search by owner admin's username(s)"),
 ):
     """

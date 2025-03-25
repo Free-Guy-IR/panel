@@ -255,7 +255,9 @@ class NodeOperator(BaseOperator):
             self.raise_error(message="Node is not connected", code=409)
 
         try:
-            await gozargah_node.sync_users(await backend_users(db=db, inbounds=config.inbounds), flush_queue=flush_users)
+            await gozargah_node.sync_users(
+                await backend_users(db=db, inbounds=config.inbounds), flush_queue=flush_users
+            )
         except NodeAPIError as e:
             await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
             self.raise_error(message=e.detail, code=e.code)

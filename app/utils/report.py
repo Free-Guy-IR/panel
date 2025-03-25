@@ -3,9 +3,9 @@ from typing import Optional
 
 from app import telegram
 from app.db import AsyncSession, create_notification_reminder
-from app.db.models import UserStatus
+from app.db.models import UserStatus, ReminderType
 from app.models.admin import AdminDetails
-from app.models.user import ReminderType, UserResponse
+from app.models.user import UserResponse
 from app.utils.notification import (
     Notification,
     ReachedDaysLeft,
