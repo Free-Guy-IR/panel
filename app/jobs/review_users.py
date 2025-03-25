@@ -89,7 +89,7 @@ async def review():
                     await add_notification_reminders(db, db_user)
                 continue
 
-            update_user_status(db, db_user, status)
+            await update_user_status(db, db_user, status)
 
             user = UserResponse.model_validate(db_user)
             asyncio.create_task(node_manager.update_user(user))
@@ -115,7 +115,7 @@ async def review():
             else:
                 continue
 
-            update_user_status(db, db_user, status)
+            await update_user_status(db, db_user, status)
             await start_user_expire(db, db_user)
             db_user = UserResponse.model_validate(db_user)
 

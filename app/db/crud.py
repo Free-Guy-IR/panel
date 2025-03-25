@@ -32,6 +32,7 @@ from app.db.models import (
     users_groups_association,
     ReminderType,
     UserStatus,
+    UserDataLimitResetStrategy,
 )
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
@@ -39,7 +40,6 @@ from app.models.admin import AdminPartialModify, AdminCreate, AdminModify
 from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
 from app.models.user import (
-    UserDataLimitResetStrategy,
     UserModify,
     UserUsageResponse,
     UserCreate,
@@ -273,7 +273,7 @@ async def get_users(
         sort (Optional[List[UsersSortingOptions]]): Sort options.
         admin (Optional[Admin]): Admin filter.
         admins (Optional[List[str]]): List of admin usernames to filter by.
-        reset_strategy (Optional[Union[UserDataLimitResetStrategy, list]]): Reset strategy filter.
+        reset_strategy (Optional[Union[app.db.models.UserDataLimitResetStrategy, list]]): Reset strategy filter.
         return_with_count (bool): Whether to return total count.
 
     Returns:

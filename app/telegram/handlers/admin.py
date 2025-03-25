@@ -16,6 +16,7 @@ from telebot.util import extract_arguments, user_link
 
 from app import backend
 from app.db import GetDB, crud
+from app.dependencies import get_v2ray_links
 from app.models.proxy import ProxyTypes
 from app.models.user import (
     UserCreate,

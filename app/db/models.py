@@ -20,7 +20,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.expression import select, text
 from sqlalchemy.ext.compiler import compiles
 from app.db.base import Base
-from app.models.user import UserDataLimitResetStrategy
 
 
 class CaseSensitiveString(String):
@@ -117,6 +116,14 @@ class UserStatus(str, Enum):
     limited = "limited"
     expired = "expired"
     on_hold = "on_hold"
+
+
+class UserDataLimitResetStrategy(str, Enum):
+    no_reset = "no_reset"
+    day = "day"
+    week = "week"
+    month = "month"
+    year = "year"
 
 
 class User(Base):

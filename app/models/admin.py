@@ -4,6 +4,8 @@ from typing import Optional
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from .validators import NumericValidatorMixin
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -70,13 +72,7 @@ class AdminDetails(AdminBaseInfo):
 
     @field_validator("users_usage", mode="before")
     def cast_to_int(cls, v):
-        if v is None:  # Allow None values
-            return v
-        if isinstance(v, float):  # Allow float to int conversion
-            return int(v)
-        if isinstance(v, int):  # Allow integers directly
-            return v
-        raise ValueError("must be an integer or a float, not a string")  # Reject strings
+        return NumericValidatorMixin.cast_to_int(v)
 
 
 class AdminModify(BaseModel):

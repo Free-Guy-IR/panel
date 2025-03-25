@@ -2,8 +2,7 @@ from datetime import datetime
 
 from app import logger, scheduler, backend
 from app.db import crud, GetDB, get_users
-from app.models.user import UserDataLimitResetStrategy
-from app.db.models import UserStatus
+from app.db.models import UserStatus, UserDataLimitResetStrategy
 
 reset_strategy_to_days = {
     UserDataLimitResetStrategy.day.value: 1,

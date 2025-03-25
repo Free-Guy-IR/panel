@@ -3,9 +3,8 @@ from datetime import datetime
 from telebot.apihelper import ApiTelegramException
 from telebot.formatting import escape_html
 
-from app.db.models import User
+from app.db.models import User, UserDataLimitResetStrategy
 from app.models.admin import AdminDetails
-from app.models.user import UserDataLimitResetStrategy
 from app.telegram import bot
 from app.telegram.utils.keyboard import BotKeyboard
 from app.utils.logger import get_logger

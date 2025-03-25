@@ -3,9 +3,8 @@ from datetime import datetime
 import requests
 from telebot.formatting import escape_html
 
-from app.db.models import User
+from app.db.models import User, UserDataLimitResetStrategy
 from app.models.admin import AdminDetails
-from app.models.user import UserDataLimitResetStrategy
 from app.utils.logger import get_logger
 from app.utils.system import readable_size
 from config import DISCORD_WEBHOOK_URL
