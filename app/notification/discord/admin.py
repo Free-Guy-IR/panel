@@ -1,9 +1,9 @@
 from config import DISCORD_WEBHOOK_URL
 from app.notification.client import send_discord_webhook
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 
 
-async def add_admin(admin: Admin, by: str):
+async def add_admin(admin: AdminDetails, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -22,7 +22,7 @@ async def add_admin(admin: Admin, by: str):
         await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
 
 
-async def modify_admin(admin: Admin, by: str):
+async def modify_admin(admin: AdminDetails, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -57,7 +57,7 @@ async def remove_admin(username: str, by: str):
         await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
 
 
-async def admin_reset_usage(admin: Admin, by: str):
+async def admin_reset_usage(admin: AdminDetails, by: str):
     data = {
         "content": "",
         "embeds": [

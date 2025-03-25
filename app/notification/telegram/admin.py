@@ -1,9 +1,9 @@
 from app.notification.client import send_telegram_message
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
-async def add_admin(admin: Admin, by: str):
+async def add_admin(admin: AdminDetails, by: str):
     data = (
         "*Add Admin*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -18,7 +18,7 @@ async def add_admin(admin: Admin, by: str):
         await send_telegram_message(data, TELEGRAM_ADMIN_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_LOGGER_TOPIC_ID)
 
 
-async def modify_admin(admin: Admin, by: str):
+async def modify_admin(admin: AdminDetails, by: str):
     data = (
         "*Modify Admin*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -39,7 +39,7 @@ async def remove_admin(username: str, by: str):
         await send_telegram_message(data, TELEGRAM_ADMIN_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_LOGGER_TOPIC_ID)
 
 
-async def admin_reset_usage(admin: Admin, by: str):
+async def admin_reset_usage(admin: AdminDetails, by: str):
     data = "*Admin Usage Reset*\n" + f"**Username:** {admin.username}\n" + "➖➖➖➖➖➖➖➖➖\n" + f"_By: {by}_"
     if TELEGRAM_NOTIFY:
         await send_telegram_message(data, TELEGRAM_ADMIN_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_LOGGER_TOPIC_ID)

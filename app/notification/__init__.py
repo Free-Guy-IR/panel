@@ -6,7 +6,7 @@ from app.models.host import BaseHost
 from app.models.user_template import UserTemplateResponse
 from app.models.node import NodeResponse
 from app.models.group import GroupResponse
-from app.models.admin import Admin
+from app.models.admin import AdminDetails
 
 
 async def add_host(host: BaseHost, by: str):
@@ -61,11 +61,11 @@ async def remove_group(group_id: int, by: str):
     asyncio.gather(ds.remove_group(group_id, by), tg.remove_group(group_id, by))
 
 
-async def add_admin(admin: Admin, by: str):
+async def add_admin(admin: AdminDetails, by: str):
     asyncio.gather(ds.add_admin(admin, by), tg.add_admin(admin, by))
 
 
-async def modify_admin(admin: Admin, by: str):
+async def modify_admin(admin: AdminDetails, by: str):
     asyncio.gather(ds.modify_admin(admin, by), tg.modify_admin(admin, by))
 
 
@@ -73,7 +73,7 @@ async def remove_admin(username: str, by: str):
     asyncio.gather(ds.remove_admin(username, by), tg.remove_admin(username, by))
 
 
-async def admin_usage_reset(admin: Admin, by: str):
+async def admin_usage_reset(admin: AdminDetails, by: str):
     asyncio.gather(ds.admin_reset_usage(admin, by), tg.admin_reset_usage(admin, by))
 
 
