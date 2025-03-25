@@ -49,7 +49,7 @@ class SubscriptionOperator(BaseOperator):
             return "clash"
 
         # Sing-box clients
-        elif re.match(r"^(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify[Nn]ext)", user_agent):
+        elif re.match(r"^(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify[Nn]ext)|.*sing[-b]?ox.*", user_agent, re.IGNORECASE):
             return "sing-box"
 
         # Shadowsocks clients
