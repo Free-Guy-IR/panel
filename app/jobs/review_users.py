@@ -18,6 +18,8 @@ from app.models.user import UserResponse
 from app.utils.logger import get_logger
 from app.utils import report
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
+from app import notification
+from app.jobs.dependencies import SYSTEM_ADMIN
 from config import (
     JOB_REVIEW_USERS_INTERVAL,
     NOTIFY_DAYS_LEFT,
@@ -60,7 +62,7 @@ async def reset_user_by_next_report(db: Session, db_user: User):
 
     asyncio.create_task(node_manager.update_user(user))
 
-    report.user_data_reset_by_next(user, user_admin=user.admin)
+    asyncio.create_task(notification.user_data_reset_by_next(user, user.admin))
 
 
 async def review():
@@ -94,7 +96,7 @@ async def review():
             user = UserResponse.model_validate(db_user)
             asyncio.create_task(node_manager.update_user(user))
 
-            report.status_change(username=db_user.username, status=status, user=user, user_admin=db_user.admin)
+            asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
 
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
 
@@ -117,9 +119,9 @@ async def review():
 
             await update_user_status(db, db_user, status)
             await start_user_expire(db, db_user)
-            db_user = UserResponse.model_validate(db_user)
+            user = UserResponse.model_validate(db_user)
 
-            report.status_change(username=db_user.username, status=status, user=db_user, user_admin=db_user.admin)
+            asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
 
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
 
