@@ -317,6 +317,8 @@ class AdminContent(Static):
         return self.table.coordinate_to_cell_key(Coordinate(self.table.cursor_row, 0)).row_key.value
 
     async def action_delete_admin(self):
+        if not self.table.columns:
+            return
         self.app.push_screen(AdminDelete(self.db, self.admin_operator, self.selected_admin, self._refresh_table))
 
     def _refresh_table(self):
@@ -326,6 +328,8 @@ class AdminContent(Static):
         self.app.push_screen(AdminCreateModale(self.db, self.admin_operator, self._refresh_table))
 
     async def action_modify_admin(self):
+        if not self.table.columns:
+            return
         admin = await self.admin_operator.get_validated_admin(self.db, username=self.selected_admin)
         self.app.push_screen(AdminModifyModale(self.db, self.admin_operator, admin, self._refresh_table))
 
