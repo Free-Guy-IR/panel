@@ -241,7 +241,7 @@ class AdminContent(Static):
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="admin-list")
-        yield Static("No admins found\nCreate an admin by pressing 'c'", classes="title box", id="no-admins")
+        yield Static("No admin found\nCreate an admin by pressing 'c'", classes="title box", id="no-admins")
 
     async def on_mount(self) -> None:
         self.db = await anext(get_db())
@@ -375,4 +375,5 @@ class AdminContent(Static):
         return readable_size(int(usage.scalar() or 0))
 
     async def key_enter(self) -> None:
-        await self.action_modify_admin()
+        if self.table.columns:
+            await self.action_modify_admin()
