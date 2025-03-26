@@ -1,5 +1,3 @@
-from typing import Optional
-
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -77,10 +75,6 @@ class AdminCreate(AdminModify):
 
     username: str
     password: str
-
-
-class AdminPartialModify(AdminModify):
-    __annotations__ = {k: Optional[v] for k, v in AdminModify.__annotations__.items()}
 
 
 class AdminInDB(AdminDetails):

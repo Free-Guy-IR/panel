@@ -36,7 +36,7 @@ from app.db.models import (
 )
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
-from app.models.admin import AdminPartialModify, AdminCreate, AdminModify
+from app.models.admin import AdminCreate, AdminModify
 from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
 from app.models.user import (
@@ -1031,7 +1031,7 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
     Returns:
         Admin: The updated admin object.
     """
-    if modified_admin.is_sudo:
+    if modified_admin.is_sudo is not None:
         db_admin.is_sudo = modified_admin.is_sudo
     if modified_admin.is_disabled is not None:
         db_admin.is_disabled = modified_admin.is_disabled
@@ -1056,42 +1056,6 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
     return db_admin
 
 
-async def partial_update_admin(db: AsyncSession, dbadmin: Admin, modified_admin: AdminPartialModify) -> Admin:
-    """
-    Partially updates an admin's details.
-
-    Args:
-        db (AsyncSession): Database session.
-        dbadmin (Admin): The admin object to be updated.
-        modified_admin (AdminPartialModify): The modified admin data.
-
-    Returns:
-        Admin: The updated admin object.
-    """
-    if modified_admin.is_sudo is not None:
-        dbadmin.is_sudo = modified_admin.is_sudo
-    if modified_admin.is_disabled is not None:
-        dbadmin.is_disabled = modified_admin.is_disabled
-    if modified_admin.password is not None and dbadmin.hashed_password != modified_admin.hashed_password:
-        dbadmin.hashed_password = modified_admin.hashed_password
-        dbadmin.password_reset_at = datetime.now(timezone.utc)
-    if modified_admin.telegram_id is not None:
-        dbadmin.telegram_id = modified_admin.telegram_id
-    if modified_admin.discord_webhook is not None:
-        dbadmin.discord_webhook = modified_admin.discord_webhook
-    if modified_admin.sub_template:
-        dbadmin.sub_template = modified_admin.sub_template
-    if modified_admin.sub_domain:
-        dbadmin.sub_domain = modified_admin.sub_domain
-    if modified_admin.support_url:
-        dbadmin.support_url = modified_admin.support_url
-    if modified_admin.profile_title:
-        dbadmin.profile_title = modified_admin.profile_title
-
-    await db.commit()
-    return await get_admin(db, dbadmin.username)
-
-
 async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:
     """
     Removes an admin from the database.
@@ -1099,9 +1063,6 @@ async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:
     Args:
         db (AsyncSession): Database session.
         dbadmin (Admin): The admin object to be removed.
-
-    Returns:
-        Admin: The removed admin object.
     """
     await db.delete(dbadmin)
     await db.commit()

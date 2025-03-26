@@ -45,6 +45,12 @@ run-migration:
 .PHONY: run
 run:
 	@uv run main.py
+	
+# run marzban-cli
+.PHONY: run-cli
+run-cli:
+	@uv run marzban-cli.py
+
 
 # Run marzban with watchfiles
 .PHONY: run-watch
