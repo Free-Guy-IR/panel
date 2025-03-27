@@ -28,9 +28,7 @@ VITE_BASE_API = (
 )
 
 XRAY_JSON = config("XRAY_JSON", default="./xray_config.json")
-XRAY_FALLBACKS_INBOUND_TAG = config("XRAY_FALLBACKS_INBOUND_TAG", cast=str, default="") or config(
-    "XRAY_FALLBACK_INBOUND_TAG", cast=str, default=""
-)
+XRAY_FALLBACKS_INBOUND_TAGS = config("XRAY_FALLBACKS_INBOUND_TAG", cast=lambda v: [tag.strip() for tag in v.split(",")] if v else [], default="")
 XRAY_EXECUTABLE_PATH = config("XRAY_EXECUTABLE_PATH", default="/usr/local/bin/xray")
 XRAY_ASSETS_PATH = config("XRAY_ASSETS_PATH", default="/usr/local/share/xray")
 XRAY_EXCLUDE_INBOUND_TAGS = config("XRAY_EXCLUDE_INBOUND_TAGS", default="").split()
