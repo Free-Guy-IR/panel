@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from sqlalchemy import (
@@ -14,10 +14,14 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
     event,
+    and_,
+    case,
+    or_,
+    Numeric,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql.expression import select, text
+from sqlalchemy.sql.expression import select, text, FunctionElement
 from sqlalchemy.ext.compiler import compiles
 from app.db.base import Base
 
@@ -56,6 +60,24 @@ users_groups_association = Table(
     Column("user_id", ForeignKey("users.id"), primary_key=True),
     Column("groups_id", ForeignKey("groups.id"), primary_key=True),
 )
+
+
+class DaysDiff(FunctionElement):
+    type = Numeric()
+    name = 'days_diff'
+    inherit_cache = True
+
+@compiles(DaysDiff, 'postgresql')
+def compile_days_diff_postgresql(element, compiler, **kw):
+    return "EXTRACT(EPOCH FROM (expire - CURRENT_TIMESTAMP)) / 86400"
+
+@compiles(DaysDiff, 'mysql')
+def compile_days_diff_mysql(element, compiler, **kw):
+    return "DATEDIFF(expire, UTC_TIMESTAMP())"
+
+@compiles(DaysDiff, 'sqlite')
+def compile_days_diff_sqlite(element, compiler, **kw):
+    return "(julianday(expire) - julianday('now'))"
 
 
 class Admin(Base):
@@ -207,6 +229,80 @@ class User(Base):
     @property
     def group_names(self):
         return [group.name for group in self.groups]
+
+    @hybrid_property
+    def is_expired(self) -> bool:
+        return self.expire is not None and self.expire <= datetime.now(timezone.utc)
+
+    @is_expired.expression
+    def is_expired(cls):
+        return and_(cls.expire.isnot(None), cls.expire <= func.current_timestamp())
+
+    @hybrid_property
+    def is_limited(self) -> bool:
+        return self.data_limit is not None and self.data_limit > 0 and self.data_limit <= self.used_traffic
+
+    @is_limited.expression
+    def is_limited(cls):
+        return and_(cls.data_limit.isnot(None), cls.data_limit > 0, cls.data_limit <= cls.used_traffic)
+
+    @hybrid_property
+    def become_online(self) -> bool:
+        now = datetime.now(timezone.utc)
+
+        # Check if online_at is set and greater than or equal to base time
+        if self.online_at:
+            base_time = self.edit_at or self.created_at
+            return self.online_at >= base_time
+
+        # Check if on_hold_timeout has passed
+        if self.on_hold_timeout and self.on_hold_timeout <= now:
+            return True
+
+        return False
+
+    @become_online.expression
+    def become_online(cls):
+        now = func.current_timestamp()
+        base_time = case((cls.edit_at.isnot(None), cls.edit_at), else_=cls.created_at)
+
+        return or_(
+            # online_at condition
+            and_(cls.online_at.isnot(None), cls.online_at >= base_time),
+            # on_hold_timeout condition
+            and_(cls.online_at.is_(None), cls.on_hold_timeout.isnot(None), cls.on_hold_timeout <= now),
+        )
+
+    @hybrid_property
+    def usage_percentage(self) -> float:
+        if not self.data_limit or self.data_limit == 0:
+            return 0.0
+        return (self.used_traffic * 100) / self.data_limit
+
+    @usage_percentage.expression
+    def usage_percentage(cls):
+        return case(
+            (
+                and_(cls.data_limit.isnot(None), cls.data_limit > 0),
+                func.least((cls.used_traffic * 100.0) / cls.data_limit, 100.0),
+            ),
+            else_=0.0,
+        )
+
+    @hybrid_property
+    def days_left(self) -> int:
+        if self.expire is None:
+            return 0
+        remaining_days = (self.expire - datetime.now(timezone.utc)).days
+        return max(remaining_days, 0)
+
+    @days_left.expression
+    def days_left(cls):
+        return case(
+            (cls.expire.isnot(None),
+             func.greatest(func.floor(DaysDiff()), 0)),
+            else_=0
+        )
 
 
 template_group_association = Table(

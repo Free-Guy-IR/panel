@@ -1,5 +1,6 @@
 from app.notification.client import send_telegram_message
 from app.models.user import UserResponse
+from app.utils.system import readable_size
 from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_ADMIN_ID, TELEGRAM_NOTIFY
 
 
@@ -31,7 +32,7 @@ async def create_user(user: UserResponse, by: str):
         "*🆕 #Create User*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Username:** `{user.username}`\n"
-        + f"**Data Limit**: `{user.data_limit}`\n"
+        + f"**Data Limit**: `{readable_size(user.data_limit)}`\n"
         + f"**Expire Date:** `{user.expire}`\n"
         + f"**Data Limit Reset Strategy:** `{user.data_limit_reset_strategy.value}`\n"
         + f"**Has Next Plan**: `{bool(user.next_plan)}`\n"
@@ -50,7 +51,7 @@ async def modify_user(user: UserResponse, by: str):
         "*✏️ #Modify User*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Username:** `{user.username}`\n"
-        + f"**Data Limit**: `{user.data_limit}`\n"
+        + f"**Data Limit**: `{readable_size(user.data_limit)}`\n"
         + f"**Expire Date:** `{user.expire}`\n"
         + f"**Data Limit Reset Strategy:** `{user.data_limit_reset_strategy.value}`\n"
         + f"**Has Next Plan**: `{bool(user.next_plan)}`\n"
@@ -84,7 +85,7 @@ async def reset_user_data_usage(user: UserResponse, by: str):
         "🔁 #Reset User Data Usage\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Username:** `{user.username}`\n"
-        + f"**Data Limit:** `{user.data_limit}`\n"
+        + f"**Data Limit**: `{readable_size(user.data_limit)}`\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"_Belongs To_: `{user.admin.username if user.admin else None}`\n"
         + f"_By: #{by}_"
@@ -100,7 +101,7 @@ async def user_data_reset_by_next(user: UserResponse, by: str):
         "🔁 #Reset User By Next\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"**Username:** `{user.username}`\n"
-        + f"**Data Limit:** `{user.data_limit}`\n"
+        + f"**Data Limit**: `{readable_size(user.data_limit)}`\n"
         + f"**Expire Date:** `{user.expire}`\n"
         + "➖➖➖➖➖➖➖➖➖\n"
         + f"_Belongs To_: `{user.admin.username if user.admin else None}`\n"

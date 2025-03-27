@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Tuple, Union
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, func, select, update, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Query, joinedload, selectinload
 from sqlalchemy.sql.functions import coalesce
@@ -403,6 +403,86 @@ async def delete_expired_users(
     await db.commit()
 
     return usernames_to_delete, result.rowcount
+
+
+async def get_active_to_expire_users(db: AsyncSession) -> list[User]:
+    stmt = get_user_queryset()
+    stmt = stmt.where(User.status == UserStatus.active).where(User.is_expired)
+
+    result = await db.execute(stmt)
+    return list(result.unique().scalars().all())
+
+
+async def get_active_to_limited_users(db: AsyncSession) -> list[User]:
+    stmt = get_user_queryset()
+    stmt = stmt.where(User.status == UserStatus.active).where(User.is_limited)
+
+    result = await db.execute(stmt)
+    return list(result.unique().scalars().all())
+
+
+async def get_on_hold_to_active_users(db: AsyncSession) -> list[User]:
+    stmt = get_user_queryset()
+    stmt = stmt.where(User.status == UserStatus.on_hold).where(User.become_online)
+
+    result = await db.execute(stmt)
+    return list(result.unique().scalars().all())
+
+
+async def get_usage_percentage_reached_users(db: AsyncSession, percentage: int) -> list[User]:
+    """
+    Get active users who have reached or exceeded the specified usage percentage threshold
+    and don't have an existing notification reminder for this threshold.
+    """
+    # Subquery to check for existing notification reminders
+    existing_reminder_subq = (
+        select(NotificationReminder.user_id)
+        .where(
+            NotificationReminder.user_id == User.id,
+            NotificationReminder.type == ReminderType.data_usage,
+            NotificationReminder.threshold == percentage,
+        )
+        .exists()
+    )
+
+    stmt = (
+        get_user_queryset()
+        .options(joinedload(User.notification_reminders))
+        .where(User.status == UserStatus.active)
+        .where(User.usage_percentage >= percentage)
+        .where(not_(existing_reminder_subq))  # Only users without existing reminders
+    )
+
+    result = await db.execute(stmt)
+    return list(result.unique().scalars().all())
+
+
+async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]:
+    """
+    Get active users who have reached or exceeded the specified days left threshold
+    and don't have an existing notification reminder for this threshold.
+    """
+    # Subquery to check for existing notification reminders
+    existing_reminder_subq = (
+        select(NotificationReminder.user_id)
+        .where(
+            NotificationReminder.user_id == User.id,
+            NotificationReminder.type == ReminderType.expiration_date,
+            NotificationReminder.threshold == days,
+        )
+        .exists()
+    )
+
+    stmt = (
+        get_user_queryset()
+        .options(joinedload(User.notification_reminders))
+        .where(User.status == UserStatus.active)
+        .where(User.days_left <= days)
+        .where(not_(existing_reminder_subq))  # Only users without existing reminders
+    )
+
+    result = await db.execute(stmt)
+    return list(result.unique().scalars().all())
 
 
 async def get_user_usages(db: AsyncSession, dbuser: User, start: datetime, end: datetime) -> List[UserUsageResponse]:
@@ -892,7 +972,7 @@ async def get_all_users_usages(db: AsyncSession, admin: str, start: datetime, en
     return list(usages.values())
 
 
-async def update_user_status(db: AsyncSession, dbuser: User, status: UserStatus) -> User:
+async def update_user_status(db: AsyncSession, db_user: User, status: UserStatus) -> User:
     """
     Updates a user's status and records the time of change.
 
@@ -904,9 +984,11 @@ async def update_user_status(db: AsyncSession, dbuser: User, status: UserStatus)
     Returns:
         User: The updated user object.
     """
-    dbuser.status = status
-    dbuser.last_status_change = datetime.now(timezone.utc)
+    db_user.status = status
+    db_user.last_status_change = datetime.now(timezone.utc)
     await db.commit()
+    await db.refresh(db_user)
+    return db_user
 
 
 async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
@@ -927,7 +1009,7 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     return await get_user(db, db_user.username)
 
 
-async def start_user_expire(db: AsyncSession, dbuser: User) -> User:
+async def start_user_expire(db: AsyncSession, db_user: User) -> User:
     """
     Starts the expiration timer for a user.
 
@@ -938,10 +1020,14 @@ async def start_user_expire(db: AsyncSession, dbuser: User) -> User:
     Returns:
         User: The updated user object.
     """
-    dbuser.expire = datetime.now(timezone.utc) + timedelta(seconds=dbuser.on_hold_expire_duration)
-    dbuser.on_hold_expire_duration = None
-    dbuser.on_hold_timeout = None
+    db_user.expire = datetime.now(timezone.utc) + timedelta(seconds=db_user.on_hold_expire_duration)
+    db_user.on_hold_expire_duration = None
+    db_user.on_hold_timeout = None
+    db_user.status = UserStatus.active
+
     await db.commit()
+    await db.refresh(db_user)
+    return db_user
 
 
 async def get_system_usage(db: AsyncSession) -> System:

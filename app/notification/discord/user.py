@@ -1,6 +1,7 @@
 from app.notification.client import send_discord_webhook
 from config import DISCORD_WEBHOOK_URL
 from app.models.user import UserResponse
+from app.utils.system import readable_size
 from . import colors
 
 _status = {
@@ -37,7 +38,7 @@ async def create_user(user: UserResponse, by: str):
             {
                 "title": "🆕 Create User",
                 "description": f"**Username:** {user.username}\n"
-                + f"**Data Limit**: {user.data_limit}\n"
+                + f"**Data Limit**: {readable_size(user.data_limit)}\n"
                 + f"**Expire Date:** {user.expire}\n"
                 + f"**Data Limit Reset Strategy:** {user.data_limit_reset_strategy.value}\n"
                 + f"**Has Next Plan**: {bool(user.next_plan)}",
@@ -59,7 +60,7 @@ async def modify_user(user: UserResponse, by: str):
             {
                 "title": "✏️ Modify User",
                 "description": f"**Username:** {user.username}\n"
-                + f"**Data Limit**: {user.data_limit}\n"
+                + f"**Data Limit**: {readable_size(user.data_limit)}\n"
                 + f"**Expire Date:** {user.expire}\n"
                 + f"**Data Limit Reset Strategy:** {user.data_limit_reset_strategy.value}\n"
                 + f"**Has Next Plan**: {bool(user.next_plan)}",
@@ -100,7 +101,8 @@ async def reset_user_data_usage(user: UserResponse, by: str):
         "embeds": [
             {
                 "title": "🔁 Reset User Data Usage",
-                "description": f"**Username:** {user.username}\n",
+                "description": f"**Username:** {user.username}\n"
+                + f"**Data Limit**: {readable_size(user.data_limit)}\n",
                 "color": colors.CYAN,
                 "footer": {
                     "text": f"ID: {user.id}\nBelongs To:{user.admin.username if user.admin else None}\nBy: {by}"
@@ -121,7 +123,7 @@ async def user_data_reset_by_next(user: UserResponse, by: str):
             {
                 "title": "🔁 Reset User",
                 "description": f"**Username:** {user.username}\n"
-                + f"**Data Limit:** {user.data_limit}\n"
+                + f"**Data Limit**: {readable_size(user.data_limit)}\n"
                 + f"**Expire Date:** {user.expire}",
                 "color": colors.CYAN,
                 "footer": {
