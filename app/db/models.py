@@ -64,18 +64,21 @@ users_groups_association = Table(
 
 class DaysDiff(FunctionElement):
     type = Numeric()
-    name = 'days_diff'
+    name = "days_diff"
     inherit_cache = True
 
-@compiles(DaysDiff, 'postgresql')
+
+@compiles(DaysDiff, "postgresql")
 def compile_days_diff_postgresql(element, compiler, **kw):
     return "EXTRACT(EPOCH FROM (expire - CURRENT_TIMESTAMP)) / 86400"
 
-@compiles(DaysDiff, 'mysql')
+
+@compiles(DaysDiff, "mysql")
 def compile_days_diff_mysql(element, compiler, **kw):
     return "DATEDIFF(expire, UTC_TIMESTAMP())"
 
-@compiles(DaysDiff, 'sqlite')
+
+@compiles(DaysDiff, "sqlite")
 def compile_days_diff_sqlite(element, compiler, **kw):
     return "(julianday(expire) - julianday('now'))"
 
@@ -298,11 +301,7 @@ class User(Base):
 
     @days_left.expression
     def days_left(cls):
-        return case(
-            (cls.expire.isnot(None),
-             func.greatest(func.floor(DaysDiff()), 0)),
-            else_=0
-        )
+        return case((cls.expire.isnot(None), func.greatest(func.floor(DaysDiff()), 0)), else_=0)
 
 
 template_group_association = Table(
