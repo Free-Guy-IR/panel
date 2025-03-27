@@ -288,6 +288,7 @@ class AdminContent(Static):
         self.table = self.query_one("#admin-list")
         self.no_admins = self.query_one("#no-admins")
         self.no_admins.styles.display = "none"
+        self.table.styles.display = "none"
         self.table.cursor_type = "row"
         self.table.styles.text_align = "center"
         await self.admins_list()
@@ -316,7 +317,6 @@ class AdminContent(Static):
         admins = await self.admin_operator.get_admins(self.db, offset=0, limit=10)
         if not admins:
             self.no_admins.styles.display = "block"
-            self.table.styles.display = "none"
             return
         else:
             self.no_admins.styles.display = "none"

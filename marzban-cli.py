@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header
-from cli.admin import AdminContent
 from cli.help import HelpModal
 
 
@@ -21,6 +20,8 @@ class MarzbanCLI(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
+        from cli.admin import AdminContent
+
         yield Header()
         yield AdminContent(id="admin-content")
         yield Footer()
