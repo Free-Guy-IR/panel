@@ -6,11 +6,18 @@ from . import colors
 
 _status = {
     "active": "**✅ Activated**",
+    "on_hold": "**🕔 On Hold**",
     "disabled": "**❌ Disabled**",
     "limited": "**🪫 Limited**",
-    "expired": "**🕔 Expired**",
+    "expired": "**📅 Expired**",
 }
-_status_color = {"active": colors.GREEN, "disabled": colors.RED, "limited": colors.YELLOW, "expired": colors.PURPLE}
+_status_color = {
+    "active": colors.GREEN,
+    "on_hold": colors.PURPLE,
+    "disabled": colors.WHITE,
+    "limited": colors.RED,
+    "expired": colors.YELLOW,
+}
 
 
 async def user_status_change(user: UserResponse, by: str):

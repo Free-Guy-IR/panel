@@ -5,10 +5,11 @@ from config import TELEGRAM_LOGGER_TOPIC_ID, TELEGRAM_LOGGER_CHANNEL_ID, TELEGRA
 
 
 _status = {
-    "active": "**✅ #Activated**",
-    "disabled": "**❌ #Disabled**",
-    "limited": "**🪫 #Limited**",
-    "expired": "**🕔 #Expired**",
+    "active": "**✅ Activated**",
+    "on_hold": "**🕔 On Hold**",
+    "disabled": "**❌ Disabled**",
+    "limited": "**🪫 Limited**",
+    "expired": "**📅 Expired**",
 }
 
 
