@@ -2,6 +2,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header
 from cli.admin import AdminContent
+from cli.help import HelpModal
 
 
 class MarzbanCLI(App):
@@ -15,6 +16,7 @@ class MarzbanCLI(App):
 
     BINDINGS = [
         ("q", "quit", "Quit"),
+        ("?", "help", "Help"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -34,6 +36,11 @@ class MarzbanCLI(App):
     async def action_quit(self) -> None:
         """An action to quit the app."""
         self.exit()
+
+    def action_help(self) -> None:
+        """Show help information in a modal."""
+        admin_content = self.query_one("#admin-content")
+        self.push_screen(HelpModal(self.BINDINGS, admin_content.BINDINGS))
 
 
 if __name__ == "__main__":

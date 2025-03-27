@@ -117,4 +117,4 @@ class AdminOperation(BaseOperator):
         reseted_admin = AdminDetails.model_validate(db_admin)
         asyncio.create_task(notification.admin_usage_reset(reseted_admin, admin.username))
 
-        return AdminDetails.model_validate(db_admin)
+        return reseted_admin

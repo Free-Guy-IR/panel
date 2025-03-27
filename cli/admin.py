@@ -55,6 +55,41 @@ class AdminDelete(BaseModal):
         await self.key_escape()
 
 
+class AdminResetUsage(BaseModal):
+    def __init__(
+        self, db: AsyncSession, operation: AdminOperation, username: str, on_close: callable, *args, **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.db = db
+        self.operation = operation
+        self.username = username
+        self.on_close = on_close
+
+    async def on_mount(self) -> None:
+        """Ensure the first button is focused."""
+        reset_button = self.query_one("#cancel")
+        self.set_focus(reset_button)
+
+    def compose(self) -> ComposeResult:
+        with Container(classes="modal-box-delete"):
+            yield Static("Are you sure about resetting this admin usage?", classes="title")
+            yield Horizontal(
+                Button("Reset", id="reset", variant="success"),
+                Button("Cancel", id="cancel", variant="error"),
+                classes="button-container",
+            )
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "reset":
+            try:
+                await self.operation.reset_admin_usage(self.db, self.username, SYSTEM_ADMIN)
+                self.notify("Admin usage reseted successfully", severity="success", title="Success")
+                self.on_close()
+            except ValueError as e:
+                self.notify(str(e), severity="error", title="Error")
+        await self.key_escape()
+
+
 class AdminCreateModale(BaseModal):
     def __init__(self, db: AsyncSession, operation: AdminOperation, on_close: callable, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -235,19 +270,23 @@ class AdminContent(Static):
     BINDINGS = [
         ("c", "create_admin", "Create admin"),
         ("m", "modify_admin", "Modify admin"),
+        ("r", "reset_admin_usage", "Reset admin usage"),
         ("d", "delete_admin", "Delete admin"),
         ("i", "import_from_env", "Import from env"),
     ]
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="admin-list")
-        yield Static("No admin found\nCreate an admin by pressing 'c'", classes="title box", id="no-admins")
+        yield Static(
+            "No admin found\n\nCreate an admin by pressing 'c'\n\nhelp by pressing '?'",
+            classes="title box",
+            id="no-admins",
+        )
 
     async def on_mount(self) -> None:
         self.db = await anext(get_db())
         self.table = self.query_one("#admin-list")
         self.no_admins = self.query_one("#no-admins")
-        self.no_admins.styles.text_align = "center"
         self.no_admins.styles.display = "none"
         self.table.cursor_type = "row"
         self.table.styles.text_align = "center"
@@ -277,7 +316,11 @@ class AdminContent(Static):
         admins = await self.admin_operator.get_admins(self.db, offset=0, limit=10)
         if not admins:
             self.no_admins.styles.display = "block"
+            self.table.styles.display = "none"
             return
+        else:
+            self.no_admins.styles.display = "none"
+            self.table.styles.display = "block"
         usage_data = await asyncio.gather(
             *[self.calculate_admin_usage(admin.id) for admin in admins],
             *[self.calculate_admin_reseted_usage(admin.id) for admin in admins],
@@ -369,6 +412,11 @@ class AdminContent(Static):
                     )
         except ValueError as e:
             self.notify(str(e), severity="error", title="Error")
+
+    async def action_reset_admin_usage(self):
+        if not self.table.columns:
+            return
+        self.app.push_screen(AdminResetUsage(self.db, self.admin_operator, self.selected_admin, self._refresh_table))
 
     async def calculate_admin_usage(self, admin_id: int) -> str:
         usage = await self.db.execute(select(func.sum(User.used_traffic)).filter_by(admin_id=admin_id))
