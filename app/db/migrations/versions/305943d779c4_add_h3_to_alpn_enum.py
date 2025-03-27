@@ -5,8 +5,8 @@ Revises: 31f92220c0d0
 Create Date: 2024-07-03 19:27:15.282711
 
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 
@@ -17,44 +17,47 @@ branch_labels = None
 depends_on = None
 
 
-# Describing of enum
+# Enum configuration
 enum_name = "alpn"
 temp_enum_name = f"temp_{enum_name}"
 old_values = ("none", "h2", "http/1.1", "h2,http/1.1")
 new_values = ("h3", "h3,h2", "h3,h2,http/1.1", *old_values)
-# on downgrade
+
+# Downgrade configuration
 downgrade_from = ("h3", "h3,h2", "h3,h2,http/1.1", "")
 downgrade_to = "none"
+
 old_type = sa.Enum(*old_values, name=enum_name)
 new_type = sa.Enum(*new_values, name=enum_name)
-temp_type = sa.Enum(*new_values, name=temp_enum_name)
 
-
-# Describing of table
 table_name = "hosts"
 column_name = "alpn"
 
+def upgrade() -> None:
+    # 1. Create new enum type
+    new_type.create(op.get_bind(), checkfirst=True)
 
-def upgrade():
-    # Create new enum type
-    new_type.create(op.get_bind(), checkfirst=False)
-
-    # Handle PostgreSQL specifically
-    if isinstance(op.get_bind().dialect, postgresql.dialect):
-        # Create a temporary text column
-        with op.batch_alter_table(table_name) as batch_op:
-            batch_op.add_column(sa.Column('alpn_new', sa.Text, nullable=True))
-        
-        # Copy data from old column to new column
+    # 2. Handle PostgreSQL-specific migration
+    if op.get_bind().dialect.name == 'postgresql':
         connection = op.get_bind()
-        connection.execute(
-            sa.text(f"UPDATE {table_name} SET alpn_new = alpn::text")
-        )
         
-        # Drop the old column and rename the new one
+        # Temporary migration column
+        with op.batch_alter_table(table_name) as batch_op:
+            batch_op.add_column(sa.Column('alpn_new', sa.Text(), nullable=True))
+        
+        # Copy existing values, using a CASE to handle potential unmapped values
+        connection.execute(sa.text(f"""
+            UPDATE {table_name} 
+            SET alpn_new = CASE 
+                WHEN alpn IS NULL THEN 'none'
+                ELSE alpn::text 
+            END
+        """))
+        
+        # Drop old column and rename new column
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.drop_column('alpn')
-            batch_op.alter_column('alpn_new',
+            batch_op.alter_column('alpn_new', 
                 new_column_name='alpn',
                 type_=new_type,
                 nullable=False,
@@ -62,7 +65,7 @@ def upgrade():
                 postgresql_using='alpn_new::alpn'
             )
     else:
-        # For MySQL and SQLite, just modify the column type
+        # For other databases, use standard column type modification
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.alter_column(
                 column_name,
@@ -71,27 +74,31 @@ def upgrade():
                 existing_nullable=False
             )
 
+def downgrade() -> None:
+    # 1. Create old enum type
+    old_type.create(op.get_bind(), checkfirst=True)
 
-def downgrade():
-    # Create old enum type
-    old_type.create(op.get_bind(), checkfirst=False)
-
-    # Handle PostgreSQL specifically
-    if isinstance(op.get_bind().dialect, postgresql.dialect):
-        # Create a temporary text column
-        with op.batch_alter_table(table_name) as batch_op:
-            batch_op.add_column(sa.Column('alpn_old', sa.Text, nullable=True))
-        
-        # Copy data from current column to old column, replacing new values
+    # 2. Handle PostgreSQL-specific downgrade
+    if op.get_bind().dialect.name == 'postgresql':
         connection = op.get_bind()
-        connection.execute(
-            sa.text(f"UPDATE {table_name} SET alpn_old = CASE WHEN alpn::text IN {downgrade_from} THEN '{downgrade_to}' ELSE alpn::text END")
-        )
         
-        # Drop the current column and rename the old one
+        # Temporary migration column
+        with op.batch_alter_table(table_name) as batch_op:
+            batch_op.add_column(sa.Column('alpn_old', sa.Text(), nullable=True))
+        
+        # Copy existing values with specific downgrade logic
+        connection.execute(sa.text(f"""
+            UPDATE {table_name} 
+            SET alpn_old = CASE 
+                WHEN alpn::text IN {downgrade_from} THEN '{downgrade_to}'
+                ELSE alpn::text
+            END
+        """))
+        
+        # Drop current column and rename old column
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.drop_column('alpn')
-            batch_op.alter_column('alpn_old',
+            batch_op.alter_column('alpn_old', 
                 new_column_name='alpn',
                 type_=old_type,
                 nullable=False,
@@ -99,7 +106,7 @@ def downgrade():
                 postgresql_using='alpn_old::alpn'
             )
     else:
-        # For MySQL and SQLite, just modify the column type back
+        # For other databases, use standard column type modification
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.alter_column(
                 column_name,
@@ -109,4 +116,4 @@ def downgrade():
             )
 
     # Drop the new enum type
-    new_type.drop(op.get_bind(), checkfirst=False)
+    new_type.drop(op.get_bind(), checkfirst=True)

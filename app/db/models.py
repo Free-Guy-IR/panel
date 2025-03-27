@@ -17,35 +17,12 @@ from sqlalchemy import (
     and_,
     case,
     or_,
-    Numeric,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql.expression import select, text, FunctionElement
-from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import select, text
 from app.db.base import Base
-
-
-class CaseSensitiveString(String):
-    def __init__(self, length=None):
-        super(CaseSensitiveString, self).__init__(length)
-
-
-# Modify how this type is handled for each dialect
-@compiles(CaseSensitiveString, "sqlite")
-def compile_cs_sqlite(element, compiler, **kw):
-    return f"VARCHAR({element.length}) COLLATE BINARY"  # BINARY is case-sensitive in SQLite
-
-
-@compiles(CaseSensitiveString, "postgresql")
-def compile_cs_postgresql(element, compiler, **kw):
-    return f'VARCHAR({element.length}) COLLATE "C"'  # "C" collation is case-sensitive
-
-
-@compiles(CaseSensitiveString, "mysql")
-def compile_cs_mysql(element, compiler, **kw):
-    return f"VARCHAR({element.length}) COLLATE utf8mb4_bin"  # utf8mb4_bin is case-sensitive
-
+from app.db.comiles_types import CaseSensitiveString, DaysDiff
 
 inbounds_groups_association = Table(
     "inbounds_groups_association",
@@ -60,27 +37,6 @@ users_groups_association = Table(
     Column("user_id", ForeignKey("users.id"), primary_key=True),
     Column("groups_id", ForeignKey("groups.id"), primary_key=True),
 )
-
-
-class DaysDiff(FunctionElement):
-    type = Numeric()
-    name = "days_diff"
-    inherit_cache = True
-
-
-@compiles(DaysDiff, "postgresql")
-def compile_days_diff_postgresql(element, compiler, **kw):
-    return "EXTRACT(EPOCH FROM (expire - CURRENT_TIMESTAMP)) / 86400"
-
-
-@compiles(DaysDiff, "mysql")
-def compile_days_diff_mysql(element, compiler, **kw):
-    return "DATEDIFF(expire, UTC_TIMESTAMP())"
-
-
-@compiles(DaysDiff, "sqlite")
-def compile_days_diff_sqlite(element, compiler, **kw):
-    return "(julianday(expire) - julianday('now'))"
 
 
 class Admin(Base):
@@ -285,10 +241,7 @@ class User(Base):
     @usage_percentage.expression
     def usage_percentage(cls):
         return case(
-            (
-                and_(cls.data_limit.isnot(None), cls.data_limit > 0),
-                func.least((cls.used_traffic * 100.0) / cls.data_limit, 100.0),
-            ),
+            (and_(cls.data_limit.isnot(None), cls.data_limit > 0), (cls.used_traffic * 100.0) / cls.data_limit),
             else_=0.0,
         )
 
@@ -301,7 +254,7 @@ class User(Base):
 
     @days_left.expression
     def days_left(cls):
-        return case((cls.expire.isnot(None), func.greatest(func.floor(DaysDiff()), 0)), else_=0)
+        return case((cls.expire.isnot(None), func.floor(DaysDiff())), else_=0)
 
 
 template_group_association = Table(

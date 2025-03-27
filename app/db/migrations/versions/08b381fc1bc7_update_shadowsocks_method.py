@@ -8,6 +8,7 @@ Create Date: 2023-11-03 13:41:57.120379
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import cast, String
 import json
 
 # revision identifiers, used by Alembic.
@@ -31,7 +32,7 @@ def upgrade() -> None:
 
     # Select proxies where type = 'Shadowsocks'
     stmt = sa.select(proxies_table.c.id, proxies_table.c.settings).where(
-        proxies_table.c.type == 'Shadowsocks'
+        cast(proxies_table.c.type, String) == 'Shadowsocks'
     )
     result = connection.execute(stmt)
 
@@ -55,7 +56,7 @@ def downgrade() -> None:
 
     # Select proxies where type = 'Shadowsocks'
     stmt = sa.select(proxies_table.c.id, proxies_table.c.settings).where(
-        proxies_table.c.type == 'Shadowsocks'
+        cast(proxies_table.c.type, String) == 'Shadowsocks'
     )
     result = connection.execute(stmt)
 
