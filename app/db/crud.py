@@ -2,6 +2,7 @@
 Functions for managing proxy hosts, users, user templates, nodes, and administrative tasks.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Tuple, Union
@@ -485,32 +486,40 @@ async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]
     return list(result.unique().scalars().all())
 
 
-async def get_user_usages(db: AsyncSession, dbuser: User, start: datetime, end: datetime) -> List[UserUsageResponse]:
+async def get_user_usages(db: AsyncSession, dbuser: User, start: datetime, end: datetime) -> list[UserUsageResponse]:
     """
     Retrieves user usages within a specified date range.
-
-    Args:
-        db (AsyncSession): Database session.
-        dbuser (User): The user object.
-        start (datetime): Start date for usage retrieval.
-        end (datetime): End date for usage retrieval.
-
-    Returns:
-        List[UserUsageResponse]: List of user usage responses.
     """
-
     usages = {
         0: UserUsageResponse(  # Main Core
             node_id=None, node_name="Master", used_traffic=0
         )
     }
 
-    for node in await db.query(Node).all():
-        usages[node.id] = UserUsageResponse(node_id=node.id, node_name=node.name, used_traffic=0)
+    # Get all nodes using modern SQLAlchemy 2.0 style
+    nodes_result = await db.execute(select(Node))
+    nodes = nodes_result.scalars().all()
 
-    cond = and_(NodeUserUsage.user_id == dbuser.id, NodeUserUsage.created_at >= start, NodeUserUsage.created_at <= end)
+    # Initialize node usages
+    for node in nodes:
+        usages[node.id] = UserUsageResponse(
+            node_id=node.id, 
+            node_name=node.name, 
+            used_traffic=0
+        )
 
-    for v in await db.query(NodeUserUsage).filter(cond):
+    # Get usage records with modern SQLAlchemy 2.0 style
+    cond = and_(
+        NodeUserUsage.user_id == dbuser.id,
+        NodeUserUsage.created_at >= start,
+        NodeUserUsage.created_at <= end
+    )
+    usage_records = (await db.execute(
+        select(NodeUserUsage).where(cond)
+    )).scalars().all()
+
+    # Aggregate usage data
+    for v in usage_records:
         try:
             usages[v.node_id or 0].used_traffic += v.used_traffic
         except KeyError:
@@ -587,16 +596,16 @@ async def remove_user(db: AsyncSession, db_user: User) -> User:
     return db_user
 
 
-async def remove_users(db: AsyncSession, dbusers: List[User]):
+async def remove_users(db: AsyncSession, db_users: list[User]):
     """
     Removes multiple users from the database.
 
     Args:
         db (AsyncSession): Database session.
-        dbusers (List[User]): List of user objects to be removed.
+        dbusers (list[User]): List of user objects to be removed.
     """
-    for dbuser in dbusers:
-        await db.delete(dbuser)
+
+    await asyncio.gather(*[db.delete(user) for user in db_users])
     await db.commit()
 
 
