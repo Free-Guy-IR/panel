@@ -235,7 +235,8 @@ class UserOperator(BaseOperator):
             opts = sort.strip(",").split(",")
             for opt in opts:
                 try:
-                    sort_list.append(UsersSortingOptions[opt])
+                    enum_member = UsersSortingOptions[opt]
+                    sort_list.append(enum_member.value)
                 except KeyError:
                     self.raise_error(message=f'"{opt}" is not a valid sort option', code=400)
 
