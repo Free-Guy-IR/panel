@@ -52,7 +52,7 @@ TELEGRAM_LOGGER_TOPIC_ID = config("TELEGRAM_LOGGER_TOPIC_ID", cast=int, default=
 TELEGRAM_DEFAULT_VLESS_FLOW = config("TELEGRAM_DEFAULT_VLESS_FLOW", default="")
 TELEGRAM_NOTIFY = config("TELEGRAM_NOTIFY", cast=bool, default=False)
 
-NOTIFICATION_PROXY_URL = config("NOTIFICATION_PROXY_URL", cast=str, default="")
+NOTIFICATION_PROXY_URL = config("NOTIFICATION_PROXY_URL", default=None)
 
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = config("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", cast=int, default=1440)
 
@@ -113,6 +113,7 @@ WEBHOOK_ADDRESS = config(
     "WEBHOOK_ADDRESS", default="", cast=lambda v: [address.strip() for address in v.split(",")] if v else []
 )
 WEBHOOK_SECRET = config("WEBHOOK_SECRET", default=None)
+WEBHOOK_PROXY_URL = config("WEBHOOK_PROXY_URL", default=None)
 
 # recurrent notifications
 

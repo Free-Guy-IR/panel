@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import psutil
 import requests
 
-from app import scheduler
+from app import async_scheduler as scheduler
 
 
 @dataclass
@@ -71,7 +71,7 @@ rt_bw = RealtimeBandwidth(incoming_bytes=0, outgoing_bytes=0, incoming_packets=0
 
 # sample time is 2 seconds, values lower than this may not produce good results
 @scheduler.scheduled_job("interval", seconds=2, coalesce=True, max_instances=1)
-def record_realtime_bandwidth() -> None:
+async def record_realtime_bandwidth() -> None:
     global rt_bw
     last_perf_counter = rt_bw.last_perf_counter
     io = psutil.net_io_counters()
@@ -171,7 +171,7 @@ def get_public_ipv6():
 
 
 def readable_size(size_bytes):
-    if size_bytes <= 0:
+    if not size_bytes or size_bytes <= 0:
         return "0 B"
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
     i = int(math.floor(math.log(size_bytes, 1024)))

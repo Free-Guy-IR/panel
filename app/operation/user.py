@@ -78,7 +78,7 @@ class UserOperator(BaseOperator):
         user = await self.validate_user(db_user)
 
         asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
-        asyncio.create_task(notification.create_user(user, admin.username))
+        asyncio.create_task(notification.create_user(user, admin))
 
         logger.info(f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"')
 
@@ -106,10 +106,10 @@ class UserOperator(BaseOperator):
 
         logger.info(f'User "{user.username}" with id "{db_user.id}" modified by admin "{admin.username}"')
 
-        asyncio.create_task(notification.modify_user(user, admin.username))
+        asyncio.create_task(notification.modify_user(user, admin))
 
         if user.status != old_status:
-            asyncio.create_task(notification.user_status_change(user, admin.username))
+            asyncio.create_task(notification.user_status_change(user, admin))
 
             logger.info(f'User "{db_user.username}" status changed from "{old_status.value}" to "{user.status.value}"')
 
@@ -122,7 +122,7 @@ class UserOperator(BaseOperator):
         user = await self.validate_user(db_user)
         asyncio.create_task(node_manager.remove_user(user))
 
-        asyncio.create_task(notification.remove_user(user, admin.username))
+        asyncio.create_task(notification.remove_user(user, admin))
 
         logger.info(f'User "{db_user.username}" with id "{db_user.id}" deleted by admin "{admin.username}"')
         return {}
@@ -138,9 +138,9 @@ class UserOperator(BaseOperator):
             asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
 
         if user.status != old_status:
-            asyncio.create_task(notification.user_status_change(user, admin.username))
+            asyncio.create_task(notification.user_status_change(user, admin))
 
-        asyncio.create_task(notification.reset_user_data_usage(user, admin.username))
+        asyncio.create_task(notification.reset_user_data_usage(user, admin))
 
         logger.info(f'User "{db_user.username}" usage was reset by admin "{admin.username}"')
 
@@ -154,7 +154,7 @@ class UserOperator(BaseOperator):
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
             asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
 
-        asyncio.create_task(notification.user_subscription_revoked(user, admin.username))
+        asyncio.create_task(notification.user_subscription_revoked(user, admin))
 
         logger.info(f'User "{db_user.username}" subscription was revoked by admin "{admin.username}"')
 
@@ -181,9 +181,9 @@ class UserOperator(BaseOperator):
             asyncio.create_task(node_manager.update_user(user, inbounds=config.inbounds))
 
         if user.status != old_status:
-            asyncio.create_task(notification.user_status_change(user, admin.username))
+            asyncio.create_task(notification.user_status_change(user, admin))
 
-        asyncio.create_task(notification.user_data_reset_by_next(user, admin.username))
+        asyncio.create_task(notification.user_data_reset_by_next(user, admin))
 
         logger.info(f'User "{db_user.username}"\'s usage was reset by next plan by admin "{admin.username}"')
 

@@ -1,15 +1,15 @@
-from collections import deque
-from datetime import datetime as dt
+from datetime import datetime as dt, timezone as tz
 from enum import Enum
 from typing import Type
+import asyncio
 
 from pydantic import BaseModel
 
 from config import WEBHOOK_ADDRESS
 from app.models.admin import AdminDetails
-from app.models.user import UserResponse
+from app.models.user import UserResponse, UserStatus
 
-queue = deque()
+queue = asyncio.Queue()
 
 
 class Notification(BaseModel):
@@ -28,8 +28,8 @@ class Notification(BaseModel):
         reached_usage_percent = "reached_usage_percent"
         reached_days_left = "reached_days_left"
 
-    enqueued_at: float = dt.utcnow().timestamp()
-    send_at: float = dt.utcnow().timestamp()
+    enqueued_at: float = dt.now(tz.utc).timestamp()
+    send_at: float = dt.now(tz.utc).timestamp()
     tries: int = 0
 
 
@@ -106,6 +106,19 @@ class UserSubscriptionRevoked(UserNotification):
     user: UserResponse
 
 
-def notify(message: Type[Notification]) -> None:
+async def status_change(user: UserResponse):
+    if user.status == UserStatus.limited:
+        await notify(UserLimited(username=user.username, user=user))
+    elif user.status == UserStatus.expired:
+        await notify(UserExpired(username=user.username, user=user))
+    elif user.status == UserStatus.disabled:
+        await notify(UserDisabled(username=user.username, user=user))
+    elif user.status == UserStatus.active:
+        await notify(UserEnabled(username=user.username, user=user))
+    elif user.status == UserStatus.on_hold:
+        await notify(UserEnabled(username=user.username, user=user))
+
+
+async def notify(message: Type[Notification]) -> None:
     if WEBHOOK_ADDRESS:
-        queue.append(message)
+        await queue.put(message)

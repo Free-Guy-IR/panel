@@ -7,8 +7,7 @@ from config import TELEGRAM_API_TOKEN, NOTIFICATION_PROXY_URL
 client = httpx.AsyncClient(
     http2=True,
     timeout=httpx.Timeout(10),
-    limits=httpx.Limits(max_keepalive_connections=1),
-    proxy=NOTIFICATION_PROXY_URL if NOTIFICATION_PROXY_URL else None,
+    proxy=NOTIFICATION_PROXY_URL,
 )
 
 logger = get_logger("Notification")
