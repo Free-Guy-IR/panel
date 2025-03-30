@@ -33,10 +33,10 @@ async def reset_user_data_usage():
 
             db_user = await crud.reset_user_data_usage(db, db_user)
             user = UserResponse.model_validate(db_user)
-            asyncio.create_task(notification.reset_user_data_usage(user, SYSTEM_ADMIN.username))
+            asyncio.create_task(notification.reset_user_data_usage(user, SYSTEM_ADMIN))
 
             if old_status != db_user.status:
-                asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN.username))
+                asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
 
             # make user active if limited on usage reset
             if user.status == UserStatus.active:
