@@ -163,9 +163,9 @@ async def add_host(db: AsyncSession, new_host: CreateHost) -> ProxyHost:
 
 
 async def modify_host(db: AsyncSession, db_host: ProxyHost, modified_host: CreateHost) -> ProxyHost:
-    node_data = modified_host.model_dump(exclude={"id"})
+    host_data = modified_host.model_dump(exclude={"id"})
 
-    for key, value in node_data.items():
+    for key, value in host_data.items():
         setattr(db_host, key, value)
 
     await db.commit()

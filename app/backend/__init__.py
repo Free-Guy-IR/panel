@@ -42,6 +42,7 @@ async def hosts(storage: dict):
                 "http_headers": host.http_headers,
                 "mux_settings": host.mux_settings,
                 "transport_settings": host.transport_settings,
+                "status": host.status,
             }
 
 

@@ -1,9 +1,12 @@
+import json
 from enum import Enum
 from typing import Union
 from app import backend
-from app.db.models import ProxyHostSecurity, ProxyHostALPN, ProxyHostFingerprint
+from app.db.models import ProxyHostSecurity, ProxyHostALPN, ProxyHostFingerprint, UserStatus
 from app.models.proxy import ProxyTypes
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.validators import ListValidator
 
 
 class XHttpModes(str, Enum):
@@ -171,6 +174,7 @@ class BaseHost(BaseModel):
     random_user_agent: bool = False
     use_sni_as_host: bool = False
     priority: int
+    status: list[UserStatus] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -199,6 +203,18 @@ class CreateHost(BaseHost):
             raise ValueError("Invalid formatting variables")
 
         return v
+
+    @field_validator("status", mode="after")
+    def deduplicate_status(cls, v):
+        return ListValidator.deduplicate_values(v)
+
+
+class HostResponse(BaseHost):
+    @field_validator("status", mode="before")
+    def parse_status(cls, value):
+        if isinstance(value, str):
+            return json.loads(value)  # Convert JSON string to list
+        return value
 
 
 class ProxyInbound(BaseModel):

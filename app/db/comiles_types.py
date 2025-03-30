@@ -1,4 +1,5 @@
-from sqlalchemy import String, Numeric
+import json
+from sqlalchemy import JSON, String, Numeric, ARRAY, TypeDecorator, Enum
 from sqlalchemy.sql.expression import FunctionElement
 from sqlalchemy.ext.compiler import compiles
 
@@ -22,6 +23,44 @@ def compile_cs_postgresql(element, compiler, **kw):
 @compiles(CaseSensitiveString, "mysql")
 def compile_cs_mysql(element, compiler, **kw):
     return f"VARCHAR({element.length}) COLLATE utf8mb4_bin"  # utf8mb4_bin is case-sensitive
+
+
+class EnumArray(TypeDecorator):
+    """Custom SQLAlchemy type to handle Enum lists across PostgreSQL, MySQL, and SQLite"""
+
+    impl = JSON  # Default to JSON for MySQL/SQLite
+
+    def __init__(self, enum_cls):
+        super().__init__()
+        self.enum_cls = enum_cls
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(ARRAY(Enum(self.enum_cls)))  # Use ARRAY for PostgreSQL
+        return dialect.type_descriptor(JSON)  # Use JSON for MySQL & SQLite
+
+    def process_bind_param(self, value, dialect):
+        """Convert Enum list to appropriate format for storage"""
+        if value is None:
+            return None
+
+        if dialect.name == "postgresql":
+            return [v.value for v in value]  # Store as native PG array
+
+        return json.dumps([v.value for v in value])  # Store as JSON for MySQL/SQLite
+
+    def process_result_value(self, value, dialect):
+        """Convert stored values back to Enum list"""
+        if value is None:
+            return None
+
+        if dialect.name == "postgresql":
+            return [self.enum_cls(v) for v in value]  # PostgreSQL returns a list directly
+
+        if isinstance(value, str):  # Ensure JSON parsing only if it's a string
+            return [self.enum_cls(v) for v in json.loads(value)]
+
+        return [self.enum_cls(v) for v in value]  # If it's already a list, return as Enums
 
 
 class DaysDiff(FunctionElement):

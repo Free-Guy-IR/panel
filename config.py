@@ -28,13 +28,20 @@ VITE_BASE_API = (
 )
 
 XRAY_JSON = config("XRAY_JSON", default="./xray_config.json")
-XRAY_FALLBACKS_INBOUND_TAGS = config("XRAY_FALLBACKS_INBOUND_TAG", cast=lambda v: [tag.strip() for tag in v.split(",")] if v else [], default="")
+XRAY_FALLBACKS_INBOUND_TAGS = config(
+    "XRAY_FALLBACKS_INBOUND_TAG", cast=lambda v: [tag.strip() for tag in v.split(",")] if v else [], default=""
+)
 XRAY_EXECUTABLE_PATH = config("XRAY_EXECUTABLE_PATH", default="/usr/local/bin/xray")
 XRAY_ASSETS_PATH = config("XRAY_ASSETS_PATH", default="/usr/local/share/xray")
 XRAY_EXCLUDE_INBOUND_TAGS = config("XRAY_EXCLUDE_INBOUND_TAGS", default="").split()
 XRAY_SUBSCRIPTION_URL_PREFIX = config("XRAY_SUBSCRIPTION_URL_PREFIX", default="").strip("/")
 XRAY_SUBSCRIPTION_PATH = config("XRAY_SUBSCRIPTION_PATH", default="sub").strip("/")
 
+# Filter hosts based on user status
+HOST_STATUS_FILTER = config("HOST_STATUS_FILTER", default=False, cast=bool)
+REMOVE_HOSTS_WITH_NO_STATUS = config("REMOVE_HOSTS_WITH_NO_STATUS", default=False, cast=bool)
+
+# Telegram
 TELEGRAM_API_TOKEN = config("TELEGRAM_API_TOKEN", default="")
 TELEGRAM_ADMIN_ID = config(
     "TELEGRAM_ADMIN_ID", default="", cast=lambda v: int(v.split(",")[0].strip()) if v.strip() else None
