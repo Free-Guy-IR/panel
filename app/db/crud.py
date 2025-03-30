@@ -503,21 +503,11 @@ async def get_user_usages(db: AsyncSession, dbuser: User, start: datetime, end: 
 
     # Initialize node usages
     for node in nodes:
-        usages[node.id] = UserUsageResponse(
-            node_id=node.id, 
-            node_name=node.name, 
-            used_traffic=0
-        )
+        usages[node.id] = UserUsageResponse(node_id=node.id, node_name=node.name, used_traffic=0)
 
     # Get usage records with modern SQLAlchemy 2.0 style
-    cond = and_(
-        NodeUserUsage.user_id == dbuser.id,
-        NodeUserUsage.created_at >= start,
-        NodeUserUsage.created_at <= end
-    )
-    usage_records = (await db.execute(
-        select(NodeUserUsage).where(cond)
-    )).scalars().all()
+    cond = and_(NodeUserUsage.user_id == dbuser.id, NodeUserUsage.created_at >= start, NodeUserUsage.created_at <= end)
+    usage_records = (await db.execute(select(NodeUserUsage).where(cond))).scalars().all()
 
     # Aggregate usage data
     for v in usage_records:
