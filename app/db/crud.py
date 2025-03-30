@@ -478,6 +478,7 @@ async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]
         get_user_queryset()
         .options(joinedload(User.notification_reminders))
         .where(User.status == UserStatus.active)
+        .where(User.expire.isnot(None))
         .where(User.days_left <= days)
         .where(not_(existing_reminder_subq))  # Only users without existing reminders
     )
@@ -1555,7 +1556,7 @@ async def update_node_status(
 
 
 async def create_notification_reminder(
-    db: AsyncSession, reminder_type: ReminderType, expires_at: datetime, user_id: int, threshold: Optional[int] = None
+    db: AsyncSession, reminder_type: ReminderType, expires_at: datetime, user_id: int, threshold: int | None = None
 ) -> NotificationReminder:
     """
     Creates a new notification reminder.

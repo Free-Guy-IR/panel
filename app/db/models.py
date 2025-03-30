@@ -247,7 +247,7 @@ class User(Base):
 
     @hybrid_property
     def days_left(self) -> int:
-        if self.expire is None:
+        if not self.expire:
             return 0
         remaining_days = (self.expire.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).days
         return max(remaining_days, 0)

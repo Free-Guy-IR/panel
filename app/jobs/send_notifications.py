@@ -6,10 +6,11 @@ import httpx
 from sqlalchemy import delete
 from fastapi.encoders import jsonable_encoder
 
-from app import logger, on_shutdown, async_scheduler as scheduler
+from app import on_shutdown, async_scheduler as scheduler
 from app.db import GetDB
 from app.db.models import NotificationReminder
 from app.notification.webhook import queue
+from app.utils.logger import get_logger
 from config import (
     JOB_SEND_NOTIFICATIONS_INTERVAL,
     NUMBER_OF_RECURRENT_NOTIFICATIONS,
@@ -18,6 +19,8 @@ from config import (
     WEBHOOK_SECRET,
     WEBHOOK_PROXY_URL,
 )
+
+logger = get_logger("send-notfication")
 
 headers = {"x-webhook-secret": WEBHOOK_SECRET} if WEBHOOK_SECRET else None
 
@@ -61,46 +64,70 @@ async def send_req(w_address: str, data):
 
 
 async def send_notifications():
-    async def _put(notif):
-        notif.tries += 1
-        if notif.tries <= NUMBER_OF_RECURRENT_NOTIFICATIONS:
-            notif.send_at = (dt.now(tz.utc) + td(seconds=RECURRENT_NOTIFICATIONS_TIMEOUT)).timestamp()
+    logger.debug("Processing notifications batch")
+
+    processed = 0
+    failed_to_requeue = []
+    current_time = dt.now(tz.utc).timestamp()
+
+    try:
+        while True:
+            try:
+                # Get without waiting to process only existing items
+                notification = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+            try:
+                if notification.tries >= NUMBER_OF_RECURRENT_NOTIFICATIONS:
+                    continue
+
+                if notification.send_at > current_time:
+                    failed_to_requeue.append(notification)
+                    continue
+
+                try:
+                    success = await send(jsonable_encoder(notification))
+                except Exception:
+                    success = False
+
+                if not success:
+                    notification.tries += 1
+                    if notification.tries < NUMBER_OF_RECURRENT_NOTIFICATIONS:
+                        notification.send_at = current_time + RECURRENT_NOTIFICATIONS_TIMEOUT
+                        failed_to_requeue.append(notification)
+
+                processed += 1
+
+            except Exception:
+                failed_to_requeue.append(notification)
+
+    finally:
+        # Requeue failed items at the end
+        for notif in failed_to_requeue:
             await queue.put(notif)
 
-    while True:
-        try:
-            notification = queue.get_nowait()
-        except asyncio.QueueEmpty:
-            return
-
-        try:
-            if notification.tries > NUMBER_OF_RECURRENT_NOTIFICATIONS:
-                continue
-
-            if notification.send_at > dt.now(tz.utc).timestamp():
-                await queue.put(notification)
-                continue
-
-            if not await send(jsonable_encoder(notification)):
-                await _put(notification)
-
-        except Exception as err:
-            logger.error(f"Error processing notification: {err}")
-            await _put(notification)
+        if processed or failed_to_requeue:
+            logger.debug(f"Processed {processed} notifications, requeued {len(failed_to_requeue)}")
 
 
 async def delete_expired_reminders() -> None:
     async with GetDB() as db:
-        await db.execute(delete(NotificationReminder).where(NotificationReminder.expires_at < dt.now(tz=tz.utc)))
+        result = await db.execute(
+            delete(NotificationReminder).where(NotificationReminder.expires_at < dt.now(tz=tz.utc))
+        )
+        logger.info(f"Cleaned up {result.rowcount} expired reminders")
 
 
 async def send_pending_notifications_before_shutdown():
-    logger.info("Sending pending notifications before shutdown...")
+    logger.info("Webhook final flush before shutdown")
     await send_notifications()
 
 
 if WEBHOOK_ADDRESS:
-    logger.info("Send webhook job started")
-    scheduler.add_job(send_notifications, "interval", seconds=JOB_SEND_NOTIFICATIONS_INTERVAL, replace_existing=True)
-    scheduler.add_job(delete_expired_reminders, "interval", hours=2, start_date=dt.now(tz.utc) + td(minutes=1))
+    logger.info("Webhook system initialized")
+    scheduler.add_job(
+        send_notifications, "interval", seconds=JOB_SEND_NOTIFICATIONS_INTERVAL, max_instances=1, coalesce=True
+    )
+    scheduler.add_job(delete_expired_reminders, "interval", hours=6, start_date=dt.now(tz.utc) + td(minutes=5))
     on_shutdown(send_pending_notifications_before_shutdown)
