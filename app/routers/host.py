@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from .authentication import check_sudo_admin
-from app.models.host import HostResponse, CreateHost
+from app.models.host import BaseHost, CreateHost
 from app.operation import OperatorType
 from app.operation.host import HostOperator
 from app.utils import responses
@@ -13,7 +13,7 @@ host_operator = HostOperator(operator_type=OperatorType.API)
 router = APIRouter(tags=["Host"], prefix="/api/host", responses={401: responses._401, 403: responses._403})
 
 
-@router.get("/{host_id}", response_model=HostResponse)
+@router.get("/{host_id}", response_model=BaseHost)
 async def get_host(host_id: int, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)):
     """
     get host by **id**
@@ -21,7 +21,7 @@ async def get_host(host_id: int, db: AsyncSession = Depends(get_db), _: AdminDet
     return await host_operator.get_validated_host(db=db, host_id=host_id)
 
 
-@router.get("s", response_model=list[HostResponse])
+@router.get("s", response_model=list[BaseHost])
 async def get_hosts(
     offset: int = 0, limit: int = 0, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
 ):
@@ -31,7 +31,7 @@ async def get_hosts(
     return await host_operator.get_hosts(db=db, offset=offset, limit=limit)
 
 
-@router.post("/", response_model=HostResponse)
+@router.post("/", response_model=BaseHost)
 async def add_host(
     new_host: CreateHost, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
@@ -43,7 +43,7 @@ async def add_host(
     return await host_operator.add_host(db, new_host=new_host, admin=admin)
 
 
-@router.put("/{host_id}", response_model=HostResponse, responses={404: responses._404})
+@router.put("/{host_id}", response_model=BaseHost, responses={404: responses._404})
 async def modify_host(
     host_id: int,
     modified_host: CreateHost,
@@ -69,7 +69,7 @@ async def remove_host(
     return {}
 
 
-@router.put("s", response_model=list[HostResponse])
+@router.put("s", response_model=list[BaseHost])
 async def modify_hosts(
     modified_hosts: list[CreateHost],
     db: AsyncSession = Depends(get_db),

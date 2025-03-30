@@ -209,13 +209,6 @@ class CreateHost(BaseHost):
         return ListValidator.deduplicate_values(v)
 
 
-class HostResponse(BaseHost):
-    @field_validator("status", mode="before")
-    def parse_status(cls, value):
-        if isinstance(value, str):
-            return json.loads(value)  # Convert JSON string to list
-        return value
-
 
 class ProxyInbound(BaseModel):
     tag: str
