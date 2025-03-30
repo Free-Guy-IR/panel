@@ -103,6 +103,101 @@ class StandardLinks(BaseSubscription):
 
         self.add_link(link=link)
 
+    def _make_net_settings(
+        self,
+        payload: dict,
+        protocol: str,
+        net: str,
+        multiMode: bool,
+        path: str,
+        host: str,
+        sc_max_each_post_bytes: int | None = None,
+        sc_max_concurrent_posts: int | None = None,
+        sc_min_posts_interval_ms: int | None = None,
+        x_padding_bytes: str | None = None,
+        mode: str = "",
+        noGRPCHeader: bool | None = None,
+        heartbeatPeriod: int | None = None,
+        scStreamUpServerSecs: int | None = None,
+        xmux: dict | None = None,
+        downloadSettings: dict | None = None,
+        random_user_agent: bool = False,
+        http_headers: dict | None = None,
+    ):
+        if net == "grpc":
+            if protocol == "vmess":
+                if multiMode:
+                    payload["type"] = "multi"
+                else:
+                    payload["type"] = "gun"
+            else:
+                payload["serviceName"] = path
+                payload["authority"] = host
+                if multiMode:
+                    payload["mode"] = "multi"
+                else:
+                    payload["mode"] = "gun"
+        elif net in ("splithttp", "xhttp"):
+            payload["path"] = path
+            payload["host"] = host
+            if protocol == "vmess":
+                payload["type"] = mode
+            else:
+                payload["mode"] = mode
+            extra = {
+                "scMaxEachPostBytes": sc_max_each_post_bytes,
+                "scMaxConcurrentPosts": sc_max_concurrent_posts,
+                "scMinPostsIntervalMs": sc_min_posts_interval_ms,
+                "xPaddingBytes": x_padding_bytes,
+                "noGRPCHeader": noGRPCHeader,
+                "scStreamUpServerSecs": scStreamUpServerSecs,
+                "xmux": xmux,
+                "downloadSettings": downloadSettings,
+                "headers": http_headers if http_headers is not None else {},
+            }
+            if random_user_agent:
+                if mode in ("stream-one", "stream-up") and not noGRPCHeader:
+                    extra["headers"]["User-Agent"] = choice(self.grpc_user_agent_data)
+                else:
+                    extra["headers"]["User-Agent"] = choice(self.user_agent_list)
+
+            extra = self._remove_none_values(extra)
+
+            if extra:
+                payload["extra"] = (json.dumps(extra)).replace(" ", "")
+        elif net == "ws":
+            if heartbeatPeriod:
+                payload["heartbeatPeriod"] = heartbeatPeriod
+            payload["path"] = path
+            payload["host"] = host
+
+        elif net == "quic":
+            if protocol != "vmess":
+                payload["key"] = path
+                payload["quicSecurity"] = host
+        elif net == "kcp":
+            if protocol != "vmess":
+                payload["seed"] = path
+                payload["host"] = host
+        else:
+            payload["path"] = path
+            payload["host"] = host
+
+    def _make_tls_settings(
+        self, payload: dict, tls: str, sni: str, fp: str, alpn: str, pbk: str, sid: str, spx: str, fs: str
+    ):
+        payload["sni"] = sni
+        payload["fp"] = fp
+        if alpn:
+            payload["alpn"] = alpn
+        if fs:
+            payload["fragment"] = fs
+        if tls == "reality":
+            payload["pbk"] = pbk
+            payload["sid"] = sid
+            if spx:
+                payload["spx"] = spx
+
     def vmess(
         self,
         remark: str,
@@ -150,62 +245,28 @@ class StandardLinks(BaseSubscription):
             "type": type,
             "v": "2",
         }
-
-        if fs:
-            payload["fragment"] = fs
-
-        if tls == "tls":
-            payload["sni"] = sni
-            payload["fp"] = fp
-            if alpn:
-                payload["alpn"] = alpn
-            if fs:
-                payload["fragment"] = fs
-            if ais:
-                payload["allowInsecure"] = 1
-
-        elif tls == "reality":
-            payload["sni"] = sni
-            payload["fp"] = fp
-            payload["pbk"] = pbk
-            payload["sid"] = sid
-            if spx:
-                payload["spx"] = spx
-
-        if net == "grpc":
-            if multiMode:
-                payload["mode"] = "multi"
-            else:
-                payload["mode"] = "gun"
-
-        elif net in ("splithttp", "xhttp"):
-            extra = {
-                "scMaxEachPostBytes": sc_max_each_post_bytes,
-                "scMaxConcurrentPosts": sc_max_concurrent_posts,
-                "scMinPostsIntervalMs": sc_min_posts_interval_ms,
-                "xPaddingBytes": x_padding_bytes,
-                "noGRPCHeader": noGRPCHeader,
-                "scStreamUpServerSecs": scStreamUpServerSecs,
-                "xmux": xmux,
-                "downloadSettings": downloadSettings,
-                "headers": http_headers if http_headers is not None else {},
-            }
-            if random_user_agent:
-                if mode in ("stream-one", "stream-up") and not noGRPCHeader:
-                    extra["headers"]["User-Agent"] = choice(self.grpc_user_agent_data)
-                else:
-                    extra["headers"]["User-Agent"] = choice(self.user_agent_list)
-
-            extra = self._remove_none_values(extra)
-
-            payload["type"] = mode
-            if extra:
-                payload["extra"] = (json.dumps(extra)).replace(" ", "")
-
-        elif net == "ws":
-            if heartbeatPeriod:
-                payload["heartbeatPeriod"] = heartbeatPeriod
-
+        self._make_net_settings(
+            payload=payload,
+            protocol="vmess",
+            net=net,
+            multiMode=multiMode,
+            path=path,
+            host=host,
+            sc_max_each_post_bytes=sc_max_each_post_bytes,
+            sc_max_concurrent_posts=sc_max_concurrent_posts,
+            sc_min_posts_interval_ms=sc_min_posts_interval_ms,
+            x_padding_bytes=x_padding_bytes,
+            mode=mode,
+            noGRPCHeader=noGRPCHeader,
+            heartbeatPeriod=heartbeatPeriod,
+            scStreamUpServerSecs=scStreamUpServerSecs,
+            http_headers=http_headers,
+            xmux=xmux,
+            random_user_agent=random_user_agent,
+            downloadSettings=downloadSettings,
+        )
+        if tls in ("tls", "reality"):
+            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs)
         return "vmess://" + base64.b64encode(json.dumps(payload, sort_keys=True).encode("utf-8")).decode()
 
     def vless(
@@ -246,76 +307,28 @@ class StandardLinks(BaseSubscription):
         if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
             payload["flow"] = flow
 
-        if net == "grpc":
-            payload["serviceName"] = path
-            payload["authority"] = host
-            if multiMode:
-                payload["mode"] = "multi"
-            else:
-                payload["mode"] = "gun"
-
-        elif net == "quic":
-            payload["key"] = path
-            payload["quicSecurity"] = host
-
-        elif net in ("splithttp", "xhttp"):
-            payload["path"] = path
-            payload["host"] = host
-            payload["mode"] = mode
-            extra = {
-                "scMaxEachPostBytes": sc_max_each_post_bytes,
-                "scMaxConcurrentPosts": sc_max_concurrent_posts,
-                "scMinPostsIntervalMs": sc_min_posts_interval_ms,
-                "xPaddingBytes": x_padding_bytes,
-                "noGRPCHeader": noGRPCHeader,
-                "scStreamUpServerSecs": scStreamUpServerSecs,
-                "xmux": xmux,
-                "downloadSettings": downloadSettings,
-                "headers": http_headers if http_headers is not None else {},
-            }
-            if random_user_agent:
-                if mode in ("stream-one", "stream-up") and not noGRPCHeader:
-                    extra["headers"]["User-Agent"] = choice(self.grpc_user_agent_data)
-                else:
-                    extra["headers"]["User-Agent"] = choice(self.user_agent_list)
-
-            extra = self._remove_none_values(extra)
-
-            if extra:
-                payload["extra"] = (json.dumps(extra)).replace(" ", "")
-
-        elif net == "kcp":
-            payload["seed"] = path
-            payload["host"] = host
-
-        elif net == "ws":
-            payload["path"] = path
-            payload["host"] = host
-            if heartbeatPeriod:
-                payload["heartbeatPeriod"] = heartbeatPeriod
-
-        else:
-            payload["path"] = path
-            payload["host"] = host
-
-        if tls == "tls":
-            payload["sni"] = sni
-            payload["fp"] = fp
-            if alpn:
-                payload["alpn"] = alpn
-            if fs:
-                payload["fragment"] = fs
-            if ais:
-                payload["allowInsecure"] = 1
-
-        elif tls == "reality":
-            payload["sni"] = sni
-            payload["fp"] = fp
-            payload["pbk"] = pbk
-            payload["sid"] = sid
-            if spx:
-                payload["spx"] = spx
-
+        self._make_net_settings(
+            payload=payload,
+            protocol="vless",
+            net=net,
+            multiMode=multiMode,
+            path=path,
+            host=host,
+            sc_max_each_post_bytes=sc_max_each_post_bytes,
+            sc_max_concurrent_posts=sc_max_concurrent_posts,
+            sc_min_posts_interval_ms=sc_min_posts_interval_ms,
+            x_padding_bytes=x_padding_bytes,
+            mode=mode,
+            noGRPCHeader=noGRPCHeader,
+            heartbeatPeriod=heartbeatPeriod,
+            scStreamUpServerSecs=scStreamUpServerSecs,
+            http_headers=http_headers,
+            xmux=xmux,
+            random_user_agent=random_user_agent,
+            downloadSettings=downloadSettings,
+        )
+        if tls in ("tls", "reality"):
+            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs)
         return "vless://" + f"{id}@{address}:{port}?" + urlparse.urlencode(payload) + f"#{(urlparse.quote(remark))}"
 
     def trojan(
@@ -353,78 +366,31 @@ class StandardLinks(BaseSubscription):
         downloadSettings: dict | None = None,
     ):
         payload = {"security": tls, "type": net, "headerType": type}
+        self._make_net_settings(
+            payload=payload,
+            protocol="trojan",
+            net=net,
+            multiMode=multiMode,
+            path=path,
+            host=host,
+            sc_max_each_post_bytes=sc_max_each_post_bytes,
+            sc_max_concurrent_posts=sc_max_concurrent_posts,
+            sc_min_posts_interval_ms=sc_min_posts_interval_ms,
+            x_padding_bytes=x_padding_bytes,
+            mode=mode,
+            noGRPCHeader=noGRPCHeader,
+            heartbeatPeriod=heartbeatPeriod,
+            scStreamUpServerSecs=scStreamUpServerSecs,
+            http_headers=http_headers,
+            xmux=xmux,
+            random_user_agent=random_user_agent,
+            downloadSettings=downloadSettings,
+        )
         if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
             payload["flow"] = flow
 
-        if net == "grpc":
-            payload["serviceName"] = path
-            payload["authority"] = host
-            if multiMode:
-                payload["mode"] = "multi"
-            else:
-                payload["mode"] = "gun"
-
-        elif net in ("splithttp", "xhttp"):
-            payload["path"] = path
-            payload["host"] = host
-            payload["mode"] = mode
-            extra = {
-                "scMaxEachPostBytes": sc_max_each_post_bytes,
-                "scMaxConcurrentPosts": sc_max_concurrent_posts,
-                "scMinPostsIntervalMs": sc_min_posts_interval_ms,
-                "xPaddingBytes": x_padding_bytes,
-                "noGRPCHeader": noGRPCHeader,
-                "scStreamUpServerSecs": scStreamUpServerSecs,
-                "xmux": xmux,
-                "downloadSettings": downloadSettings,
-                "headers": http_headers if http_headers is not None else {},
-            }
-            if random_user_agent:
-                if mode in ("stream-one", "stream-up") and not noGRPCHeader:
-                    extra["headers"]["User-Agent"] = choice(self.grpc_user_agent_data)
-                else:
-                    extra["headers"]["User-Agent"] = choice(self.user_agent_list)
-
-            extra = self._remove_none_values(extra)
-
-            if extra:
-                payload["extra"] = (json.dumps(extra)).replace(" ", "")
-
-        elif net == "quic":
-            payload["key"] = path
-            payload["quicSecurity"] = host
-
-        elif net == "kcp":
-            payload["seed"] = path
-            payload["host"] = host
-
-        elif net == "ws":
-            payload["path"] = path
-            payload["host"] = host
-            if heartbeatPeriod:
-                payload["heartbeatPeriod"] = heartbeatPeriod
-
-        else:
-            payload["path"] = path
-            payload["host"] = host
-
-        if tls == "tls":
-            payload["sni"] = sni
-            payload["fp"] = fp
-            if alpn:
-                payload["alpn"] = alpn
-            if fs:
-                payload["fragment"] = fs
-            if ais:
-                payload["allowInsecure"] = 1
-        elif tls == "reality":
-            payload["sni"] = sni
-            payload["fp"] = fp
-            payload["pbk"] = pbk
-            payload["sid"] = sid
-            if spx:
-                payload["spx"] = spx
-
+        if tls in ("tls", "reality"):
+            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs)
         return (
             "trojan://"
             + f"{urlparse.quote(password, safe=':')}@{address}:{port}?"
