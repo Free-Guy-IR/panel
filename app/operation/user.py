@@ -19,8 +19,8 @@ from app.db.crud import (
     reset_user_by_next,
     set_owner,
     get_all_users_usages,
-    get_expired_users_username,
-    delete_expired_users,
+    get_expired_users,
+    remove_users,
     UsersSortingOptions,
 )
 from app.db.models import User, UserStatus
@@ -294,11 +294,11 @@ class UserOperator(BaseOperator):
 
         expired_after, expired_before = self.validate_dates(expired_after, expired_before)
         if not admin.is_sudo:
-            id = await self.get_validated_admin(db, admin.username).id
+            id = (await self.get_validated_admin(db, admin.username)).id
         else:
             id = None
-
-        return await get_expired_users_username(db, expired_after, expired_before, id)
+        users = await get_expired_users(db, expired_after, expired_before, id)
+        return [row.username for row in users]
 
     async def delete_expired_users(
         self, db: AsyncSession, admin: AdminDetails, expired_after: dt | None = None, expired_before: dt | None = None
@@ -310,14 +310,16 @@ class UserOperator(BaseOperator):
         - **expired_before** UTC datetime (optional)
         - At least one of expired_after or expired_before must be provided
         """
+
         expired_after, expired_before = self.validate_dates(expired_after, expired_before)
         if not admin.is_sudo:
-            id = await self.get_validated_admin(db, admin.username).id
+            id = (await self.get_validated_admin(db, admin.username)).id
         else:
             id = None
+        users = await get_expired_users(db, expired_after, expired_before, id)
+        await remove_users(db, users)
 
-        removed_users, count = await delete_expired_users(db, expired_after, expired_before, id)
+        username_list = [row.username for row in users]
+        asyncio.create_task(self.remove_users_logger(users=username_list, by=admin.username))
 
-        asyncio.create_task(self.remove_users_logger(users=removed_users, by=admin.username))
-
-        return RemoveUsersResponse(users=removed_users, count=count)
+        return RemoveUsersResponse(users=username_list, count=len(username_list))

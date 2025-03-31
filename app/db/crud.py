@@ -327,28 +327,13 @@ async def get_users(
     return users
 
 
-def expired_users_query(
-    expired_after: datetime | None = None, expired_before: datetime | None = None, admin_id: int | None = None
+async def get_expired_users(
+    db: AsyncSession,
+    expired_after: datetime | None = None,
+    expired_before: datetime | None = None,
+    admin_id: int | None = None,
 ):
-    query = select(User.username, User.id).where(
-        User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None)
-    )
-    if expired_after:
-        query = query.where(User.expire >= expired_after)
-    if expired_before:
-        query = query.where(User.expire <= expired_before)
-    if admin_id:
-        query = query.where(User.admin_id == admin_id)
-    return query
-
-
-async def get_expired_users_ids(
-    db: AsyncSession,
-    expired_after: datetime | None = None,
-    expired_before: datetime | None = None,
-    admin_id: int | None = None,
-) -> list[str]:
-    query = select(User.id).where(User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None))
+    query = select(User).where(User.status.in_([UserStatus.limited, UserStatus.expired])).where(User.is_expired)
     if expired_after:
         query = query.where(User.expire >= expired_after)
     if expired_before:
@@ -356,54 +341,7 @@ async def get_expired_users_ids(
     if admin_id:
         query = query.where(User.admin_id == admin_id)
 
-    result = await db.execute(query)
-    return [row[0] for row in result.all()]
-
-
-async def get_expired_users_username(
-    db: AsyncSession,
-    expired_after: datetime | None = None,
-    expired_before: datetime | None = None,
-    admin_id: int | None = None,
-) -> list[str]:
-    query = select(User.username).where(
-        User.status.in_([UserStatus.limited, UserStatus.expired]), User.expire.isnot(None)
-    )
-    if expired_after:
-        query = query.where(User.expire >= expired_after)
-    if expired_before:
-        query = query.where(User.expire <= expired_before)
-    if admin_id:
-        query = query.where(User.admin_id == admin_id)
-
-    query = expired_users_query(expired_after, expired_before, admin_id)
-
-    result = await db.execute(query)
-    return [row[0] for row in result.all()]
-
-
-async def delete_expired_users(
-    db: AsyncSession,
-    expired_after: datetime | None = None,
-    expired_before: datetime | None = None,
-    admin_id: int | None = None,
-) -> tuple[list[str], int]:
-    usernames_to_delete = await get_expired_users_username(db, expired_after, expired_before, admin_id)
-    user_ids_to_delete = await get_expired_users_ids(db, expired_after, expired_before, admin_id)
-
-    if not user_ids_to_delete:
-        return [], 0
-
-    delete_association_stmt = users_groups_association.delete().where(
-        users_groups_association.c.user_id.in_(user_ids_to_delete)
-    )
-    await db.execute(delete_association_stmt)
-
-    delete_users_stmt = delete(User).where(User.id.in_(user_ids_to_delete))
-    result = await db.execute(delete_users_stmt)
-    await db.commit()
-
-    return usernames_to_delete, result.rowcount
+    return (await db.execute(query)).unique().scalars().all()
 
 
 async def get_active_to_expire_users(db: AsyncSession) -> list[User]:
