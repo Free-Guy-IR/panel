@@ -22,7 +22,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.expression import select, text
 from app.db.base import Base
-from app.db.comiles_types import CaseSensitiveString, DaysDiff, EnumArray
+from app.db.compiles_types import CaseSensitiveString, DaysDiff, EnumArray
 
 inbounds_groups_association = Table(
     "inbounds_groups_association",

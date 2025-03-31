@@ -7,7 +7,7 @@ Create Date: 2025-03-28 09:04:24.440491
 """
 from alembic import op
 import sqlalchemy as sa
-from app.db.comiles_types import EnumArray
+from app.db.compiles_types import EnumArray
 
 
 # revision identifiers, used by Alembic.
