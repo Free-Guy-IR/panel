@@ -55,6 +55,14 @@ async def remove_node(node: NodeResponse, by: str):
     await asyncio.gather(ds.remove_node(node, by), tg.remove_node(node, by))
 
 
+async def connect_node(node: NodeResponse):
+    await asyncio.gather(ds.connect_node(node), tg.connect_node(node))
+
+
+async def error_node(node: NodeResponse):
+    await asyncio.gather(ds.error_node(node), tg.error_node(node))
+
+
 async def create_group(group: GroupResponse, by: str):
     await asyncio.gather(ds.create_group(group, by), tg.create_group(group, by))
 

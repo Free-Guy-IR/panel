@@ -36,6 +36,38 @@ class NodeOperator(BaseOperator):
         return await get_nodes(db=db, offset=offset, limit=limit)
 
     @staticmethod
+    async def update_node_status(
+        node_id: int,
+        status: NodeStatus,
+        core_version: str = "",
+        node_version: str = "",
+        err: str = "",
+        notify_err: bool = True,
+    ):
+        async with GetDB() as db:
+            db_node = await get_node_by_id(db, node_id)
+
+            if db_node is None:
+                return
+
+            old_status = db_node.status
+
+            db_node = await update_node_status(
+                db=db,
+                db_node=db_node,
+                status=status,
+                xray_version=core_version,
+                node_version=node_version,
+                message=err,
+            )
+
+            if status is NodeStatus.connected:
+                asyncio.create_task(notification.connect_node(NodeResponse.model_validate(db_node)))
+            if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
+                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}: {err}")
+                asyncio.create_task(notification.error_node(NodeResponse.model_validate(db_node)))
+
+    @staticmethod
     async def connect_node(node_id: int) -> None:
         gozargah_node: GozargahNode | None = await node_manager.get_node(node_id)
         if gozargah_node is None:
@@ -47,8 +79,10 @@ class NodeOperator(BaseOperator):
             if db_node is None:
                 return
 
+            notify_err = True if db_node.status is not NodeStatus.error else False
+
             logger.info(f'Connecting to "{db_node.name}" node')
-            await update_node_status(db, db_node, NodeStatus.connecting)
+            await NodeOperator.update_node_status(db_node.id, NodeStatus.connecting)
 
             try:
                 info = await gozargah_node.start(
@@ -58,22 +92,22 @@ class NodeOperator(BaseOperator):
                     keep_alive=db_node.keep_alive,
                     timeout=10,
                 )
-                await update_node_status(
-                    db=db,
-                    db_node=db_node,
+                await NodeOperator.update_node_status(
+                    node_id=db_node.id,
                     status=NodeStatus.connected,
-                    xray_version=info.core_version,
+                    core_version=info.core_version,
                     node_version=info.node_version,
                 )
                 logger.info(
                     f'Connected to "{db_node.name}" node v{info.node_version}, xray run on v{info.core_version}'
                 )
             except NodeAPIError as e:
-                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}: {e.detail}")
                 if e.code == -4:
                     return
 
-                await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
+                await NodeOperator.update_node_status(
+                    node_id=db_node.id, status=NodeStatus.error, err=e.detail, notify_err=notify_err
+                )
 
     async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         try:

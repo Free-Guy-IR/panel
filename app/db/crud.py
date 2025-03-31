@@ -1518,9 +1518,9 @@ async def update_node_status(
     db: AsyncSession,
     db_node: Node,
     status: NodeStatus,
-    message: str = None,
-    xray_version: str = None,
-    node_version: str = None,
+    message: str = "",
+    xray_version: str = "",
+    node_version: str = "",
 ) -> Node:
     """
     Updates the status of a node.

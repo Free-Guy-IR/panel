@@ -50,3 +50,37 @@ async def remove_node(node: NodeResponse, by: str):
     }
     if DISCORD_WEBHOOK_URL:
         await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+
+
+async def connect_node(node: NodeResponse):
+    data = {
+        "content": "",
+        "embeds": [
+            {
+                "title": "Connect Node",
+                "description": f"**Name:** {node.name}\n"
+                + f"**Node Version:** {node.node_version}\n"
+                + f"**Core Version:** {node.xray_version}",
+                "color": colors.GREEN,
+                "footer": {"text": f"ID: {node.id}"},
+            }
+        ],
+    }
+    if DISCORD_WEBHOOK_URL:
+        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+
+
+async def error_node(node: NodeResponse):
+    data = {
+        "content": "",
+        "embeds": [
+            {
+                "title": "Error Node",
+                "description": f"**Name:** {node.name}\n" + f"**Error:** {node.message}",
+                "color": colors.RED,
+                "footer": {"text": f"ID: {node.id}"},
+            }
+        ],
+    }
+    if DISCORD_WEBHOOK_URL:
+        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)

@@ -4,7 +4,7 @@ from GozargahNodeBridge import NodeAPIError, GozargahNode
 
 from app import on_shutdown, on_startup, async_scheduler as scheduler
 from app.db import GetDB
-from app.db.models import Node
+from app.db.models import Node, NodeStatus
 from app.db.crud import get_nodes
 from app.node import node_manager
 from app.utils.logger import get_logger
@@ -22,7 +22,9 @@ async def node_health_check():
     async def check_node(id: int, node: GozargahNode):
         try:
             await node.get_backend_stats(timeout=10)
+            await node_operator.update_node_status(id, NodeStatus.connected, node.core_version, node.node_version)
         except NodeAPIError as e:
+            await node_operator.update_node_status(id, NodeStatus.error, err=e.detail)
             if e.code > 0:
                 await node_operator.connect_node(node_id=id)
 
