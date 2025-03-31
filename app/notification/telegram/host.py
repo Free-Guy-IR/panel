@@ -28,7 +28,7 @@ async def modify_host(host: BaseHost, by: str):
         + f"**Inbound Tag:** `{host.inbound_tag}`\n"
         + f"**Port:** `{host.port}`\n\n"
         + "➖➖➖➖➖➖➖➖➖\n"
-        + f"_ID: `{host.id}`_\n"
+        + f"_ID_: `{host.id}`\n"
         + f"_By: #{by}_"
     )
     if TELEGRAM_NOTIFY:
