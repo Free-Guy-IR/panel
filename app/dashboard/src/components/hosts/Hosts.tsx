@@ -4,12 +4,13 @@ import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { HostResponse, modifyHosts, ProxyHostFingerprint } from "@/service/api"
+import { HostResponse, modifyHosts, ProxyHostFingerprint, FragmentSettings, NoiseSettings } from "@/service/api"
 import AddHostModal from "../dialogs/AddHostModal"
 import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import SortableHost from "./SortableHost"
 import { useQuery } from "@tanstack/react-query"
+import { UniqueIdentifier } from "@dnd-kit/core"
 
 const hostFormSchema = z.object({
     remark: z.string().min(1, "Remark is required"),
@@ -49,7 +50,6 @@ const hostFormSchema = z.object({
         .nullable(),
     use_sni_as_host: z.boolean(),
 });
-
 
 export type HostFormValues = z.infer<typeof hostFormSchema>;
 
@@ -96,17 +96,25 @@ export default function Hosts({ data, onAddHost, isDialogOpen }: HostsProps) {
         },
     });
 
-    const handleDelete = (id: number) => {
+    const handleDelete = (id: number | null) => {
+        if (!id) return;
         setHosts(hosts?.filter((host) => host.id !== id));
     };
 
     const handleDuplicate = (host: HostResponse) => {
-        const newHost = { ...host, id: Math.max(...(hosts?.map((h) => h.id) ?? [0]), 0) + 1 };
+        if (!host.id) return;
+        const maxId = Math.max(...(hosts?.map((h) => h.id ?? 0) ?? [0]), 0);
+        const maxPriority = Math.min(...(hosts?.map((h) => h.priority ?? 0) ?? [0]), 0);
+        const newHost = { 
+            ...host, 
+            id: maxId + 1,
+            priority: maxPriority - 1 // Lower number = higher priority
+        };
         setHosts([...hosts ?? [], newHost]);
     };
 
-
-    const toggleHostStatus = (id: number) => {
+    const toggleHostStatus = (id: number | null) => {
+        if (!id) return;
         setHosts(
             hosts?.map((host) =>
                 host.id === id ? { ...host, is_disabled: !host.is_disabled } : host
@@ -115,16 +123,27 @@ export default function Hosts({ data, onAddHost, isDialogOpen }: HostsProps) {
     };
 
     const onSubmit = (data: HostFormValues) => {
+        const maxId = Math.max(...(hosts?.map((h) => h.id ?? 0) ?? [0]), 0);
+        const maxPriority = Math.min(...(hosts?.map((h) => h.priority ?? 0) ?? [0]), 0);
         const newHost: HostResponse = {
             ...data,
-            id: Math.max(...(hosts?.map((h) => h.id) ?? [0]), 0) + 1,
+            id: maxId + 1,
+            priority: maxPriority - 1, // Lower number = higher priority
             fingerprint: data.fingerprint as ProxyHostFingerprint,
-            fragment_setting: typeof data.fragment_setting === "string" ? data.fragment_setting : undefined,
-            noise_setting: typeof data.noise_setting === "string" ? data.noise_setting : undefined,
-            port: data.port ?? undefined,
+            fragment_settings: data.fragment_setting ? {
+                xray: data.fragment_setting
+            } : null,
+            noise_settings: data.noise_setting ? {
+                xray: [{
+                    type: "rand",
+                    packet: data.noise_setting.noise_payload,
+                    delay: data.noise_setting.noise_pattern
+                }]
+            } : null,
+            port: data.port ?? null,
         };
 
-        if (editingHost) {
+        if (editingHost?.id) {
             const updatedHosts = hosts?.map((host) =>
                 host.id === editingHost.id ? { ...host, ...newHost } : host
             );
@@ -150,9 +169,15 @@ export default function Hosts({ data, onAddHost, isDialogOpen }: HostsProps) {
         if (over && active.id !== over.id) {
             setHosts((hosts) => {
                 if (!hosts) return [];
-                const oldIndex = hosts?.findIndex((item) => item.id === active.id)
-                const newIndex = hosts?.findIndex((item) => item.id === over.id)
-                return arrayMove(hosts, oldIndex, newIndex)
+                const oldIndex = hosts.findIndex((item) => item.id === active.id)
+                const newIndex = hosts.findIndex((item) => item.id === over.id)
+                const reorderedHosts = arrayMove(hosts, oldIndex, newIndex)
+                
+                // Update priorities based on new order (lower number = higher priority)
+                return reorderedHosts.map((host, index) => ({
+                    ...host,
+                    priority: index
+                }))
             })
         }
     }
@@ -161,7 +186,6 @@ export default function Hosts({ data, onAddHost, isDialogOpen }: HostsProps) {
         const handler = setTimeout(() => {
             setDebouncedHosts(hosts);
         }, 1500);
-
 
         return () => {
             clearTimeout(handler);
@@ -174,16 +198,23 @@ export default function Hosts({ data, onAddHost, isDialogOpen }: HostsProps) {
         }
     }, [debouncedHosts]);
 
+    // Filter out hosts without IDs for the sortable context
+    const sortableHosts = hosts?.filter(host => host.id !== null).map(host => ({
+        id: host.id as UniqueIdentifier
+    })) ?? [];
+
+    // Sort hosts by priority (lower number = higher priority)
+    const sortedHosts = [...(hosts ?? [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
     return (
         <div className="p-4">
             <div>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={hosts ?? []} strategy={rectSortingStrategy}>
+                    <SortableContext items={sortableHosts} strategy={rectSortingStrategy}>
                         <div className="max-w-screen-[2000px] min-h-screen overflow-hidden">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {hosts?.map((host) => (
-                                    <SortableHost key={host.id} host={host} />
+                                {sortedHosts.map((host) => (
+                                    <SortableHost key={host.id ?? 'new'} host={host} />
                                 ))}
                             </div>
                         </div>

@@ -2,6 +2,7 @@ import {
     useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { UniqueIdentifier } from "@dnd-kit/core"
 
 import { HostResponse, removeHost } from "@/service/api"
 import { Card } from "../ui/card"
@@ -15,7 +16,6 @@ import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { useState } from "react"
 import { queryClient } from "@/utils/query-client"
-import { useMutation } from "@tanstack/react-query"
 
 interface SortableHostProps {
     host: HostResponse
@@ -42,7 +42,7 @@ const DeleteAlertDialog = ({
                     <AlertDialogHeader className={cn(dir === "rtl" && "sm:text-right")}>
                         <AlertDialogTitle>{t("deleteHost.title")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            <span dir={dir} dangerouslySetInnerHTML={{ __html: t("deleteHost.prompt", { name: host.inbound_tag }) }} />
+                            <span dir={dir} dangerouslySetInnerHTML={{ __html: t("deleteHost.prompt", { name: host.remark ?? "" }) }} />
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className={cn(dir === "rtl" && "sm:gap-x-2 sm:flex-row-reverse")}>
@@ -61,7 +61,15 @@ export default function SortableHost({ host }: SortableHostProps) {
     const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const dir = useDirDetection()
     const { t } = useTranslation();
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: host.id })
+    
+    // Ensure host.id is not null before using it
+    if (!host.id) {
+        return null; // Or some fallback UI
+    }
+
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+        id: host.id as UniqueIdentifier 
+    })
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -70,7 +78,6 @@ export default function SortableHost({ host }: SortableHostProps) {
         opacity: isDragging ? 0.8 : 1,
     }
     const cursor = isDragging ? "grabbing" : "grab";
-
 
     const handleDeleteClick = () => {
         setDeleteDialogOpen(true);
@@ -81,17 +88,19 @@ export default function SortableHost({ host }: SortableHostProps) {
     };
 
     const handleConfirmDelete = async () => {
+        if (!host.id) return;
+        
         try {
             await removeHost(host.id)
             toast({
                 dir,
-                description: t("deleteHost.deleteSuccess", { name: host.inbound_tag }),
+                description: t("deleteHost.deleteSuccess", { name: host.remark ?? "" }),
             })
         }
         catch (error) {
             toast({
                 dir,
-                description: t("deleteHost.deleteFailed", { name: host.inbound_tag }),
+                description: t("deleteHost.deleteFailed", { name: host.remark ?? "" }),
             })
         } finally {
             queryClient.invalidateQueries({
@@ -99,7 +108,6 @@ export default function SortableHost({ host }: SortableHostProps) {
             });
             setDeleteDialogOpen(false);
         }
-
     };
 
     return (
@@ -113,9 +121,9 @@ export default function SortableHost({ host }: SortableHostProps) {
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                             <div className="min-h-2 min-w-2 rounded-full bg-green-500" />
-                            <div className="font-medium truncate">{host.remark}</div>
+                            <div className="font-medium truncate">{host.remark ?? ""}</div>
                         </div>
-                        <div className="text-sm text-muted-foreground truncate">{host.address}</div>
+                        <div className="text-sm text-muted-foreground truncate">{host.address ?? ""}</div>
                     </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -146,15 +154,12 @@ export default function SortableHost({ host }: SortableHostProps) {
                     </DropdownMenu>
                 </div>
             </Card>
-            {/* Include the Delete AlertDialog component */}
-            <div>
-                <DeleteAlertDialog
-                    host={host}
-                    isOpen={isDeleteDialogOpen}
-                    onClose={handleCloseDeleteDialog}
-                    onConfirm={handleConfirmDelete}
-                />
-            </div>
+            <DeleteAlertDialog
+                host={host}
+                isOpen={isDeleteDialogOpen}
+                onClose={handleCloseDeleteDialog}
+                onConfirm={handleConfirmDelete}
+            />
         </div>
     )
 }
