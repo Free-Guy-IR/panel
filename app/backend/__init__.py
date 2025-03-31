@@ -1,6 +1,6 @@
 from app import on_startup
 from app.utils.store import DictStorage
-from app.backend.xray import XRayConfig
+from .xray import XRayConfig
 from app.db import GetDB
 from app.db.models import ProxyHostSecurity
 from app.db.crud import get_hosts, get_or_create_inbound
@@ -51,8 +51,8 @@ async def check_inbounds():
             await get_or_create_inbound(db, tag)
 
 
-on_startup(check_inbounds)
 on_startup(hosts.update)
+on_startup(check_inbounds)
 
 
 __all__ = ["config", "hosts", "nodes", "XRayConfig"]

@@ -38,16 +38,17 @@ async def reset_user_by_next_report(db: Session, db_user: User):
 
 async def review():
     async with GetDB() as db:
-        async def change_status(db_user: User, status: UserStatus):        
+
+        async def change_status(db_user: User, status: UserStatus):
             user = UserResponse.model_validate(db_user)
 
             if user.status is not UserStatus.active:
                 asyncio.create_task(node_manager.remove_user(user))
 
             asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
-        
+
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
-        
+
             if db_user.next_plan and (db_user.next_plan.fire_on_either or (db_user.is_limited and db_user.is_expired)):
                 await reset_user_by_next_report(db, db_user)
 

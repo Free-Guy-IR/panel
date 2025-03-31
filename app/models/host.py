@@ -207,3 +207,8 @@ class ProxyInbound(BaseModel):
     network: str
     tls: str
     port: Union[int, str]
+
+
+from app import backend  # noqa
+# don't remove this import, if you remove it it's gonna cause RuntimeError on shutdown for mysql
+# if you findout problem create a pr or open a issue and explain the solotion
