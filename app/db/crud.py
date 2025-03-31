@@ -914,23 +914,57 @@ async def get_all_users_usages(db: AsyncSession, admin: str, start: datetime, en
     return list(usages.values())
 
 
-async def update_user_status(db: AsyncSession, db_user: User, status: UserStatus) -> User:
+async def _update_user_status(db_user: User, status: UserStatus) -> User:
     """
     Updates a user's status and records the time of change.
 
     Args:
-        db (AsyncSession): Database session.
-        dbuser (User): The user to update.
-        status (app.db.models.UserStatus): The new status.
+        db_user (User): The user to update.
+        status (UserStatus): The new status.
 
     Returns:
         User: The updated user object.
     """
     db_user.status = status
     db_user.last_status_change = datetime.now(timezone.utc)
+    return db_user
+
+
+async def update_user_status(db: AsyncSession, db_user: User, status: UserStatus) -> User:
+    """
+    Updates a user status and records the time of change.
+
+    Args:
+        db (AsyncSession): Database session.
+        db_user (User): The user to update.
+        status (UserStatus): The new status.
+
+    Returns:
+        User: The updated user object.
+    """
+    db_user = await _update_user_status(db_user, status)
     await db.commit()
     await db.refresh(db_user)
     return db_user
+
+
+async def update_users_status(db: AsyncSession, users: list[User], status: UserStatus) -> list[User]:
+    """
+    Updates a users status and records the time of change.
+
+    Args:
+        db (AsyncSession): Database session.
+        users list[User]: The users list to update.
+        status (UserStatus): The new status.
+
+    Returns:
+        User: The updated user object.
+    """
+    updated_users = await asyncio.gather(*[_update_user_status(user, status) for user in users])
+    await db.commit()
+    for user in updated_users:
+        await db.refresh(user)
+    return users
 
 
 async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
@@ -951,7 +985,7 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     return await get_user(db, db_user.username)
 
 
-async def start_user_expire(db: AsyncSession, db_user: User) -> User:
+async def _start_user_expire(db_user: User) -> User:
     """
     Starts the expiration timer for a user.
 
@@ -967,9 +1001,44 @@ async def start_user_expire(db: AsyncSession, db_user: User) -> User:
     db_user.on_hold_timeout = None
     db_user.status = UserStatus.active
 
+    return db_user
+
+
+async def start_user_expire(db: AsyncSession, db_user: User) -> User:
+    """
+    Starts the expiration timer for a user.
+
+    Args:
+        db (AsyncSession): Database session.
+        db_user (User): The user object whose expiration timer is to be started.
+
+    Returns:
+        User: The updated user object.
+    """
+    db_user = await _start_user_expire(db_user)
+
     await db.commit()
     await db.refresh(db_user)
     return db_user
+
+
+async def start_users_expire(db: AsyncSession, users: list[User]) -> list[User]:
+    """
+    Starts the expiration timer for a user.
+
+    Args:
+        db (AsyncSession): Database session.
+        users list[User]: The users list whose expiration timer is to be started.
+
+    Returns:
+        list[User]: The updated users list.
+    """
+    updated_users = await asyncio.gather(*[_start_user_expire(user) for user in users])
+
+    await db.commit()
+    for user in updated_users:
+        await db.refresh(user)
+    return users
 
 
 async def get_system_usage(db: AsyncSession) -> System:

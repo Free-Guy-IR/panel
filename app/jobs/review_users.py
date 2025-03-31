@@ -6,8 +6,8 @@ from app import async_scheduler as scheduler
 from app.db import GetDB
 from app.db.crud import (
     reset_user_by_next,
-    start_user_expire,
-    update_user_status,
+    start_users_expire,
+    update_users_status,
     get_active_to_expire_users,
     get_active_to_limited_users,
     get_on_hold_to_active_users,
@@ -38,37 +38,35 @@ async def reset_user_by_next_report(db: Session, db_user: User):
 
 async def review():
     async with GetDB() as db:
-
-        async def change_status(db_user: User, status: UserStatus):
-            db_user = await update_user_status(db, db_user, status)
-
+        async def change_status(db_user: User, status: UserStatus):        
             user = UserResponse.model_validate(db_user)
-            asyncio.create_task(node_manager.remove_user(user))
+
+            if user.status is not UserStatus.active:
+                asyncio.create_task(node_manager.remove_user(user))
+
             asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
-
+        
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
-
+        
             if db_user.next_plan and (db_user.next_plan.fire_on_either or (db_user.is_limited and db_user.is_expired)):
                 await reset_user_by_next_report(db, db_user)
 
-        async def activate_user(db_user: User):
-            db_user = await start_user_expire(db, db_user)
+        if expired_users := await get_active_to_expire_users(db):
+            updated_users = await update_users_status(db, expired_users, UserStatus.expired)
+            for user in updated_users:
+                await change_status(user, UserStatus.expired)
 
-            logger.info(f'User "{db_user.username}" status changed to {UserStatus.active.value}')
-            user = UserResponse.model_validate(db_user)
-            asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
-
-        users = await get_active_to_expire_users(db)
-        for user in users:
-            await change_status(user, UserStatus.expired)
-
-        users = await get_active_to_limited_users(db)
-        for user in users:
-            await change_status(user, UserStatus.limited)
+        if limited_users := await get_active_to_limited_users(db):
+            updated_users = await update_users_status(db, limited_users, UserStatus.limited)
+            for user in updated_users:
+                await change_status(user, UserStatus.limited)
 
         users = await get_on_hold_to_active_users(db)
-        for user in users:
-            await activate_user(user)
+        if on_hold_users := await get_on_hold_to_active_users(db):
+            updated_users = await start_users_expire(db, on_hold_users)
+
+            for user in updated_users:
+                await change_status(user, UserStatus.active)
 
         if WEBHOOK_ADDRESS:
             for percent in NOTIFY_REACHED_USAGE_PERCENT:

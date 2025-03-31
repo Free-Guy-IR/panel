@@ -54,8 +54,8 @@ async def reset_user_data_usage():
                 UserDataLimitResetStrategy.year.value,
             ],
         )
-        if users:
-            await asyncio.gather(*[check_user(user) for user in users])
+        for user in users:
+            await check_user(user)
 
 
 scheduler.add_job(
