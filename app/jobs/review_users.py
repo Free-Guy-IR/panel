@@ -59,41 +59,29 @@ async def review():
             asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
 
         users = await get_active_to_expire_users(db)
-        if users:
-            await asyncio.gather(*[change_status(user, UserStatus.expired) for user in users])
+        for user in users:
+            await change_status(user, UserStatus.expired)
 
         users = await get_active_to_limited_users(db)
-        if users:
-            await asyncio.gather(*[change_status(user, UserStatus.limited) for user in users])
+        for user in users:
+            await change_status(user, UserStatus.limited)
 
         users = await get_on_hold_to_active_users(db)
-        if users:
-            await asyncio.gather(*[activate_user(user) for user in users])
+        for user in users:
+            await activate_user(user)
 
         if WEBHOOK_ADDRESS:
             for percent in NOTIFY_REACHED_USAGE_PERCENT:
                 users = await get_usage_percentage_reached_users(db, percent)
-                if users:
-                    await asyncio.gather(
-                        *[
-                            notification.data_usage_percent_reached(
-                                db, user.usage_percentage, UserResponse.model_validate(user), percent
-                            )
-                            for user in users
-                        ]
+                for user in users:
+                    await notification.data_usage_percent_reached(
+                        db, user.usage_percentage, UserResponse.model_validate(user), percent
                     )
 
             for days in NOTIFY_DAYS_LEFT:
                 users = await get_days_left_reached_users(db, days)
-                if users:
-                    await asyncio.gather(
-                        *[
-                            notification.expire_days_reached(
-                                db, user.days_left, UserResponse.model_validate(user), days
-                            )
-                            for user in users
-                        ]
-                    )
+                for user in users:
+                    await notification.expire_days_reached(db, user.days_left, UserResponse.model_validate(user), days)
 
 
 scheduler.add_job(review, "interval", seconds=JOB_REVIEW_USERS_INTERVAL, coalesce=True, max_instances=1)

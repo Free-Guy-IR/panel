@@ -20,6 +20,8 @@ class HostOperator(BaseOperator):
         return await get_hosts(db=db, offset=offset, limit=limit)
 
     async def add_host(self, db: AsyncSession, new_host: CreateHost, admin: AdminDetails) -> BaseHost:
+        await self.check_inbound_tags([new_host.inbound_tag])
+
         db_host = await add_host(db, new_host)
 
         logger.info(f'Host "{db_host.id}" added by admin "{admin.username}"')
@@ -34,6 +36,9 @@ class HostOperator(BaseOperator):
     async def modify_host(
         self, db: AsyncSession, host_id: int, modified_host: CreateHost, admin: AdminDetails
     ) -> BaseHost:
+        if modified_host.inbound_tag:
+            await self.check_inbound_tags([modified_host.inbound_tag])
+
         db_host = await self.get_validated_host(db, host_id)
 
         db_host = await modify_host(db=db, db_host=db_host, modified_host=modified_host)

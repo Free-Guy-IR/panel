@@ -5,7 +5,7 @@ Functions for managing proxy hosts, users, user templates, nodes, and administra
 import asyncio
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 from sqlalchemy import and_, delete, func, select, update, not_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,6 @@ from app.db.models import (
     UserUsageResetLogs,
     NodeStatus,
     Group,
-    users_groups_association,
     ReminderType,
     UserStatus,
     UserDataLimitResetStrategy,
@@ -76,7 +75,7 @@ async def get_or_create_inbound(db: AsyncSession, inbound_tag: str) -> ProxyInbo
     """
     stmt = select(ProxyInbound).where(ProxyInbound.tag == inbound_tag)
     result = await db.execute(stmt)
-    inbound = result.unique().scalar_one_or_none()
+    inbound = result.scalar_one_or_none()
 
     if not inbound:
         inbound = ProxyInbound(tag=inbound_tag)
@@ -250,35 +249,37 @@ UsersSortingOptions = Enum(
 
 async def get_users(
     db: AsyncSession,
-    offset: Optional[int] = None,
-    limit: Optional[int] = None,
-    usernames: Optional[List[str]] = None,
-    search: Optional[str] = None,
-    status: Optional[Union[UserStatus, list]] = None,
-    sort: Optional[List[UsersSortingOptions]] = None,
-    admin: Optional[Admin] = None,
-    admins: Optional[List[str]] = None,
-    reset_strategy: Optional[Union[UserDataLimitResetStrategy, list]] = None,
+    offset: int | None = None,
+    limit: int | None = None,
+    usernames: list[str] | None = None,
+    search: str | None = None,
+    status: UserStatus | list[UserStatus] | None = None,
+    sort: list[UsersSortingOptions] | None = None,
+    admin: Admin | None = None,
+    admins: list[str] | None = None,
+    reset_strategy: UserDataLimitResetStrategy | list[UserDataLimitResetStrategy] | None = None,
     return_with_count: bool = False,
-) -> Union[List[User], Tuple[List[User], int]]:
+    group_ids: list[int] | None = None,
+) -> list[User] | tuple[list[User], int]:
     """
     Retrieves users based on various filters.
 
     Args:
-        db (AsyncSession): Database session.
-        offset (Optional[int]): Number of records to skip.
-        limit (Optional[int]): Number of records to retrieve.
-        usernames (Optional[List[str]]): List of usernames to filter by.
-        search (Optional[str]): Search term for username.
-        status (Optional[Union[app.db.models.UserStatus, list]]): User status filter.
-        sort (Optional[List[UsersSortingOptions]]): Sort options.
-        admin (Optional[Admin]): Admin filter.
-        admins (Optional[List[str]]): List of admin usernames to filter by.
-        reset_strategy (Optional[Union[app.db.models.UserDataLimitResetStrategy, list]]): Reset strategy filter.
-        return_with_count (bool): Whether to return total count.
+        db: Database session.
+        offset: Number of records to skip.
+        limit: Number of records to retrieve.
+        usernames: List of usernames to filter by.
+        search: Search term for username.
+        status: User status filter (single status or list).
+        sort: Sort options.
+        admin: Admin filter.
+        admins: List of admin usernames to filter by.
+        reset_strategy: Reset strategy filter (single strategy or list).
+        return_with_count: Whether to return total count.
+        group_ids: Filter users by their group IDs.
 
     Returns:
-        Union[List[User], Tuple[List[User], int]]: List of users or tuple with count.
+        List of users or tuple with (users, count) if return_with_count is True.
     """
     stmt = get_user_queryset()
 
@@ -301,6 +302,9 @@ async def get_users(
             filters.append(User.data_limit_reset_strategy.in_(reset_strategy))
         else:
             filters.append(User.data_limit_reset_strategy == reset_strategy)
+
+    if group_ids:
+        filters.append(User.groups.any(Group.id.in_(group_ids)))
 
     if filters:
         stmt = stmt.where(and_(*filters))
@@ -1601,7 +1605,7 @@ async def get_inbounds_by_tags(db: AsyncSession, tags: list[str]) -> list[ProxyI
     """
     Retrieves inbounds by their tags.
     """
-    return (await db.execute(select(ProxyInbound).where(ProxyInbound.tag.in_(tags)))).scalars().all()
+    return await asyncio.gather(*[get_or_create_inbound(db, tag) for tag in tags])
 
 
 def get_group_queryset() -> Query:
@@ -1698,12 +1702,14 @@ async def update_group(db: AsyncSession, db_group: Group, modified_group: GroupM
     Returns:
         Group: The updated Group object.
     """
+
     if db_group.name != modified_group.name:
         db_group.name = modified_group.name
-    if modified_group.inbound_tags is not None:
-        db_group.inbounds = await get_inbounds_by_tags(db, modified_group.inbound_tags)
     if modified_group.is_disabled is not None:
         db_group.is_disabled = modified_group.is_disabled
+    if modified_group.inbound_tags:
+        inbounds = await get_inbounds_by_tags(db, modified_group.inbound_tags)
+        db_group.inbounds = inbounds
     await db.commit()
     await db.refresh(db_group)
     return db_group

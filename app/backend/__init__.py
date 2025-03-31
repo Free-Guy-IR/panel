@@ -2,6 +2,8 @@ from app import on_startup
 from app.utils.store import DictStorage
 from app.backend.xray import XRayConfig
 from app.db import GetDB
+from app.db.models import ProxyHostSecurity
+from app.db.crud import get_hosts, get_or_create_inbound
 from config import XRAY_JSON
 
 
@@ -10,9 +12,6 @@ config = XRayConfig(XRAY_JSON)
 
 @DictStorage
 async def hosts(storage: dict):
-    from app.db.models import ProxyHostSecurity
-    from app.db.crud import get_hosts
-
     storage.clear()
     async with GetDB() as db:
         db_hosts = await get_hosts(db)
@@ -46,6 +45,13 @@ async def hosts(storage: dict):
             }
 
 
+async def check_inbounds():
+    async with GetDB() as db:
+        for tag in config.inbounds:
+            await get_or_create_inbound(db, tag)
+
+
+on_startup(check_inbounds)
 on_startup(hosts.update)
 
 
