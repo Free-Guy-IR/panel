@@ -1,0 +1,104 @@
+name: Test Database Migrations
+
+on:
+  push:
+    paths:
+      - "app/db/migrations/versions/**"
+  pull_request:
+    paths:
+      - "app/db/migrations/versions/**"
+
+jobs:
+  test-postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:latest # Use the latest version of PostgreSQL
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PostgreSQL Client Tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install dependencies
+        run: pip install uv
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -U postgres; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 2
+          done
+
+      - name: Run Alembic Migrations
+        env:
+          SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/testdb
+        run: make run-migration
+
+  test-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:latest # Use the latest version of MySQL
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -hlocalhost -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MySQL Client Tools
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Install dependencies
+        run: pip install uv
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Wait for MySQL
+        run: |
+          until mysqladmin ping -hlocalhost -uroot -proot --silent; do
+            echo "Waiting for MySQL to be ready..."
+            sleep 2
+          done
+      - name: Run Alembic Migrations
+        env:
+          SQLALCHEMY_DATABASE_URL: mysql+asyncmy://root:root@localhost:3306/testdb
+        run: make run-migration
+
+  test-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install uv
+      - name: Sync dependencies
+        run: uv sync
+      - name: Run Alembic Migrations
+        env:
+          SQLALCHEMY_DATABASE_URL: sqlite+aiosqlite:///./test.db
+        run: make run-migration
