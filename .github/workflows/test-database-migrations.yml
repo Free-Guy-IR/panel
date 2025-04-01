@@ -29,19 +29,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install PostgreSQL Client Tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Install dependencies
         run: pip install uv
       - name: Sync dependencies
         run: uv sync
-
-      - name: Wait for PostgreSQL
-        run: |
-          until pg_isready -h localhost -U postgres; do
-            echo "Waiting for PostgreSQL to be ready..."
-            sleep 2
-          done
 
       - name: Run Alembic Migrations
         env:
@@ -69,19 +60,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install MySQL Client Tools
-        run: sudo apt-get update && sudo apt-get install -y mysql-client
       - name: Install dependencies
         run: pip install uv
       - name: Sync dependencies
         run: uv sync
 
-      - name: Wait for MySQL
-        run: |
-          until mysqladmin ping -hlocalhost -uroot -proot --silent; do
-            echo "Waiting for MySQL to be ready..."
-            sleep 2
-          done
       - name: Run Alembic Migrations
         env:
           SQLALCHEMY_DATABASE_URL: mysql+asyncmy://root:root@localhost:3306/testdb
