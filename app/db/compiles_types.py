@@ -27,12 +27,13 @@ def compile_cs_mysql(element, compiler, **kw):
 
 class EnumArray(TypeDecorator):
     """Custom SQLAlchemy type to handle Enum lists across PostgreSQL, MySQL, and SQLite"""
+
     impl = JSON  # Default to JSON for MySQL/SQLite
-    
+
     def __init__(self, enum_cls):
         super().__init__()
         self.enum_cls = enum_cls
-    
+
     def load_dialect_impl(self, dialect):
         if dialect.name == "postgresql":
             # Extract enum values from the SQLAlchemy Enum type
@@ -44,10 +45,10 @@ class EnumArray(TypeDecorator):
                 # If it's a Python enum.Enum
                 enum_values = [e.value for e in self.enum_cls.__members__.values()]
                 enum_name = self.enum_cls.__name__.lower()
-                
+
             return dialect.type_descriptor(ARRAY(Enum(*enum_values, name=enum_name)))
         return dialect.type_descriptor(JSON)  # Use JSON for MySQL & SQLite
-    
+
     def process_bind_param(self, value, dialect):
         """Convert Enum list to appropriate format for storage"""
         if value is None:
@@ -55,7 +56,7 @@ class EnumArray(TypeDecorator):
         if dialect.name == "postgresql":
             return [v.value for v in value]  # Store as native PG array
         return json.dumps([v.value for v in value])  # Store as JSON for MySQL/SQLite
-    
+
     def process_result_value(self, value, dialect):
         """Convert stored values back to Enum list"""
         if value is None:

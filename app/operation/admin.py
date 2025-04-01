@@ -3,6 +3,7 @@ import asyncio
 
 from app.utils.logger import get_logger
 from app.operation import BaseOperator, OperatorType
+from app.models.user import UserResponse
 from app.models.admin import AdminDetails, AdminCreate, AdminModify
 from app.db import AsyncSession
 from app.db.models import Admin as DBAdmin
@@ -14,7 +15,10 @@ from app.db.crud import (
     disable_all_active_users,
     activate_all_disabled_users,
     reset_admin_usage,
+    get_users,
 )
+from app.node import node_manager
+from app.backend import config
 from app import notification
 
 logger = get_logger("admin-operator")
@@ -90,7 +94,8 @@ class AdminOperation(BaseOperator):
 
         await disable_all_active_users(db=db, admin_id=db_admin.id)
 
-        # TODO: sync node users
+        users = await get_users(db, admin=db_admin)
+        await asyncio.gather(*[node_manager.remove_user(UserResponse.model_validate(user)) for user in users])
 
         logger.info(f'Admin "{username}" users has been disabled by admin "{admin.username}"')
 
@@ -103,7 +108,13 @@ class AdminOperation(BaseOperator):
 
         await activate_all_disabled_users(db=db, admin_id=db_admin.id)
 
-        # TODO: sync node users
+        users = await get_users(db, admin=db_admin)
+        await asyncio.gather(
+            *[
+                node_manager.update_user(UserResponse.model_validate(user), user.inbounds(config.inbounds))
+                for user in users
+            ]
+        )
 
         logger.info(f'Admin "{username}" users has been activated by admin "{admin.username}"')
 
