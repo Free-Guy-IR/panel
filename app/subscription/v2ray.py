@@ -152,8 +152,8 @@ class StandardLinks(BaseSubscription):
                 "noGRPCHeader": noGRPCHeader,
                 "scStreamUpServerSecs": scStreamUpServerSecs,
                 "xmux": xmux,
-                "downloadSettings": downloadSettings,
                 "headers": http_headers if http_headers is not None else {},
+                "downloadSettings": downloadSettings,
             }
             if random_user_agent:
                 if mode in ("stream-one", "stream-up") and not noGRPCHeader:
@@ -366,6 +366,9 @@ class StandardLinks(BaseSubscription):
         downloadSettings: dict | None = None,
     ):
         payload = {"security": tls, "type": net, "headerType": type}
+        if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
+            payload["flow"] = flow
+
         self._make_net_settings(
             payload=payload,
             protocol="trojan",
@@ -386,9 +389,6 @@ class StandardLinks(BaseSubscription):
             random_user_agent=random_user_agent,
             downloadSettings=downloadSettings,
         )
-        if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
-            payload["flow"] = flow
-
         if tls in ("tls", "reality"):
             self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs)
         return (

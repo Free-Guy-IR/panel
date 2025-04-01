@@ -58,6 +58,7 @@ class XHttpSettings(BaseModel):
     sc_max_buffered_posts: str | int | None = Field(None, pattern=r"^\d{1,16}(-\d{1,16})?$")
     sc_stream_up_server_secs: str | int | None = Field(None, pattern=r"^\d{1,16}(-\d{1,16})?$")
     xmux: XMuxSettings | None = None
+    download_settings: int | None = None
 
 
 class HTTPBase(BaseModel):

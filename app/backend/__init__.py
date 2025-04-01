@@ -3,7 +3,7 @@ from app.utils.store import DictStorage
 from .xray import XRayConfig
 from app.db import GetDB
 from app.db.models import ProxyHostSecurity
-from app.db.crud import get_hosts, get_or_create_inbound
+from app.db.crud import get_hosts, get_or_create_inbound, get_host_by_id
 from config import XRAY_JSON
 
 
@@ -19,19 +19,22 @@ async def hosts(storage: dict):
         for host in db_hosts:
             if host.is_disabled or (config.get_inbound(host.inbound_tag) is None):
                 continue
+            downstream = None
+            if host.transport_settings and (
+                ds_host := host.transport_settings.get("xhttp_settings", {}).get("download_settings")
+            ):
+                downstream = await get_host_by_id(db, ds_host)
 
-            storage[host.id] = {
+            host_data = {
                 "remark": host.remark,
                 "inbound_tag": host.inbound_tag,
-                "address": [i.strip() for i in host.address.split(",")] if host.address else [],
+                "address": [addr.strip() for addr in host.address.split(",")] if host.address else [],
                 "port": host.port,
-                "path": host.path if host.path else None,
-                "sni": [i.strip() for i in host.sni.split(",")] if host.sni else [],
-                "host": [i.strip() for i in host.host.split(",")] if host.host else [],
+                "path": host.path or None,
+                "sni": [s.strip() for s in host.sni.split(",")] if host.sni else [],
+                "host": [h.strip() for h in host.host.split(",")] if host.host else [],
                 "alpn": host.alpn.value,
                 "fingerprint": host.fingerprint.value,
-                # None means the tls is not specified by host itself and
-                #  complies with its inbound's settings.
                 "tls": None if host.security == ProxyHostSecurity.inbound_default else host.security.value,
                 "allowinsecure": host.allowinsecure,
                 "fragment_settings": host.fragment_settings,
@@ -43,6 +46,35 @@ async def hosts(storage: dict):
                 "transport_settings": host.transport_settings,
                 "status": host.status,
             }
+
+            if downstream:
+                host_data["downloadSettings"] = {
+                    "remark": downstream.remark,
+                    "inbound_tag": downstream.inbound_tag,
+                    "address": [addr.strip() for addr in downstream.address.split(",")] if downstream.address else [],
+                    "port": downstream.port,
+                    "path": downstream.path or None,
+                    "sni": [s.strip() for s in downstream.sni.split(",")] if downstream.sni else [],
+                    "host": [h.strip() for h in downstream.host.split(",")] if downstream.host else [],
+                    "alpn": downstream.alpn.value,
+                    "fingerprint": downstream.fingerprint.value,
+                    "tls": None
+                    if downstream.security == ProxyHostSecurity.inbound_default
+                    else downstream.security.value,
+                    "allowinsecure": downstream.allowinsecure,
+                    "fragment_settings": downstream.fragment_settings,
+                    "noise_settings": downstream.noise_settings,
+                    "random_user_agent": downstream.random_user_agent,
+                    "use_sni_as_host": downstream.use_sni_as_host,
+                    "http_headers": downstream.http_headers,
+                    "mux_settings": downstream.mux_settings,
+                    "transport_settings": downstream.transport_settings,
+                    "status": downstream.status,
+                }
+            else:
+                host_data["downloadSettings"] = None
+
+            storage[host.id] = host_data
 
 
 async def check_inbounds():

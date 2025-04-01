@@ -154,7 +154,7 @@ class XRayConfig(dict):
         elif net == "httpupgrade":
             self._handle_httpupgrade_settings(net_settings, settings)
         elif net in ("splithttp", "xhttp"):
-            self._handle_splithttp_settings(net_settings, settings)
+            self._handle_xhttp_settings(net_settings, settings)
         elif net == "kcp":
             self._handle_kcp_settings(net_settings, settings)
         elif net in ("http", "h2", "h3"):
@@ -221,12 +221,11 @@ class XRayConfig(dict):
         host = net_settings.get("host", "")
         settings["host"] = [host]
 
-    def _handle_splithttp_settings(self, net_settings: dict, settings: dict):
-        """Handle Split HTTP network settings."""
+    def _handle_xhttp_settings(self, net_settings: dict, settings: dict):
+        """Handle XHTTP network settings."""
         settings["path"] = net_settings.get("path", "")
         host = net_settings.get("host", "")
         settings["host"] = [host]
-        settings["downloadSettings"] = net_settings.get("downloadSettings", {})
         settings["mode"] = net_settings.get("mode", "auto")
 
     def _handle_kcp_settings(self, net_settings: dict, settings: dict):

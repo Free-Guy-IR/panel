@@ -111,7 +111,7 @@ class XrayConfig(BaseSubscription):
             "noGRPCHeader": noGRPCHeader,
             "scStreamUpServerSecs": scStreamUpServerSecs,
             "xmux": xmux,
-            "downloadSettings": downloadSettings,
+            "downloadSettings": self.download_config(downloadSettings, True) if downloadSettings else None,
         }
         if random_user_agent:
             if mode in ("stream-one", "stream-up") and not noGRPCHeader:
@@ -271,6 +271,80 @@ class XrayConfig(BaseSubscription):
 
         return streamSettings
 
+    def download_config(self, inbound: dict, link_format: bool = False) -> dict:
+        net = inbound["network"]
+        port = inbound["port"]
+        if isinstance(port, str):
+            ports = port.split(",")
+            port = int(choice(ports))
+
+        address = inbound["address"]
+        tls = inbound["tls"]
+        headers = inbound["header_type"]
+        fragment = inbound["fragment_settings"]
+        noise = inbound["noise_settings"]
+        path = inbound["path"]
+        multi_mode = inbound.get("multi_mode", False)
+
+        if net in ("grpc", "gun"):
+            if multi_mode:
+                path = get_grpc_multi(path)
+            else:
+                path = get_grpc_gun(path)
+
+        dialer_proxy = ""
+        if (fragment or noise) and not link_format:
+            dialer_proxy = "dsdialer"
+
+        alpn = inbound.get("alpn", None)
+        download_settings = self.make_stream_setting(
+            net=net,
+            tls=tls,
+            sni=inbound["sni"],
+            host=inbound["host"],
+            path=path,
+            alpn=alpn.rsplit(sep=",") if alpn else None,
+            fp=inbound.get("fp", ""),
+            pbk=inbound.get("pbk", ""),
+            sid=inbound.get("sid", ""),
+            spx=inbound.get("spx", ""),
+            headers=headers,
+            ais=inbound.get("ais", ""),
+            multiMode=multi_mode,
+            random_user_agent=inbound.get("random_user_agent", False),
+            sc_max_each_post_bytes=inbound.get("sc_max_each_post_bytes"),
+            sc_max_concurrent_posts=inbound.get("sc_max_concurrent_posts"),
+            sc_min_posts_interval_ms=inbound.get("sc_min_posts_interval_ms"),
+            x_padding_bytes=inbound.get("x_padding_bytes"),
+            xmux=inbound.get("xmux", {}),
+            downloadSettings=inbound.get("downloadSettings"),
+            mode=inbound.get("mode", "auto"),
+            noGRPCHeader=inbound.get("no_grpc_header"),
+            heartbeatPeriod=inbound.get("heartbeat_period"),
+            scStreamUpServerSecs=inbound.get("sc_stream_up_server_secs"),
+            http_headers=inbound.get("http_headers"),
+            request=inbound.get("request"),
+            response=inbound.get("response"),
+            mtu=inbound.get("mtu"),
+            tti=inbound.get("tti"),
+            uplinkCapacity=inbound.get("uplink_capacity"),
+            downlinkCapacity=inbound.get("downlink_capacity"),
+            congestion=inbound.get("congestion"),
+            readBufferSize=inbound.get("read_buffer_size"),
+            writeBufferSize=inbound.get("write_buffer_size"),
+            idle_timeout=inbound.get("idle_timeout"),
+            health_check_timeout=inbound.get("health_check_timeout"),
+            permit_without_stream=inbound.get("permit_without_stream", False),
+            initial_windows_size=inbound.get("initial_windows_size"),
+            dialer_proxy=dialer_proxy,
+        )
+
+        return {
+            "address": address,
+            "port": port,
+            **download_settings,
+        }
+
     @staticmethod
     def vmess_config(address=None, port=None, id=None) -> dict:
         return {
@@ -332,7 +406,9 @@ class XrayConfig(BaseSubscription):
             ]
         }
 
-    def make_dialer_outbound(self, fragment: dict | None = None, noises: dict | None = None) -> Union[dict, None]:
+    def make_dialer_outbound(
+        self, fragment: dict | None = None, noises: dict | None = None, dialer_tag: str = "dialer"
+    ) -> Union[dict, None]:
         dialer_settings = {
             "fragment": fragment.get("xray") if fragment else None,
             "noises": noises.get("xray") if noises else None,
@@ -340,7 +416,7 @@ class XrayConfig(BaseSubscription):
         dialer_settings = self._remove_none_values(dialer_settings)
 
         if dialer_settings:
-            return {"tag": "dialer", "protocol": "freedom", "settings": dialer_settings}
+            return {"tag": dialer_tag, "protocol": "freedom", "settings": dialer_settings}
 
     def make_stream_setting(
         self,
@@ -520,6 +596,11 @@ class XrayConfig(BaseSubscription):
             dialer_proxy = extra_outbound["tag"]
             outbounds.append(extra_outbound)
 
+        if (ds := inbound.get("downloadSettings")) and (ds.get("fragment_settings") or ds.get("noise_settings")):
+            ds_outbound = self.make_dialer_outbound(ds.get("fragment_settings"), ds.get("noise_settings"), "dsdialer")
+            if ds_outbound:
+                outbounds.append(ds_outbound)
+
         alpn = inbound.get("alpn", None)
         outbound["streamSettings"] = self.make_stream_setting(
             net=net,
@@ -562,6 +643,7 @@ class XrayConfig(BaseSubscription):
             permit_without_stream=inbound.get("permit_without_stream", False),
             initial_windows_size=inbound.get("initial_windows_size"),
         )
+
         mux_settings: dict = inbound.get("mux_settings", {})
         if mux_settings and (xray_mux := mux_settings.get("xray")):
             xray_mux = self._remove_none_values(xray_mux)
