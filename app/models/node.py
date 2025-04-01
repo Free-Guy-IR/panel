@@ -38,6 +38,7 @@ class NodeCreate(Node):
                 "server_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
                 "connection_type": "grpc",
                 "keep_alive": 60,
+                "max_logs": 1000,
             }
         }
     )
@@ -104,6 +105,7 @@ class NodeModify(NodeCreate):
                 "connection_type": "grpc",
                 "server_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
                 "keep_alive": 60,
+                "max_logs": 1000,
             }
         }
     )
