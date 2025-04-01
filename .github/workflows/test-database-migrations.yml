@@ -3,10 +3,10 @@ name: Test Database Migrations
 on:
   push:
     paths:
-      - "app/db/migrations/versions/**"
+      - "app/db/**"
   pull_request:
     paths:
-      - "app/db/migrations/versions/**"
+      - "app/db/**"
 
 jobs:
   test-postgresql:
