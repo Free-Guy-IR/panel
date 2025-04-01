@@ -1,7 +1,7 @@
 import asyncio
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from app.db import AsyncSession, get_db
@@ -47,7 +47,12 @@ async def get_nodes(
     return await node_operator.get_db_nodes(db=db, offset=offset, limit=limit)
 
 
-@router.post("", response_model=NodeResponse, responses={409: responses._409})
+@router.post(
+    "",
+    response_model=NodeResponse,
+    responses={201: {"description": "Node created successfully"}, 409: responses._409},
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_node(
     new_node: NodeCreate, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):

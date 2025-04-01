@@ -1,6 +1,6 @@
 from datetime import datetime as dt
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 
 from app.db import AsyncSession, get_db
 from .authentication import check_sudo_admin, get_current
@@ -26,7 +26,12 @@ node_operator = NodeOperator(operator_type=OperatorType.API)
 router = APIRouter(tags=["User"], prefix="/api/user", responses={401: responses._401})
 
 
-@router.post("", response_model=UserResponse, responses={400: responses._400, 409: responses._409})
+@router.post(
+    "",
+    response_model=UserResponse,
+    responses={400: responses._400, 409: responses._409},
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_user(
     new_user: UserCreate, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(get_current)
 ):

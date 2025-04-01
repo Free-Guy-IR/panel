@@ -1,16 +1,14 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
 import asyncio
-
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordRequestForm
+from app import notification
 from app.db import AsyncSession, get_db
-from .authentication import validate_admin, check_sudo_admin, get_current
-from app.models.admin import AdminDetails, AdminCreate, AdminModify, Token
-from app.utils import responses
-from app.utils.jwt import create_admin_token
+from app.models.admin import AdminCreate, AdminDetails, AdminModify, Token
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
-from app import notification
-
+from app.utils import responses
+from app.utils.jwt import create_admin_token
+from .authentication import check_sudo_admin, get_current, validate_admin
 
 router = APIRouter(tags=["Admin"], prefix="/api/admin", responses={401: responses._401, 403: responses._403})
 admin_operator = AdminOperation(operator_type=OperatorType.API)
@@ -52,7 +50,12 @@ async def admin_token(
     return Token(access_token=await create_admin_token(form_data.username, db_admin.is_sudo))
 
 
-@router.post("", response_model=AdminDetails, responses={409: responses._409})
+@router.post(
+    "",
+    response_model=AdminDetails,
+    responses={201: {"description": "Admin created successfully"}, 409: responses._409},
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_admin(
     new_admin: AdminCreate, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):

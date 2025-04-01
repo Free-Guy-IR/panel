@@ -1,4 +1,4 @@
-from fastapi import Depends, APIRouter
+from fastapi import Depends, APIRouter, status
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
@@ -12,7 +12,7 @@ router = APIRouter(tags=["User Template"], prefix="/api/user_template")
 template_operator = UserTemplateOperation(OperatorType.API)
 
 
-@router.post("", response_model=UserTemplateResponse)
+@router.post("", response_model=UserTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def add_user_template(
     new_user_template: UserTemplateCreate,
     db: AsyncSession = Depends(get_db),

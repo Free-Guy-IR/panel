@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
-from .authentication import check_sudo_admin
 from app.models.host import BaseHost, CreateHost
 from app.operation import OperatorType
 from app.operation.host import HostOperator
 from app.utils import responses
 
+from .authentication import check_sudo_admin
 
 host_operator = HostOperator(operator_type=OperatorType.API)
 router = APIRouter(tags=["Host"], prefix="/api/host", responses={401: responses._401, 403: responses._403})
@@ -31,7 +31,12 @@ async def get_hosts(
     return await host_operator.get_hosts(db=db, offset=offset, limit=limit)
 
 
-@router.post("/", response_model=BaseHost)
+@router.post(
+    "/",
+    response_model=BaseHost,
+    responses={201: {"description": "Host created successfully"}},
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_host(
     new_host: CreateHost, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
