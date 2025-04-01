@@ -197,6 +197,7 @@ class UserUsageResponse(BaseModel):
     node_id: int | None = None
     node_name: str
     used_traffic: int
+    period_start: datetime
 
     @field_validator("used_traffic", mode="before")
     def cast_to_int(cls, v):

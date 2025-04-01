@@ -24,16 +24,9 @@ from app.db.crud import (
     UsersSortingOptions,
 )
 from app.db.models import User, UserStatus
+from app.models.stats import UsageStats, Period
 from app.models.admin import AdminDetails
-from app.models.user import (
-    UserCreate,
-    UserModify,
-    UserResponse,
-    UsersResponse,
-    UserUsagesResponse,
-    UsersUsagesResponse,
-    RemoveUsersResponse,
-)
+from app.models.user import UserCreate, UserModify, UserResponse, UsersResponse, RemoveUsersResponse
 from app.node import node_manager as node_manager
 from app.operation import BaseOperator
 from app.utils.logger import get_logger
@@ -203,14 +196,19 @@ class UserOperator(BaseOperator):
         return user
 
     async def get_user_usage(
-        self, db: AsyncSession, username: str, admin: AdminDetails, start: str = "", end: str = ""
-    ) -> UserUsagesResponse:
+        self,
+        db: AsyncSession,
+        username: str,
+        admin: AdminDetails,
+        start: str = "",
+        end: str = "",
+        period: Period = Period.hour,
+        node_id: int | None = None,
+    ) -> list[UsageStats]:
         start, end = self.validate_dates(start, end)
         db_user = await self.get_validated_user(db, username, admin)
 
-        usages = await get_user_usages(db, db_user, start, end)
-
-        return UserUsagesResponse(username=username, usages=usages)
+        return await get_user_usages(db, db_user.id, start, end, period, node_id)
 
     async def get_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserResponse:
         db_user = await self.get_validated_user(db, username, admin)
@@ -265,15 +263,20 @@ class UserOperator(BaseOperator):
         start: str = "",
         end: str = "",
         owner: list[str] | None = None,
-    ) -> UsersUsagesResponse:
+        period: Period = Period.hour,
+        node_id: int | None = None,
+    ) -> list[UsageStats]:
         """Get all users usage"""
         start, end = self.validate_dates(start, end)
 
-        usages = await get_all_users_usages(
-            db=db, start=start, end=end, admin=owner if admin.is_sudo else [admin.username]
+        return await get_all_users_usages(
+            db=db,
+            start=start,
+            end=end,
+            period=period,
+            node_id=node_id,
+            admin=owner if admin.is_sudo else [admin.username],
         )
-
-        return UsersUsagesResponse(usages=usages)
 
     @staticmethod
     async def remove_users_logger(users: list[str], by: str):

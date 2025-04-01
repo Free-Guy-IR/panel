@@ -8,6 +8,7 @@ from . import BaseOperator
 from app.db import AsyncSession
 from app.db.models import User
 from app.db.crud import update_user_sub, get_user_usages
+from app.models.stats import Period, UsageStats
 from app.models.user import UserResponse
 from app.subscription.share import encode_title, generate_subscription
 from app.templates import render_template
@@ -182,12 +183,17 @@ class SubscriptionOperator(BaseOperator):
         """Retrieves detailed information about the user's subscription."""
         return await self.get_validated_sub(db, token=token)
 
-    async def user_get_usage(self, db: AsyncSession, token: str, start: str = "", end: str = ""):
+    async def get_user_usage(
+        self,
+        db: AsyncSession,
+        token: str,
+        start: str = "",
+        end: str = "",
+        period: Period = Period.hour,
+    ) -> list[UsageStats]:
         """Fetches the usage statistics for the user within a specified date range."""
         start, end = self.validate_dates(start, end)
 
         db_user = await self.get_validated_sub(db, token=token)
 
-        usages = await get_user_usages(db, db_user, start, end)
-
-        return {"usages": usages, "username": db_user.username}
+        return await get_user_usages(db, db_user.id, start, end, period)

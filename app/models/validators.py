@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 
 
 class NumericValidatorMixin:
@@ -22,6 +23,9 @@ class NumericValidatorMixin:
             return int(v)
         if isinstance(v, int):  # Allow integers directly
             return v
+        if isinstance(v, Decimal):
+            return int(v)
+
         raise ValueError("must be an integer or a float, not a string")  # Reject strings
 
 

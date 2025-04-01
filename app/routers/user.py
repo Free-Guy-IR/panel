@@ -4,16 +4,9 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.db import AsyncSession, get_db
 from .authentication import check_sudo_admin, get_current
+from app.models.stats import Period, UsageStats
 from app.models.admin import AdminDetails
-from app.models.user import (
-    UserCreate,
-    UserModify,
-    UserResponse,
-    UsersResponse,
-    UsersUsagesResponse,
-    UserUsagesResponse,
-    RemoveUsersResponse,
-)
+from app.models.user import UserCreate, UserModify, UserResponse, UsersResponse, RemoveUsersResponse
 from app.db.models import UserStatus
 from app.utils import responses
 from app.operation import OperatorType
@@ -175,22 +168,26 @@ async def get_users(
     )
 
 
-@router.get(
-    "/{username}/usage", response_model=UserUsagesResponse, responses={403: responses._403, 404: responses._404}
-)
+@router.get("/{username}/usage", response_model=list[UsageStats], responses={403: responses._403, 404: responses._404})
 async def get_user_usage(
     username: str,
+    period: Period,
+    node_id: int | None = None,
     start: dt | None = Query(None, example="2024-01-01T00:00:00"),
     end: dt | None = Query(None, example="2024-01-31T23:59:59"),
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(get_current),
 ):
     """Get users usage"""
-    return await user_operator.get_user_usage(db, username=username, admin=admin, start=start, end=end)
+    return await user_operator.get_user_usage(
+        db, username=username, admin=admin, start=start, end=end, period=period, node_id=node_id
+    )
 
 
-@router.get("s/usage", response_model=UsersUsagesResponse)
+@router.get("s/usage", response_model=list[UsageStats])
 async def get_users_usage(
+    period: Period,
+    node_id: int | None = None,
     start: dt | None = Query(None, example="2024-01-01T00:00:00"),
     end: dt | None = Query(None, example="2024-01-31T23:59:59"),
     db: AsyncSession = Depends(get_db),
@@ -198,7 +195,9 @@ async def get_users_usage(
     admin: AdminDetails = Depends(get_current),
 ):
     """Get all users usage"""
-    return await user_operator.get_users_usage(db, admin=admin, start=start, end=end, owner=owner)
+    return await user_operator.get_users_usage(
+        db, admin=admin, start=start, end=end, owner=owner, period=period, node_id=node_id
+    )
 
 
 @router.get("s/expired", response_model=list[str])

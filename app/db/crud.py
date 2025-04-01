@@ -34,6 +34,8 @@ from app.db.models import (
     UserStatus,
     UserDataLimitResetStrategy,
 )
+from app.db.base import DATABASE_DIALECT
+from app.models.stats import Period, UsageStats
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
 from app.models.admin import AdminCreate, AdminModify
@@ -41,12 +43,38 @@ from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeUsageResponse, NodeCreate, NodeModify
 from app.models.user import (
     UserModify,
-    UserUsageResponse,
     UserCreate,
 )
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
 from config import NOTIFY_DAYS_LEFT, NOTIFY_REACHED_USAGE_PERCENT, USERS_AUTODELETE_DAYS
+
+
+MYSQL_FORMATS = {
+    Period.minute: "%Y-%m-%d %H:%i:00",
+    Period.hour: "%Y-%m-%d %H:00:00",
+    Period.day: "%Y-%m-%d",
+    Period.month: "%Y-%m-01",
+}
+
+SQLITE_FORMATS = {
+    Period.minute: "%Y-%m-%d %H:%M:00",
+    Period.hour: "%Y-%m-%d %H:00:00",
+    Period.day: "%Y-%m-%d",
+    Period.month: "%Y-%m-01",
+}
+
+
+def _build_trunc_expression(period: Period, column):
+    """Builds the appropriate truncation SQL expression based on DATABASE_DIALECT and period."""
+    if DATABASE_DIALECT == "postgresql":
+        return func.date_trunc(period.value, column)
+    elif DATABASE_DIALECT == "mysql":
+        return func.date_format(column, MYSQL_FORMATS[period.value])
+    elif DATABASE_DIALECT == "sqlite":
+        return func.strftime(SQLITE_FORMATS[period.value], column)
+
+    raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -429,36 +457,41 @@ async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]
     return list(result.unique().scalars().all())
 
 
-async def get_user_usages(db: AsyncSession, dbuser: User, start: datetime, end: datetime) -> list[UserUsageResponse]:
+async def get_user_usages(
+    db: AsyncSession,
+    user_id: int,
+    start: datetime,
+    end: datetime,
+    period: Period = Period.hour,
+    node_id: int | None = None,
+) -> list[UsageStats]:
     """
     Retrieves user usages within a specified date range.
     """
-    usages = {
-        0: UserUsageResponse(  # Main Core
-            node_id=None, node_name="Master", used_traffic=0
-        )
-    }
 
-    # Get all nodes using modern SQLAlchemy 2.0 style
-    nodes_result = await db.execute(select(Node))
-    nodes = nodes_result.scalars().all()
+    # Build the appropriate truncation expression
+    trunc_expr = _build_trunc_expression(period, NodeUserUsage.created_at)
 
-    # Initialize node usages
-    for node in nodes:
-        usages[node.id] = UserUsageResponse(node_id=node.id, node_name=node.name, used_traffic=0)
+    conditions = [
+        NodeUserUsage.created_at >= start,
+        NodeUserUsage.created_at <= end,
+        NodeUserUsage.user_id == user_id,
+    ]
 
-    # Get usage records with modern SQLAlchemy 2.0 style
-    cond = and_(NodeUserUsage.user_id == dbuser.id, NodeUserUsage.created_at >= start, NodeUserUsage.created_at <= end)
-    usage_records = (await db.execute(select(NodeUserUsage).where(cond))).scalars().all()
+    if node_id is not None:
+        conditions.append(NodeUserUsage.node_id == node_id)
 
-    # Aggregate usage data
-    for v in usage_records:
-        try:
-            usages[v.node_id or 0].used_traffic += v.used_traffic
-        except KeyError:
-            pass
+    stmt = (
+        select(trunc_expr.label("period_start"), func.sum(NodeUserUsage.used_traffic).label("total_traffic"))
+        .where(and_(*conditions))
+        .group_by(trunc_expr)
+        .order_by(trunc_expr)
+    )
 
-    return list(usages.values())
+    result = await db.execute(stmt)
+    return [
+        UsageStats(downlink=row.total_traffic, uplink=0, period=period, period_start=row.period_start) for row in result
+    ]
 
 
 async def get_users_count(db: AsyncSession, status: UserStatus = None, admin: Admin = None) -> int:
@@ -873,45 +906,54 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
     return expired_users
 
 
-async def get_all_users_usages(db: AsyncSession, admin: str, start: datetime, end: datetime) -> list[UserUsageResponse]:
+async def get_all_users_usages(
+    db: AsyncSession,
+    admin: str,
+    start: datetime,
+    end: datetime,
+    period: Period = Period.hour,
+    node_id: int | None = None,
+) -> list[UsageStats]:
     """
-    Retrieves usage data for all users associated with an admin within a specified time range.
-
-    This function calculates the total traffic used by users across different nodes,
-    including a "Master" node that represents the main core.
+    Retrieves aggregated usage data for all users of an admin within a specified time range,
+    grouped by the specified time period.
 
     Args:
         db (AsyncSession): Database session for querying.
         admin (Admin): The admin user for which to retrieve user usage data.
-        start (datetime): The start date and time of the period to consider.
-        end (datetime): The end date and time of the period to consider.
+        start (datetime): Start of the period.
+        end (datetime): End of the period.
+        period (Period): Time period to group by ('minute', 'hour', 'day', 'month').
+        node_id (Optional[int]): Filter results by specific node ID if provided
 
     Returns:
-        List[UserUsageResponse]: A list of UserUsageResponse objects, each representing
-        the usage data for a specific node or the main core.
+        list[UsageStats]: Aggregated usage data for each period.
     """
-    usages = {
-        0: UserUsageResponse(  # Main Core
-            node_id=None, node_name="Master", used_traffic=0
-        )
-    }
+    admin_users = {user.id for user in await get_users(db=db, admins=admin)}
 
-    for node in (await db.execute(select(Node))).scalars().all():
-        usages[node.id] = UserUsageResponse(node_id=node.id, node_name=node.name, used_traffic=0)
+    # Build the appropriate truncation expression
+    trunc_expr = _build_trunc_expression(period, NodeUserUsage.created_at)
 
-    admin_users = set(user.id for user in await get_users(db=db, admins=admin))
+    conditions = [
+        NodeUserUsage.created_at >= start,
+        NodeUserUsage.created_at <= end,
+        NodeUserUsage.user_id.in_(admin_users),
+    ]
 
-    cond = and_(
-        NodeUserUsage.created_at >= start, NodeUserUsage.created_at <= end, NodeUserUsage.user_id.in_(admin_users)
+    if node_id is not None:
+        conditions.append(NodeUserUsage.node_id == node_id)
+
+    stmt = (
+        select(trunc_expr.label("period_start"), func.sum(NodeUserUsage.used_traffic).label("total_traffic"))
+        .where(and_(*conditions))
+        .group_by(trunc_expr)
+        .order_by(trunc_expr)
     )
 
-    for v in (await db.execute(select(NodeUserUsage).where(cond))).scalars().all():
-        try:
-            usages[v.node_id or 0].used_traffic += v.used_traffic
-        except KeyError:
-            pass
-
-    return list(usages.values())
+    result = await db.execute(stmt)
+    return [
+        UsageStats(downlink=row.total_traffic, uplink=0, period=period, period_start=row.period_start) for row in result
+    ]
 
 
 async def _update_user_status(db_user: User, status: UserStatus) -> User:
