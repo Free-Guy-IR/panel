@@ -6,7 +6,8 @@ from hashlib import sha256
 from math import ceil
 
 from aiocache import cached
-from app.db import GetDB, get_jwt_secret_key
+from app.db import GetDB
+from app.db.crud import get_jwt_secret_key
 from config import JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 

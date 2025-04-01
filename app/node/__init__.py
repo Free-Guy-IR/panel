@@ -4,7 +4,8 @@ from GozargahNodeBridge import GozargahNode, create_node, Health, NodeType
 from aiorwlock import RWLock
 from aiocache import cached
 
-from app.db import GetDB, get_tls_certificate
+from app.db import GetDB
+from app.db.crud import get_tls_certificate
 from app.db.models import Node, NodeConnectionType
 from app.node.user import serialize_user_for_node, backend_users
 from app.models.user import UserResponse
