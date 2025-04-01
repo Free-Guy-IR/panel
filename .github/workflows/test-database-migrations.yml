@@ -34,6 +34,9 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Wait for PostgreSQL to be ready
+        run: sleep 10
+
       - name: Run Alembic Migrations
         env:
           SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/testdb
@@ -64,6 +67,8 @@ jobs:
         run: pip install uv
       - name: Sync dependencies
         run: uv sync
+      - name: Wait for MySQL to be ready
+        run: sleep 10
 
       - name: Run Alembic Migrations
         env:
