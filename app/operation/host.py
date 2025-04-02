@@ -25,6 +25,8 @@ class HostOperator(BaseOperator):
             and new_host.transport_settings.xhttp_settings
             and (nested_host := new_host.transport_settings.xhttp_settings.download_settings)
         ):
+            if nested_host == new_host.id:
+                return self.raise_error("download host cannot be the same as the host", 400)
             ds_host = await get_host_by_id(db, nested_host)
             if not ds_host:
                 return self.raise_error("download host not found", 404)
@@ -54,6 +56,8 @@ class HostOperator(BaseOperator):
             and modified_host.transport_settings.xhttp_settings
             and (nested_host := modified_host.transport_settings.xhttp_settings.download_settings)
         ):
+            if nested_host == host_id:
+                return self.raise_error("download host cannot be the same as the host", 400)
             ds_host = await get_host_by_id(db, nested_host)
             if not ds_host:
                 return self.raise_error("download host not found", 404)

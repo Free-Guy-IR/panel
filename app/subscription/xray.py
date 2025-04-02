@@ -596,7 +596,7 @@ class XrayConfig(BaseSubscription):
             dialer_proxy = extra_outbound["tag"]
             outbounds.append(extra_outbound)
 
-        if (ds := inbound.get("downloadSettings")) and (ds.get("fragment_settings") or ds.get("noise_settings")):
+        if (ds := inbound.get("downloadSettings", {})) and (ds.get("fragment_settings") or ds.get("noise_settings")):
             ds_outbound = self.make_dialer_outbound(ds.get("fragment_settings"), ds.get("noise_settings"), "dsdialer")
             if ds_outbound:
                 outbounds.append(ds_outbound)
