@@ -37,7 +37,7 @@ async def user_subscription_info(token: str, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/{token}/usage", response_model=list[UserUsageStats])
-async def get_user_usage(
+async def get_sub_user_usage(
     token: str, start: str = "", end: str = "", period: Period = Period.hour, db: AsyncSession = Depends(get_db)
 ):
     """Fetches the usage statistics for the user within a specified date range."""
