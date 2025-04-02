@@ -61,15 +61,15 @@ class BaseOperator:
         return db_host
 
     async def get_validated_sub(self, db: AsyncSession, token: str) -> User:
-        sub = get_subscription_payload(token)
+        sub = await get_subscription_payload(token)
         if not sub:
             self.raise_error(message="Not Found", code=404)
 
         db_user = await get_user(db, sub["username"])
-        if not db_user or db_user.created_at > sub["created_at"]:
+        if not db_user or db_user.created_at.astimezone(timezone.utc) > sub["created_at"]:
             self.raise_error(message="Not Found", code=404)
 
-        if db_user.sub_revoked_at and db_user.sub_revoked_at > sub["created_at"]:
+        if db_user.sub_revoked_at and db_user.sub_revoked_at.astimezone(timezone.utc) > sub["created_at"]:
             self.raise_error(message="Not Found", code=404)
 
         return db_user

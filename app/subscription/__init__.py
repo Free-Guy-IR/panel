@@ -1,5 +1,5 @@
 from .base import BaseSubscription
-from .v2ray import StandardLinks
+from .links import StandardLinks
 from .xray import XrayConfig
 from .singbox import SingBoxConfiguration
 from .outline import OutlineConfiguration

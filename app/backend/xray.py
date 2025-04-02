@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 from copy import deepcopy
 from pathlib import PosixPath
 from typing import Union
@@ -249,6 +250,22 @@ class XRayConfig(dict):
         elif host and isinstance(host, list):
             settings["host"] = host[0]
 
+    def _handle_shadowsocks_settings(self, inbound_settings: dict, settings: dict):
+        """Handle shadowsocks special settings."""
+        settings["method"] = inbound_settings.get("method", "")
+        if settings["method"].startswith("2022-blake3"):
+            settings["is_2022"] = True
+            password = inbound_settings.get("password", "")
+
+            # Validate if password is a valid base64 string
+            try:
+                base64.b64decode(password, validate=True)
+                settings["password"] = password
+            except Exception:
+                raise ValueError("Shadowsocks password must be a valid base64 string")
+        else:
+            settings["is_2022"] = False
+
     def _resolve_inbounds(self):
         """Resolve all inbounds and their settings."""
         for inbound in self["inbounds"]:
@@ -269,6 +286,9 @@ class XRayConfig(dict):
 
         settings = self._create_base_settings(inbound)
         self._handle_port_settings(inbound, settings)
+
+        if inbound["protocol"] == "shadowsocks":
+            self._handle_shadowsocks_settings(inbound["settings"], settings)
 
         if stream := inbound.get("streamSettings"):
             net = stream.get("network", "tcp")

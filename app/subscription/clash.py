@@ -2,7 +2,7 @@ from random import choice
 from uuid import UUID
 import yaml
 from . import BaseSubscription
-from app.subscription.funcs import get_grpc_gun
+from app.subscription.funcs import get_grpc_gun, detect_shadowsocks_2022
 from app.templates import render_template
 from app.utils.helpers import yml_uuid_representer
 from config import (
@@ -369,8 +369,13 @@ class ClashMetaConfiguration(ClashConfiguration):
             node["password"] = settings["password"]
 
         elif inbound["protocol"] == "shadowsocks":
-            node["password"] = settings["password"]
-            node["cipher"] = settings["method"]
+            node["method"], node["cipher"] = detect_shadowsocks_2022(
+                inbound.get("is_2022", False),
+                inbound.get("method", ""),
+                settings["method"],
+                inbound.get("password"),
+                settings["password"],
+            )
 
         else:
             return

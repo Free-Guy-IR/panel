@@ -1,4 +1,5 @@
 import json
+from .funcs import detect_shadowsocks_2022
 
 
 class OutlineConfiguration:
@@ -29,11 +30,19 @@ class OutlineConfiguration:
         if inbound["protocol"] != "shadowsocks":
             return
 
+        method, password = detect_shadowsocks_2022(
+            inbound.get("is_2022", False),
+            inbound.get("method", ""),
+            settings["method"],
+            inbound.get("password"),
+            settings["password"],
+        )
+
         outbound = self.make_outbound(
             remark=remark,
             address=address,
             port=inbound["port"],
-            password=settings["password"],
-            method=settings["method"],
+            password=password,
+            method=method,
         )
         self.add_directly(outbound)

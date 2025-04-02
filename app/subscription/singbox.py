@@ -2,7 +2,7 @@ import json
 from random import choice
 from . import BaseSubscription
 from app.utils.helpers import UUIDEncoder
-from app.subscription.funcs import get_grpc_gun
+from app.subscription.funcs import get_grpc_gun, detect_shadowsocks_2022
 from app.templates import render_template
 from config import SINGBOX_SUBSCRIPTION_TEMPLATE
 
@@ -311,7 +311,12 @@ class SingBoxConfiguration(BaseSubscription):
             outbound["password"] = settings["password"]
 
         elif inbound["protocol"] == "shadowsocks":
-            outbound["password"] = settings["password"]
-            outbound["method"] = settings["method"]
+            outbound["method"], outbound["password"] = detect_shadowsocks_2022(
+                inbound.get("is_2022", False),
+                inbound.get("method", ""),
+                settings["method"],
+                inbound.get("password"),
+                settings["password"],
+            )
 
         self.add_outbound(outbound)

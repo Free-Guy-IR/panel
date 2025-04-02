@@ -3,7 +3,7 @@ from random import choice
 from typing import Union
 
 from . import BaseSubscription
-from app.subscription.funcs import get_grpc_gun, get_grpc_multi
+from app.subscription.funcs import get_grpc_gun, get_grpc_multi, detect_shadowsocks_2022
 from app.templates import render_template
 from app.utils.helpers import UUIDEncoder
 from config import V2RAY_SUBSCRIPTION_TEMPLATE
@@ -585,9 +585,14 @@ class XrayConfig(BaseSubscription):
             outbound["settings"] = self.trojan_config(address=address, port=port, password=settings["password"])
 
         elif inbound["protocol"] == "shadowsocks":
-            outbound["settings"] = self.shadowsocks_config(
-                address=address, port=port, password=settings["password"], method=settings["method"]
+            method, password = detect_shadowsocks_2022(
+                inbound.get("is_2022", False),
+                inbound.get("method", ""),
+                settings["method"],
+                inbound.get("password"),
+                settings["password"],
             )
+            outbound["settings"] = self.shadowsocks_config(address=address, port=port, password=password, method=method)
 
         outbounds = [outbound]
         dialer_proxy = ""

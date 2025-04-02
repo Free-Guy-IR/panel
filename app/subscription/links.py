@@ -6,7 +6,7 @@ from typing import Union
 from urllib.parse import quote
 from uuid import UUID
 from . import BaseSubscription
-from app.subscription.funcs import get_grpc_gun, get_grpc_multi
+from app.subscription.funcs import get_grpc_gun, get_grpc_multi, detect_shadowsocks_2022
 from config import EXTERNAL_CONFIG
 
 
@@ -91,12 +91,20 @@ class StandardLinks(BaseSubscription):
             )
 
         elif inbound["protocol"] == "shadowsocks":
+            method, password = detect_shadowsocks_2022(
+                inbound.get("is_2022", False),
+                inbound.get("method", ""),
+                settings["method"],
+                inbound.get("password"),
+                settings["password"],
+            )
+
             link = self.shadowsocks(
                 remark=remark,
                 address=address,
                 port=inbound["port"],
-                password=settings["password"],
-                method=settings["method"],
+                password=password,
+                method=method,
             )
         else:
             return

@@ -123,7 +123,7 @@ class SubscriptionOperator(BaseOperator):
         }
 
     async def fetch_config(self, db: AsyncSession, token: str, client_type: str) -> tuple[str, str, User]:
-        db_user: User = await self.get_validated_sub(db, token=token)
+        db_user = await self.get_validated_sub(db, token=token)
 
         # Get client configuration
         config = client_config.get(client_type)

@@ -119,17 +119,17 @@ async def generate_subscription(user: User, config_format: str, as_base64: bool,
     }
 
     if config_format == "links":
-        config = "\n".join(generate_standard_links(**kwargs))
+        config = "\n".join(await generate_standard_links(**kwargs))
     elif config_format == "clash-meta":
-        config = generate_clash_subscription(**kwargs, is_meta=True)
+        config = await generate_clash_subscription(**kwargs, is_meta=True)
     elif config_format == "clash":
-        config = generate_clash_subscription(**kwargs)
+        config = await generate_clash_subscription(**kwargs)
     elif config_format == "sing-box":
-        config = generate_singbox_subscription(**kwargs)
+        config = await generate_singbox_subscription(**kwargs)
     elif config_format == "outline":
-        config = generate_outline_subscription(**kwargs)
+        config = await generate_outline_subscription(**kwargs)
     elif config_format == "xray":
-        config = generate_xray_subscription(**kwargs)
+        config = await generate_xray_subscription(**kwargs)
     else:
         raise ValueError(f'Unsupported format "{config_format}"')
 
@@ -355,7 +355,7 @@ async def process_inbounds_and_tags(
     reverse=False,
     user_status: UserStatus = UserStatus.active,
 ) -> list | str:
-    for host in filter_hosts(backend.hosts.values(), user_status):
+    for host in filter_hosts(await backend.hosts.values(), user_status):
         host_inbound, settings, address = process_host(host, format_variables, inbounds, proxies, conf)
         if host_inbound:
             conf.add(
