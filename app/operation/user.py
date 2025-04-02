@@ -24,7 +24,7 @@ from app.db.crud import (
     UsersSortingOptions,
 )
 from app.db.models import User, UserStatus
-from app.models.stats import UsageStats, Period
+from app.models.stats import UserUsageStats, Period
 from app.models.admin import AdminDetails
 from app.models.user import UserCreate, UserModify, UserResponse, UsersResponse, RemoveUsersResponse
 from app.node import node_manager as node_manager
@@ -204,7 +204,7 @@ class UserOperator(BaseOperator):
         end: str = "",
         period: Period = Period.hour,
         node_id: int | None = None,
-    ) -> list[UsageStats]:
+    ) -> list[UserUsageStats]:
         start, end = self.validate_dates(start, end)
         db_user = await self.get_validated_user(db, username, admin)
 
@@ -265,7 +265,7 @@ class UserOperator(BaseOperator):
         owner: list[str] | None = None,
         period: Period = Period.hour,
         node_id: int | None = None,
-    ) -> list[UsageStats]:
+    ) -> list[UserUsageStats]:
         """Get all users usage"""
         start, end = self.validate_dates(start, end)
 

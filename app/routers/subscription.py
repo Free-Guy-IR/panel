@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Header, Path, Request
 
 from app.db import AsyncSession, get_db
-from app.models.stats import Period, UsageStats
+from app.models.stats import Period, UserUsageStats
 from app.models.user import SubscriptionUserResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperator
@@ -36,7 +36,7 @@ async def user_subscription_info(token: str, db: AsyncSession = Depends(get_db))
     return await subscription_operator.user_subscription_info(db, token=token)
 
 
-@router.get("/{token}/usage", response_model=list[UsageStats])
+@router.get("/{token}/usage", response_model=list[UserUsageStats])
 async def get_user_usage(
     token: str, start: str = "", end: str = "", period: Period = Period.hour, db: AsyncSession = Depends(get_db)
 ):

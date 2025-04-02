@@ -193,26 +193,6 @@ class UsersResponse(BaseModel):
             user.subscription_url = url
 
 
-class UserUsageResponse(BaseModel):
-    node_id: int | None = None
-    node_name: str
-    used_traffic: int
-    period_start: datetime
-
-    @field_validator("used_traffic", mode="before")
-    def cast_to_int(cls, v):
-        return NumericValidatorMixin.cast_to_int(v)
-
-
-class UserUsagesResponse(BaseModel):
-    username: str
-    usages: list[UserUsageResponse]
-
-
-class UsersUsagesResponse(BaseModel):
-    usages: list[UserUsageResponse]
-
-
 class RemoveUsersResponse(BaseModel):
     users: list[str]
     count: int

@@ -13,12 +13,11 @@ class Period(str, Enum):
     month = "month"
 
 
-class UsageStats(BaseModel):
-    downlink: int
-    uplink: int
+class UserUsageStats(BaseModel):
+    total_traffic: int
     period: Period
     period_start: dt
 
-    @field_validator("downlink", "uplink", mode="before")
+    @field_validator("total_traffic", mode="before")
     def cast_to_int(cls, v):
         return NumericValidatorMixin.cast_to_int(v)

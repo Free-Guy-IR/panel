@@ -35,7 +35,7 @@ from app.db.models import (
     UserDataLimitResetStrategy,
 )
 from app.db.base import DATABASE_DIALECT
-from app.models.stats import Period, UsageStats
+from app.models.stats import Period, UserUsageStats
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
 from app.models.admin import AdminCreate, AdminModify
@@ -464,7 +464,7 @@ async def get_user_usages(
     end: datetime,
     period: Period = Period.hour,
     node_id: int | None = None,
-) -> list[UsageStats]:
+) -> list[UserUsageStats]:
     """
     Retrieves user usages within a specified date range.
     """
@@ -490,7 +490,7 @@ async def get_user_usages(
 
     result = await db.execute(stmt)
     return [
-        UsageStats(downlink=row.total_traffic, uplink=0, period=period, period_start=row.period_start) for row in result
+        UserUsageStats(total_traffic=row.total_traffic, period=period, period_start=row.period_start) for row in result
     ]
 
 
@@ -913,7 +913,7 @@ async def get_all_users_usages(
     end: datetime,
     period: Period = Period.hour,
     node_id: int | None = None,
-) -> list[UsageStats]:
+) -> list[UserUsageStats]:
     """
     Retrieves aggregated usage data for all users of an admin within a specified time range,
     grouped by the specified time period.
@@ -952,7 +952,7 @@ async def get_all_users_usages(
 
     result = await db.execute(stmt)
     return [
-        UsageStats(downlink=row.total_traffic, uplink=0, period=period, period_start=row.period_start) for row in result
+        UserUsageStats(total_traffic=row.total_traffic, period=period, period_start=row.period_start) for row in result
     ]
 
 

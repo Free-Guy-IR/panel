@@ -19,12 +19,10 @@ class NumericValidatorMixin:
         """
         if v is None:  # Allow None values
             return v
-        if isinstance(v, float):  # Allow float to int conversion
+        elif isinstance(v, float) or isinstance(v, Decimal):  # Allow float or Decimal to int conversion
             return int(v)
-        if isinstance(v, int):  # Allow integers directly
+        elif isinstance(v, int):  # Allow integers directly
             return v
-        if isinstance(v, Decimal):
-            return int(v)
 
         raise ValueError("must be an integer or a float, not a string")  # Reject strings
 
