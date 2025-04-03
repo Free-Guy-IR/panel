@@ -3,7 +3,7 @@ name: "API CodeQL"
 on:
   push:
     branches:
-      - "**"
+      - "*"
     paths-ignore:
       - "app/dashboard/**"
   pull_request:
