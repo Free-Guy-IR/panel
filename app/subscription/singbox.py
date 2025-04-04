@@ -253,9 +253,6 @@ class SingBoxConfiguration(BaseSubscription):
         if mux_settings and (singbox_mux := mux_settings.get("sing_box")):
             singbox_mux = self._remove_none_values(singbox_mux)
             config["multiplex"] = singbox_mux
-            config["multiplex"]["enabled"] = True
-            if singbox_mux.get("brutal"):
-                config["multiplex"]["brutal"]["enabled"] = True
 
         return config
 

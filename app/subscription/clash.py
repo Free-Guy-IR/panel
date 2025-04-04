@@ -201,7 +201,7 @@ class ClashConfiguration(BaseSubscription):
 
         if mux_settings and (clash_mux := mux_settings.get("clash")):
             clash_mux = {
-                "enabled": True,
+                "enabled": clash_mux.get("enable"),
                 "protocol": clash_mux.get("protocol"),
                 "max-connections": clash_mux.get("max_connections"),
                 "min-streams": clash_mux.get("min_streams"),
@@ -210,7 +210,7 @@ class ClashConfiguration(BaseSubscription):
                 "only-tcp": clash_mux.get("only_tcp"),
                 "padding": clash_mux.get("padding"),
                 "brutal-opts": {
-                    "enabled": True,
+                    "enabled": clash_mux.get("brutal", {}).get("enable"),
                     "up": clash_mux["brutal"]["up_mbps"],
                     "down": clash_mux["brutal"]["down_mbps"],
                 }

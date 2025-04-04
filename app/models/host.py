@@ -114,11 +114,13 @@ class GRPCSettings(BaseModel):
 
 
 class Brutal(BaseModel):
+    enable: bool = False
     up_mbps: int
     down_mbps: int
 
 
 class SingBoxMuxSettings(BaseModel):
+    enable: bool = False
     protocol: MultiplexProtocol = MultiplexProtocol.smux
     max_connections: int | None = None
     max_streams: int | None = None
@@ -133,6 +135,7 @@ class ClashMuxSettings(SingBoxMuxSettings):
 
 
 class XrayMuxSettings(BaseModel):
+    enable: bool = False
     concurrency: int | None = None
     xudp_concurrency: int | None = None
     xudp_proxy_443: XUDP = Field(default=XUDP.reject)

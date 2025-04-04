@@ -653,6 +653,5 @@ class XrayConfig(BaseSubscription):
         if mux_settings and (xray_mux := mux_settings.get("xray")):
             xray_mux = self._remove_none_values(xray_mux)
             outbound["mux"] = xray_mux
-            outbound["mux"]["enabled"] = True
 
         self.add_config(remarks=remark, outbounds=outbounds)
