@@ -20,6 +20,12 @@ class MultiplexProtocol(str, Enum):
     h2mux = "h2mux"
 
 
+class XUDP(str, Enum):
+    reject = "reject"
+    allow = "allow"
+    skip = "skip"
+
+
 class XrayFragmentSettings(BaseModel):
     packets: str = Field(pattern=r"^(:?tlshello|[\d-]{1,16})$")
     length: str = Field(pattern=r"^[\d-]{1,16}$")
@@ -129,7 +135,7 @@ class ClashMuxSettings(SingBoxMuxSettings):
 class XrayMuxSettings(BaseModel):
     concurrency: int | None = None
     xudp_concurrency: int | None = None
-    xudp_proxy_443: str = Field(default="reject", pattern=r"^(:?reject|allow|skip)$")
+    xudp_proxy_443: XUDP = Field(default=XUDP.reject)
 
 
 class MuxSettings(BaseModel):
