@@ -24,10 +24,17 @@ async def get_node_settings(_: AdminDetails = Depends(check_sudo_admin)):
     return await node_operator.get_node_settings()
 
 
-@router.get("/{node_id}", response_model=NodeResponse)
-async def get_node(node_id: int, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)):
-    """Retrieve details of a specific node by its ID."""
-    return await node_operator.get_validated_node(db=db, node_id=node_id)
+@router.get("/usage", response_model=list[NodeUsageStats])
+async def get_usage(
+    db: AsyncSession = Depends(get_db),
+    start: str = "",
+    end: str = "",
+    period: Period = Period.hour,
+    node_id: int | None = None,
+    _: AdminDetails = Depends(check_sudo_admin),
+):
+    """Retrieve usage statistics for nodes within a specified date range."""
+    return await node_operator.get_usage(db=db, start=start, end=end, period=period, node_id=node_id)
 
 
 @router.get("s", response_model=list[NodeResponse])
@@ -52,6 +59,12 @@ async def add_node(
 ):
     """Add a new node to the database."""
     return await node_operator.add_node(db, new_node, admin)
+
+
+@router.get("/{node_id}", response_model=NodeResponse)
+async def get_node(node_id: int, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)):
+    """Retrieve details of a specific node by its ID."""
+    return await node_operator.get_validated_node(db=db, node_id=node_id)
 
 
 @router.put("/{node_id}", response_model=NodeResponse)
@@ -118,19 +131,6 @@ async def node_logs(node_id: int, request: Request, _: AdminDetails = Depends(ch
             pass
 
     return EventSourceResponse(event_generator())
-
-
-@router.get("/usage", response_model=list[NodeUsageStats])
-async def get_usage(
-    db: AsyncSession = Depends(get_db),
-    start: str = "",
-    end: str = "",
-    period: Period = Period.hour,
-    node_id: int | None = None,
-    _: AdminDetails = Depends(check_sudo_admin),
-):
-    """Retrieve usage statistics for nodes within a specified date range."""
-    return await node_operator.get_usage(db=db, start=start, end=end, period=period, node_id=node_id)
 
 
 @router.get("/{node_id}/stats", response_model=NodeStats)
