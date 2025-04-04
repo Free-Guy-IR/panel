@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next'
 export const Language: React.FC = () => {
   const { i18n } = useTranslation()
 
-  const changeLanguage = (lang: string) => {
-    i18n.changeLanguage(lang)
+  const changeLanguage = async (lang: string) => {
+    await i18n.changeLanguage(lang)
     document.documentElement.lang = lang
     document.documentElement.setAttribute('dir', i18n.dir())
   }
