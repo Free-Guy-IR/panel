@@ -11,6 +11,7 @@ from cryptography.hazmat.backends import default_backend
 
 from app import app, logger  # noqa
 from config import DEBUG, UVICORN_HOST, UVICORN_PORT, UVICORN_SSL_CERTFILE, UVICORN_SSL_KEYFILE, UVICORN_UDS
+import dashboard  # noqa
 
 
 def check_and_modify_ip(ip_address: str) -> str:

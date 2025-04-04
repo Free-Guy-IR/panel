@@ -34,7 +34,7 @@ requirements:
 # Install frontend dependencies (Node.js packages)
 .PHONY: install-front
 install-front:
-	@cd app/dashboard && pnpm i 
+	@cd dashboard && pnpm i 
 
 # Run database migrations using Alembic
 .PHONY: run-migration

@@ -80,7 +80,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-from app import dashboard, routers, telegram, jobs  # noqa
+from app import routers, telegram, jobs  # noqa
 from app.routers import api_router  # noqa
 
 app.include_router(api_router)
