@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { getInbounds } from "@/service/api"
-import { useQuery } from "@tanstack/react-query"
 
 const hostFormSchema = z.object({
     inbound_tag: z.string().min(1, "Inbound is required"),
