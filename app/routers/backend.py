@@ -43,6 +43,6 @@ async def modify_core_config(
 
     await node_operator.restart_all_node(db, admin=admin)
 
-    await backend.hosts.update()
+    await backend.hosts.update(db)
 
     return payload

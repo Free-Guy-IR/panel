@@ -72,6 +72,8 @@ docstring-code-line-length = "dynamic"
 
 [dependency-groups]
 dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
     "ruff>=0.9.7",
     "textual-dev>=1.7.0",
     "watchfiles>=1.0.4",

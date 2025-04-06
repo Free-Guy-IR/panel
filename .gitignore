@@ -160,5 +160,6 @@ xray-core
 *-dev.yml
 *-dev.yaml
 *-debug.*
+*-test.*
 
 *Zone.Identifier

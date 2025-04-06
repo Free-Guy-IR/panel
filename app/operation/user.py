@@ -111,8 +111,8 @@ class UserOperator(BaseOperator):
     async def remove_user(self, db: AsyncSession, username: str, admin: AdminDetails):
         db_user = await self.get_validated_user(db, username, admin)
 
-        await remove_user(db, db_user)
         user = await self.validate_user(db_user)
+        await remove_user(db, db_user)
         asyncio.create_task(node_manager.remove_user(user))
 
         asyncio.create_task(notification.remove_user(user, admin))

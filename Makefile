@@ -51,6 +51,10 @@ run:
 run-cli:
 	@uv run marzban-cli.py
 
+# Run tests
+.PHONY: test
+test:
+	@uv run pytest -v tests/
 
 # Run marzban with watchfiles
 .PHONY: run-watch

@@ -1714,7 +1714,7 @@ async def get_inbounds_by_tags(db: AsyncSession, tags: list[str]) -> list[ProxyI
     """
     Retrieves inbounds by their tags.
     """
-    return await asyncio.gather(*[get_or_create_inbound(db, tag) for tag in tags])
+    return [(await get_or_create_inbound(db, tag)) for tag in tags]
 
 
 def get_group_queryset() -> Query:

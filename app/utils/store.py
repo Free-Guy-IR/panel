@@ -1,3 +1,6 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
 class MemoryStorage:
     def __init__(self):
         self._data = {}
@@ -77,5 +80,5 @@ class DictStorage(dict):
             await self.update()
         return super().get(key, default)
 
-    async def update(self):
-        await self.update_func(self)
+    async def update(self, db: AsyncSession):
+        await self.update_func(self, db)

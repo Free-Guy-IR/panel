@@ -3,17 +3,17 @@ name: Test Database Migrations
 on:
   push:
     paths:
-      - "app/db/**"
+      - "app/**.py"
   pull_request:
     paths:
-      - "app/db/**"
+      - "app/**.py"
 
 jobs:
-  test-postgresql:
+  test-databases:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:latest # Use the latest version of PostgreSQL
+        image: postgres:latest
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: testdb
@@ -24,29 +24,20 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install uv
-      - name: Sync dependencies
-        run: uv sync
-
-      - name: Wait for PostgreSQL to be ready
-        run: sleep 10
-
-      - name: Run Alembic Migrations
+      timescaledb:
+        image: timescale/timescaledb:latest-pg17
         env:
-          SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/testdb
-        run: make run-migration
-
-  test-mysql:
-    runs-on: ubuntu-latest
-    services:
+          POSTGRES_PASSWORD: timescale
+          POSTGRES_DB: testdb
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
       mysql:
-        image: mysql:latest # Use the latest version of MySQL
+        image: mysql:latest
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: testdb
@@ -57,36 +48,57 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -u testuser --password=testpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    strategy:
+      matrix:
+        db: [sqlite, postgres, mysql, mariadb, timescaledb]
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      - name: Set DATABASE_URL
+        run: |
+          echo "TEST_FROM=github" >> $GITHUB_ENV
+          case "${{ matrix.db }}" in
+            sqlite)
+              echo "SQLALCHEMY_DATABASE_URL=sqlite+aiosqlite:///./test.db" >> $GITHUB_ENV
+              ;;
+            postgres)
+              echo "SQLALCHEMY_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/testdb" >> $GITHUB_ENV
+              ;;
+            mysql)
+              echo "SQLALCHEMY_DATABASE_URL=mysql+asyncmy://root:root@localhost:3306/testdb" >> $GITHUB_ENV
+              ;;
+            mariadb)
+              echo "SQLALCHEMY_DATABASE_URL=mysql+asyncmy://testuser:testpassword@localhost:3307/testdb" >> $GITHUB_ENV
+              ;;
+            timescaledb)
+              echo "SQLALCHEMY_DATABASE_URL=postgresql+asyncpg://postgres:timescale@localhost:5433/testdb" >> $GITHUB_ENV
+              ;;
+            esac
+
       - name: Install dependencies
-        run: pip install uv
-      - name: Sync dependencies
-        run: uv sync
-      - name: Wait for MySQL to be ready
-        run: sleep 10
+        run: make setup
 
       - name: Run Alembic Migrations
-        env:
-          SQLALCHEMY_DATABASE_URL: mysql+asyncmy://root:root@localhost:3306/testdb
         run: make run-migration
 
-  test-sqlite:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install uv
-      - name: Sync dependencies
-        run: uv sync
-      - name: Run Alembic Migrations
-        env:
-          SQLALCHEMY_DATABASE_URL: sqlite+aiosqlite:///./test.db
-        run: make run-migration
+      - name: Run Tests
+        run: make test
