@@ -144,7 +144,14 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
 
     return (
         <div ref={setNodeRef} className="cursor-default" style={style} {...attributes}>
-            <Card className="p-4 relative group h-full">
+            <Card 
+                className="p-4 relative group h-full hover:bg-accent transition-colors cursor-pointer" 
+                onClick={(e) => {
+                    // Prevent click when clicking on buttons or dropdown
+                    if ((e.target as HTMLElement).closest('button')) return;
+                    onEdit(host);
+                }}
+            >
                 <div className="flex items-center gap-3">
                     <button style={{ cursor: cursor }} className="touch-none opacity-50 group-hover:opacity-100 transition-opacity" {...listeners}>
                         <GripVertical className="h-5 w-5" />
