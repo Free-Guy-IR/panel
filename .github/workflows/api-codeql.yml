@@ -5,12 +5,12 @@ on:
     branches:
       - "*"
     paths-ignore:
-      - "app/dashboard/**"
+      - "dashboard/**"
   pull_request:
     branches:
       - "*"
     paths-ignore:
-      - "app/dashboard/**"
+      - "dashboard/**"
   schedule:
     - cron: "0 11 * * 3"
 
