@@ -1,6 +1,13 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.proxy import XTLSFlows, ShadowsocksMethods
+
 from .validators import ListValidator
+
+
+class ExtraSettings(BaseModel):
+    flow: XTLSFlows = XTLSFlows.NONE
+    method: ShadowsocksMethods | None = None
 
 
 class UserTemplate(BaseModel):
@@ -12,6 +19,7 @@ class UserTemplate(BaseModel):
     username_prefix: str | None = Field(max_length=20, min_length=1, default=None)
     username_suffix: str | None = Field(max_length=20, min_length=1, default=None)
     group_ids: list[int] = []
+    extra_settings: ExtraSettings | None
 
 
 class UserTemplateCreate(UserTemplate):
@@ -24,6 +32,7 @@ class UserTemplateCreate(UserTemplate):
                 "group_ids": [1, 3, 5],
                 "data_limit": 0,
                 "expire_duration": 0,
+                "extra_settings": {"flow": "none", "method": None},
             }
         }
     )
@@ -45,6 +54,7 @@ class UserTemplateModify(UserTemplate):
                 "group_ids": [1, 3, 5],
                 "data_limit": 0,
                 "expire_duration": 0,
+                "extra_settings": {"flow": "none", "method": None},
             }
         }
     )
