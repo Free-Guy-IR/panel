@@ -29,13 +29,13 @@ def test_user_create_active():
 
     for group in response.json()["group_ids"]:
         assert group in [2, 3]
-    
+
     # Parse the response date string back to datetime
     response_datetime = datetime.fromisoformat(response.json()["expire"])
     # Format both to the same format without microseconds
     expected_formatted = expire.replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
     response_formatted = response_datetime.strftime("%Y-%m-%dT%H:%M:%S")
-    
+
     assert response_formatted == expected_formatted
 
 
@@ -72,7 +72,7 @@ def test_user_create_on_hold():
     # Format both to the same format without microseconds
     expected_formatted = expire.replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
     response_formatted = response_datetime.strftime("%Y-%m-%dT%H:%M:%S")
-    
+
     assert response_formatted == expected_formatted
 
 

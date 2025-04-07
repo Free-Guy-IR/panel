@@ -112,7 +112,7 @@ async def reset_users_data_usage(db: AsyncSession = Depends(get_db), admin: Admi
     return {}
 
 
-@router.put("/{username}/set-owner", response_model=UserResponse)
+@router.put("/{username}/set-owner", response_model=UserResponse, responses={403: responses._403})
 async def set_owner(
     username: str,
     admin_username: str,

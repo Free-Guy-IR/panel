@@ -31,12 +31,7 @@ async def get_hosts(
     return await host_operator.get_hosts(db=db, offset=offset, limit=limit)
 
 
-@router.post(
-    "/",
-    response_model=BaseHost,
-    responses={201: {"description": "Host created successfully"}},
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/", response_model=BaseHost, status_code=status.HTTP_201_CREATED)
 async def add_host(
     new_host: CreateHost, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
@@ -65,7 +60,7 @@ async def modify_host(
 
 @router.delete(
     "/{host_id}",
-    responses={404: responses._404, 204: {"description": "Host deleted successfully"}},
+    responses={404: responses._404},
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def remove_host(

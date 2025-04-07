@@ -76,7 +76,7 @@ async def modify_admin(
     )
 
 
-@router.delete("/{username}",status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{username}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_admin(
     username: str, db: AsyncSession = Depends(get_db), current_admin: AdminDetails = Depends(check_sudo_admin)
 ):
@@ -121,7 +121,7 @@ async def activate_all_disabled_users(
     return {}
 
 
-@router.post("/{username}/reset", response_model=AdminDetails)
+@router.post("/{username}/reset", response_model=AdminDetails, responses={404: responses._404})
 async def reset_admin_usage(
     username: str, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):

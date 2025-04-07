@@ -51,7 +51,7 @@ async def get_nodes(
 @router.post(
     "",
     response_model=NodeResponse,
-    responses={201: {"description": "Node created successfully"}, 409: responses._409},
+    responses={409: responses._409},
     status_code=status.HTTP_201_CREATED,
 )
 async def add_node(

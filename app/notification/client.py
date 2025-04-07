@@ -15,6 +15,7 @@ logger = get_logger("Notification")
 
 MAX_RETRIES = 3
 
+
 async def send_discord_webhook(json_data, webhook):
     retries = 0
     while retries < MAX_RETRIES:
@@ -35,7 +36,7 @@ async def send_discord_webhook(json_data, webhook):
         except Exception as err:
             logger.error(f"Discord webhook failed Exception: {str(err)}")
             return
-    
+
     logger.error(f"Discord webhook failed after {MAX_RETRIES} retries")
 
 
@@ -91,5 +92,5 @@ async def send_telegram_message(message, chat_id=0, channel_id=0, topic_id=0):
         except Exception as err:
             logger.error(f"Telegram message failed: {str(err)}")
             return
-    
+
     logger.error(f"Telegram message failed after {MAX_RETRIES} retries")

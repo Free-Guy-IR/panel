@@ -18,7 +18,6 @@ group_operator = GroupOperation(OperatorType.API)
     status_code=status.HTTP_201_CREATED,
     summary="Create a new group",
     description="Creates a new group in the system. Only sudo administrators can create groups.",
-    responses={201: {"description": "Group created successfully"}},
 )
 async def add_group(
     new_group: GroupCreate, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
@@ -48,7 +47,6 @@ async def add_group(
     response_model=GroupsResponse,
     summary="List all groups",
     description="Retrieves a paginated list of all groups in the system. Requires admin authentication.",
-    responses={200: {"description": "List of groups retrieved successfully"}},
 )
 async def get_all_groups(
     offset: int = None, limit: int = None, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(get_current)
@@ -79,10 +77,7 @@ async def get_all_groups(
     response_model=GroupResponse,
     summary="Get group details",
     description="Retrieves detailed information about a specific group by its ID.",
-    responses={
-        200: {"description": "Group details retrieved successfully"},
-        404: {"description": "Group not found"},
-    },
+    responses={404: responses._404},
 )
 async def get_group(group_id: int, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(get_current)):
     """
@@ -109,7 +104,7 @@ async def get_group(group_id: int, db: AsyncSession = Depends(get_db), _: AdminD
     response_model=GroupResponse,
     summary="Update group",
     description="Updates an existing group's information. Only sudo administrators can modify groups.",
-    responses={200: {"description": "Group updated successfully"}, 404: {"description": "Group not found"}},
+    responses={404: responses._404},
 )
 async def modify_group(
     group_id: int,
@@ -143,7 +138,7 @@ async def modify_group(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete group",
     description="Deletes a group from the system. Only sudo administrators can delete groups.",
-    responses={204: {"description": "Group deleted successfully"}, 404: {"description": "Group not found"}},
+    responses={404: responses._404},
 )
 async def delete_group(
     group_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)

@@ -60,9 +60,7 @@ async def hosts(storage: dict, db: AsyncSession):
                 "host": [h.strip() for h in downstream.host.split(",")] if downstream.host else [],
                 "alpn": downstream.alpn.value,
                 "fingerprint": downstream.fingerprint.value,
-                "tls": None
-                if downstream.security == ProxyHostSecurity.inbound_default
-                else downstream.security.value,
+                "tls": None if downstream.security == ProxyHostSecurity.inbound_default else downstream.security.value,
                 "allowinsecure": downstream.allowinsecure,
                 "fragment_settings": downstream.fragment_settings,
                 "noise_settings": downstream.noise_settings,

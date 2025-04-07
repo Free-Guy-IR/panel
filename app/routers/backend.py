@@ -15,10 +15,10 @@ from config import XRAY_JSON
 
 
 node_operator = NodeOperator(operator_type=OperatorType.API)
-router = APIRouter(tags=["Backend"], prefix="/api/backend", responses={401: responses._401})
+router = APIRouter(tags=["Backend"], prefix="/api/backend", responses={401: responses._401, 403: responses._403})
 
 
-@router.get("", responses={403: responses._403})
+@router.get("")
 async def get_core_config(_: AdminDetails = Depends(check_sudo_admin)) -> dict:
     """Get the current core configuration."""
     with open(XRAY_JSON, "r") as f:
@@ -27,7 +27,7 @@ async def get_core_config(_: AdminDetails = Depends(check_sudo_admin)) -> dict:
     return config
 
 
-@router.put("", responses={403: responses._403})
+@router.put("")
 async def modify_core_config(
     payload: dict, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ) -> dict:

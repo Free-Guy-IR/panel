@@ -6,13 +6,16 @@ from .authentication import check_sudo_admin, get_current
 from app.models.user_template import UserTemplateCreate, UserTemplateModify, UserTemplateResponse
 from app.operation import OperatorType
 from app.operation.user_template import UserTemplateOperation
+from app.utils import responses
 
 
 router = APIRouter(tags=["User Template"], prefix="/api/user_template")
 template_operator = UserTemplateOperation(OperatorType.API)
 
 
-@router.post("", response_model=UserTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=UserTemplateResponse, status_code=status.HTTP_201_CREATED, responses={403: responses._403}
+)
 async def add_user_template(
     new_user_template: UserTemplateCreate,
     db: AsyncSession = Depends(get_db),
@@ -37,7 +40,7 @@ async def get_user_template(
     return await template_operator.get_validated_user_template(db, template_id)
 
 
-@router.put("/{template_id}", response_model=UserTemplateResponse)
+@router.put("/{template_id}", response_model=UserTemplateResponse, responses={403: responses._403})
 async def modify_user_template(
     template_id: int,
     modify_user_template: UserTemplateModify,
@@ -55,7 +58,7 @@ async def modify_user_template(
     return await template_operator.modify_user_template(db, template_id, modify_user_template, admin)
 
 
-@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, responses={403: responses._403})
 async def remove_user_template(
     template_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):

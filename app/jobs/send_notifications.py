@@ -116,10 +116,8 @@ async def delete_expired_reminders() -> None:
         # Get current UTC time and convert to naive datetime
         now_utc = dt.now(tz=tz.utc)
         now_naive = now_utc.replace(tzinfo=None)
-        
-        result = await db.execute(
-            delete(NotificationReminder).where(NotificationReminder.expires_at < now_naive)
-        )
+
+        result = await db.execute(delete(NotificationReminder).where(NotificationReminder.expires_at < now_naive))
         logger.info(f"Cleaned up {result.rowcount} expired reminders")
 
 
