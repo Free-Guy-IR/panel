@@ -19,7 +19,7 @@ class UserTemplate(BaseModel):
     username_prefix: str | None = Field(max_length=20, min_length=1, default=None)
     username_suffix: str | None = Field(max_length=20, min_length=1, default=None)
     group_ids: list[int] = []
-    extra_settings: ExtraSettings | None
+    extra_settings: ExtraSettings | None = None
 
 
 class UserTemplateCreate(UserTemplate):
