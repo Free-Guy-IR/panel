@@ -13,23 +13,30 @@ client = httpx.AsyncClient(
 
 logger = get_logger("Notification")
 
+MAX_RETRIES = 3
 
 async def send_discord_webhook(json_data, webhook):
-    _not_done = True
-    while _not_done:
+    retries = 0
+    while retries < MAX_RETRIES:
         try:
             response = await client.post(webhook, json=json_data)
             if response.status_code in [200, 204]:
                 logger.debug(f"Discord webhook payload delivered successfully, code {response.status_code}.")
-                _not_done = False
+                return
             elif response.status_code == 429:
-                asyncio.sleep(0.5)
-                continue
+                retries += 1
+                if retries < MAX_RETRIES:
+                    await asyncio.sleep(0.5)
+                    continue
             else:
                 response_text = response.text
                 logger.error(f"Discord webhook failed: {response.status_code} - {response_text}")
+                return
         except Exception as err:
             logger.error(f"Discord webhook failed Exception: {str(err)}")
+            return
+    
+    logger.error(f"Discord webhook failed after {MAX_RETRIES} retries")
 
 
 async def send_telegram_message(message, chat_id=0, channel_id=0, topic_id=0):
@@ -65,20 +72,24 @@ async def send_telegram_message(message, chat_id=0, channel_id=0, topic_id=0):
         logger.error("At least one of chat_id, channel_id must be provided")
         return
 
-    _not_done = True
-    while _not_done:
+    retries = 0
+    while retries < MAX_RETRIES:
         try:
             response = await client.post(base_url, data=payload)
             if response.status_code == 200:
                 logger.debug(f"Telegram message sent successfully, code {response.status_code}.")
-                _not_done = False
+                return
             elif response.status_code == 429:
-                asyncio.sleep(0.5)
-                continue
+                retries += 1
+                if retries < MAX_RETRIES:
+                    await asyncio.sleep(0.5)
+                    continue
             else:
-                # Correctly access the text property without parentheses
                 response_text = response.text
                 logger.error(f"Telegram message failed: {response.status_code} - {response_text}")
+                return
         except Exception as err:
             logger.error(f"Telegram message failed: {str(err)}")
             return
+    
+    logger.error(f"Telegram message failed after {MAX_RETRIES} retries")
