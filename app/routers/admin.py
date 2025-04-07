@@ -76,7 +76,7 @@ async def modify_admin(
     )
 
 
-@router.delete("/{username}")
+@router.delete("/{username}",status_code=status.HTTP_204_NO_CONTENT)
 async def remove_admin(
     username: str, db: AsyncSession = Depends(get_db), current_admin: AdminDetails = Depends(check_sudo_admin)
 ):

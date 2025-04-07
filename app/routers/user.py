@@ -78,7 +78,9 @@ async def modify_user(
     return await user_operator.modify_user(db, username=username, modified_user=modified_user, admin=admin)
 
 
-@router.delete("/{username}", responses={403: responses._403, 404: responses._404})
+@router.delete(
+    "/{username}", responses={403: responses._403, 404: responses._404}, status_code=status.HTTP_204_NO_CONTENT
+)
 async def remove_user(username: str, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(get_current)):
     """Remove a user"""
     return await user_operator.remove_user(db, username=username, admin=admin)

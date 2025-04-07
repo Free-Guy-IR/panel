@@ -34,12 +34,13 @@ else:
     )
 TestSession = async_sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
 if TEST_FROM == "local":
-
-    async def create_tables():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
     asyncio.run(create_tables())
 
 

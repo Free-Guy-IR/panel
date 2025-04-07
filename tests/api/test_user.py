@@ -123,4 +123,4 @@ def test_user_delete():
         "/api/user/test_user_active",
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_204_NO_CONTENT

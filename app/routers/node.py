@@ -95,7 +95,7 @@ async def sync_node(
     return await node_operator.sync_node_users(db, node_id=node_id, flush_users=flush_users)
 
 
-@router.delete("/{node_id}")
+@router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_node(
     node_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):

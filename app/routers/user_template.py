@@ -55,7 +55,7 @@ async def modify_user_template(
     return await template_operator.modify_user_template(db, template_id, modify_user_template, admin)
 
 
-@router.delete("/{template_id}")
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_user_template(
     template_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):

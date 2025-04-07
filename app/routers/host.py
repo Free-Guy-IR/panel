@@ -63,7 +63,11 @@ async def modify_host(
     return await host_operator.modify_host(db, host_id=host_id, modified_host=modified_host, admin=admin)
 
 
-@router.delete("/{host_id}", responses={404: responses._404})
+@router.delete(
+    "/{host_id}",
+    responses={404: responses._404, 204: {"description": "Host deleted successfully"}},
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def remove_host(
     host_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
