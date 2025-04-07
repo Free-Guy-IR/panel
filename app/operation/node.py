@@ -142,7 +142,10 @@ class NodeOperator(BaseOperator):
         if db_node.status is NodeStatus.disabled:
             await node_manager.remove_node(db_node.id)
         else:
-            await node_manager.update_node(db_node)
+            try:
+                await node_manager.update_node(db_node)
+            except NodeAPIError as e:
+                await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
             asyncio.create_task(self.connect_node(node_id=db_node.id))
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" modified by admin "{admin.username}"')
@@ -167,10 +170,10 @@ class NodeOperator(BaseOperator):
         asyncio.create_task(self.connect_node(node_id))
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
-    async def restart_all_node(self, db: AsyncSession, admin: AdminDetails) -> None:
-        for db_node in await get_nodes(db=db, enabled=True):
-            await asyncio.create_task(self.connect_node(db_node.id))
-        logger.info(f'All Node\'s restarted by admin "{admin.username}"')
+    @staticmethod
+    async def restart_all_node(admin: AdminDetails) -> None:
+        nodes = await node_manager.get_nodes()
+        await asyncio.gather(*[NodeOperator.connect_node(id) for id in nodes.keys()])
 
     async def get_usage(
         self, db: AsyncSession, start: str = "", end: str = "", period: Period = Period.hour, node_id: int | None = None

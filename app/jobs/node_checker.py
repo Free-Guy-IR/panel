@@ -24,7 +24,8 @@ async def node_health_check():
             await node.get_backend_stats(timeout=10)
             await node_operator.update_node_status(id, NodeStatus.connected, node.core_version, node.node_version)
         except NodeAPIError as e:
-            await node_operator.update_node_status(id, NodeStatus.error, err=e.detail)
+            if e.code > -3:
+                await node_operator.update_node_status(id, NodeStatus.error, err=e.detail)
             if e.code > 0:
                 await node_operator.connect_node(node_id=id)
 
@@ -47,7 +48,12 @@ async def initialize_nodes():
         db_nodes = await get_nodes(db=db, enabled=True)
 
         async def start_node(node: Node):
-            await node_manager.update_node(node)
+            try:
+                await node_manager.update_node(node)
+            except NodeAPIError as e:
+                await node_operator.update_node_status(node.id, NodeStatus.error, err=e.detail)
+                return
+
             await node_operator.connect_node(node_id=node.id)
 
         start_tasks = [start_node(node=db_node) for db_node in db_nodes]

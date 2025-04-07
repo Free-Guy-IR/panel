@@ -41,7 +41,7 @@ async def modify_core_config(
     with open(XRAY_JSON, "w") as f:
         f.write(json.dumps(payload, indent=4))
 
-    await node_operator.restart_all_node(db, admin=admin)
+    await node_operator.restart_all_node(admin)
 
     await backend.hosts.update(db)
 
