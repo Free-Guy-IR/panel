@@ -4,6 +4,7 @@
   "statistics": "Статистика",
   "hosts": "Хосты",
   "nodes": "Узлы",
+  "groups": "Группы",
   "documentation": "Документация",
   "discussionGroup": "Группа обсуждений",
   "github": "GitHub",
@@ -19,14 +20,15 @@
   "ip": "IP",
   "admins": "Администраторы",
   "manageAccounts": "Контроль, обновление и упорядочивание учетных записей",
+  "manageGroups": "Контроль, обновление и упорядочивание групп пользователей",
   "manageNodes": "Мониторинг, управление, добавление, редактирование, удаление узлов",
   "onlineUsers": "Пользователи онлайн",
   "totalUsers": "Всего пользователей",
   "edit": "Редактировать",
+  "editGroup": "Редактировать группу",
   "disable": "Отключить",
   "templates.title": "Шаблоны",
-  "templates.userTemplates": "Пользовательские шаблоны",
-  "templates.groupTemplates": "Групповые шаблоны",
+  "templates.userTemplates": "Шаблоны",
   "core.configuration": "Конфигурация",
   "core.generalErrorMessage": "Что-то пошло не так, пожалуйста, проверьте конфигурацию",
   "core.logs": "Логи",
@@ -41,6 +43,7 @@
   "core.title": "Основные настройки",
   "createNewUser": "Создать нового пользователя",
   "createUser": "Создать",
+  "createGroup": "Создать группу",
   "dataUsage": "Трафик",
   "dateFormat": "MMMM d, yyy",
   "delete": "Удалить",
@@ -399,5 +402,16 @@
     "disableFailed": "Не удалось отключить хост «{{name}}»",
     "duplicateSuccess": "Хост «{{name}}» успешно скопирован",
     "duplicateFailed": "Не удалось скопировать хост «{{name}}»"
-  }
+  },
+  "marzban": "Marzban",
+  "group": {
+    "createSuccess": "Группа «{{name}}» успешно создана",
+    "createFailed": "Не удалось создать группу «{{name}}»",
+    "editSuccess": "Группа «{{name}}» успешно обновлена",
+    "editFailed": "Не удалось обновить группу «{{name}}»",
+    "deleteSuccess": "Группа «{{name}}» успешно удалена",
+    "deleteFailed": "Не удалось удалить группу «{{name}}»",
+    "deleteConfirm": "Вы уверены, что хотите удалить группу «{{name}}»?"
+  },
+  "name": "Имя"
 }

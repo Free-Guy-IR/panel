@@ -163,3 +163,4 @@ xray-core
 *-test.*
 
 *Zone.Identifier
+.DS_Store

@@ -4,7 +4,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { UniqueIdentifier } from "@dnd-kit/core"
 
-import { HostResponse, removeHost, modifyHost } from "@/service/api"
+import { BaseHost, removeHost, modifyHost } from "@/service/api"
 import { Card } from "../ui/card"
 import { Copy, GripVertical, MoreVertical, Pencil, Power, Trash2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu"
@@ -18,9 +18,9 @@ import { useState } from "react"
 import { queryClient } from "@/utils/query-client"
 
 interface SortableHostProps {
-    host: HostResponse;
-    onEdit: (host: HostResponse) => void;
-    onDuplicate: (host: HostResponse) => Promise<void>;
+    host: BaseHost;
+    onEdit: (host: BaseHost) => void;
+    onDuplicate: (host: BaseHost) => Promise<void>;
 }
 
 const DeleteAlertDialog = ({
@@ -29,7 +29,7 @@ const DeleteAlertDialog = ({
     onClose,
     onConfirm,
 }: {
-    host: HostResponse;
+    host: BaseHost;
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
@@ -38,30 +38,27 @@ const DeleteAlertDialog = ({
     const dir = useDirDetection();
 
     return (
-        <div>
-            <AlertDialog open={isOpen} onOpenChange={onClose}>
-                <AlertDialogContent>
-                    <AlertDialogHeader className={cn(dir === "rtl" && "sm:text-right")}>
-                        <AlertDialogTitle>{t("deleteHost.title")}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            <span dir={dir} dangerouslySetInnerHTML={{ __html: t("deleteHost.prompt", { name: host.remark ?? "" }) }} />
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className={cn(dir === "rtl" && "sm:gap-x-2 sm:flex-row-reverse")}>
-                        <AlertDialogCancel onClick={onClose}>{t("cancel")}</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" onClick={onConfirm}>
-                            {t("delete")}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </div>
+        <AlertDialog open={isOpen} onOpenChange={onClose}>
+            <AlertDialogContent>
+                <AlertDialogHeader className={cn(dir === "rtl" && "sm:text-right")}>
+                    <AlertDialogTitle>{t("deleteHost.title")}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        <span dir={dir} dangerouslySetInnerHTML={{ __html: t("deleteHost.prompt", { name: host.remark ?? "" }) }} />
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className={cn(dir === "rtl" && "sm:gap-x-2 sm:flex-row-reverse")}>
+                    <AlertDialogCancel onClick={onClose}>{t("cancel")}</AlertDialogCancel>
+                    <AlertDialogAction variant="destructive" onClick={onConfirm}>
+                        {t("delete")}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 };
 
 export default function SortableHost({ host, onEdit, onDuplicate }: SortableHostProps) {
     const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const dir = useDirDetection()
     const { t } = useTranslation();
     
     // Ensure host.id is not null before using it
@@ -94,8 +91,11 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
             await modifyHost(host.id, updatedHost);
             
             toast({
-                dir,
-                description: t(host.is_disabled ? "host.enableSuccess" : "host.disableSuccess", { name: host.remark ?? "" }),
+                title: t('success', { defaultValue: 'Success' }),
+                description: t(host.is_disabled ? "host.enableSuccess" : "host.disableSuccess", { 
+                    name: host.remark ?? "",
+                    defaultValue: `Host "{name}" has been ${host.is_disabled ? 'enabled' : 'disabled'} successfully`
+                })
             });
             
             // Invalidate the hosts query to refresh the list
@@ -104,19 +104,19 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
             });
         } catch (error) {
             toast({
-                dir,
-                variant: "destructive",
-                description: t(host.is_disabled ? "host.enableFailed" : "host.disableFailed", { name: host.remark ?? "" }),
+                title: t('error', { defaultValue: 'Error' }),
+                description: t(host.is_disabled ? "host.enableFailed" : "host.disableFailed", { 
+                    name: host.remark ?? "",
+                    defaultValue: `Failed to ${host.is_disabled ? 'enable' : 'disable'} host "{name}"`
+                }),
+                variant: "destructive"
             });
         }
     };
 
-    const handleDeleteClick = () => {
+    const handleDeleteClick = (event: Event) => {
+        event.stopPropagation();
         setDeleteDialogOpen(true);
-    };
-
-    const handleCloseDeleteDialog = () => {
-        setDeleteDialogOpen(false);
     };
 
     const handleConfirmDelete = async () => {
@@ -125,32 +125,41 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
         try {
             await removeHost(host.id)
             toast({
-                dir,
-                description: t("deleteHost.deleteSuccess", { name: host.remark ?? "" }),
+                title: t('success', { defaultValue: 'Success' }),
+                description: t("deleteHost.deleteSuccess", { 
+                    name: host.remark ?? "",
+                    defaultValue: 'Host "{name}" has been deleted successfully'
+                })
             })
-        }
-        catch (error) {
-            toast({
-                dir,
-                description: t("deleteHost.deleteFailed", { name: host.remark ?? "" }),
-            })
-        } finally {
+            setDeleteDialogOpen(false);
             queryClient.invalidateQueries({
                 queryKey: ["getGetHostsQueryKey"],
             });
-            setDeleteDialogOpen(false);
+        }
+        catch (error) {
+            toast({
+                title: t('error', { defaultValue: 'Error' }),
+                description: t("deleteHost.deleteFailed", { 
+                    name: host.remark ?? "",
+                    defaultValue: 'Failed to delete host "{name}"'
+                }),
+                variant: "destructive"
+            })
         }
     };
 
     return (
         <div ref={setNodeRef} className="cursor-default" style={style} {...attributes}>
-            <Card className="p-4 relative group h-full">
+            <Card className="p-4 relative group h-full hover:bg-accent transition-colors">
                 <div className="flex items-center gap-3">
                     <button style={{ cursor: cursor }} className="touch-none opacity-50 group-hover:opacity-100 transition-opacity" {...listeners}>
                         <GripVertical className="h-5 w-5" />
                         <span className="sr-only">Drag to reorder</span>
                     </button>
-                    <div className="flex-1 min-w-0">
+                    <div 
+                        className="flex-1 min-w-0 cursor-pointer" 
+                        onClick={() => onEdit(host)}
+                    >
                         <div className="flex items-center gap-2">
                             <div className={cn(
                                 "min-h-2 min-w-2 rounded-full",
@@ -167,21 +176,32 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={handleToggleStatus}>
+                            <DropdownMenuItem onSelect={(e) => {
+                                e.stopPropagation()
+                                handleToggleStatus()
+                            }}>
                                 <Power className="h-4 w-4 mr-2" />
                                 {host?.is_disabled ? t("enable") : t("disable")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => onEdit(host)}>
+                            <DropdownMenuItem onSelect={(e) => {
+                                e.stopPropagation()
+                                onEdit(host)
+                            }}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 {t("edit")}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => onDuplicate(host)}>
+                            <DropdownMenuItem onSelect={(e) => {
+                                e.stopPropagation()
+                                onDuplicate(host)
+                            }}>
                                 <Copy className="h-4 w-4 mr-2" />
                                 {t("duplicate")}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleDeleteClick}
-                                className="text-destructive">
+                            <DropdownMenuItem 
+                                onSelect={handleDeleteClick}
+                                className="text-destructive"
+                            >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 {t("delete")}
                             </DropdownMenuItem>
@@ -189,10 +209,11 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
                     </DropdownMenu>
                 </div>
             </Card>
+
             <DeleteAlertDialog
                 host={host}
                 isOpen={isDeleteDialogOpen}
-                onClose={handleCloseDeleteDialog}
+                onClose={() => setDeleteDialogOpen(false)}
                 onConfirm={handleConfirmDelete}
             />
         </div>
