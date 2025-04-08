@@ -49,7 +49,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         })
         toast({
           title: t('success', { defaultValue: 'Success' }),
-            description: t('nodes.editSuccess', {
+          description: t('nodes.editSuccess', {
             name: values.name,
             defaultValue: 'Node «{name}» has been updated successfully'
           })
@@ -86,7 +86,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1000px] h-full sm:h-auto">
+      <DialogContent className="max-w-[1000px] h-full sm:h-auto overflow-y-auto">
         <DialogHeader>
           <DialogTitle className={cn("text-xl font-semibold", dir === "rtl" && "sm:text-right")}>
             {editingNode ? t('editNode.title') : t('nodeModal.title')}
@@ -148,12 +148,13 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-4 w-full md">
+                  <div className='flex items-center gap-4'>
                   <FormField
                     control={form.control}
                     name="usage_coefficient"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className='flex-1'>
                         <FormLabel>{t('nodeModal.usageRatio')}</FormLabel>
                         <FormControl>
                           <Input
@@ -171,61 +172,86 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
                   <FormField
                     control={form.control}
-                    name="connection_type"
+                    name="max_logs"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('nodeModal.connectionType')}</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Rest" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value={NodeConnectionType.grpc}>gRPC</SelectItem>
-                            <SelectItem value={NodeConnectionType.rest}>Rest</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <FormItem className='flex-1'>
+                        <FormLabel>{t('nodes.maxLogs')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder={t('nodes.maxLogsPlaceholder')}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="keep_alive"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('nodeModal.keepAlive')}</FormLabel>
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-xs text-muted-foreground">{t('nodeModal.keepAliveDescription')}</p>
-                        <div className="flex gap-2">
-                          <FormControl>
-                            <Input
-                              type="number"
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value))}
-                            />
-                          </FormControl>
-                          <Select defaultValue="days">
-                            <SelectTrigger className="w-[100px]">
-                              <SelectValue placeholder={t('nodeModal.days')} />
-                            </SelectTrigger>
+                  <div className='flex flex-col gap-4 w-full'>
+
+                    <FormField
+                      control={form.control}
+                      name="connection_type"
+                      render={({ field }) => (
+                        <FormItem className='w-full'>
+                          <FormLabel>{t('nodeModal.connectionType')}</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Rest" />
+                              </SelectTrigger>
+                            </FormControl>
                             <SelectContent>
-                              <SelectItem value="days">{t('nodeModal.days')}</SelectItem>
-                              <SelectItem value="seconds">{t('nodeModal.seconds')}</SelectItem>
+                              <SelectItem value={NodeConnectionType.grpc}>gRPC</SelectItem>
+                              <SelectItem value={NodeConnectionType.rest}>Rest</SelectItem>
                             </SelectContent>
                           </Select>
-                        </div>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="keep_alive"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('nodeModal.keepAlive')}</FormLabel>
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-xs text-muted-foreground">{t('nodeModal.keepAliveDescription')}</p>
+                            <div className="flex gap-2">
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value))}
+                                />
+                              </FormControl>
+                              <Select defaultValue="days">
+                                <SelectTrigger className="w-[100px]">
+                                  <SelectValue placeholder={t('nodeModal.days')} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="days">{t('nodeModal.days')}</SelectItem>
+                                  <SelectItem value="seconds">{t('nodeModal.seconds')}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+
               </div>
 
               <FormField

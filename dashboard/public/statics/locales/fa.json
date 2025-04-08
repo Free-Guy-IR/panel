@@ -286,7 +286,7 @@
   "nodes.reconnect": "اتصال مجدد",
   "nodes.reconnecting": "درحال اتصال مجدد...",
   "nodes.show-certificate": "نمایش دادن گواهی",
-  "nodes.title": "با استفاده از Marzban-Node, شما می‌توانید با افزودن گره‌های متفاوت در سرورهای متفاوت، کیفیت اتصال خود را بالاتر ببرید.",
+  "nodes.title": "گره‌ها",
   "nodes.usageCoefficient": "ضریب گره",
   "on_hold": "در انتظار اتصال",
   "duplicate": "تکرار",
@@ -413,7 +413,9 @@
     "certificatePlaceholder": "-----BEGIN CERTIFICATE-----",
     "days": "روز",
     "seconds": "ثانیه",
-    "save": "ذخیره"
+    "save": "ذخیره",
+    "maxLogs": "حداکثر لاگ‌ها",
+    "maxLogsPlaceHolder": "حداکثر تعداد لاگ‌ها را وارد کنید (به ثانیه)"
   },
   "nodes": {
     "title": "گره‌ها",
@@ -428,7 +430,8 @@
     "connectionType": "نوع اتصال",
     "serverCA": "گواهی سرور",
     "keepAlive": "حفظ اتصال",
-    "maxLogs": "حداکثر لاگ",
+    "maxLogs": "حداکثر لاگ‌ها",
+    "maxLogsPlaceHolder": "حداکثر تعداد لاگ‌ها را وارد کنید (به ثانیه)",
     "status": "وضعیت",
     "actions": "عملیات",
     "connected": "متصل",
