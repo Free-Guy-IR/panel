@@ -1,12 +1,10 @@
 import PageHeader from '@/components/page-header'
 import { Separator } from '@/components/ui/separator'
 import { Plus } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import Groups from '@/components/groups/Groups'
 import { useState } from 'react'
 
 export default function GroupsPage() {
-  const { t } = useTranslation()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   return (
