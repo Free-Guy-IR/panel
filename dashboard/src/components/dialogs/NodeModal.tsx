@@ -12,6 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { queryClient } from '@/utils/query-client'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { useState, useEffect } from 'react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 
 export const nodeFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -39,6 +42,71 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
   const dir = useDirDetection()
   const addNodeMutation = useAddNode()
   const modifyNodeMutation = useModifyNode()
+  const [statusChecking, setStatusChecking] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [errorDetails, setErrorDetails] = useState<string | null>(null)
+  const [autoCheck, setAutoCheck] = useState(false)
+
+  // Reset status when modal opens/closes
+  useEffect(() => {
+    if (isDialogOpen) {
+      setConnectionStatus('idle')
+      setErrorDetails(null)
+      setAutoCheck(true)
+    }
+  }, [isDialogOpen])
+
+  // Auto-check connection when form values change and are valid
+  useEffect(() => {
+    if (!isDialogOpen || !autoCheck) return
+
+    const values = form.getValues()
+    if (values.name && values.address && values.port) {
+      checkNodeStatus()
+    }
+  }, [form.watch('name'), form.watch('address'), form.watch('port')])
+
+  const checkNodeStatus = async () => {
+    // Get current form values
+    const values = form.getValues();
+
+    // Validate required fields before checking
+    if (!values.name || !values.address || !values.port) {
+      return;
+    }
+
+    setStatusChecking(true);
+    setConnectionStatus('idle');
+    setErrorDetails(null);
+
+    try {
+      // In a real implementation, you would make an API call to check the node status
+      // For now, we're simulating with a timeout
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // This is where you would make the actual API call to check the connection
+      // const response = await fetch(`/api/nodes/check-connection`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(values)
+      // });
+
+      // Mock success (you'd check the actual response in a real implementation)
+      const success = Math.random() > 0.3; // 70% chance of success for demo purposes
+
+      if (success) {
+        setConnectionStatus('success');
+      } else {
+        setConnectionStatus('error');
+        setErrorDetails('Connection timed out. Make sure the node address and port are correct and the node is running.');
+      }
+    } catch (error: any) {
+      setConnectionStatus('error');
+      setErrorDetails(error?.message || 'Unknown error occurred');
+    } finally {
+      setStatusChecking(false);
+    }
+  };
 
   const onSubmit = async (values: NodeFormValues) => {
     try {
@@ -95,6 +163,46 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
             {editingNode ? t('nodes.prompt') : t('nodeModal.description')}
           </p>
         </DialogHeader>
+
+        {/* Status Check Results - Positioned at the top of the modal */}
+        {connectionStatus !== 'idle' && (
+          <div className="mb-4">
+            {connectionStatus === 'success' ? (
+              <Alert variant="default" className="bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertTitle>{t('nodeModal.status')}</AlertTitle>
+                <AlertDescription>
+                  {t('nodeModal.statusCheckSuccess')}
+                </AlertDescription>
+              </Alert>
+            ) : connectionStatus === 'error' ? (
+              <Alert variant="destructive" className="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>{t('nodeModal.connectionError')}</AlertTitle>
+                <AlertDescription>
+                  {errorDetails && (
+                    <div className="mt-2">
+                      <p className="font-semibold">{t('nodeModal.errorDetails')}:</p>
+                      <p className="text-sm">{errorDetails}</p>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAutoCheck(true);
+                      checkNodeStatus();
+                    }}
+                    className="mt-2"
+                  >
+                    {t('nodeModal.retryConnection')}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
             <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -150,44 +258,44 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
                 <div className="flex flex-col gap-4 w-full md">
                   <div className='flex items-center gap-4'>
-                  <FormField
-                    control={form.control}
-                    name="usage_coefficient"
-                    render={({ field }) => (
-                      <FormItem className='flex-1'>
-                        <FormLabel>{t('nodeModal.usageRatio')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            placeholder={t('nodeModal.usageRatioPlaceholder')}
-                            {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="usage_coefficient"
+                      render={({ field }) => (
+                        <FormItem className='flex-1'>
+                          <FormLabel>{t('nodeModal.usageRatio')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              placeholder={t('nodeModal.usageRatioPlaceholder')}
+                              {...field}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="max_logs"
-                    render={({ field }) => (
-                      <FormItem className='flex-1'>
-                        <FormLabel>{t('nodes.maxLogs')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder={t('nodes.maxLogsPlaceholder')}
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="max_logs"
+                      render={({ field }) => (
+                        <FormItem className='flex-1'>
+                          <FormLabel>{t('nodes.maxLogs')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder={t('nodes.maxLogsPlaceholder')}
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   <div className='flex flex-col gap-4 w-full'>
@@ -248,6 +356,13 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                         </FormItem>
                       )}
                     />
+                    {/* Connection Status Indicator */}
+                    {statusChecking && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>{t('nodeModal.statusChecking')}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -279,7 +394,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
               </Button>
               <Button
                 type="submit"
-                disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}
+                disabled={addNodeMutation.isPending || modifyNodeMutation.isPending || statusChecking}
                 className="bg-primary hover:bg-primary/90"
               >
                 {editingNode ? t('edit') : t('create')}

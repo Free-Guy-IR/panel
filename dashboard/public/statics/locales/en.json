@@ -462,6 +462,17 @@
     "minutes": "Minutes",
     "seconds": "Seconds",
     "certificate": "Certificate",
-    "certificatePlaceholder": "Enter certificate"
+    "certificatePlaceholder": "Enter certificate",
+    "status": "Node Status",
+    "statusCheck": "Check Connection Status",
+    "statusCheckSuccess": "Node is connected successfully",
+    "statusCheckFailed": "Failed to connect to node",
+    "statusChecking": "Checking connection...",
+    "errorDetails": "Error Details",
+    "connectionError": "Connection Error",
+    "retryConnection": "Retry Connection",
+    "configurationError": "Configuration Error",
+    "validateConfig": "Validate Configuration",
+    "fillRequiredFields": "Please fill out all required fields before checking status"
   }
 }
