@@ -707,7 +707,7 @@ const HostModal: React.FC<HostModalProps> = ({
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="default">{t("default")}</SelectItem>
+                                                            <SelectItem value="">{t("default")}</SelectItem>
                                                             <SelectItem value="h3">h3</SelectItem>
                                                             <SelectItem value="h2">h2</SelectItem>
                                                             <SelectItem value="http/1.1">http/1.1</SelectItem>
@@ -727,17 +727,14 @@ const HostModal: React.FC<HostModalProps> = ({
                                             render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>{t("hostsDialog.fingerprint")}</FormLabel>
-                                                    <Select 
-                                                        onValueChange={(value) => field.onChange(value || "default")} 
-                                                        value={field.value || "default"}
-                                                    >
+                                                    <Select onValueChange={field.onChange} value={field.value}>
                                                         <FormControl>
                                                             <SelectTrigger>
                                                                 <SelectValue placeholder={t("hostsDialog.selectFingerprint")} />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="default">{t("default")}</SelectItem>
+                                                            <SelectItem value="">{t("default")}</SelectItem>
                                                             <SelectItem value="chrome">{t("chrome")}</SelectItem>
                                                             <SelectItem value="firefox">{t("firefox")}</SelectItem>
                                                             <SelectItem value="safari">{t("safari")}</SelectItem>

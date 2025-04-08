@@ -24,8 +24,8 @@ const fetchAdminLoader = async (): Promise<any> => {
 export const router = createHashRouter([
   {
     element: <DashboardLayout />,
-    //errorElement: <Login />,
-    //loader: fetchAdminLoader,
+    errorElement: <Login />,
+    loader: fetchAdminLoader,
     children: [
       {
         path: '/',
