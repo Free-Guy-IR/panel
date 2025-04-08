@@ -43,7 +43,7 @@ const data = {
       icon: ListTodo,
     },
     {
-      title: 'nodes',
+      title: 'nodes.title',
       url: '/nodes',
       icon: Share2Icon,
     },

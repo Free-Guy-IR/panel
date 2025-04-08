@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { Card, CardDescription, CardTitle } from "../ui/card";
+import { Card, CardTitle } from "../ui/card";
 import FlagFromIP from "@/utils/flagFromIP";
-import { NodeStatusBadge } from "./NodeStatusBadge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { EllipsisVertical, Pen, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, Power } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import useDirDetection from "@/hooks/use-dir-detection";
-import { NodeType } from "@/contexts/NodesContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +24,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/utils/query-client";
+import { NodeResponse, useRemoveNode } from "@/service/api";
+
+interface NodeProps {
+  node: NodeResponse;
+  onEdit: (node: NodeResponse) => void;
+  onToggleStatus: (node: NodeResponse) => Promise<void>;
+}
 
 const DeleteAlertDialog = ({
   node,
@@ -32,7 +39,7 @@ const DeleteAlertDialog = ({
   onClose,
   onConfirm,
 }: {
-  node: NodeType;
+  node: NodeResponse;
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -41,107 +48,125 @@ const DeleteAlertDialog = ({
   const dir = useDirDetection();
 
   return (
-    <div>
-      <AlertDialog open={isOpen} onOpenChange={onClose}>
-        <AlertDialogContent>
-          <AlertDialogHeader className={cn(dir === "rtl" && "sm:text-right")}>
-            <AlertDialogTitle>{t("deleteNode.title")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              <span dir={dir} dangerouslySetInnerHTML={{ __html: t("deleteNode.prompt", { name: node.name }) }} />
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className={cn(dir === "rtl" && "sm:gap-x-2 sm:flex-row-reverse")}>
-            <AlertDialogCancel onClick={onClose}>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={onConfirm}>
-              {t("delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    <AlertDialog open={isOpen} onOpenChange={onClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader className={cn(dir === "rtl" && "sm:text-right")}>
+          <AlertDialogTitle>{t("nodes.deleteNode")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            <span dir={dir} dangerouslySetInnerHTML={{ __html: t("deleteNode.prompt", { name: node.name }) }} />
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className={cn(dir === "rtl" && "sm:gap-x-2 sm:flex-row-reverse")}>
+          <AlertDialogCancel onClick={onClose}>{t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+            {t("delete")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 };
 
-const Node = ({ node }: { node: NodeType }) => {
+export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
   const { t } = useTranslation();
-  const dir = useDirDetection();
-  const { toast } = useToast()
+  const { toast } = useToast();
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const removeNodeMutation = useRemoveNode();
 
-  const handleDeleteClick = () => {
+  const handleDeleteClick = (event: Event) => {
+    event.stopPropagation();
     setDeleteDialogOpen(true);
   };
 
-  const handleCloseDeleteDialog = () => {
-    setDeleteDialogOpen(false);
-  };
-
-  const handleConfirmDelete = () => {
-    toast({
-      dir,
-      description: t("deleteNode.deleteSuccess",{name:node.name}),
-    })
-    setDeleteDialogOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await removeNodeMutation.mutateAsync({
+        nodeId: node.id
+      });
+      toast({
+        title: t("success", { defaultValue: "Success" }),
+        description: t("nodes.deleteSuccess", {
+          name: node.name,
+          defaultValue: "Node «{name}» has been deleted successfully"
+        })
+      });
+      setDeleteDialogOpen(false);
+      // Invalidate nodes queries
+      queryClient.invalidateQueries({ queryKey: ['/api/nodes'] });
+    } catch (error) {
+      toast({
+        title: t("error", { defaultValue: "Error" }),
+        description: t("nodes.deleteFailed", {
+          name: node.name,
+          defaultValue: "Failed to delete node «{name}»"
+        }),
+        variant: "destructive"
+      });
+    }
   };
 
   return (
-    <Card className="px-5 py-6 rounded-lg">
-      <CardTitle className="flex items-center justify-between">
-        <div className="flex items-center gap-x-2">
-          <div className="mr-1.5">
-            <NodeStatusBadge status={node.status} />
+    <>
+      <Card className="p-4 relative group h-full hover:bg-accent transition-colors">
+        <div className="flex items-center gap-3">
+          <div 
+            className="flex-1 min-w-0 cursor-pointer" 
+            onClick={() => onEdit(node)}
+          >
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "min-h-2 min-w-2 rounded-full",
+                node.status === "connected" ? "bg-green-500" : 
+                node.status === "connecting" ? "bg-yellow-500" :
+                node.status === "error" ? "bg-red-500" : "bg-gray-500"
+              )} />
+              <div className="font-medium truncate">{node.name}</div>
+            </div>
+            <CardTitle className="text-sm text-muted-foreground truncate flex items-center gap-1">
+              <FlagFromIP ip={node.address} />
+              <span>{node.address}:{node.port}</span>
+            </CardTitle>
           </div>
-          <FlagFromIP ip={node.address} />
-          <span>{node.name}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={(e) => {
+                e.stopPropagation();
+                onToggleStatus(node);
+              }}>
+                <Power className="h-4 w-4 mr-2" />
+                {node.status === "connected" ? t("disable") : t("enable")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={(e) => {
+                e.stopPropagation();
+                onEdit(node);
+              }}>
+                <Pencil className="h-4 w-4 mr-2" />
+                {t("edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={handleDeleteClick}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {t("delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <EllipsisVertical />
-              <span className="sr-only">Nodes Actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align={dir === "rtl" ? "end" : "start"}>
-            <DropdownMenuItem dir={dir} className="flex items-center">
-              <Pen className="h-4 w-4" />
-              <span>{t("edit")}</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              dir={dir}
-              className="flex items-center !text-red-500"
-              onClick={handleDeleteClick}
-            >
-              <Trash2 className="h-4 w-4 text-red-500" />
-              <span>{t("delete")}</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </CardTitle>
-      <CardDescription>
-        <div className="flex flex-col gap-y-1 mt-2">
-          <p>
-            {t("ip")}: <span>{node.address}</span>
-          </p>
-          <p>
-            {t("nodes.nodePort")}: <span>{node.port}</span>
-          </p>
-          <p>
-            {t("nodes.nodeAPIPort")}: <span>{node.api_port}</span>
-          </p>
-        </div>
-      </CardDescription>
+      </Card>
 
-      {/* Include the Delete AlertDialog component */}
-      <div>
-        <DeleteAlertDialog
-          node={node}
-          isOpen={isDeleteDialogOpen}
-          onClose={handleCloseDeleteDialog}
-          onConfirm={handleConfirmDelete}
-        />
-      </div>
-    </Card>
+      <DeleteAlertDialog
+        node={node}
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
+      />
+    </>
   );
-};
-
-export default Node;
+}
