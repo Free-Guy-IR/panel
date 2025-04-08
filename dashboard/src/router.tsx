@@ -10,7 +10,6 @@ import GeneralSettings from './pages/_dashboard.settings._index'
 import Statistics from './pages/_dashboard.statistics'
 import Templates from './pages/_dashboard.templates'
 import UserTemplates from './pages/_dashboard.templates._index'
-import GroupTemplates from './pages/_dashboard.templates.groups'
 import Login from './pages/login'
 import Hosts from './pages/_dashboard.hosts'
 
@@ -52,17 +51,7 @@ export const router = createHashRouter([
       },
       {
         path: '/templates',
-        element: <Templates />,
-        children: [
-          {
-            path: '/templates',
-            element: <UserTemplates />,
-          },
-          {
-            path: '/templates/group',
-            element: <GroupTemplates />,
-          },
-        ],
+        element: <UserTemplates />,
       },
       {
         path: '/settings',

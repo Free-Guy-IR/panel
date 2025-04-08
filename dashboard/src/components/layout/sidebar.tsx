@@ -51,16 +51,6 @@ const data = {
       title: 'templates.title',
       url: '/templates',
       icon: LayoutTemplate,
-      items: [
-        {
-          title: 'templates.userTemplates',
-          url: '/templates',
-        },
-        {
-          title: 'templates.groupTemplates',
-          url: '/templates/group',
-        },
-      ],
     },
     {
       title: 'settings',
