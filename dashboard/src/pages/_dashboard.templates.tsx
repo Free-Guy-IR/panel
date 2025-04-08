@@ -9,7 +9,7 @@ const Templates = () => {
     <div className="flex flex-col gap-0 w-full items-start">
       <PageHeader title="templates.title" description="createAndManageTemplates" />
       <div className="w-full px-4">
-        <Outlet />
+          <Outlet />
       </div>
     </div>
   )
