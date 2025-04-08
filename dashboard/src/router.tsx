@@ -3,6 +3,7 @@ import { getCurrentAdmin } from '@/service/api'
 import { createHashRouter, RouteObject } from 'react-router'
 import DashboardLayout from './pages/_dashboard'
 import Dashboard from './pages/_dashboard._index'
+import Groups from './pages/_dashboard.groups'
 import Nodes from './pages/_dashboard.nodes'
 import Settings from './pages/_dashboard.settings'
 import GeneralSettings from './pages/_dashboard.settings._index'
@@ -44,6 +45,10 @@ export const router = createHashRouter([
       {
         path: '/nodes',
         element: <Nodes />,
+      },
+      {
+        path: '/groups',
+        element: <Groups />,
       },
       {
         path: '/templates',

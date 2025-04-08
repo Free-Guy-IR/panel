@@ -5,6 +5,7 @@
   "statistics": "آمار",
   "hosts": "هاست‌ها",
   "nodes": "گره‌ها",
+  "groups": "گروه‌ها",
   "documentation": "مستندات",
   "discussionGroup": "گروه گفتگو",
   "github": "گیت‌هاب",
@@ -20,10 +21,12 @@
   "ip": "آی‌پی",
   "admins": "مدیران",
   "manageAccounts": "کنترل، بروزرسانی، و ترتیب حساب‌های کاربری",
+  "manageGroups": "کنترل، بروزرسانی، و ترتیب گروه‌های کاربری",
   "manageNodes": "نظارت، کنترل، افزودن، ویرایش و حذف گره‌ها",
   "onlineUsers": "کاربران آنلاین",
   "totalUsers": "کل کاربران",
   "edit": "ویرایش",
+  "editGroup": "ویرایش گروه",
   "disable": "غیرفعال کردن",
   "templates.title": "قالب‌ها",
   "templates.userTemplates": "قالب‌های کاربر",
@@ -42,6 +45,7 @@
   "core.title": "تنظیمات هسته",
   "createNewUser": "ساخت کاربر",
   "createUser": "افزودن کاربر",
+  "createGroup": "افزودن گروه",
   "dataUsage": "مصرف داده",
   "dateFormat": "MM/dd/yyyy",
   "dateInfo.day": " روز",
@@ -377,5 +381,15 @@
     "duplicateSuccess": "هاست «{{name}}» با موفقیت کپی شد",
     "duplicateFailed": "کپی‌سازی هاست «{{name}}» با خطا مواجه شد"
   },
-  "usersTable.sortByExpire": "مرتب‌سازی بر اساس زمان انقضا"
+  "usersTable.sortByExpire": "مرتب‌سازی بر اساس زمان انقضا",
+  "group": {
+    "createSuccess": "گروه «{{name}}» با موفقیت ایجاد شد",
+    "createFailed": "ایجاد گروه «{{name}}» با خطا مواجه شد",
+    "editSuccess": "گروه «{{name}}» با موفقیت ویرایش شد",
+    "editFailed": "ویرایش گروه «{{name}}» با خطا مواجه شد",
+    "deleteSuccess": "گروه «{{name}}» با موفقیت حذف شد",
+    "deleteFailed": "حذف گروه «{{name}}» با خطا مواجه شد",
+    "deleteConfirm": "آیا مطمئن هستید که می‌خواهید گروه «{{name}}» را حذف کنید؟"
+  },
+  "name": "نام"
 }
