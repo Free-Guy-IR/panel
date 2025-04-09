@@ -703,11 +703,11 @@ const HostModal: React.FC<HostModalProps> = ({
                                                     <Select onValueChange={field.onChange} value={field.value}>
                                                         <FormControl>
                                                             <SelectTrigger>
-                                                                <SelectValue placeholder={t("hostsDialog.selectALPN")} />
+                                                                <SelectValue placeholder={t("hostsDialog.alpn")} />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="">{t("default")}</SelectItem>
+                                                            <SelectItem value="default">{t("default")}</SelectItem>
                                                             <SelectItem value="h3">h3</SelectItem>
                                                             <SelectItem value="h2">h2</SelectItem>
                                                             <SelectItem value="http/1.1">http/1.1</SelectItem>
@@ -727,14 +727,14 @@ const HostModal: React.FC<HostModalProps> = ({
                                             render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>{t("hostsDialog.fingerprint")}</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                    <Select onValueChange={(value) => field.onChange(value === "default" ? "" : value)} value={field.value || "default"}>
                                                         <FormControl>
                                                             <SelectTrigger>
-                                                                <SelectValue placeholder={t("hostsDialog.selectFingerprint")} />
+                                                                <SelectValue placeholder={t("hostsDialog.fingerprint")} />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="">{t("default")}</SelectItem>
+                                                            <SelectItem value="default">{t("default")}</SelectItem>
                                                             <SelectItem value="chrome">{t("chrome")}</SelectItem>
                                                             <SelectItem value="firefox">{t("firefox")}</SelectItem>
                                                             <SelectItem value="safari">{t("safari")}</SelectItem>
