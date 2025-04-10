@@ -1,12 +1,16 @@
 import asyncio
 
-from app import logger, scheduler
+from app import scheduler
 from app.db import GetDB
 from app.db.crud import autodelete_expired_users
 from app.models.user import UserResponse
 from app import notification
 from config import USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS
 from app.jobs.dependencies import SYSTEM_ADMIN
+from app.utils.logger import get_logger
+
+
+logger = get_logger("jobs")
 
 
 async def remove_expired_users():

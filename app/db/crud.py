@@ -114,6 +114,37 @@ async def get_or_create_inbound(db: AsyncSession, inbound_tag: str) -> ProxyInbo
     return inbound
 
 
+async def get_inbounds_not_in_tags(db: AsyncSession, excluded_tags: List[str]) -> List[ProxyInbound]:
+    """
+    Get all inbounds where the tag is not in the provided list of tags.
+
+    Args:
+        db: Database session
+        excluded_tags: List of tags to exclude
+
+    Returns:
+        List of ProxyInbound objects not matching any tag in the list
+    """
+    stmt = select(ProxyInbound).where(ProxyInbound.tag.not_in(excluded_tags))
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+async def remove_inbounds(db: AsyncSession, inbounds: List[ProxyInbound]) -> None:
+    """
+    Remove a list of inbounds from the database.
+
+    Args:
+        db: Database session
+        inbounds: List of ProxyInbound objects to remove
+    """
+    if not inbounds:
+        return
+
+    await asyncio.gather(*[db.delete(inbound) for inbound in inbounds])
+    await db.commit()
+
+
 ProxyHostSortingOptions = Enum(
     "ProxyHostSortingOptions",
     {

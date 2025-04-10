@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime as dt, timedelta as td, timezone as tz
 
-from app import logger, scheduler
+from app import scheduler
 from app.db import GetDB, crud
 from app.db.models import UserStatus, UserDataLimitResetStrategy, User
 from app.models.user import UserResponse
@@ -9,6 +9,7 @@ from app import notification
 from app.backend import backend_manager
 from app.node import node_manager
 from app.jobs.dependencies import SYSTEM_ADMIN
+from app.utils.logger import get_logger
 
 reset_strategy_to_days = {
     UserDataLimitResetStrategy.day.value: 1,
@@ -16,6 +17,8 @@ reset_strategy_to_days = {
     UserDataLimitResetStrategy.month.value: 30,
     UserDataLimitResetStrategy.year.value: 365,
 }
+
+logger = get_logger("jobs")
 
 
 async def reset_user_data_usage():
