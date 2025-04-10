@@ -39,7 +39,7 @@ async def get_usage(
 
 @router.get("s", response_model=list[NodeResponse])
 async def get_nodes(
-    backend_id: int | None,
+    backend_id: int = None,
     offset: int = None,
     limit: int = None,
     db: AsyncSession = Depends(get_db),
