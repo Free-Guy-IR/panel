@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button'
 import { useClipboard } from '@/hooks/use-clipboard'
-import { User } from '@/types/User'
 import { Check, Copy, QrCode } from 'lucide-react'
 import { FC, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,9 +7,10 @@ import { CopyButton } from './CopyButton'
 import QRCodeModal from './dialogs/QRCodeModal'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { UserResponse } from '@/service/api'
 
 type ActionButtonsProps = {
-  user: User
+  user: UserResponse
 }
 
 export interface SubscribeLink {
@@ -37,8 +37,9 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
       const subURL = user.subscription_url.startsWith('/') ? window.location.origin + user.subscription_url : user.subscription_url
 
       const links = [
-        { protocol: 'v2ray', link: `${subURL}/v2ray` },
-        { protocol: 'v2ray-json', link: `${subURL}/v2ray-json` },
+        { protocol: 'links', link: `${subURL}/links` },
+        { protocol: 'links (base64)', link: `${subURL}/links-base64` },
+        { protocol: 'xray', link: `${subURL}/xray` },
         { protocol: 'clash', link: `${subURL}/clash` },
         { protocol: 'clash-meta', link: `${subURL}/clash-meta` },
         { protocol: 'outline', link: `${subURL}/outline` },
@@ -46,7 +47,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
       ]
       setSubscribeLinks(links)
     }
-  }, [subscribeUrl])
+  }, [user.subscription_url])
 
   const { copy, copied } = useClipboard({ timeout: 1500 })
   const handleCopy = useCallback(

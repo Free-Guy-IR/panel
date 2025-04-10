@@ -1,4 +1,4 @@
-import { User } from '@/types/User'
+import { UserResponse } from '@/service/api'
 import { ColumnDef } from '@tanstack/react-table'
 import { ChevronDown } from 'lucide-react'
 import ActionButtons from '../ActionButtons'
@@ -19,7 +19,7 @@ export const setupColumns = ({
   filters: { sort: string }
   handleStatusFilter: (value: any) => void
   dir: any
-}): ColumnDef<User>[] => [
+}): ColumnDef<UserResponse>[] => [
   {
     accessorKey: 'username',
     header: () => (
@@ -104,7 +104,7 @@ export const setupColumns = ({
       </div>
     ),
     cell: ({ row }) => {
-      const status: User['status'] = row.getValue('status')
+      const status: UserResponse['status'] = row.getValue('status')
       const expire = row.original.expire
       return (
         <div className="flex flex-col gap-y-2 py-1">

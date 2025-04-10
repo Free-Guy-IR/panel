@@ -4,19 +4,19 @@ import React, { useState } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
-import { User } from '@/types/User'
+import { UserResponse } from '@/service/api'
 import { ChevronDown } from 'lucide-react'
 import ActionButtons from '../ActionButtons'
 import { OnlineStatus } from '../OnlineStatus'
 import { StatusBadge } from '../StatusBadge'
 import UsageSliderCompact from '../UsageSliderCompact'
 
-interface DataTableProps<TData extends User, TValue> {
+interface DataTableProps<TData extends UserResponse, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
 
-export function DataTable<TData extends User, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
+export function DataTable<TData extends UserResponse, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const table = useReactTable({
     data,
