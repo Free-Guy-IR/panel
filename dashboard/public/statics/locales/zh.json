@@ -450,11 +450,13 @@
     "createFailed": "创建群组「{{name}}」失败",
     "editSuccess": "群组「{{name}}」已成功更新",
     "editFailed": "更新群组「{{name}}」失败",
-    "disableSuccess": "群组「{{name}}」已成功禁用",
-    "disableFailed": "禁用群组「{{name}}」失败",
     "deleteSuccess": "群组「{{name}}」已成功删除",
     "deleteFailed": "删除群组「{{name}}」失败",
-    "deleteConfirm": "您确定要删除群组「{{name}}」吗？"
+    "deleteConfirm": "您确定要删除群组「{{name}}」吗？",
+    "enableSuccess": "群组「{{name}}」已成功启用",
+    "enableFailed": "启用群组「{{name}}」失败",
+    "disableSuccess": "群组「{{name}}」已成功禁用",
+    "disableFailed": "禁用群组「{{name}}」失败"
   },
   "name": "名称",
   "nodeModal": {
