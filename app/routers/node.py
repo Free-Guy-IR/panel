@@ -39,13 +39,14 @@ async def get_usage(
 
 @router.get("s", response_model=list[NodeResponse])
 async def get_nodes(
+    backend_id: int | None,
     offset: int = None,
     limit: int = None,
     db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(check_sudo_admin),
 ):
     """Retrieve a list of all nodes. Accessible only to sudo admins."""
-    return await node_operator.get_db_nodes(db=db, offset=offset, limit=limit)
+    return await node_operator.get_db_nodes(db=db, backend_id=backend_id, offset=offset, limit=limit)
 
 
 @router.post(

@@ -2,11 +2,11 @@ import base64
 import random
 import secrets
 from collections import defaultdict
-from copy import deepcopy
 from datetime import timezone, timedelta, datetime as dt
 from jdatetime import date as jd
 
-from app import backend
+from app.backend.hosts import hosts as hosts_storage
+from app.backend import backend_manager
 from app.db.models import User, UserStatus
 from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 
@@ -113,7 +113,7 @@ async def generate_subscription(user: User, config_format: str, as_base64: bool,
     kwargs = {
         "proxies": user.proxy_settings,
         "user_status": user.status,
-        "inbounds": user.inbounds(backend.config.inbounds),
+        "inbounds": user.inbounds(await backend_manager.get_inbounds()),
         "extra_data": user.__dict__,
         "reverse": reverse,
     }
@@ -259,11 +259,11 @@ def filter_hosts(hosts: list, user_status: UserStatus) -> list:
     return [host for host in hosts if not host["status"] or user_status in host["status"]]
 
 
-def process_host(
+async def process_host(
     host: dict, format_variables: dict, inbounds: list[str], proxies: dict, conf
 ) -> tuple[dict, dict, str]:
     tag = host["inbound_tag"]
-    host_inbound: dict = deepcopy(backend.config.inbounds_by_tag[tag])
+    host_inbound: dict = await backend_manager.get_inbound_by_tag(tag)
 
     protocol = host_inbound["protocol"]
 
@@ -355,8 +355,8 @@ async def process_inbounds_and_tags(
     reverse=False,
     user_status: UserStatus = UserStatus.active,
 ) -> list | str:
-    for host in filter_hosts(await backend.hosts.values(), user_status):
-        host_inbound, settings, address = process_host(host, format_variables, inbounds, proxies, conf)
+    for host in filter_hosts(hosts_storage.values(), user_status):
+        host_inbound, settings, address = await process_host(host, format_variables, inbounds, proxies, conf)
         if host_inbound:
             conf.add(
                 remark=host["remark"].format_map(format_variables),

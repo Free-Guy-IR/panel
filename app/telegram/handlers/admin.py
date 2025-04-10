@@ -312,7 +312,7 @@ def inbound_command(call: types.CallbackQuery):
         call.message.chat.id,
         call.message.message_id,
         parse_mode="markdown",
-        reply_markup=BotKeyboard.inbounds_menu(call.data, backend.config.inbounds_by_tag),
+        reply_markup=BotKeyboard.inbounds_menu(call.data, backend.config._inbounds_by_tag),
     )
 
 
@@ -2095,7 +2095,7 @@ def confirm_user_command(call: types.CallbackQuery):
             unsuccessful = 0
             for user in users:
                 inbound_tags = [j for i in user.inbounds for j in user.inbounds[i]]
-                protocol = backend.config.inbounds_by_tag[inbound]["protocol"]
+                protocol = backend.config._inbounds_by_tag[inbound]["protocol"]
                 new_inbounds = user.inbounds
                 if data == "inbound_add":
                     if inbound not in inbound_tags:

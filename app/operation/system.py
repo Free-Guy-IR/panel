@@ -8,6 +8,7 @@ from app.models.admin import AdminDetails
 from app.models.system import SystemStats
 from app.db.models import UserStatus
 from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
+from app.backend import backend_manager
 
 
 class SystemOperator(BaseOperator):
@@ -61,3 +62,7 @@ class SystemOperator(BaseOperator):
             incoming_bandwidth_speed=realtime_bandwidth_stats.incoming_bytes,
             outgoing_bandwidth_speed=realtime_bandwidth_stats.outgoing_bytes,
         )
+
+    @staticmethod
+    async def get_inbounds() -> list[str]:
+        return await backend_manager.get_inbounds()

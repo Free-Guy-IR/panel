@@ -6,7 +6,7 @@ from app.db import GetDB, crud
 from app.db.models import UserStatus, UserDataLimitResetStrategy, User
 from app.models.user import UserResponse
 from app import notification
-from app.backend import config
+from app.backend import backend_manager
 from app.node import node_manager
 from app.jobs.dependencies import SYSTEM_ADMIN
 
@@ -40,7 +40,7 @@ async def reset_user_data_usage():
 
             # make user active if limited on usage reset
             if user.status == UserStatus.active:
-                asyncio.create_task(node_manager.update_user(user=user, inbounds=config.inbounds))
+                asyncio.create_task(node_manager.update_user(user=user, inbounds=await backend_manager.get_inbounds()))
 
             logger.info(f'User data usage reset for User "{user.username}"')
 

@@ -50,34 +50,22 @@ class DictStorage(dict):
         super().__init__()
         self.update_func = update_func
 
-    async def __getitem__(self, key):
-        if not self:
-            await self.update()
+    def __getitem__(self, key):
         return super().__getitem__(key)
 
-    async def __iter__(self):
-        if not self:
-            await self.update()
+    def __iter__(self):
         return super().__iter__()
 
-    async def __str__(self):
-        if not self:
-            await self.update()
+    def __str__(self):
         return super().__str__()
 
-    async def values(self):
-        if not self:
-            await self.update()
+    def values(self):
         return super().values()
 
-    async def keys(self):
-        if not self:
-            await self.update()
+    def keys(self):
         return super().keys()
 
-    async def get(self, key, default=None):
-        if not self:
-            await self.update()
+    def get(self, key, default=None):
         return super().get(key, default)
 
     async def update(self, db: AsyncSession):

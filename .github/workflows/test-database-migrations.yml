@@ -3,12 +3,11 @@ name: Test Database Migrations
 on:
   push:
     paths:
-      - "app/**.py"
-      - "tests/**.py"
+      - "**.py"
   pull_request:
     paths:
-      - "app/**.py"
-      - "tests/**.py"
+      - "**.py"
+
 jobs:
   test-databases:
     runs-on: ubuntu-latest

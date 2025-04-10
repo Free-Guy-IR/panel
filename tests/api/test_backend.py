@@ -1,5 +1,6 @@
-from tests.api import client
 from fastapi import status
+from tests.api import client
+
 
 xray_config = {
     "log": {"loglevel": "info"},
@@ -305,27 +306,92 @@ xray_config = {
 }
 
 
+def test_backend_create(access_token):
+    """Test that the backend create route is accessible."""
+
+    response = client.post(
+        url="/api/backend",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "config": xray_config,
+            "name": "xray_config",
+            "exclude_inbound_tags": "",
+            "fallbacks_inbound_tags": "",
+        },
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["config"] == xray_config
+    assert response.json()["name"] == "xray_config"
+    assert response.json()["exclude_inbound_tags"] == ""
+    assert response.json()["fallbacks_inbound_tags"] == ""
+
+
 def test_backend_update(access_token):
     """Test that the backend update route is accessible."""
 
     response = client.put(
-        url="/api/backend",
+        url="/api/backend/1",
         headers={"Authorization": f"Bearer {access_token}"},
-        json=xray_config,
+        json={
+            "config": xray_config,
+            "name": "xray_config_update",
+            "exclude_inbound_tags": "456",
+            "fallbacks_inbound_tags": "123",
+        },
+        params={"restart_nodes": False},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == xray_config
+    assert response.json()["config"] == xray_config
+    assert response.json()["name"] == "xray_config_update"
+    assert response.json()["exclude_inbound_tags"] == "456"
+    assert response.json()["fallbacks_inbound_tags"] == "123"
 
 
 def test_backend_get(access_token):
     """Test that the backend get route is accessible."""
 
     response = client.get(
-        url="/api/backend",
+        url="/api/backend/1",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == xray_config
+    assert response.json()["config"] == xray_config
+
+
+def test_backend_delete_1(access_token):
+    """Test that the backend delete route is accessible."""
+
+    response = client.delete(
+        url="/api/backend/1", headers={"Authorization": f"Bearer {access_token}"}, params={"restart_nodes": True}
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_backend_delete_2(access_token):
+    """Test that the backend delete route is accessible."""
+
+    response = client.post(
+        url="/api/backend",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "config": xray_config,
+            "name": "xray_config",
+            "exclude_inbound_tags": "123",
+            "fallbacks_inbound_tags": "456",
+        },
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["config"] == xray_config
+    assert response.json()["name"] == "xray_config"
+    assert response.json()["exclude_inbound_tags"] == "123"
+    assert response.json()["fallbacks_inbound_tags"] == "456"
+
+    response = client.delete(
+        url=f"/api/backend/{response.json()['id']}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 def test_inbounds_get(access_token):

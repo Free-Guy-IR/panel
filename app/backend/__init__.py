@@ -1,91 +1,85 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from copy import deepcopy
 
-from app import on_startup
-from app.utils.store import DictStorage
+from asyncio import Lock
+
 from .xray import XRayConfig
+from .abstract_backend import AbstractBackend
+from app import on_startup
 from app.db import GetDB
-from app.db.models import ProxyHostSecurity
-from app.db.crud import get_hosts, get_or_create_inbound, get_host_by_id
-from config import XRAY_JSON
+from app.db.models import BackendConfig
+from app.db.crud import get_backend_configs
 
 
-config = XRayConfig(XRAY_JSON)
+class BackendManager:
+    def __init__(self):
+        self._backends: dict[int, AbstractBackend] = {}
+        self._lock = Lock()
+        self._inbounds: list[str] = []
+        self._inbounds_by_tag = {}
+
+    async def update_backend(self, db_backend_config: BackendConfig):
+        fallbacks_inbound_tags = (
+            db_backend_config.fallbacks_inbound_tags.split(",") if db_backend_config.fallbacks_inbound_tags else []
+        )
+        exclude_inbound_tags = (
+            db_backend_config.exclude_inbound_tags.split(",") if db_backend_config.exclude_inbound_tags else []
+        )
+
+        backend_config = XRayConfig(db_backend_config.config, fallbacks_inbound_tags, exclude_inbound_tags)
+
+        async with self._lock:
+            self._backends.update({db_backend_config.id: backend_config})
+            self._inbounds_by_tag.update(backend_config.inbounds_by_tag)
+            self._inbounds = list(self._inbounds_by_tag.keys())
+
+    async def remove_backend(self, backend_id: int):
+        async with self._lock:
+            backend = self._backends.get(backend_id, None)
+            if backend:
+                del self._backends[backend_id]
+            else:
+                return
+
+            for backend in self._backends.values():
+                self._inbounds_by_tag.update(backend.inbounds_by_tag)
+
+            self._inbounds = list(self._inbounds_by_tag.keys())
+
+    async def get_backend(self, backend_id: int) -> AbstractBackend | None:
+        async with self._lock:
+            backend = self._backends.get(backend_id, None)
+
+            if not backend:
+                backend = self._backends.get(1)
+
+            return backend
+
+    async def get_inbounds(self) -> list[str]:
+        async with self._lock:
+            return deepcopy(self._inbounds)
+
+    async def get_inbounds_by_tag(self) -> dict:
+        async with self._lock:
+            return deepcopy(self._inbounds_by_tag)
+
+    async def get_inbound_by_tag(self, tag) -> dict:
+        async with self._lock:
+            inbound = self._inbounds_by_tag.get(tag, None)
+            if not inbound:
+                return None
+            return deepcopy(inbound)
 
 
-@DictStorage
-async def hosts(storage: dict, db: AsyncSession):
-    await check_inbounds(db)
-    storage.clear()
-    db_hosts = await get_hosts(db)
-
-    for host in db_hosts:
-        if host.is_disabled or (config.get_inbound(host.inbound_tag) is None):
-            continue
-        downstream = None
-        if host.transport_settings and (
-            ds_host := host.transport_settings.get("xhttp_settings", {}).get("download_settings")
-        ):
-            downstream = await get_host_by_id(db, ds_host)
-
-        host_data = {
-            "remark": host.remark,
-            "inbound_tag": host.inbound_tag,
-            "address": [addr.strip() for addr in host.address.split(",")] if host.address else [],
-            "port": host.port,
-            "path": host.path or None,
-            "sni": [s.strip() for s in host.sni.split(",")] if host.sni else [],
-            "host": [h.strip() for h in host.host.split(",")] if host.host else [],
-            "alpn": host.alpn.value,
-            "fingerprint": host.fingerprint.value,
-            "tls": None if host.security == ProxyHostSecurity.inbound_default else host.security.value,
-            "allowinsecure": host.allowinsecure,
-            "fragment_settings": host.fragment_settings,
-            "noise_settings": host.noise_settings,
-            "random_user_agent": host.random_user_agent,
-            "use_sni_as_host": host.use_sni_as_host,
-            "http_headers": host.http_headers,
-            "mux_settings": host.mux_settings,
-            "transport_settings": host.transport_settings,
-            "status": host.status,
-        }
-
-        if downstream:
-            host_data["downloadSettings"] = {
-                "remark": downstream.remark,
-                "inbound_tag": downstream.inbound_tag,
-                "address": [addr.strip() for addr in downstream.address.split(",")] if downstream.address else [],
-                "port": downstream.port,
-                "path": downstream.path or None,
-                "sni": [s.strip() for s in downstream.sni.split(",")] if downstream.sni else [],
-                "host": [h.strip() for h in downstream.host.split(",")] if downstream.host else [],
-                "alpn": downstream.alpn.value,
-                "fingerprint": downstream.fingerprint.value,
-                "tls": None if downstream.security == ProxyHostSecurity.inbound_default else downstream.security.value,
-                "allowinsecure": downstream.allowinsecure,
-                "fragment_settings": downstream.fragment_settings,
-                "noise_settings": downstream.noise_settings,
-                "random_user_agent": downstream.random_user_agent,
-                "use_sni_as_host": downstream.use_sni_as_host,
-                "http_headers": downstream.http_headers,
-                "mux_settings": downstream.mux_settings,
-                "transport_settings": downstream.transport_settings,
-                "status": downstream.status,
-            }
-        else:
-            host_data["downloadSettings"] = None
-
-        storage[host.id] = host_data
-
-
-async def check_inbounds(db: AsyncSession):
-    for tag in config.inbounds:
-        await get_or_create_inbound(db, tag)
+backend_manager = BackendManager()
 
 
 @on_startup
-async def initialize_hosts():
+async def init_backend_manager():
     async with GetDB() as db:
-        await hosts.update(db)
+        backend_configs, _ = await get_backend_configs(db)
+
+        for config in backend_configs:
+            await backend_manager.update_backend(config)
 
 
-__all__ = ["config", "hosts", "nodes", "XRayConfig"]
+__all__ = ["config", "XRayConfig"]

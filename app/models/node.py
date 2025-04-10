@@ -25,6 +25,7 @@ class Node(BaseModel):
     server_ca: str
     keep_alive: int
     max_logs: int
+    backend_config_id: int | None = None
 
 
 class NodeCreate(Node):
@@ -39,6 +40,7 @@ class NodeCreate(Node):
                 "connection_type": "grpc",
                 "keep_alive": 60,
                 "max_logs": 1000,
+                "backend_config_id": 1,
             }
         }
     )

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
 
-from app import backend
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.system import SystemStats
@@ -23,4 +22,4 @@ async def get_system_stats(db: AsyncSession = Depends(get_db), admin: AdminDetai
 @router.get("/inbounds", response_model=list[str])
 async def get_inbounds(_: AdminDetails = Depends(get_current)):
     """Retrieve inbound configurations grouped by protocol."""
-    return backend.config.inbounds
+    return await system_operator.get_inbounds()

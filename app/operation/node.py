@@ -20,7 +20,7 @@ from app.db.crud import (
     get_user,
 )
 from app.db.base import GetDB
-from app.backend import config
+from app.backend import backend_manager
 from app.node import get_tls, backend_users, node_manager
 from app.utils.logger import get_logger
 from app import notification
@@ -33,8 +33,10 @@ class NodeOperator(BaseOperator):
     async def get_node_settings(self) -> NodeSettings:
         return NodeSettings(certificate=(await get_tls()).certificate)
 
-    async def get_db_nodes(self, db: AsyncSession, offset: int | None, limit: int | None) -> list[NodeResponse]:
-        return await get_nodes(db=db, offset=offset, limit=limit)
+    async def get_db_nodes(
+        self, db: AsyncSession, backend_id: int | None = None, offset: int | None = None, limit: int | None = None
+    ) -> list[Node]:
+        return await get_nodes(db=db, backend_id=backend_id, offset=offset, limit=limit)
 
     @staticmethod
     async def update_node_status(
@@ -65,7 +67,6 @@ class NodeOperator(BaseOperator):
             if status is NodeStatus.connected:
                 asyncio.create_task(notification.connect_node(NodeResponse.model_validate(db_node)))
             if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
-                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}: {err}")
                 asyncio.create_task(notification.error_node(NodeResponse.model_validate(db_node)))
 
     @staticmethod
@@ -85,11 +86,13 @@ class NodeOperator(BaseOperator):
             logger.info(f'Connecting to "{db_node.name}" node')
             await NodeOperator.update_node_status(db_node.id, NodeStatus.connecting)
 
+            backend = await backend_manager.get_backend(db_node.backend_config_id if db_node.backend_config_id else 1)
+
             try:
                 info = await gozargah_node.start(
-                    config=config.to_json(),
+                    config=backend.to_str(),
                     backend_type=0,
-                    users=await backend_users(db=db, inbounds=config.inbounds),
+                    users=await backend_users(db=db, inbounds=backend.inbounds),
                     keep_alive=db_node.keep_alive,
                     timeout=10,
                 )
@@ -106,11 +109,14 @@ class NodeOperator(BaseOperator):
                 if e.code == -4:
                     return
 
+                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}: {e.detail}")
+
                 await NodeOperator.update_node_status(
                     node_id=db_node.id, status=NodeStatus.error, err=e.detail, notify_err=notify_err
                 )
 
     async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
+        await self.get_validated_backend_config(db, new_node.backend_config_id)
         try:
             db_node = await create_node(db, new_node)
         except IntegrityError:
@@ -132,7 +138,9 @@ class NodeOperator(BaseOperator):
     async def modify_node(
         self, db: AsyncSession, node_id: Node, modified_node: NodeModify, admin: AdminDetails
     ) -> Node:
-        db_node: Node = await self.get_validated_node(db=db, node_id=node_id)
+        db_node = await self.get_validated_node(db=db, node_id=node_id)
+        await self.get_validated_backend_config(db, modified_node.backend_config_id)
+
         try:
             db_node = await update_node(db, db_node, modified_node)
         except IntegrityError:
@@ -164,16 +172,17 @@ class NodeOperator(BaseOperator):
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" deleted by admin "{admin.username}"')
 
-        asyncio.create_task(notification.remove_host(db_node, admin.username))
+        asyncio.create_task(notification.remove_node(db_node, admin.username))
 
     async def restart_node(self, node_id: Node, admin: AdminDetails) -> None:
         asyncio.create_task(self.connect_node(node_id))
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
-    @staticmethod
-    async def restart_all_node(admin: AdminDetails) -> None:
-        nodes = await node_manager.get_nodes()
-        await asyncio.gather(*[NodeOperator.connect_node(id) for id in nodes.keys()])
+    async def restart_all_node(self, db: AsyncSession, backend_id: int | None, admin: AdminDetails) -> None:
+        nodes: list[Node] = await self.get_db_nodes(db, backend_id)
+        await asyncio.gather(*[NodeOperator.connect_node(node.id) for node in nodes])
+
+        logger.info(f'All nodes restarted by admin "{admin.username}"')
 
     async def get_usage(
         self, db: AsyncSession, start: str = "", end: str = "", period: Period = Period.hour, node_id: int | None = None
@@ -292,9 +301,11 @@ class NodeOperator(BaseOperator):
         if gozargah_node is None:
             self.raise_error(message="Node is not connected", code=409)
 
+        backend = await backend_manager.get_backend(db_node.backend_config_id or 1)
+
         try:
             await gozargah_node.sync_users(
-                await backend_users(db=db, inbounds=config.inbounds), flush_queue=flush_users
+                await backend_users(db=db, inbounds=backend.inbounds), flush_queue=flush_users
             )
         except NodeAPIError as e:
             await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)

@@ -5,12 +5,20 @@ from enum import IntEnum
 from fastapi import HTTPException
 
 from app.db import AsyncSession
-from app.db.crud import get_admin, get_group_by_id, get_host_by_id, get_user, get_user_template, get_node_by_id
+from app.db.crud import (
+    get_admin,
+    get_group_by_id,
+    get_host_by_id,
+    get_user,
+    get_user_template,
+    get_node_by_id,
+    get_backend_config_by_id,
+)
 from app.db.models import Admin as DBAdmin
-from app.db.models import Group, ProxyHost, User, Node, UserTemplate
+from app.db.models import Group, ProxyHost, User, Node, UserTemplate, BackendConfig
 from app.models.admin import AdminDetails
 from app.models.user import UserCreate, UserModify
-from app import backend
+from app.backend import backend_manager
 from app.utils.jwt import get_subscription_payload
 
 
@@ -119,5 +127,12 @@ class BaseOperator:
 
     async def check_inbound_tags(self, tags: list[str]) -> None:
         for tag in tags:
-            if tag not in backend.config.inbounds:
+            if tag not in await backend_manager.get_inbounds():
                 self.raise_error(f"{tag} not found", 400)
+
+    async def get_validated_backend_config(self, db: AsyncSession, backend_id) -> BackendConfig:
+        """Dependency: Fetch backend config or return not found error."""
+        db_backend_config = await get_backend_config_by_id(db, backend_id)
+        if not db_backend_config:
+            self.raise_error(message="Backend config not found", code=404)
+        return db_backend_config
