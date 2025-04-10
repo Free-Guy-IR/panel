@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import delete
 from fastapi.encoders import jsonable_encoder
 
-from app import on_shutdown, async_scheduler as scheduler
+from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.models import NotificationReminder
 from app.notification.webhook import queue

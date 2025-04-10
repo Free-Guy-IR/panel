@@ -477,6 +477,7 @@ class Node(Base):
         ForeignKey("backend_configs.id", ondelete="SET NULL"), nullable=True
     )
     backend_config: Mapped[Optional["BackendConfig"]] = relationship("BackendConfig", lazy="selectin")
+    stats: Mapped[List["NodeStat"]] = relationship(back_populates="node", cascade="all, delete-orphan")
 
 
 class NodeUserUsage(Base):
@@ -555,3 +556,20 @@ class BackendConfig(Base):
     config: Mapped[Dict[str, Any]] = mapped_column(JSON(False))
     exclude_inbound_tags: Mapped[Optional[str]] = mapped_column(String(2048))
     fallbacks_inbound_tags: Mapped[Optional[str]] = mapped_column(String(2048))
+
+
+class NodeStat(Base):
+    __tablename__ = "node_stats"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), unique=False, default=lambda: datetime.now(timezone.utc)
+    )
+    node_id: Mapped[int] = mapped_column(ForeignKey("nodes.id"))
+    node: Mapped["Node"] = relationship(back_populates="stats")
+    mem_total: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
+    mem_used: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
+    cpu_cores: Mapped[int] = mapped_column(unique=False, nullable=False)
+    cpu_usage: Mapped[float] = mapped_column(unique=False, nullable=False)
+    incoming_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
+    outgoing_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)

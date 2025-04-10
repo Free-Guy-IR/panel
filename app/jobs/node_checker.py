@@ -2,7 +2,7 @@ import asyncio
 
 from GozargahNodeBridge import NodeAPIError, GozargahNode
 
-from app import on_shutdown, on_startup, async_scheduler as scheduler
+from app import on_shutdown, on_startup, scheduler
 from app.db import GetDB
 from app.db.models import Node, NodeStatus
 from app.db.crud import get_nodes

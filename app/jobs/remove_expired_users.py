@@ -1,6 +1,6 @@
 import asyncio
 
-from app import logger, async_scheduler as scheduler
+from app import logger, scheduler
 from app.db import GetDB
 from app.db.crud import autodelete_expired_users
 from app.models.user import UserResponse

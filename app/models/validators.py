@@ -24,7 +24,30 @@ class NumericValidatorMixin:
         elif isinstance(v, int):  # Allow integers directly
             return v
 
-        raise ValueError("must be an integer or a float, not a string")  # Reject strings
+        raise ValueError("must be an integer, Decimal or a float, not a string")  # Reject strings
+
+    @staticmethod
+    def cast_to_float(v):
+        """
+        Static method to validate and convert numeric values to floats.
+
+        Args:
+            v: Input value to be converted
+
+        Returns:
+            float or None: Converted float value
+
+        Raises:
+            ValueError: If the input cannot be converted to an float
+        """
+        if v is None:
+            return v
+        elif isinstance(v, int) or isinstance(v, Decimal):
+            return float(v)
+        elif isinstance(v, float):
+            return v
+
+        raise ValueError("must be an integer, Decimal or a float, not a string")
 
 
 class ListValidator:

@@ -34,9 +34,10 @@ from app.db.models import (
     UserStatus,
     UserDataLimitResetStrategy,
     BackendConfig,
+    NodeStat,
 )
 from app.db.base import DATABASE_DIALECT
-from app.models.stats import Period, UserUsageStats, NodeUsageStats
+from app.models.stats import Period, UserUsageStats, NodeUsageStats, NodeStats
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
 from app.models.admin import AdminCreate, AdminModify
@@ -1508,6 +1509,44 @@ async def get_nodes_usage(
         NodeUsageStats(downlink=row.downlink, uplink=row.uplink, period=period, period_start=row.period_start)
         for row in result
     ]
+
+
+async def get_node_stats(
+    db: AsyncSession, node_id: int, start: datetime, end: datetime, period: Period
+) -> list[NodeStats]:
+    trunc_expr = _build_trunc_expression(period, NodeStat.created_at)
+    conditions = [NodeStat.created_at >= start, NodeStat.created_at <= end, NodeStat.node_id == node_id]
+
+    stmt = (
+        select(
+            trunc_expr.label("period_start"),
+            func.avg(NodeStat.mem_used / NodeStat.mem_total * 100).label("mem_usage_percentage"),
+            func.avg(NodeStat.cpu_usage).label("cpu_usage_percentage"),  # CPU usage is already in percentage
+            func.avg(NodeStat.incoming_bandwidth_speed).label("incoming_bandwidth_speed"),
+            func.avg(NodeStat.outgoing_bandwidth_speed).label("outgoing_bandwidth_speed"),
+        )
+        .where(and_(*conditions))
+        .group_by(trunc_expr)
+        .order_by(trunc_expr)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.fetchall()
+
+    stats = []
+    for row in rows:
+        stats.append(
+            NodeStats(
+                period_start=row.period_start,
+                period=period,
+                mem_usage_percentage=float(row.mem_usage_percentage),
+                cpu_usage_percentage=float(row.cpu_usage_percentage),
+                incoming_bandwidth_speed=float(row.incoming_bandwidth_speed),
+                outgoing_bandwidth_speed=float(row.outgoing_bandwidth_speed),
+            )
+        )
+
+    return stats
 
 
 async def create_node(db: AsyncSession, node: NodeCreate) -> Node:

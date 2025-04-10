@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime as dt, timedelta as td, timezone as tz
 
-from app import logger, async_scheduler as scheduler
+from app import logger, scheduler
 from app.db import GetDB, crud
 from app.db.models import UserStatus, UserDataLimitResetStrategy, User
 from app.models.user import UserResponse

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import psutil
 import requests
 
-from app import async_scheduler as scheduler
+from app import scheduler
 
 
 @dataclass

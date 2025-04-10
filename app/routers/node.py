@@ -1,13 +1,14 @@
 import asyncio
 from typing import AsyncGenerator
+from datetime import datetime as dt
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from .authentication import check_sudo_admin
-from app.models.stats import NodeStats, NodeUsageStats, Period
+from app.models.stats import RealtimeNodeStats, NodeUsageStats, Period, NodeStats
 from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings
 from app.operation.node import NodeOperator
 from app.operation import OperatorType
@@ -27,8 +28,8 @@ async def get_node_settings(_: AdminDetails = Depends(check_sudo_admin)):
 @router.get("/usage", response_model=list[NodeUsageStats])
 async def get_usage(
     db: AsyncSession = Depends(get_db),
-    start: str = "",
-    end: str = "",
+    start: dt | None = Query(None, example="2024-01-01T00:00:00"),
+    end: dt | None = Query(None, example="2024-01-31T23:59:59"),
     period: Period = Period.hour,
     node_id: int | None = None,
     _: AdminDetails = Depends(check_sudo_admin),
@@ -39,7 +40,7 @@ async def get_usage(
 
 @router.get("s", response_model=list[NodeResponse])
 async def get_nodes(
-    backend_id: int = None,
+    backend_id: int | None = None,
     offset: int = None,
     limit: int = None,
     db: AsyncSession = Depends(get_db),
@@ -134,19 +135,31 @@ async def node_logs(node_id: int, request: Request, _: AdminDetails = Depends(ch
     return EventSourceResponse(event_generator())
 
 
-@router.get("/{node_id}/stats", response_model=NodeStats)
-async def node_stats(node_id: int, _: AdminDetails = Depends(check_sudo_admin)):
+@router.get("/{node_id}/stats", response_model=list[NodeStats])
+async def get_node_stats_periodic(
+    node_id: int,
+    start: dt | None = Query(None, example="2024-01-01T00:00:00"),
+    end: dt | None = Query(None, example="2024-01-31T23:59:59"),
+    period: Period = Period.hour,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(check_sudo_admin),
+):
+    return await node_operator.get_node_stats_periodic(db, node_id=node_id, start=start, end=end, period=period)
+
+
+@router.get("/{node_id}/realtime_stats", response_model=RealtimeNodeStats)
+async def realtime_node_stats(node_id: int, _: AdminDetails = Depends(check_sudo_admin)):
     """Retrieve node real-time statistics."""
     return await node_operator.get_node_system_stats(node_id=node_id)
 
 
-@router.get("s/stats", response_model=dict[int, NodeStats | None])
-async def nodes_stats(_: AdminDetails = Depends(check_sudo_admin)):
+@router.get("s/realtime_stats", response_model=dict[int, RealtimeNodeStats | None])
+async def realtime_nodes_stats(_: AdminDetails = Depends(check_sudo_admin)):
     """Retrieve nodes real-time statistics."""
     return await node_operator.get_nodes_system_stats()
 
 
-@router.get("/{node_id}/stats/{username}", response_model=dict[int, int])
+@router.get("/{node_id}/online_stats/{username}", response_model=dict[int, int])
 async def user_online_stats(
     node_id: int, username: str, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
 ):
@@ -154,7 +167,7 @@ async def user_online_stats(
     return await node_operator.get_user_online_stats_by_node(db=db, node_id=node_id, username=username)
 
 
-@router.get("/{node_id}/stats/{username}/ip", response_model=dict[int, dict[str, int]])
+@router.get("/{node_id}/online_stats/{username}/ip", response_model=dict[int, dict[str, int]])
 async def user_online_ip_list(
     node_id: int, username: str, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
 ):

@@ -2,7 +2,7 @@ import asyncio
 
 from sqlalchemy.orm import Session
 
-from app import async_scheduler as scheduler
+from app import scheduler
 from app.db import GetDB
 from app.db.crud import (
     reset_user_by_next,

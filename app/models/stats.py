@@ -34,10 +34,29 @@ class NodeUsageStats(BaseModel):
         return NumericValidatorMixin.cast_to_int(v)
 
 
-class NodeStats(BaseModel):
+class RealtimeNodeStats(BaseModel):
     mem_total: int
     mem_used: int
     cpu_cores: int
     cpu_usage: float
     incoming_bandwidth_speed: int
     outgoing_bandwidth_speed: int
+
+
+class NodeStats(BaseModel):
+    period_start: dt
+    period: Period
+    mem_usage_percentage: float
+    cpu_usage_percentage: float
+    incoming_bandwidth_speed: float
+    outgoing_bandwidth_speed: float
+
+    @field_validator(
+        "mem_usage_percentage",
+        "cpu_usage_percentage",
+        "incoming_bandwidth_speed",
+        "outgoing_bandwidth_speed",
+        mode="before",
+    )
+    def cast_to_float(cls, v):
+        return NumericValidatorMixin.cast_to_float(v)
