@@ -108,7 +108,7 @@
   "header.nodesUsage": "节点统计",
   "hostsDialog.addHost": "添加主机",
   "hostsDialog.advancedOptions": "高级选项",
-  "hostsDialog.useSniAsHost": "Use sni as host",
+  "hostsDialog.useSniAsHost": "使用 SNI 作为主机名",
   "hostsDialog.alpn": "ALPN",
   "hostsDialog.apply": "保存",
   "hostsDialog.currentServer": "当前服务器的 IP 地址",
@@ -136,7 +136,7 @@
     "addNoise": "添加噪声",
     "removeNoise": "删除噪声",
     "packet": "数据包",
-    "packetPlaceholder": "选择数据包类型",
+    "packetPlaceholder": "输入数据包值（例如：rand:10-20）",
     "delay": "延迟",
     "delayPlaceholder": "输入延迟",
     "rand": "随机"
@@ -159,7 +159,7 @@
   "hostsDialog.proxyOutbound": "代理出站 json",
   "hostsDialog.proxyOutbound.info": "额外出站（仅在 v2ray 自定义配置中）",
   "hostsDialog.proxyProtocol": "代理协议（例如 VMess）",
-  "hostsDialog.randomUserAgent": "使用随机用户代理",
+  "hostsDialog.randomUserAgent": "使用随机 User-Agent",
   "hostsDialog.remainingData": "用户剩余流量情况",
   "hostsDialog.remainingDays": "用户的剩余天数",
   "hostsDialog.remainingTime": "用户剩余时间",
@@ -331,7 +331,7 @@
     "alpn": "ALPN",
     "allowInsecure": "允许不安全连接",
     "muxEnable": "启用 MUX",
-    "randomUserAgent": "使用随机用户代理",
+    "randomUserAgent": "使用随机 User-Agent",
     "inboundDefault": "入站默认值",
     "earlyData": "早期数据",
     "httpHeaders": "HTTP 标头",
@@ -413,6 +413,7 @@
     "statistic": "启用统计",
     "onlyTcp": "仅 TCP",
     "brutal": {
+      "title": "Brutal 设置",
       "upMbps": "上传速度 (Mbps)",
       "downMbps": "下载速度 (Mbps)"
     },

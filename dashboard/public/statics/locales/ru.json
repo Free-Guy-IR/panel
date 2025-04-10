@@ -108,7 +108,7 @@
   "header.nodesUsage": "Использование узлов",
   "hostsDialog.addHost": "Добавить хост",
   "hostsDialog.advancedOptions": "Дополнительные опции",
-  "hostsDialog.useSniAsHost": "Use sni as host",
+  "hostsDialog.useSniAsHost": "Использовать SNI как хост",
   "hostsDialog.alpn": "ALPN",
   "hostsDialog.apply": "Применить",
   "hostsDialog.currentServer": "IP текущего сервера",
@@ -136,7 +136,7 @@
     "addNoise": "Добавить шум",
     "removeNoise": "Удалить шум",
     "packet": "Пакет",
-    "packetPlaceholder": "Выберите тип пакета",
+    "packetPlaceholder": "Введите значение пакета (например: rand:10-20)",
     "delay": "Задержка",
     "delayPlaceholder": "Введите задержку",
     "rand": "Случайный"
@@ -159,7 +159,7 @@
   "hostsDialog.proxyOutbound": "Исходящий прокси json",
   "hostsDialog.proxyOutbound.info": "Дополнительный исходящий трафик (только в пользовательской конфигурации v2ray)",
   "hostsDialog.proxyProtocol": "Протокол прокси (например, VMess)",
-  "hostsDialog.randomUserAgent": "Use random user agent",
+  "hostsDialog.randomUserAgent": "Использовать случайный User-Agent",
   "hostsDialog.remainingData": "Оставшийся трафик пользователя",
   "hostsDialog.remainingDays": "Оставшиеся дни пользователя",
   "hostsDialog.remainingTime": "Оставшееся время пользователя",
@@ -294,9 +294,11 @@
   "hostsDialog": {
     "addHost": "Добавить хост",
     "selectInbound": "Выберите входящий",
+    "fingerprint": "Отпечаток",
     "selectStatus": "Выберите статус",
-    "remarkRequired": "Необходимо указать примечание",
-    "portRequired": "Необходимо указать порт",
+    "remarkRequired": "Примечание обязательно",
+    "addressRequired": "Адрес обязателен",
+    "portRequired": "Порт обязателен",
     "status": {
       "label": "Статус",
       "active": "Активный",
@@ -329,7 +331,8 @@
     "alpn": "ALPN",
     "allowInsecure": "Разрешить небезопасное соединение",
     "muxEnable": "Включить MUX",
-    "randomUserAgent": "Случайный User Agent",
+    "randomUserAgent": "Использовать случайный User-Agent",
+    "useSniAsHost": "Использовать SNI как хост",
     "inboundDefault": "По умолчанию",
     "earlyData": "Ранние данные",
     "httpHeaders": "HTTP заголовки",
@@ -411,11 +414,11 @@
     "statistic": "Включить статистику",
     "onlyTcp": "Только TCP",
     "brutal": {
+      "title": "Настройки Brutal",
       "upMbps": "Скорость загрузки (Мбит/с)",
       "downMbps": "Скорость скачивания (Мбит/с)"
     },
     "address": "Адрес",
-    "addressRequired": "Адрес обязателен",
     "variables": {
       "title": "Используйте эти переменные, чтобы сделать их динамическими",
       "server_ip": "IP-адрес текущего сервера",

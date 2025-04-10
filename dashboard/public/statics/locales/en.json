@@ -226,7 +226,7 @@
       "addNoise": "Add Noise",
       "removeNoise": "Remove Noise",
       "packet": "Packet",
-      "packetPlaceholder": "Select packet type",
+      "packetPlaceholder": "Enter packet value (e.g. rand:10-20)",
       "delay": "Delay",
       "delayPlaceholder": "Enter delay",
       "rand": "Random",
@@ -255,6 +255,7 @@
     "statistic": "Enable Statistics",
     "onlyTcp": "Only TCP",
     "brutal": {
+      "title": "Brutal Settings",
       "upMbps": "Upload Speed (Mbps)",
       "downMbps": "Download Speed (Mbps)"
     },
@@ -290,7 +291,8 @@
     "host.info": "By default, if a request host is set in the XRAY configuration, it will be used. However, if needed, you can set a custom request host here.",
     "host.multiHost": "To set multiple addresses, separate them with <badge>,</badge>. A random address will be selected each time.",
     "host.wildcard": "Use <badge>*</badge> to generate a random string (works for wildcard domains)",
-    "sni.info": "SNI (Server Name Indication) is used to specify which hostname the client is trying to connect to. This is particularly useful when you have multiple domains pointing to the same IP address."
+    "sni.info": "SNI (Server Name Indication) is used to specify which hostname the client is trying to connect to. This is particularly useful when you have multiple domains pointing to the same IP address.",
+    "useSniAsHost": "Use SNI as Host"
   },
   "inbound": "Inbound",
   "remark": "Host Name",
