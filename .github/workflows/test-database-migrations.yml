@@ -4,10 +4,11 @@ on:
   push:
     paths:
       - "app/**.py"
+      - "tests/**.py"
   pull_request:
     paths:
       - "app/**.py"
-
+      - "tests/**.py"
 jobs:
   test-databases:
     runs-on: ubuntu-latest
