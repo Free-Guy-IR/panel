@@ -514,5 +514,11 @@
     "configurationError": "配置错误",
     "validateConfig": "验证配置",
     "fillRequiredFields": "请在检查状态之前填写所有必填字段"
+  },
+  "theme": {
+    "toggle": "切换主题",
+    "dark": "深色",
+    "light": "浅色",
+    "system": "系统"
   }
 }

@@ -498,5 +498,11 @@
     "configurationError": "Configuration Error",
     "validateConfig": "Validate Configuration",
     "fillRequiredFields": "Please fill out all required fields before checking status"
+  },
+  "theme": {
+    "toggle": "Toggle theme",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
   }
 }
