@@ -1,13 +1,14 @@
 import Logo from '@/assets/logo.svg?react'
 import { Footer } from '@/components/Footer'
 import { Language } from '@/components/Language'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAdminToken } from '@/service/api'
 import { removeAuthToken, setAuthToken } from '@/utils/authStorage'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CircleAlertIcon } from 'lucide-react'
+import { CircleAlertIcon, LogInIcon } from 'lucide-react'
 import { FC, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -66,8 +67,9 @@ export const Login: FC = () => {
   return (
     <div className="flex flex-col justify-between min-h-screen p-6 w-full">
       <div className="w-full">
-        <div className="flex justify-end w-full">
+        <div className="flex justify-between items-center w-full">
           <Language />
+          <ThemeToggle />
         </div>
         <div className="w-full justify-center flex items-center">
           <div className="w-full max-w-[340px] mt-6">
@@ -79,16 +81,19 @@ export const Login: FC = () => {
             <div className="w-full max-w-[300px] mx-auto pt-4">
               <form onSubmit={handleSubmit(handleLogin)}>
                 <div className="flex flex-col mt-4 gap-y-2">
-                  <Input placeholder={t('username')} {...register('username')} error={t(errors?.username?.message as string)} />
-                  <Input type="password" placeholder={t('password')} {...register('password')} error={t(errors?.password?.message as string)} />
+                  <Input className="py-5" placeholder={t('username')} {...register('username')} error={t(errors?.username?.message as string)} />
+                  <Input className="py-5 mb-2" type="password" placeholder={t('password')} {...register('password')} error={t(errors?.password?.message as string)} />
                   {error && error.data && (
                     <Alert variant="destructive">
                       <CircleAlertIcon size="18px" />
                       <AlertDescription>{String(error.data.detail)}</AlertDescription>
                     </Alert>
                   )}
-                  <Button isLoading={loading} type="submit" className="w-full">
-                    {t('login')}
+                  <Button isLoading={loading} type="submit" className="w-full flex items-center gap-2">
+                    <span>
+                      {t('login')}
+                    </span>
+                    <LogInIcon size="18px" />
                   </Button>
                 </div>
               </form>

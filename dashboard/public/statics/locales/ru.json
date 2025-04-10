@@ -55,7 +55,29 @@
   "created": "Создано",
   "by": "от",
   "ip": "IP",
-  "admins": "Администраторы",
+  "admins": {
+    "title": "Администраторы",
+    "description": "Управление системными администраторами",
+    "createAdmin": "Создать администратора",
+    "editAdmin": "Редактировать администратора",
+    "deleteAdmin": "Удалить администратора",
+    "username": "Имя пользователя",
+    "password": "Пароль",
+    "isSudo": "Супер администратор",
+    "createdAt": "Дата создания",
+    "actions": "Действия",
+    "createSuccess": "Администратор успешно создан",
+    "createFailed": "Не удалось создать администратора",
+    "editSuccess": "Администратор успешно обновлен",
+    "editFailed": "Не удалось обновить администратора",
+    "deleteSuccess": "Администратор успешно удален",
+    "deleteFailed": "Не удалось удалить администратора",
+    "enterUsername": "Введите имя пользователя",
+    "enterPassword": "Введите пароль",
+    "sudo": "Права супер администратора",
+    "edit": "Сохранить изменения",
+    "create": "Создать администратора"
+  },
   "manageAccounts": "Контроль, обновление и упорядочивание учетных записей",
   "manageGroups": "Контроль, обновление и упорядочивание групп пользователей",
   "manageNodes": "Мониторинг, управление, добавление, редактирование, удаление узлов",
@@ -108,7 +130,7 @@
   "header.nodesUsage": "Использование узлов",
   "hostsDialog.addHost": "Добавить хост",
   "hostsDialog.advancedOptions": "Дополнительные опции",
-  "hostsDialog.useSniAsHost": "Use sni as host",
+  "hostsDialog.useSniAsHost": "Использовать SNI как хост",
   "hostsDialog.alpn": "ALPN",
   "hostsDialog.apply": "Применить",
   "hostsDialog.currentServer": "IP текущего сервера",
@@ -136,7 +158,7 @@
     "addNoise": "Добавить шум",
     "removeNoise": "Удалить шум",
     "packet": "Пакет",
-    "packetPlaceholder": "Выберите тип пакета",
+    "packetPlaceholder": "Введите значение пакета (например: rand:10-20)",
     "delay": "Задержка",
     "delayPlaceholder": "Введите задержку",
     "rand": "Случайный"
@@ -159,7 +181,7 @@
   "hostsDialog.proxyOutbound": "Исходящий прокси json",
   "hostsDialog.proxyOutbound.info": "Дополнительный исходящий трафик (только в пользовательской конфигурации v2ray)",
   "hostsDialog.proxyProtocol": "Протокол прокси (например, VMess)",
-  "hostsDialog.randomUserAgent": "Use random user agent",
+  "hostsDialog.randomUserAgent": "Использовать случайный User-Agent",
   "hostsDialog.remainingData": "Оставшийся трафик пользователя",
   "hostsDialog.remainingDays": "Оставшиеся дни пользователя",
   "hostsDialog.remainingTime": "Оставшееся время пользователя",
@@ -294,9 +316,11 @@
   "hostsDialog": {
     "addHost": "Добавить хост",
     "selectInbound": "Выберите входящий",
+    "fingerprint": "Отпечаток",
     "selectStatus": "Выберите статус",
-    "remarkRequired": "Необходимо указать примечание",
-    "portRequired": "Необходимо указать порт",
+    "remarkRequired": "Примечание обязательно",
+    "addressRequired": "Адрес обязателен",
+    "portRequired": "Порт обязателен",
     "status": {
       "label": "Статус",
       "active": "Активный",
@@ -329,7 +353,8 @@
     "alpn": "ALPN",
     "allowInsecure": "Разрешить небезопасное соединение",
     "muxEnable": "Включить MUX",
-    "randomUserAgent": "Случайный User Agent",
+    "randomUserAgent": "Использовать случайный User-Agent",
+    "useSniAsHost": "Использовать SNI как хост",
     "inboundDefault": "По умолчанию",
     "earlyData": "Ранние данные",
     "httpHeaders": "HTTP заголовки",
@@ -411,11 +436,11 @@
     "statistic": "Включить статистику",
     "onlyTcp": "Только TCP",
     "brutal": {
+      "title": "Настройки Brutal",
       "upMbps": "Скорость загрузки (Мбит/с)",
       "downMbps": "Скорость скачивания (Мбит/с)"
     },
     "address": "Адрес",
-    "addressRequired": "Адрес обязателен",
     "variables": {
       "title": "Используйте эти переменные, чтобы сделать их динамическими",
       "server_ip": "IP-адрес текущего сервера",
@@ -450,10 +475,12 @@
     "editSuccess": "Группа «{{name}}» успешно обновлена",
     "editFailed": "Не удалось обновить группу «{{name}}»",
     "deleteSuccess": "Группа «{{name}}» успешно удалена",
-    "disableSuccess": "Группа «{{name}}» успешно отключена",
-    "disableFailed": "Не удалось отключить группу «{{name}}»",
     "deleteFailed": "Не удалось удалить группу «{{name}}»",
-    "deleteConfirm": "Вы уверены, что хотите удалить группу «{{name}}»?"
+    "deleteConfirm": "Вы уверены, что хотите удалить группу «{{name}}»?",
+    "enableSuccess": "Группа «{{name}}» успешно включена",
+    "enableFailed": "Не удалось включить группу «{{name}}»",
+    "disableSuccess": "Группа «{{name}}» успешно отключена",
+    "disableFailed": "Не удалось отключить группу «{{name}}»"
   },
   "name": "Имя",
   "nodeModal": {
@@ -488,5 +515,11 @@
     "configurationError": "Ошибка конфигурации",
     "validateConfig": "Проверить конфигурацию",
     "fillRequiredFields": "Пожалуйста, заполните все обязательные поля перед проверкой состояния"
+  },
+  "theme": {
+    "toggle": "Переключить тему",
+    "dark": "Тёмная",
+    "light": "Светлая",
+    "system": "Системная"
   }
 }

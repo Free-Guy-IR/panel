@@ -2,30 +2,41 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useDashboard } from '@/contexts/DashboardContext'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
 import { RefreshCw, SearchIcon, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useGetUsers, UserStatus } from '@/service/api'
 
-export const Filters = () => {
+interface FiltersProps {
+  filters: {
+    search?: string
+    limit?: number
+    offset?: number
+    sort: string
+    status?: UserStatus | null
+    load_sub: boolean
+  }
+  onFilterChange: (filters: Partial<FiltersProps['filters']>) => void
+}
+
+export const Filters = ({ filters, onFilterChange }: FiltersProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
-  const { filters, loading, onFilterChange, refetchUsers } = useDashboard()
   const [search, setSearch] = useState(filters.search || '')
+  const { refetch } = useGetUsers(filters)
 
   // Debounced search function
   const setSearchField = useCallback(
     debounce((value: string) => {
       onFilterChange({
-        ...filters,
         search: value,
         offset: 0, // Reset to first page when search is updated
       })
     }, 300),
-    [filters, onFilterChange], // Recreate the debounced function when filters or onFilterChange change
+    [onFilterChange], // Recreate the debounced function when onFilterChange changes
   )
 
   // Handle input change
@@ -38,7 +49,6 @@ export const Filters = () => {
   const clearSearch = () => {
     setSearch('')
     onFilterChange({
-      ...filters,
       search: '',
       offset: 0,
     })
@@ -58,10 +68,83 @@ export const Filters = () => {
       </div>
       {/* Refresh Button */}
       <div className="flex items-center gap-2 h-full">
-        <Button size="icon-md" onClick={refetchUsers} disabled={loading} variant="ghost" className="flex items-center gap-2 border">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        <Button size="icon-md" onClick={() => refetch()} variant="ghost" className="flex items-center gap-2 border">
+          <RefreshCw className="w-4 h-4" />
         </Button>
       </div>
+    </div>
+  )
+}
+
+export const PaginationControls = () => {
+  const { t } = useTranslation()
+  const [itemsPerPage, setItemsPerPage] = useState(20)
+  const [currentPage, setCurrentPage] = useState(0)
+  const { data: usersData } = useGetUsers({
+    limit: itemsPerPage,
+    offset: currentPage * itemsPerPage,
+    load_sub: true
+  })
+
+  const totalUsers = usersData?.total || 0
+
+  const handleItemsPerPageChange = (value: string) => {
+    const newLimit = parseInt(value, 10)
+    setItemsPerPage(newLimit)
+    setCurrentPage(0) // Reset to first page when items per page changes
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage)
+  }
+
+  // Pagination controls
+  const totalPages = Math.ceil(totalUsers / itemsPerPage)
+  const paginationRange = getPaginationRange(currentPage, totalPages)
+
+  return (
+    <div className="mt-4 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+          <SelectTrigger className="w-[70px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="30">30</SelectItem>
+              <SelectItem value="40">40</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <span className="text-sm text-gray-600">{t('itemsPerPage')}</span>
+      </div>
+
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 0} />
+          </PaginationItem>
+          {paginationRange.map((pageNumber, i) =>
+            pageNumber === '...' ? (
+              <PaginationItem key={`ellipsis-${i}`}>
+                <PaginationEllipsis />
+              </PaginationItem>
+            ) : (
+              <PaginationItem key={pageNumber}>
+                <PaginationLink isActive={currentPage === pageNumber} onClick={() => handlePageChange(pageNumber as number)}>
+                  {(pageNumber as number) + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ),
+          )}
+          <PaginationItem>
+            <PaginationNext onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages - 1} />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
     </div>
   )
 }
@@ -89,103 +172,4 @@ const getPaginationRange = (currentPage: number, totalPages: number, siblingCoun
   }
 
   return [0, '...', ...range(leftSiblingIndex, rightSiblingIndex + 1), '...', totalPages - 1]
-}
-
-export const PaginationControls = () => {
-  const { filters, onFilterChange, users } = useDashboard()
-  const [itemsPerPage, setItemsPerPage] = useState(filters.limit || 20)
-  const [currentPage, setCurrentPage] = useState(filters.offset ? filters.offset / itemsPerPage : 0)
-  const { t } = useTranslation()
-
-  // Get totalUsers from filters (ensure it's available in your state)
-  const totalUsers = users.total || 0 // Ensure fallback value if not available
-
-  const handleItemsPerPageChange = (value: string) => {
-    const newLimit = parseInt(value, 10)
-    setItemsPerPage(newLimit)
-    setCurrentPage(0) // Reset to first page when items per page changes
-    onFilterChange({
-      ...filters,
-      limit: newLimit,
-      offset: 0,
-    })
-  }
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage)
-    onFilterChange({
-      ...filters,
-      offset: newPage * itemsPerPage,
-    })
-  }
-
-  // Pagination controls
-  const totalPages = Math.ceil(totalUsers / itemsPerPage)
-
-  const paginationRange = getPaginationRange(currentPage, totalPages)
-
-  return (
-    <div className="flex flex-col md:flex-row-reverse gap-y-3 justify-between items-center my-4">
-      {/* Pagination Controls */}
-      <div className=" max-w-full overflow-y-auto">
-        <Pagination className="justify-end w-[26rem]">
-          <PaginationContent>
-            {/* Previous Button */}
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 0}
-                className={`cursor-pointer ${currentPage === 0 ? 'opacity-50 !pointer-events-auto cursor-not-allowed hover:bg-inherit' : ''}`}
-              />
-            </PaginationItem>
-
-            {/* Page Links */}
-            {paginationRange.map((page, index) => (
-              <PaginationItem key={index}>
-                {page === '...' ? (
-                  <PaginationEllipsis />
-                ) : (
-                  <PaginationLink
-                    className="cursor-pointer"
-                    onClick={() => handlePageChange(page as number)}
-                    isActive={currentPage === page} // Set isActive property
-                  >
-                    {+page + 1}
-                  </PaginationLink>
-                )}
-              </PaginationItem>
-            ))}
-
-            {/* Next Button */}
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages - 1}
-                className={`cursor-pointer ${currentPage === totalPages - 1 ? 'opacity-50 !pointer-events-auto cursor-not-allowed hover:bg-inherit' : ''}`}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      </div>
-
-      {/* Items per Page */}
-      <div className="flex items-center justify-center">
-        <div className="flex items-center gap-2">
-          <Select value={itemsPerPage.toString()} onValueChange={value => handleItemsPerPageChange(value)}>
-            <SelectTrigger className="w-[80px]">
-              <SelectValue placeholder="Select items per page" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup className="w-[80px]">
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="20">20</SelectItem>
-                <SelectItem value="30">30</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <span className="text-sm whitespace-nowrap">{t('itemsPerPage')}</span>
-        </div>
-      </div>
-    </div>
-  )
 }

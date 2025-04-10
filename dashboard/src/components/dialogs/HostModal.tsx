@@ -48,6 +48,43 @@ const HostModal: React.FC<HostModalProps> = ({
     const { t } = useTranslation();
     const dir = useDirDetection();
 
+    const cleanPayload = (data: any): any => {
+        // Helper function to check if an object has any non-empty values
+        const hasNonEmptyValues = (obj: any): boolean => {
+            if (!obj || typeof obj !== 'object') return false;
+            return Object.values(obj).some(value => {
+                if (value === null || value === undefined || value === '') return false;
+                if (typeof value === 'object') return hasNonEmptyValues(value);
+                return true;
+            });
+        };
+
+        // Helper function to clean nested objects
+        const cleanObject = (obj: any, path: string[] = []): any => {
+            const result: any = {};
+            Object.entries(obj).forEach(([key, value]) => {
+                const currentPath = [...path, key];
+                if (value === null || value === undefined || value === '') return;
+
+                if (typeof value === 'object' && !Array.isArray(value)) {
+                    const cleanedNested = cleanObject(value, currentPath);
+                    if (hasNonEmptyValues(cleanedNested)) {
+                        result[key] = cleanedNested;
+                    }
+                } else if (Array.isArray(value)) {
+                    if (value.length > 0) {
+                        result[key] = value;
+                    }
+                } else {
+                    result[key] = value;
+                }
+            });
+            return result;
+        };
+
+        return cleanObject(data);
+    };
+
     const handleModalOpenChange = (open: boolean) => {
         if (!open) {
             // Let the parent component handle the form reset
@@ -67,7 +104,10 @@ const HostModal: React.FC<HostModalProps> = ({
 
     const handleSubmit = async (data: HostFormValues) => {
         try {
-            const response = await onSubmit(data);
+            // Clean the payload before sending
+            const cleanedData = cleanPayload(data);
+
+            const response = await onSubmit(cleanedData);
             if (response.status >= 400) {
                 throw new Error(`Operation failed with status: ${response.status}`);
             }
@@ -459,7 +499,7 @@ const HostModal: React.FC<HostModalProps> = ({
                             onValueChange={handleAccordionChange}
                             className="w-full flex flex-col gap-y-6 mb-6 pt-6"
                         >
-                            <AccordionItem className="border px-4 rounded-sm" value="network">
+                            <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="network">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2">
                                         <GlobeLock className="h-4 w-4" />
@@ -467,13 +507,13 @@ const HostModal: React.FC<HostModalProps> = ({
                                     </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-2">
-                                    <div className="w-full space-y-4">
-                                        <div className="flex items-center gap-4 w-full">
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <FormField
                                                 control={form.control}
                                                 name="host"
                                                 render={({ field }) => (
-                                                    <FormItem className="flex-1">
+                                                    <FormItem>
                                                         <div className="flex items-center gap-2">
                                                             <FormLabel>{t("hostsDialog.host")}</FormLabel>
                                                             <Popover>
@@ -507,7 +547,7 @@ const HostModal: React.FC<HostModalProps> = ({
                                                 control={form.control}
                                                 name="path"
                                                 render={({ field }) => (
-                                                    <FormItem className="flex-1">
+                                                    <FormItem>
                                                         <div className="flex items-center gap-2">
                                                             <FormLabel>{t("hostsDialog.path")}</FormLabel>
                                                             <Popover>
@@ -534,39 +574,59 @@ const HostModal: React.FC<HostModalProps> = ({
                                                 )}
                                             />
                                         </div>
+
+                                        <FormField
+                                            control={form.control}
+                                            name="random_user_agent"
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                                    <div className="space-y-0.5">
+                                                        <FormLabel className="text-base">
+                                                            {t("hostsDialog.randomUserAgent")}
+                                                        </FormLabel>
+                                                    </div>
+                                                    <FormControl>
+                                                        <Switch
+                                                            checked={field.value}
+                                                            onCheckedChange={field.onChange}
+                                                        />
+                                                    </FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <h4 className="text-sm font-medium">{t("hostsDialog.httpHeaders")}</h4>
-                                                <div className="flex gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => {
-                                                            const currentHeaders = form.getValues("http_headers") || {};
-                                                            const newHeaders = { ...currentHeaders };
-                                                            const newKey = `header_${Object.keys(currentHeaders).length}`;
-                                                            newHeaders[newKey] = "";
-                                                            form.setValue("http_headers", newHeaders, {
-                                                                shouldDirty: true,
-                                                                shouldTouch: true
-                                                            });
-                                                        }}
-                                                        title={t("hostsDialog.addHeader")}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => {
+                                                        const currentHeaders = form.getValues("http_headers") || {};
+                                                        const newKey = `header_${Object.keys(currentHeaders).length}`;
+                                                        form.setValue("http_headers", {
+                                                            ...currentHeaders,
+                                                            [newKey]: ""
+                                                        }, {
+                                                            shouldDirty: true,
+                                                            shouldTouch: true
+                                                        });
+                                                    }}
+                                                    title={t("hostsDialog.addHeader")}
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                </Button>
                                             </div>
                                             <div className="space-y-2">
-                                                {Object.entries(form.watch("http_headers") || {}).map(([key, value], index) => (
-                                                    <div key={`${key}_${index}`} className="flex items-center justify-between gap-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <Input
-                                                                placeholder={t("hostsDialog.headersName")}
-                                                                value={key}
-                                                                onChange={(e) => {
+                                                {Object.entries(form.watch("http_headers") || {}).map(([key, value]) => (
+                                                    <div key={key} className="grid grid-cols-[1fr,1fr,auto] gap-2">
+                                                        <Input
+                                                            placeholder={t("hostsDialog.headersName")}
+                                                            defaultValue={key}
+                                                            onBlur={(e) => {
+                                                                if (e.target.value !== key) {
                                                                     const currentHeaders = { ...form.getValues("http_headers") };
                                                                     const oldValue = currentHeaders[key];
                                                                     delete currentHeaders[key];
@@ -575,21 +635,21 @@ const HostModal: React.FC<HostModalProps> = ({
                                                                         shouldDirty: true,
                                                                         shouldTouch: true
                                                                     });
-                                                                }}
-                                                            />
-                                                            <Input
-                                                                placeholder={t("hostsDialog.headersValue")}
-                                                                value={value}
-                                                                onChange={(e) => {
-                                                                    const currentHeaders = { ...form.getValues("http_headers") };
-                                                                    currentHeaders[key] = e.target.value;
-                                                                    form.setValue("http_headers", currentHeaders, {
-                                                                        shouldDirty: true,
-                                                                        shouldTouch: true
-                                                                    });
-                                                                }}
-                                                            />
-                                                        </div>
+                                                                }
+                                                            }}
+                                                        />
+                                                        <Input
+                                                            placeholder={t("hostsDialog.headersValue")}
+                                                            value={value}
+                                                            onChange={(e) => {
+                                                                const currentHeaders = { ...form.getValues("http_headers") };
+                                                                currentHeaders[key] = e.target.value;
+                                                                form.setValue("http_headers", currentHeaders, {
+                                                                    shouldDirty: true,
+                                                                    shouldTouch: true
+                                                                });
+                                                            }}
+                                                        />
                                                         <Button
                                                             type="button"
                                                             variant="ghost"
@@ -615,7 +675,7 @@ const HostModal: React.FC<HostModalProps> = ({
                                 </AccordionContent>
                             </AccordionItem>
 
-                            <AccordionItem className="border px-4 rounded-sm" value="security">
+                            <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="security">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2">
                                         <Lock className="h-4 w-4" />
@@ -623,134 +683,139 @@ const HostModal: React.FC<HostModalProps> = ({
                                     </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-2">
-                                    <div className="space-y-4">
-                                        <FormField
-                                            control={form.control}
-                                            name="security"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <div className="flex items-center gap-2">
-                                                        <FormLabel>{t("hostsDialog.security")}</FormLabel>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-4 w-4 p-0 hover:bg-transparent"
-                                                                >
-                                                                    <Info className="h-4 w-4 text-muted-foreground" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
-                                                                <p className="text-[11px] text-muted-foreground">{t("hostsDialog.security.info")}</p>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    </div>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">None</SelectItem>
-                                                            <SelectItem value="tls">TLS</SelectItem>
-                                                            <SelectItem value="inbound_default">Inbound's default</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <FormField
+                                                control={form.control}
+                                                name="security"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <div className="flex items-center gap-2">
+                                                            <FormLabel>{t("hostsDialog.security")}</FormLabel>
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-4 w-4 p-0 hover:bg-transparent"
+                                                                    >
+                                                                        <Info className="h-4 w-4 text-muted-foreground" />
+                                                                    </Button>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
+                                                                    <p className="text-[11px] text-muted-foreground">{t("hostsDialog.security.info")}</p>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        </div>
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="none">None</SelectItem>
+                                                                <SelectItem value="tls">TLS</SelectItem>
+                                                                <SelectItem value="inbound_default">Inbound's default</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
 
-                                        <FormField
-                                            control={form.control}
-                                            name="sni"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <div className="flex items-center gap-2">
-                                                        <FormLabel>{t("hostsDialog.sni")}</FormLabel>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-4 w-4 p-0 hover:bg-transparent"
-                                                                >
-                                                                    <Info className="h-4 w-4 text-muted-foreground" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
-                                                                <p className="text-[11px] text-muted-foreground">{t("hostsDialog.sni.info")}</p>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    </div>
-                                                    <FormControl>
-                                                        <Input placeholder={t("hostsDialog.sniPlaceholder")} {...field} />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="alpn"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>{t("hostsDialog.alpn")}</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                            <FormField
+                                                control={form.control}
+                                                name="sni"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <div className="flex items-center gap-2">
+                                                            <FormLabel>{t("hostsDialog.sni")}</FormLabel>
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-4 w-4 p-0 hover:bg-transparent"
+                                                                    >
+                                                                        <Info className="h-4 w-4 text-muted-foreground" />
+                                                                    </Button>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
+                                                                    <p className="text-[11px] text-muted-foreground">{t("hostsDialog.sni.info")}</p>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        </div>
                                                         <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder={t("hostsDialog.alpn")} />
-                                                            </SelectTrigger>
+                                                            <Input placeholder={t("hostsDialog.sniPlaceholder")} {...field} />
                                                         </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="default">{t("default")}</SelectItem>
-                                                            <SelectItem value="h3">h3</SelectItem>
-                                                            <SelectItem value="h2">h2</SelectItem>
-                                                            <SelectItem value="http/1.1">http/1.1</SelectItem>
-                                                            <SelectItem value="h3,h2,http/1.1">h3,h2,http/1.1</SelectItem>
-                                                            <SelectItem value="h3,h2">h3,h2</SelectItem>
-                                                            <SelectItem value="h2,http/1.1">h2,http/1.1</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
 
-                                        <FormField
-                                            control={form.control}
-                                            name="fingerprint"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>{t("hostsDialog.fingerprint")}</FormLabel>
-                                                    <Select onValueChange={(value) => field.onChange(value === "default" ? "" : value)} value={field.value || "default"}>
-                                                        <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder={t("hostsDialog.fingerprint")} />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="default">{t("default")}</SelectItem>
-                                                            <SelectItem value="chrome">{t("chrome")}</SelectItem>
-                                                            <SelectItem value="firefox">{t("firefox")}</SelectItem>
-                                                            <SelectItem value="safari">{t("safari")}</SelectItem>
-                                                            <SelectItem value="ios">{t("ios")}</SelectItem>
-                                                            <SelectItem value="android">{t("android")}</SelectItem>
-                                                            <SelectItem value="edge">{t("edge")}</SelectItem>
-                                                            <SelectItem value="360">{t("360")}</SelectItem>
-                                                            <SelectItem value="qq">{t("qq")}</SelectItem>
-                                                            <SelectItem value="random">{t("random")}</SelectItem>
-                                                            <SelectItem value="randomized">{t("randomized")}</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <FormField
+                                                control={form.control}
+                                                name="alpn"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>{t("hostsDialog.alpn")}</FormLabel>
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder={t("hostsDialog.alpn")} />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="default">{t("default")}</SelectItem>
+                                                                <SelectItem value="h3">h3</SelectItem>
+                                                                <SelectItem value="h2">h2</SelectItem>
+                                                                <SelectItem value="http/1.1">http/1.1</SelectItem>
+                                                                <SelectItem value="h3,h2,http/1.1">h3,h2,http/1.1</SelectItem>
+                                                                <SelectItem value="h3,h2">h3,h2</SelectItem>
+                                                                <SelectItem value="h2,http/1.1">h2,http/1.1</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            <FormField
+                                                control={form.control}
+                                                name="fingerprint"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>{t("hostsDialog.fingerprint")}</FormLabel>
+                                                        <Select onValueChange={(value) => field.onChange(value === "default" ? "" : value)} value={field.value || "default"}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder={t("hostsDialog.fingerprint")} />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="default">{t("default")}</SelectItem>
+                                                                <SelectItem value="chrome">{t("chrome")}</SelectItem>
+                                                                <SelectItem value="firefox">{t("firefox")}</SelectItem>
+                                                                <SelectItem value="safari">{t("safari")}</SelectItem>
+                                                                <SelectItem value="ios">{t("ios")}</SelectItem>
+                                                                <SelectItem value="android">{t("android")}</SelectItem>
+                                                                <SelectItem value="edge">{t("edge")}</SelectItem>
+                                                                <SelectItem value="360">{t("360")}</SelectItem>
+                                                                <SelectItem value="qq">{t("qq")}</SelectItem>
+                                                                <SelectItem value="random">{t("random")}</SelectItem>
+                                                                <SelectItem value="randomized">{t("randomized")}</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
 
                                         <FormField
                                             control={form.control}
@@ -771,11 +836,31 @@ const HostModal: React.FC<HostModalProps> = ({
                                                 </FormItem>
                                             )}
                                         />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="use_sni_as_host"
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                                    <div className="space-y-0.5">
+                                                        <FormLabel className="text-base">
+                                                            {t("hostsDialog.useSniAsHost")}
+                                                        </FormLabel>
+                                                    </div>
+                                                    <FormControl>
+                                                        <Switch
+                                                            checked={field.value}
+                                                            onCheckedChange={field.onChange}
+                                                        />
+                                                    </FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
                                     </div>
                                 </AccordionContent>
                             </AccordionItem>
 
-                            <AccordionItem className="border px-4 rounded-sm" value="camouflag">
+                            <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="camouflag">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2">
                                         <ChevronsLeftRightEllipsis className="h-4 w-4" />
@@ -938,22 +1023,16 @@ const HostModal: React.FC<HostModalProps> = ({
                                                                     <SelectItem value="hex">hex</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
-                                                            <Select
+                                                            <Input
+                                                                placeholder={t("hostsDialog.noise.packetPlaceholder")}
                                                                 value={form.watch(`noise_settings.xray.${index}.packet`) || ""}
-                                                                onValueChange={(value) => {
-                                                                    form.setValue(`noise_settings.xray.${index}.packet`, value, {
+                                                                onChange={(e) => {
+                                                                    form.setValue(`noise_settings.xray.${index}.packet`, e.target.value, {
                                                                         shouldDirty: true,
                                                                         shouldTouch: true
                                                                     });
                                                                 }}
-                                                            >
-                                                                <SelectTrigger className="w-[180px]">
-                                                                    <SelectValue placeholder={t("hostsDialog.noise.packetPlaceholder")} />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="rand">{t("hostsDialog.noise.rand")}</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
+                                                            />
                                                             <Input
                                                                 placeholder={t("hostsDialog.noise.delayPlaceholder")}
                                                                 value={form.watch(`noise_settings.xray.${index}.delay`) || ""}
@@ -990,7 +1069,7 @@ const HostModal: React.FC<HostModalProps> = ({
                                 </AccordionContent>
                             </AccordionItem>
 
-                            <AccordionItem className="border px-4 rounded-sm" value="transport">
+                            <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="transport">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2">
                                         <Network className="h-4 w-4" />
@@ -1010,124 +1089,54 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                             {/* XHTTP Settings */}
                                             <TabsContent dir={dir} value="xhttp" className="space-y-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.mode"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.xhttp.mode")}</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                                <FormControl>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                </FormControl>
-                                                                <SelectContent>
-                                                                    <SelectItem value="auto">Auto</SelectItem>
-                                                                    <SelectItem value="packet-up">Packet Up</SelectItem>
-                                                                    <SelectItem value="stream-up">Stream Up</SelectItem>
-                                                                    <SelectItem value="stream-one">Stream One</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.no_grpc_header"
-                                                    render={({ field }) => (
-                                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                                            <div className="space-y-0.5">
-                                                                <FormLabel className="text-base">{t("hostsDialog.xhttp.noGrpcHeader")}</FormLabel>
-                                                            </div>
-                                                            <FormControl>
-                                                                <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.x_padding_bytes"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.xhttp.xPaddingBytes")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.sc_max_each_post_bytes"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.xhttp.scMaxEachPostBytes")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.sc_min_posts_interval_ms"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.xhttp.scMinPostsIntervalMs")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.sc_max_buffered_posts"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.xhttp.scMaxBufferedPosts")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.xhttp_settings.sc_stream_up_server_secs"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.xhttp.scStreamUpServerSecs")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <div className="space-y-4 border p-4 rounded-md">
-                                                    <h4 className="text-sm font-medium">{t("hostsDialog.xhttp.xmux")}</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.xhttp_settings.mode"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.xhttp.mode")}</FormLabel>
+                                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                                    <FormControl>
+                                                                        <SelectTrigger>
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="auto">Auto</SelectItem>
+                                                                        <SelectItem value="packet-up">Packet Up</SelectItem>
+                                                                        <SelectItem value="stream-up">Stream Up</SelectItem>
+                                                                        <SelectItem value="stream-one">Stream One</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.xhttp_settings.xmux.max_concurrency"
+                                                        name="transport_settings.xhttp_settings.no_grpc_header"
+                                                        render={({ field }) => (
+                                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                                                <div className="space-y-0.5">
+                                                                    <FormLabel className="text-base">{t("hostsDialog.xhttp.noGrpcHeader")}</FormLabel>
+                                                                </div>
+                                                                <FormControl>
+                                                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.xhttp_settings.x_padding_bytes"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xhttp.maxConcurrency")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.xhttp.xPaddingBytes")}</FormLabel>
                                                                 <FormControl>
                                                                     <Input {...field} />
                                                                 </FormControl>
@@ -1138,10 +1147,10 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.xhttp_settings.xmux.max_connections"
+                                                        name="transport_settings.xhttp_settings.sc_max_each_post_bytes"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xhttp.maxConnections")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.xhttp.scMaxEachPostBytes")}</FormLabel>
                                                                 <FormControl>
                                                                     <Input {...field} />
                                                                 </FormControl>
@@ -1152,10 +1161,10 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.xhttp_settings.xmux.c_max_reuse_times"
+                                                        name="transport_settings.xhttp_settings.sc_min_posts_interval_ms"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xhttp.cMaxReuseTimes")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.xhttp.scMinPostsIntervalMs")}</FormLabel>
                                                                 <FormControl>
                                                                     <Input {...field} />
                                                                 </FormControl>
@@ -1166,10 +1175,10 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.xhttp_settings.xmux.c_max_lifetime"
+                                                        name="transport_settings.xhttp_settings.sc_max_buffered_posts"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xhttp.cMaxLifetime")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.xhttp.scMaxBufferedPosts")}</FormLabel>
                                                                 <FormControl>
                                                                     <Input {...field} />
                                                                 </FormControl>
@@ -1180,24 +1189,10 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.xhttp_settings.xmux.h_max_request_times"
+                                                        name="transport_settings.xhttp_settings.sc_stream_up_server_secs"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xhttp.hMaxRequestTimes")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input {...field} />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="transport_settings.xhttp_settings.xmux.h_keep_alive_period"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xhttp.hKeepAlivePeriod")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.xhttp.scStreamUpServerSecs")}</FormLabel>
                                                                 <FormControl>
                                                                     <Input {...field} />
                                                                 </FormControl>
@@ -1206,299 +1201,128 @@ const HostModal: React.FC<HostModalProps> = ({
                                                         )}
                                                     />
                                                 </div>
+
+                                                <div className="space-y-4">
+                                                    <h4 className="text-sm font-medium">{t("hostsDialog.xhttp.xmux")}</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.xhttp_settings.xmux.max_concurrency"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xhttp.maxConcurrency")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.xhttp_settings.xmux.max_connections"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xhttp.maxConnections")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.xhttp_settings.xmux.c_max_reuse_times"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xhttp.cMaxReuseTimes")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.xhttp_settings.xmux.c_max_lifetime"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xhttp.cMaxLifetime")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.xhttp_settings.xmux.h_max_request_times"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xhttp.hMaxRequestTimes")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.xhttp_settings.xmux.h_keep_alive_period"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xhttp.hKeepAlivePeriod")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </div>
                                             </TabsContent>
 
                                             {/* gRPC Settings */}
                                             <TabsContent dir={dir} value="grpc" className="space-y-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.grpc_settings.multi_mode"
-                                                    render={({ field }) => (
-                                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                                            <div className="space-y-0.5">
-                                                                <FormLabel className="text-base">{t("hostsDialog.grpc.multiMode")}</FormLabel>
-                                                            </div>
-                                                            <FormControl>
-                                                                <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.grpc_settings.idle_timeout"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.grpc.idleTimeout")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.grpc_settings.health_check_timeout"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.grpc.healthCheckTimeout")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.grpc_settings.permit_without_stream"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.grpc.permitWithoutStream")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.grpc_settings.initial_windows_size"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.grpc.initialWindowsSize")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </TabsContent>
-
-                                            {/* KCP Settings */}
-                                            <TabsContent dir={dir} value="kcp" className="space-y-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.header"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.header")}</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.grpc_settings.multi_mode"
+                                                        render={({ field }) => (
+                                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                                                <div className="space-y-0.5">
+                                                                    <FormLabel className="text-base">{t("hostsDialog.grpc.multiMode")}</FormLabel>
+                                                                </div>
                                                                 <FormControl>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
+                                                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
                                                                 </FormControl>
-                                                                <SelectContent>
-                                                                    <SelectItem value="none">None</SelectItem>
-                                                                    <SelectItem value="srtp">SRTP</SelectItem>
-                                                                    <SelectItem value="utp">uTP</SelectItem>
-                                                                    <SelectItem value="wechat-video">WeChat Video</SelectItem>
-                                                                    <SelectItem value="dtls">DTLS</SelectItem>
-                                                                    <SelectItem value="wireguard">WireGuard</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.mtu"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.mtu")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.tti"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.tti")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.uplink_capacity"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.uplinkCapacity")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.downlink_capacity"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.downlinkCapacity")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.congestion"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.congestion")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.read_buffer_size"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.readBufferSize")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.kcp_settings.write_buffer_size"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.kcp.writeBufferSize")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </TabsContent>
-
-                                            {/* TCP Settings */}
-                                            <TabsContent dir={dir} value="tcp" className="space-y-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.tcp_settings.header"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.tcp.header")}</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                                <FormControl>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                </FormControl>
-                                                                <SelectContent>
-                                                                    <SelectItem value="none">None</SelectItem>
-                                                                    <SelectItem value="http">HTTP</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <div className="space-y-4 border p-4 rounded-md">
-                                                    <h4 className="text-sm font-medium">{t("hostsDialog.tcp.request")}</h4>
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.tcp_settings.request.version"
+                                                        name="transport_settings.grpc_settings.idle_timeout"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.tcp.version")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.grpc.idleTimeout")}</FormLabel>
                                                                 <FormControl>
-                                                                    <Input {...field} />
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
                                                                 </FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
@@ -1507,10 +1331,72 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.tcp_settings.request.method"
+                                                        name="transport_settings.grpc_settings.health_check_timeout"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.tcp.method")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.grpc.healthCheckTimeout")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.grpc_settings.permit_without_stream"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.grpc.permitWithoutStream")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.grpc_settings.initial_windows_size"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.grpc.initialWindowsSize")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </TabsContent>
+
+                                            {/* KCP Settings */}
+                                            <TabsContent dir={dir} value="kcp" className="space-y-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.header"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.header")}</FormLabel>
                                                                 <Select onValueChange={field.onChange} value={field.value}>
                                                                     <FormControl>
                                                                         <SelectTrigger>
@@ -1518,10 +1404,172 @@ const HostModal: React.FC<HostModalProps> = ({
                                                                         </SelectTrigger>
                                                                     </FormControl>
                                                                     <SelectContent>
-                                                                        <SelectItem value="GET">GET</SelectItem>
-                                                                        <SelectItem value="POST">POST</SelectItem>
-                                                                        <SelectItem value="PUT">PUT</SelectItem>
-                                                                        <SelectItem value="DELETE">DELETE</SelectItem>
+                                                                        <SelectItem value="none">None</SelectItem>
+                                                                        <SelectItem value="srtp">SRTP</SelectItem>
+                                                                        <SelectItem value="utp">uTP</SelectItem>
+                                                                        <SelectItem value="wechat-video">WeChat Video</SelectItem>
+                                                                        <SelectItem value="dtls">DTLS</SelectItem>
+                                                                        <SelectItem value="wireguard">WireGuard</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.mtu"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.mtu")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.tti"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.tti")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.uplink_capacity"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.uplinkCapacity")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.downlink_capacity"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.downlinkCapacity")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.congestion"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.congestion")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.read_buffer_size"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.readBufferSize")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.kcp_settings.write_buffer_size"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.kcp.writeBufferSize")}</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </TabsContent>
+
+                                            {/* TCP Settings */}
+                                            <TabsContent dir={dir} value="tcp" className="space-y-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="transport_settings.tcp_settings.header"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>{t("hostsDialog.tcp.header")}</FormLabel>
+                                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                                    <FormControl>
+                                                                        <SelectTrigger>
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="none">None</SelectItem>
+                                                                        <SelectItem value="http">HTTP</SelectItem>
                                                                     </SelectContent>
                                                                 </Select>
                                                                 <FormMessage />
@@ -1530,45 +1578,113 @@ const HostModal: React.FC<HostModalProps> = ({
                                                     />
                                                 </div>
 
-                                                <div className="space-y-4 border p-4 rounded-md">
+                                                <div className="space-y-4">
+                                                    <h4 className="text-sm font-medium">{t("hostsDialog.tcp.request")}</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.tcp_settings.request.version"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.tcp.version")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.tcp_settings.request.method"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.tcp.method")}</FormLabel>
+                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                        <FormControl>
+                                                                            <SelectTrigger>
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                        </FormControl>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="GET">GET</SelectItem>
+                                                                            <SelectItem value="POST">POST</SelectItem>
+                                                                            <SelectItem value="PUT">PUT</SelectItem>
+                                                                            <SelectItem value="DELETE">DELETE</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-4">
                                                     <h4 className="text-sm font-medium">{t("hostsDialog.tcp.response")}</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.tcp_settings.response.version"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.tcp.version")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.tcp_settings.response.status"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.tcp.status")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transport_settings.tcp_settings.response.reason"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.tcp.reason")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </TabsContent>
+
+                                            {/* WebSocket Settings */}
+                                            <TabsContent dir={dir} value="websocket" className="space-y-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <FormField
                                                         control={form.control}
-                                                        name="transport_settings.tcp_settings.response.version"
+                                                        name="transport_settings.websocket_settings.heartbeatPeriod"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t("hostsDialog.tcp.version")}</FormLabel>
+                                                                <FormLabel>{t("hostsDialog.websocket.heartbeatPeriod")}</FormLabel>
                                                                 <FormControl>
-                                                                    <Input {...field} />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="transport_settings.tcp_settings.response.status"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.tcp.status")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input {...field} />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="transport_settings.tcp_settings.response.reason"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.tcp.reason")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input {...field} />
+                                                                    <Input
+                                                                        type="number"
+                                                                        {...field}
+                                                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                                                        value={field.value}
+                                                                    />
                                                                 </FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
@@ -1576,34 +1692,12 @@ const HostModal: React.FC<HostModalProps> = ({
                                                     />
                                                 </div>
                                             </TabsContent>
-
-                                            {/* WebSocket Settings */}
-                                            <TabsContent dir={dir} value="websocket" className="space-y-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="transport_settings.websocket_settings.heartbeatPeriod"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{t("hostsDialog.websocket.heartbeatPeriod")}</FormLabel>
-                                                            <FormControl>
-                                                                <Input
-                                                                    type="number"
-                                                                    {...field}
-                                                                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
-                                                                    value={field.value}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </TabsContent>
                                         </Tabs>
                                     </div>
                                 </AccordionContent>
                             </AccordionItem>
 
-                            <AccordionItem className="border px-4 rounded-sm" value="mux">
+                            <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="mux">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2">
                                         <Cable className="h-4 w-4" />
@@ -1621,75 +1715,77 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                             {/* Xray Settings */}
                                             <TabsContent dir={dir} value="xray">
-                                                <div className="border p-4 rounded-md space-y-4">
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.xray.concurrency"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.concurrency")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value ?? ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.xray.xudp_concurrency"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xudpConcurrency")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value ?? ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.xray.xudp_proxy_443"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.xudpProxy443")}</FormLabel>
-                                                                <Select
-                                                                    onValueChange={field.onChange}
-                                                                    value={field.value ?? ""}
-                                                                >
+                                                <div className="space-y-4">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.xray.concurrency"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.concurrency")}</FormLabel>
                                                                     <FormControl>
-                                                                        <SelectTrigger>
-                                                                            <SelectValue placeholder={t("hostsDialog.selectXudpProxy443")} />
-                                                                        </SelectTrigger>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value ?? ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                        />
                                                                     </FormControl>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="reject">Reject</SelectItem>
-                                                                        <SelectItem value="accept">Accept</SelectItem>
-                                                                    </SelectContent>
-                                                                </Select>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.xray.xudp_concurrency"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xudpConcurrency")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value ?? ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.xray.xudp_proxy_443"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.xudpProxy443")}</FormLabel>
+                                                                    <Select
+                                                                        onValueChange={field.onChange}
+                                                                        value={field.value ?? ""}
+                                                                    >
+                                                                        <FormControl>
+                                                                            <SelectTrigger>
+                                                                                <SelectValue placeholder={t("hostsDialog.selectXudpProxy443")} />
+                                                                            </SelectTrigger>
+                                                                        </FormControl>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="reject">Reject</SelectItem>
+                                                                            <SelectItem value="accept">Accept</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
                                                 </div>
                                             </TabsContent>
 
                                             {/* Sing-box Settings */}
                                             <TabsContent dir={dir} value="sing_box">
-                                                <div className="border p-4 rounded-md space-y-4">
+                                                <div className="space-y-4">
                                                     <FormField
                                                         control={form.control}
                                                         name="mux_settings.sing_box.protocol"
@@ -1717,62 +1813,107 @@ const HostModal: React.FC<HostModalProps> = ({
                                                         )}
                                                     />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.sing_box.max_connections"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.maxConnections")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value || ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.sing_box.max_connections"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.maxConnections")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value || ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.sing_box.min_streams"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.minStreams")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value || ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.sing_box.min_streams"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.minStreams")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value || ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.sing_box.max_streams"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.maxStreams")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value || ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.sing_box.max_streams"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.maxStreams")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value || ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-sm font-medium">{t("hostsDialog.brutal.title")}</h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="mux_settings.sing_box.brutal.up_mbps"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>{t("hostsDialog.brutal.upMbps")}</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                {...field}
+                                                                                value={field.value || ""}
+                                                                                onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormMessage />
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="mux_settings.sing_box.brutal.down_mbps"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>{t("hostsDialog.brutal.downMbps")}</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                {...field}
+                                                                                value={field.value || ""}
+                                                                                onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormMessage />
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </div>
+                                                    </div>
 
                                                     <FormField
                                                         control={form.control}
@@ -1793,7 +1934,7 @@ const HostModal: React.FC<HostModalProps> = ({
 
                                             {/* Clash Settings */}
                                             <TabsContent dir={dir} value="clash">
-                                                <div className="border p-4 rounded-md space-y-4">
+                                                <div className="space-y-4">
                                                     <FormField
                                                         control={form.control}
                                                         name="mux_settings.clash.protocol"
@@ -1822,62 +1963,107 @@ const HostModal: React.FC<HostModalProps> = ({
                                                         )}
                                                     />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.clash.max_connections"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.maxConnections")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value ?? ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.clash.max_connections"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.maxConnections")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value ?? ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.clash.max_streams"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.maxStreams")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value ?? ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.clash.min_streams"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.minStreams")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value ?? ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="mux_settings.clash.min_streams"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>{t("hostsDialog.minStreams")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        {...field}
-                                                                        value={field.value ?? ""}
-                                                                        onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="mux_settings.clash.max_streams"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>{t("hostsDialog.maxStreams")}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value ?? ""}
+                                                                            onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-sm font-medium">{t("hostsDialog.brutal.title")}</h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="mux_settings.clash.brutal.up_mbps"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>{t("hostsDialog.brutal.upMbps")}</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                {...field}
+                                                                                value={field.value ?? ""}
+                                                                                onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormMessage />
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="mux_settings.clash.brutal.down_mbps"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>{t("hostsDialog.brutal.downMbps")}</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                {...field}
+                                                                                value={field.value ?? ""}
+                                                                                onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormMessage />
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </div>
+                                                    </div>
 
                                                     <FormField
                                                         control={form.control}

@@ -56,7 +56,29 @@
   "created": "Created",
   "by": "by",
   "ip": "IP",
-  "admins": "Admins",
+  "admins": {
+    "title": "Admins",
+    "description": "Manage system administrators",
+    "createAdmin": "Create Admin",
+    "editAdmin": "Edit Admin",
+    "deleteAdmin": "Delete Admin",
+    "username": "Username",
+    "password": "Password",
+    "isSudo": "Super Admin",
+    "createdAt": "Created At",
+    "actions": "Actions",
+    "createSuccess": "Admin created successfully",
+    "createFailed": "Failed to create admin",
+    "editSuccess": "Admin updated successfully",
+    "editFailed": "Failed to update admin",
+    "deleteSuccess": "Admin deleted successfully",
+    "deleteFailed": "Failed to delete admin",
+    "enterUsername": "Enter username",
+    "enterPassword": "Enter password",
+    "sudo": "Super Admin Privileges",
+    "edit": "Save Changes",
+    "create": "Create Admin"
+  },
   "manageAccounts": "Control, Update, and Arrange User Accounts",
   "manageGroups": "Control, Update, and Arrange User Groups",
   "manageNodes": "Monitor, control, add, edit, delete nodes",
@@ -226,7 +248,7 @@
       "addNoise": "Add Noise",
       "removeNoise": "Remove Noise",
       "packet": "Packet",
-      "packetPlaceholder": "Select packet type",
+      "packetPlaceholder": "Enter packet value (e.g. rand:10-20)",
       "delay": "Delay",
       "delayPlaceholder": "Enter delay",
       "rand": "Random",
@@ -255,6 +277,7 @@
     "statistic": "Enable Statistics",
     "onlyTcp": "Only TCP",
     "brutal": {
+      "title": "Brutal Settings",
       "upMbps": "Upload Speed (Mbps)",
       "downMbps": "Download Speed (Mbps)"
     },
@@ -290,7 +313,8 @@
     "host.info": "By default, if a request host is set in the XRAY configuration, it will be used. However, if needed, you can set a custom request host here.",
     "host.multiHost": "To set multiple addresses, separate them with <badge>,</badge>. A random address will be selected each time.",
     "host.wildcard": "Use <badge>*</badge> to generate a random string (works for wildcard domains)",
-    "sni.info": "SNI (Server Name Indication) is used to specify which hostname the client is trying to connect to. This is particularly useful when you have multiple domains pointing to the same IP address."
+    "sni.info": "SNI (Server Name Indication) is used to specify which hostname the client is trying to connect to. This is particularly useful when you have multiple domains pointing to the same IP address.",
+    "useSniAsHost": "Use SNI as Host"
   },
   "inbound": "Inbound",
   "remark": "Host Name",
@@ -474,5 +498,11 @@
     "configurationError": "Configuration Error",
     "validateConfig": "Validate Configuration",
     "fillRequiredFields": "Please fill out all required fields before checking status"
+  },
+  "theme": {
+    "toggle": "Toggle theme",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
   }
 }

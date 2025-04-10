@@ -55,7 +55,29 @@
   "created": "已创建",
   "by": "由",
   "ip": "IP",
-  "admins": "管理员",
+  "admins": {
+    "title": "管理员",
+    "description": "管理系统管理员",
+    "createAdmin": "创建管理员",
+    "editAdmin": "编辑管理员",
+    "deleteAdmin": "删除管理员",
+    "username": "用户名",
+    "password": "密码",
+    "isSudo": "超级管理员",
+    "createdAt": "创建时间",
+    "actions": "操作",
+    "createSuccess": "管理员创建成功",
+    "createFailed": "创建管理员失败",
+    "editSuccess": "管理员更新成功",
+    "editFailed": "更新管理员失败",
+    "deleteSuccess": "管理员删除成功",
+    "deleteFailed": "删除管理员失败",
+    "enterUsername": "请输入用户名",
+    "enterPassword": "请输入密码",
+    "sudo": "超级管理员权限",
+    "edit": "保存更改",
+    "create": "创建管理员"
+  },
   "manageAccounts": "控制、更新和排列用户账户",
   "manageGroups": "控制、更新和排列用户组",
   "manageNodes": "监控、控制、添加、编辑和删除节点",
@@ -108,7 +130,7 @@
   "header.nodesUsage": "节点统计",
   "hostsDialog.addHost": "添加主机",
   "hostsDialog.advancedOptions": "高级选项",
-  "hostsDialog.useSniAsHost": "Use sni as host",
+  "hostsDialog.useSniAsHost": "使用 SNI 作为主机名",
   "hostsDialog.alpn": "ALPN",
   "hostsDialog.apply": "保存",
   "hostsDialog.currentServer": "当前服务器的 IP 地址",
@@ -136,7 +158,7 @@
     "addNoise": "添加噪声",
     "removeNoise": "删除噪声",
     "packet": "数据包",
-    "packetPlaceholder": "选择数据包类型",
+    "packetPlaceholder": "输入数据包值（例如：rand:10-20）",
     "delay": "延迟",
     "delayPlaceholder": "输入延迟",
     "rand": "随机"
@@ -159,7 +181,7 @@
   "hostsDialog.proxyOutbound": "代理出站 json",
   "hostsDialog.proxyOutbound.info": "额外出站（仅在 v2ray 自定义配置中）",
   "hostsDialog.proxyProtocol": "代理协议（例如 VMess）",
-  "hostsDialog.randomUserAgent": "使用随机用户代理",
+  "hostsDialog.randomUserAgent": "使用随机 User-Agent",
   "hostsDialog.remainingData": "用户剩余流量情况",
   "hostsDialog.remainingDays": "用户的剩余天数",
   "hostsDialog.remainingTime": "用户剩余时间",
@@ -331,7 +353,7 @@
     "alpn": "ALPN",
     "allowInsecure": "允许不安全连接",
     "muxEnable": "启用 MUX",
-    "randomUserAgent": "使用随机用户代理",
+    "randomUserAgent": "使用随机 User-Agent",
     "inboundDefault": "入站默认值",
     "earlyData": "早期数据",
     "httpHeaders": "HTTP 标头",
@@ -413,6 +435,7 @@
     "statistic": "启用统计",
     "onlyTcp": "仅 TCP",
     "brutal": {
+      "title": "Brutal 设置",
       "upMbps": "上传速度 (Mbps)",
       "downMbps": "下载速度 (Mbps)"
     },
@@ -450,11 +473,13 @@
     "createFailed": "创建群组「{{name}}」失败",
     "editSuccess": "群组「{{name}}」已成功更新",
     "editFailed": "更新群组「{{name}}」失败",
-    "disableSuccess": "群组「{{name}}」已成功禁用",
-    "disableFailed": "禁用群组「{{name}}」失败",
     "deleteSuccess": "群组「{{name}}」已成功删除",
     "deleteFailed": "删除群组「{{name}}」失败",
-    "deleteConfirm": "您确定要删除群组「{{name}}」吗？"
+    "deleteConfirm": "您确定要删除群组「{{name}}」吗？",
+    "enableSuccess": "群组「{{name}}」已成功启用",
+    "enableFailed": "启用群组「{{name}}」失败",
+    "disableSuccess": "群组「{{name}}」已成功禁用",
+    "disableFailed": "禁用群组「{{name}}」失败"
   },
   "name": "名称",
   "nodeModal": {
@@ -489,5 +514,11 @@
     "configurationError": "配置错误",
     "validateConfig": "验证配置",
     "fillRequiredFields": "请在检查状态之前填写所有必填字段"
+  },
+  "theme": {
+    "toggle": "切换主题",
+    "dark": "深色",
+    "light": "浅色",
+    "system": "系统"
   }
 }

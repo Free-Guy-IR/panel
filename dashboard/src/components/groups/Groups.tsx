@@ -64,7 +64,7 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
       
       // Invalidate the groups query to refresh the list
       queryClient.invalidateQueries({
-        queryKey: ["getGetAllGroupsQueryKey"],
+        queryKey: ['/api/groups']
       })
     } catch (error) {
       toast({

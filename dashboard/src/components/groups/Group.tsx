@@ -73,7 +73,7 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
         })
       })
       setShowDeleteDialog(false)
-      queryClient.invalidateQueries({ queryKey: ['getGetAllGroupsQueryKey'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/groups'] })
     } catch (error) {
       toast({
         title: t('error', { defaultValue: 'Error' }),

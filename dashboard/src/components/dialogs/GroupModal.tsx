@@ -62,7 +62,7 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
         })
       }
       // Invalidate groups queries after successful action
-      queryClient.invalidateQueries({ queryKey: ['getGetAllGroupsQueryKey'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/groups'] })
       onOpenChange(false)
       form.reset()
     } catch (error: any) {

@@ -1,23 +1,22 @@
 import { setupColumns } from '@/components/users-table/columns'
 import { DataTable } from '@/components/users-table/data-table'
 import { Filters } from '@/components/users-table/filters'
-import { useDashboard } from '@/contexts/DashboardContext'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { useEffect } from 'react'
+import { useGetUsers } from '@/service/api'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { getUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
 
 const UsersTable = () => {
   const { t } = useTranslation()
   const dir = useDirDetection()
-  const {
-    filters,
-    onFilterChange,
-    users: { users },
-  } = useDashboard()
+  const [filters, setFilters] = useState({
+    limit: getUsersPerPageLimitSize(),
+    sort: '-created_at',
+    load_sub: true
+  })
 
-  useEffect(() => {
-    useDashboard.getState().refetchUsers()
-  }, [filters])
+  const { data: usersData } = useGetUsers(filters)
 
   const handleSort = (column: string) => {
     let newSort: string
@@ -30,15 +29,20 @@ const UsersTable = () => {
       newSort = column
     }
 
-    onFilterChange({ sort: newSort })
+    setFilters(prev => ({ ...prev, sort: newSort }))
   }
 
   const handleStatusFilter = (value: any) => {
     const newValue = value === '0' ? '' : value
 
-    onFilterChange({
+    setFilters(prev => ({
+      ...prev,
       status: value.length > 0 ? newValue : undefined,
-    })
+    }))
+  }
+
+  const handleFilterChange = (newFilters: Partial<typeof filters>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }))
   }
 
   const columns = setupColumns({
@@ -51,8 +55,8 @@ const UsersTable = () => {
 
   return (
     <div>
-      <Filters />
-      <DataTable columns={columns} data={users} />
+      <Filters filters={filters} onFilterChange={handleFilterChange} />
+      <DataTable columns={columns} data={usersData?.users || []} />
     </div>
   )
 }
