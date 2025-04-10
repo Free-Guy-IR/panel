@@ -1,6 +1,5 @@
 from tests.api import client
 from fastapi import status
-from tests.api.test_admin import test_admin_login
 from tests.api.test_group import test_groups_get
 
 host_data = {
@@ -13,11 +12,10 @@ host_data = {
 }
 
 
-def test_host_create():
+def test_host_create(access_token):
     """Test that the host create route is accessible."""
 
-    groups = test_groups_get()
-    access_token = test_admin_login()
+    groups = test_groups_get(access_token)
 
     for i, group in enumerate(groups):
         for j, inbound in enumerate(group["inbound_tags"]):
@@ -38,9 +36,8 @@ def test_host_create():
             assert response.json()["inbound_tag"] == inbound
 
 
-def test_host_get():
+def test_host_get(access_token):
     """Test that the host get route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         "/api/hosts",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -49,9 +46,8 @@ def test_host_get():
     assert len(response.json()) > 0
 
 
-def test_host_update():
+def test_host_update(access_token):
     """Test that the host update route is accessible."""
-    access_token = test_admin_login()
     response = client.put(
         "/api/host/1",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -73,9 +69,8 @@ def test_host_update():
     assert response.json()["inbound_tag"] == "Trojan Websocket TLS"
 
 
-def test_host_delete():
+def test_host_delete(access_token):
     """Test that the host delete route is accessible."""
-    access_token = test_admin_login()
     response = client.delete(
         "/api/host/1",
         headers={"Authorization": f"Bearer {access_token}"},

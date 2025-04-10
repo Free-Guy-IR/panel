@@ -1,11 +1,9 @@
 from tests.api import client
 from fastapi import status
-from tests.api.test_admin import test_admin_login
 
 
-def test_user_template_create():
+def test_user_template_create(access_token):
     """Test that the user template create route is accessible."""
-    access_token = test_admin_login()
     response = client.post(
         "/api/user_template",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -23,9 +21,8 @@ def test_user_template_create():
     assert response.json()["expire_duration"] == 3600
 
 
-def test_user_template_get():
+def test_user_template_get(access_token):
     """Test that the user template get route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         "/api/user_template",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -34,9 +31,8 @@ def test_user_template_get():
     assert len(response.json()) > 0
 
 
-def test_user_template_update():
+def test_user_template_update(access_token):
     """Test that the user template update route is accessible."""
-    access_token = test_admin_login()
     response = client.put(
         "/api/user_template/1",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -52,9 +48,8 @@ def test_user_template_update():
     assert response.json()["expire_duration"] == (86400 * 30)
 
 
-def test_user_template_get_by_id():
+def test_user_template_get_by_id(access_token):
     """Test that the user template get by id route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         "/api/user_template/1",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -66,9 +61,8 @@ def test_user_template_get_by_id():
     assert response.json()["expire_duration"] == (86400 * 30)
 
 
-def test_user_template_delete():
+def test_user_template_delete(access_token):
     """Test that the user template delete route is accessible."""
-    access_token = test_admin_login()
     response = client.delete(
         "/api/user_template/1",
         headers={"Authorization": f"Bearer {access_token}"},

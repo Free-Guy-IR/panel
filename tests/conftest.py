@@ -10,7 +10,7 @@ sys.path.insert(0, project_root)
 
 # Override the config module for tests
 import config  # noqa
-from tests.api import XRAY_JSON_TEST_FILE  # noqa
+from tests.api import XRAY_JSON_TEST_FILE, client  # noqa
 
 config.TESTING = True
 config.XRAY_JSON = XRAY_JSON_TEST_FILE

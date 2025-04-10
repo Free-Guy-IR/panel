@@ -1,12 +1,10 @@
 from datetime import timedelta, datetime, timezone
 from tests.api import client
 from fastapi import status
-from tests.api.test_admin import test_admin_login
 
 
-def test_user_create_active():
+def test_user_create_active(access_token):
     """Test that the user create active route is accessible."""
-    access_token = test_admin_login()
     expire = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=30)
     response = client.post(
         "/api/user",
@@ -39,9 +37,8 @@ def test_user_create_active():
     assert response_formatted == expected_formatted
 
 
-def test_user_create_on_hold():
+def test_user_create_on_hold(access_token):
     """Test that the user create on hold route is accessible."""
-    access_token = test_admin_login()
     expire = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=30)
     response = client.post(
         "/api/user",
@@ -76,9 +73,8 @@ def test_user_create_on_hold():
     assert response_formatted == expected_formatted
 
 
-def test_users_get():
+def test_users_get(access_token):
     """Test that the user get route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         "/api/users",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -87,9 +83,8 @@ def test_users_get():
     assert len(response.json()["users"]) > 0
 
 
-def test_user_get():
+def test_user_get(access_token):
     """Test that the user get by id route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         "/api/users?username=test_user_active",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -99,9 +94,8 @@ def test_user_get():
     assert response.json()["users"][0]["username"] == "test_user_active"
 
 
-def test_user_update():
+def test_user_update(access_token):
     """Test that the user update route is accessible."""
-    access_token = test_admin_login()
     response = client.put(
         "/api/user/test_user_active",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -116,9 +110,8 @@ def test_user_update():
     assert response.json()["data_limit"] == (1024 * 1024 * 1024 * 10)
 
 
-def test_user_delete():
+def test_user_delete(access_token):
     """Test that the user delete route is accessible."""
-    access_token = test_admin_login()
     response = client.delete(
         "/api/user/test_user_active",
         headers={"Authorization": f"Bearer {access_token}"},

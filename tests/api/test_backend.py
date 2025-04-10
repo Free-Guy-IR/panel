@@ -1,5 +1,4 @@
 from tests.api import client
-from tests.api.test_admin import test_admin_login
 from fastapi import status
 
 xray_config = {
@@ -306,10 +305,9 @@ xray_config = {
 }
 
 
-def test_backend_update():
+def test_backend_update(access_token):
     """Test that the backend update route is accessible."""
 
-    access_token = test_admin_login()
     response = client.put(
         url="/api/backend",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -319,10 +317,9 @@ def test_backend_update():
     assert response.json() == xray_config
 
 
-def test_backend_get():
+def test_backend_get(access_token):
     """Test that the backend get route is accessible."""
 
-    access_token = test_admin_login()
     response = client.get(
         url="/api/backend",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -331,10 +328,9 @@ def test_backend_get():
     assert response.json() == xray_config
 
 
-def test_inbounds_get():
+def test_inbounds_get(access_token):
     """Test that the inbounds get route is accessible."""
 
-    access_token = test_admin_login()
     response = client.get(
         url="/api/inbounds",
         headers={"Authorization": f"Bearer {access_token}"},

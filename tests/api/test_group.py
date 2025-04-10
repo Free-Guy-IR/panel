@@ -1,16 +1,14 @@
 import random
 from fastapi import status
 from tests.api import client
-from tests.api.test_admin import test_admin_login
 
 
 group_names = ["testgroup", "testgroup2", "testgroup3"]
 
 
-def test_group_create():
+def test_group_create(access_token):
     """Test that the group create route is accessible."""
 
-    access_token = test_admin_login()
     inbounds = client.get(
         url="/api/inbounds",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -32,9 +30,8 @@ def test_group_create():
             assert inbound in random_inbound
 
 
-def test_group_update():
+def test_group_update(access_token):
     """Test that the group update route is accessible."""
-    access_token = test_admin_login()
     response = client.put(
         url="/api/group/1",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -45,9 +42,8 @@ def test_group_update():
     assert response.json()["is_disabled"] is True
 
 
-def test_group_delete():
+def test_group_delete(access_token):
     """Test that the group delete route is accessible."""
-    access_token = test_admin_login()
     response = client.delete(
         url="/api/group/1",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -55,9 +51,8 @@ def test_group_delete():
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
-def test_group_get_by_id():
+def test_group_get_by_id(access_token):
     """Test that the group get by id route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         url="/api/group/2",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -66,9 +61,8 @@ def test_group_get_by_id():
     assert response.json()["name"] == "testgroup2"
 
 
-def test_groups_get():
+def test_groups_get(access_token):
     """Test that the group get route is accessible."""
-    access_token = test_admin_login()
     response = client.get(
         url="/api/groups",
         headers={"Authorization": f"Bearer {access_token}"},
