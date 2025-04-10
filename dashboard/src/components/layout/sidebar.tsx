@@ -23,7 +23,7 @@ const data = {
       icon: UsersIcon,
     },
     {
-      title: "admins",
+      title: "admins.title",
       url: "/admins",
       icon: UserCog,
     },
