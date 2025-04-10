@@ -48,6 +48,43 @@ const HostModal: React.FC<HostModalProps> = ({
     const { t } = useTranslation();
     const dir = useDirDetection();
 
+    const cleanPayload = (data: any): any => {
+        // Helper function to check if an object has any non-empty values
+        const hasNonEmptyValues = (obj: any): boolean => {
+            if (!obj || typeof obj !== 'object') return false;
+            return Object.values(obj).some(value => {
+                if (value === null || value === undefined || value === '') return false;
+                if (typeof value === 'object') return hasNonEmptyValues(value);
+                return true;
+            });
+        };
+
+        // Helper function to clean nested objects
+        const cleanObject = (obj: any, path: string[] = []): any => {
+            const result: any = {};
+            Object.entries(obj).forEach(([key, value]) => {
+                const currentPath = [...path, key];
+                if (value === null || value === undefined || value === '') return;
+                
+                if (typeof value === 'object' && !Array.isArray(value)) {
+                    const cleanedNested = cleanObject(value, currentPath);
+                    if (hasNonEmptyValues(cleanedNested)) {
+                        result[key] = cleanedNested;
+                    }
+                } else if (Array.isArray(value)) {
+                    if (value.length > 0) {
+                        result[key] = value;
+                    }
+                } else {
+                    result[key] = value;
+                }
+            });
+            return result;
+        };
+
+        return cleanObject(data);
+    };
+
     const handleModalOpenChange = (open: boolean) => {
         if (!open) {
             // Let the parent component handle the form reset
@@ -67,7 +104,10 @@ const HostModal: React.FC<HostModalProps> = ({
 
     const handleSubmit = async (data: HostFormValues) => {
         try {
-            const response = await onSubmit(data);
+            // Clean the payload before sending
+            const cleanedData = cleanPayload(data);
+            
+            const response = await onSubmit(cleanedData);
             if (response.status >= 400) {
                 throw new Error(`Operation failed with status: ${response.status}`);
             }
