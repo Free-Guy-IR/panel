@@ -7,8 +7,7 @@ import { AlertCircle, CheckCircle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from '../components/theme-provider'
 import Logs from '@/components/settings/Logs'
-import { useQuery } from '@tanstack/react-query'
-import { getCoreConfig, modifyCoreConfig } from '@/service/api'
+import { useGetBackendConfig, useModifyBackendConfig } from '@/service/api'
 import { toast } from '@/hooks/use-toast'
 import { useTranslation } from 'react-i18next'
 
@@ -48,10 +47,8 @@ interface ValidationResult {
 }
 
 export default function CoreSettings() {
-  const { data, error, isLoading } = useQuery({
-    queryKey: ["getGetCoreConfigQueryKey"],
-    queryFn: () => getCoreConfig(),
-  });
+  const { data, error, isLoading } = useGetBackendConfig(1)
+  const { mutate: modifyConfig } = useModifyBackendConfig()
   const [config, setConfig] = useState(JSON.stringify(data, null, 2))
   const [validation, setValidation] = useState<ValidationResult>({ isValid: true })
   const [isEditorReady, setIsEditorReady] = useState(false)
@@ -108,21 +105,30 @@ export default function CoreSettings() {
 
   const handleSave = async () => {
     try {
-      const response = await modifyCoreConfig({ data: JSON.parse(config) });
-      if (response.status === 200) {
-        toast({
-          description: t("settings.core.saveSuccess"),
-        });
-      } else {
-        throw new Error(`Failed to save config: ${response.status}`);
-      }
+      modifyConfig({
+        backendId: 1,
+        data: JSON.parse(config),
+        params: { restart_nodes: true }
+      }, {
+        onSuccess: () => {
+          toast({
+            description: t("settings.core.saveSuccess"),
+          })
+        },
+        onError: () => {
+          toast({
+            variant: "destructive",
+            description: t("settings.core.saveFailed"),
+          })
+        }
+      })
     } catch (error) {
       toast({
         variant: "destructive",
         description: t("settings.core.saveFailed"),
-      });
+      })
     }
-  };
+  }
 
   return (
     <div className="flex flex-col gap-y-6 pt-4">

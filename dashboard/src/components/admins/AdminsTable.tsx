@@ -2,18 +2,12 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useTranslation } from 'react-i18next'
 import { Edit2, Trash2 } from 'lucide-react'
-
-interface Admin {
-  id: string
-  username: string
-  is_sudo: boolean
-  created_at: string
-}
+import type { AdminDetails } from '@/service/api'
 
 interface AdminsTableProps {
-  data: Admin[]
-  onEdit: (admin: Admin) => void
-  onDelete: (admin: Admin) => void
+  data: AdminDetails[]
+  onEdit: (admin: AdminDetails) => void
+  onDelete: (admin: AdminDetails) => void
 }
 
 export default function AdminsTable({ data, onEdit, onDelete }: AdminsTableProps) {
@@ -26,16 +20,14 @@ export default function AdminsTable({ data, onEdit, onDelete }: AdminsTableProps
           <TableRow>
             <TableHead>{t('username')}</TableHead>
             <TableHead>{t('role')}</TableHead>
-            <TableHead>{t('createdAt')}</TableHead>
             <TableHead className="text-right">{t('actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.map((admin) => (
-            <TableRow key={admin.id}>
+            <TableRow key={admin.username}>
               <TableCell>{admin.username}</TableCell>
               <TableCell>{admin.is_sudo ? t('sudo') : t('admin')}</TableCell>
-              <TableCell>{new Date(admin.created_at).toLocaleDateString()}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   <Button

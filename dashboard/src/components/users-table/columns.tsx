@@ -147,7 +147,7 @@ export const setupColumns = ({
           total={row.original.data_limit}
           used={row.original.used_traffic}
           totalUsedTraffic={row.original.lifetime_used_traffic}
-          dataLimitResetStrategy={row.original.data_limit_reset_strategy}
+          dataLimitResetStrategy={row.original.data_limit_reset_strategy || undefined}
           status={row.original.status}
         />
         <div className="hidden md:block w-[200px] px-4 py-1">

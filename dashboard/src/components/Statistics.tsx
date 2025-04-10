@@ -30,20 +30,15 @@ const StatisticCard: FC<PropsWithChildren<StatisticCardProps>> = ({ title, conte
   )
 }
 
-export const StatisticsQueryKey = ['statistics-query-key']
+export const StatisticsQueryKey = ['systemStats']
 
-export const Statistics: FC = () => {
-  //   const { version } = useDashboard()
+export const Statistics = () => {
+  const { t } = useTranslation()
   const { data: systemData } = useGetSystemStats({
     query: {
       refetchInterval: 5000,
-      // TODO: FIX THIS
-      // onSuccess: ({ version: currentVersion }) => {
-      //   if (version !== currentVersion) useDashboard.setState({ version: currentVersion })
-      // },
     },
   })
-  const { t } = useTranslation()
 
   return (
     <div className="flex flex-wrap justify-between gap-4">
@@ -52,23 +47,27 @@ export const Statistics: FC = () => {
         content={
           systemData && (
             <div className="flex items-end">
-              <Textarea>{numberWithCommas(systemData.users_active)}</Textarea>
-              <Textarea className="font-normal Textarea-lg inline-block pb-[5px]">/ {numberWithCommas(systemData.total_user)}</Textarea>
+              <span>{numberWithCommas(systemData.users_active)}</span>
+              <span className="font-normal text-lg inline-block pb-[5px]">/ {numberWithCommas(systemData.total_user)}</span>
             </div>
           )
         }
         icon={<TotalUsersIcon className="w-5 h-5" />}
       />
-      <StatisticCard title={t('dataUsage')} content={systemData && formatBytes(systemData.incoming_bandwidth + systemData.outgoing_bandwidth)} icon={<NetworkIcon className="w-5 h-5" />} />
+      <StatisticCard 
+        title={t('dataUsage')} 
+        content={systemData && formatBytes(systemData.incoming_bandwidth + systemData.outgoing_bandwidth)} 
+        icon={<NetworkIcon className="w-5 h-5" />}
+      />
       <StatisticCard
         title={t('memoryUsage')}
         content={
           systemData && (
             <div className="flex items-end">
-              <Textarea>{formatBytes(systemData.mem_used, 1, true)[0]}</Textarea>
-              <Textarea className="font-normal text-lg inline-block pb-[5px]">
+              <span>{formatBytes(systemData.mem_used, 1, true)[0]}</span>
+              <span className="font-normal text-lg inline-block pb-[5px]">
                 {formatBytes(systemData.mem_used, 1, true)[1]} / {formatBytes(systemData.mem_total, 1)}
-              </Textarea>
+              </span>
             </div>
           )
         }
