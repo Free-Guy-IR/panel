@@ -30,8 +30,7 @@ class AdminOperation(BaseOperator):
         try:
             db_admin = await create_admin(db, new_admin)
         except IntegrityError:
-            await db.rollback()
-            self.raise_error(message="Admin already exists", code=409)
+            await self.raise_error(message="Admin already exists", code=409, db=db)
 
         if self.operator_type != OperatorType.CLI:
             logger.info(f'New admin "{db_admin.username}" with id "{db_admin.id}" added by admin "{admin.username}"')
@@ -46,7 +45,7 @@ class AdminOperation(BaseOperator):
         """Modify an existing admin's details."""
         db_admin = await self.get_validated_admin(db, username=username)
         if self.operator_type != OperatorType.CLI and db_admin.username == current_admin.username and db_admin.is_sudo:
-            self.raise_error(
+            await self.raise_error(
                 message="You're not allowed to edit another sudoer's account. Use marzban-cli instead.", code=403
             )
 
@@ -69,7 +68,7 @@ class AdminOperation(BaseOperator):
             and (db_admin.username == current_admin.username)
             and db_admin.is_sudo
         ):
-            self.raise_error(
+            await self.raise_error(
                 message="You're not allowed to delete sudoer's account. Use marzban-cli instead.", code=403
             )
 
@@ -90,7 +89,7 @@ class AdminOperation(BaseOperator):
         db_admin = await self.get_validated_admin(db, username=username)
 
         if db_admin.is_sudo:
-            self.raise_error(message="You're not allowed to disable sudo admin users.", code=403)
+            await self.raise_error(message="You're not allowed to disable sudo admin users.", code=403)
 
         await disable_all_active_users(db=db, admin_id=db_admin.id)
 
@@ -104,7 +103,7 @@ class AdminOperation(BaseOperator):
         db_admin = await self.get_validated_admin(db, username=username)
 
         if db_admin.is_sudo:
-            self.raise_error(message="You're not allowed to enable sudo admin users.", code=403)
+            await self.raise_error(message="You're not allowed to enable sudo admin users.", code=403)
 
         await activate_all_disabled_users(db=db, admin_id=db_admin.id)
 

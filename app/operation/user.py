@@ -65,8 +65,7 @@ class UserOperator(BaseOperator):
         try:
             db_user = await create_user(db, new_user, all_groups, db_admin)
         except IntegrityError:
-            await db.rollback()
-            self.raise_error(message="User already exists", code=409)
+            await self.raise_error(message="User already exists", code=409, db=db)
 
         user = await self.validate_user(db_user)
 
@@ -163,7 +162,7 @@ class UserOperator(BaseOperator):
         db_user = await self.get_validated_user(db, username, admin)
 
         if db_user is None or db_user.next_plan is None:
-            self.raise_error(message="User doesn't have next plan", code=404)
+            await self.raise_error(message="User doesn't have next plan", code=404)
 
         old_status = db_user.status
 
@@ -205,7 +204,7 @@ class UserOperator(BaseOperator):
         period: Period = Period.hour,
         node_id: int | None = None,
     ) -> list[UserUsageStats]:
-        start, end = self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end)
         db_user = await self.get_validated_user(db, username, admin)
 
         return await get_user_usages(db, db_user.id, start, end, period, node_id)
@@ -236,7 +235,7 @@ class UserOperator(BaseOperator):
                     enum_member = UsersSortingOptions[opt]
                     sort_list.append(enum_member.value)
                 except KeyError:
-                    self.raise_error(message=f'"{opt}" is not a valid sort option', code=400)
+                    await self.raise_error(message=f'"{opt}" is not a valid sort option', code=400)
 
         users, count = await get_users(
             db=db,
@@ -267,7 +266,7 @@ class UserOperator(BaseOperator):
         node_id: int | None = None,
     ) -> list[UserUsageStats]:
         """Get all users usage"""
-        start, end = self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end)
 
         return await get_all_users_usages(
             db=db,
@@ -295,7 +294,7 @@ class UserOperator(BaseOperator):
         - If both are omitted, returns all expired users
         """
 
-        expired_after, expired_before = self.validate_dates(expired_after, expired_before)
+        expired_after, expired_before = await self.validate_dates(expired_after, expired_before)
         if not admin.is_sudo:
             id = (await self.get_validated_admin(db, admin.username)).id
         else:
@@ -314,7 +313,7 @@ class UserOperator(BaseOperator):
         - At least one of expired_after or expired_before must be provided
         """
 
-        expired_after, expired_before = self.validate_dates(expired_after, expired_before)
+        expired_after, expired_before = await self.validate_dates(expired_after, expired_before)
         if not admin.is_sudo:
             id = (await self.get_validated_admin(db, admin.username)).id
         else:

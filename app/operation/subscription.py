@@ -192,7 +192,7 @@ class SubscriptionOperator(BaseOperator):
         period: Period = Period.hour,
     ) -> list[UserUsageStats]:
         """Fetches the usage statistics for the user within a specified date range."""
-        start, end = self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end)
 
         db_user = await self.get_validated_sub(db, token=token)
 

@@ -21,10 +21,8 @@ class UserTemplateOperation(BaseOperator):
             await self.get_validated_group(db, group_id)
         try:
             db_user_template = await create_user_template(db, new_user_template)
-
         except IntegrityError:
-            db.rollback()
-            self.raise_error("Template by this name already exists", 409)
+            await self.raise_error("Template by this name already exists", 409, db=db)
 
         user_template = UserTemplateResponse.model_validate(db_user_template)
 
@@ -43,8 +41,7 @@ class UserTemplateOperation(BaseOperator):
         try:
             db_user_template = await update_user_template(db, db_user_template, modify_user_template)
         except IntegrityError:
-            db.rollback()
-            self.raise_error("Template by this name already exists", 409)
+            await self.raise_error("Template by this name already exists", 409, db=db)
 
         user_template = UserTemplateResponse.model_validate(db_user_template)
 

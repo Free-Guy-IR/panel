@@ -17,8 +17,7 @@ class CoreOperation(BaseOperator):
             db_core = await create_core_config(db, new_core)
             await core_manager.update_core(db_core)
         except Exception as e:
-            await db.rollback()
-            self.raise_error(message=e, code=400)
+            await self.raise_error(message=e, code=400, db=db)
 
         logger.info(f'Core config "{db_core.id}" created by admin "{admin.username}"')
 
@@ -32,20 +31,18 @@ class CoreOperation(BaseOperator):
         self, db: AsyncSession, core_id: int, modified_core: CoreCreate, admin: AdminDetails
     ) -> CoreConfig:
         db_core = await self.get_validated_core_config(db, core_id)
-        db_core = await modify_core_config(db, db_core, modified_core)
         try:
             db_core = await modify_core_config(db, db_core, modified_core)
             await core_manager.update_core(db_core)
         except Exception as e:
-            await db.rollback()
-            self.raise_error(message=e, code=400)
+            await self.raise_error(message=e, code=400, db=db)
 
         logger.info(f'Core config "{db_core.name}" modified by admin "{admin.username}"')
         return db_core
 
     async def delete_core(self, db: AsyncSession, core_id: int, admin: AdminDetails) -> None:
         if core_id == 1:
-            self.raise_error(message="Cannot delete default core config", code=403)
+            await self.raise_error(message="Cannot delete default core config", code=403)
 
         db_core = await self.get_validated_core_config(db, core_id)
 
