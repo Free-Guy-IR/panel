@@ -28,8 +28,10 @@ class HostOperator(BaseOperator):
             ds_host = await get_host_by_id(db, nested_host)
             if not ds_host:
                 return self.raise_error("download host not found", 404)
-            if ds_host.transport_settings and ds_host.transport_settings.get("xhttp_settings", {}).get(
-                "download_settings"
+            if (
+                ds_host.transport_settings
+                and ds_host.transport_settings.get("xhttp_settings")
+                and ds_host.transport_settings.get("xhttp_settings").get("download_settings")
             ):
                 return self.raise_error("download host cannot have a download host", 400)
 

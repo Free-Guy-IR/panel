@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import on_startup
 from app.backend import backend_manager
 from app.db import GetDB
-from app.db.crud import get_hosts, get_host_by_id, get_or_create_inbound
+from app.db.crud import get_host_by_id, get_hosts, get_or_create_inbound
 from app.db.models import ProxyHostSecurity
 from app.utils.store import DictStorage
 
@@ -21,8 +21,10 @@ async def hosts(storage: dict, db: AsyncSession):
         if host.is_disabled or (host.inbound_tag not in inbounds_list):
             continue
         downstream = None
-        if host.transport_settings and (
-            ds_host := host.transport_settings.get("xhttp_settings", {}).get("download_settings")
+        if (
+            host.transport_settings
+            and host.transport_settings.get("xhttp_settings")
+            and (ds_host := host.transport_settings.get("xhttp_settings", {}).get("download_settings"))
         ):
             downstream = await get_host_by_id(db, ds_host)
 

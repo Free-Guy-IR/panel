@@ -1863,7 +1863,7 @@ async def get_group(db: AsyncSession, offset: int = None, limit: int = None) -> 
     count = (await db.execute(count_query)).scalar_one()
 
     all_groups = (await db.execute(groups)).scalars().all()
-    return all_groups, count  
+    return all_groups, count
 
 
 async def get_groups_by_ids(db: AsyncSession, group_ids: list[int]) -> list[Group]:
