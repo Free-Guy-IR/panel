@@ -1798,9 +1798,7 @@ async def get_inbounds_by_tags(db: AsyncSession, tags: list[str]) -> list[ProxyI
 
 def get_group_queryset() -> Query:
     return select(Group).options(
-        selectinload(Group.inbounds),
         selectinload(Group.users),
-        selectinload(Group.templates),
     )
 
 
@@ -1860,8 +1858,12 @@ async def get_group(db: AsyncSession, offset: int = None, limit: int = None) -> 
     if limit:
         groups = groups.limit(limit)
 
+    count_query = select(func.count()).select_from(groups.subquery())
+
+    count = (await db.execute(count_query)).scalar_one()
+
     all_groups = (await db.execute(groups)).scalars().all()
-    return all_groups, len(all_groups)
+    return all_groups, count  
 
 
 async def get_groups_by_ids(db: AsyncSession, group_ids: list[int]) -> list[Group]:
