@@ -18,7 +18,7 @@ from app.db.crud import (
     get_users,
 )
 from app.node import node_manager
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app import notification
 
 logger = get_logger("admin-operator")

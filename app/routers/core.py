@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 
-from app.backend.hosts import hosts as hosts_storage
+from app.core.hosts import hosts as hosts_storage
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.core import CoreCreate, CoreResponse, CoreResponseList

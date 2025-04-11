@@ -4,7 +4,7 @@ from typing import Dict, List, Literal
 
 from telebot import types  # noqa
 
-from app import backend
+from app import core
 from app.utils.system import readable_size
 
 
@@ -254,7 +254,7 @@ class BotKeyboard:
                 )
 
         if action != "create_from_template":
-            for protocol, inbounds in backend.config.inbounds_by_protocol.items():
+            for protocol, inbounds in core.config.inbounds_by_protocol.items():
                 keyboard.add(
                     types.InlineKeyboardButton(
                         text=f"🌐 {protocol.upper()} {'✅' if protocol in selected_protocols else '❌'}",

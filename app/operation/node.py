@@ -21,7 +21,7 @@ from app.db.crud import (
     get_node_stats,
 )
 from app.db.base import GetDB
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app.node import get_tls, core_users, node_manager
 from app.utils.logger import get_logger
 from app import notification

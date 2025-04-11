@@ -4,7 +4,7 @@ from datetime import datetime as dt
 
 from sqlalchemy.exc import IntegrityError
 
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app.db import AsyncSession
 from app.db.crud import (
     create_user,

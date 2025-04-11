@@ -6,7 +6,7 @@ from app.db import GetDB, crud
 from app.db.models import UserStatus, UserDataLimitResetStrategy, User
 from app.models.user import UserResponse
 from app import notification
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app.node import node_manager
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.utils.logger import get_logger

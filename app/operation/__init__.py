@@ -18,7 +18,7 @@ from app.db.models import Admin as DBAdmin
 from app.db.models import Group, ProxyHost, User, Node, UserTemplate, CoreConfig
 from app.models.admin import AdminDetails
 from app.models.user import UserCreate, UserModify
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app.utils.jwt import get_subscription_payload
 
 

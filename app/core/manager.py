@@ -1,13 +1,12 @@
+from asyncio import Lock
 from copy import deepcopy
 
-from asyncio import Lock
-
-from .xray import XRayConfig
-from .abstract_backend import AbstractBackend
 from app import on_startup
+from app.core.abstract_backend import AbstractBackend
+from app.core.xray import XRayConfig
 from app.db import GetDB
-from app.db.models import CoreConfig
 from app.db.crud import get_core_configs
+from app.db.models import CoreConfig
 
 
 class CoreManager:
@@ -80,6 +79,3 @@ async def init_core_manager():
 
         for config in core_configs:
             await core_manager.update_core(config)
-
-
-__all__ = ["config", "XRayConfig"]

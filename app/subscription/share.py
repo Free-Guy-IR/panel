@@ -5,8 +5,8 @@ from collections import defaultdict
 from datetime import timezone, timedelta, datetime as dt
 from jdatetime import date as jd
 
-from app.backend.hosts import hosts as hosts_storage
-from app.backend import core_manager
+from app.core.hosts import hosts as hosts_storage
+from app.core.manager import core_manager
 from app.db.models import User, UserStatus
 from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 

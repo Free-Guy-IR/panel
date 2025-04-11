@@ -6,7 +6,7 @@ from app.models.host import CreateHost, BaseHost
 from app.models.admin import AdminDetails
 from app.operation import BaseOperator
 from app.db.crud import add_host, get_host_by_id, remove_host, get_hosts, modify_host
-from app.backend.hosts import hosts as hosts_storage
+from app.core.hosts import hosts as hosts_storage
 from app.utils.logger import get_logger
 
 from app import notification

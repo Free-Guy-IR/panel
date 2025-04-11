@@ -6,7 +6,7 @@ from app.db.crud import create_group, get_group, update_group, remove_group, get
 from app.models.group import Group, GroupCreate, GroupModify, GroupsResponse, GroupResponse
 from app.models.user import UserResponse
 from app.node import node_manager
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app.operation import BaseOperator
 from app.utils.logger import get_logger
 from app import notification

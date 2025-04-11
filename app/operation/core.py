@@ -3,7 +3,7 @@ from app.db.models import CoreConfig
 from app.db.crud import create_core_config, modify_core_config, remove_core_config, get_core_configs
 from app.models.admin import AdminDetails
 from app.models.core import CoreCreate, CoreResponseList, CoreResponse
-from app.backend import core_manager
+from app.core.manager import core_manager
 from app.operation import BaseOperator
 from app.utils.logger import get_logger
 

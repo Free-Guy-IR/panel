@@ -8,7 +8,7 @@ from app.models.admin import AdminDetails
 from app.models.system import SystemStats
 from app.db.models import UserStatus
 from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
-from app.backend import core_manager
+from app.core.manager import core_manager
 
 
 class SystemOperator(BaseOperator):

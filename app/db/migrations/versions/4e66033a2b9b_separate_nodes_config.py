@@ -11,7 +11,7 @@ import sqlalchemy as sa
 import commentjson
 from datetime import datetime as dt, timezone as tz
 
-from app.backend.xray import XRayConfig
+from app.core.xray import XRayConfig
 from config import XRAY_JSON, XRAY_FALLBACKS_INBOUND_TAGS, XRAY_EXCLUDE_INBOUND_TAGS
 
 
