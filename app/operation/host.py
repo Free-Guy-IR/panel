@@ -99,6 +99,23 @@ class HostOperator(BaseOperator):
         self, db: AsyncSession, modified_hosts: list[CreateHost], admin: AdminDetails
     ) -> list[BaseHost]:
         for host in modified_hosts:
+            if (
+                host.transport_settings
+                and host.transport_settings.xhttp_settings
+                and (nested_host := host.transport_settings.xhttp_settings.download_settings)
+            ):
+                if nested_host == host.id:
+                    return self.raise_error("download host cannot be the same as the host", 400)
+                ds_host = await get_host_by_id(db, nested_host)
+                if not ds_host:
+                    return self.raise_error("download host not found", 404)
+                if (
+                    ds_host.transport_settings
+                    and ds_host.transport_settings.get("xhttp_settings")
+                    and ds_host.transport_settings.get("xhttp_settings").get("download_settings")
+                ):
+                    return self.raise_error("download host cannot have a download host", 400)
+
             old_host: ProxyHost | None = None
             if host.id is not None:
                 old_host = await get_host_by_id(db, host.id)
