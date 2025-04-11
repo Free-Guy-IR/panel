@@ -21,8 +21,8 @@ from app.db.crud import (
     get_node_stats,
 )
 from app.db.base import GetDB
-from app.backend import backend_manager
-from app.node import get_tls, backend_users, node_manager
+from app.backend import core_manager
+from app.node import get_tls, core_users, node_manager
 from app.utils.logger import get_logger
 from app import notification
 
@@ -35,9 +35,9 @@ class NodeOperator(BaseOperator):
         return NodeSettings(certificate=(await get_tls()).certificate)
 
     async def get_db_nodes(
-        self, db: AsyncSession, backend_id: int | None = None, offset: int | None = None, limit: int | None = None
+        self, db: AsyncSession, core_id: int | None = None, offset: int | None = None, limit: int | None = None
     ) -> list[Node]:
-        return await get_nodes(db=db, backend_id=backend_id, offset=offset, limit=limit)
+        return await get_nodes(db=db, core_id=core_id, offset=offset, limit=limit)
 
     @staticmethod
     async def update_node_status(
@@ -87,13 +87,13 @@ class NodeOperator(BaseOperator):
             logger.info(f'Connecting to "{db_node.name}" node')
             await NodeOperator.update_node_status(db_node.id, NodeStatus.connecting)
 
-            backend = await backend_manager.get_backend(db_node.backend_config_id if db_node.backend_config_id else 1)
+            core = await core_manager.get_core(db_node.core_config_id if db_node.core_config_id else 1)
 
             try:
                 info = await gozargah_node.start(
-                    config=backend.to_str(),
+                    config=core.to_str(),
                     backend_type=0,
-                    users=await backend_users(db=db, inbounds=backend.inbounds),
+                    users=await core_users(db=db, inbounds=core.inbounds),
                     keep_alive=db_node.keep_alive,
                     timeout=10,
                 )
@@ -117,7 +117,7 @@ class NodeOperator(BaseOperator):
                 )
 
     async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
-        await self.get_validated_backend_config(db, new_node.backend_config_id)
+        await self.get_validated_core_config(db, new_node.core_config_id)
         try:
             db_node = await create_node(db, new_node)
         except IntegrityError:
@@ -140,7 +140,7 @@ class NodeOperator(BaseOperator):
         self, db: AsyncSession, node_id: Node, modified_node: NodeModify, admin: AdminDetails
     ) -> Node:
         db_node = await self.get_validated_node(db=db, node_id=node_id)
-        await self.get_validated_backend_config(db, modified_node.backend_config_id)
+        await self.get_validated_core_config(db, modified_node.core_config_id)
 
         try:
             db_node = await update_node(db, db_node, modified_node)
@@ -179,8 +179,8 @@ class NodeOperator(BaseOperator):
         asyncio.create_task(self.connect_node(node_id))
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
-    async def restart_all_node(self, db: AsyncSession, backend_id: int | None, admin: AdminDetails) -> None:
-        nodes: list[Node] = await self.get_db_nodes(db, backend_id)
+    async def restart_all_node(self, db: AsyncSession, core_id: int | None, admin: AdminDetails) -> None:
+        nodes: list[Node] = await self.get_db_nodes(db, core_id)
         await asyncio.gather(*[NodeOperator.connect_node(node.id) for node in nodes])
 
         logger.info(f'All nodes restarted by admin "{admin.username}"')
@@ -309,12 +309,10 @@ class NodeOperator(BaseOperator):
         if gozargah_node is None:
             self.raise_error(message="Node is not connected", code=409)
 
-        backend = await backend_manager.get_backend(db_node.backend_config_id or 1)
+        core = await core_manager.get_core(db_node.core_config_id or 1)
 
         try:
-            await gozargah_node.sync_users(
-                await backend_users(db=db, inbounds=backend.inbounds), flush_queue=flush_users
-            )
+            await gozargah_node.sync_users(await core_users(db=db, inbounds=core.inbounds), flush_queue=flush_users)
         except NodeAPIError as e:
             await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
             self.raise_error(message=e.detail, code=e.code)

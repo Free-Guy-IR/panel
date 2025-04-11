@@ -18,7 +18,7 @@ from app.db.crud import (
     get_users,
 )
 from app.node import node_manager
-from app.backend import backend_manager
+from app.backend import core_manager
 from app import notification
 
 logger = get_logger("admin-operator")
@@ -112,7 +112,7 @@ class AdminOperation(BaseOperator):
         await asyncio.gather(
             *[
                 node_manager.update_user(
-                    UserResponse.model_validate(user), user.inbounds(await backend_manager.get_inbounds())
+                    UserResponse.model_validate(user), user.inbounds(await core_manager.get_inbounds())
                 )
                 for user in users
             ]

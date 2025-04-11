@@ -47,7 +47,7 @@ async def get_nodes(
     _: AdminDetails = Depends(check_sudo_admin),
 ):
     """Retrieve a list of all nodes. Accessible only to sudo admins."""
-    return await node_operator.get_db_nodes(db=db, backend_id=backend_id, offset=offset, limit=limit)
+    return await node_operator.get_db_nodes(db=db, core_id=backend_id, offset=offset, limit=limit)
 
 
 @router.post(

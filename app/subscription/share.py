@@ -6,7 +6,7 @@ from datetime import timezone, timedelta, datetime as dt
 from jdatetime import date as jd
 
 from app.backend.hosts import hosts as hosts_storage
-from app.backend import backend_manager
+from app.backend import core_manager
 from app.db.models import User, UserStatus
 from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 
@@ -113,7 +113,7 @@ async def generate_subscription(user: User, config_format: str, as_base64: bool,
     kwargs = {
         "proxies": user.proxy_settings,
         "user_status": user.status,
-        "inbounds": user.inbounds(await backend_manager.get_inbounds()),
+        "inbounds": user.inbounds(await core_manager.get_inbounds()),
         "extra_data": user.__dict__,
         "reverse": reverse,
     }
@@ -263,7 +263,7 @@ async def process_host(
     host: dict, format_variables: dict, inbounds: list[str], proxies: dict, conf
 ) -> tuple[dict, dict, str]:
     tag = host["inbound_tag"]
-    host_inbound: dict = await backend_manager.get_inbound_by_tag(tag)
+    host_inbound: dict = await core_manager.get_inbound_by_tag(tag)
 
     protocol = host_inbound["protocol"]
 

@@ -26,7 +26,7 @@ def serialize_user_for_node(id: int, username: str, user_settings: dict, inbound
     )
 
 
-async def backend_users(db: AsyncSession, inbounds: list[str]):
+async def core_users(db: AsyncSession, inbounds: list[str]):
     stmt = (
         select(User)
         .options(

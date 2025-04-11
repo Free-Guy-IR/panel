@@ -1,7 +1,7 @@
 from app import scheduler
 from app.db import GetDB
 from app.db.crud import get_inbounds_not_in_tags, remove_inbounds
-from app.backend import backend_manager
+from app.backend import core_manager
 from app.utils.logger import get_logger
 from config import JOB_REMOVE_OLD_INBOUNDS_INTERVAL
 
@@ -10,7 +10,7 @@ logger = get_logger("jobs")
 
 
 async def remove_old_inbounds():
-    in_use_inbounds = await backend_manager.get_inbounds()
+    in_use_inbounds = await core_manager.get_inbounds()
 
     async with GetDB() as db:
         old_inbounds = await get_inbounds_not_in_tags(db, in_use_inbounds)

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import on_startup
-from app.backend import backend_manager
+from app.backend import core_manager
 from app.db import GetDB
 from app.db.crud import get_host_by_id, get_hosts, get_or_create_inbound
 from app.db.models import ProxyHostSecurity
@@ -10,7 +10,7 @@ from app.utils.store import DictStorage
 
 @DictStorage
 async def hosts(storage: dict, db: AsyncSession):
-    inbounds_list = await backend_manager.get_inbounds()
+    inbounds_list = await core_manager.get_inbounds()
     for tag in inbounds_list:
         await get_or_create_inbound(db, tag)
 

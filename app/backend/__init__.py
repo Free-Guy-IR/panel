@@ -6,51 +6,51 @@ from .xray import XRayConfig
 from .abstract_backend import AbstractBackend
 from app import on_startup
 from app.db import GetDB
-from app.db.models import BackendConfig
-from app.db.crud import get_backend_configs
+from app.db.models import CoreConfig
+from app.db.crud import get_core_configs
 
 
-class BackendManager:
+class CoreManager:
     def __init__(self):
-        self._backends: dict[int, AbstractBackend] = {}
+        self._cores: dict[int, AbstractBackend] = {}
         self._lock = Lock()
         self._inbounds: list[str] = []
         self._inbounds_by_tag = {}
 
-    async def update_backend(self, db_backend_config: BackendConfig):
+    async def update_core(self, db_core_config: CoreConfig):
         fallbacks_inbound_tags = (
-            db_backend_config.fallbacks_inbound_tags.split(",") if db_backend_config.fallbacks_inbound_tags else []
+            db_core_config.fallbacks_inbound_tags.split(",") if db_core_config.fallbacks_inbound_tags else []
         )
         exclude_inbound_tags = (
-            db_backend_config.exclude_inbound_tags.split(",") if db_backend_config.exclude_inbound_tags else []
+            db_core_config.exclude_inbound_tags.split(",") if db_core_config.exclude_inbound_tags else []
         )
 
-        backend_config = XRayConfig(db_backend_config.config, fallbacks_inbound_tags, exclude_inbound_tags)
+        backend_config = XRayConfig(db_core_config.config, fallbacks_inbound_tags, exclude_inbound_tags)
 
         async with self._lock:
-            self._backends.update({db_backend_config.id: backend_config})
+            self._cores.update({db_core_config.id: backend_config})
             self._inbounds_by_tag.update(backend_config.inbounds_by_tag)
             self._inbounds = list(self._inbounds_by_tag.keys())
 
-    async def remove_backend(self, backend_id: int):
+    async def remove_core(self, core_id: int):
         async with self._lock:
-            backend = self._backends.get(backend_id, None)
+            backend = self._cores.get(core_id, None)
             if backend:
-                del self._backends[backend_id]
+                del self._cores[core_id]
             else:
                 return
 
-            for backend in self._backends.values():
+            for backend in self._cores.values():
                 self._inbounds_by_tag.update(backend.inbounds_by_tag)
 
             self._inbounds = list(self._inbounds_by_tag.keys())
 
-    async def get_backend(self, backend_id: int) -> AbstractBackend | None:
+    async def get_core(self, backend_id: int) -> AbstractBackend | None:
         async with self._lock:
-            backend = self._backends.get(backend_id, None)
+            backend = self._cores.get(backend_id, None)
 
             if not backend:
-                backend = self._backends.get(1)
+                backend = self._cores.get(1)
 
             return backend
 
@@ -70,16 +70,16 @@ class BackendManager:
             return deepcopy(inbound)
 
 
-backend_manager = BackendManager()
+core_manager = CoreManager()
 
 
 @on_startup
-async def init_backend_manager():
+async def init_core_manager():
     async with GetDB() as db:
-        backend_configs, _ = await get_backend_configs(db)
+        core_configs, _ = await get_core_configs(db)
 
-        for config in backend_configs:
-            await backend_manager.update_backend(config)
+        for config in core_configs:
+            await core_manager.update_core(config)
 
 
 __all__ = ["config", "XRayConfig"]

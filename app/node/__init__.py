@@ -7,7 +7,7 @@ from aiocache import cached
 from app.db import GetDB
 from app.db.crud import get_tls_certificate
 from app.db.models import Node, NodeConnectionType
-from app.node.user import serialize_user_for_node, backend_users
+from app.node.user import serialize_user_for_node, core_users
 from app.models.user import UserResponse
 
 
@@ -116,4 +116,4 @@ class NodeManager:
 node_manager: NodeManager = NodeManager()
 
 
-__all__ = ["backend_users"]
+__all__ = ["core_users"]

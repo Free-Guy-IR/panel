@@ -306,11 +306,11 @@ xray_config = {
 }
 
 
-def test_backend_create(access_token):
-    """Test that the backend create route is accessible."""
+def test_core_create(access_token):
+    """Test that the core create route is accessible."""
 
     response = client.post(
-        url="/api/backend",
+        url="/api/core",
         headers={"Authorization": f"Bearer {access_token}"},
         json={
             "config": xray_config,
@@ -326,11 +326,11 @@ def test_backend_create(access_token):
     assert response.json()["fallbacks_inbound_tags"] == ""
 
 
-def test_backend_update(access_token):
-    """Test that the backend update route is accessible."""
+def test_core_update(access_token):
+    """Test that the core update route is accessible."""
 
     response = client.put(
-        url="/api/backend/1",
+        url="/api/core/1",
         headers={"Authorization": f"Bearer {access_token}"},
         json={
             "config": xray_config,
@@ -347,31 +347,31 @@ def test_backend_update(access_token):
     assert response.json()["fallbacks_inbound_tags"] == "123"
 
 
-def test_backend_get(access_token):
-    """Test that the backend get route is accessible."""
+def test_core_get(access_token):
+    """Test that the core get route is accessible."""
 
     response = client.get(
-        url="/api/backend/1",
+        url="/api/core/1",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["config"] == xray_config
 
 
-def test_backend_delete_1(access_token):
-    """Test that the backend delete route is accessible."""
+def test_core_delete_1(access_token):
+    """Test that the core delete route is accessible."""
 
     response = client.delete(
-        url="/api/backend/1", headers={"Authorization": f"Bearer {access_token}"}, params={"restart_nodes": True}
+        url="/api/core/1", headers={"Authorization": f"Bearer {access_token}"}, params={"restart_nodes": True}
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_backend_delete_2(access_token):
-    """Test that the backend delete route is accessible."""
+def test_core_delete_2(access_token):
+    """Test that the core delete route is accessible."""
 
     response = client.post(
-        url="/api/backend",
+        url="/api/core",
         headers={"Authorization": f"Bearer {access_token}"},
         json={
             "config": xray_config,
@@ -388,7 +388,7 @@ def test_backend_delete_2(access_token):
     assert response.json()["fallbacks_inbound_tags"] == "456"
 
     response = client.delete(
-        url=f"/api/backend/{response.json()['id']}",
+        url=f"/api/core/{response.json()['id']}",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_204_NO_CONTENT

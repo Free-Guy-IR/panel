@@ -33,7 +33,7 @@ from app.db.models import (
     ReminderType,
     UserStatus,
     UserDataLimitResetStrategy,
-    BackendConfig,
+    CoreConfig,
     NodeStat,
 )
 from app.db.base import DATABASE_DIALECT
@@ -45,7 +45,7 @@ from app.models.group import GroupCreate, GroupModify
 from app.models.node import NodeCreate, NodeModify
 from app.models.user import UserModify, UserCreate
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
-from app.models.backend import BackendCreate
+from app.models.core import CoreCreate
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
 from config import NOTIFY_DAYS_LEFT, NOTIFY_REACHED_USAGE_PERCENT, USERS_AUTODELETE_DAYS
 
@@ -1466,7 +1466,7 @@ async def get_nodes(
     db: AsyncSession,
     status: Optional[Union[NodeStatus, list]] = None,
     enabled: bool | None = None,
-    backend_id: int | None = None,
+    core_id: int | None = None,
     offset: int | None = None,
     limit: int | None = None,
 ) -> list[Node]:
@@ -1492,8 +1492,8 @@ async def get_nodes(
     if enabled:
         query = query.where(Node.status != NodeStatus.disabled)
 
-    if backend_id:
-        query = query.where(Node.backend_config_id == backend_id)
+    if core_id:
+        query = query.where(Node.core_config_id == core_id)
 
     if offset:
         query = query.offset(offset)
@@ -1917,84 +1917,82 @@ async def remove_group(db: AsyncSession, dbgroup: Group):
     await db.commit()
 
 
-async def get_backend_config_by_id(db: AsyncSession, backend_id: int) -> BackendConfig | None:
+async def get_core_config_by_id(db: AsyncSession, core_id: int) -> CoreConfig | None:
     """
-    Retrieves a backend configuration by its ID.
+    Retrieves a core configuration by its ID.
 
     Args:
         db (AsyncSession): The database session.
-        backend_id (int): The ID of the backend configuration to retrieve.
+        core_id (int): The ID of the core configuration to retrieve.
 
     Returns:
-        Optional[BackendConfig]: The BackendConfig object if found, None otherwise.
+        Optional[CoreConfig]: The CoreConfig object if found, None otherwise.
     """
-    return (await db.execute(select(BackendConfig).where(BackendConfig.id == backend_id))).unique().scalar_one_or_none()
+    return (await db.execute(select(CoreConfig).where(CoreConfig.id == core_id))).unique().scalar_one_or_none()
 
 
-async def create_backend_config(db: AsyncSession, backend_config: BackendCreate) -> BackendConfig:
+async def create_core_config(db: AsyncSession, core_config: CoreCreate) -> CoreConfig:
     """
-    Creates a new backend configuration in the database.
+    Creates a new core configuration in the database.
 
     Args:
         db (AsyncSession): The database session.
-        backend_config (BackendCreate): The backend configuration creation model containing backend details.
+        core_config (CoreCreate): The core configuration creation model containing core details.
 
     Returns:
-        BackendConfig: The newly created BackendResponse object.
+        CoreConfig: The newly created CoreConfig object.
     """
-    db_backend_config = BackendConfig(
-        name=backend_config.name,
-        config=backend_config.config,
-        exclude_inbound_tags=backend_config.exclude_inbound_tags or "",
-        fallbacks_inbound_tags=backend_config.fallbacks_inbound_tags or "",
+    db_core_config = CoreConfig(
+        name=core_config.name,
+        config=core_config.config,
+        exclude_inbound_tags=core_config.exclude_inbound_tags or "",
+        fallbacks_inbound_tags=core_config.fallbacks_inbound_tags or "",
     )
-    db.add(db_backend_config)
+    db.add(db_core_config)
     await db.commit()
-    await db.refresh(db_backend_config)
-    return db_backend_config
+    await db.refresh(db_core_config)
+    return db_core_config
 
 
-async def modify_backend_config(
-    db: AsyncSession, db_backend_config: BackendConfig, modified_backend_config: BackendCreate
-) -> BackendConfig:
+async def modify_core_config(
+    db: AsyncSession, db_core_config: CoreConfig, modified_core_config: CoreCreate
+) -> CoreConfig:
     """
-    Modifies an existing backend configuration with new information.
+    Modifies an existing core configuration with new information.
 
     Args:
         db (AsyncSession): The database session.
-        db_backend_config (BackendConfig): The BackendConfig object to be updated.
-        modified_backend_config (BackendCreate): The modification model containing updated backend details.
+        db_core_config (CoreConfig): The CoreConfig object to be updated.
+        modified_core_config (CoreCreate): The modification model containing updated core details.
 
     Returns:
-        BackendConfig: The updated BackendConfig object.
+        CoreConfig: The updated CoreConfig object.
     """
-    backend_data = modified_backend_config.model_dump(exclude_none=True)
+    core_data = modified_core_config.model_dump(exclude_none=True)
 
-    for key, value in backend_data.items():
-        setattr(db_backend_config, key, value)
+    for key, value in core_data.items():
+        setattr(db_core_config, key, value)
 
     await db.commit()
-    await db.refresh(db_backend_config)
-    return db_backend_config
+    await db.refresh(db_core_config)
+    return db_core_config
 
 
-async def remove_backend_config(db: AsyncSession, db_backend_config: BackendConfig) -> None:
+async def remove_core_config(db: AsyncSession, db_core_config: CoreConfig) -> None:
     """
-    Removes a backend configuration from the database.
+    Removes a core configuration from the database.
 
     Args:
         db (AsyncSession): The database session.
-        db_backend_config (BackendConfig): The BackendConfig object to be removed.
+        db_core_config (CoreConfig): The CoreConfig object to be removed.
     """
-    await db.delete(db_backend_config)
+    await db.delete(db_core_config)
     await db.commit()
 
 
-async def get_backend_configs(
-    db: AsyncSession, offset: int = None, limit: int = None
-) -> tuple[int, list[BackendConfig]]:
+async def get_core_configs(db: AsyncSession, offset: int = None, limit: int = None) -> tuple[int, list[CoreConfig]]:
     """
-    Retrieves a list of backend configurations with optional pagination.
+    Retrieves a list of core configurations with optional pagination.
 
     Args:
         db (AsyncSession): The database session.
@@ -2003,14 +2001,14 @@ async def get_backend_configs(
 
     Returns:
         tuple: A tuple containing:
-            - list[BackendConfig]: A list of BackendConfig objects
-            - int: The total count of backend configurations
+            - list[CoreConfig]: A list of CoreConfig objects
+            - int: The total count of core configurations
     """
-    query = select(BackendConfig)
+    query = select(CoreConfig)
     if offset:
         query = query.offset(offset)
     if limit:
         query = query.limit(limit)
 
-    all_backend_configs = (await db.execute(query)).scalars().all()
-    return all_backend_configs, len(all_backend_configs)
+    all_core_configs = (await db.execute(query)).scalars().all()
+    return all_core_configs, len(all_core_configs)

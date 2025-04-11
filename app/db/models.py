@@ -473,10 +473,10 @@ class Node(Base):
     server_ca: Mapped[str] = mapped_column(String(2048), nullable=False)
     keep_alive: Mapped[int] = mapped_column(unique=False, default=0)
     max_logs: Mapped[int] = mapped_column(BigInteger, unique=False, default=1000, server_default=text("1000"))
-    backend_config_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("backend_configs.id", ondelete="SET NULL"), nullable=True
+    core_config_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("core_configs.id", ondelete="SET NULL"), nullable=True
     )
-    backend_config: Mapped[Optional["BackendConfig"]] = relationship("BackendConfig", lazy="selectin")
+    core_config: Mapped[Optional["CoreConfig"]] = relationship("CoreConfig", lazy="selectin")
     stats: Mapped[List["NodeStat"]] = relationship(back_populates="node", cascade="all, delete-orphan")
 
 
@@ -545,8 +545,8 @@ class Group(Base):
         return len(self.users)
 
 
-class BackendConfig(Base):
-    __tablename__ = "backend_configs"
+class CoreConfig(Base):
+    __tablename__ = "core_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -4,14 +4,14 @@ from datetime import datetime as dt
 from pydantic import BaseModel, ConfigDict, field_validator, Field
 
 
-class BackendBase(BaseModel):
+class CoreBase(BaseModel):
     name: str = Field(max_length=256)
     config: dict[str, Any]
     exclude_inbound_tags: str = Field(max_length=2048)
     fallbacks_inbound_tags: str = Field(max_length=2048)
 
 
-class BackendCreate(BackendBase):
+class CoreCreate(CoreBase):
     name: str | None = None
     exclude_inbound_tags: str | None = None
     fallbacks_inbound_tags: str | None = None
@@ -23,15 +23,15 @@ class BackendCreate(BackendBase):
         return v
 
 
-class BackendResponse(BackendBase):
+class CoreResponse(CoreBase):
     id: int
     created_at: dt
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class BackendResponseList(BaseModel):
+class CoreResponseList(BaseModel):
     count: int
-    backends: list[BackendResponse] = []
+    cores: list[CoreResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
