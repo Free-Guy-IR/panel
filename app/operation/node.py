@@ -27,6 +27,8 @@ from app.utils.logger import get_logger
 from app import notification
 
 
+MAX_MESSAGE_LENGTH = 1000
+
 logger = get_logger("node-operator")
 
 
@@ -109,11 +111,18 @@ class NodeOperator(BaseOperator):
             except NodeAPIError as e:
                 if e.code == -4:
                     return
+                
+                detail = e.detail
+    
+                if len(detail) > MAX_MESSAGE_LENGTH:
+                    detail = detail[:MAX_MESSAGE_LENGTH-3] + "..."
+                else:
+                    detail = detail
 
-                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}: {e.detail}")
+                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
 
                 await NodeOperator.update_node_status(
-                    node_id=db_node.id, status=NodeStatus.error, err=e.detail, notify_err=notify_err
+                    node_id=db_node.id, status=NodeStatus.error, err=detail, notify_err=notify_err
                 )
 
     async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
