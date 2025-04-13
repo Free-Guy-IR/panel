@@ -36,7 +36,7 @@ class HostOperator(BaseOperator):
                 and ds_host.transport_settings.get("xhttp_settings").get("download_settings")
             ):
                 return await self.raise_error("download host cannot have a download host", 400, db=db)
-        
+
     async def add_host(self, db: AsyncSession, new_host: CreateHost, admin: AdminDetails) -> BaseHost:
         await self.validate_ds_host(db, new_host)
 

@@ -27,7 +27,7 @@ from app.utils.logger import get_logger
 from app import notification
 
 
-MAX_MESSAGE_LENGTH = 1000
+MAX_MESSAGE_LENGTH = 128
 
 logger = get_logger("node-operator")
 
@@ -111,11 +111,11 @@ class NodeOperator(BaseOperator):
             except NodeAPIError as e:
                 if e.code == -4:
                     return
-                
+
                 detail = e.detail
-    
+
                 if len(detail) > MAX_MESSAGE_LENGTH:
-                    detail = detail[:MAX_MESSAGE_LENGTH-3] + "..."
+                    detail = detail[: MAX_MESSAGE_LENGTH - 3] + "..."
                 else:
                     detail = detail
 
@@ -160,8 +160,8 @@ class NodeOperator(BaseOperator):
         else:
             try:
                 await node_manager.update_node(db_node)
-            except Exception as e:
-                await self.update_node_status(db_node.id, NodeStatus.error, err=str(e))
+            except NodeAPIError as e:
+                await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
             asyncio.create_task(self.connect_node(node_id=db_node.id))
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" modified by admin "{admin.username}"')

@@ -436,7 +436,7 @@ wheels = [
 
 [[package]]
 name = "gozargah-node-bridge"
-version = "0.0.32"
+version = "0.0.33"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiorwlock" },
@@ -445,9 +445,9 @@ dependencies = [
     { name = "httpx" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b7/42/0bb60633bac222407754872938052eb95239106079dc1ab0f94db1aedec7/gozargah_node_bridge-0.0.32.tar.gz", hash = "sha256:e5e601ef3907859349f6e6ce70b9a5a2d9c2601a33e73d61d0ec718d4a3e47de", size = 39512 }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/e6/73034d528e676efa090f54f961e908d89af35e52412f0b93db874a361f46/gozargah_node_bridge-0.0.33.tar.gz", hash = "sha256:fe5bda2888ca0d443889efef608299d76fb38fc8738510470be7a2b23ad2d428", size = 39531 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/35/9e/e65d1ddd2ffc5bf279b8ca70f64be118d2688f708ae301d00e84dd2b70bb/gozargah_node_bridge-0.0.32-py3-none-any.whl", hash = "sha256:2b423f67d392e01b953e7cb07dd3908918e9db97f899fef293dae809b8a0c463", size = 30274 },
+    { url = "https://files.pythonhosted.org/packages/82/fc/bce456d9473edaa396898780828d4ba7bc74edbb875f8cc5fc4bae5c9af8/gozargah_node_bridge-0.0.33-py3-none-any.whl", hash = "sha256:68cd5fbc6f41faaee3b49c3afdc38fe83a1cfe5f1d52dd439b1cccab93ec7163", size = 30300 },
 ]
 
 [[package]]
@@ -821,7 +821,7 @@ requires-dist = [
     { name = "cryptography", specifier = "==43.0.1" },
     { name = "deprecated", specifier = "==1.2.13" },
     { name = "fastapi", specifier = "==0.115.2" },
-    { name = "gozargah-node-bridge", specifier = ">=0.0.32" },
+    { name = "gozargah-node-bridge", specifier = ">=0.0.33" },
     { name = "httptools", specifier = "==0.6.4" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jdatetime", specifier = "==4.1.1" },

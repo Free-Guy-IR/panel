@@ -50,8 +50,8 @@ async def initialize_nodes():
         async def start_node(node: Node):
             try:
                 await node_manager.update_node(node)
-            except Exception as e:
-                await node_operator.update_node_status(node.id, NodeStatus.error, err=str(e))
+            except NodeAPIError as e:
+                await node_operator.update_node_status(node.id, NodeStatus.error, err=e.detail)
                 return
 
             await node_operator.connect_node(node_id=node.id)
