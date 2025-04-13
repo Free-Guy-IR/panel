@@ -33,9 +33,6 @@ logger = get_logger("node-operator")
 
 
 class NodeOperator(BaseOperator):
-    async def get_node_settings(self) -> NodeSettings:
-        return NodeSettings(certificate=(await get_tls()).certificate)
-
     async def get_db_nodes(
         self, db: AsyncSession, core_id: int | None = None, offset: int | None = None, limit: int | None = None
     ) -> list[Node]:

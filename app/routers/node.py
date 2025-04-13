@@ -21,8 +21,8 @@ router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses.
 
 @router.get("/settings", response_model=NodeSettings)
 async def get_node_settings(_: AdminDetails = Depends(check_sudo_admin)):
-    """Retrieve the current node settings, including TLS certificate."""
-    return await node_operator.get_node_settings()
+    """Retrieve the current node settings."""
+    return NodeSettings()
 
 
 @router.get("/usage", response_model=list[NodeUsageStats])

@@ -14,7 +14,6 @@ KEY_PATTERN = r"-----BEGIN (?:RSA )?PRIVATE KEY-----"
 
 class NodeSettings(BaseModel):
     min_node_version: str = "v1.0.0"
-    certificate: str
 
 
 class Node(BaseModel):
