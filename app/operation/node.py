@@ -160,8 +160,8 @@ class NodeOperator(BaseOperator):
         else:
             try:
                 await node_manager.update_node(db_node)
-            except NodeAPIError as e:
-                await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
+            except Exception as e:
+                await self.update_node_status(db_node.id, NodeStatus.error, err=str(e))
             asyncio.create_task(self.connect_node(node_id=db_node.id))
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" modified by admin "{admin.username}"')

@@ -41,14 +41,12 @@ class NodeManager:
                 finally:
                     del self._nodes[node.id]
 
-            tls = await get_tls()
             new_node = create_node(
                 connection=type_map[node.connection_type],
                 address=node.address,
                 port=node.port,
-                client_cert=tls.certificate,
-                client_key=tls.key,
                 server_ca=node.server_ca,
+                api_key=node.api_key,
                 max_logs=node.max_logs,
                 extra={"id": node.id, "usage_coefficient": node.usage_coefficient},
             )
