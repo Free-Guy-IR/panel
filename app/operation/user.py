@@ -397,4 +397,7 @@ class UserOperator(BaseOperator):
 
         update_user_model = UserModify(**modify_user_args)
 
-        return await self.modify_user(db, username, update_user_model, admin)
+        user = await self.modify_user(db, username, update_user_model, admin)
+        if user_template.reset_usages:
+            return await self.reset_user_data_usage(db, username, admin)
+        return user
