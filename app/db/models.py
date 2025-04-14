@@ -297,11 +297,17 @@ class UserTemplate(Base):
     name: Mapped[str] = mapped_column(String(64), unique=True)
     data_limit: Mapped[int] = mapped_column(BigInteger, default=0)
     expire_duration: Mapped[int] = mapped_column(BigInteger, default=0)  # in seconds
+    on_hold_timeout: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
     username_prefix: Mapped[Optional[str]] = mapped_column(String(20))
     username_suffix: Mapped[Optional[str]] = mapped_column(String(20))
     extra_settings: Mapped[Optional[Dict]] = mapped_column(JSON(True))
     status: Mapped[UserStatusCreate] = mapped_column(SQLEnum(UserStatusCreate), default=UserStatusCreate.active)
     reset_usages: Mapped[bool] = mapped_column(default=False, server_default="0")
+    data_limit_reset_strategy: Mapped[UserDataLimitResetStrategy] = mapped_column(
+        SQLEnum(UserDataLimitResetStrategy),
+        default=UserDataLimitResetStrategy.no_reset,
+        server_default="no_reset",
+    )
 
     next_plans: Mapped[List["NextPlan"]] = relationship(back_populates="user_template", cascade="all, delete-orphan")
     groups: Mapped[List["Group"]] = relationship(

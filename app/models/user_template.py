@@ -1,10 +1,9 @@
+from datetime import datetime
 import json
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 from app.models.proxy import XTLSFlows, ShadowsocksMethods
-from app.db.models import UserStatusCreate
-from .validators import ListValidator
+from app.db.models import UserDataLimitResetStrategy, UserStatusCreate
+from .validators import ListValidator, UserValidator
 
 
 class ExtraSettings(BaseModel):
@@ -29,9 +28,22 @@ class UserTemplate(BaseModel):
     extra_settings: ExtraSettings | None = None
     status: UserStatusCreate | None = None
     reset_usages: bool | None = None
+    on_hold_timeout: datetime | int | None = None
+    data_limit_reset_strategy: UserDataLimitResetStrategy | None = None
 
 
-class UserTemplateCreate(UserTemplate):
+class UserTemplateWithValidator(UserTemplate):
+    @field_validator("on_hold_timeout", check_fields=False)
+    @classmethod
+    def validator_on_hold_timeout(cls, value):
+        return UserValidator.validator_on_hold_timeout(value)
+
+    @field_validator("status", mode="before", check_fields=False)
+    def validate_status(cls, status, values):
+        return UserValidator.validate_status(status, values)
+
+
+class UserTemplateCreate(UserTemplateWithValidator):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -44,6 +56,8 @@ class UserTemplateCreate(UserTemplate):
                 "extra_settings": {"flow": "", "method": None},
                 "status": "active",
                 "reset_usages": True,
+                "on_hold_timeout": "2028-11-03T20:30:00",
+                "data_limit_reset_strategy": "no_reset",
             }
         }
     )
@@ -54,7 +68,7 @@ class UserTemplateCreate(UserTemplate):
         return ListValidator.not_null_list(v, "group")
 
 
-class UserTemplateModify(UserTemplate):
+class UserTemplateModify(UserTemplateWithValidator):
     group_ids: list[int] | None = None
     model_config = ConfigDict(
         json_schema_extra={
@@ -68,6 +82,8 @@ class UserTemplateModify(UserTemplate):
                 "extra_settings": {"flow": "", "method": None},
                 "status": "active",
                 "reset_usages": True,
+                "on_hold_timeout": "2028-11-03T20:30:00",
+                "data_limit_reset_strategy": "no_reset",
             }
         }
     )

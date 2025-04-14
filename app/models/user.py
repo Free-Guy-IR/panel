@@ -28,19 +28,19 @@ class NextPlanModel(BaseModel):
 
 class User(BaseModel):
     proxy_settings: ProxyTable = Field(default_factory=ProxyTable)
-    expire: datetime | int | None = Field(None, nullable=True)
+    expire: datetime | int | None = None
     data_limit: int | None = Field(ge=0, default=None, description="data_limit can be 0 or greater")
     data_limit_reset_strategy: UserDataLimitResetStrategy | None = None
     note: str | None = Field(max_length=500, default=None)
-    sub_updated_at: datetime | None = Field(None, nullable=True)
-    sub_last_user_agent: str | None = Field(None, nullable=True)
-    online_at: datetime | None = Field(None, nullable=True)
-    on_hold_expire_duration: int | None = Field(None, nullable=True)
-    on_hold_timeout: datetime | int | None = Field(None, nullable=True)
+    sub_updated_at: datetime | None = None
+    sub_last_user_agent: str | None = None
+    online_at: datetime | None = None
+    on_hold_expire_duration: int | None = None
+    on_hold_timeout: datetime | int | None = None
     group_ids: list[int] | None = Field(default_factory=list)
-    auto_delete_in_days: int | None = Field(None, nullable=True)
+    auto_delete_in_days: int | None = None
 
-    next_plan: NextPlanModel | None = Field(None, nullable=True)
+    next_plan: NextPlanModel | None = None
 
 
 class UserWithValidator(User):
@@ -55,10 +55,7 @@ class UserWithValidator(User):
     @field_validator("on_hold_timeout", check_fields=False)
     @classmethod
     def validator_on_hold_timeout(cls, value):
-        if value == 0 or isinstance(value, datetime) or value is None:
-            return value
-        else:
-            raise ValueError("on_hold_timeout can be datetime or 0")
+        return UserValidator.validator_on_hold_timeout(value)
 
     @field_validator("expire", check_fields=False)
     @classmethod
@@ -93,7 +90,7 @@ class UserCreate(UserWithValidator):
                 "data_limit_reset_strategy": "no_reset",
                 "status": "active",
                 "note": "",
-                "on_hold_timeout": "2023-11-03T20:30:00",
+                "on_hold_timeout": "2028-11-03T20:30:00",
                 "on_hold_expire_duration": 0,
             }
         }

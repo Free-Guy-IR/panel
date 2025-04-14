@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 from decimal import Decimal
 from app.db.models import UserStatusCreate
@@ -123,3 +124,10 @@ class UserValidator:
             raise ValueError("Username cannot have consecutive special characters")
 
         return username
+
+    @staticmethod
+    def validator_on_hold_timeout(value):
+        if value == 0 or isinstance(value, datetime) or value is None:
+            return value
+        else:
+            raise ValueError("on_hold_timeout can be datetime or 0")
