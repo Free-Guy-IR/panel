@@ -349,9 +349,7 @@ class UserOperator(BaseOperator):
         db_user_template = await self.get_validated_user_template(db, new_template_user.user_template_id)
 
         user_template = UserTemplateResponse.model_validate(db_user_template)
-        all_groups = await self.validate_all_groups(db, user_template)
 
-        db_admin = await get_admin(db, admin.username)
         new_user_args = {
             "username": f"{user_template.username_prefix if user_template.username_prefix else ''}{new_template_user.username}{user_template.username_suffix if user_template.username_suffix else ''}",
             **user_template.model_dump(
@@ -372,29 +370,14 @@ class UserOperator(BaseOperator):
 
         new_user = UserCreate(**new_user_args)
 
-        try:
-            db_user = await create_user(db, new_user, all_groups, db_admin)
-        except IntegrityError:
-            await self.raise_error(message="User already exists", code=409, db=db)
-
-        user = await self.validate_user(db_user)
-
-        asyncio.create_task(node_manager.update_user(user, inbounds=await core_manager.get_inbounds()))
-        asyncio.create_task(notification.create_user(user, admin))
-
-        logger.info(f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"')
-
-        return user
+        return await self.add_user(db, new_user, admin)
 
     async def modify_user_by_user_template(
         self, db: AsyncSession, username: str, modified_template: ModifyUserByTemplate, admin: AdminDetails
     ) -> UserResponse:
         db_user_template = await self.get_validated_user_template(db, modified_template.user_template_id)
         user_template = UserTemplateResponse.model_validate(db_user_template)
-        db_user = await self.get_validated_user(db, username, admin)
-        await self.validate_all_groups(db, db_user_template)
 
-        old_status = db_user.status
         modify_user_args = {
             **user_template.model_dump(
                 exclude={
@@ -414,21 +397,4 @@ class UserOperator(BaseOperator):
 
         update_user_model = UserModify(**modify_user_args)
 
-        db_user = await update_user(db, db_user, update_user_model)
-        user = await self.validate_user(db_user)
-
-        if db_user.status in (UserStatus.active, UserStatus.on_hold):
-            asyncio.create_task(node_manager.update_user(user, inbounds=await core_manager.get_inbounds()))
-        else:
-            asyncio.create_task(node_manager.remove_user(user))
-
-        logger.info(f'User "{user.username}" with id "{db_user.id}" modified by admin "{admin.username}"')
-
-        asyncio.create_task(notification.modify_user(user, admin))
-
-        if user.status != old_status:
-            asyncio.create_task(notification.user_status_change(user, admin))
-
-            logger.info(f'User "{db_user.username}" status changed from "{old_status.value}" to "{user.status.value}"')
-
-        return user
+        return await self.modify_user(db, username, update_user_model, admin)
