@@ -76,6 +76,10 @@ class Admin(Base):
     def lifetime_used_traffic(self) -> int:
         return self.reseted_usage + self.users_usage
 
+    @property
+    def total_users(self) -> int:
+        return len(self.users)
+
 
 class AdminUsageLogs(Base):
     __tablename__ = "admin_usage_logs"

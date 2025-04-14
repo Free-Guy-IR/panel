@@ -27,6 +27,7 @@ class AdminDetails(AdminBaseInfo):
     """Complete admin model with all fields for database representation and API responses."""
 
     is_sudo: bool
+    total_users: int = 0
     users_usage: int = 0
     is_disabled: bool = False
     sub_template: str | None = None

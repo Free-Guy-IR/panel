@@ -1149,7 +1149,7 @@ async def get_tls_certificate(db: AsyncSession) -> TLS:
 
 
 def get_admin_queryset() -> Query:
-    return select(Admin).options(selectinload(Admin.usage_logs))
+    return select(Admin).options(selectinload(Admin.usage_logs), selectinload(Admin.users))
 
 
 async def get_admin(db: AsyncSession, username: str) -> Admin:
