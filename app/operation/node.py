@@ -5,7 +5,7 @@ from GozargahNodeBridge import GozargahNode, NodeAPIError
 
 from app.operation import BaseOperator
 from app.models.stats import RealtimeNodeStats, NodeUsageStats, Period, NodeStats
-from app.models.node import NodeCreate, NodeResponse, NodeSettings, NodeModify
+from app.models.node import NodeCreate, NodeResponse, NodeModify
 from app.models.admin import AdminDetails
 from app.db.models import Node, NodeStatus
 from app.db import AsyncSession
@@ -22,7 +22,7 @@ from app.db.crud import (
 )
 from app.db.base import GetDB
 from app.core.manager import core_manager
-from app.node import get_tls, core_users, node_manager
+from app.node import core_users, node_manager
 from app.utils.logger import get_logger
 from app import notification
 
