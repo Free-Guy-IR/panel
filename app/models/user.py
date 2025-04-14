@@ -5,7 +5,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .validators import NumericValidatorMixin, ListValidator
+from .validators import NumericValidatorMixin, ListValidator, UserValidator
 from app.db.models import UserStatus, UserDataLimitResetStrategy, UserStatusCreate
 from app.models.admin import AdminBaseInfo
 from app.models.proxy import ProxyTable
@@ -72,14 +72,7 @@ class UserWithValidator(User):
 
     @field_validator("status", mode="before", check_fields=False)
     def validate_status(cls, status, values):
-        on_hold_expire = values.data.get("on_hold_expire_duration")
-        expire = values.data.get("expire")
-        if status == UserStatusCreate.on_hold:
-            if on_hold_expire == 0 or on_hold_expire is None:
-                raise ValueError("User cannot be on hold without a valid on_hold_expire_duration.")
-            if expire:
-                raise ValueError("User cannot be on hold with specified expire.")
-        return status
+        return UserValidator.validate_status(status, values)
 
 
 class UserCreate(UserWithValidator):
@@ -191,3 +184,16 @@ class UsersResponse(BaseModel):
 class RemoveUsersResponse(BaseModel):
     users: list[str]
     count: int
+
+
+class ModifyUserByTemplate(BaseModel):
+    user_template_id: int
+
+
+class CreateUserFromTemplate(ModifyUserByTemplate):
+    username: str
+
+    @field_validator("username", check_fields=False)
+    @classmethod
+    def validate_username(cls, v):
+        return UserValidator.validate_username(v)

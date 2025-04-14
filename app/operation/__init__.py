@@ -106,7 +106,7 @@ class BaseOperator:
             await self.raise_error("Group not found", 404)
         return db_group
 
-    async def validate_all_groups(self, db, user: UserCreate | UserModify) -> list[Group]:
+    async def validate_all_groups(self, db, user: UserCreate | UserModify | UserTemplate) -> list[Group]:
         all_groups: list[Group] = []
         if user.group_ids:
             for group_id in user.group_ids:

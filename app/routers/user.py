@@ -6,7 +6,15 @@ from app.db import AsyncSession, get_db
 from .authentication import check_sudo_admin, get_current
 from app.models.stats import Period, UserUsageStats
 from app.models.admin import AdminDetails
-from app.models.user import UserCreate, UserModify, UserResponse, UsersResponse, RemoveUsersResponse
+from app.models.user import (
+    CreateUserFromTemplate,
+    ModifyUserByTemplate,
+    UserCreate,
+    UserModify,
+    UserResponse,
+    UsersResponse,
+    RemoveUsersResponse,
+)
 from app.db.models import UserStatus
 from app.utils import responses
 from app.operation import OperatorType
@@ -238,3 +246,22 @@ async def delete_expired_users(
     - At least one of expired_after or expired_before must be provided
     """
     return await user_operator.delete_expired_users(db, admin, expired_after, expired_before)
+
+
+@router.post("/from-template", response_model=UserResponse)
+async def create_user_from_template(
+    new_template_user: CreateUserFromTemplate,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    return await user_operator.create_user_from_template(db, new_template_user, admin)
+
+
+@router.put("/from-template/{username}", response_model=UserResponse)
+async def modify_user_with_template(
+    username: str,
+    modify_template_user: ModifyUserByTemplate,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    return await user_operator.modify_user_by_user_template(db, username, modify_template_user, admin)
