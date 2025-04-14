@@ -1,13 +1,20 @@
+import json
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.proxy import XTLSFlows, ShadowsocksMethods
-
+from app.db.models import UserStatusCreate
 from .validators import ListValidator
 
 
 class ExtraSettings(BaseModel):
     flow: XTLSFlows = XTLSFlows.NONE
     method: ShadowsocksMethods | None = None
+
+    def dict(self, *, no_obj=True, **kwargs):
+        if no_obj:
+            return json.loads(self.model_dump_json())
+        return super().model_dump(**kwargs)
 
 
 class UserTemplate(BaseModel):
@@ -20,6 +27,8 @@ class UserTemplate(BaseModel):
     username_suffix: str | None = Field(max_length=20, min_length=1, default=None)
     group_ids: list[int] = []
     extra_settings: ExtraSettings | None = None
+    status: UserStatusCreate | None = None
+    reset_usages: bool | None = None
 
 
 class UserTemplateCreate(UserTemplate):
@@ -32,7 +41,9 @@ class UserTemplateCreate(UserTemplate):
                 "group_ids": [1, 3, 5],
                 "data_limit": 0,
                 "expire_duration": 0,
-                "extra_settings": {"flow": "none", "method": None},
+                "extra_settings": {"flow": "", "method": None},
+                "status": "active",
+                "reset_usages": True,
             }
         }
     )
@@ -54,7 +65,9 @@ class UserTemplateModify(UserTemplate):
                 "group_ids": [1, 3, 5],
                 "data_limit": 0,
                 "expire_duration": 0,
-                "extra_settings": {"flow": "none", "method": None},
+                "extra_settings": {"flow": "", "method": None},
+                "status": "active",
+                "reset_usages": True,
             }
         }
     )

@@ -6,7 +6,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .validators import NumericValidatorMixin, ListValidator
-from app.db.models import UserStatus, UserDataLimitResetStrategy
+from app.db.models import UserStatus, UserDataLimitResetStrategy, UserStatusCreate
 from app.models.admin import AdminBaseInfo
 from app.models.proxy import ProxyTable
 
@@ -14,11 +14,6 @@ from app.models.proxy import ProxyTable
 class UserStatusModify(str, Enum):
     active = "active"
     disabled = "disabled"
-    on_hold = "on_hold"
-
-
-class UserStatusCreate(str, Enum):
-    active = "active"
     on_hold = "on_hold"
 
 

@@ -281,6 +281,11 @@ class NextPlan(Base):
     user_template: Mapped[Optional["UserTemplate"]] = relationship(back_populates="next_plans")
 
 
+class UserStatusCreate(str, Enum):
+    active = "active"
+    on_hold = "on_hold"
+
+
 class UserTemplate(Base):
     __tablename__ = "user_templates"
 
@@ -291,6 +296,8 @@ class UserTemplate(Base):
     username_prefix: Mapped[Optional[str]] = mapped_column(String(20))
     username_suffix: Mapped[Optional[str]] = mapped_column(String(20))
     extra_settings: Mapped[Optional[Dict]] = mapped_column(JSON(True))
+    status: Mapped[UserStatusCreate] = mapped_column(SQLEnum(UserStatusCreate), default=UserStatusCreate.active)
+    reset_usages: Mapped[bool] = mapped_column(default=False, server_default="0")
 
     next_plans: Mapped[List["NextPlan"]] = relationship(back_populates="user_template", cascade="all, delete-orphan")
     groups: Mapped[List["Group"]] = relationship(

@@ -1331,7 +1331,9 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
         username_prefix=user_template.username_prefix,
         username_suffix=user_template.username_suffix,
         groups=await get_groups_by_ids(db, user_template.group_ids) if user_template.group_ids else None,
-        extra_settings=user_template.extra_settings,
+        extra_settings=user_template.extra_settings.dict(),
+        status=user_template.status,
+        reset_usages=user_template.reset_usages,
     )
 
     db.add(db_user_template)
@@ -1366,8 +1368,12 @@ async def update_user_template(
         db_user_template.username_suffix = modified_user_template.username_suffix
     if modified_user_template.group_ids:
         db_user_template.groups = await get_groups_by_ids(db, modified_user_template.group_ids)
-    if db_user_template.extra_settings is not None:
-        db_user_template.extra_settings = modified_user_template.extra_settings
+    if modified_user_template.extra_settings is not None:
+        db_user_template.extra_settings = modified_user_template.extra_settings.dict()
+    if modified_user_template.status is not None:
+        db_user_template.status = modified_user_template.status
+    if modified_user_template.reset_usages is not None:
+        db_user_template.reset_usages = modified_user_template.reset_usages
 
     await db.commit()
     await db.refresh(db_user_template)
