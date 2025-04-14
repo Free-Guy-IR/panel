@@ -1180,8 +1180,7 @@ async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
     db_admin = Admin(**admin.model_dump(exclude={"password"}), hashed_password=admin.hashed_password)
     db.add(db_admin)
     await db.commit()
-    await db.refresh(db_admin)  # Ensure the admin object is refreshed after commit
-    return db_admin
+    return await get_admin(db, admin.username)
 
 
 async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminModify) -> Admin:
@@ -1218,7 +1217,7 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
 
     await db.commit()
     await db.refresh(db_admin)
-    return db_admin
+    return await get_admin(db, db_admin.username)
 
 
 async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:
@@ -1305,8 +1304,7 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> int:
     db_admin.users_usage = 0
 
     await db.commit()
-    await db.refresh(db_admin)
-    return db_admin
+    return await get_admin_by_id(db, db_admin.id)
 
 
 def get_user_template_queryset() -> Query:
