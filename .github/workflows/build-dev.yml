@@ -1,9 +1,10 @@
-name: Build-dev
+name: Build-Docker-dev
 
 on:
   push:
     branches:
       - 'dev'
+      - 'next'
 
 jobs:
   build-dev:
