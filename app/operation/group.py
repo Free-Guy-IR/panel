@@ -27,9 +27,9 @@ class GroupOperation(BaseOperator):
         logger.info(f'Group "{group.name}" created by admin "{admin.username}"')
         return group
 
-    async def get_all_groups(self, db: AsyncSession, offset: int, limit: int) -> GroupsResponse:
+    async def get_all_groups(self, db: AsyncSession, offset: int| None = None, limit: int|None=None) -> GroupsResponse:
         db_groups, count = await get_group(db, offset, limit)
-        return {"groups": db_groups, "total": count}
+        return GroupsResponse.model_validate({"groups": db_groups, "total": count})
 
     async def modify_group(self, db: AsyncSession, group_id: int, modified_group: GroupModify, admin: Admin) -> Group:
         db_group = await self.get_validated_group(db, group_id)
