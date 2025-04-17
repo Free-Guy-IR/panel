@@ -176,15 +176,15 @@ class User(Base):
 
     def inbounds(self, active_inbounds: list[str]) -> list[str]:
         """Returns a flat list of all included inbound tags across all proxies"""
-        included_tags = []
+        included_tags = set()
         for group in self.groups:
             if group.is_disabled:
                 continue
             tags = group.inbound_tags
             for inbound in active_inbounds:
                 if inbound in tags:
-                    included_tags.append(inbound)
-        return included_tags
+                    included_tags.add(inbound)
+        return list(included_tags)
 
     @property
     def group_ids(self):
