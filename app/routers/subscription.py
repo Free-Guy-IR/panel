@@ -4,12 +4,12 @@ from app.db import AsyncSession, get_db
 from app.models.stats import Period, UserUsageStats
 from app.models.user import SubscriptionUserResponse
 from app.operation import OperatorType
-from app.operation.subscription import SubscriptionOperator
+from app.operation.subscription import SubscriptionOperation
 from config import XRAY_SUBSCRIPTION_PATH
 
 
 router = APIRouter(tags=["Subscription"], prefix=f"/{XRAY_SUBSCRIPTION_PATH}")
-subscription_operator = SubscriptionOperator(operator_type=OperatorType.API)
+subscription_operator = SubscriptionOperation(operator_type=OperatorType.API)
 
 
 @router.get("/{token}/")

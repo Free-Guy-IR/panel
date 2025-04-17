@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy.exc import IntegrityError
 from GozargahNodeBridge import GozargahNode, NodeAPIError
 
-from app.operation import BaseOperator
+from app.operation import BaseOperation
 from app.models.stats import RealtimeNodeStats, NodeUsageStats, Period, NodeStats
 from app.models.node import NodeCreate, NodeResponse, NodeModify
 from app.models.admin import AdminDetails
@@ -16,7 +16,7 @@ from app.db.crud import (
     get_nodes,
     remove_node,
     get_nodes_usage,
-    update_node,
+    modify_node,
     get_user,
     get_node_stats,
 )
@@ -29,10 +29,10 @@ from app import notification
 
 MAX_MESSAGE_LENGTH = 128
 
-logger = get_logger("node-operator")
+logger = get_logger("node-operation")
 
 
-class NodeOperator(BaseOperator):
+class NodeOperation(BaseOperation):
     async def get_db_nodes(
         self, db: AsyncSession, core_id: int | None = None, offset: int | None = None, limit: int | None = None
     ) -> list[Node]:
@@ -84,7 +84,7 @@ class NodeOperator(BaseOperator):
             notify_err = True if db_node.status is not NodeStatus.error else False
 
             logger.info(f'Connecting to "{db_node.name}" node')
-            await NodeOperator.update_node_status(db_node.id, NodeStatus.connecting)
+            await NodeOperation.update_node_status(db_node.id, NodeStatus.connecting)
 
             core = await core_manager.get_core(db_node.core_config_id if db_node.core_config_id else 1)
 
@@ -96,7 +96,7 @@ class NodeOperator(BaseOperator):
                     keep_alive=db_node.keep_alive,
                     timeout=10,
                 )
-                await NodeOperator.update_node_status(
+                await NodeOperation.update_node_status(
                     node_id=db_node.id,
                     status=NodeStatus.connected,
                     core_version=info.core_version,
@@ -118,11 +118,11 @@ class NodeOperator(BaseOperator):
 
                 logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
 
-                await NodeOperator.update_node_status(
+                await NodeOperation.update_node_status(
                     node_id=db_node.id, status=NodeStatus.error, err=detail, notify_err=notify_err
                 )
 
-    async def add_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
+    async def create_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         await self.get_validated_core_config(db, new_node.core_config_id)
         try:
             db_node = await create_node(db, new_node)
@@ -148,7 +148,7 @@ class NodeOperator(BaseOperator):
         await self.get_validated_core_config(db, modified_node.core_config_id)
 
         try:
-            db_node = await update_node(db, db_node, modified_node)
+            db_node = await modify_node(db, db_node, modified_node)
         except IntegrityError:
             await self.raise_error(message=f'Node "{db_node.name}" already exists', code=409, db=db)
 
@@ -185,7 +185,7 @@ class NodeOperator(BaseOperator):
 
     async def restart_all_node(self, db: AsyncSession, core_id: int | None, admin: AdminDetails) -> None:
         nodes: list[Node] = await self.get_db_nodes(db, core_id)
-        await asyncio.gather(*[NodeOperator.connect_node(node.id) for node in nodes])
+        await asyncio.gather(*[NodeOperation.connect_node(node.id) for node in nodes])
 
         logger.info(f'All nodes restarted by admin "{admin.username}"')
 

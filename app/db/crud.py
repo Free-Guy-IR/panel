@@ -200,7 +200,7 @@ async def get_host_by_id(db: AsyncSession, id: int) -> ProxyHost:
     return result.scalar_one_or_none()
 
 
-async def add_host(db: AsyncSession, new_host: CreateHost) -> ProxyHost:
+async def create_host(db: AsyncSession, new_host: CreateHost) -> ProxyHost:
     """
     Creates a proxy Host based on the host.
 
@@ -602,9 +602,9 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
     await db.commit()
 
 
-async def update_user(db: AsyncSession, db_user: User, modify: UserModify) -> User:
+async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> User:
     """
-    Updates a user's information.
+    Modify a user's information.
 
     Args:
         db (AsyncSession): Database session.
@@ -1341,7 +1341,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
     return db_user_template
 
 
-async def update_user_template(
+async def modify_user_template(
     db: AsyncSession, db_user_template: UserTemplate, modified_user_template: UserTemplateModify
 ) -> UserTemplate:
     """
@@ -1349,7 +1349,7 @@ async def update_user_template(
 
     Args:
         db (AsyncSession): Database session.
-        dbuser_template (UserTemplate): The user template object to be updated.
+        db_user_template (UserTemplate): The user template object to be updated.
         modified_user_template (UserTemplateModify): The modified user template data.
 
     Returns:
@@ -1619,9 +1619,9 @@ async def remove_node(db: AsyncSession, db_node: Node) -> Node:
     await db.commit()
 
 
-async def update_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> Node:
+async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> Node:
     """
-    Updates an existing node with new information.
+    modify an existing node with new information.
 
     Args:
         db (AsyncSession): The database session.
@@ -1629,7 +1629,7 @@ async def update_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
         modify (NodeModify): The modification model containing updated node details.
 
     Returns:
-        Node: The updated Node object.
+        Node: The modified Node object.
     """
 
     node_data = modify.model_dump(exclude_none=True)
@@ -1885,9 +1885,9 @@ async def get_groups_by_ids(db: AsyncSession, group_ids: list[int]) -> list[Grou
     return (await db.execute(get_group_queryset().where(Group.id.in_(group_ids)))).scalars().all()
 
 
-async def update_group(db: AsyncSession, db_group: Group, modified_group: GroupModify) -> Group:
+async def modify_group(db: AsyncSession, db_group: Group, modified_group: GroupModify) -> Group:
     """
-    Updates an existing group with new information.
+    Modify an existing group with new information.
 
     Args:
         db (AsyncSession): The database session.

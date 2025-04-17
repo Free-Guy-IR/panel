@@ -27,8 +27,5 @@ async def confirm_action(event: CallbackQuery, callback_data: ConfirmAction.Call
 
     await event.message.edit_text(
         text,
-        reply_markup=ConfirmAction(
-            confirm_action=callback_data.action,
-            cancel_action=callback_data.cancel
-        ).as_markup()
+        reply_markup=ConfirmAction(confirm_action=callback_data.action, cancel_action=callback_data.cancel).as_markup(),
     )

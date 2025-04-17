@@ -7,7 +7,7 @@ router = Router(name="error_handler")
 
 
 @router.error(ExceptionTypeFilter(ValueError, ValidationError), F.update.message.as_("message"))
-async def handle_exception(event: ErrorEvent, message: Message):
+async def handle_message_exception(event: ErrorEvent, message: Message):
     error = "❌ Error: "
     if isinstance(event.exception, ValidationError):
         error += "\n".join(
@@ -19,7 +19,7 @@ async def handle_exception(event: ErrorEvent, message: Message):
 
 
 @router.error(ExceptionTypeFilter(ValueError, ValidationError), F.update.callback_query.as_("query"))
-async def handle_exception(event: ErrorEvent, query: CallbackQuery):
+async def handle_query_exception(event: ErrorEvent, query: CallbackQuery):
     error = "❌ Error: "
     if isinstance(event.exception, ValidationError):
         error += "\n".join(

@@ -4,14 +4,14 @@ from app.db.crud import create_core_config, modify_core_config, remove_core_conf
 from app.models.admin import AdminDetails
 from app.models.core import CoreCreate, CoreResponseList, CoreResponse
 from app.core.manager import core_manager
-from app.operation import BaseOperator
+from app.operation import BaseOperation
 from app.utils.logger import get_logger
 
 
-logger = get_logger("core-operator")
+logger = get_logger("core-operation")
 
 
-class CoreOperation(BaseOperator):
+class CoreOperation(BaseOperation):
     async def create_core(self, db: AsyncSession, new_core: CoreCreate, admin: AdminDetails) -> CoreResponse:
         try:
             db_core = await create_core_config(db, new_core)

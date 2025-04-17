@@ -18,12 +18,12 @@ from app.models.user import (
 from app.db.models import UserStatus
 from app.utils import responses
 from app.operation import OperatorType
-from app.operation.user import UserOperator
-from app.operation.node import NodeOperator
+from app.operation.user import UserOperation
+from app.operation.node import NodeOperation
 
 
-user_operator = UserOperator(operator_type=OperatorType.API)
-node_operator = NodeOperator(operator_type=OperatorType.API)
+user_operator = UserOperation(operator_type=OperatorType.API)
+node_operator = NodeOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["User"], prefix="/api/user", responses={401: responses._401})
 
 
@@ -33,11 +33,11 @@ router = APIRouter(tags=["User"], prefix="/api/user", responses={401: responses.
     responses={400: responses._400, 409: responses._409},
     status_code=status.HTTP_201_CREATED,
 )
-async def add_user(
+async def create_user(
     new_user: UserCreate, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(get_current)
 ):
     """
-    Add a new user
+    Create a new user
 
     - **username**: 3 to 32 characters, can include a-z, 0-9, and underscores.
     - **status**: User's status, defaults to `active`. Special rules if `on_hold`.
@@ -52,7 +52,7 @@ async def add_user(
     - **next_plan**: Next user plan (resets after use).
     """
 
-    return await user_operator.add_user(db, new_user=new_user, admin=admin)
+    return await user_operator.create_user(db, new_user=new_user, admin=admin)
 
 
 @router.put(

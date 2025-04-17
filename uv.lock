@@ -484,9 +484,9 @@ dependencies = [
     { name = "httpx" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bb/a2/9950c041393e7eeb09d63b766d247f8f39ecf3bfd1e2068392edf2404907/gozargah_node_bridge-0.0.30.tar.gz", hash = "sha256:6779fa4be7f4fb9d59f0392ae0425f55762e9386612148d9d14d49e6071a5cae", size = 39494 }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/e6/73034d528e676efa090f54f961e908d89af35e52412f0b93db874a361f46/gozargah_node_bridge-0.0.33.tar.gz", hash = "sha256:fe5bda2888ca0d443889efef608299d76fb38fc8738510470be7a2b23ad2d428", size = 39531 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/cb/8b8c65f8bb46846c45acf9c5859d6ffa228fabedf150dc6b0ff79a299ca2/gozargah_node_bridge-0.0.30-py3-none-any.whl", hash = "sha256:548cbc83887d93f5ac7b0c501fa2ee8a60b1451d9bddef0d667c0703d2dbe25e", size = 30159 },
+    { url = "https://files.pythonhosted.org/packages/82/fc/bce456d9473edaa396898780828d4ba7bc74edbb875f8cc5fc4bae5c9af8/gozargah_node_bridge-0.0.33-py3-none-any.whl", hash = "sha256:68cd5fbc6f41faaee3b49c3afdc38fe83a1cfe5f1d52dd439b1cccab93ec7163", size = 30300 },
 ]
 
 [[package]]
@@ -795,7 +795,6 @@ dependencies = [
     { name = "aiocache" },
     { name = "aiogram" },
     { name = "aiohttp-socks" },
-    { name = "aiorwlock" },
     { name = "aiosqlite" },
     { name = "alembic" },
     { name = "anyio" },
@@ -858,7 +857,6 @@ requires-dist = [
     { name = "aiocache", specifier = ">=0.12.3" },
     { name = "aiogram", specifier = ">=3.19.0" },
     { name = "aiohttp-socks", specifier = ">=0.10.1" },
-    { name = "aiorwlock", specifier = ">=1.5.0" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "alembic", specifier = "==1.14.0" },
     { name = "anyio", specifier = "==4.2.0" },

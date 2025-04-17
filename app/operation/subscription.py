@@ -4,7 +4,7 @@ from packaging.version import parse
 from fastapi import Response
 from fastapi.responses import HTMLResponse
 
-from . import BaseOperator
+from . import BaseOperation
 from app.db import AsyncSession
 from app.db.models import User
 from app.db.crud import update_user_sub, get_user_usages
@@ -37,7 +37,7 @@ client_config = {
 }
 
 
-class SubscriptionOperator(BaseOperator):
+class SubscriptionOperation(BaseOperation):
     @staticmethod
     def detect_client_type(user_agent: str) -> str:
         """Detect the appropriate client configuration based on the user agent."""

@@ -19,6 +19,6 @@ class AdminPanel(InlineKeyboardBuilder):
 
 
 class InlineQuerySearch(InlineKeyboardBuilder):
-    def __init__(self, query: str,  *args, **kwargs):
+    def __init__(self, query: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.button(text=Texts.search, switch_inline_query_current_chat=query)

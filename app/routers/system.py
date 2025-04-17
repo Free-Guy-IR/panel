@@ -5,14 +5,14 @@ from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.system import SystemStats
 from app.operation import OperatorType
-from app.operation.system import SystemOperator
+from app.operation.system import SystemOperation
 from app.telegram import bot, dp
 from app.utils import responses
 from app.utils.logger import EndpointFilter, get_logger
 from config import TELEGRAM_API_TOKEN, TELEGRAM_WEBHOOK_SECRET_KEY
 from .authentication import get_current
 
-system_operator = SystemOperator(operator_type=OperatorType.API)
+system_operator = SystemOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["System"], prefix="/api", responses={401: responses._401})
 
 TELEGRAN_WEBHOOK_PATH = f"/tghook/{TELEGRAM_API_TOKEN}"

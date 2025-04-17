@@ -12,5 +12,5 @@ def readable_size(size_bytes: int):
 
     size_name = ("Bytes", "KB", "MB", "GB", "TB", "PT")
     i = int(math.floor(math.log(size_bytes, 1024)))
-    s = round(size_bytes / (1024 ** i), 1)
+    s = round(size_bytes / (1024**i), 1)
     return f"{'-' if is_negative else ''}{int(s) if s.is_integer() else s} {size_name[i]}"

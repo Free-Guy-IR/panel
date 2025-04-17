@@ -31,7 +31,7 @@ class OperatorType(IntEnum):
     DISCORD = 5
 
 
-class BaseOperator:
+class BaseOperation:
     def __init__(self, operator_type: OperatorType):
         self.operator_type = operator_type
 

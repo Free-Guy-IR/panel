@@ -3,6 +3,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
+from pydantic import ValidationError
 
 from app.core.manager import core_manager
 from app.db import AsyncSession
@@ -12,7 +13,7 @@ from app.db.crud import (
     remove_user,
     reset_user_data_usage,
     revoke_user_sub,
-    update_user,
+    modify_user,
     get_users,
     reset_all_users_data_usage,
     get_user_usages,
@@ -37,17 +38,17 @@ from app.models.user import (
 )
 from app.models.user_template import UserTemplateResponse
 from app.node import node_manager as node_manager
-from app.operation import BaseOperator
+from app.operation import BaseOperation
 from app.utils.logger import get_logger
 from app.utils.jwt import create_subscription_token
 from config import XRAY_SUBSCRIPTION_PATH, XRAY_SUBSCRIPTION_URL_PREFIX
 from app import notification
 
 
-logger = get_logger("user-operator")
+logger = get_logger("user-operation")
 
 
-class UserOperator(BaseOperator):
+class UserOperation(BaseOperation):
     @staticmethod
     async def generate_subscription_url(user: UserResponse):
         salt = secrets.token_hex(8)
@@ -64,7 +65,7 @@ class UserOperator(BaseOperator):
         user.subscription_url = await self.generate_subscription_url(user)
         return user
 
-    async def add_user(self, db: AsyncSession, new_user: UserCreate, admin: AdminDetails) -> UserResponse:
+    async def create_user(self, db: AsyncSession, new_user: UserCreate, admin: AdminDetails) -> UserResponse:
         if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
             await self.get_validated_user_template(db, new_user.next_plan.user_template_id)
 
@@ -97,7 +98,7 @@ class UserOperator(BaseOperator):
 
         old_status = db_user.status
 
-        db_user = await update_user(db, db_user, modified_user)
+        db_user = await modify_user(db, db_user, modified_user)
         user = await self.validate_user(db_user)
 
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
@@ -367,10 +368,13 @@ class UserOperator(BaseOperator):
             )
         else:
             new_user_args["on_hold_expire_duration"] = user_template.expire_duration
+        try:
+            new_user = UserCreate(**new_user_args)
+        except ValidationError as e:
+            error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            await self.raise_error(message=error_messages, code=400)
 
-        new_user = UserCreate(**new_user_args)
-
-        return await self.add_user(db, new_user, admin)
+        return await self.create_user(db, new_user, admin)
 
     async def modify_user_by_user_template(
         self, db: AsyncSession, username: str, modified_template: ModifyUserByTemplate, admin: AdminDetails
@@ -395,9 +399,13 @@ class UserOperator(BaseOperator):
         else:
             modify_user_args["on_hold_expire_duration"] = user_template.expire_duration
 
-        update_user_model = UserModify(**modify_user_args)
+        try:
+            modify_user_model = UserModify(**modify_user_args)
+        except ValidationError as e:
+            error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            await self.raise_error(message=error_messages, code=400)
 
-        user = await self.modify_user(db, username, update_user_model, admin)
+        user = await self.modify_user(db, username, modify_user_model, admin)
         if user_template.reset_usages:
             return await self.reset_user_data_usage(db, username, admin)
         return user

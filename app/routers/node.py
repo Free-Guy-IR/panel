@@ -10,12 +10,12 @@ from app.models.admin import AdminDetails
 from .authentication import check_sudo_admin
 from app.models.stats import RealtimeNodeStats, NodeUsageStats, Period, NodeStats
 from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings
-from app.operation.node import NodeOperator
+from app.operation.node import NodeOperation
 from app.operation import OperatorType
 from app.utils import responses
 
 
-node_operator = NodeOperator(operator_type=OperatorType.API)
+node_operator = NodeOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses._401, 403: responses._403})
 
 
@@ -56,11 +56,11 @@ async def get_nodes(
     responses={409: responses._409},
     status_code=status.HTTP_201_CREATED,
 )
-async def add_node(
+async def create_node(
     new_node: NodeCreate, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
-    """Add a new node to the database."""
-    return await node_operator.add_node(db, new_node, admin)
+    """Create a new node to the database."""
+    return await node_operator.create_node(db, new_node, admin)
 
 
 @router.get("/{node_id}", response_model=NodeResponse)
@@ -76,7 +76,7 @@ async def modify_node(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(check_sudo_admin),
 ):
-    """Update a node's details. Only accessible to sudo admins."""
+    """Modify a node's details. Only accessible to sudo admins."""
     return await node_operator.modify_node(db, node_id=node_id, modified_node=modified_node, admin=admin)
 
 
@@ -101,7 +101,7 @@ async def sync_node(
 async def remove_node(
     node_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
 ):
-    """Delete a node and remove it from xray in the background."""
+    """Remove a node and remove it from xray in the background."""
     await node_operator.remove_node(db=db, node_id=node_id, admin=admin)
     return {}
 

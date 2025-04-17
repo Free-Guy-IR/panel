@@ -32,9 +32,6 @@ class User(BaseModel):
     data_limit: int | None = Field(ge=0, default=None, description="data_limit can be 0 or greater")
     data_limit_reset_strategy: UserDataLimitResetStrategy | None = None
     note: str | None = Field(max_length=500, default=None)
-    sub_updated_at: datetime | None = None
-    sub_last_user_agent: str | None = None
-    online_at: datetime | None = None
     on_hold_expire_duration: int | None = None
     on_hold_timeout: datetime | int | None = None
     group_ids: list[int] | None = Field(default_factory=list)
@@ -149,6 +146,9 @@ class UserResponse(User):
     used_traffic: int
     lifetime_used_traffic: int = 0
     created_at: datetime
+    sub_updated_at: datetime | None = None
+    sub_last_user_agent: str | None = None
+    online_at: datetime | None = None
     subscription_url: str = ""
     admin: AdminBaseInfo | None = None
     model_config = ConfigDict(from_attributes=True)
@@ -188,7 +188,7 @@ class ModifyUserByTemplate(BaseModel):
 
 
 class CreateUserFromTemplate(ModifyUserByTemplate):
-    username: str
+    username: str = Field(min_length=3, max_length=32)
 
     @field_validator("username", check_fields=False)
     @classmethod
