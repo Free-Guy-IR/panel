@@ -1203,17 +1203,19 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
     if modified_admin.hashed_password is not None and db_admin.hashed_password != modified_admin.hashed_password:
         db_admin.hashed_password = modified_admin.hashed_password
         db_admin.password_reset_at = datetime.now(timezone.utc)
-    if modified_admin.telegram_id:
+    if modified_admin.telegram_id is not None:
         db_admin.telegram_id = modified_admin.telegram_id
-    if modified_admin.discord_webhook:
+    if modified_admin.discord_webhook is not None:
         db_admin.discord_webhook = modified_admin.discord_webhook
-    if modified_admin.sub_template:
+    if modified_admin.discord_id is not None:
+        db_admin.discord_id = modified_admin.discord_id
+    if modified_admin.sub_template is not None:
         db_admin.sub_template = modified_admin.sub_template
-    if modified_admin.sub_domain:
+    if modified_admin.sub_domain is not None:
         db_admin.sub_domain = modified_admin.sub_domain
-    if modified_admin.support_url:
+    if modified_admin.support_url is not None:
         db_admin.support_url = modified_admin.support_url
-    if modified_admin.profile_title:
+    if modified_admin.profile_title is not None:
         db_admin.profile_title = modified_admin.profile_title
 
     await db.commit()
@@ -1260,6 +1262,22 @@ async def get_admin_by_telegram_id(db: AsyncSession, telegram_id: int) -> Admin:
     """
     return (
         (await db.execute(get_admin_queryset().where(Admin.telegram_id == telegram_id))).unique().scalar_one_or_none()
+    )
+
+
+async def get_admin_by_discord_id(db: AsyncSession, discord_id: int) -> Admin:
+    """
+    Retrieves an admin by their Discord ID.
+
+    Args:
+        db (AsyncSession): Database session.
+        discord_id (int): The Discord ID of the admin.
+
+    Returns:
+        Admin: The admin object.
+    """
+    return (
+        (await db.execute(get_admin_queryset().where(Admin.discord_id == discord_id))).unique().scalar_one_or_none()
     )
 
 

@@ -52,6 +52,7 @@ class Admin(Base):
     password_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
     telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
     discord_webhook: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
+    discord_id: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
     users_usage: Mapped[int] = mapped_column(BigInteger, default=0)
     is_disabled: Mapped[bool] = mapped_column(server_default="0", default=False)
     usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin", lazy="selectin")
