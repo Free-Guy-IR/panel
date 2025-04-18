@@ -11,12 +11,17 @@ class ACLMiddleware(BaseMiddleware):
     async def __call__(
         self, handler: Callable[[Update, Dict[str, Any]], Awaitable[Any]], event: Update, data: Dict[str, Any]
     ) -> Any:
-        user_id = (event.message or event.callback_query or event.inline_query).from_user.id
+        message_obj = event.message or event.callback_query or event.inline_query
+        user_id = message_obj.from_user.id
         async with GetDB() as db:
             admin = await crud.get_admin_by_telegram_id(db, user_id)
             if admin:
-                admin = AdminDetails.model_validate(admin)
-                data["admin"] = admin
+                if admin.is_disabled:
+                    await message_obj.reply("your account hase been disabled.")
+                    data["admin"] = None
+                else:
+                    admin = AdminDetails.model_validate(admin)
+                    data["admin"] = admin
             else:
                 data["admin"] = None
 
