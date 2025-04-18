@@ -88,7 +88,7 @@ async def create_admin(
     return await admin_operator.create_admin(db, new_admin=new_admin, admin=admin)
 
 
-@router.put("/{username}", response_model=AdminDetails, responses={403: responses._403, 404: responses._404},)
+@router.put("/{username}", response_model=AdminDetails, responses={403: responses._403, 404: responses._404})
 async def modify_admin(
     username: str,
     modified_admin: AdminModify,

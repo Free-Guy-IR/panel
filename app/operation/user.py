@@ -25,7 +25,7 @@ from app.db.crud import (
     UsersSortingOptions,
 )
 from app.db.models import User, UserStatus
-from app.models.stats import UserUsageStats, Period
+from app.models.stats import UserUsageStatsList, Period
 from app.models.admin import AdminDetails
 from app.models.user import (
     CreateUserFromTemplate,
@@ -213,7 +213,7 @@ class UserOperation(BaseOperation):
         end: str = "",
         period: Period = Period.hour,
         node_id: int | None = None,
-    ) -> list[UserUsageStats]:
+    ) -> UserUsageStatsList:
         start, end = await self.validate_dates(start, end)
         db_user = await self.get_validated_user(db, username, admin)
 
@@ -274,7 +274,7 @@ class UserOperation(BaseOperation):
         owner: list[str] | None = None,
         period: Period = Period.hour,
         node_id: int | None = None,
-    ) -> list[UserUsageStats]:
+    ) -> UserUsageStatsList:
         """Get all users usage"""
         start, end = await self.validate_dates(start, end)
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.db import AsyncSession, get_db
 from .authentication import check_sudo_admin, get_current
-from app.models.stats import Period, UserUsageStats
+from app.models.stats import Period, UserUsageStatsList
 from app.models.admin import AdminDetails
 from app.models.user import (
     CreateUserFromTemplate,
@@ -179,7 +179,7 @@ async def get_users(
 
 
 @router.get(
-    "/{username}/usage", response_model=list[UserUsageStats], responses={403: responses._403, 404: responses._404}
+    "/{username}/usage", response_model=UserUsageStatsList, responses={403: responses._403, 404: responses._404}
 )
 async def get_user_usage(
     username: str,
@@ -196,7 +196,7 @@ async def get_user_usage(
     )
 
 
-@router.get("s/usage", response_model=list[UserUsageStats])
+@router.get("s/usage", response_model=UserUsageStatsList)
 async def get_users_usage(
     period: Period,
     node_id: int | None = None,

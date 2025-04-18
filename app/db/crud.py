@@ -37,7 +37,15 @@ from app.db.models import (
     NodeStat,
 )
 from app.db.base import DATABASE_DIALECT
-from app.models.stats import Period, UserUsageStats, NodeUsageStats, NodeStats
+from app.models.stats import (
+    Period,
+    UserUsageStat,
+    NodeUsageStat,
+    NodeStats,
+    UserUsageStatsList,
+    NodeUsageStatsList,
+    NodeStatsList,
+)
 from app.models.proxy import ProxyTable
 from app.models.host import CreateHost
 from app.models.admin import AdminCreate, AdminModify
@@ -491,7 +499,7 @@ async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]
 
 async def get_user_usages(
     db: AsyncSession, user_id: int, start: datetime, end: datetime, period: Period, node_id: int | None = None
-) -> list[UserUsageStats]:
+) -> UserUsageStatsList:
     """
     Retrieves user usages within a specified date range.
     """
@@ -516,9 +524,9 @@ async def get_user_usages(
     )
 
     result = await db.execute(stmt)
-    return [
-        UserUsageStats(total_traffic=row.total_traffic, period=period, period_start=row.period_start) for row in result
-    ]
+    return UserUsageStatsList(
+        period=period, start=start, end=end, stats=[UserUsageStat(**row) for row in result.mappings()]
+    )
 
 
 async def get_users_count(db: AsyncSession, status: UserStatus = None, admin: Admin = None) -> int:
@@ -940,7 +948,7 @@ async def get_all_users_usages(
     end: datetime,
     period: Period = Period.hour,
     node_id: int | None = None,
-) -> list[UserUsageStats]:
+) -> UserUsageStatsList:
     """
     Retrieves aggregated usage data for all users of an admin within a specified time range,
     grouped by the specified time period.
@@ -954,7 +962,7 @@ async def get_all_users_usages(
         node_id (Optional[int]): Filter results by specific node ID if provided
 
     Returns:
-        list[UsageStats]: Aggregated usage data for each period.
+        UserUsageStatsList: Aggregated usage data for each period.
     """
     admin_users = {user.id for user in await get_users(db=db, admins=admin)}
 
@@ -978,9 +986,9 @@ async def get_all_users_usages(
     )
 
     result = await db.execute(stmt)
-    return [
-        UserUsageStats(total_traffic=row.total_traffic, period=period, period_start=row.period_start) for row in result
-    ]
+    return UserUsageStatsList(
+        period=period, start=start, end=end, stats=[UserUsageStat(**row) for row in result.mappings()]
+    )
 
 
 async def _update_user_status(db_user: User, status: UserStatus) -> User:
@@ -1276,9 +1284,7 @@ async def get_admin_by_discord_id(db: AsyncSession, discord_id: int) -> Admin:
     Returns:
         Admin: The admin object.
     """
-    return (
-        (await db.execute(get_admin_queryset().where(Admin.discord_id == discord_id))).unique().scalar_one_or_none()
-    )
+    return (await db.execute(get_admin_queryset().where(Admin.discord_id == discord_id))).unique().scalar_one_or_none()
 
 
 async def get_admins(
@@ -1528,7 +1534,7 @@ async def get_nodes(
 
 async def get_nodes_usage(
     db: AsyncSession, start: datetime, end: datetime, period: Period, node_id: int | None = None
-) -> list[NodeUsageStats]:
+) -> NodeUsageStatsList:
     """
     Retrieves usage data for all nodes within a specified time range.
 
@@ -1538,7 +1544,7 @@ async def get_nodes_usage(
         end (datetime): The end time of the usage period.
 
     Returns:
-        List[NodeUsageResponse]: A list of NodeUsageResponse objects containing usage data.
+        NodeUsageStatsList: A NodeUsageStatsList contain list of NodeUsageResponse objects containing usage data.
     """
     trunc_expr = _build_trunc_expression(period, NodeUsage.created_at)
 
@@ -1559,15 +1565,12 @@ async def get_nodes_usage(
     )
 
     result = await db.execute(stmt)
-    return [
-        NodeUsageStats(downlink=row.downlink, uplink=row.uplink, period=period, period_start=row.period_start)
-        for row in result
-    ]
+    return NodeUsageStatsList(period=period, start=start, end=end, stats=[NodeUsageStat(**row) for row in result])
 
 
 async def get_node_stats(
     db: AsyncSession, node_id: int, start: datetime, end: datetime, period: Period
-) -> list[NodeStats]:
+) -> NodeStatsList:
     trunc_expr = _build_trunc_expression(period, NodeStat.created_at)
     conditions = [NodeStat.created_at >= start, NodeStat.created_at <= end, NodeStat.node_id == node_id]
 
@@ -1585,22 +1588,8 @@ async def get_node_stats(
     )
 
     result = await db.execute(stmt)
-    rows = result.fetchall()
 
-    stats = []
-    for row in rows:
-        stats.append(
-            NodeStats(
-                period_start=row.period_start,
-                period=period,
-                mem_usage_percentage=float(row.mem_usage_percentage),
-                cpu_usage_percentage=float(row.cpu_usage_percentage),
-                incoming_bandwidth_speed=float(row.incoming_bandwidth_speed),
-                outgoing_bandwidth_speed=float(row.outgoing_bandwidth_speed),
-            )
-        )
-
-    return stats
+    return NodeStatsList(period=period, start=start, end=end, stats=[NodeStats(**row) for row in result.mappings()])
 
 
 async def create_node(db: AsyncSession, node: NodeCreate) -> Node:
