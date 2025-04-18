@@ -27,7 +27,6 @@ dependencies = [
     "python-dotenv>=0.21.1",
     "python-multipart>=0.0.7",
     "qrcode>=8.1",
-    "requests>=2.32.3",
     "rich>=13.7.1",
     "uvicorn==0.27.0.post1",
     "websocket-client==1.7.0",
