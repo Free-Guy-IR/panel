@@ -70,7 +70,7 @@ class UserWithValidator(User):
 
 
 class UserCreate(UserWithValidator):
-    username: str = Field(min_length=3, max_length=32)
+    username: str = Field(min_length=3, max_length=128)
     status: UserStatusCreate | None = None
     model_config = ConfigDict(
         json_schema_extra={
@@ -188,7 +188,7 @@ class ModifyUserByTemplate(BaseModel):
 
 
 class CreateUserFromTemplate(ModifyUserByTemplate):
-    username: str = Field(min_length=3, max_length=32)
+    username: str = Field(min_length=3, max_length=128)
 
     @field_validator("username", check_fields=False)
     @classmethod

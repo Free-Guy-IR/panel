@@ -25,7 +25,7 @@ from app.telegram.keyboards.user import UserPanel, UserPanelAction
 user_operations = UserOperation(OperatorType.TELEGRAM)
 group_operations = GroupOperation(OperatorType.TELEGRAM)
 
-USERNAME_PATTERN = re.compile(r"^(?=\w{3,32}\b)[a-zA-Z0-9-_@.]+(?:_[a-zA-Z0-9-_@.]+)*$")
+USERNAME_PATTERN = re.compile(r"^(?=\w{3,128}\b)[a-zA-Z0-9-_@.]+(?:_[a-zA-Z0-9-_@.]+)*$")
 
 
 @router.callback_query(
@@ -45,7 +45,7 @@ async def process_username(message: Message, state: FSMContext, admin: AdminDeta
     username = message.text
     if not USERNAME_PATTERN.match(username):
         return await message.reply(
-            "❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.",
+            "❌ Username only can be 3 to 128 characters and contain a-z, A-Z, 0-9, and underscores in between.",
             reply_markup=CancelKeyboard().as_markup(),
         )
     async with GetDB() as db:
