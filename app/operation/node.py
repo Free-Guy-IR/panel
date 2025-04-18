@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from GozargahNodeBridge import GozargahNode, NodeAPIError
 
 from app.operation import BaseOperation
-from app.models.stats import RealtimeNodeStats, NodeUsageStats, Period, NodeStats
+from app.models.stats import NodeRealtimeStats, Period, NodeUsageStatsList, NodeStatsList
 from app.models.node import NodeCreate, NodeResponse, NodeModify
 from app.models.admin import AdminDetails
 from app.db.models import Node, NodeStatus
@@ -191,7 +191,7 @@ class NodeOperation(BaseOperation):
 
     async def get_usage(
         self, db: AsyncSession, start: str = "", end: str = "", period: Period = Period.hour, node_id: int | None = None
-    ) -> list[NodeUsageStats]:
+    ) -> NodeUsageStatsList:
         start, end = await self.validate_dates(start, end)
         return await get_nodes_usage(db, start, end, period=period, node_id=node_id)
 
@@ -210,12 +210,12 @@ class NodeOperation(BaseOperation):
 
     async def get_node_stats_periodic(
         self, db: AsyncSession, node_id: id, start: str = "", end: str = "", period: Period = Period.hour
-    ) -> list[NodeStats]:
+    ) -> NodeStatsList:
         start, end = await self.validate_dates(start, end)
 
         return await get_node_stats(db, node_id, start, end, period=period)
 
-    async def get_node_system_stats(self, node_id: Node) -> RealtimeNodeStats:
+    async def get_node_system_stats(self, node_id: Node) -> NodeRealtimeStats:
         node = await node_manager.get_node(node_id)
 
         if node is None:
@@ -229,7 +229,7 @@ class NodeOperation(BaseOperation):
         if stats is None:
             await self.raise_error(message="Stats not found", code=404)
 
-        return RealtimeNodeStats(
+        return NodeRealtimeStats(
             mem_total=stats.mem_total,
             mem_used=stats.mem_used,
             cpu_cores=stats.cpu_cores,
@@ -238,7 +238,7 @@ class NodeOperation(BaseOperation):
             outgoing_bandwidth_speed=stats.outgoing_bandwidth_speed,
         )
 
-    async def get_nodes_system_stats(self) -> dict[int, RealtimeNodeStats | None]:
+    async def get_nodes_system_stats(self) -> dict[int, NodeRealtimeStats | None]:
         nodes = await node_manager.get_healthy_nodes()
         stats_tasks = {id: asyncio.create_task(self._get_node_stats_safe(id)) for id, _ in nodes}
 
@@ -253,7 +253,7 @@ class NodeOperation(BaseOperation):
 
         return results
 
-    async def _get_node_stats_safe(self, node_id: Node) -> RealtimeNodeStats | None:
+    async def _get_node_stats_safe(self, node_id: Node) -> NodeRealtimeStats | None:
         """Wrapper method that returns None instead of raising exceptions"""
         try:
             return await self.get_node_system_stats(node_id)

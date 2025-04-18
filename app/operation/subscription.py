@@ -8,7 +8,7 @@ from . import BaseOperation
 from app.db import AsyncSession
 from app.db.models import User
 from app.db.crud import update_user_sub, get_user_usages
-from app.models.stats import Period, UserUsageStats
+from app.models.stats import Period, UserUsageStatsList
 from app.models.user import UserResponse
 from app.subscription.share import encode_title, generate_subscription
 from app.templates import render_template
@@ -190,7 +190,7 @@ class SubscriptionOperation(BaseOperation):
         start: str = "",
         end: str = "",
         period: Period = Period.hour,
-    ) -> list[UserUsageStats]:
+    ) -> UserUsageStatsList:
         """Fetches the usage statistics for the user within a specified date range."""
         start, end = await self.validate_dates(start, end)
 
