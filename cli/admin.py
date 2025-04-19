@@ -15,7 +15,6 @@ from app.db.models import Admin, User
 from app.models.admin import AdminCreate, AdminDetails, AdminModify
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
-from app.utils.concurrency import GetBG
 from app.utils.helpers import readable_datetime
 from app.utils.system import readable_size
 from cli import BaseModal
