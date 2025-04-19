@@ -1,13 +1,12 @@
 import re
-from packaging.version import parse
 
 from fastapi import Response
 from fastapi.responses import HTMLResponse
+from packaging.version import parse
 
-from . import BaseOperation
 from app.db import AsyncSession
+from app.db.crud import get_user_usages, update_user_sub
 from app.db.models import User
-from app.db.crud import update_user_sub, get_user_usages
 from app.models.stats import Period, UserUsageStatsList
 from app.models.user import UserResponse
 from app.subscription.share import encode_title, generate_subscription
@@ -19,12 +18,13 @@ from config import (
     SUBSCRIPTION_PAGE_TEMPLATE,
     USE_CUSTOM_JSON_DEFAULT,
     USE_CUSTOM_JSON_FOR_HAPP,
-    USE_CUSTOM_JSON_FOR_STREISAND,
     USE_CUSTOM_JSON_FOR_NPVTUNNEL,
+    USE_CUSTOM_JSON_FOR_STREISAND,
     USE_CUSTOM_JSON_FOR_V2RAYN,
     USE_CUSTOM_JSON_FOR_V2RAYNG,
 )
 
+from . import BaseOperation
 
 client_config = {
     "clash-meta": {"config_format": "clash-meta", "media_type": "text/yaml", "as_base64": False},
@@ -99,8 +99,7 @@ class SubscriptionOperation(BaseOperation):
         else:
             return "links-base64"
 
-    @staticmethod
-    def create_response_headers(user: User, request_url: str) -> dict:
+    def create_response_headers(self, user: User, request_url: str) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
         user_info = {
@@ -163,9 +162,13 @@ class SubscriptionOperation(BaseOperation):
 
         # Update user subscription info
         await update_user_sub(db, db_user, user_agent)
+        print("=================================")
+        print(db_user.username)
+        print("=================================")
 
+        user = UserResponse.model_validate(db_user)
         # Create response with appropriate headers
-        response_headers = self.create_response_headers(db_user, request_url)
+        response_headers = self.create_response_headers(user, request_url)
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
     async def user_subscription_with_client_type(
@@ -174,8 +177,9 @@ class SubscriptionOperation(BaseOperation):
         """Provides a subscription link based on the specified client type (e.g., Clash, V2Ray)."""
         conf, media_type, db_user = await self.fetch_config(db, token=token, client_type=client_type)
 
+        user = UserResponse.model_validate(db_user)
         # Create response headers
-        response_headers = self.create_response_headers(db_user, request_url)
+        response_headers = self.create_response_headers(user, request_url)
 
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
