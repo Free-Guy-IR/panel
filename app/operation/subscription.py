@@ -161,14 +161,9 @@ class SubscriptionOperation(BaseOperation):
             conf, media_type, db_user = await self.fetch_config(db, token=token, client_type=client_type)
 
         # Update user subscription info
-        await update_user_sub(db, db_user, user_agent)
-        print("=================================")
-        print(db_user.username)
-        print("=================================")
-
-        user = UserResponse.model_validate(db_user)
+        db_user = await update_user_sub(db, db_user, user_agent)
         # Create response with appropriate headers
-        response_headers = self.create_response_headers(user, request_url)
+        response_headers = self.create_response_headers(db_user, request_url)
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
     async def user_subscription_with_client_type(
@@ -177,9 +172,8 @@ class SubscriptionOperation(BaseOperation):
         """Provides a subscription link based on the specified client type (e.g., Clash, V2Ray)."""
         conf, media_type, db_user = await self.fetch_config(db, token=token, client_type=client_type)
 
-        user = UserResponse.model_validate(db_user)
         # Create response headers
-        response_headers = self.create_response_headers(user, request_url)
+        response_headers = self.create_response_headers(db_user, request_url)
 
         return Response(content=conf, media_type=media_type, headers=response_headers)
 

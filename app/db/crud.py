@@ -7,56 +7,55 @@ from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Union
 
-from sqlalchemy import and_, delete, func, select, update, not_, or_
+from sqlalchemy import and_, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Query, joinedload, selectinload
 from sqlalchemy.sql.functions import coalesce
 
+from app.db.base import DATABASE_DIALECT
 from app.db.models import (
     JWT,
     TLS,
     Admin,
     AdminUsageLogs,
-    Node,
+    CoreConfig,
+    Group,
     NextPlan,
+    Node,
+    NodeStat,
+    NodeStatus,
     NodeUsage,
     NodeUserUsage,
     NotificationReminder,
     ProxyHost,
     ProxyInbound,
+    ReminderType,
     System,
     User,
+    UserDataLimitResetStrategy,
+    UserStatus,
     UserTemplate,
     UserUsageResetLogs,
-    NodeStatus,
-    Group,
-    ReminderType,
-    UserStatus,
-    UserDataLimitResetStrategy,
-    CoreConfig,
-    NodeStat,
 )
-from app.db.base import DATABASE_DIALECT
+from app.models.admin import AdminCreate, AdminModify
+from app.models.core import CoreCreate
+from app.models.group import GroupCreate, GroupModify
+from app.models.host import CreateHost
+from app.models.node import NodeCreate, NodeModify
+from app.models.proxy import ProxyTable
 from app.models.stats import (
+    NodeStats,
+    NodeStatsList,
+    NodeUsageStat,
+    NodeUsageStatsList,
     Period,
     UserUsageStat,
-    NodeUsageStat,
-    NodeStats,
     UserUsageStatsList,
-    NodeUsageStatsList,
-    NodeStatsList,
 )
-from app.models.proxy import ProxyTable
-from app.models.host import CreateHost
-from app.models.admin import AdminCreate, AdminModify
-from app.models.group import GroupCreate, GroupModify
-from app.models.node import NodeCreate, NodeModify
-from app.models.user import UserModify, UserCreate
+from app.models.user import UserCreate, UserModify
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
-from app.models.core import CoreCreate
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
 from config import NOTIFY_DAYS_LEFT, NOTIFY_REACHED_USAGE_PERCENT, USERS_AUTODELETE_DAYS
-
 
 MYSQL_FORMATS = {
     Period.minute: "%Y-%m-%d %H:%i:00",
@@ -261,6 +260,8 @@ def get_user_queryset() -> Query:
         selectinload(User.next_plan),
         selectinload(User.usage_logs),
         selectinload(User.groups),
+        selectinload(User.node_usages),  # Add this if needed
+        selectinload(User.notification_reminders),  # Add this if needed)
     )
 
 
@@ -813,6 +814,8 @@ async def update_user_sub(db: AsyncSession, dbuser: User, user_agent: str) -> Us
     dbuser.sub_last_user_agent = user_agent
 
     await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
 
 
 async def reset_all_users_data_usage(db: AsyncSession, admin: Optional[Admin] = None):
