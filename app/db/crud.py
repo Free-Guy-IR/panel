@@ -260,8 +260,6 @@ def get_user_queryset() -> Query:
         selectinload(User.next_plan),
         selectinload(User.usage_logs),
         selectinload(User.groups),
-        selectinload(User.node_usages),  # Add this if needed
-        selectinload(User.notification_reminders),  # Add this if needed)
     )
 
 
