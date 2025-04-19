@@ -176,7 +176,7 @@ class UserOperation(BaseOperation):
 
         old_status = db_user.status
 
-        db_user = reset_user_by_next(db=db, db_user=db_user)
+        db_user = await reset_user_by_next(db=db, db_user=db_user)
 
         user = await self.validate_user(db_user)
         if user.status in (UserStatus.active, UserStatus.on_hold):

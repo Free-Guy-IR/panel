@@ -138,8 +138,7 @@ async def active_next_plan(
     username: str, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(get_current)
 ):
     """Reset user by next plan"""
-
-    return user_operator.active_next_plan(db, username=username, admin=admin)
+    return await user_operator.active_next_plan(db, username=username, admin=admin)
 
 
 @router.get("/{username}", response_model=UserResponse, responses={403: responses._403, 404: responses._404})

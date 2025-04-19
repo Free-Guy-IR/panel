@@ -254,13 +254,11 @@ async def remove_host(db: AsyncSession, db_host: ProxyHost) -> ProxyHost:
     return db_host
 
 
-def get_user_queryset() -> Query:
-    return select(User).options(
-        selectinload(User.admin),
-        selectinload(User.next_plan),
-        selectinload(User.usage_logs),
-        selectinload(User.groups),
-    )
+async def load_user_attrs(user: User):
+    await user.awaitable_attrs.admin
+    await user.awaitable_attrs.next_plan
+    await user.awaitable_attrs.usage_logs
+    await user.awaitable_attrs.groups
 
 
 async def get_user(db: AsyncSession, username: str) -> Optional[User]:
@@ -274,10 +272,12 @@ async def get_user(db: AsyncSession, username: str) -> Optional[User]:
     Returns:
         Optional[User]: The user object if found, else None.
     """
-    stmt = get_user_queryset().where(User.username == username)
+    stmt = select(User).where(User.username == username)
 
-    result = await db.execute(stmt)
-    return result.unique().scalar_one_or_none()
+    user = (await db.execute(stmt)).unique().scalar_one_or_none()
+    if user:
+        await load_user_attrs(user)
+    return user
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
@@ -291,9 +291,12 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
     Returns:
         Optional[User]: The user object if found, else None.
     """
-    stmt = get_user_queryset().where(User.id == user_id)
-    result = await db.execute(stmt)
-    return result.unique().scalar_one_or_none()
+    stmt = select(User).where(User.id == user_id)
+
+    user = (await db.execute(stmt)).unique().scalar_one_or_none()
+    if user:
+        await load_user_attrs(user)
+    return user
 
 
 UsersSortingOptions = Enum(
@@ -347,7 +350,7 @@ async def get_users(
     Returns:
         List of users or tuple with (users, count) if return_with_count is True.
     """
-    stmt = get_user_queryset()
+    stmt = select(User)
 
     filters = []
     if usernames:
@@ -393,6 +396,9 @@ async def get_users(
     result = await db.execute(stmt)
     users = list(result.unique().scalars().all())
 
+    for user in users:
+        await load_user_attrs(user)
+
     if return_with_count:
         return users, total
     return users
@@ -416,27 +422,30 @@ async def get_expired_users(
 
 
 async def get_active_to_expire_users(db: AsyncSession) -> list[User]:
-    stmt = get_user_queryset()
-    stmt = stmt.where(User.status == UserStatus.active).where(User.is_expired)
+    stmt = select(User).where(User.status == UserStatus.active).where(User.is_expired)
 
-    result = await db.execute(stmt)
-    return list(result.unique().scalars().all())
+    users = list((await db.execute(stmt)).unique().scalars().all())
+    for user in users:
+        await load_user_attrs(user)
+    return users
 
 
 async def get_active_to_limited_users(db: AsyncSession) -> list[User]:
-    stmt = get_user_queryset()
-    stmt = stmt.where(User.status == UserStatus.active).where(User.is_limited)
+    stmt = select(User).where(User.status == UserStatus.active).where(User.is_limited)
 
-    result = await db.execute(stmt)
-    return list(result.unique().scalars().all())
+    users = list((await db.execute(stmt)).unique().scalars().all())
+    for user in users:
+        await load_user_attrs(user)
+    return users
 
 
 async def get_on_hold_to_active_users(db: AsyncSession) -> list[User]:
-    stmt = get_user_queryset()
-    stmt = stmt.where(User.status == UserStatus.on_hold).where(User.become_online)
+    stmt = select(User).where(User.status == UserStatus.on_hold).where(User.become_online)
 
-    result = await db.execute(stmt)
-    return list(result.unique().scalars().all())
+    users = list((await db.execute(stmt)).unique().scalars().all())
+    for user in users:
+        await load_user_attrs(user)
+    return users
 
 
 async def get_usage_percentage_reached_users(db: AsyncSession, percentage: int) -> list[User]:
@@ -456,15 +465,17 @@ async def get_usage_percentage_reached_users(db: AsyncSession, percentage: int) 
     )
 
     stmt = (
-        get_user_queryset()
+        select(User)
         .options(joinedload(User.notification_reminders))
         .where(User.status == UserStatus.active)
         .where(User.usage_percentage >= percentage)
         .where(not_(existing_reminder_subq))  # Only users without existing reminders
     )
 
-    result = await db.execute(stmt)
-    return list(result.unique().scalars().all())
+    users = list((await db.execute(stmt)).unique().scalars().all())
+    for user in users:
+        await load_user_attrs(user)
+    return users
 
 
 async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]:
@@ -484,7 +495,7 @@ async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]
     )
 
     stmt = (
-        get_user_queryset()
+        select(User)
         .options(joinedload(User.notification_reminders))
         .where(User.status == UserStatus.active)
         .where(User.expire.isnot(None))
@@ -492,8 +503,10 @@ async def get_days_left_reached_users(db: AsyncSession, days: int) -> list[User]
         .where(not_(existing_reminder_subq))  # Only users without existing reminders
     )
 
-    result = await db.execute(stmt)
-    return list(result.unique().scalars().all())
+    users = list((await db.execute(stmt)).unique().scalars().all())
+    for user in users:
+        await load_user_attrs(user)
+    return users
 
 
 async def get_user_usages(
@@ -577,7 +590,9 @@ async def create_user(db: AsyncSession, new_user: UserCreate, groups: list[Group
 
     db.add(db_user)
     await db.commit()
-    return await get_user(db, username=new_user.username)
+    await db.refresh(db_user)
+    await load_user_attrs(db_user)
+    return db_user
 
 
 async def remove_user(db: AsyncSession, db_user: User) -> User:
@@ -698,6 +713,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
 
     await db.commit()
     await db.refresh(db_user)
+    await load_user_attrs(db_user)
     return db_user
 
 
@@ -712,8 +728,7 @@ async def reset_user_data_usage(db: AsyncSession, db_user: User) -> User:
     Returns:
         User: The updated user object.
     """
-    username = db_user.username
-    await db.refresh(db_user, ["node_usages", "next_plan"])
+    await db_user.awaitable_attrs.node_usages
     usage_log = UserUsageResetLogs(
         user=db_user,
         used_traffic_at_reset=db_user.used_traffic,
@@ -730,7 +745,9 @@ async def reset_user_data_usage(db: AsyncSession, db_user: User) -> User:
         db_user.next_plan = None
 
     await db.commit()
-    return await get_user(db, username)
+    await db.refresh(db_user)
+    await load_user_attrs(db_user)
+    return db_user
 
 
 async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
@@ -744,9 +761,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
     Returns:
         User: The updated user object.
     """
-    username = db_user.username
-    await db.refresh(db_user, ["node_usages", "next_plan", "data_limit"])
-
+    await db_user.awaitable_attrs.node_usages
     usage_log = UserUsageResetLogs(
         user=db_user,
         used_traffic_at_reset=db_user.used_traffic,
@@ -773,7 +788,9 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
     db_user.next_plan = None
 
     await db.commit()
-    return await get_user(db, username)
+    await db.refresh(db_user)
+    await load_user_attrs(db_user)
+    return db_user
 
 
 async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
@@ -793,10 +810,11 @@ async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
 
     await db.commit()
     await db.refresh(db_user)
+    await load_user_attrs(db_user)
     return db_user
 
 
-async def update_user_sub(db: AsyncSession, dbuser: User, user_agent: str) -> User:
+async def update_user_sub(db: AsyncSession, db_user: User, user_agent: str) -> User:
     """
     Updates the user's subscription details.
 
@@ -808,12 +826,13 @@ async def update_user_sub(db: AsyncSession, dbuser: User, user_agent: str) -> Us
     Returns:
         User: The updated user object.
     """
-    dbuser.sub_updated_at = datetime.now(timezone.utc)
-    dbuser.sub_last_user_agent = user_agent
+    db_user.sub_updated_at = datetime.now(timezone.utc)
+    db_user.sub_last_user_agent = user_agent
 
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    await db.refresh(db_user)
+    await load_user_attrs(db_user)
+    return db_user
 
 
 async def reset_all_users_data_usage(db: AsyncSession, admin: Optional[Admin] = None):
@@ -824,7 +843,7 @@ async def reset_all_users_data_usage(db: AsyncSession, admin: Optional[Admin] = 
         db (AsyncSession): Database session.
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
-    query = get_user_queryset().options(selectinload(User.node_usages))
+    query = select(User).options(selectinload(User.node_usages))
 
     if admin:
         query = query.where(User.admin == admin)
@@ -1023,6 +1042,7 @@ async def update_user_status(db: AsyncSession, db_user: User, status: UserStatus
     db_user = await _update_user_status(db_user, status)
     await db.commit()
     await db.refresh(db_user)
+    await load_user_attrs(db_user)
     return db_user
 
 
@@ -1042,6 +1062,7 @@ async def update_users_status(db: AsyncSession, users: list[User], status: UserS
     await db.commit()
     for user in updated_users:
         await db.refresh(user)
+        await load_user_attrs(user)
     return users
 
 
@@ -1060,7 +1081,8 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     db_user.admin = admin
     await db.commit()
     await db.refresh(db_user)
-    return await get_user(db, db_user.username)
+    await load_user_attrs(db_user)
+    return db_user
 
 
 async def _start_user_expire(db_user: User) -> User:
@@ -1097,6 +1119,7 @@ async def start_user_expire(db: AsyncSession, db_user: User) -> User:
 
     await db.commit()
     await db.refresh(db_user)
+    await load_user_attrs(db_user)
     return db_user
 
 
@@ -1116,6 +1139,7 @@ async def start_users_expire(db: AsyncSession, users: list[User]) -> list[User]:
     await db.commit()
     for user in updated_users:
         await db.refresh(user)
+        await load_user_attrs(user)
     return users
 
 
@@ -1158,8 +1182,9 @@ async def get_tls_certificate(db: AsyncSession) -> TLS:
     return (await db.execute(select(TLS))).scalar_one_or_none()
 
 
-def get_admin_queryset() -> Query:
-    return select(Admin).options(selectinload(Admin.usage_logs), selectinload(Admin.users))
+async def load_admin_attrs(admin: Admin):
+    await admin.awaitable_attrs.users
+    await admin.awaitable_attrs.usage_logs
 
 
 async def get_admin(db: AsyncSession, username: str) -> Admin:
@@ -1173,7 +1198,10 @@ async def get_admin(db: AsyncSession, username: str) -> Admin:
     Returns:
         Admin: The admin object.
     """
-    return (await db.execute(get_admin_queryset().where(Admin.username == username))).unique().scalar_one_or_none()
+    admin = (await db.execute(select(Admin).where(Admin.username == username))).unique().scalar_one_or_none()
+    if admin:
+        await load_admin_attrs(admin)
+    return admin
 
 
 async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
@@ -1190,7 +1218,9 @@ async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
     db_admin = Admin(**admin.model_dump(exclude={"password"}), hashed_password=admin.hashed_password)
     db.add(db_admin)
     await db.commit()
-    return await get_admin(db, admin.username)
+    await db.refresh(db_admin)
+    await load_admin_attrs(db_admin)
+    return db_admin
 
 
 async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminModify) -> Admin:
@@ -1228,8 +1258,8 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
         db_admin.profile_title = modified_admin.profile_title
 
     await db.commit()
-    await db.refresh(db_admin)
-    return await get_admin(db, db_admin.username)
+    await load_admin_attrs(db_admin)
+    return db_admin
 
 
 async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:
@@ -1255,7 +1285,10 @@ async def get_admin_by_id(db: AsyncSession, id: int) -> Admin:
     Returns:
         Admin: The admin object.
     """
-    return (await db.execute(get_admin_queryset().where(Admin.id == id))).unique().scalar_one_or_none()
+    admin = (await db.execute(select(Admin).where(Admin.id == id))).unique().scalar_one_or_none()
+    if admin:
+        await load_admin_attrs(admin)
+    return admin
 
 
 async def get_admin_by_telegram_id(db: AsyncSession, telegram_id: int) -> Admin:
@@ -1269,9 +1302,10 @@ async def get_admin_by_telegram_id(db: AsyncSession, telegram_id: int) -> Admin:
     Returns:
         Admin: The admin object.
     """
-    return (
-        (await db.execute(get_admin_queryset().where(Admin.telegram_id == telegram_id))).unique().scalar_one_or_none()
-    )
+    admin = (await db.execute(select(Admin).where(Admin.telegram_id == telegram_id))).unique().scalar_one_or_none()
+    if admin:
+        await load_admin_attrs(admin)
+    return admin
 
 
 async def get_admin_by_discord_id(db: AsyncSession, discord_id: int) -> Admin:
@@ -1285,7 +1319,10 @@ async def get_admin_by_discord_id(db: AsyncSession, discord_id: int) -> Admin:
     Returns:
         Admin: The admin object.
     """
-    return (await db.execute(get_admin_queryset().where(Admin.discord_id == discord_id))).unique().scalar_one_or_none()
+    admin = (await db.execute(select(Admin).where(Admin.discord_id == discord_id))).unique().scalar_one_or_none()
+    if admin:
+        await load_admin_attrs(admin)
+    return admin
 
 
 async def get_admins(
@@ -1303,14 +1340,20 @@ async def get_admins(
     Returns:
         List[Admin]: A list of admin objects.
     """
-    query = get_admin_queryset()
+    query = select(Admin)
     if username:
         query = query.where(Admin.username.ilike(f"%{username}%"))
     if offset:
         query = query.offset(offset)
     if limit:
         query = query.limit(limit)
-    return (await db.execute(query)).scalars().all()
+
+    admins = (await db.execute(query)).scalars().all()
+
+    for admin in admins:
+        await load_admin_attrs(admin)
+
+    return admins
 
 
 async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> int:
@@ -1330,11 +1373,12 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> int:
     db_admin.users_usage = 0
 
     await db.commit()
-    return await get_admin_by_id(db, db_admin.id)
+    await db.refresh(db_admin)
+    return db_admin
 
 
-def get_user_template_queryset() -> Query:
-    return select(UserTemplate).options(selectinload(UserTemplate.groups))
+async def load_user_template_attrs(template: UserTemplate):
+    await template.awaitable_attrs.groups
 
 
 async def create_user_template(db: AsyncSession, user_template: UserTemplateCreate) -> UserTemplate:
@@ -1363,6 +1407,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
     db.add(db_user_template)
     await db.commit()
     await db.refresh(db_user_template)
+    await load_user_template_attrs(db_user_template)
     return db_user_template
 
 
@@ -1401,6 +1446,7 @@ async def modify_user_template(
 
     await db.commit()
     await db.refresh(db_user_template)
+    await load_user_template_attrs(db_user_template)
     return db_user_template
 
 
@@ -1427,11 +1473,13 @@ async def get_user_template(db: AsyncSession, user_template_id: int) -> UserTemp
     Returns:
         UserTemplate: The user template object.
     """
-    return (
-        (await db.execute(get_user_template_queryset().where(UserTemplate.id == user_template_id)))
+    user_template = (
+        (await db.execute(select(UserTemplate).where(UserTemplate.id == user_template_id)))
         .unique()
         .scalar_one_or_none()
     )
+    await load_user_template_attrs(user_template)
+    return user_template
 
 
 async def get_user_templates(
@@ -1448,13 +1496,17 @@ async def get_user_templates(
     Returns:
         List[UserTemplate]: A list of user template objects.
     """
-    dbuser_templates = get_user_template_queryset()
+    query = select(UserTemplate)
     if offset:
-        dbuser_templates = dbuser_templates.offset(offset)
+        query = query.offset(offset)
     if limit:
-        dbuser_templates = dbuser_templates.limit(limit)
+        query = query.limit(limit)
 
-    return (await db.execute(dbuser_templates)).scalars().all()
+    user_templates = (await db.execute(query)).scalars().all()
+    for template in user_templates:
+        await load_user_template_attrs(template)
+
+    return user_templates
 
 
 def get_node_queryset() -> Query:
@@ -1566,7 +1618,9 @@ async def get_nodes_usage(
     )
 
     result = await db.execute(stmt)
-    return NodeUsageStatsList(period=period, start=start, end=end, stats=[NodeUsageStat(**row) for row in result])
+    return NodeUsageStatsList(
+        period=period, start=start, end=end, stats=[NodeUsageStat(**row) for row in result.mappings()]
+    )
 
 
 async def get_node_stats(
@@ -1809,10 +1863,9 @@ async def get_inbounds_by_tags(db: AsyncSession, tags: list[str]) -> list[ProxyI
     return [(await get_or_create_inbound(db, tag)) for tag in tags]
 
 
-def get_group_queryset() -> Query:
-    return select(Group).options(
-        selectinload(Group.users),
-    )
+async def load_group_attrs(group: Group):
+    await group.awaitable_attrs.users
+    await group.awaitable_attrs.inbounds
 
 
 async def get_group_by_id(db: AsyncSession, group_id: int) -> Group | None:
@@ -1826,7 +1879,10 @@ async def get_group_by_id(db: AsyncSession, group_id: int) -> Group | None:
     Returns:
         Optional[Group]: The Group object if found, None otherwise.
     """
-    return (await db.execute(get_group_queryset().where(Group.id == group_id))).unique().scalar_one_or_none()
+    group = (await db.execute(select(Group).where(Group.id == group_id))).unique().scalar_one_or_none()
+    if group:
+        await load_group_attrs(group)
+    return group
 
 
 async def create_group(db: AsyncSession, group: GroupCreate) -> Group:
@@ -1847,7 +1903,8 @@ async def create_group(db: AsyncSession, group: GroupCreate) -> Group:
     )
     db.add(db_group)
     await db.commit()
-    await db.refresh(db_group, ["id", "name", "is_disabled", "users", "inbounds"])
+    await db.refresh(db_group)
+    await load_group_attrs(db_group)
     return db_group
 
 
@@ -1865,7 +1922,7 @@ async def get_group(db: AsyncSession, offset: int = None, limit: int = None) -> 
             - list[Group]: A list of Group objects
             - int: The total count of groups
     """
-    groups = get_group_queryset()
+    groups = select(Group)
     if offset:
         groups = groups.offset(offset)
     if limit:
@@ -1876,6 +1933,10 @@ async def get_group(db: AsyncSession, offset: int = None, limit: int = None) -> 
     count = (await db.execute(count_query)).scalar_one()
 
     all_groups = (await db.execute(groups)).scalars().all()
+
+    for group in all_groups:
+        await load_group_attrs(group)
+
     return all_groups, count
 
 
@@ -1890,7 +1951,12 @@ async def get_groups_by_ids(db: AsyncSession, group_ids: list[int]) -> list[Grou
     Returns:
         list[Group]: A list of Group objects.
     """
-    return (await db.execute(get_group_queryset().where(Group.id.in_(group_ids)))).scalars().all()
+    groups = (await db.execute(select(Group).where(Group.id.in_(group_ids)))).scalars().all()
+
+    for group in groups:
+        await load_group_attrs(group)
+
+    return groups
 
 
 async def modify_group(db: AsyncSession, db_group: Group, modified_group: GroupModify) -> Group:
@@ -1915,6 +1981,7 @@ async def modify_group(db: AsyncSession, db_group: Group, modified_group: GroupM
         db_group.inbounds = inbounds
     await db.commit()
     await db.refresh(db_group)
+    await load_group_attrs(db_group)
     return db_group
 
 

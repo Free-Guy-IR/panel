@@ -1,15 +1,15 @@
 import asyncio
 
+from app import notification
+from app.core.manager import core_manager
 from app.db import AsyncSession
+from app.db.crud import create_group, get_group, get_users, modify_group, remove_group
 from app.db.models import Admin
-from app.db.crud import create_group, get_group, modify_group, remove_group, get_users
-from app.models.group import Group, GroupCreate, GroupModify, GroupsResponse, GroupResponse
+from app.models.group import Group, GroupCreate, GroupModify, GroupResponse, GroupsResponse
 from app.models.user import UserResponse
 from app.node import node_manager
-from app.core.manager import core_manager
 from app.operation import BaseOperation
 from app.utils.logger import get_logger
-from app import notification
 
 logger = get_logger("group-operation")
 

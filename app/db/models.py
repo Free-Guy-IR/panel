@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -17,11 +18,14 @@ from sqlalchemy import (
     event,
     func,
     or_,
+)
+from sqlalchemy import (
     Enum as SQLEnum,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.expression import select, text
+
 from app.db.base import Base
 from app.db.compiles_types import CaseSensitiveString, DaysDiff, EnumArray
 
@@ -55,7 +59,7 @@ class Admin(Base):
     discord_id: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
     users_usage: Mapped[int] = mapped_column(BigInteger, default=0)
     is_disabled: Mapped[bool] = mapped_column(server_default="0", default=False)
-    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin", lazy="selectin")
+    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin")
     sub_template: Mapped[Optional[str]] = mapped_column(String(1024), default=None)
     sub_domain: Mapped[Optional[str]] = mapped_column(String(256), default=None)
     profile_title: Mapped[Optional[str]] = mapped_column(String(512), default=None)
@@ -121,21 +125,19 @@ class User(Base):
     proxy_settings: Mapped[Dict[str, Any]] = mapped_column(JSON(True), server_default=text("'{}'"), default=lambda: {})
     status: Mapped[UserStatus] = mapped_column(SQLEnum(UserStatus), default=UserStatus.active)
     used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
-    node_usages: Mapped[List["NodeUserUsage"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan", lazy="joined"
-    )
+    node_usages: Mapped[List["NodeUserUsage"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     notification_reminders: Mapped[List["NotificationReminder"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan", lazy="joined"
+        back_populates="user", cascade="all, delete-orphan"
     )
     data_limit: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
     data_limit_reset_strategy: Mapped[UserDataLimitResetStrategy] = mapped_column(
         SQLEnum(UserDataLimitResetStrategy),
         default=UserDataLimitResetStrategy.no_reset,
     )
-    usage_logs: Mapped[List["UserUsageResetLogs"]] = relationship(back_populates="user", lazy="selectin")
+    usage_logs: Mapped[List["UserUsageResetLogs"]] = relationship(back_populates="user")
     expire: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
     admin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admins.id"), default=None)
-    admin: Mapped["Admin"] = relationship(back_populates="users", lazy="selectin")
+    admin: Mapped["Admin"] = relationship(back_populates="users")
     sub_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
     sub_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
     sub_last_user_agent: Mapped[Optional[str]] = mapped_column(String(512), default=None)
@@ -149,11 +151,9 @@ class User(Base):
     last_status_change: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     next_plan: Mapped[Optional["NextPlan"]] = relationship(
-        uselist=False, back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+        uselist=False, back_populates="user", cascade="all, delete-orphan"
     )
-    groups: Mapped[List["Group"]] = relationship(
-        secondary=users_groups_association, back_populates="users", lazy="selectin"
-    )
+    groups: Mapped[List["Group"]] = relationship(secondary=users_groups_association, back_populates="users")
 
     @hybrid_property
     def reseted_usage(self) -> int:
@@ -311,9 +311,7 @@ class UserTemplate(Base):
     )
 
     next_plans: Mapped[List["NextPlan"]] = relationship(back_populates="user_template", cascade="all, delete-orphan")
-    groups: Mapped[List["Group"]] = relationship(
-        secondary=template_group_association, back_populates="templates", lazy="selectin"
-    )
+    groups: Mapped[List["Group"]] = relationship(secondary=template_group_association, back_populates="templates")
 
     @property
     def group_ids(self):
@@ -476,9 +474,7 @@ class Node(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     uplink: Mapped[int] = mapped_column(BigInteger, default=0)
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
-    user_usages: Mapped[List["NodeUserUsage"]] = relationship(
-        back_populates="node", cascade="all, delete-orphan", lazy="selectin"
-    )
+    user_usages: Mapped[List["NodeUserUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan")
     usages: Mapped[List["NodeUsage"]] = relationship(back_populates="node", cascade="all, delete-orphan")
     usage_coefficient: Mapped[float] = mapped_column(Float, server_default=text("1.0"), default=1)
     node_version: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
@@ -494,7 +490,7 @@ class Node(Base):
     core_config_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("core_configs.id", ondelete="SET NULL"), nullable=True
     )
-    core_config: Mapped[Optional["CoreConfig"]] = relationship("CoreConfig", lazy="selectin")
+    core_config: Mapped[Optional["CoreConfig"]] = relationship("CoreConfig")
     stats: Mapped[List["NodeStat"]] = relationship(back_populates="node", cascade="all, delete-orphan")
     api_key: Mapped[str | None] = mapped_column(String(36))
 
@@ -545,10 +541,10 @@ class Group(Base):
 
     users: Mapped[List["User"]] = relationship(secondary=users_groups_association, back_populates="groups")
     inbounds: Mapped[List["ProxyInbound"]] = relationship(
-        secondary=inbounds_groups_association, back_populates="groups", lazy="selectin"
+        secondary=inbounds_groups_association, back_populates="groups"
     )
     templates: Mapped[List["UserTemplate"]] = relationship(
-        secondary=template_group_association, back_populates="groups", lazy="selectin"
+        secondary=template_group_association, back_populates="groups"
     )
 
     @property
