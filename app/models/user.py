@@ -1,4 +1,3 @@
-import re
 import asyncio
 from datetime import datetime, timezone
 from enum import Enum
@@ -70,7 +69,7 @@ class UserWithValidator(User):
 
 
 class UserCreate(UserWithValidator):
-    username: str = Field(min_length=3, max_length=128)
+    username: str
     status: UserStatusCreate | None = None
     model_config = ConfigDict(
         json_schema_extra={
@@ -96,14 +95,7 @@ class UserCreate(UserWithValidator):
     @field_validator("username", check_fields=False)
     @classmethod
     def validate_username(cls, v):
-        if not re.match(r"^[a-zA-Z0-9-_@.]+$", v):
-            raise ValueError("Username can only contain alphanumeric characters, -, _, @, and .")
-
-        # Additional check to prevent consecutive special characters
-        if re.search(r"[-_@.]{2,}", v):
-            raise ValueError("Username cannot have consecutive special characters")
-
-        return v
+        return UserValidator.validate_username(v)
 
     @field_validator("group_ids", mode="after")
     @classmethod
@@ -188,7 +180,7 @@ class ModifyUserByTemplate(BaseModel):
 
 
 class CreateUserFromTemplate(ModifyUserByTemplate):
-    username: str = Field(min_length=3, max_length=128)
+    username: str
 
     @field_validator("username", check_fields=False)
     @classmethod
