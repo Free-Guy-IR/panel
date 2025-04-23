@@ -28,8 +28,8 @@ async def remove_host(host: BaseHost, by: str):
     await asyncio.gather(ds.remove_host(host, by), tg.remove_host(host, by))
 
 
-async def update_hosts(by: str):
-    await asyncio.gather(ds.update_hosts(by), tg.update_hosts(by))
+async def modify_hosts(by: str):
+    await asyncio.gather(ds.modify_hosts(by), tg.modify_hosts(by))
 
 
 async def create_user_template(user: UserTemplateResponse, by: str):

@@ -1,4 +1,4 @@
-from .host import create_host, modify_host, remove_host, update_hosts
+from .host import create_host, modify_host, remove_host, modify_hosts
 from .user_template import create_user_template, modify_user_template, remove_user_template
 from .node import create_node, modify_node, remove_node, connect_node, error_node
 from .group import create_group, modify_group, remove_group
@@ -18,7 +18,7 @@ __all__ = [
     "create_host",
     "modify_host",
     "remove_host",
-    "update_hosts",
+    "modify_hosts",
     "create_user_template",
     "modify_user_template",
     "remove_user_template",

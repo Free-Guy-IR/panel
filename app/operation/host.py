@@ -104,6 +104,6 @@ class HostOperation(BaseOperation):
 
         logger.info(f'Host\'s has been modified by admin "{admin.username}"')
 
-        asyncio.create_task(notification.update_hosts(admin.username))
+        asyncio.create_task(notification.modify_hosts(admin.username))
 
         return await get_hosts(db=db)
