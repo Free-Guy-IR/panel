@@ -48,20 +48,7 @@ async def get_current(db: AsyncSession = Depends(get_db), token: str = Depends(o
     return admin
 
 
-async def check_sudo_admin(db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    admin: AdminDetails | None = await get_admin(db, token)
-    if not admin:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if admin.is_disabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="your account has been disabled",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+async def check_sudo_admin(admin: AdminDetails = Depends(get_current)):
     if not admin.is_sudo:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You're not allowed")
     return admin
