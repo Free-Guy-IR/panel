@@ -1481,7 +1481,8 @@ async def get_user_template(db: AsyncSession, user_template_id: int) -> UserTemp
         .unique()
         .scalar_one_or_none()
     )
-    await load_user_template_attrs(user_template)
+    if user_template:
+        await load_user_template_attrs(user_template)
     return user_template
 
 
