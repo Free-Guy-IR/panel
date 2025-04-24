@@ -17,3 +17,10 @@ docker-compose*.yml
 v2ray-core
 xray-core
 tests
+venv*
+.venv*
+LICENSE
+install_service.sh
+Marzban.code-workspace
+pyproject.toml
+uv.lock
