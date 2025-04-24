@@ -337,7 +337,13 @@ class UserOperation(BaseOperation):
         return RemoveUsersResponse(users=username_list, count=len(username_list))
 
     @staticmethod
-    def apply_expire(user_args: dict, template: UserTemplate):
+    def load_base_user_args(template: UserTemplate) -> dict:
+        user_args = {
+            "data_limit": template.data_limit,
+            "group_ids": template.group_ids,
+            "data_limit_reset_strategy": template.data_limit_reset_strategy,
+        }
+
         if template.status == UserStatus.active:
             if template.expire_duration:
                 user_args["expire"] = dt.now(tz.utc) + td(seconds=template.expire_duration)
@@ -353,7 +359,7 @@ class UserOperation(BaseOperation):
         return user_args
 
     @staticmethod
-    def apply_settings(user_args: UserCreate | UserModify, template: UserTemplate):
+    def apply_settings(user_args: UserCreate | UserModify, template: UserTemplate) -> dict:
         if template.extra_settings:
             flow = template.extra_settings.get("flow", None)
             method = template.extra_settings.get("method", None)
@@ -363,7 +369,7 @@ class UserOperation(BaseOperation):
 
             if method is not None:
                 user_args.proxy_settings.shadowsocks.method = method
-        
+
         return user_args
 
     async def create_user_from_template(
@@ -371,14 +377,10 @@ class UserOperation(BaseOperation):
     ) -> UserResponse:
         user_template = await self.get_validated_user_template(db, new_template_user.user_template_id)
 
-        new_user_args = {
-            "username": f"{user_template.username_prefix if user_template.username_prefix else ''}{new_template_user.username}{user_template.username_suffix if user_template.username_suffix else ''}",
-            "data_limit": user_template.data_limit,
-            "group_ids": user_template.group_ids,
-            "data_limit_reset_strategy": user_template.data_limit_reset_strategy,
-        }
-
-        new_user_args = self.apply_expire(new_user_args, user_template)
+        new_user_args = self.load_base_user_args(user_template)
+        new_user_args["username"] = (
+            f"{user_template.username_prefix if user_template.username_prefix else ''}{new_template_user.username}{user_template.username_suffix if user_template.username_suffix else ''}"
+        )
 
         try:
             new_user = UserCreate(**new_user_args)
@@ -395,13 +397,7 @@ class UserOperation(BaseOperation):
     ) -> UserResponse:
         user_template = await self.get_validated_user_template(db, modified_template.user_template_id)
 
-        modify_user_args = {
-            "data_limit": user_template.data_limit,
-            "group_ids": user_template.group_ids,
-            "data_limit_reset_strategy": user_template.data_limit_reset_strategy,
-        }
-
-        modify_user_args = self.apply_expire(modify_user_args, user_template)
+        modify_user_args = self.load_base_user_args(user_template)
 
         try:
             modify_user = UserModify(**modify_user_args)
@@ -414,6 +410,4 @@ class UserOperation(BaseOperation):
         if user_template.reset_usages:
             await self.reset_user_data_usage(db, username, admin)
 
-        user = await self.modify_user(db, username, modify_user, admin)
-        
-        return user
+        return await self.modify_user(db, username, modify_user, admin)
