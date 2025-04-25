@@ -114,12 +114,12 @@ class UserOperation(BaseOperation):
             logger.info(f'User "{db_user.username}" status changed from "{old_status.value}" to "{user.status.value}"')
 
         return user
-    
+
     async def modify_user(
         self, db: AsyncSession, username: str, modified_user: UserModify, admin: AdminDetails
     ) -> UserResponse:
         db_user = await self.get_validated_user(db, username, admin)
-        
+
         return await self._modify_user(db, db_user, modified_user, admin)
 
     async def remove_user(self, db: AsyncSession, username: str, admin: AdminDetails):
@@ -151,7 +151,7 @@ class UserOperation(BaseOperation):
         logger.info(f'User "{db_user.username}" usage was reset by admin "{admin.username}"')
 
         return user
-    
+
     async def reset_user_data_usage(self, db: AsyncSession, username: str, admin: AdminDetails):
         db_user = await self.get_validated_user(db, username, admin)
 
