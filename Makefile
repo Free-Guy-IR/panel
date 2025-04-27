@@ -31,9 +31,22 @@ install_uv:
 requirements:
 	@uv sync
 
+# Check if pnpm is installed, if not, install it
+.PHONY: check-pnpm
+check-pnpm:
+	@if ! pnpm --version > /dev/null 2>&1; then \
+		echo "pnpm not found. Installing..."; \
+		npm install -g pnpm@latest-10 || { \
+			echo "Failed to install pnpm. Please install it manually."; \
+			exit 1; \
+		}; \
+	else \
+		echo "pnpm is already installed."; \
+	fi
+
 # Install frontend dependencies (Node.js packages)
 .PHONY: install-front
-install-front:
+install-front: check-pnpm
 	@cd dashboard && pnpm i 
 
 # Run database migrations using Alembic
