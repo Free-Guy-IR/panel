@@ -177,15 +177,16 @@ class User(Base):
     def last_traffic_reset_time(self):
         return self.usage_logs[-1].reset_at if self.usage_logs else self.created_at
 
-    def inbounds(self, active_inbounds: list[str]) -> list[str]:
+    async def inbounds(self, active_inbounds: list[str]) -> list[str]:
         """Returns a flat list of all included inbound tags across all proxies"""
         included_tags = set()
         for group in self.groups:
             if group.is_disabled:
                 continue
-            tags = group.inbound_tags
+
+            await group.awaitable_attrs.inbounds
             for inbound in active_inbounds:
-                if inbound in tags:
+                if inbound in group.inbound_tags:
                     included_tags.add(inbound)
         return list(included_tags)
 
