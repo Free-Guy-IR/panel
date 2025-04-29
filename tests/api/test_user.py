@@ -96,7 +96,7 @@ def test_user_subscriptions(access_token):
 
     for user in users:
         for usf in user_subscription_formats:
-            url = f"http://testserver{user['subscription_url']}/{usf}"
+            url = f"{user['subscription_url']}/{usf}"
             response = client.get(url)
             assert response.status_code == status.HTTP_200_OK
 
