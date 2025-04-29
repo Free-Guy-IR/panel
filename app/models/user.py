@@ -156,6 +156,7 @@ class SubscriptionUserResponse(UserResponse):
     admin: AdminBaseInfo | None = Field(default=None, exclude=True)
     note: str | None = Field(None, exclude=True)
     auto_delete_in_days: int | None = Field(None, exclude=True)
+    subscription_url: str | None = Field(None, exclude=True)
     model_config = ConfigDict(from_attributes=True)
 
 
