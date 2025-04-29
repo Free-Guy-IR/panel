@@ -59,6 +59,9 @@ line-ending = "auto"
 docstring-code-format = false
 docstring-code-line-length = "dynamic"
 
+[tool.ruff.isort]
+combine-as-imports = true
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",
