@@ -1,7 +1,6 @@
 import asyncio
 import secrets
-from datetime import datetime as dt, timedelta as td
-from datetime import timezone as tz
+from datetime import datetime as dt, timedelta as td, timezone as tz
 
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
