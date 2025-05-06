@@ -18,9 +18,7 @@ router = APIRouter(tags=["Dev"], prefix="/api/dev", responses={401: responses._4
 
 
 @router.post("/generate/nodes-logs")
-async def nodes_logs(
-    db: AsyncSession = Depends(get_db),  # _: AdminDetails = Depends(check_sudo_admin)
-):
+async def nodes_logs(db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)):
     """
     generate node logs for developers
     """
