@@ -8,7 +8,7 @@ from enum import Enum
 from random import randint
 from typing import List, Optional, Union
 
-from sqlalchemy import and_, delete, func, not_, or_, select, update
+from sqlalchemy import String, and_, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Query, joinedload, selectinload
 from sqlalchemy.sql.functions import coalesce
@@ -82,6 +82,35 @@ def _build_trunc_expression(period: Period, column):
         return func.strftime(SQLITE_FORMATS[period.value], column)
 
     raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
+
+
+def json_extract(column, dialect_name: str, path: str):
+    """
+    Args:
+        column: The JSON column in your model
+        dialect_name: The database name
+        path: JSON path (e.g., '$.theme')
+    """
+    if dialect_name == "postgresql":
+        return func.jsonb_path_query(column, path).cast(String)
+    elif dialect_name == "mysql":
+        return func.json_unquote(func.json_extract(column, path)).cast(String)
+    elif dialect_name == "sqlite":
+        return func.json_extract(column, path).cast(String)
+
+
+def build_json_proxy_settings_search_condition(column, dialect_name: str, value: str):
+    """
+    Builds a condition to search JSON column for UUIDs or passwords.
+    Supports PostgreSQL, MySQL, SQLite.
+    """
+    conditions = []
+
+    for field in ["$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password"]:
+        conditions.append(json_extract(column, dialect_name, field) == value)
+
+    if conditions:
+        return or_(*conditions)
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -382,12 +411,6 @@ async def get_users(
     if sort:
         stmt = stmt.order_by(*sort)
 
-    total = None
-    if return_with_count:
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        result = await db.execute(count_stmt)
-        total = result.scalar()
-
     if offset:
         stmt = stmt.offset(offset)
     if limit:
@@ -395,6 +418,22 @@ async def get_users(
 
     result = await db.execute(stmt)
     users = list(result.unique().scalars().all())
+
+    if not users:
+        if search:
+            dialect_name = (await db.connection()).dialect.name
+            stmt = select(User).where(
+                build_json_proxy_settings_search_condition(User.proxy_settings, dialect_name, search)
+            )
+
+            result = await db.execute(stmt)
+            users = list(result.unique().scalars().all())
+
+    total = None
+    if return_with_count:
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        result = await db.execute(count_stmt)
+        total = result.scalar()
 
     for user in users:
         await load_user_attrs(user)
