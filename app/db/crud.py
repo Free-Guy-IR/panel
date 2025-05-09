@@ -405,6 +405,9 @@ async def get_users(
 
     if group_ids:
         filters.append(User.groups.any(Group.id.in_(group_ids)))
+    if proxy_id:
+        dialect_name = (await db.connection()).dialect.name
+        filters.append(build_json_proxy_settings_search_condition(User.proxy_settings, dialect_name, proxy_id))
 
     if filters:
         stmt = stmt.where(and_(*filters))
@@ -419,16 +422,6 @@ async def get_users(
 
     result = await db.execute(stmt)
     users = list(result.unique().scalars().all())
-
-    if not users:
-        if proxy_id:
-            dialect_name = (await db.connection()).dialect.name
-            stmt = select(User).where(
-                build_json_proxy_settings_search_condition(User.proxy_settings, dialect_name, proxy_id)
-            )
-
-            result = await db.execute(stmt)
-            users = list(result.unique().scalars().all())
 
     total = None
     if return_with_count:
