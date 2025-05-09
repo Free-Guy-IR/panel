@@ -84,33 +84,31 @@ def _build_trunc_expression(period: Period, column):
     raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
 
 
-def json_extract(column, dialect_name: str, path: str):
+def json_extract(column, path: str):
     """
     Args:
         column: The JSON column in your model
         dialect_name: The database name
         path: JSON path (e.g., '$.theme')
     """
-    if dialect_name == "postgresql":
-        return func.jsonb_path_query(column, path).cast(String)
-    elif dialect_name == "mysql":
-        return func.json_unquote(func.json_extract(column, path)).cast(String)
-    elif dialect_name == "sqlite":
-        return func.json_extract(column, path).cast(String)
+    match DATABASE_DIALECT:
+        case "postgresql":
+            return func.jsonb_path_query(column, path).cast(String)
+        case "mysql":
+            return func.json_unquote(func.json_extract(column, path)).cast(String)
+        case "sqlite":
+            return func.json_extract(column, path).cast(String)
 
 
-def build_json_proxy_settings_search_condition(column, dialect_name: str, value: str):
+def build_json_proxy_settings_search_condition(column, value: str):
     """
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    conditions = []
-
-    for field in ["$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password"]:
-        conditions.append(json_extract(column, dialect_name, field) == value)
-
-    if conditions:
-        return or_(*conditions)
+    return or_(*[
+        json_extract(column, field) == value
+        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+    ])
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -406,8 +404,7 @@ async def get_users(
     if group_ids:
         filters.append(User.groups.any(Group.id.in_(group_ids)))
     if proxy_id:
-        dialect_name = (await db.connection()).dialect.name
-        filters.append(build_json_proxy_settings_search_condition(User.proxy_settings, dialect_name, proxy_id))
+        filters.append(build_json_proxy_settings_search_condition(User.proxy_settings, proxy_id))
 
     if filters:
         stmt = stmt.where(and_(*filters))
