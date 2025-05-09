@@ -351,6 +351,7 @@ async def get_users(
     limit: int | None = None,
     usernames: list[str] | None = None,
     search: str | None = None,
+    proxy_id: str | None = None,
     status: UserStatus | list[UserStatus] | None = None,
     sort: list[UsersSortingOptions] | None = None,
     admin: Admin | None = None,
@@ -420,10 +421,10 @@ async def get_users(
     users = list(result.unique().scalars().all())
 
     if not users:
-        if search:
+        if proxy_id:
             dialect_name = (await db.connection()).dialect.name
             stmt = select(User).where(
-                build_json_proxy_settings_search_condition(User.proxy_settings, dialect_name, search)
+                build_json_proxy_settings_search_condition(User.proxy_settings, dialect_name, proxy_id)
             )
 
             result = await db.execute(stmt)
