@@ -341,7 +341,7 @@ class AdminContent(Static):
                 admin.username,
                 usages[i],
                 reseted_usages[i],
-                readable_size(admin.users_usage),
+                readable_size(admin.used_traffic),
                 "✔️" if admin.is_sudo else "✖️",
                 "✔️" if admin.is_disabled else "✖️",
                 readable_datetime(admin.created_at),
