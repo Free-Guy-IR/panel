@@ -1423,6 +1423,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
     Returns:
         UserTemplate: The created user template object.
     """
+
     db_user_template = UserTemplate(
         name=user_template.name,
         data_limit=user_template.data_limit,
@@ -1430,7 +1431,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
         username_prefix=user_template.username_prefix,
         username_suffix=user_template.username_suffix,
         groups=await get_groups_by_ids(db, user_template.group_ids) if user_template.group_ids else None,
-        extra_settings=user_template.extra_settings.dict(),
+        extra_settings=user_template.extra_settings.dict() if user_template.extra_settings else None,
         status=user_template.status,
         reset_usages=user_template.reset_usages,
         on_hold_timeout=user_template.on_hold_timeout,
