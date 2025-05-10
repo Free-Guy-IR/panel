@@ -594,3 +594,15 @@ class NodeStat(Base):
     cpu_usage: Mapped[float] = mapped_column(unique=False, nullable=False)
     incoming_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
     outgoing_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
+
+
+class Settings(Base):
+    __tablename__ = "settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telegram: Mapped[Optional[dict]] = mapped_column(JSON(True))
+    discord: Mapped[Optional[dict]] = mapped_column(JSON(True))
+    webhook: Mapped[Optional[dict]] = mapped_column(JSON(True))
+    notfication_settings: Mapped[dict] = mapped_column(JSON())
+    notfication_enable: Mapped[dict] = mapped_column(JSON())
+    subscription: Mapped[dict] = mapped_column(JSON())

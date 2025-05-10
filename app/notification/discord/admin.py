@@ -1,6 +1,7 @@
-from config import DISCORD_WEBHOOK_URL
 from app.notification.client import send_discord_webhook
 from app.models.admin import AdminDetails
+from app.models.settings import NotficationSettings
+from app.settings import notfication_settings
 from . import colors
 
 
@@ -19,8 +20,9 @@ async def create_admin(admin: AdminDetails, by: str):
             }
         ],
     }
-    if DISCORD_WEBHOOK_URL:
-        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+    settings: NotficationSettings = await notfication_settings()
+    if settings.notify_discord:
+        await send_discord_webhook(data, settings.discord_webhook_url)
 
 
 async def modify_admin(admin: AdminDetails, by: str):
@@ -38,8 +40,9 @@ async def modify_admin(admin: AdminDetails, by: str):
             }
         ],
     }
-    if DISCORD_WEBHOOK_URL:
-        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+    settings: NotficationSettings = await notfication_settings()
+    if settings.notify_discord:
+        await send_discord_webhook(data, settings.discord_webhook_url)
 
 
 async def remove_admin(username: str, by: str):
@@ -54,8 +57,9 @@ async def remove_admin(username: str, by: str):
             }
         ],
     }
-    if DISCORD_WEBHOOK_URL:
-        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+    settings: NotficationSettings = await notfication_settings()
+    if settings.notify_discord:
+        await send_discord_webhook(data, settings.discord_webhook_url)
 
 
 async def admin_reset_usage(admin: AdminDetails, by: str):
@@ -70,8 +74,9 @@ async def admin_reset_usage(admin: AdminDetails, by: str):
             }
         ],
     }
-    if DISCORD_WEBHOOK_URL:
-        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+    settings: NotficationSettings = await notfication_settings()
+    if settings.notify_discord:
+        await send_discord_webhook(data, settings.discord_webhook_url)
 
 
 async def admin_login(username: str, password: str, client_ip: str, success: bool):
@@ -87,5 +92,6 @@ async def admin_login(username: str, password: str, client_ip: str, success: boo
             }
         ]
     }
-    if DISCORD_WEBHOOK_URL:
-        await send_discord_webhook(data, DISCORD_WEBHOOK_URL)
+    settings: NotficationSettings = await notfication_settings()
+    if settings.notify_discord:
+        await send_discord_webhook(data, settings.discord_webhook_url)
