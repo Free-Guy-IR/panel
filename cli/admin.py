@@ -106,6 +106,7 @@ class AdminCreateModale(BaseModal):
                 Input(placeholder="Password", password=True, id="password"),
                 Input(placeholder="Confirm Password", password=True, id="confirm_password"),
                 Input(placeholder="Telegram ID", id="telegram_id", type="integer"),
+                Input(placeholder="Discord ID", id="discord_id", type="integer"),
                 Input(placeholder="Discord Webhook", id="discord_webhook"),
                 Horizontal(
                     Static("Is sudo:     ", classes="label"),
@@ -137,6 +138,7 @@ class AdminCreateModale(BaseModal):
             confirm_password = self.query_one("#confirm_password").value.strip()
             telegram_id = self.query_one("#telegram_id").value or None
             discord_webhook = self.query_one("#discord_webhook").value.strip() or None
+            discord_id = self.query_one("#discord_id").value or None
             is_sudo = self.query_one("#is_sudo").value
             if password != confirm_password:
                 self.notify("Password and confirm password do not match", severity="error", title="Error")
@@ -149,6 +151,7 @@ class AdminCreateModale(BaseModal):
                         password=password,
                         telegram_id=telegram_id,
                         discord_webhook=discord_webhook,
+                        discord_id=discord_id,
                         is_sudo=is_sudo,
                     ),
                     SYSTEM_ADMIN,
@@ -187,6 +190,7 @@ class AdminModifyModale(BaseModal):
                 Input(placeholder="Password", password=True, id="password"),
                 Input(placeholder="Confirm Password", password=True, id="confirm_password"),
                 Input(placeholder="Telegram ID", id="telegram_id", type="integer"),
+                Input(placeholder="Discord ID", id="discord_id", type="integer"),
                 Input(placeholder="Discord Webhook", id="discord_webhook"),
                 Horizontal(
                     Static("Is sudo: ", classes="label"),
@@ -224,6 +228,7 @@ class AdminModifyModale(BaseModal):
             confirm_password = self.query_one("#confirm_password").value.strip() or None
             telegram_id = self.query_one("#telegram_id").value or None
             discord_webhook = self.query_one("#discord_webhook").value.strip() or None
+            discord_id = self.query_one("#discord_id").value or None
             is_sudo = self.query_one("#is_sudo").value
             is_disabled = self.query_one("#is_disabled").value
 
@@ -238,6 +243,7 @@ class AdminModifyModale(BaseModal):
                         password=password,
                         telegram_id=telegram_id,
                         discord_webhook=discord_webhook,
+                        discord_id=discord_id,
                         is_sudo=is_sudo,
                         is_disabled=is_disabled,
                     ),
@@ -313,6 +319,7 @@ class AdminContent(Static):
             "Is disabled",
             "Created at",
             "Telegram ID",
+            "Discord ID",
             "Discord Webhook",
         )
         admins = await self.admin_operator.get_admins(self.db, offset=0, limit=10)
@@ -339,6 +346,7 @@ class AdminContent(Static):
                 "✔️" if admin.is_disabled else "✖️",
                 readable_datetime(admin.created_at),
                 str(admin.telegram_id or "✖️"),
+                str(admin.discord_id or "✖️"),
                 str(admin.discord_webhook or "✖️"),
             )
             for i, admin in enumerate(admins)
