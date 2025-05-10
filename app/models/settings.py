@@ -19,8 +19,8 @@ class Telegram(BaseModel):
 
     @model_validator(mode="after")
     def check_enable_requires_token_and_url(self):
-        if self.enable and (not self.token or not self.webhook_url):
-            raise ValueError("Telegram cannot be enabled without both token and webhook_url.")
+        if self.enable and (not self.token or not self.webhook_url or not self.webhook_secret):
+            raise ValueError("Telegram bot cannot be enabled without token, webhook_url and webhook_secret.")
         return self
 
 
@@ -37,7 +37,7 @@ class Discord(BaseModel):
     @model_validator(mode="after")
     def check_enable_requires_token(self):
         if self.enable and not self.token:
-            raise ValueError("Discord cannot be enabled without token.")
+            raise ValueError("Discord bot cannot be enabled without token.")
         return self
 
 

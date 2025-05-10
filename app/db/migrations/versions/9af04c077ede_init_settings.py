@@ -20,7 +20,7 @@ depends_on = None
 
 
 telegram = {
-    "enable": True if config.TELEGRAM_API_TOKEN else False,
+    "enable": True if config.TELEGRAM_API_TOKEN and config.TELEGRAM_WEBHOOK_URL and config.TELEGRAM_WEBHOOK_SECRET_KEY else False,
     "token": config.TELEGRAM_API_TOKEN,
     "webhook_url": config.TELEGRAM_WEBHOOK_URL,
     "webhook_secret": config.TELEGRAM_WEBHOOK_SECRET_KEY,
