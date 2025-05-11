@@ -491,6 +491,7 @@ export const UserStatusCreate = {
   on_hold: 'on_hold',
 } as const
 
+
 export type UserTemplateCreateStatus = UserStatusCreate | null
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus]
@@ -781,6 +782,41 @@ export interface SubscriptionUserResponse {
   sub_updated_at?: SubscriptionUserResponseSubUpdatedAt
   sub_last_user_agent?: SubscriptionUserResponseSubLastUserAgent
   online_at?: SubscriptionUserResponseOnlineAt
+}
+
+export interface SubRule {
+  pattern: string
+  target: ConfigFormat
+}
+
+export interface SubFormatEnable {
+  links?: boolean
+  links_base64?: boolean
+  xray?: boolean
+  sing_box?: boolean
+  clash?: boolean
+  clash_meta?: boolean
+  outline?: boolean
+}
+
+export interface SubscriptionOutput {
+  url_prefix?: string
+  update_interval?: number
+  support_url?: string
+  profile_title?: string
+  host_status_filter: boolean
+  rules: SubRule[]
+  manual_sub_request?: SubFormatEnable
+}
+
+export interface SubscriptionInput {
+  url_prefix?: string
+  update_interval?: number
+  support_url?: string
+  profile_title?: string
+  host_status_filter: boolean
+  rules: SubRule[]
+  manual_sub_request?: SubFormatEnable
 }
 
 export interface SubRule {

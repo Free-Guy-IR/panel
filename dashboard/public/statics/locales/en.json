@@ -46,7 +46,14 @@
     "certificate": "Certificate",
     "certificateCopied": "Certificate copied to clipboard",
     "certificateDownloaded": "Certificate downloaded successfully",
-    "certificateDescription": "To set up the node, you need to configure this certificate to establish a secure connection between the main server and the node"
+    "certificateDescription": "To set up the node, you need to configure this certificate to establish a secure connection between the main server and the node",
+    "selectNode": "Select a node",
+    "logs": {
+      "title": "Logs",
+      "description": "View and monitor node logs",
+      "noLogs": "No logs available",
+      "loading": "Loading logs..."
+    }
   },
   "groups": "Groups",
   "documentation": "Documentation",
@@ -735,6 +742,10 @@
     "publicKey": "Public Key",
     "privateKey": "Private Key",
     "clearAllFallbacks": "Clear all fallbacks",
+    "clearAllExcluded": "Clear all excluded inbounds",
+    "copyPublicKey": "Copy Public Key",
+    "copyPrivateKey": "Copy Private Key",
+    "copyShortId": "Copy Short ID"
     "clearAllExcluded": "Clear all excluded inbounds"
   },
   "settings.cores": {
@@ -778,5 +789,16 @@
   "usersTable.deleteSuccess": "User «{{name}}» has been deleted successfully.",
   "usersTable.deleteFailed": "Failed to delete user «{{name}}». {{error}}",
   "usersTable.delete": "Delete",
+  "usersTable.cancel": "Cancel",
+  "statistics.trafficUsage": "Traffic Usage",
+  "statistics.trafficUsageDescription": "Total traffic usage across all servers",
+  "statistics.usageDuringPeriod": "Usage During Period",
+  "statistics.users": "Users",
+  "statistics.onlineUsers": "Online Users",
+  "statistics.limitedUsers": "Limited Users",
+  "statistics.activeUsers": "Active Users",
+  "statistics.disabledUsers": "Disabled Users",
+  "statistics.expiredUsers": "Expired Users",
+  "statistics.onHoldUsers": "On Hold Users"
   "usersTable.cancel": "Cancel"
 }
