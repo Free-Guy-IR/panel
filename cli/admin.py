@@ -329,9 +329,7 @@ class AdminContent(Static):
         else:
             self.no_admins.styles.display = "none"
             self.table.styles.display = "block"
-        users_usages = await asyncio.gather(
-            *[self.calculate_admin_usage(admin.id) for admin in admins]
-        )
+        users_usages = await asyncio.gather(*[self.calculate_admin_usage(admin.id) for admin in admins])
 
         admins_data = [
             (
