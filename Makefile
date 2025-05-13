@@ -66,10 +66,11 @@ check-nodejs: check-nvm
 check-pnpm: check-nodejs
 	@if ! pnpm --version > /dev/null 2>&1; then \
 		echo "pnpm not found. Installing..."; \
-		npm install -g pnpm@latest-10 || { \
+		curl -fsSL https://get.pnpm.io/install.sh | sh - || { \
 			echo "Failed to install pnpm. Please install it manually."; \
 			exit 1; \
 		}; \
+		source ~/.bashrc
 	else \
 		echo "pnpm is already installed."; \
 	fi
