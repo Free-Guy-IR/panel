@@ -26,6 +26,9 @@ if TELEGRAM_API_TOKEN:
 async def initial_telegram_bot():
     if not TELEGRAM_API_TOKEN:
         return
+    if not TELEGRAM_WEBHOOK_SECRET_KEY:
+        logger.error("TELEGRAM_WEBHOOK_SECRET_KEY is required")
+        return
 
     # register handlers
     include_routers(dp)

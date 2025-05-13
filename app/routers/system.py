@@ -1,5 +1,5 @@
 from aiogram.types import Update
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.db import AsyncSession, get_db
@@ -35,13 +35,14 @@ async def get_inbounds(_: AdminDetails = Depends(get_current)):
 
 
 @router.post(TELEGRAN_WEBHOOK_PATH, include_in_schema=False)
-async def webhook_handler(request: Request):
+async def webhook_handler(request: Request, X_Telegram_Bot_Api_Secret_Token: str = Header()):
     """Telegram webhook handler"""
 
-    if TELEGRAM_WEBHOOK_SECRET_KEY:
-        secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        if secret_token != TELEGRAM_WEBHOOK_SECRET_KEY:
-            raise HTTPException(status_code=403, detail="Forbidden: Invalid secret key")
+    if not TELEGRAM_WEBHOOK_SECRET_KEY:
+        raise HTTPException(status_code=404, detail="not found")
+
+    if X_Telegram_Bot_Api_Secret_Token != TELEGRAM_WEBHOOK_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid secret key")
 
     update_data = await request.json()
     update = Update.model_validate(update_data, context={"bot": bot})
