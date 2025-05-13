@@ -32,16 +32,7 @@ VITE_BASE_API = (
     else config("VITE_BASE_API", default="/")
 )
 
-XRAY_JSON = config("XRAY_JSON", default="./xray_config.json")
-XRAY_FALLBACKS_INBOUND_TAGS = config(
-    "XRAY_FALLBACKS_INBOUND_TAG", cast=lambda v: [tag.strip() for tag in v.split(",")] if v else [], default=""
-)
-XRAY_EXCLUDE_INBOUND_TAGS = config("XRAY_EXCLUDE_INBOUND_TAGS", default="").split()
-XRAY_SUBSCRIPTION_URL_PREFIX = config("XRAY_SUBSCRIPTION_URL_PREFIX", default="").strip("/")
 XRAY_SUBSCRIPTION_PATH = config("XRAY_SUBSCRIPTION_PATH", default="sub").strip("/")
-
-# Filter hosts based on user status
-HOST_STATUS_FILTER = config("HOST_STATUS_FILTER", default=False, cast=bool)
 
 # Telegram
 TELEGRAM_API_TOKEN = config("TELEGRAM_API_TOKEN", default="")
@@ -51,11 +42,6 @@ TELEGRAM_ADMIN_ID = config(
     "TELEGRAM_ADMIN_ID", default="", cast=lambda v: int(v.split(",")[0].strip()) if v.strip() else None
 )
 TELEGRAM_PROXY_URL = config("TELEGRAM_PROXY_URL", default=None)
-TELEGRAM_LOGGER_CHANNEL_ID = config("TELEGRAM_LOGGER_CHANNEL_ID", cast=int, default=0)
-TELEGRAM_LOGGER_TOPIC_ID = config("TELEGRAM_LOGGER_TOPIC_ID", cast=int, default=0)
-TELEGRAM_NOTIFY = config("TELEGRAM_NOTIFY", cast=bool, default=False)
-
-NOTIFICATION_PROXY_URL = config("NOTIFICATION_PROXY_URL", default=None)
 
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = config("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", cast=int, default=1440)
 
@@ -73,16 +59,6 @@ USER_AGENT_TEMPLATE = config("USER_AGENT_TEMPLATE", default="user_agent/default.
 GRPC_USER_AGENT_TEMPLATE = config("GRPC_USER_AGENT_TEMPLATE", default="user_agent/grpc.json")
 
 EXTERNAL_CONFIG = config("EXTERNAL_CONFIG", default="", cast=str)
-LOGIN_NOTIFY_WHITE_LIST = [
-    ip.strip() for ip in config("LOGIN_NOTIFY_WHITE_LIST", default="", cast=str).split(",") if ip.strip()
-]
-
-USE_CUSTOM_JSON_DEFAULT = config("USE_CUSTOM_JSON_DEFAULT", default=False, cast=bool)
-USE_CUSTOM_JSON_FOR_V2RAYN = config("USE_CUSTOM_JSON_FOR_V2RAYN", default=False, cast=bool)
-USE_CUSTOM_JSON_FOR_V2RAYNG = config("USE_CUSTOM_JSON_FOR_V2RAYNG", default=False, cast=bool)
-USE_CUSTOM_JSON_FOR_STREISAND = config("USE_CUSTOM_JSON_FOR_STREISAND", default=False, cast=bool)
-USE_CUSTOM_JSON_FOR_HAPP = config("USE_CUSTOM_JSON_FOR_HAPP", default=False, cast=bool)
-USE_CUSTOM_JSON_FOR_NPVTUNNEL = config("USE_CUSTOM_JSON_FOR_NPVTUNNEL", default=False, cast=bool)
 
 USERS_AUTODELETE_DAYS = config("USERS_AUTODELETE_DAYS", default=-1, cast=int)
 USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS = config("USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS", default=False, cast=bool)
@@ -95,40 +71,7 @@ SUDOERS = (
     else {}
 )
 
-
-WEBHOOK_ADDRESS = config(
-    "WEBHOOK_ADDRESS", default="", cast=lambda v: [address.strip() for address in v.split(",")] if v else []
-)
-WEBHOOK_SECRET = config("WEBHOOK_SECRET", default=None)
-WEBHOOK_PROXY_URL = config("WEBHOOK_PROXY_URL", default=None)
-
-# recurrent notifications
-
-# timeout between each retry of sending a notification in seconds
-RECURRENT_NOTIFICATIONS_TIMEOUT = config("RECURRENT_NOTIFICATIONS_TIMEOUT", default=180, cast=int)
-# how many times to try after ok response not recevied after sending a notifications
-NUMBER_OF_RECURRENT_NOTIFICATIONS = config("NUMBER_OF_RECURRENT_NOTIFICATIONS", default=3, cast=int)
-
-# sends a notification when the user uses this much of thier data
-NOTIFY_REACHED_USAGE_PERCENT = config(
-    "NOTIFY_REACHED_USAGE_PERCENT", default="80", cast=lambda v: [int(p.strip()) for p in v.split(",")] if v else []
-)
-
-# sends a notification when there is n days left of their service
-NOTIFY_DAYS_LEFT = config(
-    "NOTIFY_DAYS_LEFT", default="3", cast=lambda v: [int(d.strip()) for d in v.split(",")] if v else []
-)
-
 DISABLE_RECORDING_NODE_USAGE = config("DISABLE_RECORDING_NODE_USAGE", cast=bool, default=False)
-
-# headers: profile-update-interval, support-url, profile-title
-SUB_UPDATE_INTERVAL = config("SUB_UPDATE_INTERVAL", default="12")
-SUB_SUPPORT_URL = config("SUB_SUPPORT_URL", default="https://t.me/")
-SUB_PROFILE_TITLE = config("SUB_PROFILE_TITLE", default="Subscription")
-
-# discord webhook log
-DISCORD_WEBHOOK_URL = config("DISCORD_WEBHOOK_URL", default="")
-
 
 # due to high amout of data this job is only available for postgresql and timescaledb
 if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):

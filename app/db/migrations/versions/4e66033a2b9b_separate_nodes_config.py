@@ -10,9 +10,9 @@ from alembic import op
 import sqlalchemy as sa
 import commentjson
 from datetime import datetime as dt, timezone as tz
+from decouple import config as decouple_config
 
 from app.core.xray import XRayConfig
-from config import XRAY_JSON, XRAY_FALLBACKS_INBOUND_TAGS, XRAY_EXCLUDE_INBOUND_TAGS
 
 
 # revision identifiers, used by Alembic.
@@ -36,6 +36,20 @@ base_xray = {
     ],
     "outbounds": [{"protocol": "freedom", "tag": "DIRECT"}, {"protocol": "blackhole", "tag": "BLOCK"}],
 }
+
+def get_config(key, default=None, cast=None):
+    if cast is not None:
+        return decouple_config(key, default=default, cast=cast)
+    else:
+        return decouple_config(key, default=default)
+
+
+XRAY_JSON = get_config("XRAY_JSON", default="./xray_config.json")
+XRAY_FALLBACKS_INBOUND_TAGS = get_config(
+    "XRAY_FALLBACKS_INBOUND_TAG", cast=lambda v: [tag.strip() for tag in v.split(",")] if v else [], default=""
+)
+XRAY_EXCLUDE_INBOUND_TAGS = get_config("XRAY_EXCLUDE_INBOUND_TAGS", default="").split()
+
 
 
 def upgrade() -> None:

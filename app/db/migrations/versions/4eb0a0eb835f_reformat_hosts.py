@@ -9,7 +9,8 @@ from alembic import op
 from sqlalchemy.orm import Session
 import commentjson
 import json
-from config import XRAY_JSON
+from decouple import config as decouple_config
+
 from app.db.models import ProxyHost
 
 
@@ -34,6 +35,15 @@ base_xray = {
     ],
     "outbounds": [{"protocol": "freedom", "tag": "DIRECT"}, {"protocol": "blackhole", "tag": "BLOCK"}],
 }
+
+def get_config(key, default=None, cast=None):
+    if cast is not None:
+        return decouple_config(key, default=default, cast=cast)
+    else:
+        return decouple_config(key, default=default)
+
+
+XRAY_JSON = get_config("XRAY_JSON", default="./xray_config.json")
 
 
 def upgrade() -> None:

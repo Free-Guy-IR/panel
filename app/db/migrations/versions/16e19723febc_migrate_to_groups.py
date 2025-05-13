@@ -7,18 +7,19 @@ Create Date: 2025-03-17 08:45:33.514529
 """
 import json
 from collections import defaultdict
+from decouple import config as decouple_config
 
 import commentjson
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import Column, ForeignKey, MetaData, Table
-from sqlalchemy.orm import Session, joinedload,contains_eager
+from sqlalchemy.orm import Session
 from app.db.models import (
     User,
     ProxyInbound,
 )
 from app.models.proxy import ProxyTypes
-from config import XRAY_JSON
+
 
 group_table = Table(
     "groups",
@@ -82,6 +83,16 @@ revision = '16e19723febc'
 down_revision = '3b59f3680c90'
 branch_labels = None
 depends_on = None
+
+
+def get_config(key, default=None, cast=None):
+    if cast is not None:
+        return decouple_config(key, default=default, cast=cast)
+    else:
+        return decouple_config(key, default=default)
+
+XRAY_JSON = get_config("XRAY_JSON", default="./xray_config.json")
+
 
 def upgrade() -> None:
     
