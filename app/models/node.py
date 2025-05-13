@@ -24,7 +24,7 @@ class Node(BaseModel):
     server_ca: str
     keep_alive: int
     max_logs: int = Field(gt=0, default=1000)
-    core_config_id: int | None = None
+    core_config_id: int
     api_key: str
     gather_logs: bool = True
 
@@ -124,6 +124,7 @@ class NodeModify(NodeCreate):
 
 class NodeResponse(Node):
     id: int
+    core_config_id: int | None = None
     xray_version: str | None = None
     node_version: str | None = None
     status: NodeStatus
