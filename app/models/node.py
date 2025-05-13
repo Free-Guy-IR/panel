@@ -1,11 +1,10 @@
 import re
 from uuid import UUID
-from cryptography.x509 import load_pem_x509_certificate
 
-from pydantic import ConfigDict, BaseModel, Field, field_validator
+from cryptography.x509 import load_pem_x509_certificate
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.db.models import NodeConnectionType, NodeStatus
-
 
 # Basic PEM format validation
 CERT_PATTERN = r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
@@ -25,7 +24,7 @@ class Node(BaseModel):
     server_ca: str
     keep_alive: int
     max_logs: int = Field(gt=0, default=1000)
-    core_config_id: int
+    core_config_id: int | None = None
     api_key: str
     gather_logs: bool = True
 
