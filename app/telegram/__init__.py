@@ -75,10 +75,16 @@ async def shutdown_telegram_bot():
             await _bot.delete_webhook(drop_pending_updates=True)
         except TelegramNetworkError as err:
             logger.error(err.message)
+
         await _dp.storage.close()
 
-        # bot = None
-        # dp = None
+        if _bot.session:
+            await _bot.session.close()
+
+        await _bot.close()
+
+        _bot = None
+        _dp = None
 
 
 on_startup(startup_telegram_bot)
