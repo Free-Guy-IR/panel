@@ -12,6 +12,8 @@ class Telegram(BaseModel):
     webhook_secret: str | None = Field(default=None)
     proxy_url: str | None = Field(default=None)
 
+    mini_app_login: bool = Field(default=True)
+
     @field_validator("proxy_url")
     @classmethod
     def validate_proxy_url(cls, v):

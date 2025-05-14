@@ -1,9 +1,12 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from aiogram.utils.web_app import WebAppInitData, safe_parse_webapp_init_data
+
 from app.db import AsyncSession, get_db
 from app.db.crud import get_admin as get_admin_by_username, get_admin_by_telegram_id
 from app.models.admin import AdminDetails, AdminValidationResult, AdminInDB
+from app.models.settings import Telegram
+from app.settings import telegram_settings
 from app.utils.jwt import get_admin_payload
 from config import SUDOERS, TELEGRAM_API_TOKEN
 
@@ -69,6 +72,13 @@ async def validate_admin(db: AsyncSession, username: str, password: str) -> Admi
 
 async def validate_mini_app_admin(db: AsyncSession, token: str) -> AdminValidationResult | None:
     """Validate raw MiniApp init data and return it as AdminValidationResult object"""
+    settings: Telegram = await telegram_settings()
+
+    if not settings.mini_app_login:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="service unavailable",
+        )
 
     try:
         data: WebAppInitData = safe_parse_webapp_init_data(token=TELEGRAM_API_TOKEN, init_data=token)
