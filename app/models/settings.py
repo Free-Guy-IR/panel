@@ -28,8 +28,8 @@ class Telegram(BaseModel):
 
 class Discord(BaseModel):
     enable: bool = Field(default=False)
-    token: str | None
-    proxy_url: str | None
+    token: str | None = Field(default=None)
+    proxy_url: str | None = Field(default=None)
 
     @field_validator("proxy_url")
     @classmethod
