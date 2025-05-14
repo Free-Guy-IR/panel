@@ -23,11 +23,11 @@ _lock = Lock()
 
 
 async def startup_telegram_bot():
-    if bot:
-        await shutdown_telegram_bot()
-
     global bot
     global dp
+
+    if bot:
+        await shutdown_telegram_bot()
     
     async with _lock:
         settings: Telegram = await telegram_settings()
