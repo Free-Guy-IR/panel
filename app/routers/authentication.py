@@ -8,7 +8,7 @@ from app.models.admin import AdminDetails, AdminValidationResult, AdminInDB
 from app.models.settings import Telegram
 from app.settings import telegram_settings
 from app.utils.jwt import get_admin_payload
-from config import SUDOERS, TELEGRAM_API_TOKEN
+from config import SUDOERS
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/token")
@@ -74,14 +74,14 @@ async def validate_mini_app_admin(db: AsyncSession, token: str) -> AdminValidati
     """Validate raw MiniApp init data and return it as AdminValidationResult object"""
     settings: Telegram = await telegram_settings()
 
-    if not settings.mini_app_login:
+    if not settings.mini_app_login or not settings.enable:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="service unavailable",
         )
 
     try:
-        data: WebAppInitData = safe_parse_webapp_init_data(token=TELEGRAM_API_TOKEN, init_data=token)
+        data: WebAppInitData = safe_parse_webapp_init_data(token=settings.token, init_data=token)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

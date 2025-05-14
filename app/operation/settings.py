@@ -8,6 +8,7 @@ from app.models.settings import SettingsSchema
 from app.settings import refresh_caches
 from app.notification.client import define_client
 from app.notification.webhook import queue as webhook_queue
+from app.telegram import startup_telegram_bot
 from . import BaseOperation
 
 
@@ -15,7 +16,7 @@ class SettingsOperation(BaseOperation):
     @staticmethod
     async def reset_services(old_settings: SettingsSchema, new_settings: SettingsSchema):
         if new_settings.telegram != old_settings.telegram:
-            pass
+            await startup_telegram_bot()
         if new_settings.discord != old_settings.discord:
             pass
         if old_settings.webhook and new_settings.webhook is None or not new_settings.webhook.enable:

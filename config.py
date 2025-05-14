@@ -34,15 +34,6 @@ VITE_BASE_API = (
 
 XRAY_SUBSCRIPTION_PATH = config("XRAY_SUBSCRIPTION_PATH", default="sub").strip("/")
 
-# Telegram
-TELEGRAM_API_TOKEN = config("TELEGRAM_API_TOKEN", default="")
-TELEGRAM_WEBHOOK_URL = config("TELEGRAM_WEBHOOK_URL", default="").strip("/")
-TELEGRAM_WEBHOOK_SECRET_KEY = config("TELEGRAM_WEBHOOK_SECRET_KEY", default=None)
-TELEGRAM_ADMIN_ID = config(
-    "TELEGRAM_ADMIN_ID", default="", cast=lambda v: int(v.split(",")[0].strip()) if v.strip() else None
-)
-TELEGRAM_PROXY_URL = config("TELEGRAM_PROXY_URL", default=None)
-
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = config("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", cast=int, default=1440)
 
 CUSTOM_TEMPLATES_DIRECTORY = config("CUSTOM_TEMPLATES_DIRECTORY", default=None)

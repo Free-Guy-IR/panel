@@ -5,12 +5,14 @@ from fastapi.responses import JSONResponse
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.system import SystemStats
+from app.models.settings import Telegram
+from app.settings import telegram_settings
 from app.operation import OperatorType
 from app.operation.system import SystemOperation
 from app.telegram import bot, dp
 from app.utils import responses
 from app.utils.logger import EndpointFilter, get_logger
-from config import TELEGRAM_WEBHOOK_SECRET_KEY
+
 
 from .authentication import get_current
 
@@ -37,11 +39,12 @@ async def get_inbounds(_: AdminDetails = Depends(get_current)):
 @router.post(TELEGRAN_WEBHOOK_PATH, include_in_schema=False)
 async def webhook_handler(request: Request, X_Telegram_Bot_Api_Secret_Token: str = Header()):
     """Telegram webhook handler"""
+    settings: Telegram = await telegram_settings()
 
-    if not TELEGRAM_WEBHOOK_SECRET_KEY:
+    if not settings.enable:
         raise HTTPException(status_code=404, detail="not found")
 
-    if X_Telegram_Bot_Api_Secret_Token != TELEGRAM_WEBHOOK_SECRET_KEY:
+    if X_Telegram_Bot_Api_Secret_Token != settings.webhook_secret:
         raise HTTPException(status_code=403, detail="Forbidden: Invalid secret key")
 
     update_data = await request.json()
