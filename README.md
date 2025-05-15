@@ -71,7 +71,7 @@
 - [Backup](#backup)
 - [Telegram Bot](#telegram-bot)
 - [Marzban CLI](#marzban-cli)
-- [Marzban Node](#marzban-node)
+- [Gozaroah Node](#gozargah-node)
 - [Webhook notifications](#webhook-notifications)
 - [Donation](#donation)
 - [License](#license)
@@ -89,7 +89,7 @@ Marzban is user-friendly, feature-rich and reliable. It lets you to create diffe
 
 - Built-in **Web UI**
 - Fully **REST API** backend
-- [**Multiple Nodes**](#marzban-node) support (for infrastructure distribution & scalability)
+- [**Multiple Nodes**](#Gozargah-node) support (for infrastructure distribution & scalability)
 - Supports protocols **Vmess**, **VLESS**, **Trojan** and **Shadowsocks**
 - **Multi-protocol** for a single user
 - **Multi-user** on a single inbound
@@ -301,27 +301,13 @@ By default the app will be run on `http://localhost:8000/dashboard`. You can con
 | UVICORN_SSL_KEYFILE                      | SSL key file to have application on https                                                                                |
 | UVICORN_SSL_CA_TYPE                      | Type of authority SSL certificate. Use `private` for testing self-signed CA (default: `public`)                          |
 | XRAY_JSON                                | Path of Xray's json config file (default: `xray_config.json`)                                                            |
-| XRAY_EXECUTABLE_PATH                     | Path of Xray binary (default: `/usr/local/bin/xray`)                                                                     |
-| XRAY_ASSETS_PATH                         | Path of Xray assets (default: `/usr/local/share/xray`)                                                                   |
-| XRAY_SUBSCRIPTION_URL_PREFIX             | Prefix of subscription URLs                                                                                              |
-| XRAY_FALLBACKS_INBOUND_TAG               | Tag of the inbound that includes fallbacks, needed in the case you're using fallbacks                                    |
-| XRAY_EXCLUDE_INBOUND_TAGS                | Tags of the inbounds that shouldn't be managed and included in links by application                                      |
 | CUSTOM_TEMPLATES_DIRECTORY               | Customized templates directory (default: `app/templates`)                                                                |
 | CLASH_SUBSCRIPTION_TEMPLATE              | The template that will be used for generating clash configs (default: `clash/default.yml`)                               |
 | SUBSCRIPTION_PAGE_TEMPLATE               | The template used for generating subscription info page (default: `subscription/index.html`)                             |
 | HOME_PAGE_TEMPLATE                       | Decoy page template (default: `home/index.html`)                                                                         |
-| TELEGRAM_API_TOKEN                       | Telegram bot API token (get token from [@botfather](https://t.me/botfather))                                             |
-| TELEGRAM_ADMIN_ID                        | Numeric Telegram ID of admin (use [@userinfobot](https://t.me/userinfobot) to found your ID)                             |
-| TELEGRAM_PROXY_URL                       | Run Telegram Bot over proxy                                                                                              |
 | JWT_ACCESS_TOKEN_EXPIRE_MINUTES          | Expire time for the Access Tokens in minutes, `0` considered as infinite (default: `1440`)                               |
 | DOCS                                     | Whether API documents should be available on `/docs` and `/redoc` or not (default: `False`)                              |
 | DEBUG                                    | Debug mode for development (default: `False`)                                                                            |
-| WEBHOOK_ADDRESS                          | Webhook address to send notifications to. Webhook notifications will be sent if this value was set.                      |
-| WEBHOOK_SECRET                           | Webhook secret will be sent with each request as `x-webhook-secret` in the header (default: `None`)                      |
-| NUMBER_OF_RECURRENT_NOTIFICATIONS        | How many times to retry if an error detected in sending a notification (default: `3`)                                    |
-| RECURRENT_NOTIFICATIONS_TIMEOUT          | Timeout between each retry if an error detected in sending a notification in seconds (default: `180`)                    |
-| NOTIFY_REACHED_USAGE_PERCENT             | At which percentage of usage to send the warning notification (default: `80`)                                            |
-| NOTIFY_DAYS_LEFT                         | When to send warning notifaction about expiration (default: `3`)                                                         |
 | USERS_AUTODELETE_DAYS                    | Delete expired (and optionally limited users) after this many days (Negative values disable this feature, default: `-1`) |
 | USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS | Whether to include limited accounts in the auto-delete feature (default: `False`)                                        |
 | USE_CUSTOM_JSON_DEFAULT                  | Enable custom JSON config for ALL supported clients (default: `False`)                                                   |
@@ -387,10 +373,10 @@ marzban cli [OPTIONS] COMMAND [ARGS]...
 
 For more information, You can read [Marzban CLI's documentation](./cli/README.md).
 
-# Marzban Node
+# Gozargah Node
 
-The Marzban project introduces the [Marzban-node](https://github.com/gozargah/marzban-node), which revolutionizes infrastructure distribution. With Marzban-node, you can distribute your infrastructure across multiple locations, unlocking benefits such as redundancy, high availability, scalability, flexibility. Marzban-node empowers users to connect to different servers, offering them the flexibility to choose and connect to multiple servers instead of being limited to only one server.
-For more detailed information and installation instructions, please refer to the [Marzban-node official documentation](https://github.com/gozargah/marzban-node)
+The Marzban project introduces the [Gozargah-node](https://github.com/M03ED/gozargah-node), which revolutionizes infrastructure distribution. With Gozargah-node, you can distribute your infrastructure across multiple locations, unlocking benefits such as redundancy, high availability, scalability, flexibility. Gozargah-node empowers users to connect to different servers, offering them the flexibility to choose and connect to multiple servers instead of being limited to only one server.
+For more detailed information and installation instructions, please refer to the [Gozargah-node official documentation](https://github.com/gozargah/Gozargah-node)
 
 # Webhook notifications
 
@@ -421,7 +407,7 @@ Different action typs are: `user_created`, `user_updated`, `user_deleted`, `user
 
 # Donation
 
-If you found Marzban useful and would like to support its development, you can make a donation,  [Click Here](https://donate.gozargah.pro)
+If you found Marzban useful and would like to support its development, you can make a donation, [Click Here](https://donate.gozargah.pro)
 
 Thank you for your support!
 
