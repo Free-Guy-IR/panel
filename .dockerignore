@@ -22,5 +22,3 @@ venv*
 LICENSE
 install_service.sh
 Marzban.code-workspace
-pyproject.toml
-uv.lock
