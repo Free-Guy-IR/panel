@@ -63,7 +63,7 @@ export const nextPlanModelSchema = z.object({
 export const userCreateSchema = z.object({
   username: z.string().min(3).max(32),
   status: userStatusCreateEnum.optional(),
-  group_ids: z.array(z.number()).optional(),
+  group_ids: z.array(z.number()).min(1, { message: 'validation.required' }),
   data_limit: z.number().min(0),
   expire: z.union([z.string(), z.number(), z.null()]).optional(),
   note: z.string().optional(),
@@ -86,7 +86,7 @@ const Dashboard = () => {
     defaultValues: {
       username: '',
       status: 'active',
-      data_limit: undefined,
+      data_limit: 0,
       expire: '',
       note: '',
       group_ids: [],
@@ -98,6 +98,7 @@ const Dashboard = () => {
     // Invalidate all relevant queries 
     queryClient.invalidateQueries({ queryKey: ['getUsers'] })
     queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
+    queryClient.invalidateQueries({ queryKey: ['/api/users/'] })
   }
 
 

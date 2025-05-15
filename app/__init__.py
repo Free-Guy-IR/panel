@@ -1,8 +1,7 @@
-from contextlib import asynccontextmanager
 import asyncio
+from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -103,6 +102,7 @@ def validate_paths():
 
 on_startup(scheduler.start)
 on_shutdown(scheduler.shutdown)
+on_startup(lambda: logger.info(f"Marzban v{__version__}"))
 
 
 @app.exception_handler(RequestValidationError)
