@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class AbstractBackend(ABC):
+class AbstractCore(ABC):
     @abstractmethod
     def __init__(self, config: dict, exclude_inbound_tags: list[str], fallbacks_inbound_tags: list[str]) -> None:
         raise NotImplementedError
