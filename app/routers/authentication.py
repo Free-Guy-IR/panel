@@ -1,3 +1,5 @@
+from datetime import timezone as tz
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from aiogram.utils.web_app import WebAppInitData, safe_parse_webapp_init_data
@@ -24,7 +26,7 @@ async def get_admin(db: AsyncSession, token: str) -> AdminDetails | None:
         if db_admin.password_reset_at:
             if not payload.get("created_at"):
                 return
-            if db_admin.password_reset_at > payload.get("created_at"):
+            if db_admin.password_reset_at.astimezone(tz.utc) > payload.get("created_at"):
                 return
 
         return AdminDetails.model_validate(db_admin)
