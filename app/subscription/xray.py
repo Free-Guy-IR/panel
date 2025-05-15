@@ -5,7 +5,7 @@ from typing import Union
 from app.subscription.funcs import detect_shadowsocks_2022, get_grpc_gun, get_grpc_multi
 from app.templates import render_template
 from app.utils.helpers import UUIDEncoder
-from config import V2RAY_SUBSCRIPTION_TEMPLATE
+from config import XRAY_SUBSCRIPTION_TEMPLATE
 
 from . import BaseSubscription
 
@@ -14,7 +14,7 @@ class XrayConfig(BaseSubscription):
     def __init__(self):
         super().__init__()
         self.config = []
-        self.template = render_template(V2RAY_SUBSCRIPTION_TEMPLATE)
+        self.template = render_template(XRAY_SUBSCRIPTION_TEMPLATE)
 
     def add_config(self, remarks, outbounds):
         json_template = json.loads(self.template)

@@ -290,10 +290,12 @@ By default the app will be run on `http://localhost:8000/dashboard`. You can con
 > You can set settings below using environment variables or placing them in `.env` file.
 
 | Variable                                 | Description                                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+|------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
 | SUDO_USERNAME                            | Superuser's username                                                                                                     |
 | SUDO_PASSWORD                            | Superuser's password                                                                                                     |
 | SQLALCHEMY_DATABASE_URL                  | Database URL ([SQLAlchemy's docs](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls))                    |
+| SQLALCHEMY_POOL_SIZE                     | (default: `10`)                                                                                                          |
+| SQLALCHEMY_MAX_OVERFLOW                  | (default: `30`)                                                                                                          |
 | UVICORN_HOST                             | Bind application to this host (default: `0.0.0.0`)                                                                       |
 | UVICORN_PORT                             | Bind application to this port (default: `8000`)                                                                          |
 | UVICORN_UDS                              | Bind application to a UNIX domain socket                                                                                 |
@@ -304,16 +306,16 @@ By default the app will be run on `http://localhost:8000/dashboard`. You can con
 | CUSTOM_TEMPLATES_DIRECTORY               | Customized templates directory (default: `app/templates`)                                                                |
 | CLASH_SUBSCRIPTION_TEMPLATE              | The template that will be used for generating clash configs (default: `clash/default.yml`)                               |
 | SUBSCRIPTION_PAGE_TEMPLATE               | The template used for generating subscription info page (default: `subscription/index.html`)                             |
+| XRAY_SUBSCRIPTION_TEMPLATE               | The template that will be used for generating xray configs (default: `xray/default.yml`)                                 |\
+| SINGBOX_SUBSCRIPTION_TEMPLATE            | The template that will be used for generating xray configs (default: `xray/default.yml`)                                 |
 | HOME_PAGE_TEMPLATE                       | Decoy page template (default: `home/index.html`)                                                                         |
 | JWT_ACCESS_TOKEN_EXPIRE_MINUTES          | Expire time for the Access Tokens in minutes, `0` considered as infinite (default: `1440`)                               |
 | DOCS                                     | Whether API documents should be available on `/docs` and `/redoc` or not (default: `False`)                              |
 | DEBUG                                    | Debug mode for development (default: `False`)                                                                            |
 | USERS_AUTODELETE_DAYS                    | Delete expired (and optionally limited users) after this many days (Negative values disable this feature, default: `-1`) |
 | USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS | Whether to include limited accounts in the auto-delete feature (default: `False`)                                        |
-| USE_CUSTOM_JSON_DEFAULT                  | Enable custom JSON config for ALL supported clients (default: `False`)                                                   |
-| USE_CUSTOM_JSON_FOR_V2RAYNG              | Enable custom JSON config only for V2rayNG (default: `False`)                                                            |
-| USE_CUSTOM_JSON_FOR_STREISAND            | Enable custom JSON config only for Streisand (default: `False`)                                                          |
-| USE_CUSTOM_JSON_FOR_V2RAYN               | Enable custom JSON config only for V2rayN (default: `False`)                                                             |
+| XRAY_SUBSCRIPTION_PATH                   | You can change your api path for subscrtiption (default: `sub`)                                                          |
+| ENABLE_RECORDING_NODES_STATS             | Due to high amount of data, this job is only available for postgresql and timescaledb                                    |
 
 # Documentation
 

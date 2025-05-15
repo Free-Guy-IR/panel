@@ -5,9 +5,9 @@ from app.db import GetDB
 from app.db.crud import autodelete_expired_users
 from app.models.user import UserResponse
 from app import notification
-from config import USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.utils.logger import get_logger
+from config import USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS, JOB_REMOVE_EXPIRED_USERS_INTERVAL
 
 
 logger = get_logger("jobs")
@@ -22,4 +22,4 @@ async def remove_expired_users():
             logger.info("Expired user %s deleted.", user.username)
 
 
-scheduler.add_job(remove_expired_users, "interval", coalesce=True, hours=6, max_instances=1)
+scheduler.add_job(remove_expired_users, "interval", coalesce=True, seconds=JOB_REMOVE_EXPIRED_USERS_INTERVAL, max_instances=1)

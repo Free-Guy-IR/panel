@@ -969,15 +969,11 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
         .options(joinedload(User.admin))
     )
 
-    # Add time filter to query
-    query = query.where(
-        func.date_add(
-            User.last_status_change, func.make_interval(days=coalesce(User.auto_delete_in_days, USERS_AUTODELETE_DAYS))
-        )
-        <= func.now()
-    )
-
-    expired_users = [user for (user, _) in (await db.execute(query)).unique()]
+    expired_users = [
+        user
+        for (user, auto_delete) in (await db.execute(query)).unique()
+        if user.last_status_change + timedelta(days=auto_delete) <= datetime.now(timezone.utc)
+    ]
 
     if expired_users:
         await remove_users(db, expired_users)

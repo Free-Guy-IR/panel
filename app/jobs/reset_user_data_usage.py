@@ -10,6 +10,7 @@ from app.core.manager import core_manager
 from app.node import node_manager
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.utils.logger import get_logger
+from config import JOB_RESET_USER_DATA_USAGE_INTERVAL
 
 reset_strategy_to_days = {
     UserDataLimitResetStrategy.day.value: 1,
@@ -64,7 +65,7 @@ async def reset_user_data_usage():
 scheduler.add_job(
     reset_user_data_usage,
     "interval",
-    minutes=10,
+    seconds=JOB_RESET_USER_DATA_USAGE_INTERVAL,
     coalesce=True,
     start_date=dt.now(tz.utc) + td(minutes=1),
     max_instances=1,
