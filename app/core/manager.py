@@ -15,7 +15,7 @@ class CoreManager:
         self._lock = Lock()
         self._inbounds: list[str] = []
         self._inbounds_by_tag = {}
-    
+
     @staticmethod
     def validate_core(config: dict, fallbacks_inbounds: str, exclude_inbounds: str):
         fallbacks_inbound_tags = fallbacks_inbounds.split(",") if fallbacks_inbounds else []

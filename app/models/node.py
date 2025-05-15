@@ -26,7 +26,7 @@ class Node(BaseModel):
     max_logs: int = Field(gt=0, default=1000)
     core_config_id: int
     api_key: str
-    gather_logs: bool = True
+    gather_logs: bool = Field(default=True)
 
 
 class NodeCreate(Node):
@@ -88,19 +88,19 @@ class NodeCreate(Node):
 
 
 class NodeModify(NodeCreate):
-    name: str | None = None
-    address: str | None = None
-    port: int | None = None
-    api_port: int | None = None
-    status: NodeStatus | None = None
-    usage_coefficient: float | None = None
-    server_ca: str | None = None
-    connection_type: NodeConnectionType | None = None
-    keep_alive: int | None = None
-    max_logs: int | None = None
-    core_config_id: int | None = None
-    api_key: str | None = None
-    gather_logs: bool | None = None
+    name: str | None = Field(default=None)
+    address: str | None = Field(default=None)
+    port: int | None = Field(default=None)
+    api_port: int | None = Field(default=None)
+    status: NodeStatus | None = Field(default=None)
+    usage_coefficient: float | None = Field(default=None)
+    server_ca: str | None = Field(default=None)
+    connection_type: NodeConnectionType | None = Field(default=None)
+    keep_alive: int | None = Field(default=None)
+    max_logs: int | None = Field(default=None)
+    core_config_id: int | None = Field(default=None)
+    api_key: str | None = Field(default=None)
+    gather_logs: bool | None = Field(default=None)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -124,9 +124,9 @@ class NodeModify(NodeCreate):
 
 class NodeResponse(Node):
     id: int
-    core_config_id: int | None = None
-    xray_version: str | None = None
-    node_version: str | None = None
+    core_config_id: int | None = Field(default=None)
+    xray_version: str | None = Field(default=None)
+    node_version: str | None = Field(default=None)
     status: NodeStatus
-    message: str | None = None
+    message: str | None = Field(default=None)
     model_config = ConfigDict(from_attributes=True)

@@ -22,4 +22,6 @@ async def remove_expired_users():
             logger.info("Expired user %s deleted.", user.username)
 
 
-scheduler.add_job(remove_expired_users, "interval", coalesce=True, seconds=JOB_REMOVE_EXPIRED_USERS_INTERVAL, max_instances=1)
+scheduler.add_job(
+    remove_expired_users, "interval", coalesce=True, seconds=JOB_REMOVE_EXPIRED_USERS_INTERVAL, max_instances=1
+)
