@@ -13,7 +13,7 @@ from fastapi.routing import APIRoute
 from app.utils.logger import get_logger
 from config import ALLOWED_ORIGINS, DOCS, XRAY_SUBSCRIPTION_PATH
 
-__version__ = "1.0.0-alpha-2"
+__version__ = "1.0.0-alpha-3"
 
 startup_functions = []
 shutdown_functions = []
