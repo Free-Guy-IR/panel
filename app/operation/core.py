@@ -17,11 +17,12 @@ logger = get_logger("core-operation")
 class CoreOperation(BaseOperation):
     async def create_core(self, db: AsyncSession, new_core: CoreCreate, admin: AdminDetails) -> CoreResponse:
         try:
+            core_manager.validate_core(new_core.config, new_core.fallbacks_inbound_tags, new_core.exclude_inbound_tags)
             db_core = await create_core_config(db, new_core)
-            await core_manager.update_core(db_core)
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
 
+        await core_manager.update_core(db_core)
         logger.info(f'Core config "{db_core.id}" created by admin "{admin.username}"')
 
         core = CoreResponse.model_validate(db_core)
@@ -40,10 +41,14 @@ class CoreOperation(BaseOperation):
     ) -> CoreResponse:
         db_core = await self.get_validated_core_config(db, core_id)
         try:
+            core_manager.validate_core(
+                modified_core.config, modified_core.fallbacks_inbound_tags, modified_core.exclude_inbound_tags
+            )
             db_core = await modify_core_config(db, db_core, modified_core)
-            await core_manager.update_core(db_core)
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
+
+        await core_manager.update_core(db_core)
 
         logger.info(f'Core config "{db_core.name}" modified by admin "{admin.username}"')
 
@@ -56,12 +61,12 @@ class CoreOperation(BaseOperation):
 
     async def delete_core(self, db: AsyncSession, core_id: int, admin: AdminDetails) -> None:
         if core_id == 1:
-            await self.raise_error(message="Cannot delete default core config", code=403)
+            return await self.raise_error(message="Cannot delete default core config", code=403)
 
         db_core = await self.get_validated_core_config(db, core_id)
 
         await remove_core_config(db, db_core)
-        core_manager.remove_core(db_core.id)
+        await core_manager.remove_core(db_core.id)
 
         asyncio.create_task(notification.remove_core(db_core.id, admin.username))
 

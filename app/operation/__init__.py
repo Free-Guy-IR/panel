@@ -40,8 +40,8 @@ class BaseOperation:
             await db.rollback()
         if code <= 0:
             code = 408
-        if self.operator_type in (OperatorType.API, OperatorType.WEB):
-            raise HTTPException(status_code=code, detail=message)
+        if self.operator_type in [OperatorType.API, OperatorType.WEB]:
+            raise HTTPException(status_code=code, detail=str(message))
         else:
             raise ValueError(message)
 

@@ -16,15 +16,16 @@ class CoreManager:
         self._inbounds: list[str] = []
         self._inbounds_by_tag = {}
 
-    async def update_core(self, db_core_config: CoreConfig):
-        fallbacks_inbound_tags = (
-            db_core_config.fallbacks_inbound_tags.split(",") if db_core_config.fallbacks_inbound_tags else []
-        )
-        exclude_inbound_tags = (
-            db_core_config.exclude_inbound_tags.split(",") if db_core_config.exclude_inbound_tags else []
-        )
+    def validate_core(self, config: dict, fallbacks_inbounds: str, exclude_inbounds: str):
+        fallbacks_inbound_tags = fallbacks_inbounds.split(",") if fallbacks_inbounds else []
+        exclude_inbound_tags = exclude_inbounds.split(",") if exclude_inbounds else []
 
-        backend_config = XRayConfig(db_core_config.config, fallbacks_inbound_tags, exclude_inbound_tags)
+        return XRayConfig(config, fallbacks_inbound_tags, exclude_inbound_tags)
+
+    async def update_core(self, db_core_config: CoreConfig):
+        backend_config = self.validate_core(
+            db_core_config.config, db_core_config.fallbacks_inbound_tags, db_core_config.exclude_inbound_tags
+        )
 
         async with self._lock:
             self._cores.update({db_core_config.id: backend_config})
