@@ -31,8 +31,8 @@ from app.db.models import (
     ProxyHost,
     ProxyInbound,
     ReminderType,
-    System,
     Settings,
+    System,
     User,
     UserDataLimitResetStrategy,
     UserStatus,
@@ -107,12 +107,10 @@ def build_json_proxy_settings_search_condition(column, value: str):
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    return or_(
-        *[
-            json_extract(column, field) == value
-            for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-        ]
-    )
+    return or_(*[
+        json_extract(column, field) == value
+        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+    ])
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -1424,6 +1422,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
         status=user_template.status,
         reset_usages=user_template.reset_usages,
         on_hold_timeout=user_template.on_hold_timeout,
+        is_disabled=bool(user_template.is_disabled),
     )
 
     db.add(db_user_template)
@@ -1467,6 +1466,8 @@ async def modify_user_template(
         db_user_template.reset_usages = modified_user_template.reset_usages
     if modified_user_template.on_hold_timeout is not None:
         db_user_template.on_hold_timeout = modified_user_template.on_hold_timeout
+    if modified_user_template.is_disabled is not None:
+        db_user_template.is_disabled = modified_user_template.is_disabled
 
     await db.commit()
     await db.refresh(db_user_template)
