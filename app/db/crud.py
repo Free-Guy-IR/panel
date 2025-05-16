@@ -107,10 +107,12 @@ def build_json_proxy_settings_search_condition(column, value: str):
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    return or_(*[
-        json_extract(column, field) == value
-        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-    ])
+    return or_(
+        *[
+            json_extract(column, field) == value
+            for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+        ]
+    )
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -668,6 +670,9 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
     Returns:
         User: Updated user object.
     """
+    remove_usage_reminder = False
+    remove_expiration_reminder = False
+
     if modify.proxy_settings:
         db_user.proxy_settings = modify.proxy_settings.dict()
     if modify.group_ids:
@@ -683,9 +688,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
                 if db_user.status != UserStatus.on_hold:
                     db_user.status = UserStatus.active
 
-                await delete_user_passed_notification_reminders(
-                    db, db_user.id, ReminderType.data_usage, db_user.usage_percentage
-                )
+                remove_usage_reminder = True
             else:
                 db_user.status = UserStatus.limited
 
@@ -700,9 +703,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
             if not db_user.expire or db_user.expire.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
                 db_user.status = UserStatus.active
 
-                await delete_user_passed_notification_reminders(
-                    db, db_user.id, ReminderType.expiration_date, db_user.days_left
-                )
+                remove_expiration_reminder = True
             else:
                 db_user.status = UserStatus.expired
 
@@ -732,6 +733,13 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
         await db.delete(db_user.next_plan)
 
     db_user.edit_at = datetime.now(timezone.utc)
+
+    if remove_usage_reminder:
+        await delete_user_passed_notification_reminders(
+            db, db_user.id, ReminderType.data_usage, db_user.usage_percentage
+        )
+    if remove_expiration_reminder:
+        await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.expiration_date, db_user.days_left)
 
     await db.commit()
     await db.refresh(db_user)
