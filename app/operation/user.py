@@ -354,6 +354,7 @@ class UserOperation(BaseOperation):
             "data_limit": template.data_limit,
             "group_ids": template.group_ids,
             "data_limit_reset_strategy": template.data_limit_reset_strategy,
+            "status": template.status,
         }
 
         if template.status == UserStatus.active:
