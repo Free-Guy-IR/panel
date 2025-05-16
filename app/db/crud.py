@@ -734,12 +734,12 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
 
     db_user.edit_at = datetime.now(timezone.utc)
 
+    id = db_user.id
+
     if remove_usage_reminder:
-        await delete_user_passed_notification_reminders(
-            db, db_user.id, ReminderType.data_usage, db_user.usage_percentage
-        )
+        await delete_user_passed_notification_reminders(db, id, ReminderType.data_usage, db_user.usage_percentage)
     if remove_expiration_reminder:
-        await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.expiration_date, db_user.days_left)
+        await delete_user_passed_notification_reminders(db, id, ReminderType.expiration_date, db_user.days_left)
 
     await db.commit()
     await db.refresh(db_user)
