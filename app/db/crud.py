@@ -1422,7 +1422,7 @@ async def create_user_template(db: AsyncSession, user_template: UserTemplateCrea
         status=user_template.status,
         reset_usages=user_template.reset_usages,
         on_hold_timeout=user_template.on_hold_timeout,
-        is_disabled=bool(user_template.is_disabled),
+        is_disabled=user_template.is_disabled,
     )
 
     db.add(db_user_template)
