@@ -683,7 +683,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
                 if db_user.status != UserStatus.on_hold:
                     db_user.status = UserStatus.active
 
-                delete_user_passed_notification_reminders(
+                await delete_user_passed_notification_reminders(
                     db, db_user.id, ReminderType.data_usage, db_user.usage_percentage
                 )
             else:
@@ -700,7 +700,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
             if not db_user.expire or db_user.expire.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
                 db_user.status = UserStatus.active
 
-                delete_user_passed_notification_reminders(
+                await delete_user_passed_notification_reminders(
                     db, db_user.id, ReminderType.expiration_date, db_user.days_left
                 )
             else:
