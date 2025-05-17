@@ -1,22 +1,22 @@
-import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog';
-import {Form, FormControl, FormField, FormItem, FormLabel, FormMessage} from '@/components/ui/form';
-import {Input} from '@/components/ui/input';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
-import {Button} from '@/components/ui/button';
-import {useTranslation} from 'react-i18next';
-import {UseFormReturn} from 'react-hook-form';
-import {toast} from '@/hooks/use-toast';
-import {useState, useEffect} from 'react';
-import {UseFormValues, userCreateSchema} from '@/pages/_dashboard._index';
-import {RefreshCcw} from 'lucide-react';
-import {Calendar} from '@/components/ui/calendar';
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import {format} from 'date-fns';
-import {CalendarIcon} from 'lucide-react';
-import {cn} from '@/lib/utils';
-import {relativeExpiryDate} from '@/utils/dateFormatter';
-import {Textarea} from '@/components/ui/textarea';
-import {formatBytes} from '@/utils/formatByte';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { useTranslation } from 'react-i18next';
+import { UseFormReturn } from 'react-hook-form';
+import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
+import { UseFormValues, userCreateSchema } from '@/pages/_dashboard._index';
+import { RefreshCcw } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { CalendarIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { relativeExpiryDate } from '@/utils/dateFormatter';
+import { Textarea } from '@/components/ui/textarea';
+import { formatBytes } from '@/utils/formatByte';
 import {
     useGetUserTemplates,
     useGetAllGroups,
@@ -25,14 +25,15 @@ import {
     useModifyUser,
     useCreateUserFromTemplate
 } from '@/service/api';
-import {Layers, Users} from 'lucide-react';
-import {Checkbox} from '@/components/ui/checkbox';
-import {Search} from 'lucide-react';
+import { Layers, Users } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search } from 'lucide-react';
 import useDirDetection from '@/hooks/use-dir-detection';
-import {Switch} from '@/components/ui/switch';
-import {useQueryClient} from '@tanstack/react-query';
-import {Trans} from 'react-i18next';
-import {useNavigate} from 'react-router';
+import { Switch } from '@/components/ui/switch';
+import { useQueryClient } from '@tanstack/react-query';
+import { Trans } from 'react-i18next';
+import { useNavigate } from 'react-router';
+import { LoaderButton } from '@/components/ui/loader-button';
 
 interface UserModalProps {
     isDialogOpen: boolean;
@@ -54,14 +55,14 @@ export default function UserModal({
                                       editingUserId,
                                       onSuccessCallback
                                   }: UserModalProps) {
-    const {t} = useTranslation();
+    const { t } = useTranslation();
     const dir = useDirDetection();
     const [loading, setLoading] = useState(false);
     const status = form.watch('status');
     const [activeTab, setActiveTab] = useState<'groups' | 'templates'>('groups');
     const tabs = [
-        {id: 'groups', label: 'groups', icon: Users},
-        {id: 'templates', label: 'templates.title', icon: Layers},
+        { id: 'groups', label: 'groups', icon: Users },
+        { id: 'templates', label: 'templates.title', icon: Layers },
     ];
     const [nextPlanEnabled, setNextPlanEnabled] = useState(!!form.watch('next_plan'));
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined);
@@ -71,18 +72,39 @@ export default function UserModal({
     const queryClient = useQueryClient();
 
     // Get refetch function for users
-    const {refetch: refetchUsers} = useGetUsers({}, {
-        query: {enabled: false}
+    const { refetch: refetchUsers } = useGetUsers({}, {
+        query: { enabled: false }
+    });
+
+    // Fetch data for tabs with proper caching
+    const { data: templatesData, isLoading: templatesLoading } = useGetUserTemplates(undefined, {
+        query: {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            gcTime: 10 * 60 * 1000, // 10 minutes
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+            refetchOnReconnect: false
+        }
+    });
+
+    const { data: groupsData, isLoading: groupsLoading } = useGetAllGroups(undefined, {
+        query: {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            gcTime: 10 * 60 * 1000, // 10 minutes
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+            refetchOnReconnect: false
+        }
     });
 
     // Function to refresh all user-related data
     const refreshUserData = () => {
         // Invalidate relevant queries to trigger fresh fetches
-        queryClient.invalidateQueries({queryKey: ['/api/users']});
-        queryClient.invalidateQueries({queryKey: ['getUsersUsage']});
-        queryClient.invalidateQueries({queryKey: ['getUserStats']});
-        queryClient.invalidateQueries({queryKey: ['getInboundStats']});
-        queryClient.invalidateQueries({queryKey: ['getUserOnlineStats']});
+        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+        queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] });
+        queryClient.invalidateQueries({ queryKey: ['getUserStats'] });
+        queryClient.invalidateQueries({ queryKey: ['getInboundStats'] });
+        queryClient.invalidateQueries({ queryKey: ['getUserOnlineStats'] });
 
         // Force immediate refetch
         refetchUsers();
@@ -122,7 +144,7 @@ export default function UserModal({
         if (!editingUser) {
             form.setError('username', {
                 type: 'manual',
-                message: t('validation.required', {field: t('username')})
+                message: t('validation.required', { field: t('username') })
             });
         }
     }, [form, editingUser, t]);
@@ -137,7 +159,7 @@ export default function UserModal({
             if (!duration || duration < 1) {
                 form.setError('on_hold_expire_duration', {
                     type: 'manual',
-                    message: t('validation.required', {field: t('userDialog.onHoldExpireDuration')})
+                    message: t('validation.required', { field: t('userDialog.onHoldExpireDuration') })
                 });
             }
         } else {
@@ -202,6 +224,74 @@ export default function UserModal({
     // Helper to check if a template is selected in next plan
     const nextPlanTemplateSelected = !!form.watch('next_plan.user_template_id');
 
+    // Add validation function
+    const validateAllFields = (currentValues: any, touchedFields: any) => {
+        try {
+            // Only validate fields that have been touched
+            const touchedValues = Object.keys(touchedFields).reduce((acc, key) => {
+                if (touchedFields[key]) {
+                    acc[key] = currentValues[key];
+                }
+                return acc;
+            }, {} as any);
+
+            // If no fields are touched, return true
+            if (Object.keys(touchedValues).length === 0) {
+                return true;
+            }
+
+            // Validate only touched fields
+            userCreateSchema.partial().parse(touchedValues);
+            form.clearErrors();
+            return true;
+        } catch (error: any) {
+            if (error?.errors) {
+                // Clear all previous errors
+                form.clearErrors();
+
+                // Set new errors only for touched fields
+                error.errors.forEach((err: any) => {
+                    const fieldName = err.path[0];
+                    if (fieldName && touchedFields[fieldName]) {
+                        form.setError(fieldName as any, {
+                            type: 'manual',
+                            message: t(`validation.${err.code}`, {
+                                field: t(`userDialog.${fieldName}`, { defaultValue: fieldName }),
+                                defaultValue: `${t(`userDialog.${fieldName}`)} is invalid`
+                            })
+                        });
+                    }
+                });
+
+                // Show first error in toast only if it's from a touched field
+                const firstError = error.errors.find((err: any) => touchedFields[err.path[0]]);
+                if (firstError) {
+                    const fieldName = firstError.path[0] ?
+                        t(`userDialog.${firstError.path[0]}`, { defaultValue: firstError.path[0] }) :
+                        'field';
+
+                    toast.error(t(`validation.${firstError.code}`, {
+                        field: fieldName,
+                        defaultValue: `${fieldName} is invalid`
+                    }));
+                }
+            }
+            return false;
+        }
+    };
+
+    // Add state to track touched fields
+    const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+
+    // Update field handlers to track touched state
+    const handleFieldChange = (fieldName: string, value: any) => {
+        setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
+        validateAllFields({
+            ...form.getValues(),
+            [fieldName]: value
+        }, touchedFields);
+    };
+
     const onSubmit = async (values: UseFormValues) => {
         try {
             form.clearErrors();
@@ -215,13 +305,10 @@ export default function UserModal({
                         note: values.note || undefined
                     }
                 });
-                toast({
-                    title: t('success', {defaultValue: 'Success'}),
-                    description: t('users.createSuccess', {
+                toast.success(t('users.createSuccess', {
                         name: values.username,
                         defaultValue: 'User «{{name}}» has been created successfully'
-                    })
-                });
+                }));
                 onOpenChange(false);
                 form.reset();
                 setSelectedTemplateId(undefined);
@@ -269,24 +356,18 @@ export default function UserModal({
                     username: sendValues.username,
                     data: sendValues
                 });
-                toast({
-                    title: t('success', {defaultValue: 'Success'}),
-                    description: t('users.editSuccess', {
+                toast.success(t('users.editSuccess', {
                         name: values.username,
                         defaultValue: 'User «{{name}}» has been updated successfully'
-                    })
-                });
+                }));
             } else {
                 await createUserMutation.mutateAsync({
                     data: sendValues
                 });
-                toast({
-                    title: t('success', {defaultValue: 'Success'}),
-                    description: t('users.createSuccess', {
+                toast.success(t('users.createSuccess', {
                         name: values.username,
                         defaultValue: 'User «{{name}}» has been created successfully'
-                    })
-                });
+                }));
             }
 
             onOpenChange(false);
@@ -308,7 +389,7 @@ export default function UserModal({
                 if (error.errors.length > 0) {
                     const firstError = error.errors[0];
                     const fieldName = firstError.path[0] ?
-                        t(`userDialog.${firstError.path[0]}`, {defaultValue: firstError.path[0]}) :
+                        t(`userDialog.${firstError.path[0]}`, { defaultValue: firstError.path[0] }) :
                         'field';
 
                     // Set error on form if it's a recognized field
@@ -322,14 +403,10 @@ export default function UserModal({
                         });
                     }
 
-                    toast({
-                        title: t('error', {defaultValue: 'Validation Error'}),
-                        description: t(`validation.${firstError.code}`, {
+                    toast.error(t(`validation.${firstError.code}`, {
                             field: fieldName,
                             defaultValue: `${fieldName} is invalid`
-                        }),
-                        variant: 'destructive',
-                    });
+                    }));
                 }
             } else if (error?.response?.data) {
                 // Handle API errors
@@ -349,18 +426,10 @@ export default function UserModal({
                     errorMessage = 'An unexpected error occurred';
                 }
 
-                toast({
-                    title: t('error', {defaultValue: 'Error'}),
-                    description: errorMessage,
-                    variant: 'destructive',
-                });
+                toast.error(errorMessage);
             } else {
                 // Generic error handling
-                toast({
-                    title: t('error', {defaultValue: 'Error'}),
-                    description: error?.message || t('users.genericError', {defaultValue: 'An error occurred'}),
-                    variant: 'destructive',
-                });
+                toast.error(error?.message || t('users.genericError', { defaultValue: 'An error occurred' }));
             }
         } finally {
             setLoading(false);
@@ -371,11 +440,6 @@ export default function UserModal({
         // Example: random 8-char string
         return Math.random().toString(36).slice(2, 10);
     }
-
-    // Fetch data for tabs
-    const {data: templatesData, isLoading: templatesLoading} = useGetUserTemplates();
-    const {data: groupsData, isLoading: groupsLoading} = useGetAllGroups();
-
 
     useEffect(() => {
         // Log form state when dialog opens
@@ -397,7 +461,7 @@ export default function UserModal({
                 className={`lg:min-w-[900px]  ${editingUser ? "sm:h-auto h-full" : "h-auto"}`}>
                 <DialogHeader>
                     <DialogTitle
-                        className={`${dir === 'rtl' ? 'text-right' : ''}`}>{editingUser ? t('userDialog.editUser', {defaultValue: 'Edit User'}) : t('createUser', {defaultValue: 'Create User'})}</DialogTitle>
+                        className={`${dir === 'rtl' ? 'text-right' : ''}`}>{editingUser ? t('userDialog.editUser', { defaultValue: 'Edit User' }) : t('createUser', { defaultValue: 'Create User' })}</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -413,17 +477,21 @@ export default function UserModal({
                                                 <FormField
                                                     control={form.control}
                                                     name="username"
-                                                    render={({field}) => (
+                                                    render={({ field }) => (
                                                         <FormItem className='flex-1'>
-                                                            <FormLabel>{t('username', {defaultValue: 'Username'})}</FormLabel>
+                                                            <FormLabel>{t('username', { defaultValue: 'Username' })}</FormLabel>
                                                             <FormControl>
                                                                 <div className="flex gap-2 items-center">
                                                                     <div className='w-full'>
                                                                         <Input
-                                                                            placeholder={t('admins.enterUsername', {defaultValue: 'Enter username'})}
+                                                                            placeholder={t('admins.enterUsername', { defaultValue: 'Enter username' })}
                                                                             {...field}
                                                                             value={field.value ?? ''}
                                                                             disabled={editingUser}
+                                                                            onChange={(e) => {
+                                                                                field.onChange(e);
+                                                                                handleFieldChange('username', e.target.value);
+                                                                            }}
                                                                         />
                                                                     </div>
                                                                     {!editingUser && (
@@ -434,39 +502,42 @@ export default function UserModal({
                                                                             onClick={() => field.onChange(generateUsername())}
                                                                             title="Generate username"
                                                                         >
-                                                                            <RefreshCcw className="w-3 h-3"/>
+                                                                            <RefreshCcw className="w-3 h-3" />
                                                                         </Button>
                                                                     )}
                                                                 </div>
                                                             </FormControl>
-                                                            <FormMessage/>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />
                                                 <FormField
                                                     control={form.control}
                                                     name="status"
-                                                    render={({field}) => (
+                                                    render={({ field }) => (
                                                         <FormItem className='w-1/3'>
-                                                            <FormLabel>{t('status', {defaultValue: 'Status'})}</FormLabel>
+                                                            <FormLabel>{t('status', { defaultValue: 'Status' })}</FormLabel>
                                                             <FormControl>
-                                                                <Select onValueChange={field.onChange}
+                                                                <Select onValueChange={(value) => {
+                                                                    field.onChange(value);
+                                                                    handleFieldChange('status', value);
+                                                                }}
                                                                         value={field.value || ''}>
                                                                     <SelectTrigger>
                                                                         <SelectValue
-                                                                            placeholder={t('users.selectStatus', {defaultValue: 'Select status'})}/>
+                                                                            placeholder={t('users.selectStatus', { defaultValue: 'Select status' })} />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
                                                                         <SelectItem
-                                                                            value="active">{t('status.active', {defaultValue: 'Active'})}</SelectItem>
+                                                                            value="active">{t('status.active', { defaultValue: 'Active' })}</SelectItem>
                                                                         {editingUser && <SelectItem
-                                                                            value="disabled">{t('status.disabled', {defaultValue: 'Disabled'})}</SelectItem>}
+                                                                            value="disabled">{t('status.disabled', { defaultValue: 'Disabled' })}</SelectItem>}
                                                                         <SelectItem
-                                                                            value="on_hold">{t('status.on_hold', {defaultValue: 'On Hold'})}</SelectItem>
+                                                                            value="on_hold">{t('status.on_hold', { defaultValue: 'On Hold' })}</SelectItem>
                                                                     </SelectContent>
                                                                 </Select>
                                                             </FormControl>
-                                                            <FormMessage/>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />
@@ -477,17 +548,21 @@ export default function UserModal({
                                             <FormField
                                                 control={form.control}
                                                 name="username"
-                                                render={({field}) => (
+                                                render={({ field }) => (
                                                     <FormItem className='flex-1 w-full'>
-                                                        <FormLabel>{t('username', {defaultValue: 'Username'})}</FormLabel>
+                                                        <FormLabel>{t('username', { defaultValue: 'Username' })}</FormLabel>
                                                         <FormControl>
                                                             <div
                                                                 className="flex flex-row justify-between gap-4 w-full items-center">
                                                                 <div className='w-full'>
                                                                     <Input
-                                                                        placeholder={t('admins.enterUsername', {defaultValue: 'Enter username'})}
+                                                                        placeholder={t('admins.enterUsername', { defaultValue: 'Enter username' })}
                                                                         {...field}
                                                                         value={field.value ?? ''}
+                                                                        onChange={(e) => {
+                                                                            field.onChange(e);
+                                                                            handleFieldChange('username', e.target.value);
+                                                                        }}
                                                                     />
                                                                 </div>
                                                                 <Button
@@ -497,11 +572,11 @@ export default function UserModal({
                                                                     onClick={() => field.onChange(generateUsername())}
                                                                     title="Generate username"
                                                                 >
-                                                                    <RefreshCcw className="w-3 h-3"/>
+                                                                    <RefreshCcw className="w-3 h-3" />
                                                                 </Button>
                                                             </div>
                                                         </FormControl>
-                                                        <FormMessage/>
+                                                        <FormMessage />
                                                     </FormItem>
                                                 )}
                                             />
@@ -513,26 +588,111 @@ export default function UserModal({
                                             <FormField
                                                 control={form.control}
                                                 name="data_limit"
-                                                render={({field}) => (
+                                                render={({ field }) => (
                                                     <FormItem className='flex-1'>
-                                                        <FormLabel>{t('userDialog.dataLimit', {defaultValue: 'Data Limit (GB)'})}</FormLabel>
+                                                        <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
                                                         <FormControl>
                                                             <div className="relative w-full">
                                                                 <Input
-                                                                    type="number"
-                                                                    step="any"
-                                                                    min="0"
-                                                                    placeholder={t('userDialog.dataLimit', {defaultValue: 'e.g. 1'})}
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
                                                                     onChange={(e) => {
-                                                                        // Handle empty string properly
-                                                                        const value = e.target.value === '' ? undefined : Number(e.target.value);
-                                                                        field.onChange(value);
+                                                                        const value = e.target.value;
+                                                                        // Allow empty string
+                                                                        if (value === '') {
+                                                                            field.onChange(undefined);
+                                                                            handleFieldChange('data_limit', undefined);
+                                                                            return;
+                                                                        }
+                                                                        // Allow only numbers and decimal point
+                                                                        if (/^\d*\.?\d*$/.test(value)) {
+                                                                            const numValue = parseFloat(value);
+                                                                            if (!isNaN(numValue)) {
+                                                                                field.onChange(numValue);
+                                                                                handleFieldChange('data_limit', numValue);
+                                                                            }
+                                                                        }
                                                                     }}
-                                                                    value={field.value ?? ''}
-                                                                    className="pr-12"
+                                                                    onKeyDown={(e) => {
+                                                                        const currentValue = field.value === undefined ? 0 : field.value;
+                                                                        if (e.key === 'ArrowUp') {
+                                                                            e.preventDefault();
+                                                                            const newValue = currentValue + 1;
+                                                                            field.onChange(newValue);
+                                                                            handleFieldChange('data_limit', newValue);
+                                                                        } else if (e.key === 'ArrowDown') {
+                                                                            e.preventDefault();
+                                                                            const newValue = Math.max(0, currentValue - 1);
+                                                                            field.onChange(newValue);
+                                                                            handleFieldChange('data_limit', newValue);
+                                                                        }
+                                                                    }}
+                                                                    onBlur={() => {
+                                                                        handleFieldChange('data_limit', field.value);
+                                                                    }}
+                                                                    value={field.value === undefined ? '' : field.value}
+                                                                    className="pr-20"
                                                                 />
-                                                                <span
-                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">GB</span>
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                                                                    <div className="flex flex-col border-l border-input">
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-4 w-4 rounded-none border-b border-input hover:bg-accent hover:text-accent-foreground"
+                                                                            onClick={() => {
+                                                                                const currentValue = field.value === undefined ? 0 : field.value;
+                                                                                const newValue = currentValue + 1;
+                                                                                field.onChange(newValue);
+                                                                                handleFieldChange('data_limit', newValue);
+                                                                            }}
+                                                                        >
+                                                                            <svg
+                                                                                xmlns="http://www.w3.org/2000/svg"
+                                                                                width="12"
+                                                                                height="12"
+                                                                                viewBox="0 0 24 24"
+                                                                                fill="none"
+                                                                                stroke="currentColor"
+                                                                                strokeWidth="2"
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                className="h-3 w-3"
+                                                                            >
+                                                                                <path d="m5 15 7-7 7 7"/>
+                                                                            </svg>
+                                                                        </Button>
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-4 w-4 rounded-none hover:bg-accent hover:text-accent-foreground"
+                                                                            onClick={() => {
+                                                                                const currentValue = field.value === undefined ? 0 : field.value;
+                                                                                const newValue = Math.max(0, currentValue - 1);
+                                                                                field.onChange(newValue);
+                                                                                handleFieldChange('data_limit', newValue);
+                                                                            }}
+                                                                        >
+                                                                            <svg
+                                                                                xmlns="http://www.w3.org/2000/svg"
+                                                                                width="12"
+                                                                                height="12"
+                                                                                viewBox="0 0 24 24"
+                                                                                fill="none"
+                                                                                stroke="currentColor"
+                                                                                strokeWidth="2"
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                className="h-3 w-3"
+                                                                            >
+                                                                                <path d="m19 9-7 7-7-7"/>
+                                                                            </svg>
+                                                                        </Button>
+                                                                    </div>
+                                                                    <span className="text-muted-foreground pointer-events-none ml-1">GB</span>
+                                                                </div>
                                                             </div>
                                                         </FormControl>
                                                         {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
@@ -540,39 +700,42 @@ export default function UserModal({
                                                                 {formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}
                                                             </p>
                                                         )}
-                                                        <FormMessage/>
+                                                        <FormMessage />
                                                     </FormItem>
                                                 )}
                                             />
-                                            {form.getValues("data_limit") > 0 && (
+                                            {form.watch("data_limit") !== undefined && form.watch("data_limit") !== null && Number(form.watch("data_limit")) > 0 && (
                                                 <FormField
                                                     control={form.control}
                                                     name="data_limit_reset_strategy"
-                                                    render={({field}) => (
+                                                    render={({ field }) => (
                                                         <FormItem className="flex-1">
-                                                            <FormLabel>{t('userDialog.periodicUsageReset', {defaultValue: 'Periodic Usage Reset'})}</FormLabel>
-                                                            <Select onValueChange={field.onChange}
+                                                            <FormLabel>{t('userDialog.periodicUsageReset', { defaultValue: 'Periodic Usage Reset' })}</FormLabel>
+                                                            <Select onValueChange={(value) => {
+                                                                field.onChange(value);
+                                                                handleFieldChange('data_limit_reset_strategy', value);
+                                                            }}
                                                                     value={field.value || ''}>
                                                                 <FormControl>
                                                                     <SelectTrigger>
                                                                         <SelectValue
-                                                                            placeholder={t('userDialog.resetStrategyNo', {defaultValue: 'No'})}/>
+                                                                            placeholder={t('userDialog.resetStrategyNo', { defaultValue: 'No' })} />
                                                                     </SelectTrigger>
                                                                 </FormControl>
                                                                 <SelectContent>
                                                                     <SelectItem
-                                                                        value="no_reset">{t('userDialog.resetStrategyNo', {defaultValue: 'No'})}</SelectItem>
+                                                                        value="no_reset">{t('userDialog.resetStrategyNo', { defaultValue: 'No' })}</SelectItem>
                                                                     <SelectItem
-                                                                        value="day">{t('userDialog.resetStrategyDaily', {defaultValue: 'Daily'})}</SelectItem>
+                                                                        value="day">{t('userDialog.resetStrategyDaily', { defaultValue: 'Daily' })}</SelectItem>
                                                                     <SelectItem
-                                                                        value="week">{t('userDialog.resetStrategyWeekly', {defaultValue: 'Weekly'})}</SelectItem>
+                                                                        value="week">{t('userDialog.resetStrategyWeekly', { defaultValue: 'Weekly' })}</SelectItem>
                                                                     <SelectItem
-                                                                        value="month">{t('userDialog.resetStrategyMonthly', {defaultValue: 'Monthly'})}</SelectItem>
+                                                                        value="month">{t('userDialog.resetStrategyMonthly', { defaultValue: 'Monthly' })}</SelectItem>
                                                                     <SelectItem
-                                                                        value="year">{t('userDialog.resetStrategyAnnually', {defaultValue: 'Annually'})}</SelectItem>
+                                                                        value="year">{t('userDialog.resetStrategyAnnually', { defaultValue: 'Annually' })}</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
-                                                            <FormMessage/>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />)}
@@ -581,19 +744,19 @@ export default function UserModal({
                                                     <FormField
                                                         control={form.control}
                                                         name="on_hold_expire_duration"
-                                                        render={({field}) => (
+                                                        render={({ field }) => (
                                                             <FormItem className="flex-1">
-                                                                <FormLabel>{t('userDialog.onHoldExpireDuration', {defaultValue: 'On Hold Expire Duration (days)'})}</FormLabel>
+                                                                <FormLabel>{t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration (days)' })}</FormLabel>
                                                                 <FormControl>
                                                                     <Input
                                                                         type="number"
                                                                         min="1"
-                                                                        placeholder={t('userDialog.onHoldExpireDurationPlaceholder', {defaultValue: 'e.g. 7'})}
+                                                                        placeholder={t('userDialog.onHoldExpireDurationPlaceholder', { defaultValue: 'e.g. 7' })}
                                                                         {...field}
                                                                         value={field.value === null || field.value === undefined ? '' : field.value}
                                                                     />
                                                                 </FormControl>
-                                                                <FormMessage/>
+                                                                <FormMessage />
                                                             </FormItem>
                                                         )}
                                                     />
@@ -602,7 +765,7 @@ export default function UserModal({
                                                     <FormField
                                                         control={form.control}
                                                         name="expire"
-                                                        render={({field}) => {
+                                                        render={({ field }) => {
                                                             let expireUnix: number | null = null;
                                                             let displayDate: Date | null = null;
 
@@ -649,7 +812,7 @@ export default function UserModal({
 
                                                             return (
                                                                 <FormItem className="flex flex-col flex-1">
-                                                                    <FormLabel>{t('userDialog.expiryDate', {defaultValue: 'Expire date'})}</FormLabel>
+                                                                    <FormLabel>{t('userDialog.expiryDate', { defaultValue: 'Expire date' })}</FormLabel>
                                                                     <Popover>
                                                                         <PopoverTrigger asChild>
                                                                             <FormControl>
@@ -666,10 +829,10 @@ export default function UserModal({
                                                                                         : field.value && !isNaN(Number(field.value))
                                                                                             ? String(field.value)
                                                                                             :
-                                                                                            <span>{t('users.expirePlaceholder', {defaultValue: 'Pick a date'})}</span>
+                                                                                            <span>{t('users.expirePlaceholder', { defaultValue: 'Pick a date' })}</span>
                                                                                     }
                                                                                     <CalendarIcon
-                                                                                        className="ml-auto h-4 w-4 opacity-50"/>
+                                                                                        className="ml-auto h-4 w-4 opacity-50" />
                                                                                 </Button>
                                                                             </FormControl>
                                                                         </PopoverTrigger>
@@ -680,11 +843,12 @@ export default function UserModal({
                                                                                 selected={displayDate || undefined}
                                                                                 onSelect={date => {
                                                                                     if (date) {
-                                                                                        // Convert to seconds timestamp when saving to form
                                                                                         const timestamp = Math.floor(date.getTime() / 1000);
                                                                                         field.onChange(timestamp);
+                                                                                        handleFieldChange('expire', timestamp);
                                                                                     } else {
                                                                                         field.onChange('');
+                                                                                        handleFieldChange('expire', undefined);
                                                                                     }
                                                                                 }}
                                                                                 fromDate={new Date()}
@@ -696,7 +860,7 @@ export default function UserModal({
                                                                         <p dir="ltr"
                                                                            className="text-xs text-muted-foreground ">{expireInfo.time} later</p>
                                                                     )}
-                                                                    <FormMessage/>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             );
                                                         }}
@@ -708,17 +872,21 @@ export default function UserModal({
                                     <FormField
                                         control={form.control}
                                         name="note"
-                                        render={({field}) => (
+                                        render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>{t('userDialog.note', {defaultValue: 'Note'})}</FormLabel>
+                                                <FormLabel>{t('userDialog.note', { defaultValue: 'Note' })}</FormLabel>
                                                 <FormControl>
                                                     <Textarea
-                                                        placeholder={t('userDialog.note', {defaultValue: 'Optional note'}) + "..."}
+                                                        placeholder={t('userDialog.note', { defaultValue: 'Optional note' }) + "..."}
                                                         {...field}
                                                         rows={3}
+                                                        onChange={(e) => {
+                                                            field.onChange(e);
+                                                            handleFieldChange('note', e.target.value);
+                                                        }}
                                                     />
                                                 </FormControl>
-                                                <FormMessage/>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
@@ -727,17 +895,17 @@ export default function UserModal({
                                         <>
                                             <div className="flex items-center justify-between mb-2">
                                                 <div
-                                                    className="font-semibold">{t('userDialog.nextPlanTitle', {defaultValue: 'Next Plan'})}</div>
-                                                <Switch checked={nextPlanEnabled} onCheckedChange={setNextPlanEnabled}/>
+                                                    className="font-semibold">{t('userDialog.nextPlanTitle', { defaultValue: 'Next Plan' })}</div>
+                                                <Switch checked={nextPlanEnabled} onCheckedChange={setNextPlanEnabled} />
                                             </div>
                                             {nextPlanEnabled && (
                                                 <div className="flex flex-col gap-4">
                                                     <FormField
                                                         control={form.control}
                                                         name="next_plan.user_template_id"
-                                                        render={({field}) => (
+                                                        render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t('userDialog.nextPlanTemplate', {defaultValue: 'Template'})}</FormLabel>
+                                                                <FormLabel>{t('userDialog.nextPlanTemplate', { defaultValue: 'Template' })}</FormLabel>
                                                                 <FormControl>
                                                                     <Select
                                                                         value={field.value ? String(field.value) : "none"}
@@ -751,7 +919,7 @@ export default function UserModal({
                                                                     >
                                                                         <SelectTrigger>
                                                                             <SelectValue
-                                                                                placeholder={t('userDialog.selectTemplatePlaceholder', {defaultValue: 'Choose a template'})}/>
+                                                                                placeholder={t('userDialog.selectTemplatePlaceholder', { defaultValue: 'Choose a template' })} />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
                                                                             <SelectItem value="none">---</SelectItem>
@@ -762,7 +930,7 @@ export default function UserModal({
                                                                         </SelectContent>
                                                                     </Select>
                                                                 </FormControl>
-                                                                <FormMessage/>
+                                                                <FormMessage />
                                                             </FormItem>
                                                         )}
                                                     />
@@ -772,33 +940,33 @@ export default function UserModal({
                                                             <FormField
                                                                 control={form.control}
                                                                 name="next_plan.expire"
-                                                                render={({field}) => (
+                                                                render={({ field }) => (
                                                                     <FormItem>
-                                                                        <FormLabel>{t('userDialog.nextPlanExpire', {defaultValue: 'Expire'})}</FormLabel>
+                                                                        <FormLabel>{t('userDialog.nextPlanExpire', { defaultValue: 'Expire' })}</FormLabel>
                                                                         <FormControl>
                                                                             <Input type="number" min="0" {...field}
-                                                                                   value={field.value ?? ''}/>
+                                                                                value={field.value ?? ''} />
                                                                         </FormControl>
                                                                         <span
-                                                                            className="text-xs text-muted-foreground">{t('userDialog.days', {defaultValue: 'Days'})}</span>
-                                                                        <FormMessage/>
+                                                                            className="text-xs text-muted-foreground">{t('userDialog.days', { defaultValue: 'Days' })}</span>
+                                                                        <FormMessage />
                                                                     </FormItem>
                                                                 )}
                                                             />
                                                             <FormField
                                                                 control={form.control}
                                                                 name="next_plan.data_limit"
-                                                                render={({field}) => (
+                                                                render={({ field }) => (
                                                                     <FormItem>
-                                                                        <FormLabel>{t('userDialog.nextPlanDataLimit', {defaultValue: 'Data Limit'})}</FormLabel>
+                                                                        <FormLabel>{t('userDialog.nextPlanDataLimit', { defaultValue: 'Data Limit' })}</FormLabel>
                                                                         <FormControl>
                                                                             <Input type="number" min="0"
                                                                                    step="any" {...field}
-                                                                                   value={field.value ?? ''}/>
+                                                                                value={field.value ?? ''} />
                                                                         </FormControl>
                                                                         <span
                                                                             className="text-xs text-muted-foreground">GB</span>
-                                                                        <FormMessage/>
+                                                                        <FormMessage />
                                                                     </FormItem>
                                                                 )}
                                                             />
@@ -808,24 +976,24 @@ export default function UserModal({
                                                         <FormField
                                                             control={form.control}
                                                             name="next_plan.add_remaining_traffic"
-                                                            render={({field}) => (
+                                                            render={({ field }) => (
                                                                 <FormItem className="flex flex-row items-center gap-2">
                                                                     <Switch checked={!!field.value}
-                                                                            onCheckedChange={field.onChange}/>
-                                                                    <FormLabel>{t('userDialog.nextPlanAddRemainingTraffic', {defaultValue: 'Add Remaining Traffic'})}</FormLabel>
-                                                                    <FormMessage/>
+                                                                        onCheckedChange={field.onChange} />
+                                                                    <FormLabel>{t('userDialog.nextPlanAddRemainingTraffic', { defaultValue: 'Add Remaining Traffic' })}</FormLabel>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             )}
                                                         />
                                                         <FormField
                                                             control={form.control}
                                                             name="next_plan.fire_on_either"
-                                                            render={({field}) => (
+                                                            render={({ field }) => (
                                                                 <FormItem className="flex flex-row items-center gap-2">
                                                                     <Switch checked={!!field.value}
-                                                                            onCheckedChange={field.onChange}/>
-                                                                    <FormLabel>{t('userDialog.nextPlanFireOnEither', {defaultValue: 'Fire On Either'})}</FormLabel>
-                                                                    <FormMessage/>
+                                                                        onCheckedChange={field.onChange} />
+                                                                    <FormLabel>{t('userDialog.nextPlanFireOnEither', { defaultValue: 'Fire On Either' })}</FormLabel>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             )}
                                                         />
@@ -849,7 +1017,7 @@ export default function UserModal({
                                                     type="button"
                                                 >
                                                     <div className="flex items-center gap-1.5">
-                                                        <tab.icon className="h-4 w-4"/>
+                                                        <tab.icon className="h-4 w-4" />
                                                         <span>{t(tab.label)}</span>
                                                     </div>
                                                 </button>
@@ -858,9 +1026,9 @@ export default function UserModal({
                                         <div className="py-2">
                                             {activeTab === 'templates' && (
                                                 templatesLoading ?
-                                                    <div>{t('Loading...', {defaultValue: 'Loading...'})}</div> :
+                                                    <div>{t('Loading...', { defaultValue: 'Loading...' })}</div> :
                                                     <div className="space-y-4 pt-4">
-                                                        <FormLabel>{t('userDialog.selectTemplate', {defaultValue: 'Select Template'})}</FormLabel>
+                                                        <FormLabel>{t('userDialog.selectTemplate', { defaultValue: 'Select Template' })}</FormLabel>
                                                         <Select
                                                             value={selectedTemplateId ? String(selectedTemplateId) : 'none'}
                                                             onValueChange={val => {
@@ -875,7 +1043,7 @@ export default function UserModal({
                                                         >
                                                             <SelectTrigger>
                                                                 <SelectValue
-                                                                    placeholder={t('userDialog.selectTemplatePlaceholder', {defaultValue: 'Choose a template'})}/>
+                                                                    placeholder={t('userDialog.selectTemplatePlaceholder', { defaultValue: 'Choose a template' })} />
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="none">---</SelectItem>
@@ -897,11 +1065,11 @@ export default function UserModal({
                                             )}
                                             {activeTab === 'groups' && (
                                                 groupsLoading ?
-                                                    <div>{t('Loading...', {defaultValue: 'Loading...'})}</div> :
+                                                    <div>{t('Loading...', { defaultValue: 'Loading...' })}</div> :
                                                     <FormField
                                                         control={form.control}
                                                         name="group_ids"
-                                                        render={({field}) => {
+                                                        render={({ field }) => {
                                                             const [searchQuery, setSearchQuery] = useState('');
                                                             const selectedGroups = field.value || [];
                                                             const filteredGroups = (groupsData?.groups || []).filter((group: any) =>
@@ -934,9 +1102,9 @@ export default function UserModal({
                                                                     <div className="space-y-4 pt-4">
                                                                         <div className="relative">
                                                                             <Search
-                                                                                className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground"/>
+                                                                                className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                                                             <Input
-                                                                                placeholder={t('search', {defaultValue: 'Search'}) + " " + t("groups", {defaultValue: "groups"})}
+                                                                                placeholder={t('search', { defaultValue: 'Search' }) + " " + t("groups", { defaultValue: "groups" })}
                                                                                 value={searchQuery}
                                                                                 onChange={(e) => setSearchQuery(e.target.value)}
                                                                                 className="pl-8"
@@ -949,7 +1117,7 @@ export default function UserModal({
                                                                                 onCheckedChange={handleSelectAll}
                                                                             />
                                                                             <span className="text-sm font-medium">
-                                                                                {t('selectAll', {defaultValue: 'Select All'})}
+                                                                                {t('selectAll', { defaultValue: 'Select All' })}
                                                                             </span>
                                                                         </div>
                                                                         <div
@@ -1007,7 +1175,7 @@ export default function UserModal({
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                    <FormMessage/>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             );
                                                         }}
@@ -1021,12 +1189,15 @@ export default function UserModal({
                         {/* Cancel/Create buttons - always visible */}
                         <div className="flex justify-end gap-2 mt-4">
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                                {t('cancel', {defaultValue: 'Cancel'})}
+                                {t('cancel', { defaultValue: 'Cancel' })}
                             </Button>
-                            <Button type="submit"
-                                    disabled={loading || (groupsData?.groups?.length === 0 && !selectedTemplateId)}>
-                                {editingUser ? t('save', {defaultValue: 'Save'}) : t('create', {defaultValue: 'Create'})}
-                            </Button>
+                            <LoaderButton 
+                                type="submit"
+                                isLoading={loading}
+                                disabled={groupsData?.groups?.length === 0 && !selectedTemplateId}
+                            >
+                                {editingUser ? t('save', { defaultValue: 'Save' }) : t('create', { defaultValue: 'Create' })}
+                            </LoaderButton>
                         </div>
                     </form>
                 </Form>
