@@ -1,7 +1,7 @@
 import { ORGANIZATION_URL, REPO_URL } from '@/constants/Project'
 import { useGetSystemStats } from '@/service/api'
 
-const FooterContent = () => {
+const Footer = () => {
   const { data: systemStats } = useGetSystemStats({
     query: {
       // Only fetch once when component mounts
@@ -26,4 +26,4 @@ const FooterContent = () => {
   )
 }
 
-export default FooterContent
+export default Footer
