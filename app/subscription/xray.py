@@ -188,6 +188,7 @@ class XrayConfig(BaseSubscription):
                     },
                 }
             }
+
         else:
             tcpSettings = {"header": {"type": headers}}
 
@@ -196,17 +197,17 @@ class XrayConfig(BaseSubscription):
                 tcpSettings["header"]["request"] = {}
 
         if any((random_user_agent, host)):
-            if "headers" not in tcpSettings["header"]["request"]:
+            if "headers" not in tcpSettings["header"]["request"] or tcpSettings["header"]["request"]["headers"] is None:
                 tcpSettings["header"]["request"]["headers"] = {}
 
-            if path:
-                tcpSettings["header"]["request"]["path"] = [path]
+        if path:
+            tcpSettings["header"]["request"]["path"] = [path]
 
-            if host:
-                tcpSettings["header"]["request"]["headers"]["Host"] = [host]
+        if host:
+            tcpSettings["header"]["request"]["headers"]["Host"] = [host]
 
-            if random_user_agent:
-                tcpSettings["header"]["request"]["headers"]["User-Agent"] = [choice(self.user_agent_list)]
+        if random_user_agent:
+            tcpSettings["header"]["request"]["headers"]["User-Agent"] = [choice(self.user_agent_list)]
 
         return tcpSettings
 
