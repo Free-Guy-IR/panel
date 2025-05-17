@@ -1,8 +1,7 @@
 import { ORGANIZATION_URL, REPO_URL } from '@/constants/Project'
 import { useGetSystemStats } from '@/service/api'
-import { FC, HTMLAttributes } from 'react'
 
-const FooterContent = () => {
+const Footer = () => {
   const { data: systemStats } = useGetSystemStats({
     query: {
       // Only fetch once when component mounts
@@ -19,7 +18,7 @@ const FooterContent = () => {
       <a className="text-blue-400" href={REPO_URL}>
         Marzban
       </a>
-      {version}, Made with ❤️ in{' '}
+      v{version}, Made with ❤️ in{' '}
       <a className="text-blue-400" href={ORGANIZATION_URL}>
         Gozargah
       </a>
@@ -27,11 +26,4 @@ const FooterContent = () => {
   )
 }
 
-
-export const Footer: FC<HTMLAttributes<HTMLDivElement>> = (props) => {
-  return (
-    <div className="flex w-full pt-1 pb-3 relative" {...props}>
-      <FooterContent />
-    </div>
-  )
-}
+export default Footer
