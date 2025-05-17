@@ -110,7 +110,7 @@ export default function CoreConfigModal({
                 const parsedConfig = JSON.parse(value);
                 if (parsedConfig.inbounds && Array.isArray(parsedConfig.inbounds)) {
                     const tags = parsedConfig.inbounds
-                        .filter((inbound: any) => typeof inbound.tag === 'string')
+                        .filter((inbound: any) => typeof inbound.tag === 'string' && inbound.tag.trim() !== '')
                         .map((inbound: any) => inbound.tag);
                     setInboundTags(tags);
                 } else {
@@ -438,9 +438,9 @@ export default function CoreConfigModal({
                                                         )}
                                                     </div>
                                                     <Select
-                                                        value=""
+                                                        value={undefined}
                                                         onValueChange={(value: string) => {
-                                                            if (!value) return;
+                                                            if (!value || value.trim() === '') return;
                                                             const currentValue = field.value || [];
                                                             if (!currentValue.includes(value)) {
                                                                 field.onChange([...currentValue, value]);
@@ -466,8 +466,9 @@ export default function CoreConfigModal({
                                                                     </SelectItem>
                                                                 ))
                                                             ) : (
-                                                                <SelectItem key="fallback-none" value="none">No inbounds
-                                                                    found</SelectItem>
+                                                                <SelectItem key="no-inbounds" value="no-inbounds" disabled>
+                                                                    {t('coreConfigModal.noInboundsFound')}
+                                                                </SelectItem>
                                                             )}
                                                         </SelectContent>
                                                     </Select>
@@ -516,9 +517,9 @@ export default function CoreConfigModal({
                                                         )}
                                                     </div>
                                                     <Select
-                                                        value=""
+                                                        value={undefined}
                                                         onValueChange={(value: string) => {
-                                                            if (!value) return;
+                                                            if (!value || value.trim() === '') return;
                                                             const currentValue = field.value || [];
                                                             if (!currentValue.includes(value)) {
                                                                 field.onChange([...currentValue, value]);
@@ -544,8 +545,9 @@ export default function CoreConfigModal({
                                                                     </SelectItem>
                                                                 ))
                                                             ) : (
-                                                                <SelectItem key="inbound-none" value="none">No inbounds
-                                                                    found</SelectItem>
+                                                                <SelectItem key="no-inbounds" value="no-inbounds" disabled>
+                                                                    {t('coreConfigModal.noInboundsFound')}
+                                                                </SelectItem>
                                                             )}
                                                         </SelectContent>
                                                     </Select>
