@@ -302,6 +302,43 @@ export default function CoreConfigModal({
         }
     }, [isDialogOpen]);
 
+    // Add this CSS somewhere in your styles (you might need to create a new CSS file or add to existing one)
+    const styles = `
+    .monaco-editor-mobile .monaco-menu {
+        background-color: var(--background) !important;
+    }
+
+    .monaco-editor-mobile .monaco-menu .action-item {
+        background-color: var(--background) !important;
+    }
+
+    .monaco-editor-mobile .monaco-menu .action-item:hover {
+        background-color: var(--muted) !important;
+    }
+
+    .monaco-editor-mobile .monaco-menu .action-item.disabled {
+        opacity: 0.5;
+    }
+
+    .monaco-editor-mobile .monaco-menu .action-item .action-label {
+        color: var(--foreground) !important;
+    }
+
+    .monaco-editor-mobile .monaco-menu .action-item:hover .action-label {
+        color: var(--foreground) !important;
+    }
+    `;
+
+    // Add this useEffect to inject the styles
+    useEffect(() => {
+        const styleElement = document.createElement('style');
+        styleElement.textContent = styles;
+        document.head.appendChild(styleElement);
+        return () => {
+            document.head.removeChild(styleElement);
+        };
+    }, []);
+
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-full sm:max-w-[1000px] h-full sm:h-auto px-4 py-6">
@@ -380,6 +417,33 @@ export default function CoreConfigModal({
                                                                         useShadows: false,
                                                                         verticalScrollbarSize: 10,
                                                                         horizontalScrollbarSize: 10
+                                                                    },
+                                                                    // Mobile-friendly options
+                                                                    contextmenu: true,
+                                                                    copyWithSyntaxHighlighting: false,
+                                                                    multiCursorModifier: 'alt',
+                                                                    accessibilitySupport: 'on',
+                                                                    mouseWheelZoom: true,
+                                                                    quickSuggestionsDelay: 0,
+                                                                    occurrencesHighlight: 'singleFile',
+                                                                    wordBasedSuggestions: 'currentDocument',
+                                                                    suggest: {
+                                                                        showWords: true,
+                                                                        showSnippets: true,
+                                                                        showClasses: true,
+                                                                        showFunctions: true,
+                                                                        showVariables: true,
+                                                                        showProperties: true,
+                                                                        showColors: true,
+                                                                        showFiles: true,
+                                                                        showReferences: true,
+                                                                        showFolders: true,
+                                                                        showTypeParameters: true,
+                                                                        showEnums: true,
+                                                                        showConstructors: true,
+                                                                        showDeprecated: true,
+                                                                        showEnumMembers: true,
+                                                                        showKeywords: true
                                                                     }
                                                                 }}
                                                             />
