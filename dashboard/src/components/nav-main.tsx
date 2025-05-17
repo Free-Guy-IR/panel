@@ -1,7 +1,7 @@
 import { ChevronRight, type LucideIcon } from 'lucide-react'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem } from '@/components/ui/sidebar'
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem, useSidebar } from '@/components/ui/sidebar'
 import { NavLink, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -21,7 +21,12 @@ export function NavMain({
   }[]
 }) {
   const location = useLocation()
-  const {t} = useTranslation()
+  const { t } = useTranslation()
+  const { setOpenMobile } = useSidebar()
+
+  const handleNavigation = () => {
+    setOpenMobile(false)
+  }
 
   return (
     <SidebarGroup>
@@ -30,7 +35,7 @@ export function NavMain({
         {items.map(item => (
           <Collapsible key={item.title} asChild defaultOpen={item.isActive || location.pathname.startsWith(item.url)}>
             <SidebarMenuItem>
-              <NavLink to={item.url} className="block">
+              <NavLink to={item.url} className="block" onClick={handleNavigation}>
                 {({ isActive }) => (
                   <CollapsibleTrigger className="w-full">
                     <SidebarMenuButton tooltip={t(item.title)} isActive={isActive}>
@@ -52,7 +57,7 @@ export function NavMain({
                     <SidebarMenuSub>
                       {item.items?.map(subItem => (
                         <SidebarMenuSubItem key={subItem.title}>
-                          <NavLink to={subItem.url} end>
+                          <NavLink to={subItem.url} end onClick={handleNavigation}>
                             {({ isActive }) => (
                               <SidebarMenuButton className="flex items-center gap-2" isActive={isActive}>
                                 <subItem.icon />
