@@ -2,13 +2,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { LoaderButton } from '@/components/ui/loader-button'
 import { useTranslation } from 'react-i18next'
 import { UseFormReturn } from 'react-hook-form'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import Editor from '@monaco-editor/react'
 import { useTheme } from '../../components/theme-provider'
 import { useCallback, useState, useEffect } from 'react'
@@ -18,6 +20,8 @@ import { queryClient } from '@/utils/query-client'
 import { CopyButton } from '@/components/CopyButton'
 import { generateKeyPair } from '@stablelib/x25519'
 import { encodeURLSafe } from '@stablelib/base64'
+import { debounce } from 'es-toolkit'
+import { toast as sonnerToast } from 'sonner'
 
 export const coreConfigFormSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -26,6 +30,7 @@ export const coreConfigFormSchema = z.object({
     excluded_inbound_ids: z.array(z.string()).optional(),
     public_key: z.string().optional(),
     private_key: z.string().optional(),
+    restart_nodes: z.boolean().default(true),
 })
 
 export type CoreConfigFormValues = z.infer<typeof coreConfigFormSchema>
@@ -36,6 +41,7 @@ interface CoreConfigModalProps {
     form: UseFormReturn<CoreConfigFormValues>
     editingCore: boolean
     editingCoreId?: number
+    onDuplicateCore?: (coreId: string | number) => void
 }
 
 interface ValidationResult {
@@ -48,7 +54,8 @@ export default function CoreConfigModal({
     onOpenChange,
     form,
     editingCore,
-    editingCoreId
+    editingCoreId,
+    onDuplicateCore
 }: CoreConfigModalProps) {
     const { t } = useTranslation()
     const dir = useDirDetection()
@@ -61,7 +68,8 @@ export default function CoreConfigModal({
     const modifyCoreMutation = useModifyCoreConfig()
     const [isEditorFullscreen, setIsEditorFullscreen] = useState(false)
     const [inboundTags, setInboundTags] = useState<string[]>([])
-
+    const [isGeneratingKeyPair, setIsGeneratingKeyPair] = useState(false)
+    const [isGeneratingShortId, setIsGeneratingShortId] = useState(false)
 
     const handleEditorValidation = useCallback(
         (markers: any[]) => {
@@ -72,15 +80,24 @@ export default function CoreConfigModal({
                     isValid: false,
                     error: markers[0].message,
                 })
+                sonnerToast.error(markers[0].message, {
+                    duration: 3000,
+                    position: 'bottom-right',
+                })
             } else {
                 try {
                     // Additional validation - try parsing the JSON
                     JSON.parse(form.getValues().config)
                     setValidation({ isValid: true })
                 } catch (e) {
+                    const errorMessage = e instanceof Error ? e.message : 'Invalid JSON'
                     setValidation({
                         isValid: false,
-                        error: e instanceof Error ? e.message : 'Invalid JSON',
+                        error: errorMessage,
+                    })
+                    sonnerToast.error(errorMessage, {
+                        duration: 3000,
+                        position: 'bottom-right',
                     })
                 }
             }
@@ -88,36 +105,70 @@ export default function CoreConfigModal({
         [form],
     )
 
+    // Debounce config changes to improve performance
+    const debouncedConfigChange = useCallback(
+        debounce((value: string) => {
+            try {
+                const parsedConfig = JSON.parse(value);
+                if (parsedConfig.inbounds && Array.isArray(parsedConfig.inbounds)) {
+                    const tags = parsedConfig.inbounds
+                        .filter((inbound: any) => typeof inbound.tag === 'string')
+                        .map((inbound: any) => inbound.tag);
+                    setInboundTags(tags);
+                } else {
+                    setInboundTags([]);
+                }
+            } catch {
+                setInboundTags([]);
+            }
+        }, 300),
+        []
+    );
+
+    // Extract inbound tags from config JSON whenever config changes
+    useEffect(() => {
+        const configValue = form.getValues().config;
+        if (configValue) {
+            debouncedConfigChange(configValue);
+        }
+    }, [form.watch('config'), debouncedConfigChange]);
+
     const handleEditorDidMount = useCallback(() => {
         setIsEditorReady(true)
     }, [])
 
-    const generatePrivateAndPublicKey = () => {
-        const keyPair = generateKeyPair()
-        const formattedKeyPair = {
-            privateKey: encodeURLSafe(keyPair.secretKey).replace(/=/g, '').replace(/\n/g, ''),
-            publicKey: encodeURLSafe(keyPair.publicKey).replace(/=/g, '').replace(/\n/g, '')
+    const generatePrivateAndPublicKey = async () => {
+        try {
+            setIsGeneratingKeyPair(true)
+            const keyPair = generateKeyPair()
+            const formattedKeyPair = {
+                privateKey: encodeURLSafe(keyPair.secretKey).replace(/=/g, '').replace(/\n/g, ''),
+                publicKey: encodeURLSafe(keyPair.publicKey).replace(/=/g, '').replace(/\n/g, '')
+            }
+            setKeyPair(formattedKeyPair)
+            toast.success(t('coreConfigModal.keyPairGenerated'))
+        } catch (error) {
+            toast.error(t('coreConfigModal.keyPairGenerationFailed'))
+        } finally {
+            setIsGeneratingKeyPair(false)
         }
-        setKeyPair(formattedKeyPair)
-
-        toast({
-            description: t('coreConfigModal.keyPairGenerated'),
-        })
     }
 
-    const generateShortId = () => {
-        // Generate 8 random bytes and convert to hex string (equivalent to openssl rand -hex 8)
-        const randomBytes = new Uint8Array(8);
-        crypto.getRandomValues(randomBytes);
-        const shortId = Array.from(randomBytes)
-            .map(byte => byte.toString(16).padStart(2, '0'))
-            .join('');
-
-        setGeneratedShortId(shortId)
-
-        toast({
-            description: t('coreConfigModal.shortIdGenerated'),
-        })
+    const generateShortId = async () => {
+        try {
+            setIsGeneratingShortId(true)
+            const randomBytes = new Uint8Array(8)
+            crypto.getRandomValues(randomBytes)
+            const shortId = Array.from(randomBytes)
+                .map(byte => byte.toString(16).padStart(2, '0'))
+                .join('')
+            setGeneratedShortId(shortId)
+            toast.success(t('coreConfigModal.shortIdGenerated'))
+        } catch (error) {
+            toast.error(t('coreConfigModal.shortIdGenerationFailed'))
+        } finally {
+            setIsGeneratingShortId(false)
+        }
     }
 
     const defaultConfig = JSON.stringify({
@@ -154,11 +205,7 @@ export default function CoreConfigModal({
             try {
                 configObj = JSON.parse(values.config)
             } catch (e) {
-                toast({
-                    title: t('error', { defaultValue: 'Error' }),
-                    description: t('coreConfigModal.invalidJson'),
-                    variant: "destructive"
-                })
+                toast.error(t('coreConfigModal.invalidJson'));
                 return
             }
 
@@ -183,7 +230,7 @@ export default function CoreConfigModal({
                         exclude_inbound_tags: excludeInboundTags
                     },
                     params: {
-                        restart_nodes: true
+                        restart_nodes: values.restart_nodes
                     }
                 });
             } else {
@@ -198,15 +245,9 @@ export default function CoreConfigModal({
                 });
             }
 
-            toast({
-                title: t('success', { defaultValue: 'Success' }),
-                description: t(editingCore ? 'coreConfigModal.editSuccess' : 'coreConfigModal.createSuccess', {
-                    name: values.name,
-                    defaultValue: editingCore
-                        ? `Core "${values.name}" has been updated successfully`
-                        : `Core "${values.name}" has been created successfully`
-                })
-            })
+            toast.success(t(editingCore ? 'coreConfigModal.editSuccess' : 'coreConfigModal.createSuccess', {
+                name: values.name,
+            }));
 
             // Invalidate cores query to refresh list
             queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
@@ -215,39 +256,12 @@ export default function CoreConfigModal({
             form.reset()
         } catch (error: any) {
             console.error('Core config operation failed:', error)
-            toast({
-                title: t('error', { defaultValue: 'Error' }),
-                description: t(editingCore ? 'coreConfigModal.editFailed' : 'coreConfigModal.createFailed', {
-                    name: values.name,
-                    error: error?.message || '',
-                    defaultValue: editingCore
-                        ? `Failed to update core "${values.name}"`
-                        : `Failed to create core "${values.name}"`
-                }),
-                variant: "destructive"
-            })
+            toast.error(t(editingCore ? 'coreConfigModal.editFailed' : 'coreConfigModal.createFailed', {
+                name: values.name,
+                error: error?.message || '',
+            }));
         }
     }
-
-    // Extract inbound tags from config JSON whenever config changes
-    useEffect(() => {
-        try {
-            const configValue = form.getValues().config;
-            if (configValue) {
-                const parsedConfig = JSON.parse(configValue);
-                if (parsedConfig.inbounds && Array.isArray(parsedConfig.inbounds)) {
-                    const tags = parsedConfig.inbounds
-                        .filter((inbound: any) => typeof inbound.tag === 'string')
-                        .map((inbound: any) => inbound.tag);
-                    setInboundTags(tags);
-                } else {
-                    setInboundTags([]);
-                }
-            }
-        } catch {
-            setInboundTags([]);
-        }
-    }, [form.watch('config')]);
 
     // Initialize form fields when modal opens
     useEffect(() => {
@@ -258,29 +272,29 @@ export default function CoreConfigModal({
                     name: '',
                     config: defaultConfig,
                     excluded_inbound_ids: [],
-                    fallback_id: []
+                    fallback_id: [],
+                    restart_nodes: true
                 });
+            } else {
+                // Set restart_nodes to true for editing
+                form.setValue('restart_nodes', true);
             }
-        } else {
-            // Reset form when modal closes
-            form.reset({
-                name: '',
-                config: defaultConfig,
-                excluded_inbound_ids: [],
-                fallback_id: []
-            });
         }
     }, [isDialogOpen, editingCore, form, defaultConfig]);
 
+    // Cleanup on modal close
     useEffect(() => {
         if (!isDialogOpen) {
             setIsEditorFullscreen(false);
+            setKeyPair(null);
+            setGeneratedShortId(null);
+            setValidation({ isValid: true });
         }
     }, [isDialogOpen]);
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-full sm:max-w-[1000px] h-full sm:h-auto  px-4 py-6">
+            <DialogContent className="max-w-full sm:max-w-[1000px] h-full sm:h-auto px-4 py-6">
                 <DialogHeader>
                     <DialogTitle className={cn("text-xl text-start font-semibold", dir === "rtl" && "sm:text-right")}>
                         {editingCore ? t('coreConfigModal.editCore') : t('coreConfigModal.addConfig')}
@@ -292,8 +306,7 @@ export default function CoreConfigModal({
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <div
-                            className="max-h-[75vh] overflow-y-auto pr-4 -mr-4 px-2">
+                        <div className="max-h-[75vh] overflow-y-auto pr-4 -mr-4 px-2">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <h3 className="text-lg font-semibold mb-4">{t('coreConfigModal.jsonConfig')}</h3>
@@ -311,13 +324,10 @@ export default function CoreConfigModal({
                                                             "fixed inset-0 z-50 bg-background flex flex-col h-full w-full max-w-none max-h-none p-0 m-0"
                                                         )} dir="ltr">
                                                             {!isEditorReady && (
-                                                                <div
-                                                                    className="absolute inset-0 flex items-center justify-center bg-background/80 z-50">
-                                                                    <span
-                                                                        className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></span>
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-50">
+                                                                    <span className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></span>
                                                                 </div>
                                                             )}
-                                                            {/* Fullscreen Toggle Button */}
                                                             <Button
                                                                 type="button"
                                                                 size="icon"
@@ -327,10 +337,9 @@ export default function CoreConfigModal({
                                                                     isEditorFullscreen ? "bg-muted" : ""
                                                                 )}
                                                                 onClick={() => setIsEditorFullscreen((v) => !v)}
-                                                                aria-label={isEditorFullscreen ? t('exitFullscreen', { defaultValue: 'Exit Fullscreen' }) : t('fullscreen', { defaultValue: 'Fullscreen' })}
+                                                                aria-label={isEditorFullscreen ? t('exitFullscreen') : t('fullscreen')}
                                                             >
-                                                                {isEditorFullscreen ? <Minimize2 className="h-5 w-5" /> :
-                                                                    <Maximize2 className="h-5 w-5" />}
+                                                                {isEditorFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
                                                             </Button>
                                                             <Editor
                                                                 height={isEditorFullscreen ? "100vh" : "100%"}
@@ -349,6 +358,19 @@ export default function CoreConfigModal({
                                                                     automaticLayout: true,
                                                                     formatOnPaste: true,
                                                                     formatOnType: true,
+                                                                    renderWhitespace: 'none',
+                                                                    wordWrap: 'on',
+                                                                    folding: true,
+                                                                    suggestOnTriggerCharacters: true,
+                                                                    quickSuggestions: true,
+                                                                    renderLineHighlight: 'all',
+                                                                    scrollbar: {
+                                                                        vertical: 'visible',
+                                                                        horizontal: 'visible',
+                                                                        useShadows: false,
+                                                                        verticalScrollbarSize: 10,
+                                                                        horizontalScrollbarSize: 10
+                                                                    }
                                                                 }}
                                                             />
                                                         </div>
@@ -535,9 +557,15 @@ export default function CoreConfigModal({
                                     />
 
                                     <div className="pt-4 space-y-4">
-                                        <Button type="button" onClick={generatePrivateAndPublicKey} className="w-full">
+                                        <LoaderButton
+                                            type="button"
+                                            onClick={generatePrivateAndPublicKey}
+                                            className="w-full"
+                                            isLoading={isGeneratingKeyPair}
+                                            loadingText={t('coreConfigModal.generatingKeyPair')}
+                                        >
                                             {t('coreConfigModal.generateKeyPair')}
-                                        </Button>
+                                        </LoaderButton>
 
                                         {keyPair && (
                                             <div className="p-4 border rounded-md relative">
@@ -590,9 +618,15 @@ export default function CoreConfigModal({
                                     </div>
 
                                     <div className="pt-2">
-                                        <Button type="button" onClick={generateShortId} className="w-full">
+                                        <LoaderButton
+                                            type="button"
+                                            onClick={generateShortId}
+                                            className="w-full"
+                                            isLoading={isGeneratingShortId}
+                                            loadingText={t('coreConfigModal.generatingShortId')}
+                                        >
                                             {t('coreConfigModal.generateShortId')}
-                                        </Button>
+                                        </LoaderButton>
                                     </div>
 
                                     {generatedShortId && (
@@ -627,13 +661,49 @@ export default function CoreConfigModal({
                             </div>
                         </div>
                         {!isEditorFullscreen && (
-                            <div className="flex justify-end gap-2">
-                                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                                    {t('cancel')}
-                                </Button>
-                                <Button type="submit" disabled={!validation.isValid}>
-                                    {editingCore ? t('save') : t('create')}
-                                </Button>
+                            <div className="flex flex-col gap-2">
+                                {editingCore && (
+                                    <FormField
+                                        control={form.control}
+                                        name="restart_nodes"
+                                        render={({ field }) => (
+                                            <FormItem className={"flex items-center gap-2 flex-row-reverse mb-2"}>
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="text-sm !m-0">
+                                                    {t('coreConfigModal.restartNodes')}
+                                                </FormLabel>
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
+                                <div className="flex justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => onOpenChange(false)}
+                                        disabled={createCoreMutation.isPending || modifyCoreMutation.isPending}
+                                    >
+                                        {t('cancel')}
+                                    </Button>
+                                    <LoaderButton
+                                        type="submit"
+                                        disabled={
+                                            !validation.isValid ||
+                                            createCoreMutation.isPending ||
+                                            modifyCoreMutation.isPending ||
+                                            form.formState.isSubmitting
+                                        }
+                                        isLoading={createCoreMutation.isPending || modifyCoreMutation.isPending}
+                                        loadingText={editingCore ? t('modifying') : t('creating')}
+                                    >
+                                        {editingCore ? t('modify') : t('create')}
+                                    </LoaderButton>
+                                </div>
                             </div>
                         )}
                     </form>
