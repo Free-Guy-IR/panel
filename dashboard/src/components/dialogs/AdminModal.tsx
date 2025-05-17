@@ -193,7 +193,7 @@ export default function AdminModal({
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <div
-                            className="max-h-[80vh] overflow-y-auto pr-4 -mr-4 sm:max-h-[75vh] px-2">
+                            className="max-h-[80dvh] overflow-y-auto pr-4 -mr-4 sm:max-h-[75dvh] px-2">
                             <div className="flex flex-col sm:flex-row items-start gap-4 pb-4">
                                 <div className="flex-1 space-y-4 w-full">
                                     {!editingAdmin &&
@@ -282,7 +282,15 @@ export default function AdminModal({
                                         <FormItem>
                                             <FormLabel>{t('admins.telegramId')}</FormLabel>
                                             <FormControl>
-                                                <Input placeholder={"Telegram ID (e.g. 36548974)"} {...field}/>
+                                                <Input
+                                                    type="number"
+                                                    placeholder={t('Telegram ID (e.g. 36548974)')}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        field.onChange(value ? parseInt(value) : 0);
+                                                    }}
+                                                    value={field.value ? field.value : ''}
+                                                />
                                             </FormControl>
                                             <FormMessage/>
                                         </FormItem>
