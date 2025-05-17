@@ -7,6 +7,7 @@ import { getHosts, createHost, modifyHost, CreateHost, ProxyHostALPN, ProxyHostF
 import { HostFormValues } from '@/components/hosts/Hosts'
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
+import { Separator } from '@/components/ui/separator'
 
 export default function HostsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -36,7 +37,7 @@ export default function HostsPage() {
     const handleSubmit = async (formData: HostFormValues) => {
         try {
             // Check if all protocols are set to none
-            const allProtocolsNone = formData.mux_settings && 
+            const allProtocolsNone = formData.mux_settings &&
                 (!formData.mux_settings.sing_box?.protocol || formData.mux_settings.sing_box.protocol === 'none') &&
                 (!formData.mux_settings.clash?.protocol || formData.mux_settings.clash.protocol === 'none') &&
                 (!formData.mux_settings.xray?.concurrency);
@@ -88,7 +89,7 @@ export default function HostsPage() {
                     } : undefined
                 } : undefined
             };
-            
+
             if (editingHost?.id) {
                 // This is an edit operation
                 await modifyHost(editingHost.id, hostData);
@@ -150,10 +151,11 @@ export default function HostsPage() {
                 buttonText='hostsDialog.addHost'
                 onButtonClick={handleCreateClick}
             />
+            <Separator />
             <div>
-                <MainSection 
-                    data={data || []} 
-                    isDialogOpen={isDialogOpen} 
+                <MainSection
+                    data={data || []}
+                    isDialogOpen={isDialogOpen}
                     onDialogOpenChange={handleDialogOpen}
                     onAddHost={onAddHost}
                     onSubmit={handleSubmit}
