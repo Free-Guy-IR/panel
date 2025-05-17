@@ -138,12 +138,12 @@ export default function CoreConfigModal({
     const generatePrivateAndPublicKey = async () => {
         try {
             setIsGeneratingKeyPair(true)
-            const keyPair = generateKeyPair()
-            const formattedKeyPair = {
-                privateKey: encodeURLSafe(keyPair.secretKey).replace(/=/g, '').replace(/\n/g, ''),
-                publicKey: encodeURLSafe(keyPair.publicKey).replace(/=/g, '').replace(/\n/g, '')
-            }
-            setKeyPair(formattedKeyPair)
+        const keyPair = generateKeyPair()
+        const formattedKeyPair = {
+            privateKey: encodeURLSafe(keyPair.secretKey).replace(/=/g, '').replace(/\n/g, ''),
+            publicKey: encodeURLSafe(keyPair.publicKey).replace(/=/g, '').replace(/\n/g, '')
+        }
+        setKeyPair(formattedKeyPair)
             toast.success(t('coreConfigModal.keyPairGenerated'))
         } catch (error) {
             toast.error(t('coreConfigModal.keyPairGenerationFailed'))
@@ -157,10 +157,10 @@ export default function CoreConfigModal({
             setIsGeneratingShortId(true)
             const randomBytes = new Uint8Array(8)
             crypto.getRandomValues(randomBytes)
-            const shortId = Array.from(randomBytes)
-                .map(byte => byte.toString(16).padStart(2, '0'))
+        const shortId = Array.from(randomBytes)
+            .map(byte => byte.toString(16).padStart(2, '0'))
                 .join('')
-            setGeneratedShortId(shortId)
+        setGeneratedShortId(shortId)
             toast.success(t('coreConfigModal.shortIdGenerated'))
         } catch (error) {
             toast.error(t('coreConfigModal.shortIdGenerationFailed'))
@@ -256,7 +256,7 @@ export default function CoreConfigModal({
             }
 
             toast.success(t(editingCore ? 'coreConfigModal.editSuccess' : 'coreConfigModal.createSuccess', {
-                name: values.name,
+                    name: values.name,
             }));
 
             // Invalidate cores query to refresh list
@@ -267,8 +267,8 @@ export default function CoreConfigModal({
         } catch (error: any) {
             console.error('Core config operation failed:', error)
             toast.error(t(editingCore ? 'coreConfigModal.editFailed' : 'coreConfigModal.createFailed', {
-                name: values.name,
-                error: error?.message || '',
+                    name: values.name,
+                    error: error?.message || '',
             }));
         }
     }
@@ -693,15 +693,15 @@ export default function CoreConfigModal({
                                         )}
                                     />
                                 )}
-                                <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-2">
                                     <Button
                                         type="button"
                                         variant="outline"
                                         onClick={() => onOpenChange(false)}
                                         disabled={createCoreMutation.isPending || modifyCoreMutation.isPending}
                                     >
-                                        {t('cancel')}
-                                    </Button>
+                                    {t('cancel')}
+                                </Button>
                                     <LoaderButton
                                         type="submit"
                                         disabled={
