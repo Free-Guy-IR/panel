@@ -41,7 +41,6 @@ interface CoreConfigModalProps {
     form: UseFormReturn<CoreConfigFormValues>
     editingCore: boolean
     editingCoreId?: number
-    onDuplicateCore?: (coreId: string | number) => void
 }
 
 interface ValidationResult {
@@ -55,7 +54,6 @@ export default function CoreConfigModal({
     form,
     editingCore,
     editingCoreId,
-    onDuplicateCore
 }: CoreConfigModalProps) {
     const { t } = useTranslation()
     const dir = useDirDetection()
@@ -172,28 +170,40 @@ export default function CoreConfigModal({
     }
 
     const defaultConfig = JSON.stringify({
-        log: {
-            loglevel: "error"
+        "log": {
+            "loglevel": "warning"
         },
-        inbounds: [
-            {
-                tag: "Inbound Name",
-                listen: "0.0.0.0",
-                port: 1122,
-                protocol: "vless",
-                settings: {
-                    clients: [],
-                    decryption: "none"
-                },
-                streamSettings: {
-                    network: "tcp",
-                    tcpSettings: {},
-                    security: "none"
-                },
-                sniffing: {
-                    enabled: true,
-                    destOverride: ["http", "tls"]
+        "routing": {
+            "rules": [
+                {
+                    "ip": [
+                        "geoip:private"
+                    ],
+                    "outboundTag": "BLOCK",
+                    "type": "field"
                 }
+            ]
+        },
+        "inbounds": [
+            {
+                "tag": "Shadowsocks TCP",
+                "listen": "0.0.0.0",
+                "port": 1080,
+                "protocol": "shadowsocks",
+                "settings": {
+                    "clients": [],
+                    "network": "tcp,udp"
+                }
+            }
+        ],
+        "outbounds": [
+            {
+                "protocol": "freedom",
+                "tag": "DIRECT"
+            },
+            {
+                "protocol": "blackhole",
+                "tag": "BLOCK"
             }
         ]
     }, null, 2)
