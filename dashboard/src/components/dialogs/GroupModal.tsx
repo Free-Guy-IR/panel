@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { UseFormReturn } from 'react-hook-form'
 import { useCreateGroup, useModifyGroup, useGetInbounds } from '@/service/api'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command'
 import { Badge } from '@/components/ui/badge'
@@ -43,24 +43,16 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
           groupId: editingGroupId,
           data: values
         })
-        toast({
-          title: t('success', { defaultValue: 'Success' }),
-          description: t('group.editSuccess', {
-            name: values.name,
-            defaultValue: 'Group "{name}" has been updated successfully'
-          })
-        })
+        toast.success(t('group.editSuccess', {
+          name: values.name,
+        }))
       } else {
         await addGroupMutation.mutateAsync({
           data: values
         })
-        toast({
-          title: t('success', { defaultValue: 'Success' }),
-          description: t('group.createSuccess', {
-            name: values.name,
-            defaultValue: 'Group "{name}" has been created successfully'
-          })
-        })
+        toast.success(t('group.createSuccess', {
+          name: values.name,
+        }))
       }
       // Invalidate groups queries after successful action
       queryClient.invalidateQueries({ queryKey: ['/api/groups'] })
@@ -68,15 +60,15 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
       form.reset()
     } catch (error: any) {
       console.error('Group operation failed:', error)
-      toast({
-        title: t('error', { defaultValue: 'Error' }),
-        description: t(editingGroup ? 'group.editFailed' : 'group.createFailed', {
+      toast.error(t(editingGroup
+        ? "group.editFailed"
+        : "group.createFailed",
+        {
           name: values.name,
           error: error?.message || '',
           defaultValue: `Failed to ${editingGroup ? 'update' : 'create'} group "{name}". {error}`
-        }),
-        variant: "destructive"
-      })
+        }
+      ));
     }
   }
 

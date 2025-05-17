@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
 import { getInbounds, UserStatus, getHosts } from "@/service/api"
 import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Lock, Plus, Trash2, Network, Info } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import useDirDetection from "@/hooks/use-dir-detection"
 import { queryClient } from "@/utils/query-client"
 import { cn } from "@/lib/utils"
@@ -123,14 +123,11 @@ const HostModal: React.FC<HostModalProps> = ({
                 throw new Error(`Operation failed with status: ${response.status}`);
             }
             // Only show success toast and close modal if the operation was successful
-            toast({
-                dir,
-                description: t(editingHost
-                    ? "hostsDialog.editSuccess"
-                    : "hostsDialog.createSuccess",
-                    { name: data.remark }
-                ),
-            });
+            toast.success(t(editingHost
+                ? "hostsDialog.editSuccess"
+                : "hostsDialog.createSuccess",
+                { name: data.remark }
+            ));
             // Close the modal
             handleModalOpenChange(false);
             // The form reset is handled by the parent component
@@ -140,22 +137,18 @@ const HostModal: React.FC<HostModalProps> = ({
             });
         } catch (error) {
             // Show error toast if the operation failed
-            toast({
-                dir,
-                variant: "destructive",
-                description: t(editingHost
-                    ? "hostsDialog.editFailed"
-                    : "hostsDialog.createFailed",
-                    { name: data.remark }
-                ),
-            });
+            toast.error(t(editingHost
+                ? "hostsDialog.editFailed"
+                : "hostsDialog.createFailed",
+                { name: data.remark }
+            ));
             // Don't close the modal or reset the form on error
         }
     };
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
-            <DialogContent className="w-full h-full max-w-2xl md:max-h-[90dvh] sm:overflow-y-auto">
+            <DialogContent className="w-full h-full max-w-2xl md:max-h-[90dvh]">
                 <DialogHeader>
                     <DialogTitle className={cn(dir === "rtl" ? "text-right" : "text-left")}>{editingHost ? t("editHost.title") : t("hostsDialog.addHost")}</DialogTitle>
                 </DialogHeader>

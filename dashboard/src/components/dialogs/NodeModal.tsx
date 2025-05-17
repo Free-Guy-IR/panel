@@ -13,7 +13,7 @@ import {
     getNode,
     reconnectNode
 } from '@/service/api'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -23,6 +23,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { v4 as uuidv4, v5 as uuidv5, v6 as uuidv6, v7 as uuidv7 } from 'uuid'
+import { LoaderButton } from '../ui/loader-button'
 
 export const nodeFormSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -123,11 +124,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     });
                 } catch (error) {
                     console.error('Error fetching node data:', error);
-                    toast({
-                        title: t('error'),
-                        description: t('nodes.fetchFailed'),
-                        variant: 'destructive',
-                    });
+                    toast.error(t('nodes.fetchFailed'));
                 }
             };
 
@@ -213,25 +210,19 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     data: nodeData
                 })
                 nodeId = editingNodeId;
-                toast({
-                    title: t('success', { defaultValue: 'Success' }),
-                    description: t('nodes.editSuccess', {
-                        name: values.name,
-                        defaultValue: 'Node «{name}» has been updated successfully'
-                    })
-                })
+                toast.success(t('nodes.editSuccess', {
+                    name: values.name,
+                    defaultValue: 'Node «{name}» has been updated successfully'
+                }))
             } else {
                 const result = await addNodeMutation.mutateAsync({
                     data: nodeData
                 })
                 nodeId = result?.id;
-                toast({
-                    title: t('success', { defaultValue: 'Success' }),
-                    description: t('nodes.createSuccess', {
-                        name: values.name,
-                        defaultValue: 'Node «{name}» has been created successfully'
-                    })
-                })
+                toast.success(t('nodes.createSuccess', {
+                    name: values.name,
+                    defaultValue: 'Node «{name}» has been created successfully'
+                }))
             }
 
             // Check status after successful creation/editing
@@ -259,15 +250,14 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
             form.reset()
         } catch (error: any) {
             console.error('Node operation failed:', error)
-            toast({
-                title: t('error', { defaultValue: 'Error' }),
-                description: t(editingNode ? 'nodes.editFailed' : 'nodes.createFailed', {
+            toast.error(t(editingNode
+                ? "nodes.editFailed"
+                : "nodes.createFailed",
+                {
                     name: values.name,
-                    error: error?.message || '',
-                    defaultValue: `Failed to ${editingNode ? 'update' : 'create'} node «{name}». {error}`
-                }),
-                variant: "destructive"
-            })
+                    error: error?.message || t('unknownError')
+                }
+            ));
         }
     }
 
@@ -693,17 +683,22 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                 />
                             </div>
                         </div>
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button 
+                                variant="outline" 
+                                onClick={() => onOpenChange(false)}
+                                disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}
+                            >
                                 {t('cancel')}
                             </Button>
-                            <Button
+                            <LoaderButton
                                 type="submit"
                                 disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}
-                                className="bg-primary hover:bg-primary/90"
+                                isLoading={addNodeMutation.isPending || modifyNodeMutation.isPending}
+                                loadingText={editingNode ? t('modifying') : t('creating')}
                             >
-                                {editingNode ? t('edit') : t('create')}
-                            </Button>
+                                {editingNode ? t('modify') : t('create')}
+                            </LoaderButton>
                         </div>
                     </form>
                 </Form>
