@@ -98,7 +98,7 @@
     "create": "创建管理员",
     "status": "状态",
     "role": "角色",
-    "users.count": "用户数量",
+    "total.users": "用户总数",
     "used.traffic": "已用流量",
     "total": "管理员总数",
     "active": "活跃管理员",
@@ -168,7 +168,11 @@
     "deleteUserTemplateTitle": "删除用户模板",
     "deleteUserTemplatePrompt": "您确定要删除模板 <b>{{name}}</b> 吗？",
     "duplicateSuccess": "模板「{{name}}」复制成功",
-    "duplicateFailed": "复制模板「{{name}}」失败"
+    "duplicateFailed": "复制模板「{{name}}」失败",
+    "enableSuccess": "模板「{{name}}」已成功启用",
+    "disableSuccess": "模板「{{name}}」已成功禁用",
+    "enableFailed": "启用管理员「{{name}}」失败",
+    "disableFailed": "禁用管理员「{{name}}」失败"
   },
   "core.configuration": "配置",
   "core.generalErrorMessage": "配置有误, 请检查",

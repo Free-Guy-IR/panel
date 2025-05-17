@@ -1,4 +1,4 @@
-import { Footer } from '@/components/Footer'
+import Footer from '@/components/Footer'
 import { AppSidebar } from '@/components/layout/sidebar'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
