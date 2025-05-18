@@ -44,6 +44,7 @@ class Discord(BaseModel):
 
 
 class WebhookInfo(BaseModel):
+    name: str = Field(max_length=128)
     url: str
     secret: str
 
