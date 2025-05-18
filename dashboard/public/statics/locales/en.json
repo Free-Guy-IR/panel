@@ -16,6 +16,7 @@
   "underDevelopment.description": "This page is currently being built and will be available soon.",
   "modifying": "Modifying...",
   "removing": "Removing...",
+  "creating": "Creating",
   "nodes": {
     "title": "Nodes",
     "description": "Manage your nodes",
@@ -234,7 +235,7 @@
     "status": {
       "label": "Status",
       "active": "Active",
-      "disabled": "Disable",
+      "disabled": "Disabled",
       "limited": "Limited",
       "expired": "Expired",
       "onHold": "On Hold"
@@ -555,7 +556,7 @@
   "search": "Search",
   "status.active": "Active",
   "status.enable": "Enable",
-  "status.disabled": "Disable",
+  "status.disabled": "Disabled",
   "status.expired": "Expired",
   "status.limited": "Limited",
   "status.on_hold": "On Hold",
@@ -618,7 +619,17 @@
     "nextPlanAddRemainingTraffic": "Add Remaining Traffic",
     "nextPlanFireOnEither": "Fire On Either",
     "selectTemplate": "Select Template",
-    "selectTemplatePlaceholder": "Choose a template"
+    "selectTemplatePlaceholder": "Choose a template",
+    "proxySettingsAccordion": "Proxy Settings",
+    "proxySettings.vmess": "VMess",
+    "proxySettings.vless": "VLESS",
+    "proxySettings.trojan": "Trojan",
+    "proxySettings.shadowsocks": "Shadowsocks",
+    "proxySettings.id": "ID",
+    "proxySettings.password": "Password",
+    "proxySettings.method": "Method",
+    "proxySettings.flow": "Flow",
+    "proxySettings.desc": "Configure protocol-specific settings for this user."
   },
   "users": "Users",
   "usersTable.copied": "Copied",

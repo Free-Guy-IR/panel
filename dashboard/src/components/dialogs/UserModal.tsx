@@ -7,11 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
-import { UseFormValues, userCreateSchema } from '@/pages/_dashboard._index';
+import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard._index';
 import { RefreshCcw } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { relativeExpiryDate } from '@/utils/dateFormatter';
@@ -23,7 +23,8 @@ import {
     useGetUsers,
     useCreateUser,
     useModifyUser,
-    useCreateUserFromTemplate
+    useCreateUserFromTemplate,
+    useModifyUserWithTemplate
 } from '@/service/api';
 import { Layers, Users } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,11 +35,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Trans } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { LoaderButton } from '@/components/ui/loader-button';
+import { z } from 'zod';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import { Lock } from 'lucide-react';
+import { v4 as uuidv4, v5 as uuidv5, v7 as uuidv7 } from 'uuid';
 
 interface UserModalProps {
     isDialogOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    form: UseFormReturn<UseFormValues>;
+    form: UseFormReturn<UseFormValues | UseEditFormValues>;
     editingUser: boolean;
     editingUserId?: number;
     onSuccessCallback?: () => void;
@@ -47,14 +52,29 @@ interface UserModalProps {
 const isDate = (v: unknown): v is Date =>
     typeof v === 'object' && v !== null && v instanceof Date;
 
+// Add template validation schema
+const templateUserSchema = z.object({
+    username: z.string().min(3).max(32),
+    note: z.string().optional(),
+});
+
+// Add template modification schema
+const templateModifySchema = z.object({
+    note: z.string().optional(),
+    user_template_id: z.number(),
+});
+
+// Helper for UUID namespace (for v5)
+const UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
 export default function UserModal({
-                                      isDialogOpen,
-                                      onOpenChange,
-                                      form,
-                                      editingUser,
-                                      editingUserId,
-                                      onSuccessCallback
-                                  }: UserModalProps) {
+    isDialogOpen,
+    onOpenChange,
+    form,
+    editingUser,
+    editingUserId,
+    onSuccessCallback
+}: UserModalProps) {
     const { t } = useTranslation();
     const dir = useDirDetection();
     const [loading, setLoading] = useState(false);
@@ -97,6 +117,11 @@ export default function UserModal({
         }
     });
 
+    const isEmptyObject = (obj: Record<string, any> | null | undefined): boolean => {
+        if (!obj) return false;
+        return Object.keys(obj).length === 0 && obj.constructor === Object;
+    };
+
     // Function to refresh all user-related data
     const refreshUserData = () => {
         // Invalidate relevant queries to trigger fresh fetches
@@ -131,6 +156,9 @@ export default function UserModal({
         }
     });
 
+    // Add the mutation hook at the top with other mutations
+    const modifyUserWithTemplateMutation = useModifyUserWithTemplate();
+
     useEffect(() => {
         // When the dialog closes, reset errors
         if (!isDialogOpen) {
@@ -141,13 +169,13 @@ export default function UserModal({
     useEffect(() => {
         // Set form validation schema
         form.clearErrors();
-        if (!editingUser) {
+        if (!editingUser && !selectedTemplateId) {
             form.setError('username', {
                 type: 'manual',
-                message: t('validation.required', { field: t('username') })
+                message: t('validation.required', { field: t('username', { defaultValue: 'Username' }) })
             });
         }
-    }, [form, editingUser, t]);
+    }, [form, editingUser, t, selectedTemplateId]);
 
     useEffect(() => {
         if (status === 'on_hold') {
@@ -224,7 +252,7 @@ export default function UserModal({
     // Helper to check if a template is selected in next plan
     const nextPlanTemplateSelected = !!form.watch('next_plan.user_template_id');
 
-    // Add validation function
+    // Update validateAllFields function
     const validateAllFields = (currentValues: any, touchedFields: any) => {
         try {
             // Only validate fields that have been touched
@@ -235,102 +263,166 @@ export default function UserModal({
                 return acc;
             }, {} as any);
 
-            // If no fields are touched, return true
+            // If no fields are touched, clear errors and return true
             if (Object.keys(touchedValues).length === 0) {
+                form.clearErrors();
                 return true;
             }
 
-            // Validate only touched fields
-            userCreateSchema.partial().parse(touchedValues);
+            // Clear all previous errors before setting new ones
             form.clearErrors();
+
+            // Select the appropriate schema based on template selection
+            const schema = selectedTemplateId
+                ? (editingUser ? templateModifySchema : templateUserSchema)
+                : (editingUser ? userEditSchema : userCreateSchema);
+
+            // Validate only touched fields using the selected schema
+            schema.partial().parse(touchedValues);
+
             return true;
         } catch (error: any) {
+            // Handle validation errors from schema.partial().parse
             if (error?.errors) {
-                // Clear all previous errors
+                // Clear all previous errors again just in case
                 form.clearErrors();
 
                 // Set new errors only for touched fields
                 error.errors.forEach((err: any) => {
                     const fieldName = err.path[0];
                     if (fieldName && touchedFields[fieldName]) {
+                        let message = err.message;
+                        if (fieldName === 'group_ids' && message.includes('Required')) { // Check for required message for groups
+                            message = t('validation.required', { field: t('groups', { defaultValue: 'Groups' }) });
+                        } else if (fieldName === 'username' && message.includes('too short')) {
+                            message = t('validation.required', { field: t('username', { defaultValue: 'Username' }) });
+                        }
+                        if (fieldName === 'group_ids') {
+                            message = t('validation.required', { field: t('groups', { defaultValue: 'Groups' }) });
+                        }
                         form.setError(fieldName as any, {
                             type: 'manual',
-                            message: t(`validation.${err.code}`, {
-                                field: t(`userDialog.${fieldName}`, { defaultValue: fieldName }),
-                                defaultValue: `${t(`userDialog.${fieldName}`)} is invalid`
-                            })
+                            message
                         });
                     }
                 });
-
-                // Show first error in toast only if it's from a touched field
-                const firstError = error.errors.find((err: any) => touchedFields[err.path[0]]);
-                if (firstError) {
-                    const fieldName = firstError.path[0] ?
-                        t(`userDialog.${firstError.path[0]}`, { defaultValue: firstError.path[0] }) :
-                        'field';
-
-                    toast.error(t(`validation.${firstError.code}`, {
-                        field: fieldName,
-                        defaultValue: `${fieldName} is invalid`
-                    }));
-                }
             }
             return false;
         }
     };
 
-    // Add state to track touched fields
+    // Add state to track touched fields and form validity
     const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+    const [isFormValid, setIsFormValid] = useState(false);
 
-    // Update field handlers to track touched state
+    // Update field handlers to track touched state and validate immediately
     const handleFieldChange = (fieldName: string, value: any) => {
         setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
-        validateAllFields({
+        const currentValues = {
             ...form.getValues(),
             [fieldName]: value
-        }, touchedFields);
+        };
+        const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true });
+        setIsFormValid(isValid);
     };
 
-    const onSubmit = async (values: UseFormValues) => {
+    // Add validation on field blur
+    const handleFieldBlur = (fieldName: string) => {
+        if (!touchedFields[fieldName]) {
+            setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
+            const currentValues = form.getValues();
+            const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true });
+            setIsFormValid(isValid);
+        }
+    };
+
+    const onSubmit = async (values: UseFormValues | UseEditFormValues) => {
         try {
             form.clearErrors();
-            // If a template is selected, use createUserFromTemplate
+
+            // If a template is selected in edit mode
+            if (editingUser && selectedTemplateId) {
+                setLoading(true);
+                try {
+                    await modifyUserWithTemplateMutation.mutateAsync({
+                        username: values.username,
+                        data: {
+                            user_template_id: selectedTemplateId,
+                            note: values.note
+                        }
+                    });
+                    toast.success(t('userDialog.userEdited', {
+                        username: values.username,
+                        defaultValue: 'User «{{name}}» has been updated successfully'
+                    }));
+                    onOpenChange(false);
+                    form.reset();
+                    setSelectedTemplateId(undefined);
+                    return;
+                } catch (error: any) {
+                    toast.error(
+                        error?.response?._data?.detail ||
+                        t('users.editError', {
+                            name: values.username,
+                            defaultValue: 'Failed to update user «{{name}}»'
+                        })
+                    );
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // If a template is selected in create mode
             if (selectedTemplateId) {
                 setLoading(true);
-                await createUserFromTemplateMutation.mutateAsync({
-                    data: {
-                        user_template_id: selectedTemplateId,
+                try {
+                    await createUserFromTemplateMutation.mutateAsync({
+                        data: {
+                            user_template_id: selectedTemplateId,
+                            username: values.username,
+                            note: values.note || undefined
+                        }
+                    });
+                    toast.success(t('userDialog.userCreated', {
                         username: values.username,
-                        note: values.note || undefined
-                    }
-                });
-                toast.success(t('users.createSuccess', {
-                        name: values.username,
                         defaultValue: 'User «{{name}}» has been created successfully'
-                }));
-                onOpenChange(false);
-                form.reset();
-                setSelectedTemplateId(undefined);
+                    }));
+                    onOpenChange(false);
+                    form.reset();
+                    setSelectedTemplateId(undefined);
+                    return;
+                } catch (error: any) {
+                    toast.error(
+                        error?.response?._data?.detail ||
+                        t('users.createError', {
+                            name: values.username,
+                            defaultValue: 'Failed to create user «{{name}}»'
+                        })
+                    );
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // Regular create/edit flow
+            if (!validateAllFields(values, touchedFields)) {
                 return;
             }
+
             // Convert data to the right format before validation
             const preparedValues = {
                 ...values,
-                // Ensure data_limit is a number
                 data_limit: typeof values.data_limit === 'string'
                     ? parseFloat(values.data_limit)
                     : values.data_limit,
-                // Ensure on_hold_expire_duration is a number and valid for on_hold status
-                on_hold_expire_duration: status === 'on_hold'
-                    ? (typeof values.on_hold_expire_duration === 'string' && values.on_hold_expire_duration !== ''
+                on_hold_expire_duration: values.on_hold_expire_duration
+                    ? (typeof values.on_hold_expire_duration === 'string'
                         ? parseInt(values.on_hold_expire_duration, 10)
                         : values.on_hold_expire_duration)
                     : undefined,
-                // Ensure expire is properly formatted and not set when on_hold
                 expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
-                // Ensure group_ids is an array
                 group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
+                status: values.status === 'disabled' ? 'active' : values.status
             };
 
             // Remove next_plan.data_limit and next_plan.expire if next_plan.user_template_id is set
@@ -339,74 +431,96 @@ export default function UserModal({
                 delete preparedValues.next_plan.expire;
             }
 
-            // Validate against schema
-            const validatedData = userCreateSchema.parse(preparedValues);
-
             setLoading(true);
             // Convert data_limit from GB to bytes
             const sendValues = {
-                ...validatedData,
-                data_limit: gbToBytes(validatedData.data_limit as any),
-                expire: normalizeExpire(validatedData.expire),
+                ...preparedValues,
+                data_limit: gbToBytes(preparedValues.data_limit as any),
+                expire: normalizeExpire(preparedValues.expire),
             };
 
             // Make API calls to the backend
             if (editingUser && editingUserId) {
-                await modifyUserMutation.mutateAsync({
-                    username: sendValues.username,
-                    data: sendValues
-                });
-                toast.success(t('users.editSuccess', {
-                        name: values.username,
+                try {
+                    await modifyUserMutation.mutateAsync({
+                        username: sendValues.username,
+                        data: sendValues
+                    });
+                    toast.success(t('userDialog.userEdited', {
+                        username: values.username,
                         defaultValue: 'User «{{name}}» has been updated successfully'
-                }));
+                    }));
+                } catch (error) {
+                    console.error('Modify user error:', error);
+                    throw error;
+                }
             } else {
-                await createUserMutation.mutateAsync({
-                    data: sendValues
-                });
-                toast.success(t('users.createSuccess', {
-                        name: values.username,
+                try {
+                    const createData = {
+                        ...sendValues,
+                        status: (sendValues.status === 'active' ? 'active' : sendValues.status) as 'active' | 'on_hold'
+                    };
+                    await createUserMutation.mutateAsync({
+                        data: createData
+                    });
+                    toast.success(t('userDialog.userCreated', {
+                        username: values.username,
                         defaultValue: 'User «{{name}}» has been created successfully'
-                }));
+                    }));
+                } catch (error) {
+                    console.error('Create user error:', error);
+                    throw error;
+                }
             }
 
             onOpenChange(false);
             form.reset();
+            setTouchedFields({});
         } catch (error: any) {
             console.error('Form submission error:', error);
+            console.error('Error response:', error?.response);
+            console.log('Error data:', error?.response?._data?.detail);
 
             // Reset all previous errors first
             form.clearErrors();
 
             // Handle validation errors
-            if (error?.errors) {
+            if (error?.response?._data && !isEmptyObject(error?.response?._data)) {
                 // For zod validation errors
                 const fields = ['username', 'status', 'data_limit', 'expire', 'note',
                     'data_limit_reset_strategy', 'on_hold_expire_duration',
                     'on_hold_timeout', 'group_ids'];
 
                 // Show first error in a toast
-                if (error.errors.length > 0) {
-                    const firstError = error.errors[0];
-                    const fieldName = firstError.path[0] ?
-                        t(`userDialog.${firstError.path[0]}`, { defaultValue: firstError.path[0] }) :
-                        'field';
+                if (error?.response?._data?.detail) {
+                    const detail = error?.response?._data?.detail;
 
-                    // Set error on form if it's a recognized field
-                    if (firstError.path[0] && fields.includes(firstError.path[0])) {
-                        form.setError(firstError.path[0] as any, {
-                            type: 'manual',
-                            message: t(`validation.${firstError.code}`, {
-                                field: fieldName,
-                                defaultValue: `${fieldName} is invalid`
-                            })
+                    // If detail is an object with field errors (e.g., { status: "some error" })
+                    if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
+                        // Set errors for all fields in the object
+                        const firstField = Object.keys(detail)[0];
+                        const firstMessage = detail[firstField];
+
+                        Object.entries(detail).forEach(([field, message]) => {
+                            if (fields.includes(field)) {
+                                form.setError(field as any, {
+                                    type: 'manual',
+                                    message: typeof message === 'string' ? message : t('validation.invalid', {
+                                        field: t(`userDialog.${field}`, { defaultValue: field }),
+                                        defaultValue: `${field} is invalid`
+                                    })
+                                });
+                            }
                         });
-                    }
 
-                    toast.error(t(`validation.${firstError.code}`, {
-                            field: fieldName,
-                            defaultValue: `${fieldName} is invalid`
-                    }));
+                        toast.error(
+                            firstMessage ||
+                            t('validation.invalid', {
+                                field: t(`userDialog.${firstField}`, { defaultValue: firstField }),
+                                defaultValue: `${firstField} is invalid`
+                            })
+                        );
+                    }
                 }
             } else if (error?.response?.data) {
                 // Handle API errors
@@ -416,10 +530,23 @@ export default function UserModal({
                 if (typeof apiError === 'string') {
                     errorMessage = apiError;
                 } else if (apiError?.detail) {
-                    errorMessage = typeof apiError.detail === 'string' ?
-                        apiError.detail :
-                        (Array.isArray(apiError.detail) && apiError.detail.length > 0 ?
-                            apiError.detail[0].msg : 'Validation error');
+                    if (Array.isArray(apiError.detail)) {
+                        // Handle array of field errors
+                        apiError.detail.forEach((err: any) => {
+                            if (err.loc && err.loc[1]) {
+                                const fieldName = err.loc[1];
+                                form.setError(fieldName as any, {
+                                    type: 'manual',
+                                    message: err.msg
+                                });
+                            }
+                        });
+                        errorMessage = apiError.detail[0]?.msg || 'Validation error';
+                    } else if (typeof apiError.detail === 'string') {
+                        errorMessage = apiError.detail;
+                    } else {
+                        errorMessage = 'Validation error';
+                    }
                 } else if (apiError?.message) {
                     errorMessage = apiError.message;
                 } else {
@@ -441,6 +568,42 @@ export default function UserModal({
         return Math.random().toString(36).slice(2, 10);
     }
 
+    // Add this function after the generateUsername function
+    function generateProxySettings() {
+        return {
+            vmess: {
+                id: uuidv4(),
+            },
+            vless: {
+                id: uuidv4(),
+                flow: "" as "" | "xtls-rprx-vision" | undefined,
+            },
+            trojan: {
+                password: uuidv4(),
+            },
+            shadowsocks: {
+                password: uuidv4(),
+            },
+        };
+    }
+
+    // Add this button component after the username generate button
+    const GenerateProxySettingsButton = () => (
+        <Button
+            size="icon"
+            type="button"
+            variant="ghost"
+            onClick={() => {
+                const newSettings = generateProxySettings();
+                form.setValue('proxy_settings', newSettings);
+                handleFieldChange('proxy_settings', newSettings);
+            }}
+            title="Generate proxy settings"
+        >
+            <RefreshCcw className="w-3 h-3" />
+        </Button>
+    );
+
     useEffect(() => {
         // Log form state when dialog opens
         if (isDialogOpen) {
@@ -454,6 +617,55 @@ export default function UserModal({
             }
         }
     }, [isDialogOpen, form, editingUser, status]);
+
+    // Add new effect for initial validation on modal open
+    useEffect(() => {
+        if (isDialogOpen) {
+            const currentValues = form.getValues();
+            const allFieldsTouched = Object.keys(currentValues).reduce((acc, key) => {
+                acc[key] = true;
+                return acc;
+            }, {} as Record<string, boolean>);
+            const isValid = validateAllFields(currentValues, allFieldsTouched);
+            setIsFormValid(isValid);
+            setTouchedFields(allFieldsTouched);
+        }
+    }, [isDialogOpen, form]);
+
+    // State for UUID version per field
+    const [uuidVersions, setUuidVersions] = useState({
+        vmess: 'v4',
+        vless: 'v4',
+        trojan: 'v4',
+        shadowsocks: 'v4',
+    });
+
+    // Helper to generate UUID by version
+    function generateUUID(version: string, value: string = ''): string {
+        switch (version) {
+            case 'v4':
+                return uuidv4();
+            case 'v5':
+                return uuidv5(value || 'default', UUID_NAMESPACE);
+            case 'v7':
+                return uuidv7();
+            default:
+                return uuidv4();
+        }
+    }
+
+    // On first load (create user), auto-generate UUIDs for all fields
+    useEffect(() => {
+        if (isDialogOpen && !editingUser) {
+            form.setValue('proxy_settings.vmess.id', generateUUID(uuidVersions.vmess));
+            form.setValue('proxy_settings.vless.id', generateUUID(uuidVersions.vless));
+            form.setValue('proxy_settings.vless.flow', "");
+            form.setValue('proxy_settings.trojan.password', generateUUID(uuidVersions.trojan));
+            form.setValue('proxy_settings.shadowsocks.password', generateUUID(uuidVersions.shadowsocks));
+            form.setValue('proxy_settings.shadowsocks.method', 'chacha20-ietf-poly1305');
+        }
+        // eslint-disable-next-line
+    }, [isDialogOpen, editingUser]);
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
@@ -492,6 +704,7 @@ export default function UserModal({
                                                                                 field.onChange(e);
                                                                                 handleFieldChange('username', e.target.value);
                                                                             }}
+                                                                            onBlur={() => handleFieldBlur('username')}
                                                                         />
                                                                     </div>
                                                                     {!editingUser && (
@@ -499,7 +712,10 @@ export default function UserModal({
                                                                             size="icon"
                                                                             type="button"
                                                                             variant="ghost"
-                                                                            onClick={() => field.onChange(generateUsername())}
+                                                                            onClick={(e) => {
+                                                                                field.onChange(generateUsername())
+                                                                                handleFieldChange('username', field.value)
+                                                                            }}
                                                                             title="Generate username"
                                                                         >
                                                                             <RefreshCcw className="w-3 h-3" />
@@ -521,8 +737,9 @@ export default function UserModal({
                                                                 <Select onValueChange={(value) => {
                                                                     field.onChange(value);
                                                                     handleFieldChange('status', value);
+                                                                    handleFieldBlur('status');
                                                                 }}
-                                                                        value={field.value || ''}>
+                                                                    value={field.value || ''}>
                                                                     <SelectTrigger>
                                                                         <SelectValue
                                                                             placeholder={t('users.selectStatus', { defaultValue: 'Select status' })} />
@@ -552,28 +769,31 @@ export default function UserModal({
                                                     <FormItem className='flex-1 w-full'>
                                                         <FormLabel>{t('username', { defaultValue: 'Username' })}</FormLabel>
                                                         <FormControl>
-                                                            <div
-                                                                className="flex flex-row justify-between gap-4 w-full items-center">
+                                                            <div className="flex flex-row justify-between gap-4 w-full items-center">
                                                                 <div className='w-full'>
                                                                     <Input
                                                                         placeholder={t('admins.enterUsername', { defaultValue: 'Enter username' })}
                                                                         {...field}
                                                                         value={field.value ?? ''}
+                                                                        disabled={editingUser}
                                                                         onChange={(e) => {
                                                                             field.onChange(e);
                                                                             handleFieldChange('username', e.target.value);
                                                                         }}
+                                                                        onBlur={() => handleFieldBlur('username')}
                                                                     />
                                                                 </div>
-                                                                <Button
-                                                                    size="icon"
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    onClick={() => field.onChange(generateUsername())}
-                                                                    title="Generate username"
-                                                                >
-                                                                    <RefreshCcw className="w-3 h-3" />
-                                                                </Button>
+                                                                {!editingUser && (
+                                                                    <Button
+                                                                        size="icon"
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        onClick={() => field.onChange(generateUsername())}
+                                                                        title="Generate username"
+                                                                    >
+                                                                        <RefreshCcw className="w-3 h-3" />
+                                                                    </Button>
+                                                                )}
                                                             </div>
                                                         </FormControl>
                                                         <FormMessage />
@@ -660,7 +880,7 @@ export default function UserModal({
                                                                                 strokeLinejoin="round"
                                                                                 className="h-3 w-3"
                                                                             >
-                                                                                <path d="m5 15 7-7 7 7"/>
+                                                                                <path d="m5 15 7-7 7 7" />
                                                                             </svg>
                                                                         </Button>
                                                                         <Button
@@ -687,7 +907,7 @@ export default function UserModal({
                                                                                 strokeLinejoin="round"
                                                                                 className="h-3 w-3"
                                                                             >
-                                                                                <path d="m19 9-7 7-7-7"/>
+                                                                                <path d="m19 9-7 7-7-7" />
                                                                             </svg>
                                                                         </Button>
                                                                     </div>
@@ -715,7 +935,7 @@ export default function UserModal({
                                                                 field.onChange(value);
                                                                 handleFieldChange('data_limit_reset_strategy', value);
                                                             }}
-                                                                    value={field.value || ''}>
+                                                                value={field.value || ''}>
                                                                 <FormControl>
                                                                     <SelectTrigger>
                                                                         <SelectValue
@@ -754,6 +974,12 @@ export default function UserModal({
                                                                         placeholder={t('userDialog.onHoldExpireDurationPlaceholder', { defaultValue: 'e.g. 7' })}
                                                                         {...field}
                                                                         value={field.value === null || field.value === undefined ? '' : field.value}
+                                                                        onChange={(e) => {
+                                                                            const value = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
+                                                                            field.onChange(value);
+                                                                            handleFieldChange('on_hold_expire_duration', value);
+                                                                        }}
+                                                                        onBlur={() => handleFieldBlur('on_hold_expire_duration')}
                                                                     />
                                                                 </FormControl>
                                                                 <FormMessage />
@@ -837,12 +1063,16 @@ export default function UserModal({
                                                                             </FormControl>
                                                                         </PopoverTrigger>
                                                                         <PopoverContent className="w-auto p-0"
-                                                                                        align="start">
+                                                                            align="start">
                                                                             <Calendar
                                                                                 mode="single"
                                                                                 selected={displayDate || undefined}
                                                                                 onSelect={date => {
                                                                                     if (date) {
+                                                                                        const today = new Date();
+                                                                                        if (date.toDateString() === today.toDateString()) {
+                                                                                            date.setHours(23, 59, 59);
+                                                                                        }
                                                                                         const timestamp = Math.floor(date.getTime() / 1000);
                                                                                         field.onChange(timestamp);
                                                                                         handleFieldChange('expire', timestamp);
@@ -858,7 +1088,7 @@ export default function UserModal({
                                                                     </Popover>
                                                                     {expireInfo?.time && (
                                                                         <p dir="ltr"
-                                                                           className="text-xs text-muted-foreground ">{expireInfo.time} later</p>
+                                                                            className="text-xs text-muted-foreground ">{expireInfo.time} later</p>
                                                                     )}
                                                                     <FormMessage />
                                                                 </FormItem>
@@ -890,6 +1120,303 @@ export default function UserModal({
                                             </FormItem>
                                         )}
                                     />
+                                    {/* Proxy Settings Accordion */}
+                                    <Accordion type="single" collapsible className="w-full my-4">
+                                        <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="proxySettings">
+                                            <AccordionTrigger>
+                                                <div className="flex items-center gap-2">
+                                                    <Lock className="h-4 w-4" />
+                                                    <span>{t('userDialog.proxySettingsAccordion')}</span>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="px-2">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <div className="text-muted-foreground text-xs">{t('userDialog.proxySettings.desc')}</div>
+                                                    <GenerateProxySettingsButton />
+                                                </div>
+                                                {/* VMess */}
+                                                <FormField
+                                                    control={form.control}
+                                                    name="proxy_settings.vmess.id"
+                                                    render={({ field, formState }) => {
+                                                        const error = formState.errors.proxy_settings?.vmess?.id;
+                                                        return (
+                                                            <FormItem className="mb-2">
+                                                                <FormLabel>{t('userDialog.proxySettings.vmess')} {t('userDialog.proxySettings.id')}</FormLabel>
+                                                                <FormControl>
+                                                                    <div dir='ltr' className="flex gap-2 items-center">
+                                                                        <Input
+                                                                            {...field}
+                                                                            placeholder={t('userDialog.proxySettings.id')}
+                                                                            onChange={(e) => {
+                                                                                field.onChange(e);
+                                                                                form.trigger('proxy_settings.vmess.id');
+                                                                                handleFieldChange('proxy_settings.vmess.id', e.target.value);
+                                                                            }}
+                                                                        />
+                                                                        <Select
+                                                                            value={uuidVersions.vmess}
+                                                                            onValueChange={val => setUuidVersions(v => ({ ...v, vmess: val }))}
+                                                                        >
+                                                                            <SelectTrigger className="w-[60px]">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="v4">v4</SelectItem>
+                                                                                <SelectItem value="v5">v5</SelectItem>
+                                                                                <SelectItem value="v7">v7</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            onClick={() => {
+                                                                                const newVal = generateUUID(uuidVersions.vmess, field.value);
+                                                                                field.onChange(newVal);
+                                                                                form.trigger('proxy_settings.vmess.id');
+                                                                                handleFieldChange('proxy_settings.vmess.id', newVal);
+                                                                            }}
+                                                                            title="Generate UUID"
+                                                                        >
+                                                                            <RefreshCcw className="w-3 h-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </FormControl>
+                                                                <FormMessage>
+                                                                    {error?.message === 'Invalid uuid' && t('validation.invalidUuid', { defaultValue: 'Invalid UUID format' })}
+                                                                </FormMessage>
+                                                            </FormItem>
+                                                        );
+                                                    }}
+                                                />
+                                                {/* VLESS */}
+                                                <FormField
+                                                    control={form.control}
+                                                    name="proxy_settings.vless.id"
+                                                    render={({ field, formState }) => {
+                                                        const error = formState.errors.proxy_settings?.vless?.id;
+                                                        return (
+                                                            <FormItem className="mb-2">
+                                                                <FormLabel>{t('userDialog.proxySettings.vless')} {t('userDialog.proxySettings.id')}</FormLabel>
+                                                                <FormControl>
+                                                                    <div dir='ltr' className="flex gap-2 items-center">
+                                                                        <Input
+                                                                            {...field}
+                                                                            placeholder={t('userDialog.proxySettings.id')}
+                                                                            onChange={(e) => {
+                                                                                field.onChange(e);
+                                                                                form.trigger('proxy_settings.vless.id');
+                                                                                handleFieldChange('proxy_settings.vless.id', e.target.value);
+                                                                            }}
+                                                                        />
+                                                                        <Select
+                                                                            value={uuidVersions.vless}
+                                                                            onValueChange={val => setUuidVersions(v => ({ ...v, vless: val }))}
+                                                                        >
+                                                                            <SelectTrigger className="w-[60px]">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="v4">v4</SelectItem>
+                                                                                <SelectItem value="v5">v5</SelectItem>
+                                                                                <SelectItem value="v7">v7</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            onClick={() => {
+                                                                                const newVal = generateUUID(uuidVersions.vless, field.value);
+                                                                                field.onChange(newVal);
+                                                                                form.trigger('proxy_settings.vless.id');
+                                                                                handleFieldChange('proxy_settings.vless.id', newVal);
+                                                                            }}
+                                                                            title="Generate UUID"
+                                                                        >
+                                                                            <RefreshCcw className="w-3 h-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </FormControl>
+                                                                <FormMessage>
+                                                                    {error?.message === 'Invalid uuid' && t('validation.invalidUuid', { defaultValue: 'Invalid UUID format' })}
+                                                                </FormMessage>
+                                                            </FormItem>
+                                                        );
+                                                    }}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name="proxy_settings.vless.flow"
+                                                    render={({ field }) => (
+                                                        <FormItem className="mb-2">
+                                                            <FormLabel>{t('userDialog.proxySettings.vless')} {t('userDialog.proxySettings.flow')}</FormLabel>
+                                                            <FormControl>
+                                                                <Select
+                                                                    value={field.value ?? ""}
+                                                                    onValueChange={val => {
+                                                                        field.onChange(val === "none" ? undefined : val);
+                                                                        handleFieldChange('proxy_settings.vless.flow', val === "none" ? undefined : val);
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger>
+                                                                        <SelectValue placeholder={t('userDialog.proxySettings.flow')} />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="none">{t('userDialog.proxySettings.flow.none', { defaultValue: 'None' })}</SelectItem>
+                                                                        <SelectItem value="xtls-rprx-vision">xtls-rprx-vision</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                {/* Trojan */}
+                                                <FormField
+                                                    control={form.control}
+                                                    name="proxy_settings.trojan.password"
+                                                    render={({ field, formState }) => {
+                                                        const error = formState.errors.proxy_settings?.trojan?.password;
+                                                        return (
+                                                            <FormItem className="mb-2">
+                                                                <FormLabel>{t('userDialog.proxySettings.trojan')} {t('userDialog.proxySettings.password')}</FormLabel>
+                                                                <FormControl>
+                                                                    <div dir='ltr' className="flex gap-2 items-center">
+                                                                        <Input
+                                                                            {...field}
+                                                                            placeholder={t('userDialog.proxySettings.password')}
+                                                                            onChange={(e) => {
+                                                                                field.onChange(e);
+                                                                                form.trigger('proxy_settings.trojan.password');
+                                                                                handleFieldChange('proxy_settings.trojan.password', e.target.value);
+                                                                            }}
+                                                                        />
+                                                                        <Select
+                                                                            value={uuidVersions.trojan}
+                                                                            onValueChange={val => setUuidVersions(v => ({ ...v, trojan: val }))}
+                                                                        >
+                                                                            <SelectTrigger className="w-[60px]">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="v4">v4</SelectItem>
+                                                                                <SelectItem value="v5">v5</SelectItem>
+                                                                                <SelectItem value="v7">v7</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            onClick={() => {
+                                                                                const newVal = generateUUID(uuidVersions.trojan, field.value);
+                                                                                field.onChange(newVal);
+                                                                                form.trigger('proxy_settings.trojan.password');
+                                                                                handleFieldChange('proxy_settings.trojan.password', newVal);
+                                                                            }}
+                                                                            title="Generate UUID"
+                                                                        >
+                                                                            <RefreshCcw className="w-3 h-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </FormControl>
+                                                                <FormMessage>
+                                                                    {error?.message === 'Invalid uuid' && t('validation.invalidUuid', { defaultValue: 'Invalid UUID format' })}
+                                                                </FormMessage>
+                                                            </FormItem>
+                                                        );
+                                                    }}
+                                                />
+                                                {/* Shadowsocks */}
+                                                <FormField
+                                                    control={form.control}
+                                                    name="proxy_settings.shadowsocks.password"
+                                                    render={({ field, formState }) => {
+                                                        const error = formState.errors.proxy_settings?.shadowsocks?.password;
+                                                        return (
+                                                            <FormItem className="mb-2 w-full">
+                                                                <FormLabel>{t('userDialog.proxySettings.shadowsocks')} {t('userDialog.proxySettings.password')}</FormLabel>
+                                                                <FormControl>
+                                                                    <div dir='ltr' className="flex gap-2 items-center">
+                                                                        <Input
+                                                                            {...field}
+                                                                            placeholder={t('userDialog.proxySettings.password')}
+                                                                            onChange={(e) => {
+                                                                                field.onChange(e);
+                                                                                form.trigger('proxy_settings.shadowsocks.password');
+                                                                                handleFieldChange('proxy_settings.shadowsocks.password', e.target.value);
+                                                                            }}
+                                                                        />
+                                                                        <Select
+                                                                            value={uuidVersions.shadowsocks}
+                                                                            onValueChange={val => setUuidVersions(v => ({ ...v, shadowsocks: val }))}
+                                                                        >
+                                                                            <SelectTrigger className="w-[60px]">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="v4">v4</SelectItem>
+                                                                                <SelectItem value="v5">v5</SelectItem>
+                                                                                <SelectItem value="v7">v7</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            onClick={() => {
+                                                                                const newVal = generateUUID(uuidVersions.shadowsocks, field.value);
+                                                                                field.onChange(newVal);
+                                                                                form.trigger('proxy_settings.shadowsocks.password');
+                                                                                handleFieldChange('proxy_settings.shadowsocks.password', newVal);
+                                                                            }}
+                                                                            title="Generate UUID"
+                                                                        >
+                                                                            <RefreshCcw className="w-3 h-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </FormControl>
+                                                                <FormMessage>
+                                                                    {error?.message === 'Invalid uuid' && t('validation.invalidUuid', { defaultValue: 'Invalid UUID format' })}
+                                                                </FormMessage>
+                                                            </FormItem>
+                                                        );
+                                                    }}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name="proxy_settings.shadowsocks.method"
+                                                    render={({ field }) => (
+                                                        <FormItem className="mb-2">
+                                                            <FormLabel>{t('userDialog.proxySettings.shadowsocks')} {t('userDialog.proxySettings.method')}</FormLabel>
+                                                            <FormControl>
+                                                                <Select
+                                                                    value={field.value ?? ''}
+                                                                    onValueChange={val => {
+                                                                        field.onChange(val);
+                                                                        handleFieldChange('proxy_settings.shadowsocks.method', val);
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger>
+                                                                        <SelectValue placeholder={t('userDialog.proxySettings.method')} />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="aes-128-gcm">aes-128-gcm</SelectItem>
+                                                                        <SelectItem value="aes-256-gcm">aes-256-gcm</SelectItem>
+                                                                        <SelectItem value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</SelectItem>
+                                                                        <SelectItem value="xchacha20-poly1305">xchacha20-poly1305</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    </Accordion>
                                     {/* Next Plan Section (toggleable) */}
                                     {editingUser && (
                                         <>
@@ -925,7 +1452,7 @@ export default function UserModal({
                                                                             <SelectItem value="none">---</SelectItem>
                                                                             {(templatesData || []).map((tpl: any) => (
                                                                                 <SelectItem key={tpl.id}
-                                                                                            value={String(tpl.id)}>{tpl.name}</SelectItem>
+                                                                                    value={String(tpl.id)}>{tpl.name}</SelectItem>
                                                                             ))}
                                                                         </SelectContent>
                                                                     </Select>
@@ -961,7 +1488,7 @@ export default function UserModal({
                                                                         <FormLabel>{t('userDialog.nextPlanDataLimit', { defaultValue: 'Data Limit' })}</FormLabel>
                                                                         <FormControl>
                                                                             <Input type="number" min="0"
-                                                                                   step="any" {...field}
+                                                                                step="any" {...field}
                                                                                 value={field.value ?? ''} />
                                                                         </FormControl>
                                                                         <span
@@ -1005,18 +1532,18 @@ export default function UserModal({
                                 </div>
                                 <div className='space-y-6 w-full h-full flex-1'>
                                     <div className="w-full">
-                                        <div className="flex border-b">
+                                        <div className="flex border-b items-center">
                                             {tabs.map(tab => (
                                                 <button
                                                     key={tab.id}
                                                     onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                                                    className={`relative px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
+                                                    className={`relative flex-1 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
                                                         ? 'text-foreground border-b-2 border-primary'
                                                         : 'text-muted-foreground hover:text-foreground'
-                                                    }`}
+                                                        }`}
                                                     type="button"
                                                 >
-                                                    <div className="flex items-center gap-1.5">
+                                                    <div className="flex items-center gap-1.5 justify-center">
                                                         <tab.icon className="h-4 w-4" />
                                                         <span>{t(tab.label)}</span>
                                                     </div>
@@ -1032,13 +1559,20 @@ export default function UserModal({
                                                         <Select
                                                             value={selectedTemplateId ? String(selectedTemplateId) : 'none'}
                                                             onValueChange={val => {
+                                                                const currentValues = form.getValues();
                                                                 if (val === 'none' || (selectedTemplateId && String(selectedTemplateId) === val)) {
                                                                     setSelectedTemplateId(undefined);
                                                                     clearGroups();
                                                                 } else {
                                                                     setSelectedTemplateId(Number(val));
                                                                     clearGroups();
+                                                                    // Clear group selection when template is selected
+                                                                    form.setValue('group_ids', []);
+                                                                    handleFieldChange('group_ids', []);
                                                                 }
+                                                                // Trigger validation after template selection changes
+                                                                const isValid = validateAllFields(currentValues, touchedFields);
+                                                                setIsFormValid(isValid);
                                                             }}
                                                         >
                                                             <SelectTrigger>
@@ -1049,7 +1583,7 @@ export default function UserModal({
                                                                 <SelectItem value="none">---</SelectItem>
                                                                 {(templatesData || []).map((template: any) => (
                                                                     <SelectItem key={template.id}
-                                                                                value={String(template.id)}>{template.name}</SelectItem>
+                                                                        value={String(template.id)}>{template.name}</SelectItem>
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
@@ -1077,24 +1611,41 @@ export default function UserModal({
                                                             );
 
                                                             const handleSelectAll = (checked: boolean) => {
-                                                                if (checked) {
-                                                                    field.onChange(filteredGroups.map((group: any) => group.id));
-                                                                } else {
-                                                                    field.onChange([]);
+                                                                const newGroups = checked
+                                                                    ? filteredGroups.map((group: any) => group.id)
+                                                                    : [];
+
+                                                                field.onChange(newGroups);
+                                                                handleFieldChange('group_ids', newGroups);
+
+                                                                // Clear template selection when groups are selected
+                                                                if (checked && selectedTemplateId) {
+                                                                    setSelectedTemplateId(undefined);
+                                                                    clearTemplate();
                                                                 }
+
+                                                                // Trigger validation after group selection changes
+                                                                const isValid = validateAllFields({ ...form.getValues(), group_ids: newGroups }, touchedFields);
+                                                                setIsFormValid(isValid);
                                                             };
 
-                                                            const allSelected = filteredGroups.length > 0 &&
-                                                                filteredGroups.every((group: any) => selectedGroups.includes(group.id));
-
-                                                            // If a group is selected, clear template selection
                                                             const handleGroupChange = (checked: boolean, groupId: number) => {
-                                                                if (checked) {
+                                                                const newGroups = checked
+                                                                    ? [...selectedGroups, groupId]
+                                                                    : selectedGroups.filter(id => id !== groupId);
+
+                                                                field.onChange(newGroups);
+                                                                handleFieldChange('group_ids', newGroups);
+
+                                                                // Clear template selection when groups are selected
+                                                                if (checked && selectedTemplateId) {
+                                                                    setSelectedTemplateId(undefined);
                                                                     clearTemplate();
-                                                                    field.onChange([...selectedGroups, groupId]);
-                                                                } else {
-                                                                    field.onChange(selectedGroups.filter((id: number) => id !== groupId));
                                                                 }
+
+                                                                // Trigger validation after group selection changes
+                                                                const isValid = validateAllFields({ ...form.getValues(), group_ids: newGroups }, touchedFields);
+                                                                setIsFormValid(isValid);
                                                             };
 
                                                             return (
@@ -1110,16 +1661,19 @@ export default function UserModal({
                                                                                 className="pl-8"
                                                                             />
                                                                         </div>
-                                                                        <div
-                                                                            className="flex items-center gap-2 p-2 border rounded-md">
+                                                                        <label
+                                                                            className="flex items-center border border-border gap-2 p-3 rounded-md hover:bg-accent cursor-pointer"
+                                                                        >
                                                                             <Checkbox
-                                                                                checked={allSelected}
+                                                                                checked={selectedGroups.length > 0 && selectedGroups.every(id =>
+                                                                                    filteredGroups.some(group => group.id === id)
+                                                                                )}
                                                                                 onCheckedChange={handleSelectAll}
                                                                             />
                                                                             <span className="text-sm font-medium">
                                                                                 {t('selectAll', { defaultValue: 'Select All' })}
                                                                             </span>
-                                                                        </div>
+                                                                        </label>
                                                                         <div
                                                                             className="max-h-[200px] overflow-y-auto space-y-2 p-2 border rounded-md">
                                                                             {filteredGroups.length === 0 ? (
@@ -1145,8 +1699,7 @@ export default function UserModal({
                                                                                                     />
                                                                                                 )
                                                                                             }}
-                                                                                        >
-                                                                                        </Trans>
+                                                                                        />
                                                                                     </span>
                                                                                 </div>
                                                                             ) : (
@@ -1191,12 +1744,13 @@ export default function UserModal({
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                                 {t('cancel', { defaultValue: 'Cancel' })}
                             </Button>
-                            <LoaderButton 
+                            <LoaderButton
                                 type="submit"
                                 isLoading={loading}
-                                disabled={groupsData?.groups?.length === 0 && !selectedTemplateId}
+                                disabled={!isFormValid || (!selectedTemplateId && groupsData?.groups?.length === 0)}
+                                loadingText={editingUser ? t('modifying') : t('creating')}
                             >
-                                {editingUser ? t('save', { defaultValue: 'Save' }) : t('create', { defaultValue: 'Create' })}
+                                {editingUser ? t('modify', { defaultValue: 'Modify' }) : t('create', { defaultValue: 'Create' })}
                             </LoaderButton>
                         </div>
                     </form>

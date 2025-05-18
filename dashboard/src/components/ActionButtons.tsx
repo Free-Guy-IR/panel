@@ -21,7 +21,7 @@ import { UserResponse } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/hooks/use-toast'
 import { useForm } from 'react-hook-form'
-import { UseFormValues } from '@/pages/_dashboard._index'
+import { UseEditFormValues, UseFormValues } from '@/pages/_dashboard._index'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,10 +61,10 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   const revokeUserSubscriptionMutation = useRevokeUserSubscription()
 
   // Create form for user editing
-  const userForm = useForm<UseFormValues>({
+  const userForm = useForm<UseEditFormValues>({
     defaultValues: {
       username: user.username,
-      status: user.status === 'active' || user.status === 'on_hold' ? user.status : 'active',
+      status: user.status === 'active' || user.status === 'on_hold' || user.status === "disabled" ? user.status : 'active',
       data_limit: user.data_limit ? Math.round(Number(user.data_limit) / (1024 * 1024 * 1024) * 100) / 100 : undefined, // Convert bytes to GB
       expire: user.expire,
       note: user.note || '',
@@ -92,6 +92,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
       data_limit_reset_strategy: user.data_limit_reset_strategy || undefined,
       group_ids: user.group_ids || [],
       on_hold_expire_duration: user.on_hold_expire_duration || undefined,
+      proxy_settings: user.proxy_settings || undefined,
       next_plan: user.next_plan ? {
         user_template_id: user.next_plan.user_template_id ? Number(user.next_plan.user_template_id) : undefined,
         data_limit: user.next_plan.data_limit ? Number(user.next_plan.data_limit) : undefined,

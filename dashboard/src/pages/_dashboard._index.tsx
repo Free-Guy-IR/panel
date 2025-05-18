@@ -28,17 +28,17 @@ export const shadowsocksMethodsEnum = z.enum([
 ]);
 
 export const vMessSettingsSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().uuid().optional(),
 });
 export const vlessSettingsSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().uuid().optional(),
   flow: xtlsFlowsEnum.optional(),
 });
 export const trojanSettingsSchema = z.object({
-  password: z.string().optional(),
+  password: z.string().uuid().optional(),
 });
 export const shadowsocksSettingsSchema = z.object({
-  password: z.string().optional(),
+  password: z.string().uuid().optional(),
   method: shadowsocksMethodsEnum.optional(),
 });
 export const proxyTableInputSchema = z.object({
@@ -50,6 +50,8 @@ export const proxyTableInputSchema = z.object({
 
 // For creation, only 'active' and 'on_hold' are valid
 export const userStatusCreateEnum = z.enum(['active', 'on_hold']);
+export const userStatusEditEnum = z.enum(['active', 'on_hold', 'disabled']);
+
 
 // Add NextPlanModel zod schema
 export const nextPlanModelSchema = z.object({
@@ -69,20 +71,54 @@ export const userCreateSchema = z.object({
   note: z.string().optional(),
   proxy_settings: proxyTableInputSchema.optional(),
   data_limit_reset_strategy: userDataLimitResetStrategyEnum.optional(),
-  on_hold_expire_duration: z.number().optional(),
+  on_hold_expire_duration: z.number().nullable().optional().superRefine((val, ctx) => {
+    const status = (ctx.path.length > 0 ? ctx.path[0] : 'status') as string;
+    if (status === 'on_hold' && (!val || val < 1)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'validation.required'
+      });
+    }
+  }),
   on_hold_timeout: z.union([z.string(), z.number(), z.null()]).optional(),
   auto_delete_in_days: z.number().optional(),
   next_plan: nextPlanModelSchema.optional(),
   template_id: z.number().optional(),
 });
 
+export const userEditSchema = z.object({
+  username: z.string().min(3).max(32),
+  status: userStatusEditEnum.optional(),
+  group_ids: z.array(z.number()).min(1, { message: 'validation.required' }),
+  data_limit: z.number().min(0),
+  expire: z.union([z.string(), z.number(), z.null()]).optional(),
+  note: z.string().optional(),
+  proxy_settings: proxyTableInputSchema.optional(),
+  data_limit_reset_strategy: userDataLimitResetStrategyEnum.optional(),
+  on_hold_expire_duration: z.number().nullable().optional().superRefine((val, ctx) => {
+    const status = (ctx.path.length > 0 ? ctx.path[0] : 'status') as string;
+    if (status === 'on_hold' && (!val || val < 1)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'validation.required'
+      });
+    }
+  }),
+  on_hold_timeout: z.union([z.string(), z.number(), z.null()]).optional(),
+  auto_delete_in_days: z.number().optional(),
+  next_plan: nextPlanModelSchema.optional(),
+  template_id: z.number().optional(),
+});
+
+export type UseEditFormValues = z.infer<typeof userEditSchema>;
+
 export type UseFormValues = z.infer<typeof userCreateSchema>;
 
 const Dashboard = () => {
   const [isUserModalOpen, setUserModalOpen] = useState(false)
   const queryClient = useQueryClient()
-  
-  const userForm = useForm<UseFormValues>({
+
+  const userForm = useForm<UseFormValues | UseEditFormValues>({
     defaultValues: {
       username: '',
       status: 'active',
@@ -90,6 +126,22 @@ const Dashboard = () => {
       expire: '',
       note: '',
       group_ids: [],
+      proxy_settings: {
+        vmess: {
+          id: undefined,
+        },
+        vless: {
+          id: undefined,
+          flow: '',
+        },
+        trojan: {
+          password: undefined,
+        },
+        shadowsocks: {
+          password: undefined,
+          method: 'chacha20-ietf-poly1305',
+        },
+      },
     },
   })
 
@@ -109,12 +161,12 @@ const Dashboard = () => {
 
   return (
     <div className="flex flex-col gap-2 w-full items-start">
-      <PageHeader 
-        title="users" 
-        description="manageAccounts" 
-        buttonIcon={Plus} 
-        buttonText="createUser" 
-        onButtonClick={handleCreateUser} 
+      <PageHeader
+        title="users"
+        description="manageAccounts"
+        buttonIcon={Plus}
+        buttonText="createUser"
+        onButtonClick={handleCreateUser}
       />
       <Separator />
       <div className="px-4 w-full pt-2">

@@ -14,6 +14,7 @@
   "underDevelopment.description": "Эта страница находится в разработке и скоро будет доступна.",
   "modifying": "Изменение...",
   "removing": "Удаление...",
+  "creating": "Создание...",
   "nodes": {
     "title": "Узлы",
     "description": "Управление узлами",
@@ -794,7 +795,17 @@
     "deleteConfirmTitle": "Удалить пользователя",
     "deleteConfirm": "Вы уверены, что хотите удалить пользователя «{{name}}»?",
     "selectTemplate": "Выберите шаблон",
-    "selectTemplatePlaceholder": "Выберите шаблон"
+    "selectTemplatePlaceholder": "Выберите шаблон",
+    "proxySettingsAccordion": "Настройки прокси",
+    "proxySettings.vmess": "VMess",
+    "proxySettings.vless": "VLESS",
+    "proxySettings.trojan": "Trojan",
+    "proxySettings.shadowsocks": "Shadowsocks",
+    "proxySettings.id": "ID",
+    "proxySettings.password": "Пароль",
+    "proxySettings.method": "Метод",
+    "proxySettings.flow": "Поток (Flow)",
+    "proxySettings.desc": "Настройте параметры протокола для этого пользователя."
   },
   "sidebar.expand": "Развернуть меню",
   "sidebar.collapse": "Свернуть меню",
