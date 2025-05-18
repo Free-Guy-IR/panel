@@ -1,5 +1,5 @@
-import { ThemeProvider } from '@/components/theme-provider'
 import { ColorThemeProvider } from '@/components/color-theme-provider'
+import { ThemeProvider } from '@/components/theme-provider'
 import { router } from '@/router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router'

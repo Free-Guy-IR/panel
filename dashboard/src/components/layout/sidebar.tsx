@@ -6,13 +6,13 @@ import { NavSecondary } from '@/components/nav-secondary'
 import { NavUser } from '@/components/nav-user'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar'
-import { DONATION_URL, REPO_URL } from '@/constants/Project'
+import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { BookOpen, GithubIcon, LayoutTemplate, LifeBuoy, ListTodo, PieChart, RssIcon, Settings2, Share2Icon, UserCog, UsersIcon, Users2, Palette, Cpu, Settings, FileText } from 'lucide-react'
+import { getSystemStats } from '@/service/api'
+import { BookOpen, Cpu, FileText, GithubIcon, LayoutTemplate, LifeBuoy, ListTodo, Palette, PieChart, RssIcon, Settings, Settings2, Share2Icon, UserCog, Users2, UsersIcon } from 'lucide-react'
 import * as React from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {useEffect, useState} from "react";
-import {getSystemStats} from "@/service/api";
 
 const data = {
   user: {
@@ -20,14 +20,19 @@ const data = {
   },
   navMain: [
     {
+      title: 'statistics',
+      url: '/statistics',
+      icon: PieChart,
+    },
+    {
       title: 'users',
       url: '/',
       icon: UsersIcon,
     },
     {
-      title: "admins.title",
-      url: "/admins",
-      icon: UserCog,
+      title: 'hosts',
+      url: '/hosts',
+      icon: ListTodo,
     },
     {
       title: 'groups',
@@ -35,14 +40,9 @@ const data = {
       icon: Users2,
     },
     {
-      title: 'statistics',
-      url: '/statistics',
-      icon: PieChart,
-    },
-    {
-      title: 'hosts',
-      url: '/hosts',
-      icon: ListTodo,
+      title: 'templates.title',
+      url: '/templates',
+      icon: LayoutTemplate,
     },
     {
       title: 'nodes.title',
@@ -67,9 +67,9 @@ const data = {
       ],
     },
     {
-      title: 'templates.title',
-      url: '/templates',
-      icon: LayoutTemplate,
+      title: 'admins.title',
+      url: '/admins',
+      icon: UserCog,
     },
     {
       title: 'settings',
@@ -100,18 +100,21 @@ const data = {
   community: [
     {
       title: 'documentation',
-      url: '#',
+      url: DOCUMENTATION,
       icon: BookOpen,
+      target: '_blank',
     },
     {
       title: 'discussionGroup',
-      url: '#',
+      url: DISCUSSION_GROUP,
       icon: RssIcon,
+      target: '_blank',
     },
     {
       title: 'github',
-      url: '#',
+      url: REPO_URL,
       icon: GithubIcon,
+      target: '_blank',
     },
   ],
 }
