@@ -422,7 +422,7 @@ export default function UserModal({
                     : undefined,
                 expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
                 group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
-                status: values.status === 'disabled' ? 'active' : values.status
+                status: values.status
             };
 
             // Remove next_plan.data_limit and next_plan.expire if next_plan.user_template_id is set
@@ -622,7 +622,8 @@ export default function UserModal({
     useEffect(() => {
         if (isDialogOpen) {
             const currentValues = form.getValues();
-            const allFieldsTouched = Object.keys(currentValues).reduce((acc, key) => {
+            // For edit mode, only validate fields that have been changed
+            const allFieldsTouched = editingUser ? {} : Object.keys(currentValues).reduce((acc, key) => {
                 acc[key] = true;
                 return acc;
             }, {} as Record<string, boolean>);
@@ -630,7 +631,7 @@ export default function UserModal({
             setIsFormValid(isValid);
             setTouchedFields(allFieldsTouched);
         }
-    }, [isDialogOpen, form]);
+    }, [isDialogOpen, form, editingUser]);
 
     // State for UUID version per field
     const [uuidVersions, setUuidVersions] = useState({
