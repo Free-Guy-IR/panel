@@ -335,7 +335,7 @@ class ProxyInbound(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tag: Mapped[str] = mapped_column(String(256), unique=True, index=True)
-    hosts: Mapped[List["ProxyHost"]] = relationship(back_populates="inbound", cascade="all, delete-orphan")
+    hosts: Mapped[List["ProxyHost"]] = relationship(back_populates="inbound")
     groups: Mapped[List["Group"]] = relationship(secondary=inbounds_groups_association, back_populates="inbounds")
 
 
