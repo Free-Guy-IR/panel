@@ -422,7 +422,7 @@ export default function UserModal({
                     : undefined,
                 expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
                 group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
-                status: values.status === 'disabled' ? 'active' : values.status
+                status: values.status
             };
 
             // Remove next_plan.data_limit and next_plan.expire if next_plan.user_template_id is set
