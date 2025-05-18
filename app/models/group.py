@@ -1,15 +1,10 @@
-import re
-
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, Field
 
 from .validators import ListValidator
 
 
-GROUPNAME_REGEXP = re.compile(r"^(?=\w{3,64}\b)[a-zA-Z0-9]+(?:[a-zA-Z0-9]+)*$")
-
-
 class Group(BaseModel):
-    name: str
+    name: str = Field(min_length=3, max_length=64)
     inbound_tags: list[str] | None = []
     is_disabled: bool = False
 
@@ -22,13 +17,6 @@ class Group(BaseModel):
             }
         },
     )
-
-    @field_validator("name", mode="after")
-    @classmethod
-    def name_validate(cls, v):
-        if not GROUPNAME_REGEXP.match(v):
-            raise ValueError("Name only can be 3 to 64 characters and contain a-z, 0-9")
-        return v
 
 
 class GroupCreate(Group):
