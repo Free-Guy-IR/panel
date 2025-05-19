@@ -36,22 +36,12 @@ class SystemOperation(BaseOperation):
             limited_users,
             online_users,
         ) = await asyncio.gather(
-            get_users_count(db, admin=admin_param, count_all_admins_users=admin_param.is_sudo),
-            get_users_count(
-                db, status=UserStatus.active, admin=admin_param, count_all_admins_users=admin_param.is_sudo
-            ),
-            get_users_count(
-                db, status=UserStatus.disabled, admin=admin_param, count_all_admins_users=admin_param.is_sudo
-            ),
-            get_users_count(
-                db, status=UserStatus.on_hold, admin=admin_param, count_all_admins_users=admin_param.is_sudo
-            ),
-            get_users_count(
-                db, status=UserStatus.expired, admin=admin_param, count_all_admins_users=admin_param.is_sudo
-            ),
-            get_users_count(
-                db, status=UserStatus.limited, admin=admin_param, count_all_admins_users=admin_param.is_sudo
-            ),
+            get_users_count(db, admin=admin_param, count_all_admins_users=admin.is_sudo),
+            get_users_count(db, status=UserStatus.active, admin=admin_param, count_all_admins_users=admin.is_sudo),
+            get_users_count(db, status=UserStatus.disabled, admin=admin_param, count_all_admins_users=admin.is_sudo),
+            get_users_count(db, status=UserStatus.on_hold, admin=admin_param, count_all_admins_users=admin.is_sudo),
+            get_users_count(db, status=UserStatus.expired, admin=admin_param, count_all_admins_users=admin.is_sudo),
+            get_users_count(db, status=UserStatus.limited, admin=admin_param, count_all_admins_users=admin.is_sudo),
             count_online_users(db, timedelta(minutes=2), admin_param),
         )
 
