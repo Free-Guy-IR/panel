@@ -573,7 +573,9 @@ async def get_user_usages(
     )
 
 
-async def get_users_count(db: AsyncSession, status: UserStatus = None, admin: Admin = None) -> int:
+async def get_users_count(
+    db: AsyncSession, status: UserStatus = None, admin: Admin = None, count_all_admins_users: bool = False
+) -> int:
     """
     Gets the total count of users with optional filters.
 
@@ -581,7 +583,7 @@ async def get_users_count(db: AsyncSession, status: UserStatus = None, admin: Ad
         db (AsyncSession): Database session.
         status (UserStatus, optional): Filter by user status.
         admin (Admin, optional): Filter by admin.
-
+        count_all_admins_users (bool, optional): ignore admin if True
     Returns:
         int: Total count of users.
     """
@@ -590,7 +592,7 @@ async def get_users_count(db: AsyncSession, status: UserStatus = None, admin: Ad
     filters = []
     if status:
         filters.append(User.status == status)
-    if admin:
+    if admin and not count_all_admins_users:
         filters.append(User.admin_id == admin.id)
 
     if filters:
@@ -1906,6 +1908,7 @@ async def count_online_users(db: AsyncSession, time_delta: timedelta, admin: Adm
     Args:
         db (AsyncSession): The database session.
         time_delta (timedelta): The time period to check for online users.
+        admin (Admin, optional): Filter by admin.
 
     Returns:
         int: The number of users who have been online within the specified time period.
