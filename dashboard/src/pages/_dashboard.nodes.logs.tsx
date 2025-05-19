@@ -32,7 +32,7 @@ export default function NodeLogs() {
     }
     setIsLoading(true);
 
-    const baseUrl = import.meta.env.VITE_BASE_API || ''
+    const baseUrl = import.meta.env.VITE_BASE_API || window.location.origin
     const token = getAuthToken()
     const eventSource = new EventSource(`${baseUrl}/api/node/${selectedNode}/logs`, {
       fetch: (input: Request | URL | string, init?: RequestInit) => {
