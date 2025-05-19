@@ -107,12 +107,10 @@ def build_json_proxy_settings_search_condition(column, value: str):
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    return or_(
-        *[
-            json_extract(column, field) == value
-            for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-        ]
-    )
+    return or_(*[
+        json_extract(column, field) == value
+        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+    ])
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -1901,7 +1899,7 @@ async def delete_notification_reminder(db: AsyncSession, dbreminder: Notificatio
     await db.commit()
 
 
-async def count_online_users(db: AsyncSession, time_delta: timedelta):
+async def count_online_users(db: AsyncSession, time_delta: timedelta, admin: Admin | None = None):
     """
     Counts the number of users who have been online within the specified time delta.
 
@@ -1914,6 +1912,8 @@ async def count_online_users(db: AsyncSession, time_delta: timedelta):
     """
     twenty_four_hours_ago = datetime.now(timezone.utc) - time_delta
     query = select(func.count(User.id)).where(User.online_at.isnot(None), User.online_at >= twenty_four_hours_ago)
+    if admin and not admin.is_sudo:
+        query = query.where(User.admin.username == admin.username)
     return (await db.execute(query)).scalar_one_or_none()
 
 

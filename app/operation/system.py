@@ -1,15 +1,16 @@
-from datetime import timedelta
 import asyncio
+from datetime import timedelta
 
-from . import BaseOperation
 from app import __version__
+from app.core.manager import core_manager
 from app.db import AsyncSession
-from app.db.crud import get_system_usage, get_admin, get_users_count, count_online_users
+from app.db.crud import count_online_users, get_admin, get_system_usage, get_users_count
+from app.db.models import UserStatus
 from app.models.admin import AdminDetails
 from app.models.system import SystemStats
-from app.db.models import UserStatus
 from app.utils.system import cpu_usage, memory_usage
-from app.core.manager import core_manager
+
+from . import BaseOperation
 
 
 class SystemOperation(BaseOperation):
@@ -41,7 +42,7 @@ class SystemOperation(BaseOperation):
             get_users_count(db, status=UserStatus.on_hold, admin=admin_param),
             get_users_count(db, status=UserStatus.expired, admin=admin_param),
             get_users_count(db, status=UserStatus.limited, admin=admin_param),
-            count_online_users(db, timedelta(minutes=2)),
+            count_online_users(db, timedelta(minutes=2), admin),
         )
 
         return SystemStats(
