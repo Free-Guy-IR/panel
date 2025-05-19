@@ -1913,7 +1913,7 @@ async def count_online_users(db: AsyncSession, time_delta: timedelta, admin: Adm
     twenty_four_hours_ago = datetime.now(timezone.utc) - time_delta
     query = select(func.count(User.id)).where(User.online_at.isnot(None), User.online_at >= twenty_four_hours_ago)
     if admin and not admin.is_sudo:
-        query = query.where(User.admin.username == admin.username)
+        query = query.where(User.admin_id == admin.id)
     return (await db.execute(query)).scalar_one_or_none()
 
 

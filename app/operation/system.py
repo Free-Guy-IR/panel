@@ -42,7 +42,7 @@ class SystemOperation(BaseOperation):
             get_users_count(db, status=UserStatus.on_hold, admin=admin_param),
             get_users_count(db, status=UserStatus.expired, admin=admin_param),
             get_users_count(db, status=UserStatus.limited, admin=admin_param),
-            count_online_users(db, timedelta(minutes=2), admin),
+            count_online_users(db, timedelta(minutes=2), admin_param),
         )
 
         return SystemStats(
