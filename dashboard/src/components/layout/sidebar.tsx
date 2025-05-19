@@ -19,6 +19,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const isRTL = useDirDetection() === 'rtl'
   const { t } = useTranslation()
   const [version, setVersion] = useState<string>('')
+  const { admin } = useAdmin()
 
   useEffect(() => {
     const fetchVersion = async () => {
@@ -34,8 +35,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     fetchVersion()
   }, [])
 
-  const { admin } = useAdmin()
-  console.log(admin);
 
   const data = {
     user: {
