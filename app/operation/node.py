@@ -70,7 +70,7 @@ class NodeOperation(BaseOperation):
         node_response = NodeResponse.model_validate(db_node)
         if status is NodeStatus.connected:
             asyncio.create_task(notification.connect_node(node_response))
-        
+
         if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
             asyncio.create_task(notification.error_node(node_response))
 
@@ -133,9 +133,11 @@ class NodeOperation(BaseOperation):
         except IntegrityError:
             await self.raise_error(message=f'Node "{new_node.name}" already exists', code=409, db=db)
 
-        await node_manager.update_node(db_node)
-
-        asyncio.create_task(self.connect_node(node_id=db_node.id))
+        try:
+            await node_manager.update_node(db_node)
+            asyncio.create_task(self.connect_node(node_id=db_node.id))
+        except NodeAPIError as e:
+            await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
 
         logger.info(f'New node "{db_node.name}" with id "{db_node.id}" added by admin "{admin.username}"')
 
@@ -162,9 +164,9 @@ class NodeOperation(BaseOperation):
         else:
             try:
                 await node_manager.update_node(db_node)
+                asyncio.create_task(self.connect_node(node_id=db_node.id))
             except NodeAPIError as e:
                 await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
-            asyncio.create_task(self.connect_node(node_id=db_node.id))
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" modified by admin "{admin.username}"')
 

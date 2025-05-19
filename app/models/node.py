@@ -25,7 +25,7 @@ class Node(BaseModel):
     keep_alive: int
     max_logs: int = Field(gt=0, default=1000)
     core_config_id: int
-    api_key: str | None
+    api_key: str
     gather_logs: bool = Field(default=True)
 
 
@@ -99,6 +99,7 @@ class NodeModify(NodeCreate):
     keep_alive: int | None = Field(default=None)
     max_logs: int | None = Field(default=None)
     core_config_id: int | None = Field(default=None)
+    api_key: str | None = Field(default=None)
     gather_logs: bool | None = Field(default=None)
 
     model_config = ConfigDict(
@@ -123,9 +124,11 @@ class NodeModify(NodeCreate):
 
 class NodeResponse(Node):
     id: int
-    core_config_id: int | None = Field(default=None)
-    xray_version: str | None = Field(default=None)
-    node_version: str | None = Field(default=None)
+    api_key: str | None
+    core_config_id: int | None
+    xray_version: str | None
+    node_version: str | None
     status: NodeStatus
-    message: str | None = Field(default=None)
+    message: str | None
+
     model_config = ConfigDict(from_attributes=True)
