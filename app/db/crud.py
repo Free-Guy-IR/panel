@@ -575,9 +575,7 @@ async def get_user_usages(
     )
 
 
-async def get_users_count(
-    db: AsyncSession, status: UserStatus = None, admin: Admin = None, count_all_admins_users: bool = False
-) -> int:
+async def get_users_count(db: AsyncSession, status: UserStatus = None, admin: Admin = None) -> int:
     """
     Gets the total count of users with optional filters.
 
@@ -585,7 +583,6 @@ async def get_users_count(
         db (AsyncSession): Database session.
         status (UserStatus, optional): Filter by user status.
         admin (Admin, optional): Filter by admin.
-        count_all_admins_users (bool, optional): ignore admin if True
     Returns:
         int: Total count of users.
     """
@@ -594,7 +591,7 @@ async def get_users_count(
     filters = []
     if status:
         filters.append(User.status == status)
-    if admin and not count_all_admins_users:
+    if admin:
         filters.append(User.admin_id == admin.id)
 
     if filters:
