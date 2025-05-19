@@ -157,30 +157,32 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         }
 
         setStatusChecking(true);
-        setConnectionStatus('idle');
+        setConnectionStatus('checking');
         setErrorDetails(null);
 
         try {
             if (editingNode && editingNodeId) {
                 // For editing mode, use the node's endpoint directly
                 const node = await getNode(editingNodeId);
-                if (node && node.status === 'connected') {
+                if (!node) {
+                    throw new Error('No node data received');
+                }
+                
+                if (node.status === 'connected') {
                     setConnectionStatus('success');
                 } else {
                     setConnectionStatus('error');
-                    setErrorDetails(node?.message || 'Failed to get node information');
+                    setErrorDetails(node.message || 'Node is not connected');
                 }
             } else {
-                // For new nodes, status cannot be checked before creation without a dedicated endpoint.
-                // Avoid calling addNode here to prevent premature creation.
-                // Set status to idle or disabled, as the check cannot be performed yet.
-                setConnectionStatus('idle'); // Or 'disabled', depending on desired UX
-                // Optional: provide feedback that status check is unavailable for new nodes yet.
-                // setErrorDetails(t('nodeModal.status.checkUnavailableForNew'));
+                // For new nodes, we can't check status before creation
+                setConnectionStatus('idle');
+                setErrorDetails(t('nodeModal.status.checkUnavailableForNew'));
             }
         } catch (error: any) {
+            console.error('Node status check failed:', error);
             setConnectionStatus('error');
-            setErrorDetails(error?.message || 'Failed to connect to node');
+            setErrorDetails(error?.message || 'Failed to connect to node. Please check your connection settings.');
         } finally {
             setStatusChecking(false);
         }
