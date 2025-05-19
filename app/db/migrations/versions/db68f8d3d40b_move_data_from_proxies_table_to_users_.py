@@ -55,7 +55,7 @@ def upgrade() -> None:
         if "vless" not in proxy:
             user_proxy_map[user_id]["vless"] = {"id": str(uuid4()), "flow": ""}
         if "trojan" not in proxy:
-            user_proxy_map[user_id]["trojan"] = {"password": random_password(), "flow": ""}
+            user_proxy_map[user_id]["trojan"] = {"password": random_password()}
         if "shadowsocks" not in proxy:
             user_proxy_map[user_id]["shadowsocks"] = {
                 "password": random_password(),  "method": "chacha20-ietf-poly1305"}

@@ -67,10 +67,12 @@ class NodeOperation(BaseOperation):
                 message=err,
             )
 
-            if status is NodeStatus.connected:
-                asyncio.create_task(notification.connect_node(NodeResponse.model_validate(db_node)))
-            if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
-                asyncio.create_task(notification.error_node(NodeResponse.model_validate(db_node)))
+        node_response = NodeResponse.model_validate(db_node)
+        if status is NodeStatus.connected:
+            asyncio.create_task(notification.connect_node(node_response))
+        
+        if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
+            asyncio.create_task(notification.error_node(node_response))
 
     @staticmethod
     async def connect_node(node_id: int) -> None:

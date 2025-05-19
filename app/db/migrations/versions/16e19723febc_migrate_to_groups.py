@@ -6,6 +6,7 @@ Create Date: 2025-03-17 08:45:33.514529
 
 """
 import json
+from enum import Enum
 from collections import defaultdict
 from decouple import config as decouple_config
 
@@ -18,7 +19,13 @@ from app.db.models import (
     User,
     ProxyInbound,
 )
-from app.models.proxy import ProxyTypes
+
+
+class ProxyTypes(str, Enum):
+    VMess = "vmess"
+    VLESS = "vless"
+    Trojan = "trojan"
+    Shadowsocks = "shadowsocks"
 
 
 group_table = Table(
@@ -155,6 +162,7 @@ def upgrade() -> None:
         except (json.JSONDecodeError, ValueError):
             with open(XRAY_JSON, 'r') as file:
                 config = commentjson.loads(file.read())
+
         inbounds = [{"tag": inbound['tag'], "protocol": inbound["protocol"]}
                     for inbound in config['inbounds'] if 'tag' in inbound]
 
@@ -190,14 +198,21 @@ def upgrade() -> None:
                 name=group_name,
             ))
             group_id = session.execute(sa.select(group_table).where(group_table.c.name == group_name)).scalar()
-            inbound_data = [
-                {"inbound_id":i.id,"group_id":group_id} for i in dbinbounds
-            ]
-            session.execute(
-                inbounds_groups_association.insert(),
-                inbound_data
-            )
-            users_data = [{"user_id": user["id"],"groups_id": group_id} for user in users]
+            
+            # Fix: Check if dbinbounds is not empty before inserting
+            if dbinbounds:
+                inbound_data = [
+                    {"inbound_id": i.id, "group_id": group_id} for i in dbinbounds if i.id is not None
+                ]
+                
+                # Add additional check to ensure we're not inserting empty values
+                if inbound_data:
+                    session.execute(
+                        inbounds_groups_association.insert(),
+                        inbound_data
+                    )
+            
+            users_data = [{"user_id": user["id"], "groups_id": group_id} for user in users]
             session.execute(
                 users_groups_association.insert(),
                 users_data,
@@ -243,13 +258,20 @@ def upgrade() -> None:
                     group_id = session.execute(sa.select(group_table).where(group_table.c.name == group_name)).scalar()
 
                     dbinbounds = session.query(ProxyInbound).filter(ProxyInbound.tag.in_(inbounds)).all()
-                    inbound_data = [
-                        {"inbound_id":i.id,"group_id":group_id} for i in dbinbounds
-                    ]
-                    session.execute(
-                        inbounds_groups_association.insert(),
-                        inbound_data
-                    )
+                    
+                    # Fix: Similar check here to ensure we have valid data before insert
+                    if dbinbounds:
+                        inbound_data = [
+                            {"inbound_id": i.id, "group_id": group_id} for i in dbinbounds if i.id is not None
+                        ]
+                        
+                        # Add additional check to ensure we're not inserting empty values
+                        if inbound_data:
+                            session.execute(
+                                inbounds_groups_association.insert(),
+                                inbound_data
+                            )
+                    
                     session.execute(
                        template_group_association.insert().values(
                                 user_template_id=int(k),
@@ -259,6 +281,7 @@ def upgrade() -> None:
                     counter += 1
 
     finally:
+        # Uncomment this for production
         # session.commit()
         session.close()
 

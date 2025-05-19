@@ -1,7 +1,5 @@
 from enum import Enum
-from typing import Union
 from app.db.models import ProxyHostSecurity, ProxyHostALPN, ProxyHostFingerprint, UserStatus
-from app.models.proxy import ProxyTypes
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.validators import ListValidator
@@ -209,11 +207,3 @@ class CreateHost(BaseHost):
     @field_validator("status", mode="after")
     def deduplicate_status(cls, v):
         return ListValidator.deduplicate_values(v)
-
-
-class ProxyInbound(BaseModel):
-    tag: str
-    protocol: ProxyTypes
-    network: str
-    tls: str
-    port: Union[int, str]

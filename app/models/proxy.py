@@ -7,41 +7,8 @@ from pydantic import BaseModel, Field
 from app.utils.system import random_password
 
 
-class ProxyTypes(str, Enum):
-    # proxy_type = protocol
-    VMess = "vmess"
-    VLESS = "vless"
-    Trojan = "trojan"
-    Shadowsocks = "shadowsocks"
-
-    @property
-    def settings_model(self):
-        if self == self.VMess:
-            return VMessSettings
-        if self == self.VLESS:
-            return VlessSettings
-        if self == self.Trojan:
-            return TrojanSettings
-        if self == self.Shadowsocks:
-            return ShadowsocksSettings
-
-
-class ProxySettings(BaseModel, use_enum_values=True):
-    @classmethod
-    def from_dict(cls, proxy_type: ProxyTypes, _dict: dict):
-        return ProxyTypes(proxy_type).settings_model.model_validate(_dict)
-
-    def dict(self, *, no_obj=False, **kwargs):
-        if no_obj:
-            return json.loads(self.model_dump_json())
-        return super().model_dump(**kwargs)
-
-
-class VMessSettings(ProxySettings):
+class VMessSettings(BaseModel):
     id: UUID = Field(default_factory=uuid4)
-
-    def revoke(self):
-        self.id = str(uuid4())
 
 
 class XTLSFlows(str, Enum):
@@ -49,19 +16,13 @@ class XTLSFlows(str, Enum):
     VISION = "xtls-rprx-vision"
 
 
-class VlessSettings(ProxySettings):
+class VlessSettings(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     flow: XTLSFlows = XTLSFlows.NONE
 
-    def revoke(self):
-        self.id = uuid4()
 
-
-class TrojanSettings(ProxySettings):
+class TrojanSettings(BaseModel):
     password: str = Field(default_factory=random_password)
-
-    def revoke(self):
-        self.password = random_password()
 
 
 class ShadowsocksMethods(str, Enum):  # Already a str, Enum which is good
@@ -71,12 +32,9 @@ class ShadowsocksMethods(str, Enum):  # Already a str, Enum which is good
     XCHACHA20_POLY1305 = "xchacha20-poly1305"
 
 
-class ShadowsocksSettings(ProxySettings):
+class ShadowsocksSettings(BaseModel):
     password: str = Field(default_factory=random_password)
     method: ShadowsocksMethods = ShadowsocksMethods.CHACHA20_POLY1305
-
-    def revoke(self):
-        self.password = random_password()
 
 
 class ProxyTable(BaseModel):

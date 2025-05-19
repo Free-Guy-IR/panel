@@ -8,7 +8,6 @@ from typing import Union
 
 import commentjson
 
-from app.models.proxy import ProxyTypes
 from app.utils.crypto import get_cert_SANs, get_x25519_public_key
 
 
@@ -280,7 +279,7 @@ class XRayConfig(dict):
 
     def _read_inbound(self, inbound: dict):
         """Read an inbound and its settings."""
-        if inbound["protocol"] not in ProxyTypes._value2member_map_:
+        if inbound["protocol"] not in ("vmess", "vless", "trojan", "shadowsocks"):
             return
 
         if inbound["tag"] in self.exclude_inbound_tags:
