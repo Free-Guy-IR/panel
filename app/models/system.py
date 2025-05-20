@@ -3,10 +3,10 @@ from pydantic import BaseModel
 
 class SystemStats(BaseModel):
     version: str
-    mem_total: int
-    mem_used: int
-    cpu_cores: int
-    cpu_usage: float
+    mem_total: int | None = None
+    mem_used: int | None = None
+    cpu_cores: int | None = None
+    cpu_usage: float | None = None
     total_user: int
     online_users: int
     active_users: int
