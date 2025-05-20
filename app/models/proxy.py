@@ -22,7 +22,7 @@ class VlessSettings(BaseModel):
 
 
 class TrojanSettings(BaseModel):
-    password: str = Field(default_factory=random_password, min_length=22, max_length=128)
+    password: str = Field(default_factory=random_password)
 
 
 class ShadowsocksMethods(str, Enum):  # Already a str, Enum which is good
@@ -33,7 +33,7 @@ class ShadowsocksMethods(str, Enum):  # Already a str, Enum which is good
 
 
 class ShadowsocksSettings(BaseModel):
-    password: str = Field(default_factory=random_password, min_length=22, max_length=128)
+    password: str = Field(default_factory=random_password)
     method: ShadowsocksMethods = ShadowsocksMethods.CHACHA20_POLY1305
 
 
