@@ -22,7 +22,7 @@ const UsageSliderCompact: React.FC<UsageSliderProps> = ({ used, total = 0, statu
     <div className="flex flex-col justify-between text-xs text-muted-foreground font-medium w-full gap-y-1">
       <Progress indicatorClassName={color} value={progressValue} className={cn(isMobile ? 'block' : 'hidden md:block')} />
       <div className="flex items-center justify-between">
-        <span dir="ltr">
+        <span className={isMobile ? 'hidden' : ''} dir="ltr">
           {formatBytes(used)} / {isUnlimited ? <span className="font-system-ui">∞</span> : formatBytes(total)}
         </span>
         <span className={cn(isMobile ? 'block' : 'hidden md:block')}>

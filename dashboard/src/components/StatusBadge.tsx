@@ -12,9 +12,10 @@ type UserStatusProps = {
   status: UserStatus
   extraText?: string | null
   showExpiry?: boolean
+  showOnlyExpiry?: boolean // Added prop to only show expiry date without badge
 }
 
-export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: userStatus, extraText, showExpiry }) => {
+export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: userStatus, extraText, showExpiry, showOnlyExpiry }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const convertDateFormat = (expire: UserStatusProps['expiryDate']) => {
@@ -25,6 +26,20 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
 
   const dateInfo = relativeExpiryDate(unixTime)
   const StatusIcon = statusColors[userStatus]?.icon
+
+  if (showOnlyExpiry) {
+    return (
+      <div className={cn("flex flex-wrap gap-x-2 justify-start")}>
+        <div className={cn(!dateInfo.time && !dateInfo.status && 'hidden',showExpiry? 'block': 'hidden md:block')}>
+          <div>
+            <span className={cn('inline-block text-xs font-medium', dir === 'rtl' ? 'mr-0.5 md:mr-2' : 'ml-0.5 md:ml-2', 'text-gray-600 dark:text-gray-400')}>
+              {t(dateInfo.status, { time: dateInfo.time })}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={cn("flex flex-wrap gap-x-2 justify-start")}>

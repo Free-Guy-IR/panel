@@ -122,9 +122,9 @@ export function DataTable<TData extends UserResponse, TValue>({
                           dataLimitResetStrategy={row.original.data_limit_reset_strategy || undefined}
                         />
                         <div className="flex flex-col">
-                          <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <StatusBadge expiryDate={row.original.expire} status={row.original.status} showExpiry />
+                              <StatusBadge showOnlyExpiry expiryDate={row.original.expire} status={row.original.status} showExpiry />
                             </div>
                             <ActionButtons user={row.original} />
                           </div>

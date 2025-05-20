@@ -101,7 +101,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
         fire_on_either: user.next_plan.fire_on_either || false,
       } : undefined,
     };
-    
+
     // Update form with current values
     userForm.reset(values);
   }, [user, userForm]);
@@ -231,6 +231,14 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   return (
     <div>
       <div className="flex justify-end items-center">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={handleEdit}
+          className='md:hidden'
+        >
+          <Edit className="h-4 w-4" />
+        </Button>
         <TooltipProvider>
           <CopyButton
             value={user.subscription_url ? (user.subscription_url.startsWith('/') ? window.location.origin + user.subscription_url : user.subscription_url) : ''}
@@ -268,7 +276,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {/* Edit */}
-            <DropdownMenuItem onClick={handleEdit}>
+            <DropdownMenuItem className='hidden md:block' onClick={handleEdit}>
               <Edit className="h-4 w-4 mr-2" />
               <span>{t('edit')}</span>
             </DropdownMenuItem>
@@ -324,7 +332,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           onCloseModal={onCloseQRModal}
         />
       }
-      
+
       {/* Delete User Confirm Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent dir={dir}>
@@ -342,7 +350,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       {/* Reset Usage Confirm Dialog */}
       <AlertDialog open={isResetUsageDialogOpen} onOpenChange={setResetUsageDialogOpen}>
         <AlertDialogContent dir={dir}>
@@ -360,7 +368,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       {/* Revoke Subscription Confirm Dialog */}
       <AlertDialog open={isRevokeSubDialogOpen} onOpenChange={setRevokeSubDialogOpen}>
         <AlertDialogContent dir={dir}>
@@ -378,7 +386,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       {/* Edit User Modal */}
       <UserModal
         isDialogOpen={isEditModalOpen}
