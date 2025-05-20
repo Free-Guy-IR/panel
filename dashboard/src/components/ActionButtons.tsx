@@ -270,7 +270,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   };
 
   return (
-    <div>
+    <div onClick={(e) => e.stopPropagation()}>
       <div className="flex justify-end items-center">
         <Button
           size="icon"
@@ -322,7 +322,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {/* Edit */}
-            <DropdownMenuItem className='hidden md:block' onClick={handleEdit}>
+            <DropdownMenuItem className='hidden md:flex' onClick={handleEdit}>
               <Edit className="h-4 w-4 mr-2" />
               <span>{t('edit')}</span>
             </DropdownMenuItem>

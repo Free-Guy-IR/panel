@@ -2,12 +2,15 @@ import { setupColumns } from '@/components/users-table/columns'
 import { DataTable } from '@/components/users-table/data-table'
 import { Filters } from '@/components/users-table/filters'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { useGetUsers } from '@/service/api'
+import { useGetUsers, UserResponse } from '@/service/api'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
 import { useQueryClient } from '@tanstack/react-query'
 import { PaginationControls } from './filters'
+import { useForm } from 'react-hook-form'
+import { UseEditFormValues } from '@/pages/_dashboard._index'
+import UserModal from '../dialogs/UserModal'
 
 const UsersTable = () => {
   const { t } = useTranslation()
@@ -16,6 +19,8 @@ const UsersTable = () => {
   const [currentPage, setCurrentPage] = useState(0)
   const [itemsPerPage, setItemsPerPage] = useState(getUsersPerPageLimitSize())
   const [isChangingPage, setIsChangingPage] = useState(false)
+  const [isEditModalOpen, setEditModalOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null)
   
   const [filters, setFilters] = useState({
     limit: itemsPerPage,
@@ -24,6 +29,53 @@ const UsersTable = () => {
     offset: 0,
     search: undefined as string | undefined
   })
+
+  // Create form for user editing
+  const userForm = useForm<UseEditFormValues>({
+    defaultValues: {
+      username: selectedUser?.username,
+      status: selectedUser?.status === 'active' || selectedUser?.status === 'on_hold' || selectedUser?.status === "disabled" ? selectedUser?.status : 'active',
+      data_limit: selectedUser?.data_limit ? Math.round(Number(selectedUser?.data_limit) / (1024 * 1024 * 1024) * 100) / 100 : undefined, // Convert bytes to GB
+      expire: selectedUser?.expire,
+      note: selectedUser?.note || '',
+      data_limit_reset_strategy: selectedUser?.data_limit_reset_strategy || undefined,
+      group_ids: selectedUser?.group_ids || [], // Add group_ids
+      on_hold_expire_duration: selectedUser?.on_hold_expire_duration || undefined,
+      proxy_settings: selectedUser?.proxy_settings || undefined,
+      next_plan: selectedUser?.next_plan ? {
+        user_template_id: selectedUser?.next_plan.user_template_id ? Number(selectedUser?.next_plan.user_template_id) : undefined,
+        data_limit: selectedUser?.next_plan.data_limit ? Number(selectedUser?.next_plan.data_limit) : undefined,
+        expire: selectedUser?.next_plan.expire ? Number(selectedUser?.next_plan.expire) : undefined,
+        add_remaining_traffic: selectedUser?.next_plan.add_remaining_traffic || false,
+        fire_on_either: selectedUser?.next_plan.fire_on_either || false,
+      } : undefined,
+    }
+  })
+
+  // Update form when selected user changes
+  useEffect(() => {
+    if (selectedUser) {
+      const values: UseEditFormValues = {
+        username: selectedUser.username,
+        status: selectedUser.status === 'active' || selectedUser.status === 'on_hold' ? selectedUser.status : 'active',
+        data_limit: selectedUser.data_limit ? Math.round(Number(selectedUser.data_limit) / (1024 * 1024 * 1024) * 100) / 100 : 0, // Convert bytes to GB
+        expire: selectedUser.expire,
+        note: selectedUser.note || '',
+        data_limit_reset_strategy: selectedUser.data_limit_reset_strategy || undefined,
+        group_ids: selectedUser.group_ids || [],
+        on_hold_expire_duration: selectedUser.on_hold_expire_duration || undefined,
+        proxy_settings: selectedUser.proxy_settings || undefined,
+        next_plan: selectedUser.next_plan ? {
+          user_template_id: selectedUser.next_plan.user_template_id ? Number(selectedUser.next_plan.user_template_id) : undefined,
+          data_limit: selectedUser.next_plan.data_limit ? Number(selectedUser.next_plan.data_limit) : undefined,
+          expire: selectedUser.next_plan.expire ? Number(selectedUser.next_plan.expire) : undefined,
+          add_remaining_traffic: selectedUser.next_plan.add_remaining_traffic || false,
+          fire_on_either: selectedUser.next_plan.fire_on_either || false,
+        } : undefined,
+      }
+      userForm.reset(values)
+    }
+  }, [selectedUser, userForm])
 
   // Update filters when pagination changes
   useEffect(() => {
@@ -144,6 +196,17 @@ const UsersTable = () => {
     }
   }
 
+  const handleEdit = (user: UserResponse) => {
+    setSelectedUser(user)
+    setEditModalOpen(true)
+  }
+
+  const handleEditSuccess = () => {
+    setEditModalOpen(false)
+    setSelectedUser(null)
+    handleManualRefresh()
+  }
+
   const columns = setupColumns({
     t,
     dir,
@@ -168,6 +231,7 @@ const UsersTable = () => {
         data={usersData?.users || []} 
         isLoading={isLoading}
         isFetching={isFetching}
+        onEdit={handleEdit}
       />
       <PaginationControls 
         currentPage={currentPage}
@@ -178,6 +242,16 @@ const UsersTable = () => {
         onPageChange={handlePageChange}
         onItemsPerPageChange={handleItemsPerPageChange}
       />
+      {selectedUser && (
+        <UserModal
+          isDialogOpen={isEditModalOpen}
+          onOpenChange={setEditModalOpen}
+          form={userForm}
+          editingUser={true}
+          editingUserId={selectedUser.id || undefined}
+          onSuccessCallback={handleEditSuccess}
+        />
+      )}
     </div>
   )
 }

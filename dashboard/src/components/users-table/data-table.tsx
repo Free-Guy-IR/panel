@@ -1,6 +1,5 @@
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import React, { useState } from 'react'
-
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
@@ -17,13 +16,15 @@ interface DataTableProps<TData extends UserResponse, TValue> {
   data: TData[]
   isLoading?: boolean
   isFetching?: boolean
+  onEdit?: (user: UserResponse) => void
 }
 
 export function DataTable<TData extends UserResponse, TValue>({
   columns,
   data,
   isLoading = false,
-  isFetching = false
+  isFetching = false,
+  onEdit
 }: DataTableProps<TData, TValue>) {
   const { t } = useTranslation()
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -36,6 +37,18 @@ export function DataTable<TData extends UserResponse, TValue>({
 
   const handleRowToggle = (rowId: string) => {
     setExpandedRow(expandedRow === rowId ? null : rowId)
+  }
+
+  const handleEditModal = (e: React.MouseEvent, user: UserResponse) => {
+    // Don't open modal if clicking on chevron or if screen is small
+    if ((e.target as HTMLElement).closest('.chevron') || window.innerWidth < 768) {
+      return;
+    }
+    // Don't open modal if clicking on dropdown menu or its items
+    if ((e.target as HTMLElement).closest('[role="menu"], [role="menuitem"], [data-radix-popper-content-wrapper]')) {
+      return;
+    }
+    onEdit?.(user);
   }
 
   const dir = useDirDetection()
@@ -82,7 +95,7 @@ export function DataTable<TData extends UserResponse, TValue>({
               <React.Fragment key={row.id}>
                 <TableRow
                   className={cn('cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50', expandedRow === row.id && 'border-transparent')}
-                  onClick={() => window.innerWidth < 768 && handleRowToggle(row.id)} // Only toggle on small screens
+                  onClick={(e) => handleEditModal(e, row.original)}
                   data-state={row.getIsSelected() && 'selected'}
                 >
                   {row.getVisibleCells().map((cell, index) => (
@@ -126,7 +139,9 @@ export function DataTable<TData extends UserResponse, TValue>({
                             <div className="flex items-center">
                               <StatusBadge showOnlyExpiry expiryDate={row.original.expire} status={row.original.status} showExpiry />
                             </div>
-                            <ActionButtons user={row.original} />
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <ActionButtons user={row.original} />
+                            </div>
                           </div>
                           <div>
                             <OnlineStatus lastOnline={row.original.online_at} />

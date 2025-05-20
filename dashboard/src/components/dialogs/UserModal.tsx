@@ -8,7 +8,7 @@ import { UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard._index';
-import { RefreshCcw } from 'lucide-react';
+import { ListStart, RefreshCcw } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -432,7 +432,7 @@ export default function UserModal({
             }
 
             // Check if proxy settings are filled
-            const hasProxySettings = values.proxy_settings && Object.values(values.proxy_settings).some(settings => 
+            const hasProxySettings = values.proxy_settings && Object.values(values.proxy_settings).some(settings =>
                 settings && Object.values(settings).some(value => value !== undefined && value !== '')
             );
 
@@ -586,17 +586,17 @@ export default function UserModal({
         const numbers = '0123456789';
         const special = '_';
         let password = '';
-        
+
         // Ensure at least one underscore
         password += special;
-        
+
         // Fill the rest with letters and numbers
         for (let i = 1; i < length; i++) {
             const charSet = Math.random() < 0.7 ? letters : numbers;
             const randomIndex = Math.floor(Math.random() * charSet.length);
             password += charSet[randomIndex];
         }
-        
+
         // Shuffle the password to make it more random
         return password.split('').sort(() => Math.random() - 0.5).join('');
     }
@@ -1417,10 +1417,12 @@ export default function UserModal({
                                     </Accordion>
                                     {/* Next Plan Section (toggleable) */}
                                     {editingUser && (
-                                        <>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div
-                                                    className="font-semibold">{t('userDialog.nextPlanTitle', { defaultValue: 'Next Plan' })}</div>
+                                        <div className='border border-border rounded-[--radius] p-4'>
+                                            <div className="flex items-center justify-between">
+                                                <div className='flex items-center gap-2'>
+                                                    <ListStart className='w-4 h-4' />
+                                                    <div>{t('userDialog.nextPlanTitle', { defaultValue: 'Next Plan' })}</div>
+                                                </div>
                                                 <Switch checked={nextPlanEnabled} onCheckedChange={setNextPlanEnabled} />
                                             </div>
                                             {nextPlanEnabled && (
@@ -1525,7 +1527,7 @@ export default function UserModal({
                                                     </div>
                                                 </div>
                                             )}
-                                        </>
+                                        </div>
                                     )}
                                 </div>
                                 <div className='space-y-6 w-full h-full flex-1'>
