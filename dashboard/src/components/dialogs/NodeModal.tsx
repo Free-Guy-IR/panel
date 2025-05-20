@@ -353,7 +353,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     </div>
                     {showErrorDetails && connectionStatus === 'error' && (
                         <div
-                            className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                            className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded whitespace-pre-wrap break-words">
                             {errorDetails}
                         </div>
                     )}

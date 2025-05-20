@@ -773,7 +773,14 @@
     "copyPublicKey": "复制公钥",
     "copyPrivateKey": "复制私钥",
     "copyShortId": "复制短 ID",
-    "restartNodes": "重启节点"
+    "restartNodes": "重启节点",
+    "generateShadowsocksPassword": "生成 Shadowsocks 密码",
+    "generatingShadowsocksPassword": "正在生成密码...",
+    "shadowsocksPassword": "Shadowsocks 密码",
+    "shadowsocksPasswordCopied": "密码已复制到剪贴板",
+    "copyShadowsocksPassword": "复制密码",
+    "selectEncryptionMethod": "选择加密方法",
+    "regeneratePassword": "重新生成密码"
   },
   "settings.cores": {
     "title": "核心",

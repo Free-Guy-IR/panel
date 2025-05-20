@@ -431,13 +431,25 @@ export default function UserModal({
                 delete preparedValues.next_plan.expire;
             }
 
+            // Check if proxy settings are filled
+            const hasProxySettings = values.proxy_settings && Object.values(values.proxy_settings).some(settings => 
+                settings && Object.values(settings).some(value => value !== undefined && value !== '')
+            );
+
             setLoading(true);
             // Convert data_limit from GB to bytes
             const sendValues = {
                 ...preparedValues,
                 data_limit: gbToBytes(preparedValues.data_limit as any),
                 expire: normalizeExpire(preparedValues.expire),
+                // Only include proxy_settings if they are filled
+                ...(hasProxySettings ? { proxy_settings: values.proxy_settings } : {})
             };
+
+            // Remove proxy_settings from the payload if it's empty or undefined
+            if (!hasProxySettings) {
+                delete sendValues.proxy_settings;
+            }
 
             // Make API calls to the backend
             if (editingUser && editingUserId) {
@@ -569,6 +581,27 @@ export default function UserModal({
     }
 
     // Add this function after the generateUsername function
+    function generatePassword(length: number = 24): string {
+        const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const numbers = '0123456789';
+        const special = '_';
+        let password = '';
+        
+        // Ensure at least one underscore
+        password += special;
+        
+        // Fill the rest with letters and numbers
+        for (let i = 1; i < length; i++) {
+            const charSet = Math.random() < 0.7 ? letters : numbers;
+            const randomIndex = Math.floor(Math.random() * charSet.length);
+            password += charSet[randomIndex];
+        }
+        
+        // Shuffle the password to make it more random
+        return password.split('').sort(() => Math.random() - 0.5).join('');
+    }
+
+    // Add this function after the generatePassword function
     function generateProxySettings() {
         return {
             vmess: {
@@ -579,10 +612,10 @@ export default function UserModal({
                 flow: "" as "" | "xtls-rprx-vision" | undefined,
             },
             trojan: {
-                password: uuidv4(),
+                password: generatePassword(),
             },
             shadowsocks: {
-                password: uuidv4(),
+                password: generatePassword(),
             },
         };
     }
@@ -658,12 +691,8 @@ export default function UserModal({
     // On first load (create user), auto-generate UUIDs for all fields
     useEffect(() => {
         if (isDialogOpen && !editingUser) {
-            form.setValue('proxy_settings.vmess.id', generateUUID(uuidVersions.vmess));
-            form.setValue('proxy_settings.vless.id', generateUUID(uuidVersions.vless));
-            form.setValue('proxy_settings.vless.flow', "");
-            form.setValue('proxy_settings.trojan.password', generateUUID(uuidVersions.trojan));
-            form.setValue('proxy_settings.shadowsocks.password', generateUUID(uuidVersions.shadowsocks));
-            form.setValue('proxy_settings.shadowsocks.method', 'chacha20-ietf-poly1305');
+            // Remove auto-fill of proxy settings
+            form.setValue('proxy_settings', undefined);
         }
         // eslint-disable-next-line
     }, [isDialogOpen, editingUser]);
@@ -1278,113 +1307,77 @@ export default function UserModal({
                                                 <FormField
                                                     control={form.control}
                                                     name="proxy_settings.trojan.password"
-                                                    render={({ field, formState }) => {
-                                                        const error = formState.errors.proxy_settings?.trojan?.password;
-                                                        return (
-                                                            <FormItem className="mb-2">
-                                                                <FormLabel>{t('userDialog.proxySettings.trojan')} {t('userDialog.proxySettings.password')}</FormLabel>
-                                                                <FormControl>
-                                                                    <div dir='ltr' className="flex gap-2 items-center">
-                                                                        <Input
-                                                                            {...field}
-                                                                            placeholder={t('userDialog.proxySettings.password')}
-                                                                            onChange={(e) => {
-                                                                                field.onChange(e);
-                                                                                form.trigger('proxy_settings.trojan.password');
-                                                                                handleFieldChange('proxy_settings.trojan.password', e.target.value);
-                                                                            }}
-                                                                        />
-                                                                        <Select
-                                                                            value={uuidVersions.trojan}
-                                                                            onValueChange={val => setUuidVersions(v => ({ ...v, trojan: val }))}
-                                                                        >
-                                                                            <SelectTrigger className="w-[60px]">
-                                                                                <SelectValue />
-                                                                            </SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="v4">v4</SelectItem>
-                                                                                <SelectItem value="v5">v5</SelectItem>
-                                                                                <SelectItem value="v7">v7</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                        <Button
-                                                                            size="icon"
-                                                                            type="button"
-                                                                            variant="ghost"
-                                                                            onClick={() => {
-                                                                                const newVal = generateUUID(uuidVersions.trojan, field.value);
-                                                                                field.onChange(newVal);
-                                                                                form.trigger('proxy_settings.trojan.password');
-                                                                                handleFieldChange('proxy_settings.trojan.password', newVal);
-                                                                            }}
-                                                                            title="Generate UUID"
-                                                                        >
-                                                                            <RefreshCcw className="w-3 h-3" />
-                                                                        </Button>
-                                                                    </div>
-                                                                </FormControl>
-                                                                <FormMessage>
-                                                                    {error?.message === 'Invalid uuid' && t('validation.invalidUuid', { defaultValue: 'Invalid UUID format' })}
-                                                                </FormMessage>
-                                                            </FormItem>
-                                                        );
-                                                    }}
+                                                    render={({ field }) => (
+                                                        <FormItem className="mb-2">
+                                                            <FormLabel>{t('userDialog.proxySettings.trojan')} {t('userDialog.proxySettings.password')}</FormLabel>
+                                                            <FormControl>
+                                                                <div dir='ltr' className="flex gap-2 items-center">
+                                                                    <Input
+                                                                        {...field}
+                                                                        placeholder={t('userDialog.proxySettings.password')}
+                                                                        onChange={(e) => {
+                                                                            field.onChange(e);
+                                                                            form.trigger('proxy_settings.trojan.password');
+                                                                            handleFieldChange('proxy_settings.trojan.password', e.target.value);
+                                                                        }}
+                                                                    />
+                                                                    <Button
+                                                                        size="icon"
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        onClick={() => {
+                                                                            const newVal = generatePassword();
+                                                                            field.onChange(newVal);
+                                                                            form.trigger('proxy_settings.trojan.password');
+                                                                            handleFieldChange('proxy_settings.trojan.password', newVal);
+                                                                        }}
+                                                                        title="Generate password"
+                                                                    >
+                                                                        <RefreshCcw className="w-3 h-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
                                                 />
                                                 {/* Shadowsocks */}
                                                 <FormField
                                                     control={form.control}
                                                     name="proxy_settings.shadowsocks.password"
-                                                    render={({ field, formState }) => {
-                                                        const error = formState.errors.proxy_settings?.shadowsocks?.password;
-                                                        return (
-                                                            <FormItem className="mb-2 w-full">
-                                                                <FormLabel>{t('userDialog.proxySettings.shadowsocks')} {t('userDialog.proxySettings.password')}</FormLabel>
-                                                                <FormControl>
-                                                                    <div dir='ltr' className="flex gap-2 items-center">
-                                                                        <Input
-                                                                            {...field}
-                                                                            placeholder={t('userDialog.proxySettings.password')}
-                                                                            onChange={(e) => {
-                                                                                field.onChange(e);
-                                                                                form.trigger('proxy_settings.shadowsocks.password');
-                                                                                handleFieldChange('proxy_settings.shadowsocks.password', e.target.value);
-                                                                            }}
-                                                                        />
-                                                                        <Select
-                                                                            value={uuidVersions.shadowsocks}
-                                                                            onValueChange={val => setUuidVersions(v => ({ ...v, shadowsocks: val }))}
-                                                                        >
-                                                                            <SelectTrigger className="w-[60px]">
-                                                                                <SelectValue />
-                                                                            </SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="v4">v4</SelectItem>
-                                                                                <SelectItem value="v5">v5</SelectItem>
-                                                                                <SelectItem value="v7">v7</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                        <Button
-                                                                            size="icon"
-                                                                            type="button"
-                                                                            variant="ghost"
-                                                                            onClick={() => {
-                                                                                const newVal = generateUUID(uuidVersions.shadowsocks, field.value);
-                                                                                field.onChange(newVal);
-                                                                                form.trigger('proxy_settings.shadowsocks.password');
-                                                                                handleFieldChange('proxy_settings.shadowsocks.password', newVal);
-                                                                            }}
-                                                                            title="Generate UUID"
-                                                                        >
-                                                                            <RefreshCcw className="w-3 h-3" />
-                                                                        </Button>
-                                                                    </div>
-                                                                </FormControl>
-                                                                <FormMessage>
-                                                                    {error?.message === 'Invalid uuid' && t('validation.invalidUuid', { defaultValue: 'Invalid UUID format' })}
-                                                                </FormMessage>
-                                                            </FormItem>
-                                                        );
-                                                    }}
+                                                    render={({ field }) => (
+                                                        <FormItem className="mb-2 w-full">
+                                                            <FormLabel>{t('userDialog.proxySettings.shadowsocks')} {t('userDialog.proxySettings.password')}</FormLabel>
+                                                            <FormControl>
+                                                                <div dir='ltr' className="flex gap-2 items-center">
+                                                                    <Input
+                                                                        {...field}
+                                                                        placeholder={t('userDialog.proxySettings.password')}
+                                                                        onChange={(e) => {
+                                                                            field.onChange(e);
+                                                                            form.trigger('proxy_settings.shadowsocks.password');
+                                                                            handleFieldChange('proxy_settings.shadowsocks.password', e.target.value);
+                                                                        }}
+                                                                    />
+                                                                    <Button
+                                                                        size="icon"
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        onClick={() => {
+                                                                            const newVal = generatePassword();
+                                                                            field.onChange(newVal);
+                                                                            form.trigger('proxy_settings.shadowsocks.password');
+                                                                            handleFieldChange('proxy_settings.shadowsocks.password', newVal);
+                                                                        }}
+                                                                        title="Generate password"
+                                                                    >
+                                                                        <RefreshCcw className="w-3 h-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
                                                 />
                                                 <FormField
                                                     control={form.control}

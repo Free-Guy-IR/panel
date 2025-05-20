@@ -54,9 +54,9 @@ export function DataTable<TData extends UserResponse, TValue>({
                   className={cn(
                     'text-xs sticky z-10 overflow-visible',
                     isRTL && 'text-right',
-                    index === 0 && 'w-[270px] md:w-auto',
-                    index === 1 && 'max-w-[70px] md:w-auto md:px-0',
-                    index === 2 && 'min-w-[100px] md:w-[450px]',
+                    index === 0 && 'w-[200px] sm:w-[270px] md:w-auto',
+                    index === 1 && 'max-w-[70px] md:w-auto !px-0',
+                    index === 2 && 'min-w-[100px] md:w-[450px] px-1',
                     index >= 3 && 'hidden md:table-cell',
                     header.id === 'chevron' && 'table-cell md:hidden',
                   )}
@@ -96,7 +96,7 @@ export function DataTable<TData extends UserResponse, TValue>({
                         index === 3 && dir === 'rtl' ? 'pr-0' : index === 3 && dir === 'ltr' && 'pl-0',
                         index >= 4 && 'hidden md:table-cell',
                         cell.column.id === 'chevron' && 'table-cell md:hidden',
-                        dir === 'rtl' ? 'pl-3' : 'pr-3',
+                        dir === 'rtl' ? 'pl-1.5 sm:pl-3' : 'pr-1.5 sm:pr-3',
                       )}
                     >
                       {cell.column.id === 'chevron' ? (
@@ -124,7 +124,7 @@ export function DataTable<TData extends UserResponse, TValue>({
                         <div className="flex flex-col">
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center">
-                              <StatusBadge expiryDate={row.original.expire} status={row.original.status} isMobile />
+                              <StatusBadge expiryDate={row.original.expire} status={row.original.status} showExpiry />
                             </div>
                             <ActionButtons user={row.original} />
                           </div>

@@ -48,6 +48,13 @@ interface ValidationResult {
     error?: string
 }
 
+// Add encryption methods enum
+const SHADOWSOCKS_ENCRYPTION_METHODS = [
+    { value: '2022-blanke3-aes-128-gcm', label: '2022-blanke3-aes-128-gcm', length: 16 },
+    { value: '2022-blake3-aes-256-gcm', label: '2022-blake3-aes-256-gcm', length: 32 },
+    { value: '2022-blake3-chacha20-poly1305', label: '2022-blake3-chacha20-poly1305', length: 32 }
+] as const;
+
 export default function CoreConfigModal({
     isDialogOpen,
     onOpenChange,
@@ -68,6 +75,9 @@ export default function CoreConfigModal({
     const [inboundTags, setInboundTags] = useState<string[]>([])
     const [isGeneratingKeyPair, setIsGeneratingKeyPair] = useState(false)
     const [isGeneratingShortId, setIsGeneratingShortId] = useState(false)
+    const [generatedShadowsocksPassword, setGeneratedShadowsocksPassword] = useState<string | null>(null)
+    const [selectedEncryptionMethod, setSelectedEncryptionMethod] = useState<string>(SHADOWSOCKS_ENCRYPTION_METHODS[0].value)
+    const [isGeneratingShadowsocksPassword, setIsGeneratingShadowsocksPassword] = useState(false)
 
     const handleEditorValidation = useCallback(
         (markers: any[]) => {
@@ -166,6 +176,27 @@ export default function CoreConfigModal({
             toast.error(t('coreConfigModal.shortIdGenerationFailed'))
         } finally {
             setIsGeneratingShortId(false)
+        }
+    }
+
+    const generateShadowsocksPassword = async () => {
+        try {
+            setIsGeneratingShadowsocksPassword(true)
+            const method = SHADOWSOCKS_ENCRYPTION_METHODS.find(m => m.value === selectedEncryptionMethod)
+            if (!method) return
+
+            const randomBytes = new Uint8Array(method.length)
+            crypto.getRandomValues(randomBytes)
+            const password = btoa(String.fromCharCode(...randomBytes))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '')
+            setGeneratedShadowsocksPassword(password)
+            toast.success(t('coreConfigModal.shadowsocksPasswordGenerated'))
+        } catch (error) {
+            toast.error(t('coreConfigModal.shadowsocksPasswordGenerationFailed'))
+        } finally {
+            setIsGeneratingShadowsocksPassword(false)
         }
     }
 
@@ -733,6 +764,79 @@ export default function CoreConfigModal({
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* <div className="pt-2">
+                                        <LoaderButton
+                                            type="button"
+                                            onClick={generateShadowsocksPassword}
+                                            className="w-full"
+                                            isLoading={isGeneratingShadowsocksPassword}
+                                            loadingText={t('coreConfigModal.generatingShadowsocksPassword')}
+                                        >
+                                            {t('coreConfigModal.generateShadowsocksPassword')}
+                                        </LoaderButton>
+                                    </div>
+
+                                    {generatedShadowsocksPassword && (
+                                        <div className="mt-4 p-4 border rounded-md relative">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className={cn("absolute top-2 h-6 w-6",
+                                                    dir === "rtl" ? "left-2" : "right-2"
+                                                )}
+                                                onClick={() => setGeneratedShadowsocksPassword(null)}
+                                                aria-label={t('close')}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <p className="text-sm font-medium mb-1">{t('coreConfigModal.selectEncryptionMethod')}</p>
+                                                    <Select
+                                                        value={selectedEncryptionMethod}
+                                                        onValueChange={(value) => {
+                                                            setSelectedEncryptionMethod(value)
+                                                        }}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {SHADOWSOCKS_ENCRYPTION_METHODS.map((method) => (
+                                                                <SelectItem key={method.value} value={method.value}>
+                                                                    {method.label}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium mb-1">{t('coreConfigModal.shadowsocksPassword')}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <code className="bg-muted p-2 rounded text-sm flex-1 overflow-x-auto whitespace-nowrap">
+                                                            {generatedShadowsocksPassword}
+                                                        </code>
+                                                        <CopyButton
+                                                            value={generatedShadowsocksPassword}
+                                                            copiedMessage="coreConfigModal.shadowsocksPasswordCopied"
+                                                            defaultMessage="coreConfigModal.copyShadowsocksPassword"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={generateShadowsocksPassword}
+                                                    className="w-full"
+                                                >
+                                                    {t('coreConfigModal.generateShadowsocksPassword')}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )} */}
                                 </div>
                             </div>
                         </div>

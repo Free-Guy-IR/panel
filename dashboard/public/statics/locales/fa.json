@@ -743,7 +743,14 @@
     "copyPublicKey": "کپی کلید عمومی",
     "copyPrivateKey": "کپی کلید خصوصی",
     "copyShortId": "کپی شناسه کوتاه",
-    "restartNodes": "راه‌اندازی مجدد گره‌ها"
+    "restartNodes": "راه‌اندازی مجدد گره‌ها",
+    "generateShadowsocksPassword": "تولید رمز عبور Shadowsocks",
+    "generatingShadowsocksPassword": "در حال تولید رمز عبور...",
+    "shadowsocksPassword": "رمز عبور Shadowsocks",
+    "shadowsocksPasswordCopied": "رمز عبور در کلیپ‌بورد کپی شد",
+    "copyShadowsocksPassword": "کپی رمز عبور",
+    "selectEncryptionMethod": "انتخاب روش رمزنگاری",
+    "regeneratePassword": "تولید مجدد رمز عبور"
   },
   "settings.cores": {
     "title": "هسته‌ها",

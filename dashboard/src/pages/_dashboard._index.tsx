@@ -35,10 +35,10 @@ export const vlessSettingsSchema = z.object({
   flow: xtlsFlowsEnum.optional(),
 });
 export const trojanSettingsSchema = z.object({
-  password: z.string().uuid().optional(),
+  password: z.string().min(2).max(32).optional(),
 });
 export const shadowsocksSettingsSchema = z.object({
-  password: z.string().uuid().optional(),
+  password: z.string().min(2).max(32).optional(),
   method: shadowsocksMethodsEnum.optional(),
 });
 export const proxyTableInputSchema = z.object({
