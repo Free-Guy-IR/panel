@@ -697,6 +697,8 @@ export default function UserModal({
         // eslint-disable-next-line
     }, [isDialogOpen, editingUser]);
 
+    const [calendarOpen, setCalendarOpen] = useState(false);
+
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
             <DialogContent
@@ -1069,7 +1071,7 @@ export default function UserModal({
                                                             return (
                                                                 <FormItem className="flex flex-col flex-1">
                                                                     <FormLabel>{t('userDialog.expiryDate', { defaultValue: 'Expire date' })}</FormLabel>
-                                                                    <Popover>
+                                                                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                                                                         <PopoverTrigger asChild>
                                                                             <FormControl>
                                                                                 <Button
@@ -1106,9 +1108,11 @@ export default function UserModal({
                                                                                         const timestamp = Math.floor(date.getTime() / 1000);
                                                                                         field.onChange(timestamp);
                                                                                         handleFieldChange('expire', timestamp);
+                                                                                        setCalendarOpen(false);
                                                                                     } else {
                                                                                         field.onChange('');
                                                                                         handleFieldChange('expire', undefined);
+                                                                                        setCalendarOpen(false);
                                                                                     }
                                                                                 }}
                                                                                 fromDate={new Date()}
