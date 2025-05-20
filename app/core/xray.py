@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import base64
+import json
 from copy import deepcopy
 from pathlib import PosixPath
 from typing import Union
@@ -259,6 +259,8 @@ class XRayConfig(dict):
     def _handle_shadowsocks_settings(self, inbound_settings: dict, settings: dict):
         """Handle shadowsocks special settings."""
         settings["method"] = inbound_settings.get("method", "")
+        if settings["method"] == "2022-blake3-chacha20-poly1305":
+            raise ValueError("only 2022-blake3-aes-*-gcm methods are supported")
         if settings["method"].startswith("2022-blake3"):
             settings["is_2022"] = True
             password = inbound_settings.get("password", "")
