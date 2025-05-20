@@ -228,6 +228,47 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
     }
   }
 
+  const handleCopyOrDownload = async (subLink: SubscribeLink) => {
+    if (subLink.protocol === 'links') {
+      // For links protocols, fetch content and copy to clipboard
+      try {
+        const response = await fetch(subLink.link);
+        const content = await response.text();        
+        copy(content);
+        toast({
+          title: t('success', { defaultValue: 'Success' }),
+          description: t('usersTable.copied', { defaultValue: 'Copied to clipboard' }),
+        });
+      } catch (error) {
+        toast({
+          title: t('error', { defaultValue: 'Error' }),
+          description: t('copyFailed', { defaultValue: 'Failed to copy content' }),
+          variant: 'destructive',
+        });
+      }
+    } else {
+      // For other protocols, trigger download
+      try {
+        const response = await fetch(subLink.link);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${user.username}-${subLink.protocol}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error) {
+        toast({
+          title: t('error', { defaultValue: 'Error' }),
+          description: t('downloadFailed', { defaultValue: 'Failed to download configuration' }),
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-end items-center">
@@ -258,7 +299,12 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
               <DropdownMenuContent>
                 {subscribeLinks.map(subLink => (
                   <DropdownMenuItem className="p-0 justify-start" key={subLink.link}>
-                    <Button variant="ghost" className="w-full h-full px-2 justify-start" aria-label="Copy" onClick={() => copy(subLink.link)}>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full h-full px-2 justify-start" 
+                      aria-label={subLink.protocol.includes('links') ? 'Copy' : 'Download'} 
+                      onClick={() => handleCopyOrDownload(subLink)}
+                    >
                       <span>{subLink.protocol}</span>
                     </Button>
                   </DropdownMenuItem>
