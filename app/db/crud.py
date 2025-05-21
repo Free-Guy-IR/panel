@@ -979,7 +979,7 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
     expired_users = [
         user
         for (user, auto_delete) in (await db.execute(query)).unique()
-        if user.last_status_change + timedelta(days=auto_delete) <= datetime.now(timezone.utc)
+        if user.last_status_change.replace(tzinfo=timezone.utc) + timedelta(days=auto_delete) <= datetime.now(timezone.utc)
     ]
 
     if expired_users:
