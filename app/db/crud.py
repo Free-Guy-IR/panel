@@ -107,12 +107,10 @@ def build_json_proxy_settings_search_condition(column, value: str):
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    return or_(
-        *[
-            json_extract(column, field) == value
-            for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-        ]
-    )
+    return or_(*[
+        json_extract(column, field) == value
+        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+    ])
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -894,7 +892,7 @@ async def reset_all_users_data_usage(db: AsyncSession, admin: Optional[Admin] = 
     await db.commit()
 
 
-async def disable_all_active_users(db: AsyncSession, admin_id: int | None = None):
+async def disable_all_active_users(db: AsyncSession, admin: Admin | None = None):
     """
     Disable all active users or users under a specific admin.
 
@@ -903,8 +901,8 @@ async def disable_all_active_users(db: AsyncSession, admin_id: int | None = None
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
     query = update(User).where(User.status.in_((UserStatus.active, UserStatus.on_hold)))
-    if admin_id:
-        query = query.filter(User.admin_id == admin_id)
+    if admin:
+        query = query.filter(User.admin_id == admin.id)
 
     await db.execute(
         query.values(
@@ -913,9 +911,10 @@ async def disable_all_active_users(db: AsyncSession, admin_id: int | None = None
     )
 
     await db.commit()
+    await db.refresh(admin)
 
 
-async def activate_all_disabled_users(db: AsyncSession, admin_id: int | None = None):
+async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = None):
     """
     Activate all disabled users or users under a specific admin.
 
@@ -931,9 +930,9 @@ async def activate_all_disabled_users(db: AsyncSession, admin_id: int | None = N
             User.on_hold_expire_duration.isnot(None),
         )
     )
-    if admin_id:
-        query_for_active_users = query_for_active_users.where(User.admin_id == admin_id)
-        query_for_on_hold_users = query_for_on_hold_users.where(User.admin_id == admin_id)
+    if admin:
+        query_for_active_users = query_for_active_users.where(User.admin_id == admin.id)
+        query_for_on_hold_users = query_for_on_hold_users.where(User.admin_id == admin.id)
 
     await db.execute(
         query_for_on_hold_users.values(
@@ -947,7 +946,7 @@ async def activate_all_disabled_users(db: AsyncSession, admin_id: int | None = N
     )
 
     await db.commit()
-
+    await db.refresh(admin)
 
 async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
     """
