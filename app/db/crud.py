@@ -10,7 +10,7 @@ from typing import List, Optional, Union
 
 from sqlalchemy import String, and_, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Query, joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.sql.functions import coalesce
 
 from app.db.base import DATABASE_DIALECT
@@ -107,10 +107,12 @@ def build_json_proxy_settings_search_condition(column, value: str):
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    return or_(*[
-        json_extract(column, field) == value
-        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-    ])
+    return or_(
+        *[
+            json_extract(column, field) == value
+            for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+        ]
+    )
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -948,6 +950,7 @@ async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = No
     await db.commit()
     await db.refresh(admin)
 
+
 async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
     """
     Deletes expired (optionally also limited) users whose auto-delete time has passed.
@@ -979,7 +982,8 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
     expired_users = [
         user
         for (user, auto_delete) in (await db.execute(query)).unique()
-        if user.last_status_change.replace(tzinfo=timezone.utc) + timedelta(days=auto_delete) <= datetime.now(timezone.utc)
+        if user.last_status_change.replace(tzinfo=timezone.utc) + timedelta(days=auto_delete)
+        <= datetime.now(timezone.utc)
     ]
 
     if expired_users:

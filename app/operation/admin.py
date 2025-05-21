@@ -109,12 +109,14 @@ class AdminOperation(BaseOperation):
         await activate_all_disabled_users(db=db, admin=db_admin)
 
         users = await get_users(db, admin=db_admin)
-        await asyncio.gather(*[
-            node_manager.update_user(
-                UserResponse.model_validate(user), await user.inbounds(await core_manager.get_inbounds())
-            )
-            for user in users
-        ])
+        await asyncio.gather(
+            *[
+                node_manager.update_user(
+                    UserResponse.model_validate(user), await user.inbounds(await core_manager.get_inbounds())
+                )
+                for user in users
+            ]
+        )
 
         logger.info(f'Admin "{username}" users has been activated by admin "{admin.username}"')
 
