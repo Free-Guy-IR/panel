@@ -1544,13 +1544,6 @@ async def get_user_templates(
     return user_templates
 
 
-def get_node_queryset() -> Query:
-    return select(Node).options(
-        selectinload(Node.user_usages),
-        selectinload(Node.usages),
-    )
-
-
 async def get_node(db: AsyncSession, name: str) -> Optional[Node]:
     """
     Retrieves a node by its name.
@@ -1598,7 +1591,7 @@ async def get_nodes(
     Returns:
         List[Node]: A list of Node objects matching the criteria.
     """
-    query = get_node_queryset()
+    query = select(Node)
 
     if status:
         if isinstance(status, list):
