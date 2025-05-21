@@ -1405,6 +1405,7 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> int:
 
     await db.commit()
     await db.refresh(db_admin)
+    await load_admin_attrs(db_admin)
     return db_admin
 
 
