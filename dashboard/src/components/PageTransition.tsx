@@ -18,7 +18,12 @@ export default function PageTransition({
   const [displayChildren, setDisplayChildren] = useState(children);
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
-  const previousPathnameRef = useRef(location.pathname);
+  const previousLocationRef = useRef({
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+    state: location.state
+  });
   const isFirstRenderRef = useRef(true);
   const hasNavigatedRef = useRef(false);
 
@@ -28,6 +33,19 @@ export default function PageTransition({
       setDisplayChildren(children);
     }
   }, [children, isShaking]);
+
+  // Helper to check if location actually changed
+  const isLocationChanged = () => {
+    return (
+      location.pathname !== previousLocationRef.current.pathname ||
+      location.search !== previousLocationRef.current.search ||
+      location.hash !== previousLocationRef.current.hash ||
+      // Only compare state if both are objects
+      (typeof location.state === 'object' && 
+       typeof previousLocationRef.current.state === 'object' &&
+       JSON.stringify(location.state) !== JSON.stringify(previousLocationRef.current.state))
+    );
+  };
 
   // Handle navigation effects
   useEffect(() => {
@@ -40,13 +58,22 @@ export default function PageTransition({
     // Skip animations on browser actions like refresh (POP)
     if (navigationType === 'POP') {
       setDisplayChildren(children);
-      previousPathnameRef.current = location.pathname;
+      previousLocationRef.current = {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+        state: location.state
+      };
       return;
     }
 
+    // Detect if we actually changed location
+    const locationChanged = isLocationChanged();
+
     // Same page navigation - trigger shake animation
     // Only if we've already navigated before (prevent after login)
-    if (location.pathname === previousPathnameRef.current && hasNavigatedRef.current) {
+    // And only if a real navigation attempt was made
+    if (!locationChanged && hasNavigatedRef.current && navigationType === 'PUSH') {
       setIsShaking(true);
       
       // Reset shake after animation completes
@@ -57,16 +84,33 @@ export default function PageTransition({
       return;
     }
 
-    // Different page navigation - fade transition
-    setIsPageTransitioning(true);
-    
-    // Wait for fade-out, then update content
-    setTimeout(() => {
+    // Only transition if location actually changed
+    if (locationChanged) {
+      // Different page navigation - fade transition
+      setIsPageTransitioning(true);
+      
+      // Wait for fade-out, then update content
+      setTimeout(() => {
+        setDisplayChildren(children);
+        setIsPageTransitioning(false);
+        previousLocationRef.current = {
+          pathname: location.pathname,
+          search: location.search,
+          hash: location.hash,
+          state: location.state
+        };
+        hasNavigatedRef.current = true;
+      }, 150);
+    } else {
+      // Just update the children without transition
       setDisplayChildren(children);
-      setIsPageTransitioning(false);
-      previousPathnameRef.current = location.pathname;
-      hasNavigatedRef.current = true;
-    }, 150);
+      previousLocationRef.current = {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+        state: location.state
+      };
+    }
     
   }, [location, navigationType, children, duration]);
 
