@@ -98,10 +98,20 @@ export function DataTable<TData extends UserResponse, TValue>({
               </TableCell>
             </TableRow>
           ) : table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map(row => (
+            table.getRowModel().rows.map((row, index) => (
               <React.Fragment key={row.id}>
                 <TableRow
-                  className={cn('cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50', expandedRow === row.original.id && 'border-transparent')}
+                  className={cn(
+                    'cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50', 
+                    expandedRow === row.original.id && 'border-transparent',
+                    'transition-all duration-300 ease-in-out',
+                    'animate-slide-up will-change-transform'
+                  )}
+                  style={{ 
+                    animationDelay: `${index * 40}ms`,
+                    animationDuration: '0.4s', 
+                    animationFillMode: 'both' 
+                  }}
                   onClick={(e) => handleEditModal(e, row.original)}
                   data-state={row.getIsSelected() && 'selected'}
                 >
@@ -133,28 +143,30 @@ export function DataTable<TData extends UserResponse, TValue>({
                   ))}
                 </TableRow>
                 {expandedRow === row.original.id && (
-                  <TableRow className="md:hidden border-b hover:!bg-inherit">
-                    <TableCell colSpan={columns.length} className="p-4 text-sm">
-                      <div className="flex flex-col gap-y-4">
-                        <UsageSliderCompact
-                          isMobile
-                          status={row.original.status}
-                          total={row.original.data_limit}
-                          totalUsedTraffic={row.original.lifetime_used_traffic}
-                          used={row.original.used_traffic}
-                          dataLimitResetStrategy={row.original.data_limit_reset_strategy || undefined}
-                        />
-                        <div className="flex flex-col">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <StatusBadge showOnlyExpiry expiryDate={row.original.expire} status={row.original.status} showExpiry />
+                  <TableRow className="md:hidden border-b hover:!bg-inherit overflow-hidden">
+                    <TableCell colSpan={columns.length} className="p-0 text-sm">
+                      <div className="transform-gpu animate-zoom-out overflow-hidden origin-top will-change-transform" style={{ animationDuration: '0.4s' }}>
+                        <div className="p-4 flex flex-col gap-y-4">
+                          <UsageSliderCompact
+                            isMobile
+                            status={row.original.status}
+                            total={row.original.data_limit}
+                            totalUsedTraffic={row.original.lifetime_used_traffic}
+                            used={row.original.used_traffic}
+                            dataLimitResetStrategy={row.original.data_limit_reset_strategy || undefined}
+                          />
+                          <div className="flex flex-col">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <StatusBadge showOnlyExpiry expiryDate={row.original.expire} status={row.original.status} showExpiry />
+                              </div>
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <ActionButtons user={row.original} />
+                              </div>
                             </div>
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <ActionButtons user={row.original} />
+                            <div>
+                              <OnlineStatus lastOnline={row.original.online_at} />
                             </div>
-                          </div>
-                          <div>
-                            <OnlineStatus lastOnline={row.original.online_at} />
                           </div>
                         </div>
                       </div>
@@ -166,7 +178,7 @@ export function DataTable<TData extends UserResponse, TValue>({
           ) : (
             <TableRow>
               <TableCell colSpan={columns.length} className="h-24 text-center">
-                <span className="text-muted-foreground">{t('noResults')}</span>
+                <span className="text-muted-foreground animate-fade-in">{t('noResults')}</span>
               </TableCell>
             </TableRow>
           )}

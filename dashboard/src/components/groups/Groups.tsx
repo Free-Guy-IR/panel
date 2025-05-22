@@ -80,7 +80,7 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
   }
 
   return (
-    <div className="flex-1 w-full space-y-4 p-4 pt-6">
+    <div className="flex-1 w-full space-y-4 pt-4">
       <ScrollArea className="h-[calc(100vh-8rem)]">
         <div dir={dir} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {groupsData?.groups.map((group) => (

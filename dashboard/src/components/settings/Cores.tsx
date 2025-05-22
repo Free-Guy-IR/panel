@@ -98,7 +98,7 @@ export default function Cores({
   return (
     <div className="flex-1 w-full">
       <ScrollArea dir={dir} className="h-[calc(100vh-8rem)]">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 pt-6 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-6 w-full">
           {(cores || coresData?.cores)?.map((core: CoreResponse) => (
             <Core
               key={core.id}

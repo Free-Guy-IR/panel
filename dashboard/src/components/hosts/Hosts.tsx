@@ -620,7 +620,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
     const sortedHosts = [...(hosts ?? [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
     return (
-        <div className="p-4">
+        <div>
             <div>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={sortableHosts} strategy={rectSortingStrategy}>

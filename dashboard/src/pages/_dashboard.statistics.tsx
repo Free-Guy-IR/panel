@@ -22,24 +22,28 @@ const Statistics = () => {
 
     return (
         <div className="flex flex-col gap-2 w-full items-start">
-            <PageHeader title="statistics" description="monitorServers"/>
+            <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
+                <PageHeader title="statistics" description="monitorServers"/>
+                <Separator/>
+            </div>
 
             <div className="w-full relative">
-                <Separator/>
                 <div className="px-4 w-full pt-2">
-                    <MainContent
-                        error={error}
-                        isLoading={isLoading}
-                        data={data}
-                        selectedServer={selectedServer}
-                        onServerChange={setSelectedServer}
-                    />
+                    <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
+                        <MainContent
+                            error={error}
+                            isLoading={isLoading}
+                            data={data}
+                            selectedServer={selectedServer}
+                            onServerChange={setSelectedServer}
+                        />
+                    </div>
                 </div>
 
                 {/* Under Development Overlay */}
-                <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex flex-col items-center z-10">
+                <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex flex-col items-center z-10 transform-gpu animate-fade-in" style={{ animationDuration: '600ms', animationDelay: '250ms', animationFillMode: 'both' }}>
                     <div
-                        className="bg-background/90 border-2 border-amber-400 dark:border-amber-600 shadow-md rounded-md p-4 max-w-md sm:max-w-lg md:max-w-xl mt-6 mx-auto flex flex-col items-center gap-3">
+                        className="bg-background/90 border-2 border-amber-400 dark:border-amber-600 shadow-md rounded-md p-4 max-w-md sm:max-w-lg md:max-w-xl mt-6 mx-auto flex flex-col items-center gap-3 transform-gpu animate-bounce-in" style={{ animationDuration: '700ms', animationDelay: '300ms', animationFillMode: 'both' }}>
                         <Construction className="h-16 w-16 sm:h-20 sm:w-20 text-amber-500 "/>
                         <div>
                             <h2 className="text-lg font-bold text-foreground">{t("underDevelopment.title")}</h2>

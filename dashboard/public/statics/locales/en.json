@@ -57,7 +57,18 @@
       "title": "Logs",
       "description": "View and monitor node logs",
       "noLogs": "No logs available",
-      "loading": "Loading logs..."
+      "loading": "Loading logs...",
+      "timestamps": "Timestamps",
+      "autoScroll": "Auto Scroll",
+      "scrollToEnd": "Scroll to End",
+      "clear": "Clear Logs",
+      "search": "Search logs",
+      "filter": "Filter Logs",
+      "levels": "Log Levels",
+      "debug": "Debug",
+      "info": "Info",
+      "warning": "Warning",
+      "error": "Error"
     }
   },
   "groups": "Groups",

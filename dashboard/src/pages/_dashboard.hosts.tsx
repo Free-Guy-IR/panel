@@ -8,6 +8,8 @@ import { HostFormValues } from '@/components/hosts/Hosts'
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { Separator } from '@/components/ui/separator'
+import PageTransition from '@/components/PageTransition'
+import { Card, CardContent } from '@/components/ui/card'
 
 export default function HostsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -138,30 +140,51 @@ export default function HostsPage() {
         }
     };
 
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
-
     return (
-        <div className="pb-8">
-            <PageHeader
-                title='hosts'
-                description='manageHosts'
-                buttonIcon={Plus}
-                buttonText='hostsDialog.addHost'
-                onButtonClick={handleCreateClick}
-            />
-            <Separator />
-            <div>
-                <MainSection
-                    data={data || []}
-                    isDialogOpen={isDialogOpen}
-                    onDialogOpenChange={handleDialogOpen}
-                    onAddHost={onAddHost}
-                    onSubmit={handleSubmit}
-                    editingHost={editingHost}
-                    setEditingHost={setEditingHost}
+        <div className="pb-8 flex flex-col gap-2 w-full items-start">
+            <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
+                <PageHeader
+                    title='hosts'
+                    description='manageHosts'
+                    buttonIcon={Plus}
+                    buttonText='hostsDialog.addHost'
+                    onButtonClick={handleCreateClick}
                 />
+                <Separator />
+            </div>
+            
+            <div className="px-4 w-full pt-6">
+                {isLoading ? (
+                    <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-6">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                            <Card key={index} className="animate-pulse">
+                                <CardContent className="p-4">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="h-5 bg-muted rounded-md w-2/3"></div>
+                                        <div className="h-3 bg-muted rounded-md w-full"></div>
+                                        <div className="h-3 bg-muted rounded-md w-4/5"></div>
+                                        <div className="flex justify-between mt-2">
+                                            <div className="h-6 bg-muted rounded-md w-1/4"></div>
+                                            <div className="h-6 bg-muted rounded-md w-1/4"></div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                ) : (
+                    <PageTransition>
+                        <MainSection
+                            data={data || []}
+                            isDialogOpen={isDialogOpen}
+                            onDialogOpenChange={handleDialogOpen}
+                            onAddHost={onAddHost}
+                            onSubmit={handleSubmit}
+                            editingHost={editingHost}
+                            setEditingHost={setEditingHost}
+                        />
+                    </PageTransition>
+                )}
             </div>
         </div>
     );

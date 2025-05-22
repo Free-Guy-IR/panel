@@ -53,7 +53,18 @@
       "title": "日志",
       "description": "查看和监控节点日志",
       "noLogs": "暂无日志",
-      "loading": "正在加载日志..."
+      "loading": "正在加载日志...",
+      "timestamps": "时间戳",
+      "autoScroll": "自动滚动",
+      "scrollToEnd": "滚动到底部",
+      "clear": "清除日志",
+      "search": "搜索日志",
+      "filter": "筛选日志",
+      "levels": "日志级别",
+      "debug": "调试",
+      "info": "信息",
+      "warning": "警告",
+      "error": "错误"
     }
   },
   "groups": "群组",

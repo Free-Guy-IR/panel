@@ -3,12 +3,14 @@ import { Separator } from '@/components/ui/separator'
 import UsersTable from '@/components/users/users-table'
 import UsersStatistics from '@/components/UsersStatistics'
 import { Plus } from 'lucide-react'
+import PageTransition from '@/components/PageTransition'
 
 import UserModal from '@/components/dialogs/UserModal'
 import { useForm } from 'react-hook-form'
 import { useState } from 'react'
 import { z } from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
+import { cn } from '@/lib/utils'
 
 // --- Zod Schemas matching backend ---
 export const userStatusEnum = z.enum(['active', 'disabled', 'limited', 'expired', 'on_hold']);
@@ -161,18 +163,27 @@ const Dashboard = () => {
 
   return (
     <div className="flex flex-col gap-2 w-full items-start">
-      <PageHeader
-        title="users"
-        description="manageAccounts"
-        buttonIcon={Plus}
-        buttonText="createUser"
-        onButtonClick={handleCreateUser}
-      />
-      <Separator />
-      <div className="px-4 w-full pt-2">
-        <UsersStatistics />
-        <UsersTable />
+      <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
+        <PageHeader
+          title="users"
+          description="manageAccounts"
+          buttonIcon={Plus}
+          buttonText="createUser"
+          onButtonClick={handleCreateUser}
+        />
+        <Separator />
       </div>
+      
+      <div className="px-4 w-full pt-2">
+        <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
+          <UsersStatistics />
+        </div>
+        
+        <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '250ms', animationFillMode: 'both' }}>
+          <UsersTable />
+        </div>
+      </div>
+      
       <UserModal
         isDialogOpen={isUserModalOpen}
         onOpenChange={setUserModalOpen}

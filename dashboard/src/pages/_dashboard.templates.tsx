@@ -109,18 +109,21 @@ export default function UserTemplates() {
 
     return (
         <div className="flex flex-col gap-2 w-full items-start">
-            <PageHeader
-                title="templates.title"
-                description="templates.description"
-                buttonIcon={Plus}
-                buttonText="templates.addTemplate"
-                onButtonClick={() => {
-                    setIsDialogOpen(true)
-                }}
-            />
-            <Separator/>
+            <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
+                <PageHeader
+                    title="templates.title"
+                    description="templates.description"
+                    buttonIcon={Plus}
+                    buttonText="templates.addTemplate"
+                    onButtonClick={() => {
+                        setIsDialogOpen(true)
+                    }}
+                />
+                <Separator/>
+            </div>
+            
             <div className="flex-1 space-y-4 p-4 pt-6 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12 transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
                     {userTemplates?.map((template: UserTemplateResponse) => (
                         <UserTemplate onEdit={handleEdit} template={template} key={template.id} onToggleStatus={handleToggleStatus}/>
                     ))}
