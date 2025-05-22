@@ -37,8 +37,10 @@ class BaseSubscription:
             new_dict = {}
             for k, v in d.items():
                 if v not in (None, "", 0):
-                    if isinstance(v, dict) and v:
-                        new_dict[k] = clean_dict(v)
+                    if isinstance(v, dict):
+                        cleaned_dict = clean_dict(v)
+                        if cleaned_dict:
+                            new_dict[k] = cleaned_dict
                     else:
                         new_dict[k] = v
             return new_dict
