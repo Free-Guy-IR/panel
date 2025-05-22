@@ -112,7 +112,7 @@ class XrayConfig(BaseSubscription):
             "noGRPCHeader": noGRPCHeader,
             "scStreamUpServerSecs": scStreamUpServerSecs,
             "xmux": xmux,
-            "downloadSettings": self.download_config(downloadSettings, True) if downloadSettings else None,
+            "downloadSettings": self.download_config(downloadSettings, False) if downloadSettings else None,
         }
         if random_user_agent:
             if mode in ("stream-one", "stream-up") and not noGRPCHeader:
@@ -120,6 +120,7 @@ class XrayConfig(BaseSubscription):
             else:
                 extra["headers"]["User-Agent"] = choice(self.user_agent_list)
 
+        xhttSettings["extra"] = extra
         return self._remove_none_values(xhttSettings)
 
     def grpc_config(
