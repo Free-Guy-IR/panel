@@ -14,7 +14,7 @@ import { getHosts, getInbounds, UserStatus } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
 import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -93,12 +93,23 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     queryFn: () => getInbounds(),
   })
 
+  // Update the hosts query to refetch when needed
   const { data: hosts = [] } = useQuery({
     queryKey: ['getHostsQueryKey'],
     queryFn: () => getHosts(),
-    enabled: isTransportOpen,
+    enabled: isDialogOpen || isTransportOpen, // Fetch when dialog opens or transport section is open
+    refetchOnWindowFocus: false,
     select: data => data.filter(host => host.id != null), // Filter out hosts with null IDs
   })
+
+  // Refresh hosts data when the dialog opens
+  useEffect(() => {
+    if (isDialogOpen) {
+      queryClient.invalidateQueries({
+        queryKey: ['getHostsQueryKey'],
+      })
+    }
+  }, [isDialogOpen])
 
   const handleAccordionChange = (value: string) => {
     if (value === 'transport') {
@@ -123,7 +134,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
       // The form reset is handled by the parent component
       // Invalidate hosts query to refresh the list
       queryClient.invalidateQueries({
-        queryKey: ['getGetHostsQueryKey'],
+        queryKey: ['getHostsQueryKey'],
       })
     } catch (error) {
       // Show error toast if the operation failed
@@ -454,7 +465,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                 </div>
               </div>
 
-              <Accordion type="single" collapsible value={openSection} onValueChange={handleAccordionChange} className="w-full flex flex-col gap-y-6 mb-6 pt-6">
+              <Accordion type="single" collapsible value={openSection} onValueChange={handleAccordionChange} className="w-full flex flex-col gap-y-6 mb-6 !mt-0">
                 <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="network">
                   <AccordionTrigger>
                     <div className="flex items-center gap-2">
@@ -585,11 +596,12 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                               />
                               <Input
                                 placeholder={t('hostsDialog.headersValue')}
-                                value={value}
+                                value={Array.isArray(value) ? value.join(', ') : ''}
                                 onChange={e => {
-                                  const currentHeaders = { ...form.getValues('http_headers') }
-                                  currentHeaders[key] = e.target.value
-                                  form.setValue('http_headers', currentHeaders, {
+                                  const tcpHeaderValues = e.target.value.split(',').map(v => v.trim())
+                                  const tcpHeaders = { ...form.getValues('transport_settings.tcp_settings.request.headers') }
+                                  tcpHeaders[key] = tcpHeaderValues
+                                  form.setValue('transport_settings.tcp_settings.request.headers', tcpHeaders, {
                                     shouldDirty: true,
                                     shouldTouch: true,
                                   })
@@ -1032,7 +1044,18 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                         </PopoverContent>
                                       </Popover>
                                     </div>
-                                    <Select onValueChange={value => field.onChange(value ? parseInt(value) : 0)} value={field.value?.toString() ?? '0'}>
+                                    <Select 
+                                      onValueChange={value => field.onChange(value ? parseInt(value) : 0)} 
+                                      value={field.value?.toString() ?? '0'}
+                                      onOpenChange={(open) => {
+                                        // Refresh hosts list when dropdown is opened
+                                        if (open) {
+                                          queryClient.invalidateQueries({
+                                            queryKey: ['getHostsQueryKey'],
+                                          })
+                                        }
+                                      }}
+                                    >
                                       <FormControl>
                                         <SelectTrigger className="w-full">
                                           <SelectValue placeholder={t('hostsDialog.xhttp.selectDownloadSettings')} />
@@ -1395,11 +1418,12 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                       />
                                       <Input
                                         placeholder={t('hostsDialog.tcp.headerValue')}
-                                        value={values.join(', ')}
+                                        value={Array.isArray(values) ? values.join(', ') : ''}
                                         onChange={e => {
-                                          const currentHeaders = { ...form.getValues('transport_settings.tcp_settings.request.headers') }
-                                          currentHeaders[key] = e.target.value.split(',').map(v => v.trim())
-                                          form.setValue('transport_settings.tcp_settings.request.headers', currentHeaders, {
+                                          const tcpHeaderValues = e.target.value.split(',').map(v => v.trim())
+                                          const tcpHeaders = { ...form.getValues('transport_settings.tcp_settings.request.headers') }
+                                          tcpHeaders[key] = tcpHeaderValues
+                                          form.setValue('transport_settings.tcp_settings.request.headers', tcpHeaders, {
                                             shouldDirty: true,
                                             shouldTouch: true,
                                           })

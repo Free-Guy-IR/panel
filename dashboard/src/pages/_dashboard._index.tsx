@@ -1,6 +1,6 @@
 import PageHeader from '@/components/page-header'
 import { Separator } from '@/components/ui/separator'
-import UsersTable from '@/components/users-table/users-table'
+import UsersTable from '@/components/users/users-table'
 import UsersStatistics from '@/components/UsersStatistics'
 import { Plus } from 'lucide-react'
 

@@ -72,12 +72,18 @@ export default function CoreSettings() {
           .map(id => id.trim())
           .filter(Boolean)
         : [];
+        
+      const fallbackIds = coreToEdit.fallbacks_inbound_tags
+        ? coreToEdit.fallbacks_inbound_tags.split(',')
+          .map(id => id.trim())
+          .filter(Boolean)
+        : [];
 
       coreConfigForm.reset({
         name: coreToEdit.name,
         config: JSON.stringify(coreToEdit.config, null, 2),
         excluded_inbound_ids: excludedInboundIds,
-        fallback_id: [],
+        fallback_id: fallbackIds,
       });
     } else {
       coreConfigForm.reset({

@@ -96,14 +96,14 @@ export default function UserModal({
         query: { enabled: false }
     });
 
-    // Fetch data for tabs with proper caching
+    // Fetch data for tabs with proper caching and refetch on page view
     const { data: templatesData, isLoading: templatesLoading } = useGetUserTemplates(undefined, {
         query: {
             staleTime: 5 * 60 * 1000, // 5 minutes
             gcTime: 10 * 60 * 1000, // 10 minutes
-            refetchOnWindowFocus: false,
-            refetchOnMount: false,
-            refetchOnReconnect: false
+            refetchOnWindowFocus: true,
+            refetchOnMount: true,
+            refetchOnReconnect: true
         }
     });
 
@@ -111,9 +111,9 @@ export default function UserModal({
         query: {
             staleTime: 5 * 60 * 1000, // 5 minutes
             gcTime: 10 * 60 * 1000, // 10 minutes
-            refetchOnWindowFocus: false,
-            refetchOnMount: false,
-            refetchOnReconnect: false
+            refetchOnWindowFocus: true,
+            refetchOnMount: true,
+            refetchOnReconnect: true
         }
     });
 

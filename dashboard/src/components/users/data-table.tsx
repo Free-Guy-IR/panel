@@ -27,7 +27,7 @@ export function DataTable<TData extends UserResponse, TValue>({
   onEdit
 }: DataTableProps<TData, TValue>) {
   const { t } = useTranslation()
-  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [expandedRow, setExpandedRow] = useState<number | null>(null)
   const table = useReactTable({
     data,
     columns,
@@ -35,15 +35,22 @@ export function DataTable<TData extends UserResponse, TValue>({
   })
   const isRTL = useDirDetection() === 'rtl'
 
-  const handleRowToggle = (rowId: string) => {
+  const handleRowToggle = (rowId: number) => {
     setExpandedRow(expandedRow === rowId ? null : rowId)
   }
 
   const handleEditModal = (e: React.MouseEvent, user: UserResponse) => {
-    // Don't open modal if clicking on chevron or if screen is small
-    if ((e.target as HTMLElement).closest('.chevron') || window.innerWidth < 768) {
+    // Don't open modal if clicking on chevron
+    if ((e.target as HTMLElement).closest('.chevron')) {
       return;
     }
+
+    // On mobile, toggle row expansion instead of opening edit modal
+    if (window.innerWidth < 768) {
+      handleRowToggle(user.id);
+      return;
+    }
+
     // Don't open modal if clicking on dropdown menu or its items
     if ((e.target as HTMLElement).closest('[role="menu"], [role="menuitem"], [data-radix-popper-content-wrapper]')) {
       return;
@@ -94,7 +101,7 @@ export function DataTable<TData extends UserResponse, TValue>({
             table.getRowModel().rows.map(row => (
               <React.Fragment key={row.id}>
                 <TableRow
-                  className={cn('cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50', expandedRow === row.id && 'border-transparent')}
+                  className={cn('cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50', expandedRow === row.original.id && 'border-transparent')}
                   onClick={(e) => handleEditModal(e, row.original)}
                   data-state={row.getIsSelected() && 'selected'}
                 >
@@ -113,8 +120,11 @@ export function DataTable<TData extends UserResponse, TValue>({
                       )}
                     >
                       {cell.column.id === 'chevron' ? (
-                        <div className="flex items-center justify-center cursor-pointer" onClick={() => handleRowToggle(row.id)}>
-                          <ChevronDown className={cn('h-4 w-4 transition-transform duration-300', expandedRow === row.id && 'rotate-180')} />
+                        <div className="chevron flex items-center justify-center cursor-pointer" onClick={(e) => {
+                          e.stopPropagation();
+                          handleRowToggle(row.original.id);
+                        }}>
+                          <ChevronDown className={cn('h-4 w-4 transition-transform duration-300', expandedRow === row.original.id && 'rotate-180')} />
                         </div>
                       ) : (
                         flexRender(cell.column.columnDef.cell, cell.getContext())
@@ -122,7 +132,7 @@ export function DataTable<TData extends UserResponse, TValue>({
                     </TableCell>
                   ))}
                 </TableRow>
-                {expandedRow === row.id && (
+                {expandedRow === row.original.id && (
                   <TableRow className="md:hidden border-b hover:!bg-inherit">
                     <TableCell colSpan={columns.length} className="p-4 text-sm">
                       <div className="flex flex-col gap-y-4">
