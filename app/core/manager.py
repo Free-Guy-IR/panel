@@ -21,7 +21,7 @@ class CoreManager:
         fallbacks_inbound_tags = fallbacks_inbounds.split(",") if fallbacks_inbounds else []
         exclude_inbound_tags = exclude_inbounds.split(",") if exclude_inbounds else []
 
-        return XRayConfig(config, fallbacks_inbound_tags, exclude_inbound_tags)
+        return XRayConfig(config, exclude_inbound_tags, fallbacks_inbound_tags)
 
     async def update_inbounds(self):
         async with self._lock:
