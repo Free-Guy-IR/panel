@@ -316,14 +316,14 @@ def test_core_create(access_token):
             "config": xray_config,
             "name": "xray_config",
             "exclude_inbound_tags": "",
-            "fallbacks_inbound_tags": "",
+            "fallbacks_inbound_tags": "fallback-B,fallback-A",
         },
     )
     assert response.status_code == status.HTTP_201_CREATED
     assert response.json()["config"] == xray_config
     assert response.json()["name"] == "xray_config"
     assert response.json()["exclude_inbound_tags"] == ""
-    assert response.json()["fallbacks_inbound_tags"] == ""
+    assert response.json()["fallbacks_inbound_tags"] == "fallback-B,fallback-A"
 
 
 def test_core_update(access_token):
@@ -335,16 +335,16 @@ def test_core_update(access_token):
         json={
             "config": xray_config,
             "name": "xray_config_update",
-            "exclude_inbound_tags": "456",
-            "fallbacks_inbound_tags": "123",
+            "exclude_inbound_tags": "",
+            "fallbacks_inbound_tags": "fallback-B,fallback-A",
         },
         params={"restart_nodes": False},
     )
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["config"] == xray_config
     assert response.json()["name"] == "xray_config_update"
-    assert response.json()["exclude_inbound_tags"] == "456"
-    assert response.json()["fallbacks_inbound_tags"] == "123"
+    assert response.json()["exclude_inbound_tags"] == ""
+    assert response.json()["fallbacks_inbound_tags"] == "fallback-B,fallback-A"
 
 
 def test_core_get(access_token):
@@ -376,16 +376,16 @@ def test_core_delete_2(access_token):
         json={
             "config": xray_config,
             "name": "xray_config",
-            "exclude_inbound_tags": "123",
-            "fallbacks_inbound_tags": "456",
+            "exclude_inbound_tags": "",
+            "fallbacks_inbound_tags": "fallback-B,fallback-A",
         },
     )
 
     assert response.status_code == status.HTTP_201_CREATED
     assert response.json()["config"] == xray_config
     assert response.json()["name"] == "xray_config"
-    assert response.json()["exclude_inbound_tags"] == "123"
-    assert response.json()["fallbacks_inbound_tags"] == "456"
+    assert response.json()["exclude_inbound_tags"] == ""
+    assert response.json()["fallbacks_inbound_tags"] == "fallback-B,fallback-A"
 
     response = client.delete(
         url=f"/api/core/{response.json()['id']}",
