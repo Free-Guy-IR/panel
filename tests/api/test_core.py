@@ -401,7 +401,9 @@ def test_inbounds_get(access_token):
         url="/api/inbounds",
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    config_tags = [inbound["tag"] for inbound in xray_config["inbounds"]]
+    config_tags = [
+        inbound["tag"] for inbound in xray_config["inbounds"] if inbound["tag"] not in ["fallback-B", "fallback-A"]
+    ]
     response_tags = [inbound for inbound in response.json() if "<=>" not in inbound]
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) > 0
