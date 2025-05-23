@@ -315,7 +315,7 @@ class XRayConfig(dict):
 
             if settings["is_fallback"] is True:
                 for fallback in settings["fallbacks"]:
-                    fallback_tag = f"{inbound['tag']}<=>{fallback['tag']}"  # a fake inbound tag
+                    fallback_tag = f"{inbound['tag']}<=>{fallback['tag']}"  # Fake inbound tag
                     if fallback_tag in self._inbounds_by_tag:
                         continue
                     try:
@@ -325,7 +325,7 @@ class XRayConfig(dict):
                     fallback_security = fallback.get("streamSettings", {}).get("security")
                     fallback_tls_settings = fallback.get("streamSettings", {}).get(f"{fallback_security}Settings", {})
                     fallback_inbound = self._make_fallback_inbound(
-                        inbound, fallback_security, fallback_tls_settings, fallback_tag, fallback_port
+                        deepcopy(inbound), fallback_security, fallback_tls_settings, fallback_tag, fallback_port
                     )
                     self._read_inbound(fallback_inbound)
 
