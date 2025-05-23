@@ -42,10 +42,12 @@ class XRayConfig(dict):
         self._inbounds = []
         self._inbounds_by_tag = {}
         self._fallbacks_inbound = []
+        self._fallback_tags = []
         for tag in fallbacks_inbound_tags:
             inbound = self.get_inbound(tag)
             if inbound:
                 self._fallbacks_inbound.append(inbound)
+                self._fallback_tags.append(tag)
         self._resolve_inbounds()
 
     def _validate(self):
@@ -294,6 +296,8 @@ class XRayConfig(dict):
             return
 
         if inbound["tag"] in self.exclude_inbound_tags:
+            return
+        if inbound["tag"] in self._fallback_tags:
             return
 
         if not inbound.get("settings"):
