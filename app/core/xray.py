@@ -72,7 +72,7 @@ class XRayConfig(dict):
         fallback_inbounds = []
         for fallback in self._fallbacks_inbound:
             for fallback_settings in fallback.get("settings", {}).get("fallbacks", []):
-                if fallback_settings.get("dest", "") == inbound.get("listen", "") or fallback_settings.get(
+                if fallback_settings.get("dest", "") == inbound.get("listen") or fallback_settings.get(
                     "dest", ""
                 ) == inbound.get("port", 0):
                     fallback_inbounds.append(fallback)
