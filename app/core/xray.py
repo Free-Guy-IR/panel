@@ -73,7 +73,9 @@ class XRayConfig(dict):
         for fallback in self._fallbacks_inbound:
             for fallback_settings in fallback.get("settings", {}).get("fallbacks", []):
                 try:
-                    if fallback_settings["dest"] == inbound["listen"]:
+                    if (fallback_settings["dest"] == inbound["listen"]) or (
+                        fallback_settings["dest"] == inbound["port"]
+                    ):
                         fallback_inbounds.append(fallback)
                 except KeyError:
                     continue
@@ -98,14 +100,24 @@ class XRayConfig(dict):
 
     def _handle_port_settings(self, inbound: dict, settings: dict):
         """Handle port settings for an inbound."""
+        port_found = True
         try:
             settings["port"] = inbound["port"]
         except KeyError:
-            if self._fallbacks_inbound:
-                fallbacks = self._find_fallback_inbound(inbound)
-                if fallbacks:
-                    settings["is_fallback"] = True
-                    settings["fallbacks"] = fallbacks
+            port_found = False
+
+        if self._fallbacks_inbound and "<=>" not in inbound["tag"]:
+            if inbound.get("settings", {}).get("fallbacks", []):
+                if not port_found:
+                    raise ValueError(f"{settings['tag']} inbound doesn't have port")
+                else:
+                    return
+            fallbacks = self._find_fallback_inbound(inbound)
+            if fallbacks:
+                settings["is_fallback"] = True
+                settings["fallbacks"] = fallbacks
+        elif not port_found:
+            raise ValueError(f"{settings['tag']} inbound doesn't have port")
 
     def _handle_tls_settings(self, tls_settings: dict, settings: dict, inbound_tag: str):
         """Handle TLS security settings."""
