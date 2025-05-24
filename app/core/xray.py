@@ -126,14 +126,28 @@ class XRayConfig(dict):
                 with open(certificate["certificateFile"], "rb") as file:
                     cert = file.read()
                     settings["sni"].extend(get_cert_SANs(cert))
+                
+                if certificate.get("keyFile", None):
+                    with open(certificate["keyFile"], "rb") as file:
+                        key = file.read()
+                else:
+                    raise ValueError(f"{inbound_tag} inbound doesn't keyFile in tlsSettings")
 
-            if certificate.get("certificate", None):
+                certificate["certificate"] = [line.decode() for line in cert.splitlines()]
+                certificate["key"] = [line.decode() for line in key.splitlines()]
+
+                del certificate["certificateFile"]
+                del certificate["keyFile"]
+
+            elif certificate.get("certificate", None):
                 cert = certificate["certificate"]
                 if isinstance(cert, list):
                     cert = "\n".join(cert)
                 if isinstance(cert, str):
                     cert = cert.encode()
                 settings["sni"].extend(get_cert_SANs(cert))
+        
+        return tls_settings
 
     def _handle_reality_settings(self, tls_settings: dict, settings: dict, inbound_tag: str):
         """Handle Reality security settings."""
@@ -336,7 +350,7 @@ class XRayConfig(dict):
             settings["network"] = net
 
             if security == "tls":
-                self._handle_tls_settings(tls_settings, settings, inbound["tag"])
+                stream["tlsSettings"] = self._handle_tls_settings(tls_settings, settings, inbound["tag"])
             elif security == "reality":
                 self._handle_reality_settings(tls_settings, settings, inbound["tag"])
 
