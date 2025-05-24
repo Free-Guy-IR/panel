@@ -68,7 +68,15 @@
       "debug": "Debug",
       "info": "Info",
       "warning": "Warning",
-      "error": "Error"
+      "error": "Error",
+      "maxLogsTooltip": "Maximum logs to keep in memory",
+      "memory": "Memory Usage",
+      "custom": "Custom",
+      "unlimited": "Unlimited",
+      "memoryWarning": "High values may cause browser performance issues",
+      "setCustom": "Set Custom Limit",
+      "customLimit": "Enter custom limit",
+      "apply": "Apply"
     }
   },
   "groups": "Groups",
