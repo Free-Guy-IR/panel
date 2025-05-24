@@ -2,13 +2,12 @@ import PageHeader from '@/components/page-header'
 import { Plus } from 'lucide-react'
 import MainSection from '@/components/hosts/Hosts'
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getHosts, createHost, modifyHost, CreateHost, ProxyHostALPN, ProxyHostFingerprint, MultiplexProtocol, Xudp, BaseHost } from '@/service/api'
 import { HostFormValues } from '@/components/hosts/Hosts'
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { Separator } from '@/components/ui/separator'
-import PageTransition from '@/components/PageTransition'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function HostsPage() {
@@ -19,6 +18,7 @@ export default function HostsPage() {
         queryFn: () => getHosts(),
     });
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
 
     const handleDialogOpen = (open: boolean) => {
         setIsDialogOpen(open);
@@ -103,6 +103,7 @@ export default function HostsPage() {
                 toast.success(t("hostsDialog.createSuccess", { name: formData.remark }));
                 return { status: 200 };
             }
+
         } catch (error: any) {
             console.error("Error submitting host:", error);
 
@@ -137,6 +138,11 @@ export default function HostsPage() {
 
             toast.error(errorMessage);
             return { status: 500 };
+        } finally {
+            // Refresh the hosts data
+            queryClient.invalidateQueries({
+                queryKey: ["/api/hosts"],
+            });
         }
     };
 
@@ -152,7 +158,7 @@ export default function HostsPage() {
                 />
                 <Separator />
             </div>
-            
+
             <div className="px-4 w-full pt-6">
                 {isLoading ? (
                     <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-6">
@@ -173,17 +179,15 @@ export default function HostsPage() {
                         ))}
                     </div>
                 ) : (
-                    <PageTransition>
-                        <MainSection
-                            data={data || []}
-                            isDialogOpen={isDialogOpen}
-                            onDialogOpenChange={handleDialogOpen}
-                            onAddHost={onAddHost}
-                            onSubmit={handleSubmit}
-                            editingHost={editingHost}
-                            setEditingHost={setEditingHost}
-                        />
-                    </PageTransition>
+                    <MainSection
+                        data={data || []}
+                        isDialogOpen={isDialogOpen}
+                        onDialogOpenChange={handleDialogOpen}
+                        onAddHost={onAddHost}
+                        onSubmit={handleSubmit}
+                        editingHost={editingHost}
+                        setEditingHost={setEditingHost}
+                    />
                 )}
             </div>
         </div>

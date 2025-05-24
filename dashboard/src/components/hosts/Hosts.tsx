@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { BaseHost, modifyHosts, CreateHost, createHost } from "@/service/api"
+import { BaseHost, modifyHosts, CreateHost, createHost, getHosts } from "@/service/api"
 import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import SortableHost from "./SortableHost"
@@ -182,7 +182,7 @@ const transportSettingsSchema = z.object({
         request: z.object({
             version: z.enum(['1.0', '1.1', '2.0', '3.0']).nullish().optional(),
             method: z.enum([
-                'GET', 'POST', 'PUT', 'DELETE', 'HEAD', 
+                'GET', 'POST', 'PUT', 'DELETE', 'HEAD',
                 'OPTIONS', 'PATCH', 'TRACE', 'CONNECT'
             ]).nullish().optional(),
             headers: z.record(z.array(z.string())).nullish().optional()
@@ -320,12 +320,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
     const dir = useDirDetection();
     const { t } = useTranslation();
 
-    // useQuery({
-    //     queryKey: ["modifyHosts", debouncedHosts],
-    //     queryFn: () => modifyHosts(debouncedHosts ?? []),
-    //     enabled: !!debouncedHosts,
-    // });    
-
+    // Set up hosts data from props
     useEffect(() => {
         setHosts(data ?? [])
     }, [data])
@@ -334,6 +329,15 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         resolver: zodResolver(HostFormSchema),
         defaultValues: initialDefaultValues,
     });
+
+    const refreshHostsData = () => {
+        // Just invalidate the main query key used in the dashboard
+        queryClient.invalidateQueries({
+            queryKey: ["getGetHostsQueryKey"],
+            exact: true, // Only invalidate this exact query
+            refetchType: "active", // Only refetch if the query is currently being rendered
+        });
+    };
 
     const handleEdit = (host: BaseHost) => {
         const formData: HostFormValues = {
@@ -474,7 +478,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
 
                     if (hostsToUpdate.length > 0) {
                         // Update priorities in batch
-                        modifyHosts(hostsToUpdate);
+                        await modifyHosts(hostsToUpdate);
                     }
                 }
             }
@@ -496,9 +500,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
             toast.success(t("host.duplicateSuccess", { name: host.remark || "" }));
 
             // Refresh the hosts data
-            queryClient.invalidateQueries({
-                queryKey: ["getGetHostsQueryKey"],
-            });
+            refreshHostsData();
 
         } catch (error) {
             // Show error toast
@@ -542,9 +544,9 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
             };
 
             // Remove mux_settings if it's empty
-            if (cleanedData.mux_settings && 
-                !cleanedData.mux_settings.xray && 
-                !cleanedData.mux_settings.sing_box && 
+            if (cleanedData.mux_settings &&
+                !cleanedData.mux_settings.xray &&
+                !cleanedData.mux_settings.sing_box &&
                 !cleanedData.mux_settings.clash) {
                 delete cleanedData.mux_settings;
             }
@@ -556,6 +558,16 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
                 } else {
                     toast.error(t("hostsDialog.createFailed", { name: data.remark }));
                 }
+            } else {
+                // Show success message
+                if (editingHost?.id) {
+                    toast.success(t("hostsDialog.editSuccess", { name: data.remark }));
+                } else {
+                    toast.success(t("hostsDialog.createSuccess", { name: data.remark }));
+                }
+                
+                // Refresh the hosts data
+                refreshHostsData();
             }
             return response;
         } catch (error) {
@@ -595,6 +607,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         }
     }
 
+    // Debounce the host updates to prevent too many API calls
     useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedHosts(hosts);
@@ -605,10 +618,21 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         };
     }, [hosts]);
 
+    // Save debounced hosts to the server
     useEffect(() => {
-        if (debouncedHosts) {
-            modifyHosts(debouncedHosts)
-        }
+        const updateHosts = async () => {
+            if (debouncedHosts && debouncedHosts.length > 0) {
+                try {
+                    await modifyHosts(debouncedHosts);
+                    // Refresh data after modifying hosts order
+                    refreshHostsData();
+                } catch (error) {
+                    console.error("Error updating host order:", error);
+                }
+            }
+        };
+        
+        updateHosts();
     }, [debouncedHosts]);
 
     // Filter out hosts without IDs for the sortable context
@@ -632,6 +656,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
                                         host={host}
                                         onEdit={handleEdit}
                                         onDuplicate={handleDuplicate}
+                                        onDataChanged={refreshHostsData}
                                     />
                                 ))}
                             </div>

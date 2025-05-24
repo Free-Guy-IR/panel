@@ -13,14 +13,14 @@ import { useTranslation } from "react-i18next"
 import useDirDetection from "@/hooks/use-dir-detection"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog"
 import { cn } from "@/lib/utils"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { useState } from "react"
-import { queryClient } from "@/utils/query-client"
 
 interface SortableHostProps {
     host: BaseHost;
     onEdit: (host: BaseHost) => void;
     onDuplicate: (host: BaseHost) => Promise<void>;
+    onDataChanged?: () => void; // New callback for notifying parent about data changes
 }
 
 const DeleteAlertDialog = ({
@@ -57,8 +57,8 @@ const DeleteAlertDialog = ({
     );
 };
 
-export default function SortableHost({ host, onEdit, onDuplicate }: SortableHostProps) {
-    const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged }: SortableHostProps) {
+    const [isDeleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
     const { t } = useTranslation();
     
     // Ensure host.id is not null before using it
@@ -90,27 +90,20 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
             
             await modifyHost(host.id, updatedHost);
             
-            toast({
-                title: t('success', { defaultValue: 'Success' }),
-                description: t(host.is_disabled ? "host.enableSuccess" : "host.disableSuccess", { 
-                    name: host.remark ?? "",
-                    defaultValue: `Host "{name}" has been ${host.is_disabled ? 'enabled' : 'disabled'} successfully`
-                })
-            });
+            toast.success(t(host.is_disabled ? "host.enableSuccess" : "host.disableSuccess", { 
+                name: host.remark ?? "",
+                defaultValue: `Host "{name}" has been ${host.is_disabled ? 'enabled' : 'disabled'} successfully`
+            }));
             
-            // Invalidate the hosts query to refresh the list
-            queryClient.invalidateQueries({
-                queryKey: ["getGetHostsQueryKey"],
-            });
+            // Notify parent that data has changed
+            if (onDataChanged) {
+                onDataChanged();
+            }
         } catch (error) {
-            toast({
-                title: t('error', { defaultValue: 'Error' }),
-                description: t(host.is_disabled ? "host.enableFailed" : "host.disableFailed", { 
-                    name: host.remark ?? "",
-                    defaultValue: `Failed to ${host.is_disabled ? 'enable' : 'disable'} host "{name}"`
-                }),
-                variant: "destructive"
-            });
+            toast.error(t(host.is_disabled ? "host.enableFailed" : "host.disableFailed", { 
+                name: host.remark ?? "",
+                defaultValue: `Failed to ${host.is_disabled ? 'enable' : 'disable'} host "{name}"`
+            }));
         }
     };
 
@@ -123,28 +116,25 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
         if (!host.id) return;
         
         try {
-            await removeHost(host.id)
-            toast({
-                title: t('success', { defaultValue: 'Success' }),
-                description: t("deleteHost.deleteSuccess", { 
-                    name: host.remark ?? "",
-                    defaultValue: 'Host "{name}" has been deleted successfully'
-                })
-            })
+            await removeHost(host.id);
+            
+            toast.success(t("deleteHost.deleteSuccess", { 
+                name: host.remark ?? "",
+                defaultValue: 'Host "{name}" removed successfully'
+            }));
+            
             setDeleteDialogOpen(false);
-            queryClient.invalidateQueries({
-                queryKey: ["getGetHostsQueryKey"],
-            });
+            
+            // Notify parent that data has changed
+            if (onDataChanged) {
+                onDataChanged();
+            }
         }
         catch (error) {
-            toast({
-                title: t('error', { defaultValue: 'Error' }),
-                description: t("deleteHost.deleteFailed", { 
-                    name: host.remark ?? "",
-                    defaultValue: 'Failed to delete host "{name}"'
-                }),
-                variant: "destructive"
-            })
+            toast.error(t("deleteHost.deleteFailed", { 
+                name: host.remark ?? "",
+                defaultValue: 'Failed to remove host "{name}"'
+            }));
         }
     };
 
@@ -167,7 +157,7 @@ export default function SortableHost({ host, onEdit, onDuplicate }: SortableHost
                             )} />
                             <div className="font-medium truncate">{host.remark ?? ""}</div>
                         </div>
-                        <div className="text-sm text-muted-foreground truncate">{host.address ?? ""}</div>
+                        <div dir="ltr" className="text-sm text-muted-foreground truncate">{host.address ?? ""}:{host.port ?? 0}</div>
                     </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

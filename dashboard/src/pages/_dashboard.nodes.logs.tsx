@@ -1,12 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent } from '@/components/ui/card'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useGetNodes } from '@/service/api'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { getAuthToken } from '@/utils/authStorage'
 import { EventSource } from 'eventsource'
-import { ChevronDown, ArrowDown, Terminal, Clock, Search, ArrowDownCircle, FilterIcon, XIcon } from 'lucide-react'
+import { ChevronDown, ArrowDown, Terminal, Clock, Search, ArrowDownCircle, FilterIcon, XIcon, PlusIcon, MinusIcon, DatabaseIcon, InfinityIcon, AlertTriangleIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -14,6 +14,12 @@ import { Input } from '@/components/ui/input'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 // define EventSource globally
 globalThis.EventSource = EventSource
@@ -34,12 +40,29 @@ export default function NodeLogs() {
   const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
   const [showTimestamps, setShowTimestamps] = useState(false)
   const [selectedLevels, setSelectedLevels] = useState<LogLevel[]>(['debug', 'info', 'warning', 'error'])
   const [searchQuery, setSearchQuery] = useState('')
+  // Maximum number of logs to display (not affecting storage)
+  const [maxLogsCount, setMaxLogsCount] = useState(1000)
+  // For custom log limit input
+  const [customLimitInput, setCustomLimitInput] = useState('')
+  const [isUnlimited, setIsUnlimited] = useState(false)
+  // Add state for controlling popover open/close
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   const eventSourceRef = useRef<EventSource | null>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
+  const userScrolledRef = useRef(false)
+  // Store logs in ref to avoid unnecessary re-renders
+  const logsRef = useRef<LogEntry[]>([])
+  // Use a buffer for new logs to reduce state updates
+  const pendingLogsRef = useRef<LogEntry[]>([])
+  // Debounce timer ref
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
+  // Maximum logs to keep in storage (separate from display limit)
+  const maxStorageLogsRef = useRef<number>(10000)
 
   const { data: nodes = [] } = useGetNodes({})
 
@@ -83,6 +106,12 @@ export default function NodeLogs() {
     }
     setIsLoading(true);
     setLogs([]);
+    logsRef.current = [];
+    pendingLogsRef.current = [];
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
+      updateTimerRef.current = null;
+    }
 
     const baseUrl = (import.meta.env.VITE_BASE_API && typeof import.meta.env.VITE_BASE_API === 'string' && import.meta.env.VITE_BASE_API.trim() !== '/' && import.meta.env.VITE_BASE_API.startsWith('http')) ? import.meta.env.VITE_BASE_API : window.location.origin
     const token = getAuthToken()
@@ -97,6 +126,38 @@ export default function NodeLogs() {
       }
     } as any)
     eventSourceRef.current = eventSource
+
+    // Setup a recurring timer to batch-update logs
+    const setupBatchUpdateTimer = () => {
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+      
+      updateTimerRef.current = setTimeout(() => {
+        if (pendingLogsRef.current.length > 0) {
+          // Combine existing logs with new ones
+          const combinedLogs = [...logsRef.current, ...pendingLogsRef.current];
+          
+          // Only limit the stored logs if we exceed the max storage count
+          const storageLimit = isUnlimited ? Number.MAX_SAFE_INTEGER : maxStorageLogsRef.current;
+          const trimmedLogs = combinedLogs.length > storageLimit 
+            ? combinedLogs.slice(-storageLimit) 
+            : combinedLogs;
+          
+          // Update our refs
+          logsRef.current = trimmedLogs;
+          pendingLogsRef.current = [];
+          
+          // Update state (triggers render)
+          setLogs(trimmedLogs);
+        }
+        
+        // Continue the cycle
+        setupBatchUpdateTimer();
+      }, 1000); // Update once per second maximum
+    };
+    
+    setupBatchUpdateTimer();
 
     eventSource.onmessage = (event) => {
       let logEntry: Partial<LogEntry>
@@ -119,16 +180,18 @@ export default function NodeLogs() {
         level
       }
 
-      setLogs(prevLogs => {
-        const newLogs = [...prevLogs, newEntry]
-        return newLogs.slice(-1000)
-      })
+      // Add to pending logs buffer instead of updating state directly
+      pendingLogsRef.current.push(newEntry);
     }
 
     eventSource.onerror = (error) => {
       console.error('SSE Error:', error)
       eventSource.close()
       setIsLoading(false)
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+        updateTimerRef.current = null;
+      }
     }
 
     eventSource.onopen = () => {
@@ -141,31 +204,114 @@ export default function NodeLogs() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
       }
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+        updateTimerRef.current = null;
+      }
     }
   }, [selectedNode])
 
   // Filter logs based on selected levels and search query
   useEffect(() => {
-    setFilteredLogs(logs.filter(log =>
-      selectedLevels.includes(log.level) &&
-      (searchQuery === '' || log.message.toLowerCase().includes(searchQuery.toLowerCase()))
-    ))
-  }, [logs, selectedLevels, searchQuery])
+    // Debounce filtering to prevent excessive calculations
+    const debounceTimer = setTimeout(() => {
+      // Apply filters to all stored logs
+      const visibleLogs = logs.filter(log =>
+        selectedLevels.includes(log.level) &&
+        (searchQuery === '' || log.message.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+      
+      // Apply display limit based on maxLogsCount setting
+      if (isUnlimited) {
+        setFilteredLogs(visibleLogs);
+      } else {
+        setFilteredLogs(visibleLogs.slice(-maxLogsCount));
+      }
+    }, 100);
+    
+    return () => clearTimeout(debounceTimer);
+  }, [logs, selectedLevels, searchQuery, maxLogsCount, isUnlimited]);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
-    if (autoScroll && logsContainerRef.current) {
+    if (autoScroll && autoScrollEnabled && logsContainerRef.current) {
       setTimeout(() => {
         if (logsContainerRef.current) {
           logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
         }
       }, 100)
     }
-  }, [filteredLogs, autoScroll])
+  }, [filteredLogs, autoScroll, autoScrollEnabled])
+
+  // For windowed rendering
+  const [visibleStartIndex, setVisibleStartIndex] = useState(0);
+  const itemHeight = 36; // Approximate height of a log entry in pixels
+  const bufferSize = 50; // Number of items to render outside visible area
+  const containerHeight = 600; // Container height in pixels
+  const visibleItemsCount = Math.ceil(containerHeight / itemHeight) + 2 * bufferSize;
+  
+  // Handle scroll events for windowed rendering
+  const handleScroll = useMemo(() => {
+    return (e: React.UIEvent<HTMLDivElement>) => {
+      const container = e.currentTarget;
+      // Calculate the first visible item index
+      const scrollTop = container.scrollTop;
+      const firstVisibleIndex = Math.max(
+        0, 
+        Math.floor(scrollTop / itemHeight) - bufferSize
+      );
+      
+      // If the user scrolls up, disable auto-scroll
+      if (container.scrollHeight - scrollTop - container.clientHeight > 50) {
+        if (autoScrollEnabled) {
+          setAutoScrollEnabled(false);
+        }
+      }
+      
+      setVisibleStartIndex(firstVisibleIndex);
+    };
+  }, [autoScrollEnabled, bufferSize, itemHeight]);
+  
+  // Calculate the items to display in the window
+  const visibleLogs = useMemo(() => {
+    if (filteredLogs.length === 0) return [];
+    
+    // Calculate end index ensuring we don't go out of bounds
+    const endIndex = Math.min(
+      visibleStartIndex + visibleItemsCount,
+      filteredLogs.length
+    );
+    
+    // Get the slice of logs that should be visible
+    return filteredLogs.slice(
+      Math.max(0, visibleStartIndex),
+      endIndex
+    );
+  }, [filteredLogs, visibleStartIndex, visibleItemsCount]);
+  
+  // Calculate total content height for proper scrolling
+  const totalContentHeight = filteredLogs.length * itemHeight;
+  
+  // Calculate offset for the visible items
+  const offsetY = Math.max(0, visibleStartIndex * itemHeight);
+
+  // Update autoScrollEnabled when autoScroll changes
+  useEffect(() => {
+    setAutoScrollEnabled(autoScroll);
+  }, [autoScroll]);
 
   const scrollToBottom = () => {
     if (logsContainerRef.current) {
       logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
+      // Re-enable auto-scroll if it's turned on but was disabled by manual scrolling
+      if (autoScroll && !autoScrollEnabled) {
+        setAutoScrollEnabled(true);
+      }
+      // Update the visible window indices
+      if (filteredLogs.length > 0) {
+        const maxStartIndex = Math.max(0, filteredLogs.length - visibleItemsCount);
+        setVisibleStartIndex(maxStartIndex);
+      }
     }
   }
 
@@ -202,6 +348,60 @@ export default function NodeLogs() {
     };
     return keys[level].toUpperCase();
   };
+
+  // Add maxLogsCount controls
+  const increaseMaxLogs = () => {
+    if (isUnlimited) return;
+    setMaxLogsCount(prev => Math.min(prev * 2, 50000));
+  };
+
+  const decreaseMaxLogs = () => {
+    if (isUnlimited) {
+      setIsUnlimited(false);
+      setMaxLogsCount(10000);
+      return;
+    }
+    setMaxLogsCount(prev => Math.max(prev / 2, 100));
+  };
+
+  // Add handler for setting log limit and closing popover
+  const handleSetLogLimit = (unlimited: boolean, count?: number) => {
+    setIsUnlimited(unlimited);
+    if (!unlimited && count) {
+      setMaxLogsCount(count);
+    } else if (unlimited) {
+      setMaxLogsCount(Number.MAX_SAFE_INTEGER);
+    }
+    setIsPopoverOpen(false);
+  };
+
+  // Update setUnlimitedLogs to use handleSetLogLimit
+  const setUnlimitedLogs = () => {
+    handleSetLogLimit(true);
+  };
+
+  // Add a useEffect for window resize events
+  useEffect(() => {
+    const handleResize = () => {
+      if (logsContainerRef.current) {
+        // Recalculate visible item count when window resizes
+        const newContainerHeight = logsContainerRef.current.clientHeight;
+        const newVisibleItemCount = Math.ceil(newContainerHeight / itemHeight) + 2 * bufferSize;
+        
+        // Force recalculation of visible items
+        if (filteredLogs.length > 0) {
+          const currScrollTop = logsContainerRef.current.scrollTop;
+          const firstVisibleIndex = Math.max(0, Math.floor(currScrollTop / itemHeight) - bufferSize);
+          setVisibleStartIndex(firstVisibleIndex);
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [itemHeight, bufferSize, filteredLogs.length]);
 
   return (
     <div className={cn("flex flex-col gap-2 w-full", dir === "rtl" && "rtl")}>
@@ -298,10 +498,114 @@ export default function NodeLogs() {
               <Switch
                 id="auto-scroll"
                 checked={autoScroll}
-                onCheckedChange={setAutoScroll}
+                onCheckedChange={(checked) => {
+                  setAutoScroll(checked);
+                  setAutoScrollEnabled(checked);
+                  if (checked) {
+                    scrollToBottom();
+                  }
+                }}
                 className="scale-75 sm:scale-90"
               />
             </div>
+
+            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className={cn("h-8 gap-1 text-xs", isUnlimited && "border-amber-500 dark:border-amber-400")}
+                      >
+                        <DatabaseIcon size={12} className="opacity-70" />
+                        {isUnlimited ? (
+                          <span className="flex items-center">
+                            <InfinityIcon size={14} className="mr-1 text-amber-500 dark:text-amber-400" />
+                            {t('nodes.logs.unlimited')}
+                          </span>
+                        ) : (
+                          <span>{maxLogsCount.toLocaleString()}</span>
+                        )}
+                        <ChevronDown size={14} />
+                      </Button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">{t('nodes.logs.maxLogsTooltip')}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <PopoverContent className="w-56 p-3" align="end">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-medium text-sm">{t('nodes.logs.memory')}</h4>
+                    {isUnlimited && (
+                      <Badge variant="outline" className="text-xs text-amber-500 border-amber-500 dark:text-amber-400 dark:border-amber-400">
+                        <AlertTriangleIcon size={10} className="mr-1" />
+                        {t('nodes.logs.unlimited')}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      variant={isUnlimited ? "default" : "outline"} 
+                      size="sm"
+                      className="justify-start text-xs"
+                      onClick={() => handleSetLogLimit(true)}
+                    >
+                      <InfinityIcon size={12} className="mr-2 opacity-70" />
+                      {t('nodes.logs.unlimited')}
+                    </Button>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button 
+                        variant={!isUnlimited && maxLogsCount === 1000 ? "default" : "outline"} 
+                        size="sm"
+                        className="justify-start text-xs"
+                        onClick={() => handleSetLogLimit(false, 1000)}
+                      >
+                        1,000
+                      </Button>
+                      <Button 
+                        variant={!isUnlimited && maxLogsCount === 5000 ? "default" : "outline"} 
+                        size="sm"
+                        className="justify-start text-xs"
+                        onClick={() => handleSetLogLimit(false, 5000)}
+                      >
+                        5,000
+                      </Button>
+                      <Button 
+                        variant={!isUnlimited && maxLogsCount === 10000 ? "default" : "outline"} 
+                        size="sm"
+                        className="justify-start text-xs"
+                        onClick={() => handleSetLogLimit(false, 10000)}
+                      >
+                        10,000
+                      </Button>
+                      <Button 
+                        variant={!isUnlimited && maxLogsCount === 50000 ? "default" : "outline"} 
+                        size="sm"
+                        className="justify-start text-xs"
+                        onClick={() => handleSetLogLimit(false, 50000)}
+                      >
+                        50,000
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2 text-[10px] text-muted-foreground flex items-start gap-1">
+                    <AlertTriangleIcon size={10} className="mt-0.5 shrink-0 text-amber-500" />
+                    <span>
+                      {t('nodes.logs.memoryWarning')}
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <Button
               onClick={scrollToBottom}
@@ -327,7 +631,11 @@ export default function NodeLogs() {
 
         <Card className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationFillMode: 'both' }}>
           <CardContent dir="ltr" className="p-4">
-            <div className="h-[600px] w-full rounded-md overflow-auto" ref={logsContainerRef}>
+            <div 
+              className="h-[600px] w-full rounded-md overflow-auto" 
+              ref={logsContainerRef}
+              onScroll={handleScroll}
+            >
               <div className="p-1">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full animate-pulse">
@@ -338,29 +646,31 @@ export default function NodeLogs() {
                     <p className="text-muted-foreground">{t('nodes.selectNode')}</p>
                   </div>
                 ) : filteredLogs.length > 0 ? (
-                  <div>
-                    {filteredLogs.map((log, index) => (
-                      <div
-                        key={`${log.timestamp}-${index}`}
-                        className="text-sm font-mono p-2 mb-1 border-b border-muted last:border-b-0 hover:bg-muted/20 transition-colors"
-                      >
-                        <div className="flex flex-wrap items-start gap-2">
-                          {showTimestamps && (
-                            <div className="shrink-0 text-xs text-muted-foreground flex items-center gap-1 min-w-[85px]">
-                              <Clock size={10} className="opacity-60" />
-                              {formatTimestamp(log.timestamp)}
-                            </div>
-                          )}
-                          <Badge variant="outline" className={`shrink-0 ${logBadgeColors[log.level]}`}>
-                            <Terminal size={12} className={`mr-1 ${logIconColors[log.level]}`} />
-                            <span className={cn(logLevelColors[log.level], "text-xs font-body")}>{getLevelName(log.level)}</span>
-                          </Badge>
-                          <span className="break-words text-foreground">
-                            {log.message}
-                          </span>
+                  <div style={{ height: `${totalContentHeight}px`, position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${offsetY}px)` }}>
+                      {visibleLogs.map((log, index) => (
+                        <div
+                          key={`${log.timestamp}-${visibleStartIndex + index}`}
+                          className="text-sm font-mono p-2 mb-1 border-b border-muted last:border-b-0 hover:bg-muted/20 transition-colors"
+                        >
+                          <div className="flex flex-wrap items-start gap-2">
+                            {showTimestamps && (
+                              <div className="shrink-0 text-xs text-muted-foreground flex items-center gap-1 min-w-[85px]">
+                                <Clock size={10} className="opacity-60" />
+                                {formatTimestamp(log.timestamp)}
+                              </div>
+                            )}
+                            <Badge variant="outline" className={`shrink-0 ${logBadgeColors[log.level]}`}>
+                              <Terminal size={12} className={`mr-1 ${logIconColors[log.level]}`} />
+                              <span className={cn(logLevelColors[log.level], "text-xs font-body")}>{getLevelName(log.level)}</span>
+                            </Badge>
+                            <span className="break-words text-foreground">
+                              {log.message}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-full">

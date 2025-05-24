@@ -51,7 +51,7 @@ export const Login: FC = () => {
     mutation: {
       onSuccess({ access_token }) {
         setAuthToken(access_token)
-        navigate('/')
+        navigate('/', { replace: true })
       },
     },
   })
