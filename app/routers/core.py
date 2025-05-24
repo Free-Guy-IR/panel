@@ -3,12 +3,12 @@ from fastapi import APIRouter, Depends, status
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.core import CoreCreate, CoreResponse, CoreResponseList
-from app.utils import responses
-from .authentication import check_sudo_admin
 from app.operation import OperatorType
 from app.operation.core import CoreOperation
 from app.operation.node import NodeOperation
+from app.utils import responses
 
+from .authentication import check_sudo_admin
 
 core_operator = CoreOperation(operator_type=OperatorType.API)
 node_operator = NodeOperation(operator_type=OperatorType.API)
@@ -73,3 +73,13 @@ async def get_all_cores(
 ):
     """Get a list of all core configurations."""
     return await core_operator.get_all_cores(db, offset, limit)
+
+
+@router.post("/{core_id}/restart", response_model=CoreResponse, status_code=status.HTTP_204_NO_CONTENT)
+async def restart_core(
+    core_id: int, admin: AdminDetails = Depends(check_sudo_admin), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """restart nodes related to the core config"""
+
+    await node_operator.restart_all_node(db=db, core_id=core_id, admin=admin)
+    return {}
