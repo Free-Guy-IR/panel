@@ -157,7 +157,11 @@ export default function UserModal({
     });
 
     // Add the mutation hook at the top with other mutations
-    const modifyUserWithTemplateMutation = useModifyUserWithTemplate();
+    const modifyUserWithTemplateMutation = useModifyUserWithTemplate({
+        mutation: {
+            onSuccess: () => refreshUserData()
+        }
+    });
 
     useEffect(() => {
         // When the dialog closes, reset errors
@@ -176,6 +180,28 @@ export default function UserModal({
             });
         }
     }, [form, editingUser, t, selectedTemplateId]);
+
+    // Add new effect to update form validity when template is selected
+    useEffect(() => {
+        if (selectedTemplateId) {
+            // If template is selected, only username is required
+            const username = form.getValues('username');
+            if (username && username.length >= 3) {
+                // Clear all errors and set form as valid
+                form.clearErrors();
+                setIsFormValid(true);
+                setTouchedFields({ username: true });
+            } else {
+                // Set username error only
+                form.clearErrors();
+                form.setError('username', {
+                    type: 'manual',
+                    message: t('validation.required', { field: t('username', { defaultValue: 'Username' }) })
+                });
+                setIsFormValid(false);
+            }
+        }
+    }, [selectedTemplateId, form, t]);
 
     useEffect(() => {
         if (status === 'on_hold') {
@@ -255,6 +281,20 @@ export default function UserModal({
     // Update validateAllFields function
     const validateAllFields = (currentValues: any, touchedFields: any) => {
         try {
+            // Special case for template mode
+            if (selectedTemplateId) {
+                // In template mode, only validate username
+                form.clearErrors();
+                if (!currentValues.username || currentValues.username.length < 3) {
+                    form.setError('username', {
+                        type: 'manual',
+                        message: t('validation.required', { field: t('username', { defaultValue: 'Username' }) })
+                    });
+                    return false;
+                }
+                return true;
+            }
+
             // Only validate fields that have been touched
             const touchedValues = Object.keys(touchedFields).reduce((acc, key) => {
                 if (touchedFields[key]) {
@@ -1440,13 +1480,13 @@ export default function UserModal({
                                                 <Switch checked={nextPlanEnabled} onCheckedChange={setNextPlanEnabled} />
                                             </div>
                                             {nextPlanEnabled && (
-                                                <div className="flex flex-col gap-4">
+                                                <div className="flex flex-col gap-4 py-4">
                                                     <FormField
                                                         control={form.control}
                                                         name="next_plan.user_template_id"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>{t('userDialog.nextPlanTemplate', { defaultValue: 'Template' })}</FormLabel>
+                                                                <FormLabel>{t('userDialog.nextPlanTemplateId', { defaultValue: 'Template ID' })}</FormLabel>
                                                                 <FormControl>
                                                                     <Select
                                                                         value={field.value ? String(field.value) : "none"}
@@ -1761,7 +1801,7 @@ export default function UserModal({
                             <LoaderButton
                                 type="submit"
                                 isLoading={loading}
-                                disabled={!isFormValid || (!selectedTemplateId && groupsData?.groups?.length === 0)}
+                                disabled={(!isFormValid && !selectedTemplateId) || (!selectedTemplateId && groupsData?.groups?.length === 0)}
                                 loadingText={editingUser ? t('modifying') : t('creating')}
                             >
                                 {editingUser ? t('modify', { defaultValue: 'Modify' }) : t('create', { defaultValue: 'Create' })}

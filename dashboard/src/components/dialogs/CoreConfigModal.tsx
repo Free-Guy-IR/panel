@@ -172,7 +172,7 @@ export default function CoreConfigModal({
         "log": {
             "loglevel": "info"
         },
-       "inbounds": [
+        "inbounds": [
             {
                 "tag": "Shadowsocks TCP",
                 "listen": "0.0.0.0",
