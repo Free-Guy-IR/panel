@@ -1,27 +1,26 @@
+import { CopyButton } from '@/components/CopyButton'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { LoaderButton } from '@/components/ui/loader-button'
-import { useTranslation } from 'react-i18next'
-import { UseFormReturn } from 'react-hook-form'
-import { toast } from 'sonner'
-import { z } from 'zod'
-import { cn } from '@/lib/utils'
-import useDirDetection from '@/hooks/use-dir-detection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import Editor from '@monaco-editor/react'
-import { useTheme } from '../../components/theme-provider'
-import { useCallback, useState, useEffect } from 'react'
-import { X, Maximize2, Minimize2 } from 'lucide-react'
+import useDirDetection from '@/hooks/use-dir-detection'
+import { cn } from '@/lib/utils'
 import { useCreateCoreConfig, useModifyCoreConfig } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
-import { CopyButton } from '@/components/CopyButton'
-import { generateKeyPair } from '@stablelib/x25519'
+import Editor from '@monaco-editor/react'
 import { encodeURLSafe } from '@stablelib/base64'
+import { generateKeyPair } from '@stablelib/x25519'
 import { debounce } from 'es-toolkit'
-import { toast as sonnerToast } from 'sonner'
+import { Maximize2, Minimize2, X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+import { toast as sonnerToast, toast } from 'sonner'
+import { z } from 'zod'
+import { useTheme } from '../../components/theme-provider'
 
 export const coreConfigFormSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -171,20 +170,9 @@ export default function CoreConfigModal({
 
     const defaultConfig = JSON.stringify({
         "log": {
-            "loglevel": "warning"
+            "loglevel": "info"
         },
-        "routing": {
-            "rules": [
-                {
-                    "ip": [
-                        "geoip:private"
-                    ],
-                    "outboundTag": "BLOCK",
-                    "type": "field"
-                }
-            ]
-        },
-        "inbounds": [
+       "inbounds": [
             {
                 "tag": "Shadowsocks TCP",
                 "listen": "0.0.0.0",
@@ -205,7 +193,18 @@ export default function CoreConfigModal({
                 "protocol": "blackhole",
                 "tag": "BLOCK"
             }
-        ]
+        ],
+        "routing": {
+            "rules": [
+                {
+                    "ip": [
+                        "geoip:private"
+                    ],
+                    "outboundTag": "BLOCK",
+                    "type": "field"
+                }
+            ]
+        }
     }, null, 2)
 
     const onSubmit = async (values: CoreConfigFormValues) => {
