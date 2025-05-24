@@ -75,10 +75,10 @@ async def get_all_cores(
     return await core_operator.get_all_cores(db, offset, limit)
 
 
-@router.post("/{core_id}/restart", response_model=CoreResponse, status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/{core_id}/restart", status_code=status.HTTP_204_NO_CONTENT)
 async def restart_core(
     core_id: int, admin: AdminDetails = Depends(check_sudo_admin), db: AsyncSession = Depends(get_db)
-) -> dict:
+):
     """restart nodes related to the core config"""
 
     await node_operator.restart_all_node(db=db, core_id=core_id, admin=admin)
