@@ -70,7 +70,6 @@ check-pnpm: check-nodejs
 			echo "Failed to install pnpm. Please install it manually."; \
 			exit 1; \
 		}; \
-		source ~/.bashrc
 	else \
 		echo "pnpm is already installed."; \
 	fi
