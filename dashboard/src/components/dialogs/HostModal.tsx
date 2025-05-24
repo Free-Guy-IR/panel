@@ -127,9 +127,6 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
       if (response.status >= 400) {
         throw new Error(`Operation failed with status: ${response.status}`)
       }
-      // Only show success toast and close modal if the operation was successful
-      toast.success(t(editingHost ? 'hostsDialog.editSuccess' : 'hostsDialog.createSuccess', { name: data.remark }))
-      // Close the modal
       handleModalOpenChange(false)
       // The form reset is handled by the parent component
       // Invalidate hosts query to refresh the list

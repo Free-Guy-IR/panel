@@ -747,9 +747,10 @@ export default function UserModal({
                                                                             size="icon"
                                                                             type="button"
                                                                             variant="ghost"
-                                                                            onClick={(e) => {
-                                                                                field.onChange(generateUsername())
-                                                                                handleFieldChange('username', field.value)
+                                                                            onClick={() => {
+                                                                                const newUsername = generateUsername();
+                                                                                field.onChange(newUsername);
+                                                                                handleFieldChange('username', newUsername);
                                                                             }}
                                                                             title="Generate username"
                                                                         >
@@ -826,7 +827,11 @@ export default function UserModal({
                                                                         size="icon"
                                                                         type="button"
                                                                         variant="ghost"
-                                                                        onClick={() => field.onChange(generateUsername())}
+                                                                        onClick={() => {
+                                                                            const newUsername = generateUsername();
+                                                                            field.onChange(newUsername);
+                                                                            handleFieldChange('username', newUsername);
+                                                                        }}
                                                                         title="Generate username"
                                                                     >
                                                                         <RefreshCcw className="w-3 h-3" />

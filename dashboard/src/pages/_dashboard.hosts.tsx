@@ -95,12 +95,10 @@ export default function HostsPage() {
             if (editingHost?.id) {
                 // This is an edit operation
                 await modifyHost(editingHost.id, hostData);
-                toast.success(t("hostsDialog.editSuccess", { name: formData.remark }));
                 return { status: 200 };
             } else {
                 // This is a new host
                 await createHost(hostData);
-                toast.success(t("hostsDialog.createSuccess", { name: formData.remark }));
                 return { status: 200 };
             }
 
