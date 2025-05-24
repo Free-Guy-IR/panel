@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { getAuthToken } from '@/utils/authStorage'
 import { EventSource } from 'eventsource'
-import { ChevronDown, ArrowDown, Terminal, Clock, Search, ArrowDownCircle, FilterIcon, XIcon, PlusIcon, MinusIcon, DatabaseIcon, InfinityIcon, AlertTriangleIcon } from 'lucide-react'
+import { ChevronDown, ArrowDown, Terminal, Clock, Search, ArrowDownCircle, FilterIcon, XIcon, DatabaseIcon, InfinityIcon, AlertTriangleIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -47,14 +47,12 @@ export default function NodeLogs() {
   // Maximum number of logs to display (not affecting storage)
   const [maxLogsCount, setMaxLogsCount] = useState(1000)
   // For custom log limit input
-  const [customLimitInput, setCustomLimitInput] = useState('')
   const [isUnlimited, setIsUnlimited] = useState(false)
   // Add state for controlling popover open/close
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   const eventSourceRef = useRef<EventSource | null>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
-  const userScrolledRef = useRef(false)
   // Store logs in ref to avoid unnecessary re-renders
   const logsRef = useRef<LogEntry[]>([])
   // Use a buffer for new logs to reduce state updates
@@ -132,31 +130,31 @@ export default function NodeLogs() {
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
       }
-      
+
       updateTimerRef.current = setTimeout(() => {
         if (pendingLogsRef.current.length > 0) {
           // Combine existing logs with new ones
           const combinedLogs = [...logsRef.current, ...pendingLogsRef.current];
-          
+
           // Only limit the stored logs if we exceed the max storage count
           const storageLimit = isUnlimited ? Number.MAX_SAFE_INTEGER : maxStorageLogsRef.current;
-          const trimmedLogs = combinedLogs.length > storageLimit 
-            ? combinedLogs.slice(-storageLimit) 
+          const trimmedLogs = combinedLogs.length > storageLimit
+            ? combinedLogs.slice(-storageLimit)
             : combinedLogs;
-          
+
           // Update our refs
           logsRef.current = trimmedLogs;
           pendingLogsRef.current = [];
-          
+
           // Update state (triggers render)
           setLogs(trimmedLogs);
         }
-        
+
         // Continue the cycle
         setupBatchUpdateTimer();
       }, 1000); // Update once per second maximum
     };
-    
+
     setupBatchUpdateTimer();
 
     eventSource.onmessage = (event) => {
@@ -220,7 +218,7 @@ export default function NodeLogs() {
         selectedLevels.includes(log.level) &&
         (searchQuery === '' || log.message.toLowerCase().includes(searchQuery.toLowerCase()))
       );
-      
+
       // Apply display limit based on maxLogsCount setting
       if (isUnlimited) {
         setFilteredLogs(visibleLogs);
@@ -228,7 +226,7 @@ export default function NodeLogs() {
         setFilteredLogs(visibleLogs.slice(-maxLogsCount));
       }
     }, 100);
-    
+
     return () => clearTimeout(debounceTimer);
   }, [logs, selectedLevels, searchQuery, maxLogsCount, isUnlimited]);
 
@@ -249,7 +247,7 @@ export default function NodeLogs() {
   const bufferSize = 50; // Number of items to render outside visible area
   const containerHeight = 600; // Container height in pixels
   const visibleItemsCount = Math.ceil(containerHeight / itemHeight) + 2 * bufferSize;
-  
+
   // Handle scroll events for windowed rendering
   const handleScroll = useMemo(() => {
     return (e: React.UIEvent<HTMLDivElement>) => {
@@ -257,41 +255,41 @@ export default function NodeLogs() {
       // Calculate the first visible item index
       const scrollTop = container.scrollTop;
       const firstVisibleIndex = Math.max(
-        0, 
+        0,
         Math.floor(scrollTop / itemHeight) - bufferSize
       );
-      
+
       // If the user scrolls up, disable auto-scroll
       if (container.scrollHeight - scrollTop - container.clientHeight > 50) {
         if (autoScrollEnabled) {
           setAutoScrollEnabled(false);
         }
       }
-      
+
       setVisibleStartIndex(firstVisibleIndex);
     };
   }, [autoScrollEnabled, bufferSize, itemHeight]);
-  
+
   // Calculate the items to display in the window
   const visibleLogs = useMemo(() => {
     if (filteredLogs.length === 0) return [];
-    
+
     // Calculate end index ensuring we don't go out of bounds
     const endIndex = Math.min(
       visibleStartIndex + visibleItemsCount,
       filteredLogs.length
     );
-    
+
     // Get the slice of logs that should be visible
     return filteredLogs.slice(
       Math.max(0, visibleStartIndex),
       endIndex
     );
   }, [filteredLogs, visibleStartIndex, visibleItemsCount]);
-  
+
   // Calculate total content height for proper scrolling
   const totalContentHeight = filteredLogs.length * itemHeight;
-  
+
   // Calculate offset for the visible items
   const offsetY = Math.max(0, visibleStartIndex * itemHeight);
 
@@ -349,21 +347,6 @@ export default function NodeLogs() {
     return keys[level].toUpperCase();
   };
 
-  // Add maxLogsCount controls
-  const increaseMaxLogs = () => {
-    if (isUnlimited) return;
-    setMaxLogsCount(prev => Math.min(prev * 2, 50000));
-  };
-
-  const decreaseMaxLogs = () => {
-    if (isUnlimited) {
-      setIsUnlimited(false);
-      setMaxLogsCount(10000);
-      return;
-    }
-    setMaxLogsCount(prev => Math.max(prev / 2, 100));
-  };
-
   // Add handler for setting log limit and closing popover
   const handleSetLogLimit = (unlimited: boolean, count?: number) => {
     setIsUnlimited(unlimited);
@@ -375,19 +358,10 @@ export default function NodeLogs() {
     setIsPopoverOpen(false);
   };
 
-  // Update setUnlimitedLogs to use handleSetLogLimit
-  const setUnlimitedLogs = () => {
-    handleSetLogLimit(true);
-  };
-
   // Add a useEffect for window resize events
   useEffect(() => {
     const handleResize = () => {
       if (logsContainerRef.current) {
-        // Recalculate visible item count when window resizes
-        const newContainerHeight = logsContainerRef.current.clientHeight;
-        const newVisibleItemCount = Math.ceil(newContainerHeight / itemHeight) + 2 * bufferSize;
-        
         // Force recalculation of visible items
         if (filteredLogs.length > 0) {
           const currScrollTop = logsContainerRef.current.scrollTop;
@@ -514,9 +488,9 @@ export default function NodeLogs() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className={cn("h-8 gap-1 text-xs", isUnlimited && "border-amber-500 dark:border-amber-400")}
                       >
                         <DatabaseIcon size={12} className="opacity-70" />
@@ -537,7 +511,7 @@ export default function NodeLogs() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              
+
               <PopoverContent className="w-56 p-3" align="end">
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -549,10 +523,10 @@ export default function NodeLogs() {
                       </Badge>
                     )}
                   </div>
-                  
+
                   <div className="flex flex-col gap-2">
-                    <Button 
-                      variant={isUnlimited ? "default" : "outline"} 
+                    <Button
+                      variant={isUnlimited ? "default" : "outline"}
                       size="sm"
                       className="justify-start text-xs"
                       onClick={() => handleSetLogLimit(true)}
@@ -560,34 +534,34 @@ export default function NodeLogs() {
                       <InfinityIcon size={12} className="mr-2 opacity-70" />
                       {t('nodes.logs.unlimited')}
                     </Button>
-                    
+
                     <div className="grid grid-cols-2 gap-2">
-                      <Button 
-                        variant={!isUnlimited && maxLogsCount === 1000 ? "default" : "outline"} 
+                      <Button
+                        variant={!isUnlimited && maxLogsCount === 1000 ? "default" : "outline"}
                         size="sm"
                         className="justify-start text-xs"
                         onClick={() => handleSetLogLimit(false, 1000)}
                       >
                         1,000
                       </Button>
-                      <Button 
-                        variant={!isUnlimited && maxLogsCount === 5000 ? "default" : "outline"} 
+                      <Button
+                        variant={!isUnlimited && maxLogsCount === 5000 ? "default" : "outline"}
                         size="sm"
                         className="justify-start text-xs"
                         onClick={() => handleSetLogLimit(false, 5000)}
                       >
                         5,000
                       </Button>
-                      <Button 
-                        variant={!isUnlimited && maxLogsCount === 10000 ? "default" : "outline"} 
+                      <Button
+                        variant={!isUnlimited && maxLogsCount === 10000 ? "default" : "outline"}
                         size="sm"
                         className="justify-start text-xs"
                         onClick={() => handleSetLogLimit(false, 10000)}
                       >
                         10,000
                       </Button>
-                      <Button 
-                        variant={!isUnlimited && maxLogsCount === 50000 ? "default" : "outline"} 
+                      <Button
+                        variant={!isUnlimited && maxLogsCount === 50000 ? "default" : "outline"}
                         size="sm"
                         className="justify-start text-xs"
                         onClick={() => handleSetLogLimit(false, 50000)}
@@ -596,7 +570,7 @@ export default function NodeLogs() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="pt-2 text-[10px] text-muted-foreground flex items-start gap-1">
                     <AlertTriangleIcon size={10} className="mt-0.5 shrink-0 text-amber-500" />
                     <span>
@@ -631,8 +605,8 @@ export default function NodeLogs() {
 
         <Card className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationFillMode: 'both' }}>
           <CardContent dir="ltr" className="p-4">
-            <div 
-              className="h-[600px] w-full rounded-md overflow-auto" 
+            <div
+              className="h-[600px] w-full rounded-md overflow-auto"
               ref={logsContainerRef}
               onScroll={handleScroll}
             >
