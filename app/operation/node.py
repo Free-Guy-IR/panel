@@ -72,6 +72,7 @@ class NodeOperation(BaseOperation):
             asyncio.create_task(notification.connect_node(node_response))
 
         if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
+            err = err[: MAX_MESSAGE_LENGTH - 3] + "..."
             asyncio.create_task(notification.error_node(node_response))
 
     @staticmethod
@@ -117,8 +118,8 @@ class NodeOperation(BaseOperation):
 
                 detail = e.detail
 
-                if len(detail) > MAX_MESSAGE_LENGTH:
-                    detail = detail[: MAX_MESSAGE_LENGTH - 3] + "..."
+                if len(detail) > 1024:
+                    detail = detail[: 1020] + "..."
                 else:
                     detail = detail
 
