@@ -84,22 +84,27 @@ export default function NodeLogs() {
 
   const determineLogLevel = (message: string): LogLevel => {
     const lowerMessage = message.toLowerCase();
-    // Check for common log level patterns
-    if (lowerMessage.includes('[error]') || lowerMessage.includes('error:')) return 'error';
-    if (lowerMessage.includes('[warning]') || lowerMessage.includes('[warn]') || lowerMessage.includes('warning:')) return 'warning';
-    if (lowerMessage.includes('[info]') || lowerMessage.includes('info:')) return 'info';
-    if (lowerMessage.includes('[debug]') || lowerMessage.includes('debug:')) return 'debug';
     
-    // Check for common log prefixes
-    if (lowerMessage.startsWith('error:') || lowerMessage.startsWith('err:')) return 'error';
-    if (lowerMessage.startsWith('warning:') || lowerMessage.startsWith('warn:')) return 'warning';
-    if (lowerMessage.startsWith('info:') || lowerMessage.startsWith('inf:')) return 'info';
-    if (lowerMessage.startsWith('debug:') || lowerMessage.startsWith('dbg:')) return 'debug';
+    // First check for exact matches with brackets
+    if (lowerMessage.includes('[error]')) return 'error';
+    if (lowerMessage.includes('[warning]') || lowerMessage.includes('[warn]')) return 'warning';
+    if (lowerMessage.includes('[info]')) return 'info';
+    if (lowerMessage.includes('[debug]')) return 'debug';
+    
+    // Then check for other patterns
+    if (lowerMessage.includes('warning:') || lowerMessage.includes('warn:')) return 'warning';
+    if (lowerMessage.includes('info:') || lowerMessage.includes('inf:')) return 'info';
+    if (lowerMessage.includes('debug:') || lowerMessage.includes('dbg:')) return 'debug';
+    
+    // Check for common patterns in the message
+    if (lowerMessage.includes('warning')) return 'warning';
+    if (lowerMessage.includes('info') || lowerMessage.includes('information')) return 'info';
+    if (lowerMessage.includes('debug')) return 'debug';
     
     // Default to info for connection logs and other common patterns
     if (lowerMessage.includes('from') || lowerMessage.includes('connected') || lowerMessage.includes('connection')) return 'info';
     
-    // If no level is detected, default to info instead of none
+    // If no level is detected, default to info
     return 'info';
   };
 
