@@ -26,7 +26,7 @@ class UserTemplate(BaseModel):
     )
     username_prefix: str | None = Field(max_length=20, min_length=1, default=None)
     username_suffix: str | None = Field(max_length=20, min_length=1, default=None)
-    group_ids: list[int] = []
+    group_ids: list[int]
     extra_settings: ExtraSettings | None = None
     status: UserStatusCreate | None = None
     reset_usages: bool | None = None
@@ -42,24 +42,6 @@ class UserTemplateWithValidator(UserTemplate):
 
 
 class UserTemplateCreate(UserTemplateWithValidator):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "name": "my template 1",
-                "username_prefix": None,
-                "username_suffix": None,
-                "group_ids": [1, 3, 5],
-                "data_limit": 0,
-                "expire_duration": 0,
-                "extra_settings": {"flow": "", "method": None},
-                "status": "active",
-                "reset_usages": True,
-                "on_hold_timeout": 3600,
-                "data_limit_reset_strategy": "no_reset",
-            }
-        }
-    )
-
     @field_validator("group_ids", mode="after")
     @classmethod
     def group_ids_validator(cls, v):
@@ -68,23 +50,6 @@ class UserTemplateCreate(UserTemplateWithValidator):
 
 class UserTemplateModify(UserTemplateWithValidator):
     group_ids: list[int] | None = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "name": "my template 1",
-                "username_prefix": None,
-                "username_suffix": None,
-                "group_ids": [1, 3, 5],
-                "data_limit": 0,
-                "expire_duration": 0,
-                "extra_settings": {"flow": "", "method": None},
-                "status": "active",
-                "reset_usages": True,
-                "on_hold_timeout": 3600,
-                "data_limit_reset_strategy": "no_reset",
-            }
-        }
-    )
 
     @field_validator("group_ids", mode="after")
     @classmethod

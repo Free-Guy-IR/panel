@@ -8,15 +8,7 @@ class Group(BaseModel):
     inbound_tags: list[str] | None = []
     is_disabled: bool = False
 
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "name": "group1",
-                "inbound_tags": ["VMess TCP", "VMess Websocket"],
-            }
-        },
-    )
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GroupCreate(Group):
@@ -29,15 +21,6 @@ class GroupCreate(Group):
 
 
 class GroupModify(Group):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "name": "group1",
-                "inbound_tags": ["VMess TCP", "VMess Websocket"],
-            }
-        }
-    )
-
     @field_validator("inbound_tags", mode="after")
     @classmethod
     def inbound_tags_validator(cls, v):
