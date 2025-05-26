@@ -83,7 +83,9 @@ async def review():
             for days in settings.days_left:
                 users = await get_days_left_reached_users(db, days)
                 for user in users:
-                    await notification.expire_days_reached(db, user.days_left, UserNotificationResponse.model_validate(user), days)
+                    await notification.expire_days_reached(
+                        db, user.days_left, UserNotificationResponse.model_validate(user), days
+                    )
 
 
 scheduler.add_job(review, "interval", seconds=JOB_REVIEW_USERS_INTERVAL, coalesce=True, max_instances=1)

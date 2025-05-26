@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -127,13 +126,6 @@ class SubscriptionUserResponse(UserResponse):
 class UsersResponse(BaseModel):
     users: list[UserResponse]
     total: int
-
-    async def load_subscriptions(self, gen_sub_func):
-        tasks = [gen_sub_func(user) for user in self.users]
-        urls = await asyncio.gather(*tasks)
-
-        for user, url in zip(self.users, urls):
-            user.subscription_url = url
 
 
 class RemoveUsersResponse(BaseModel):

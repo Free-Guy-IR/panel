@@ -14,6 +14,7 @@ class Token(BaseModel):
 
 class AdminBase(BaseModel):
     """Minimal admin model containing only the username."""
+
     username: str
 
     model_config = ConfigDict(from_attributes=True)

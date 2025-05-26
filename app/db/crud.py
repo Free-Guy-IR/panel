@@ -680,18 +680,10 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
     if modify.status is not None:
         db_user.status = modify.status
 
-    if modify.data_limit is not None:
-        db_user.data_limit = modify.data_limit or None
-        if db_user.status not in [UserStatus.expired, UserStatus.disabled]:
-            if not db_user.data_limit or db_user.used_traffic < db_user.data_limit:
-                if db_user.status != UserStatus.on_hold:
-                    db_user.status = UserStatus.active
+    if modify.status is UserStatus.on_hold:
+        db_user.expire = None
 
-                remove_usage_reminder = True
-            else:
-                db_user.status = UserStatus.limited
-
-    if modify.expire == 0:
+    elif modify.expire == 0:
         db_user.expire = None
         if db_user.status is UserStatus.expired:
             db_user.status = UserStatus.active
@@ -705,6 +697,17 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
                 remove_expiration_reminder = True
             else:
                 db_user.status = UserStatus.expired
+
+    if modify.data_limit is not None:
+        db_user.data_limit = modify.data_limit or None
+        if db_user.status not in [UserStatus.expired, UserStatus.disabled]:
+            if not db_user.data_limit or db_user.used_traffic < db_user.data_limit:
+                if db_user.status != UserStatus.on_hold:
+                    db_user.status = UserStatus.active
+
+                remove_usage_reminder = True
+            else:
+                db_user.status = UserStatus.limited
 
     if modify.note is not None:
         db_user.note = modify.note or None

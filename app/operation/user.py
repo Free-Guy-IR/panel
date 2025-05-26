@@ -272,9 +272,14 @@ class UserOperation(BaseOperation):
             return_with_count=True,
         )
 
-        response = UsersResponse(users=users, total=count)
         if load_sub:
-            await response.load_subscriptions(self.generate_subscription_url)
+            tasks = [self.generate_subscription_url(user) for user in users]
+            urls = await asyncio.gather(*tasks)
+
+            for user, url in zip(users, urls):
+                user.subscription_url = url
+
+        response = UsersResponse(users=users, total=count)
 
         return response
 

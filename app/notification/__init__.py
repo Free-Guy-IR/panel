@@ -180,7 +180,9 @@ async def user_subscription_revoked(user: UserNotificationResponse, by: AdminDet
         )
 
 
-async def data_usage_percent_reached(db: AsyncSession, percent: float, user: UserNotificationResponse, threshold: int) -> None:
+async def data_usage_percent_reached(
+    db: AsyncSession, percent: float, user: UserNotificationResponse, threshold: int
+) -> None:
     if (await notification_enable()).percentage_reached:
         await asyncio.gather(
             wh.notify(wh.ReachedUsagePercent(username=user.username, user=user, used_percent=percent)),

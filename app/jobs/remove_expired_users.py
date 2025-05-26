@@ -18,7 +18,9 @@ async def remove_expired_users():
         deleted_users = await autodelete_expired_users(db, USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS)
 
         for user in deleted_users:
-            asyncio.create_task(notification.remove_user(user=UserNotificationResponse.model_validate(user), by=SYSTEM_ADMIN))
+            asyncio.create_task(
+                notification.remove_user(user=UserNotificationResponse.model_validate(user), by=SYSTEM_ADMIN)
+            )
             logger.info("Expired user %s deleted.", user.username)
 
 
