@@ -93,6 +93,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}-${{ matrix.arch }}
             ${{ env.GHCR_IMAGE }}-${{ matrix.arch }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   push-manifest:
     needs: [build-images]
