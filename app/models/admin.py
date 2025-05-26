@@ -12,7 +12,14 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
-class AdminBaseInfo(BaseModel):
+class AdminBase(BaseModel):
+    """Minimal admin model containing only the username."""
+    username: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminContactInfo(AdminBase):
     """Base model containing the core admin identification fields."""
 
     username: str
@@ -23,7 +30,7 @@ class AdminBaseInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AdminDetails(AdminBaseInfo):
+class AdminDetails(AdminContactInfo):
     """Complete admin model with all fields for database representation and API responses."""
 
     is_sudo: bool

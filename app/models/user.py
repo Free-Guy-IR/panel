@@ -5,7 +5,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.db.models import UserDataLimitResetStrategy, UserStatus, UserStatusCreate
-from app.models.admin import AdminBaseInfo
+from app.models.admin import AdminContactInfo, AdminBase
 from app.models.proxy import ProxyTable
 
 from .validators import ListValidator, NumericValidatorMixin, UserValidator
@@ -71,30 +71,6 @@ class UserWithValidator(User):
 class UserCreate(UserWithValidator):
     username: str
     status: UserStatusCreate | None = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "username": "user1234",
-                "proxy_settings": {
-                    "vmess": {"id": "35e4e39c-7d5c-4f4b-8b71-558e4f37ff53"},
-                    "vless": {},
-                },
-                "group_ids": [1, 3, 5],
-                "next_plan": {
-                    "data_limit": 0,
-                    "expire": 0,
-                    "add_remaining_traffic": False,
-                },
-                "expire": 0,
-                "data_limit": 0,
-                "data_limit_reset_strategy": "no_reset",
-                "status": "active",
-                "note": "",
-                "on_hold_timeout": "2028-11-03T20:30:00",
-                "on_hold_expire_duration": 0,
-            }
-        }
-    )
 
     @field_validator("username", check_fields=False)
     @classmethod
@@ -109,29 +85,6 @@ class UserCreate(UserWithValidator):
 
 class UserModify(UserWithValidator):
     status: UserStatusModify | None = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "proxy_settings": {
-                    "vmess": {"id": "35e4e39c-7d5c-4f4b-8b71-558e4f37ff53"},
-                    "vless": {},
-                },
-                "group_ids": [1, 3, 5],
-                "next_plan": {
-                    "data_limit": 0,
-                    "expire": 0,
-                    "add_remaining_traffic": False,
-                },
-                "expire": 0,
-                "data_limit": 0,
-                "data_limit_reset_strategy": "no_reset",
-                "status": "active",
-                "note": "",
-                "on_hold_timeout": "2023-11-03T20:30:00",
-                "on_hold_expire_duration": 0,
-            }
-        }
-    )
 
     @field_validator("group_ids", mode="after")
     @classmethod
@@ -139,7 +92,7 @@ class UserModify(UserWithValidator):
         return ListValidator.nullable_list(v, "group")
 
 
-class UserResponse(User):
+class UserNotificationResponse(User):
     id: int
     username: str
     status: UserStatus
@@ -150,7 +103,7 @@ class UserResponse(User):
     sub_last_user_agent: str | None = None
     online_at: datetime | None = None
     subscription_url: str = ""
-    admin: AdminBaseInfo | None = None
+    admin: AdminContactInfo | None = None
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("used_traffic", "lifetime_used_traffic", "data_limit", mode="before")
@@ -159,8 +112,12 @@ class UserResponse(User):
         return NumericValidatorMixin.cast_to_int(v)
 
 
+class UserResponse(UserNotificationResponse):
+    admin: AdminBase | None = None
+
+
 class SubscriptionUserResponse(UserResponse):
-    admin: AdminBaseInfo | None = Field(default=None, exclude=True)
+    admin: AdminContactInfo | None = Field(default=None, exclude=True)
     note: str | None = Field(None, exclude=True)
     auto_delete_in_days: int | None = Field(None, exclude=True)
     subscription_url: str | None = Field(None, exclude=True)

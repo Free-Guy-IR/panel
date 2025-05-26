@@ -1,5 +1,5 @@
 from app.notification.client import send_discord_webhook
-from app.models.user import UserResponse
+from app.models.user import UserNotificationResponse
 from app.utils.system import readable_size
 from app.models.settings import NotificationSettings
 from app.settings import notification_settings
@@ -21,7 +21,7 @@ _status_color = {
 }
 
 
-async def user_status_change(user: UserResponse, by: str):
+async def user_status_change(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -40,7 +40,7 @@ async def user_status_change(user: UserResponse, by: str):
         await send_discord_webhook(data, user.admin.discord_webhook)
 
 
-async def create_user(user: UserResponse, by: str):
+async def create_user(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -63,7 +63,7 @@ async def create_user(user: UserResponse, by: str):
         await send_discord_webhook(data, user.admin.discord_webhook)
 
 
-async def modify_user(user: UserResponse, by: str):
+async def modify_user(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -86,7 +86,7 @@ async def modify_user(user: UserResponse, by: str):
         await send_discord_webhook(data, user.admin.discord_webhook)
 
 
-async def remove_user(user: UserResponse, by: str):
+async def remove_user(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -107,7 +107,7 @@ async def remove_user(user: UserResponse, by: str):
         await send_discord_webhook(data, user.admin.discord_webhook)
 
 
-async def reset_user_data_usage(user: UserResponse, by: str):
+async def reset_user_data_usage(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -129,7 +129,7 @@ async def reset_user_data_usage(user: UserResponse, by: str):
         await send_discord_webhook(data, user.admin.discord_webhook)
 
 
-async def user_data_reset_by_next(user: UserResponse, by: str):
+async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [
@@ -152,7 +152,7 @@ async def user_data_reset_by_next(user: UserResponse, by: str):
         await send_discord_webhook(data, user.admin.discord_webhook)
 
 
-async def user_subscription_revoked(user: UserResponse, by: str):
+async def user_subscription_revoked(user: UserNotificationResponse, by: str):
     data = {
         "content": "",
         "embeds": [

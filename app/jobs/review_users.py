@@ -17,7 +17,7 @@ from app.db.crud import (
 from app.db.models import User, UserStatus
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import Webhook
-from app.models.user import UserResponse
+from app.models.user import UserNotificationResponse
 from app.node import node_manager as node_manager
 from app.settings import webhook_settings
 from app.utils.logger import get_logger
@@ -29,7 +29,7 @@ logger = get_logger("review-users")
 async def reset_user_by_next_report(db: Session, db_user: User):
     db_user = await reset_user_by_next(db, db_user)
 
-    user = UserResponse.model_validate(db_user)
+    user = UserNotificationResponse.model_validate(db_user)
 
     asyncio.create_task(node_manager.update_user(user))
 
@@ -40,7 +40,7 @@ async def review():
     async with GetDB() as db:
 
         async def change_status(db_user: User, status: UserStatus):
-            user = UserResponse.model_validate(db_user)
+            user = UserNotificationResponse.model_validate(db_user)
 
             if user.status is not UserStatus.active:
                 asyncio.create_task(node_manager.remove_user(user))
@@ -75,13 +75,13 @@ async def review():
                 users = await get_usage_percentage_reached_users(db, percent)
                 for user in users:
                     await notification.data_usage_percent_reached(
-                        db, user.usage_percentage, UserResponse.model_validate(user), percent
+                        db, user.usage_percentage, UserNotificationResponse.model_validate(user), percent
                     )
 
             for days in settings.days_left:
                 users = await get_days_left_reached_users(db, days)
                 for user in users:
-                    await notification.expire_days_reached(db, user.days_left, UserResponse.model_validate(user), days)
+                    await notification.expire_days_reached(db, user.days_left, UserNotificationResponse.model_validate(user), days)
 
 
 scheduler.add_job(review, "interval", seconds=JOB_REVIEW_USERS_INTERVAL, coalesce=True, max_instances=1)
