@@ -8,8 +8,8 @@ const FooterContent = () => {
       // Only fetch once when component mounts
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity
-    }
+      staleTime: Infinity,
+    },
   })
 
   const version = systemStats?.version ? ` (v${systemStats.version})` : ''
@@ -27,8 +27,7 @@ const FooterContent = () => {
   )
 }
 
-
-export const Footer: FC<HTMLAttributes<HTMLDivElement>> = (props) => {
+export const Footer: FC<HTMLAttributes<HTMLDivElement>> = props => {
   return (
     <div className="flex w-full pt-1 pb-3 relative" {...props}>
       <FooterContent />

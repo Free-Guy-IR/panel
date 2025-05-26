@@ -1,93 +1,84 @@
-import {
-  Users,
-  Settings,
-  LucideIcon,
-  ChartPie,
-  ListTodo,
-  Share2,
-  Settings2,
-  UserCog,
-} from "lucide-react";
+import { Users, Settings, LucideIcon, ChartPie, ListTodo, Share2, Settings2, UserCog } from 'lucide-react'
 
 type Submenu = {
-  href: string;
-  label: string;
-  active?: boolean;
-};
+  href: string
+  label: string
+  active?: boolean
+}
 
 type Menu = {
-  href: string;
-  label: string;
-  active?: boolean;
-  icon: LucideIcon;
-  submenus?: Submenu[];
-};
+  href: string
+  label: string
+  active?: boolean
+  icon: LucideIcon
+  submenus?: Submenu[]
+}
 
 type Group = {
-  groupLabel: string;
-  menus: Menu[];
-};
+  groupLabel: string
+  menus: Menu[]
+}
 
 export function getMenuList(pathname: string): Group[] {
   return [
     {
-      groupLabel: "platform",
+      groupLabel: 'platform',
       menus: [
         {
-          href: "/",
-          label: "users",
+          href: '/',
+          label: 'users',
           icon: Users,
           submenus: [],
         },
         {
-          href: "/statistics",
-          label: "statistics",
+          href: '/statistics',
+          label: 'statistics',
           icon: ChartPie,
           submenus: [],
         },
         {
-          href: "/hosts",
-          label: "hosts",
+          href: '/hosts',
+          label: 'hosts',
           icon: ListTodo,
           submenus: [],
         },
         {
-          href: "/nodes",
-          label: "nodes",
+          href: '/nodes',
+          label: 'nodes',
           icon: Share2,
           submenus: [],
         },
         {
-          href: "/settings",
-          label: "settings",
+          href: '/settings',
+          label: 'settings',
           icon: Settings2,
           submenus: [
             {
-              href: "/settings",
-              label: "general"
+              href: '/settings',
+              label: 'general',
             },
             {
-              href: "/settings/core",
-              label: "core"
-            }
+              href: '/settings/core',
+              label: 'core',
+            },
           ],
         },
       ],
     },
     {
-      groupLabel: "Settings",
+      groupLabel: 'Settings',
       menus: [
         {
-          href: "/users",
-          label: "Users",
+          href: '/users',
+          label: 'Users',
           icon: Users,
         },
         {
-          href: "/account",
-          label: "Account",
+          href: '/account',
+          label: 'Account',
           icon: Settings,
         },
       ],
     },
-  ];
+  ]
 }

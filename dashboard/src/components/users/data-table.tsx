@@ -19,13 +19,7 @@ interface DataTableProps<TData extends UserResponse, TValue> {
   onEdit?: (user: UserResponse) => void
 }
 
-export function DataTable<TData extends UserResponse, TValue>({
-  columns,
-  data,
-  isLoading = false,
-  isFetching = false,
-  onEdit
-}: DataTableProps<TData, TValue>) {
+export function DataTable<TData extends UserResponse, TValue>({ columns, data, isLoading = false, isFetching = false, onEdit }: DataTableProps<TData, TValue>) {
   const { t } = useTranslation()
   const [expandedRow, setExpandedRow] = useState<number | null>(null)
   const table = useReactTable({
@@ -42,20 +36,20 @@ export function DataTable<TData extends UserResponse, TValue>({
   const handleEditModal = (e: React.MouseEvent, user: UserResponse) => {
     // Don't open modal if clicking on chevron
     if ((e.target as HTMLElement).closest('.chevron')) {
-      return;
+      return
     }
 
     // On mobile, toggle row expansion instead of opening edit modal
     if (window.innerWidth < 768) {
-      handleRowToggle(user.id);
-      return;
+      handleRowToggle(user.id)
+      return
     }
 
     // Don't open modal if clicking on dropdown menu or its items
     if ((e.target as HTMLElement).closest('[role="menu"], [role="menuitem"], [data-radix-popper-content-wrapper]')) {
-      return;
+      return
     }
-    onEdit?.(user);
+    onEdit?.(user)
   }
 
   const dir = useDirDetection()
@@ -102,17 +96,17 @@ export function DataTable<TData extends UserResponse, TValue>({
               <React.Fragment key={row.id}>
                 <TableRow
                   className={cn(
-                    'cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50', 
+                    'cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50',
                     expandedRow === row.original.id && 'border-transparent',
                     'transition-all duration-300 ease-in-out',
-                    'animate-slide-up will-change-transform'
+                    'animate-slide-up will-change-transform',
                   )}
-                  style={{ 
+                  style={{
                     animationDelay: `${index * 40}ms`,
-                    animationDuration: '0.4s', 
-                    animationFillMode: 'both' 
+                    animationDuration: '0.4s',
+                    animationFillMode: 'both',
                   }}
-                  onClick={(e) => handleEditModal(e, row.original)}
+                  onClick={e => handleEditModal(e, row.original)}
                   data-state={row.getIsSelected() && 'selected'}
                 >
                   {row.getVisibleCells().map((cell, index) => (
@@ -130,10 +124,13 @@ export function DataTable<TData extends UserResponse, TValue>({
                       )}
                     >
                       {cell.column.id === 'chevron' ? (
-                        <div className="chevron flex items-center justify-center cursor-pointer" onClick={(e) => {
-                          e.stopPropagation();
-                          handleRowToggle(row.original.id);
-                        }}>
+                        <div
+                          className="chevron flex items-center justify-center cursor-pointer"
+                          onClick={e => {
+                            e.stopPropagation()
+                            handleRowToggle(row.original.id)
+                          }}
+                        >
                           <ChevronDown className={cn('h-4 w-4 transition-transform duration-300', expandedRow === row.original.id && 'rotate-180')} />
                         </div>
                       ) : (
@@ -160,7 +157,7 @@ export function DataTable<TData extends UserResponse, TValue>({
                               <div className="flex items-center">
                                 <StatusBadge showOnlyExpiry expiryDate={row.original.expire} status={row.original.status} showExpiry />
                               </div>
-                              <div onClick={(e) => e.stopPropagation()}>
+                              <div onClick={e => e.stopPropagation()}>
                                 <ActionButtons user={row.original} />
                               </div>
                             </div>

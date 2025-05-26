@@ -29,8 +29,8 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
 
   if (showOnlyExpiry) {
     return (
-      <div className={cn("flex flex-wrap gap-x-2 justify-start")}>
-        <div className={cn(!dateInfo.time && !dateInfo.status && 'hidden',showExpiry? 'block': 'hidden md:block')}>
+      <div className={cn('flex flex-wrap gap-x-2 justify-start')}>
+        <div className={cn(!dateInfo.time && !dateInfo.status && 'hidden', showExpiry ? 'block' : 'hidden md:block')}>
           <div>
             <span className={cn('inline-block text-xs font-medium', dir === 'rtl' ? 'mr-0.5 md:mr-2' : 'ml-0.5 md:ml-2', 'text-gray-600 dark:text-gray-400')}>
               {t(dateInfo.status, { time: dateInfo.time })}
@@ -42,7 +42,7 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
   }
 
   return (
-    <div className={cn("flex flex-wrap gap-x-2 justify-start")}>
+    <div className={cn('flex flex-wrap gap-x-2 justify-start')}>
       <Badge
         className={cn(
           'flex items-center justify-center rounded-full px-0.5 sm:px-2 py-0.5 w-fit max-w-[150px] gap-x-2 pointer-events-none',
@@ -52,10 +52,10 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
       >
         <div className={cn('flex items-center gap-1 sm:px-1', showExpiry && 'px-1')}>
           {StatusIcon && <StatusIcon className="w-4 h-4 sm:w-3 sm:h-3" />}
-          <span className={cn("capitalize text-nowrap font-medium text-xs hidden sm:block",showExpiry && 'block')}>{userStatus && t(`status.${userStatus}`)}</span>
+          <span className={cn('capitalize text-nowrap font-medium text-xs hidden sm:block', showExpiry && 'block')}>{userStatus && t(`status.${userStatus}`)}</span>
         </div>
       </Badge>
-      <div className={cn(!dateInfo.time && !dateInfo.status && 'hidden',showExpiry? 'block': 'hidden md:block')}>
+      <div className={cn(!dateInfo.time && !dateInfo.status && 'hidden', showExpiry ? 'block' : 'hidden md:block')}>
         <div>
           <span className={cn('inline-block text-[11.5px] sm:text-xs font-normal text-muted-foreground dark:text-muted-foreground', dir === 'rtl' && 'ml-0 mr-1')}>
             {t(dateInfo.status, { time: dateInfo.time })}

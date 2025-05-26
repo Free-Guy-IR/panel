@@ -156,7 +156,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                   <FormItem>
                     <FormLabel>{t('inbound')}</FormLabel>
                     <Select dir={dir} onValueChange={field.onChange} value={field.value}>
-                      <FormControl className={cn(!!form.formState.errors.inbound_tag && "border-destructive")}>
+                      <FormControl className={cn(!!form.formState.errors.inbound_tag && 'border-destructive')}>
                         <SelectTrigger className="py-5">
                           <SelectValue placeholder={t('hostsDialog.selectInbound')} />
                         </SelectTrigger>
@@ -250,7 +250,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
               <FormField
                 control={form.control}
                 name="remark"
-                render={({ field }) =>(
+                render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center gap-2">
                       <FormLabel>{t('remark')}</FormLabel>
@@ -339,88 +339,89 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     control={form.control}
                     name="address"
                     render={({ field }) => {
-                      const hasError = !!form.formState.errors.address;
-                        return(
-                      <FormItem>
-                        <div className="flex items-center gap-2">
-                          <FormLabel>{t('hostsDialog.address')}</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
-                                <Info className="h-4 w-4 text-muted-foreground" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
-                              <div className="space-y-1.5">
-                                <h4 className="font-medium text-[12px] mb-2">{t('hostsDialog.variables.title')}</h4>
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{SERVER_IP}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ip')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{SERVER_IPV6}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ipv6')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{USERNAME}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.username')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DATA_USAGE}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_usage')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DATA_LEFT}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_left')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DATA_LIMIT}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_limit')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DAYS_LEFT}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.days_left')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{EXPIRE_DATE}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.expire_date')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{JALALI_EXPIRE_DATE}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.jalali_expire_date')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{TIME_LEFT}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.time_left')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{STATUS_TEXT}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.status_text')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{STATUS_EMOJI}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.status_emoji')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{PROTOCOL}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.protocol')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{TRANSPORT}'}</code>
-                                    <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.transport')}</span>
+                      const hasError = !!form.formState.errors.address
+                      return (
+                        <FormItem>
+                          <div className="flex items-center gap-2">
+                            <FormLabel>{t('hostsDialog.address')}</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
+                                  <Info className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
+                                <div className="space-y-1.5">
+                                  <h4 className="font-medium text-[12px] mb-2">{t('hostsDialog.variables.title')}</h4>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{SERVER_IP}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ip')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{SERVER_IPV6}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ipv6')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{USERNAME}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.username')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DATA_USAGE}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_usage')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DATA_LEFT}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_left')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DATA_LIMIT}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_limit')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{DAYS_LEFT}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.days_left')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{EXPIRE_DATE}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.expire_date')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{JALALI_EXPIRE_DATE}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.jalali_expire_date')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{TIME_LEFT}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.time_left')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{STATUS_TEXT}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.status_text')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{STATUS_EMOJI}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.status_emoji')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{PROTOCOL}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.protocol')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded-sm">{'{TRANSPORT}'}</code>
+                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.transport')}</span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <FormControl>
-                          <Input placeholder="example.com" isError={hasError} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}}
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <FormControl>
+                            <Input placeholder="example.com" isError={hasError} {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
                   />
                 </div>
                 <div className="flex-1 min-h-[110px]">
@@ -1041,10 +1042,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                         </PopoverContent>
                                       </Popover>
                                     </div>
-                                    <Select 
-                                      onValueChange={value => field.onChange(value ? parseInt(value) : 0)} 
+                                    <Select
+                                      onValueChange={value => field.onChange(value ? parseInt(value) : 0)}
                                       value={field.value?.toString() ?? '0'}
-                                      onOpenChange={(open) => {
+                                      onOpenChange={open => {
                                         // Refresh hosts list when dropdown is opened
                                         if (open) {
                                           queryClient.invalidateQueries({

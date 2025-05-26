@@ -90,9 +90,7 @@ export const Login: FC = () => {
                     </Alert>
                   )}
                   <Button isLoading={loading} type="submit" className="w-full flex items-center gap-2">
-                    <span>
-                      {t('login')}
-                    </span>
+                    <span>{t('login')}</span>
                     <LogInIcon size="18px" />
                   </Button>
                 </div>

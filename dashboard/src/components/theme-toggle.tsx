@@ -8,14 +8,14 @@ import { useTranslation } from 'react-i18next'
 export function ThemeToggle() {
   const { setTheme } = useTheme()
   const { t } = useTranslation()
-  
+
   const toggleTheme = useCallback(
     (theme: Theme) => {
       setTheme(theme)
     },
     [setTheme],
   )
-  
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

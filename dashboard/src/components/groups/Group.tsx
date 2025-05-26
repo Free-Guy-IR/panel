@@ -18,30 +18,20 @@ interface GroupProps {
   onToggleStatus: (group: GroupResponse) => Promise<void>
 }
 
-const DeleteAlertDialog = ({
-  group,
-  isOpen,
-  onClose,
-  onConfirm,
-}: {
-  group: GroupResponse
-  isOpen: boolean
-  onClose: () => void
-  onConfirm: () => void
-}) => {
+const DeleteAlertDialog = ({ group, isOpen, onClose, onConfirm }: { group: GroupResponse; isOpen: boolean; onClose: () => void; onConfirm: () => void }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent>
-        <AlertDialogHeader className={cn(dir === "rtl" && "sm:text-right")}>
+        <AlertDialogHeader className={cn(dir === 'rtl' && 'sm:text-right')}>
           <AlertDialogTitle>{t('deleteConfirmation')}</AlertDialogTitle>
           <AlertDialogDescription>
             <span dir={dir} dangerouslySetInnerHTML={{ __html: t('group.deleteConfirm', { name: group.name }) }} />
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className={cn(dir === "rtl" && "sm:gap-x-2 sm:flex-row-reverse")}>
+        <AlertDialogFooter className={cn(dir === 'rtl' && 'sm:gap-x-2 sm:flex-row-reverse')}>
           <AlertDialogCancel onClick={onClose}>{t('cancel')}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm}>
             {t('delete')}
@@ -69,8 +59,8 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
         title: t('success', { defaultValue: 'Success' }),
         description: t('group.deleteSuccess', {
           name: group.name,
-          defaultValue: 'Group "{name}" has been deleted successfully'
-        })
+          defaultValue: 'Group "{name}" has been deleted successfully',
+        }),
       })
       setShowDeleteDialog(false)
       queryClient.invalidateQueries({ queryKey: ['/api/groups'] })
@@ -79,9 +69,9 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
         title: t('error', { defaultValue: 'Error' }),
         description: t('group.deleteFailed', {
           name: group.name,
-          defaultValue: 'Failed to delete group "{name}"'
+          defaultValue: 'Failed to delete group "{name}"',
         }),
-        variant: "destructive"
+        variant: 'destructive',
       })
     }
   }
@@ -90,19 +80,12 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
     <>
       <Card className="px-4 py-5 relative group h-full hover:bg-accent transition-colors">
         <div className="flex items-center gap-3">
-          <div
-            className="flex-1 min-w-0 cursor-pointer"
-            onClick={() => onEdit(group)}
-          >
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(group)}>
             <div className="flex items-center gap-2">
-              <div className={cn(
-                "min-h-2 min-w-2 rounded-full",
-                group.is_disabled ? "bg-red-500" : "bg-green-500"
-              )} />
-              <div className='flex items-center gap-2'>
-
+              <div className={cn('min-h-2 min-w-2 rounded-full', group.is_disabled ? 'bg-red-500' : 'bg-green-500')} />
+              <div className="flex items-center gap-2">
                 <div className="font-medium truncate">{group.name}</div>
-                <div className='font-mono text-xs text-muted-foreground'>({group.inbound_tags?.length || 0})</div>
+                <div className="font-mono text-xs text-muted-foreground">({group.inbound_tags?.length || 0})</div>
               </div>
             </div>
             <div className="text-sm text-muted-foreground truncate">
@@ -116,25 +99,26 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={(e) => {
-                e.stopPropagation()
-                onToggleStatus(group)
-              }}>
+              <DropdownMenuItem
+                onSelect={e => {
+                  e.stopPropagation()
+                  onToggleStatus(group)
+                }}
+              >
                 <Power className="h-4 w-4 mr-2" />
                 {group.is_disabled ? t('enable') : t('disable')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={(e) => {
-                e.stopPropagation()
-                onEdit(group)
-              }}>
+              <DropdownMenuItem
+                onSelect={e => {
+                  e.stopPropagation()
+                  onEdit(group)
+                }}
+              >
                 <Pencil className="h-4 w-4 mr-2" />
                 {t('edit')}
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={handleDeleteClick}
-                className="text-destructive"
-              >
+              <DropdownMenuItem onSelect={handleDeleteClick} className="text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" />
                 {t('delete')}
               </DropdownMenuItem>
@@ -143,12 +127,7 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
         </div>
       </Card>
 
-      <DeleteAlertDialog
-        group={group}
-        isOpen={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
-        onConfirm={handleConfirmDelete}
-      />
+      <DeleteAlertDialog group={group} isOpen={showDeleteDialog} onClose={() => setShowDeleteDialog(false)} onConfirm={handleConfirmDelete} />
     </>
   )
-} 
+}

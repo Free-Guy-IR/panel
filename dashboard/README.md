@@ -6,14 +6,15 @@ For development, you will only need Node.js installed on your environement.
 
 ### Node
 
-[Node](http://nodejs.org/) is really easy to install & now include [NPM](https://npmjs.org/).
-This project has been developed on the Nodejs v20.x so if you faced any issue during installation that may related to the node version, install Node with version >= v20
+[Node](http://nodejs.org/) is really easy to install & now include [NPM](https://npmjs.org/). This project has been developed on the Nodejs v20.x so if you faced any issue during installation that may
+related to the node version, install Node with version >= v20
 
 ## Install
+
     Install the latest LTS version of Node.js
     git clone https://github.com/Gozargah/Marzban.git
     `bash cd Marzban/app/dashboard`
-	`bash corepack enable`
+    `bash corepack enable`
     `bash pnpm install`
 
 ### Configure app

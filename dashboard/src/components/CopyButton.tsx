@@ -32,14 +32,7 @@ export function CopyButton({ value, className, copiedMessage = 'Copied!', defaul
     <Tooltip open={copied ? true : undefined}>
       <TooltipTrigger asChild>
         <div>
-          <Button 
-            type="button"
-            size="icon" 
-            variant="ghost" 
-            className={className} 
-            aria-label="Copy to clipboard" 
-            onClick={handleCopy}
-          >
+          <Button type="button" size="icon" variant="ghost" className={className} aria-label="Copy to clipboard" onClick={handleCopy}>
             {copied ? <Check className="h-4 w-4" /> : icon === 'copy' ? <Copy className="h-4 w-4" /> : <Link className="h-4 w-4" />}
           </Button>
         </div>

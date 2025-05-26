@@ -63,10 +63,7 @@ export const useTheme = () => {
   }
 
   // Resolve theme: 'system' should be converted to 'light' or 'dark'
-  const resolvedTheme = context.theme === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : context.theme
+  const resolvedTheme = context.theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : context.theme
 
   return { ...context, resolvedTheme }
 }
-

@@ -14,7 +14,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 const initialDefaultValues: Partial<GroupFormValues> = {
   name: '',
   inbound_tags: [],
-  is_disabled: false
+  is_disabled: false,
 }
 
 interface GroupsProps {
@@ -31,7 +31,7 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
 
   const form = useForm<GroupFormValues>({
     resolver: zodResolver(groupFormSchema),
-    defaultValues: initialDefaultValues
+    defaultValues: initialDefaultValues,
   })
 
   const handleEdit = (group: GroupResponse) => {
@@ -39,7 +39,7 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
     form.reset({
       name: group.name,
       inbound_tags: group.inbound_tags || [],
-      is_disabled: group.is_disabled
+      is_disabled: group.is_disabled,
     })
     onOpenChange(true)
   }
@@ -51,30 +51,30 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
         data: {
           name: group.name,
           inbound_tags: group.inbound_tags,
-          is_disabled: !group.is_disabled
-        }
+          is_disabled: !group.is_disabled,
+        },
       })
-      
+
       toast({
         title: t('success', { defaultValue: 'Success' }),
-        description: t(group.is_disabled ? 'group.enableSuccess' : 'group.disableSuccess', { 
+        description: t(group.is_disabled ? 'group.enableSuccess' : 'group.disableSuccess', {
           name: group.name,
-          defaultValue: `Group "{name}" has been ${group.is_disabled ? 'enabled' : 'disabled'} successfully`
-        })
+          defaultValue: `Group "{name}" has been ${group.is_disabled ? 'enabled' : 'disabled'} successfully`,
+        }),
       })
-      
+
       // Invalidate the groups query to refresh the list
       queryClient.invalidateQueries({
-        queryKey: ['/api/groups']
+        queryKey: ['/api/groups'],
       })
     } catch (error) {
       toast({
         title: t('error', { defaultValue: 'Error' }),
-        description: t(group.is_disabled ? 'group.enableFailed' : 'group.disableFailed', { 
+        description: t(group.is_disabled ? 'group.enableFailed' : 'group.disableFailed', {
           name: group.name,
-          defaultValue: `Failed to ${group.is_disabled ? 'enable' : 'disable'} group "{name}"`
+          defaultValue: `Failed to ${group.is_disabled ? 'enable' : 'disable'} group "{name}"`,
         }),
-        variant: "destructive"
+        variant: 'destructive',
       })
     }
   }
@@ -83,14 +83,7 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
     <div className="flex-1 w-full space-y-4 pt-4">
       <ScrollArea className="h-[calc(100vh-8rem)]">
         <div dir={dir} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {groupsData?.groups.map((group) => (
-            <Group
-              key={group.id}
-              group={group}
-              onEdit={handleEdit}
-              onToggleStatus={handleToggleStatus}
-            />
-          ))}
+          {groupsData?.groups.map(group => <Group key={group.id} group={group} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)}
         </div>
       </ScrollArea>
 
@@ -109,4 +102,4 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
       />
     </div>
   )
-} 
+}

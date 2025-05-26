@@ -25,7 +25,7 @@ export const useAdmin = () => {
         toast({
           title: 'Error',
           description: 'Failed to fetch admin details',
-          variant: 'destructive'
+          variant: 'destructive',
         })
       } finally {
         setIsLoading(false)
@@ -50,6 +50,6 @@ export const useAdmin = () => {
     admin,
     isLoading,
     error,
-    clearAdmin
+    clearAdmin,
   }
 }

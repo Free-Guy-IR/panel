@@ -16,7 +16,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 export const groupFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   inbound_tags: z.array(z.string()),
-  is_disabled: z.boolean().optional()
+  is_disabled: z.boolean().optional(),
 })
 
 export type GroupFormValues = z.infer<typeof groupFormSchema>
@@ -41,18 +41,22 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
       if (editingGroup && editingGroupId) {
         await modifyGroupMutation.mutateAsync({
           groupId: editingGroupId,
-          data: values
+          data: values,
         })
-        toast.success(t('group.editSuccess', {
-          name: values.name,
-        }))
+        toast.success(
+          t('group.editSuccess', {
+            name: values.name,
+          }),
+        )
       } else {
         await addGroupMutation.mutateAsync({
-          data: values
+          data: values,
         })
-        toast.success(t('group.createSuccess', {
-          name: values.name,
-        }))
+        toast.success(
+          t('group.createSuccess', {
+            name: values.name,
+          }),
+        )
       }
       // Invalidate groups queries after successful action
       queryClient.invalidateQueries({ queryKey: ['/api/groups'] })
@@ -60,15 +64,13 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
       form.reset()
     } catch (error: any) {
       console.error('Group operation failed:', error)
-      toast.error(t(editingGroup
-        ? "group.editFailed"
-        : "group.createFailed",
-        {
+      toast.error(
+        t(editingGroup ? 'group.editFailed' : 'group.createFailed', {
           name: values.name,
           error: error?.message || '',
-          defaultValue: `Failed to ${editingGroup ? 'update' : 'create'} group "{name}". {error}`
-        }
-      ));
+          defaultValue: `Failed to ${editingGroup ? 'update' : 'create'} group "{name}". {error}`,
+        }),
+      )
     }
   }
 
@@ -104,35 +106,24 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
                       <CommandInput placeholder={t('searchInbounds')} />
                       <CommandEmpty>{t('noInboundsFound')}</CommandEmpty>
                       <CommandGroup className="max-h-40 overflow-auto">
-                        {inbounds?.map((inbound) => (
+                        {inbounds?.map(inbound => (
                           <CommandItem
                             key={inbound}
                             onSelect={() => {
                               const currentTags = field.value || []
-                              const newTags = currentTags.includes(inbound)
-                                ? currentTags.filter(tag => tag !== inbound)
-                                : [...currentTags, inbound]
+                              const newTags = currentTags.includes(inbound) ? currentTags.filter(tag => tag !== inbound) : [...currentTags, inbound]
                               field.onChange(newTags)
                             }}
                           >
-                            <div
-                              className={cn(
-                                "mr-2 h-4 w-4 border rounded-sm",
-                                field.value?.includes(inbound) ? "bg-primary border-primary" : "border-muted"
-                              )}
-                            />
+                            <div className={cn('mr-2 h-4 w-4 border rounded-sm', field.value?.includes(inbound) ? 'bg-primary border-primary' : 'border-muted')} />
                             {inbound}
                           </CommandItem>
                         ))}
                       </CommandGroup>
                     </Command>
                     <div className="flex flex-wrap gap-2">
-                      {field.value?.map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          className="flex items-center gap-1"
-                        >
+                      {field.value?.map(tag => (
+                        <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                           {tag}
                           <X
                             className="h-3 w-3 cursor-pointer"
@@ -152,11 +143,7 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {t('cancel')}
               </Button>
-              <Button
-                type="submit"
-                disabled={addGroupMutation.isPending || modifyGroupMutation.isPending}
-                className="bg-primary hover:bg-primary/90"
-              >
+              <Button type="submit" disabled={addGroupMutation.isPending || modifyGroupMutation.isPending} className="bg-primary hover:bg-primary/90">
                 {editingGroup ? t('edit') : t('create')}
               </Button>
             </div>
@@ -165,4 +152,4 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
       </DialogContent>
     </Dialog>
   )
-} 
+}

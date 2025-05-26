@@ -141,7 +141,7 @@
     "enableFailed": "Failed to enable admin «{{name}}»",
     "resetUsersUsage": "Admin Reset Users Usage",
     "resetUsageSuccess": "Admin «{{name}}» user usage has been reset successfully",
-    "resetUsageFailed":"Failed to reset admin «{{name}}» user usage",
+    "resetUsageFailed": "Failed to reset admin «{{name}}» user usage",
     "reset": "Reset usage",
     "discordId": "Discord ID",
     "lifetime.used.traffic": "Total"
@@ -194,7 +194,7 @@
     "duplicateSuccess": "Template «{{name}}» duplicated successfully",
     "duplicateFailed": "Failed to duplicate template «{{name}}»",
     "enableSuccess": "Template «{{name}}» has been enabled successfully",
-    "disableSuccess":  "Template «{{name}}» has been disabled successfully",
+    "disableSuccess": "Template «{{name}}» has been disabled successfully",
     "enableFailed": "Failed to enable admin «{{name}}»",
     "disableFailed": "Failed to disable admin «{{name}}»"
   },
@@ -809,7 +809,7 @@
     "duplicateFailed": "Failed to duplicate core config «{{name}}»",
     "deleteSuccess": "Core has been removed successfully",
     "deleteFailed": "Failed to remove core",
-    "delete":"Remove Core Config",
+    "delete": "Remove Core Config",
     "coreNotFound": "Core not found"
   },
   "createdAt": "Created at",

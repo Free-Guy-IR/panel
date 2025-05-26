@@ -268,8 +268,8 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
           {...props}
         />
       </TooltipTrigger>
-      <TooltipContent className='font-semibold' side={state === 'collapsed' ? 'right' : 'left'} align="center">
-        {state === 'collapsed' ? t("sidebar.expand") : t("sidebar.collapse")}
+      <TooltipContent className="font-semibold" side={state === 'collapsed' ? 'right' : 'left'} align="center">
+        {state === 'collapsed' ? t('sidebar.expand') : t('sidebar.collapse')}
       </TooltipContent>
     </Tooltip>
   )

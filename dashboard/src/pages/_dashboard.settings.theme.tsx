@@ -1,19 +1,19 @@
-import { useTranslation } from 'react-i18next';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { useTheme } from '@/components/theme-provider';
-import { useEffect, useState } from 'react';
-import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
+import { useTheme } from '@/components/theme-provider'
+import { useEffect, useState } from 'react'
+import { toast } from '@/hooks/use-toast'
+import { cn } from '@/lib/utils'
 
 export function applyThemeVars(vars: Record<string, string | undefined>) {
-  const root = document.documentElement;
+  const root = document.documentElement
   Object.entries(vars).forEach(([key, value]) => {
     if (typeof value === 'string') {
-      root.style.setProperty(key, value);
+      root.style.setProperty(key, value)
     }
-  });
+  })
 }
 
 export const colorThemes = [
@@ -793,61 +793,61 @@ export const colorThemes = [
 ]
 
 export default function ThemeSettings() {
-  const { t } = useTranslation();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { t } = useTranslation()
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [selectedColor, setSelectedColor] = useState(() => {
-    return localStorage.getItem('color-theme') || 'default';
-  });
+    return localStorage.getItem('color-theme') || 'default'
+  })
   const [radius, setRadius] = useState(() => {
-    return localStorage.getItem('radius') || '0.5rem';
-  });
+    return localStorage.getItem('radius') || '0.5rem'
+  })
 
   useEffect(() => {
-    setMounted(true);
-    const color = colorThemes.find(c => c.name === selectedColor) || colorThemes[0];
-    const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    setMounted(true)
+    const color = colorThemes.find(c => c.name === selectedColor) || colorThemes[0]
+    const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
     applyThemeVars({
       ...color.css[mode],
-      '--radius': radius
-    });
-  }, []);
+      '--radius': radius,
+    })
+  }, [])
 
   useEffect(() => {
-    if (!mounted) return;
-    const color = colorThemes.find(c => c.name === selectedColor) || colorThemes[0];
-    const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    if (!mounted) return
+    const color = colorThemes.find(c => c.name === selectedColor) || colorThemes[0]
+    const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
     applyThemeVars({
       ...color.css[mode],
-      '--radius': radius
-    });
-    localStorage.setItem('color-theme', selectedColor);
-    localStorage.setItem('radius', radius);
-  }, [selectedColor, mounted, theme, radius]);
+      '--radius': radius,
+    })
+    localStorage.setItem('color-theme', selectedColor)
+    localStorage.setItem('radius', radius)
+  }, [selectedColor, mounted, theme, radius])
 
   const handleColorChange = (name: string) => {
-    setSelectedColor(name);
+    setSelectedColor(name)
     toast({
       title: t('success'),
       description: t('theme.themeSaved'),
-    });
-  };
+    })
+  }
 
   const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
-    setTheme(newTheme);
+    setTheme(newTheme)
     toast({
       title: t('theme.themeChanged'),
       description: t('theme.visitThemePage'),
-    });
-  };
+    })
+  }
 
   const handleRadiusChange = (value: string) => {
-    setRadius(value);
+    setRadius(value)
     toast({
       title: t('success'),
       description: t('theme.radiusSaved'),
-    });
-  };
+    })
+  }
 
   return (
     <div className="flex flex-col gap-y-6 mt-10">
@@ -858,33 +858,21 @@ export default function ThemeSettings() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap gap-2 items-center">
-            {colorThemes.map((color) => (
+            {colorThemes.map(color => (
               <button
                 key={color.name}
                 onClick={() => handleColorChange(color.name)}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-1 rounded-full border transition',
-                  selectedColor === color.name
-                    ? 'border-primary bg-primary/10'
-                    : 'border-border bg-background',
-                )}
+                className={cn('flex items-center gap-2 px-3 py-1 rounded-full border transition', selectedColor === color.name ? 'border-primary bg-primary/10' : 'border-border bg-background')}
                 aria-label={color.label}
               >
-                <span
-                  className="inline-block w-4 h-4 rounded-full border"
-                  style={{ background: color.dot }}
-                />
+                <span className="inline-block w-4 h-4 rounded-full border" style={{ background: color.dot }} />
                 <span className="text-sm font-medium">{color.label}</span>
               </button>
             ))}
           </div>
           <div className="space-y-4">
             <h3 className="text-lg font-medium">{t('theme.mode')}</h3>
-            <RadioGroup
-              defaultValue={theme}
-              onValueChange={handleThemeChange}
-              className="grid grid-cols-1 gap-4"
-            >
+            <RadioGroup defaultValue={theme} onValueChange={handleThemeChange} className="grid grid-cols-1 gap-4">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="light" id="light" />
                 <Label htmlFor="light">{t('theme.light')}</Label>
@@ -901,106 +889,50 @@ export default function ThemeSettings() {
           </div>
           <div className="space-y-4">
             <h3 className="text-lg font-medium">{t('theme.radius')}</h3>
-            <RadioGroup
-              defaultValue={radius}
-              onValueChange={handleRadiusChange}
-              className="grid grid-cols-2 gap-4 sm:grid-cols-4"
-            >
+            <RadioGroup defaultValue={radius} onValueChange={handleRadiusChange} className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
-                <RadioGroupItem
-                  value="0"
-                  id="radius-none"
-                  className="peer sr-only"
-                />
+                <RadioGroupItem value="0" id="radius-none" className="peer sr-only" />
                 <Label
                   htmlFor="radius-none"
                   className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mb-3 h-6 w-6"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-3 h-6 w-6">
                     <rect width="18" height="18" x="3" y="3" rx="0" />
                   </svg>
                   None
                 </Label>
               </div>
               <div>
-                <RadioGroupItem
-                  value="0.3rem"
-                  id="radius-sm"
-                  className="peer sr-only"
-                />
+                <RadioGroupItem value="0.3rem" id="radius-sm" className="peer sr-only" />
                 <Label
                   htmlFor="radius-sm"
                   className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mb-3 h-6 w-6"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-3 h-6 w-6">
                     <rect width="18" height="18" x="3" y="3" rx="2" />
                   </svg>
                   Small
                 </Label>
               </div>
               <div>
-                <RadioGroupItem
-                  value="0.5rem"
-                  id="radius-md"
-                  className="peer sr-only"
-                />
+                <RadioGroupItem value="0.5rem" id="radius-md" className="peer sr-only" />
                 <Label
                   htmlFor="radius-md"
                   className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mb-3 h-6 w-6"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-3 h-6 w-6">
                     <rect width="18" height="18" x="3" y="3" rx="6" />
                   </svg>
                   Medium
                 </Label>
               </div>
               <div>
-                <RadioGroupItem
-                  value="0.75rem"
-                  id="radius-lg"
-                  className="peer sr-only"
-                />
+                <RadioGroupItem value="0.75rem" id="radius-lg" className="peer sr-only" />
                 <Label
                   htmlFor="radius-lg"
                   className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mb-3 h-6 w-6"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-3 h-6 w-6">
                     <rect width="18" height="18" x="3" y="3" rx="12" />
                   </svg>
                   Large
@@ -1011,5 +943,5 @@ export default function ThemeSettings() {
         </CardContent>
       </Card>
     </div>
-  );
-} 
+  )
+}

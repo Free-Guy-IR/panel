@@ -42,7 +42,7 @@ const Settings = () => {
           // This will be handled by the child component through context or props
           const event = new CustomEvent('openCoreDialog')
           window.dispatchEvent(event)
-        }
+        },
       }
     }
     if (location.pathname === '/nodes/logs') {
@@ -51,7 +51,7 @@ const Settings = () => {
         description: 'nodes.logs.description',
         buttonIcon: undefined,
         buttonText: undefined,
-        onButtonClick: undefined
+        onButtonClick: undefined,
       }
     }
     return {
@@ -63,7 +63,7 @@ const Settings = () => {
         // This will be handled by the child component through context or props
         const event = new CustomEvent('openNodeDialog')
         window.dispatchEvent(event)
-      }
+      },
     }
   }
 

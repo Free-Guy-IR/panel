@@ -1,44 +1,41 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+import React, { useState, useEffect } from 'react'
+import axios from 'axios'
 
 interface FlagFromIPProps {
-  ip: string;
+  ip: string
 }
 
 const FlagFromIP: React.FC<FlagFromIPProps> = ({ ip }) => {
-  const [flag, setFlag] = useState<string | null>(null);
+  const [flag, setFlag] = useState<string | null>(null)
 
   const generateFlagEmoji = (countryCode: string): string => {
-    const baseCodePoint = 127397; // Base code point for flags
-    return (
-      String.fromCodePoint(baseCodePoint + countryCode.charCodeAt(0)) +
-      String.fromCodePoint(baseCodePoint + countryCode.charCodeAt(1))
-    );
-  };
+    const baseCodePoint = 127397 // Base code point for flags
+    return String.fromCodePoint(baseCodePoint + countryCode.charCodeAt(0)) + String.fromCodePoint(baseCodePoint + countryCode.charCodeAt(1))
+  }
 
   const fetchFlag = async (ip: string) => {
     try {
-      const { data } = await axios.get(`https://freeipapi.com/api/json/${ip}`);
+      const { data } = await axios.get(`https://freeipapi.com/api/json/${ip}`)
 
       if (data && data.countryCode) {
-        const countryCode = data.countryCode.toUpperCase();
-        const flagEmoji = generateFlagEmoji(countryCode);
+        const countryCode = data.countryCode.toUpperCase()
+        const flagEmoji = generateFlagEmoji(countryCode)
 
-        setFlag(flagEmoji);
+        setFlag(flagEmoji)
       } else {
       }
     } catch (error) {
-      console.error(error);
+      console.error(error)
     }
-  };
+  }
 
   useEffect(() => {
     if (ip) {
-      fetchFlag(ip);
+      fetchFlag(ip)
     }
-  }, [ip]);
+  }, [ip])
 
-  if (flag) return <span>{flag}</span>;
-};
+  if (flag) return <span>{flag}</span>
+}
 
-export default FlagFromIP;
+export default FlagFromIP

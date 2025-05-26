@@ -11,11 +11,11 @@ import { cn } from '@/lib/utils'
 
 export function NavUser({
   username,
-  admin
+  admin,
 }: {
   username: {
     name: string
-  },
+  }
   admin: AdminDetails | null
 }) {
   const { t } = useTranslation()
@@ -29,10 +29,7 @@ export function NavUser({
                 <div className="flex items-center gap-2">
                   <span className="truncate font-semibold">{username.name}</span>
                   {admin && (
-                    <Badge 
-                      variant={admin.is_sudo ? "secondary" : "outline"} 
-                      className="hidden lg:hidden text-[10px] px-1 py-0 h-4"
-                    >
+                    <Badge variant={admin.is_sudo ? 'secondary' : 'outline'} className="hidden lg:hidden text-[10px] px-1 py-0 h-4">
                       {admin.is_sudo ? (
                         <>
                           <Shield className="size-3 mr-1" />
@@ -64,10 +61,7 @@ export function NavUser({
                   <div className="flex items-center gap-2">
                     <span className="truncate font-semibold">{username.name}</span>
                     {admin && (
-                      <Badge 
-                        variant={admin.is_sudo ? "secondary" : "outline"} 
-                        className="text-[10px] py-0 h-4 flex items-center gap-2"
-                      >
+                      <Badge variant={admin.is_sudo ? 'secondary' : 'outline'} className="text-[10px] py-0 h-4 flex items-center gap-2">
                         {admin.is_sudo ? (
                           <>
                             <Shield className="size-3" />
@@ -87,15 +81,21 @@ export function NavUser({
                   <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                     <div className="flex items-center gap-2">
                       <Network className="size-3" />
-                      <span>{t('admins.used.traffic')}: {formatBytes(admin?.used_traffic || 0)}</span>
+                      <span>
+                        {t('admins.used.traffic')}: {formatBytes(admin?.used_traffic || 0)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Wifi className="size-3" />
-                      <span>{t('admins.lifetime.used.traffic')}: {formatBytes(admin?.lifetime_used_traffic || 0)}</span>
+                      <span>
+                        {t('admins.lifetime.used.traffic')}: {formatBytes(admin?.lifetime_used_traffic || 0)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <UsersIcon className="size-3" />
-                      <span>{t('admins.total.users')}: {admin?.total_users || 0}</span>
+                      <span>
+                        {t('admins.total.users')}: {admin?.total_users || 0}
+                      </span>
                     </div>
                   </div>
                 )}

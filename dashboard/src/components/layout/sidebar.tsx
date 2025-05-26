@@ -35,7 +35,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     fetchVersion()
   }, [])
 
-
   const data = {
     user: {
       name: admin?.username || 'Admin',
@@ -51,67 +50,69 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: '/',
         icon: UsersIcon,
       },
-      ...(admin?.is_sudo ? [
-        {
-          title: 'hosts',
-          url: '/hosts',
-          icon: ListTodo,
-        },
-        {
-          title: 'groups',
-          url: '/groups',
-          icon: Users2,
-        },
-        {
-          title: 'templates.title',
-          url: '/templates',
-          icon: LayoutTemplate,
-        },
-        {
-          title: 'nodes.title',
-          url: '/nodes',
-          icon: Share2Icon,
-          items: [
+      ...(admin?.is_sudo
+        ? [
+            {
+              title: 'hosts',
+              url: '/hosts',
+              icon: ListTodo,
+            },
+            {
+              title: 'groups',
+              url: '/groups',
+              icon: Users2,
+            },
+            {
+              title: 'templates.title',
+              url: '/templates',
+              icon: LayoutTemplate,
+            },
             {
               title: 'nodes.title',
               url: '/nodes',
               icon: Share2Icon,
+              items: [
+                {
+                  title: 'nodes.title',
+                  url: '/nodes',
+                  icon: Share2Icon,
+                },
+                {
+                  title: 'settings.cores.title',
+                  url: '/nodes/cores',
+                  icon: Cpu,
+                },
+                {
+                  title: 'nodes.logs.title',
+                  url: '/nodes/logs',
+                  icon: FileText,
+                },
+              ],
             },
             {
-              title: 'settings.cores.title',
-              url: '/nodes/cores',
-              icon: Cpu,
+              title: 'admins.title',
+              url: '/admins',
+              icon: UserCog,
             },
             {
-              title: 'nodes.logs.title',
-              url: '/nodes/logs',
-              icon: FileText,
-            },
-          ],
-        },
-        {
-          title: 'admins.title',
-          url: '/admins',
-          icon: UserCog,
-        },
-        {
-          title: 'settings',
-          url: '/settings',
-          icon: Settings2,
-          items: [
-            {
-              title: 'general',
+              title: 'settings',
               url: '/settings',
-              icon: Settings,
+              icon: Settings2,
+              items: [
+                {
+                  title: 'general',
+                  url: '/settings',
+                  icon: Settings,
+                },
+                {
+                  title: 'theme.title',
+                  url: '/settings/theme',
+                  icon: Palette,
+                },
+              ],
             },
-            {
-              title: 'theme.title',
-              url: '/settings/theme',
-              icon: Palette,
-            },
-          ],
-        },
-      ] : []),
+          ]
+        : []),
     ],
     navSecondary: [
       {

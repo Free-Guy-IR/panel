@@ -54,11 +54,7 @@ export const Statistics = () => {
         }
         icon={<TotalUsersIcon className="w-5 h-5" />}
       />
-      <StatisticCard 
-        title={t('dataUsage')} 
-        content={systemData && formatBytes(systemData.incoming_bandwidth + systemData.outgoing_bandwidth)} 
-        icon={<NetworkIcon className="w-5 h-5" />}
-      />
+      <StatisticCard title={t('dataUsage')} content={systemData && formatBytes(systemData.incoming_bandwidth + systemData.outgoing_bandwidth)} icon={<NetworkIcon className="w-5 h-5" />} />
       <StatisticCard
         title={t('memoryUsage')}
         content={

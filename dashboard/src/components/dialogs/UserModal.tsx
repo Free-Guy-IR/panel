@@ -689,10 +689,13 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       // For edit mode, only validate fields that have been changed
       const allFieldsTouched = editingUser
         ? {}
-        : Object.keys(currentValues).reduce((acc, key) => {
-            acc[key] = true
-            return acc
-          }, {} as Record<string, boolean>)
+        : Object.keys(currentValues).reduce(
+            (acc, key) => {
+              acc[key] = true
+              return acc
+            },
+            {} as Record<string, boolean>,
+          )
       const isValid = validateAllFields(currentValues, allFieldsTouched)
       setIsFormValid(isValid)
       setTouchedFields(allFieldsTouched)

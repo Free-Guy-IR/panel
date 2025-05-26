@@ -15,31 +15,24 @@ import useDirDetection from '@/hooks/use-dir-detection'
 const initialDefaultValues: Partial<CoreConfigFormValues> = {
   name: '',
   config: JSON.stringify({}, null, 2),
-  excluded_inbound_ids: []
+  excluded_inbound_ids: [],
 }
 
 interface CoresProps {
-  isDialogOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  cores?: CoreResponse[];
-  onEditCore?: (coreId: number | string) => void;
-  onDuplicateCore?: (coreId: number | string) => void;
-  onDeleteCore?: (coreName: string, coreId: number) => void;
+  isDialogOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  cores?: CoreResponse[]
+  onEditCore?: (coreId: number | string) => void
+  onDuplicateCore?: (coreId: number | string) => void
+  onDeleteCore?: (coreName: string, coreId: number) => void
 }
 
-export default function Cores({ 
-  isDialogOpen, 
-  onOpenChange,
-  cores,
-  onEditCore,
-  onDuplicateCore,
-  onDeleteCore 
-}: CoresProps) {
+export default function Cores({ isDialogOpen, onOpenChange, cores, onEditCore, onDuplicateCore, onDeleteCore }: CoresProps) {
   const [editingCore, setEditingCore] = useState<CoreResponse | null>(null)
   const { t } = useTranslation()
   const modifyCoreMutation = useModifyCoreConfig()
   const dir = useDirDetection()
-  
+
   const { data: coresData, isLoading } = useGetAllCores({})
 
   useEffect(() => {
@@ -50,7 +43,7 @@ export default function Cores({
 
   const form = useForm<CoreConfigFormValues>({
     resolver: zodResolver(coreConfigFormSchema),
-    defaultValues: initialDefaultValues
+    defaultValues: initialDefaultValues,
   })
 
   const handleEdit = (core: CoreResponse) => {
@@ -58,11 +51,12 @@ export default function Cores({
     form.reset({
       name: core.name,
       config: JSON.stringify(core.config, null, 2),
-      excluded_inbound_ids: core.exclude_inbound_tags ? 
-        core.exclude_inbound_tags.split(',')
-          .map(id => id.trim())
-          .filter(Boolean) : 
-        []
+      excluded_inbound_ids: core.exclude_inbound_tags
+        ? core.exclude_inbound_tags
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean)
+        : [],
     })
     onOpenChange?.(true)
   }
@@ -74,24 +68,28 @@ export default function Cores({
         data: {
           name: core.name,
           config: core.config,
-          exclude_inbound_tags: core.exclude_inbound_tags
+          exclude_inbound_tags: core.exclude_inbound_tags,
         },
         params: {
-          restart_nodes: true
-        }
+          restart_nodes: true,
+        },
       })
-      
-      toast.success(t('core.toggleSuccess', { 
-        name: core.name,
-      }))
-      
+
+      toast.success(
+        t('core.toggleSuccess', {
+          name: core.name,
+        }),
+      )
+
       queryClient.invalidateQueries({
-        queryKey: ['/api/cores']
+        queryKey: ['/api/cores'],
       })
     } catch (error) {
-      toast.error(t('core.toggleFailed', { 
-        name: core.name,
-      }))
+      toast.error(
+        t('core.toggleFailed', {
+          name: core.name,
+        }),
+      )
     }
   }
 
@@ -127,4 +125,4 @@ export default function Cores({
       />
     </div>
   )
-} 
+}

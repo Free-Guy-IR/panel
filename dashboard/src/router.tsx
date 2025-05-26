@@ -42,7 +42,7 @@ export const router = createHashRouter([
       },
       {
         path: '/hosts',
-        element: <Hosts />
+        element: <Hosts />,
       },
       {
         path: '/nodes',

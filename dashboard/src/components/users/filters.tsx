@@ -59,7 +59,7 @@ export const Filters = ({ filters, onFilterChange, refetch }: FiltersProps) => {
       offset: 0,
     })
   }
-  
+
   // Handle refresh with loading state
   const handleRefreshClick = async () => {
     setIsRefreshing(true)
@@ -87,14 +87,8 @@ export const Filters = ({ filters, onFilterChange, refetch }: FiltersProps) => {
       </div>
       {/* Refresh Button */}
       <div className="flex items-center gap-2 h-full">
-        <Button 
-          size="icon-md" 
-          onClick={handleRefreshClick} 
-          variant="ghost" 
-          className="flex items-center gap-2 border"
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+        <Button size="icon-md" onClick={handleRefreshClick} variant="ghost" className="flex items-center gap-2 border" disabled={isRefreshing}>
+          <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
         </Button>
       </div>
     </div>
@@ -102,86 +96,74 @@ export const Filters = ({ filters, onFilterChange, refetch }: FiltersProps) => {
 }
 
 interface PaginationControlsProps {
-  currentPage: number;
-  totalPages: number;
-  itemsPerPage: number;
-  totalUsers: number;
-  isLoading: boolean;
-  onPageChange: (page: number) => Promise<void>;
-  onItemsPerPageChange: (value: number) => Promise<void>;
+  currentPage: number
+  totalPages: number
+  itemsPerPage: number
+  totalUsers: number
+  isLoading: boolean
+  onPageChange: (page: number) => Promise<void>
+  onItemsPerPageChange: (value: number) => Promise<void>
 }
 
-export const PaginationControls = ({
-  currentPage,
-  totalPages,
-  itemsPerPage,
-  totalUsers,
-  isLoading,
-  onPageChange,
-  onItemsPerPageChange
-}: PaginationControlsProps) => {
+export const PaginationControls = ({ currentPage, totalPages, itemsPerPage, totalUsers, isLoading, onPageChange, onItemsPerPageChange }: PaginationControlsProps) => {
   const { t } = useTranslation()
-  
+
   const getPaginationRange = (currentPage: number, totalPages: number) => {
-    const delta = 2; // Number of pages to show on each side of current page
-    const range = [];
-    
+    const delta = 2 // Number of pages to show on each side of current page
+    const range = []
+
     // Handle small number of pages
     if (totalPages <= 5) {
       for (let i = 0; i < totalPages; i++) {
-        range.push(i);
+        range.push(i)
       }
-      return range;
+      return range
     }
-    
+
     // Always include first and last page
-    range.push(0);
-    
+    range.push(0)
+
     // Calculate start and end of range
-    let start = Math.max(1, currentPage - delta);
-    let end = Math.min(totalPages - 2, currentPage + delta);
-    
+    let start = Math.max(1, currentPage - delta)
+    let end = Math.min(totalPages - 2, currentPage + delta)
+
     // Adjust range if current page is near start or end
     if (currentPage - delta <= 1) {
-      end = Math.min(totalPages - 2, start + 2 * delta);
+      end = Math.min(totalPages - 2, start + 2 * delta)
     }
     if (currentPage + delta >= totalPages - 2) {
-      start = Math.max(1, totalPages - 3 - 2 * delta);
+      start = Math.max(1, totalPages - 3 - 2 * delta)
     }
-    
+
     // Add ellipsis if needed
     if (start > 1) {
-      range.push(-1); // -1 represents ellipsis
+      range.push(-1) // -1 represents ellipsis
     }
-    
+
     // Add pages in range
     for (let i = start; i <= end; i++) {
-      range.push(i);
+      range.push(i)
     }
-    
+
     // Add ellipsis if needed
     if (end < totalPages - 2) {
-      range.push(-1); // -1 represents ellipsis
+      range.push(-1) // -1 represents ellipsis
     }
-    
+
     // Add last page
     if (totalPages > 1) {
-      range.push(totalPages - 1);
+      range.push(totalPages - 1)
     }
-    
-    return range;
-  };
-  
+
+    return range
+  }
+
   const paginationRange = getPaginationRange(currentPage, totalPages)
   const dir = useDirDetection()
   return (
     <div className="mt-4 flex flex-col-reverse md:flex-row gap-4 items-center justify-between">
       <div className="flex items-center gap-2">
-        <Select 
-          value={itemsPerPage.toString()} 
-          onValueChange={(value) => onItemsPerPageChange(parseInt(value, 10))}
-          disabled={isLoading}
-        >
+        <Select value={itemsPerPage.toString()} onValueChange={value => onItemsPerPageChange(parseInt(value, 10))} disabled={isLoading}>
           <SelectTrigger className="w-[70px]">
             <SelectValue />
           </SelectTrigger>
@@ -198,13 +180,10 @@ export const PaginationControls = ({
         <span className="text-sm text-gray-600">{t('itemsPerPage')}</span>
       </div>
 
-      <Pagination dir='ltr' className={`md:justify-end ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
-        <PaginationContent className='max-w-[300px] overflow-x-auto sm:max-w-full'>
+      <Pagination dir="ltr" className={`md:justify-end ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
+        <PaginationContent className="max-w-[300px] overflow-x-auto sm:max-w-full">
           <PaginationItem>
-            <PaginationPrevious 
-              onClick={() => onPageChange(currentPage - 1)} 
-              disabled={currentPage === 0 || isLoading} 
-            />
+            <PaginationPrevious onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 0 || isLoading} />
           </PaginationItem>
           {paginationRange.map((pageNumber, i) =>
             pageNumber === -1 ? (
@@ -213,27 +192,26 @@ export const PaginationControls = ({
               </PaginationItem>
             ) : (
               <PaginationItem key={pageNumber}>
-                <PaginationLink 
-                  isActive={currentPage === pageNumber} 
+                <PaginationLink
+                  isActive={currentPage === pageNumber}
                   onClick={() => onPageChange(pageNumber as number)}
                   disabled={isLoading}
-                  className={isLoading && currentPage === pageNumber ? "opacity-70" : ""}
+                  className={isLoading && currentPage === pageNumber ? 'opacity-70' : ''}
                 >
                   {isLoading && currentPage === pageNumber ? (
                     <div className="flex items-center">
                       <LoaderCircle className="h-3 w-3 mr-1 animate-spin" />
                       {(pageNumber as number) + 1}
                     </div>
-                  ) : (pageNumber as number) + 1}
+                  ) : (
+                    (pageNumber as number) + 1
+                  )}
                 </PaginationLink>
               </PaginationItem>
             ),
           )}
           <PaginationItem>
-            <PaginationNext 
-              onClick={() => onPageChange(currentPage + 1)} 
-              disabled={currentPage === totalPages - 1 || totalPages === 0 || isLoading} 
-            />
+            <PaginationNext onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages - 1 || totalPages === 0 || isLoading} />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
