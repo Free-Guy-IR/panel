@@ -9,7 +9,7 @@ from app.models.node import NodeResponse
 from app.models.group import GroupResponse
 from app.models.core import CoreResponse
 from app.models.admin import AdminDetails
-from app.models.user import UserResponse
+from app.models.user import UserNotificationResponse
 from app.db import AsyncSession
 from app.db.models import ReminderType
 from app.db.crud import create_notification_reminder
@@ -119,14 +119,14 @@ async def admin_login(username: str, password: str, client_ip: str, success: boo
         )
 
 
-async def user_status_change(user: UserResponse, by: AdminDetails):
+async def user_status_change(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.user_status_change(user, by.username), tg.user_status_change(user, by.username), wh.status_change(user)
         )
 
 
-async def create_user(user: UserResponse, by: AdminDetails):
+async def create_user(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.create_user(user, by.username),
@@ -135,7 +135,7 @@ async def create_user(user: UserResponse, by: AdminDetails):
         )
 
 
-async def modify_user(user: UserResponse, by: AdminDetails):
+async def modify_user(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.modify_user(user, by.username),
@@ -144,7 +144,7 @@ async def modify_user(user: UserResponse, by: AdminDetails):
         )
 
 
-async def remove_user(user: UserResponse, by: AdminDetails):
+async def remove_user(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.remove_user(user, by.username),
@@ -153,7 +153,7 @@ async def remove_user(user: UserResponse, by: AdminDetails):
         )
 
 
-async def reset_user_data_usage(user: UserResponse, by: AdminDetails):
+async def reset_user_data_usage(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.reset_user_data_usage(user, by.username),
@@ -162,7 +162,7 @@ async def reset_user_data_usage(user: UserResponse, by: AdminDetails):
         )
 
 
-async def user_data_reset_by_next(user: UserResponse, by: AdminDetails):
+async def user_data_reset_by_next(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.user_data_reset_by_next(user, by.username),
@@ -171,7 +171,7 @@ async def user_data_reset_by_next(user: UserResponse, by: AdminDetails):
         )
 
 
-async def user_subscription_revoked(user: UserResponse, by: AdminDetails):
+async def user_subscription_revoked(user: UserNotificationResponse, by: AdminDetails):
     if (await notification_enable()).user:
         await asyncio.gather(
             ds.user_subscription_revoked(user, by.username),
@@ -180,7 +180,7 @@ async def user_subscription_revoked(user: UserResponse, by: AdminDetails):
         )
 
 
-async def data_usage_percent_reached(db: AsyncSession, percent: float, user: UserResponse, threshold: int) -> None:
+async def data_usage_percent_reached(db: AsyncSession, percent: float, user: UserNotificationResponse, threshold: int) -> None:
     if (await notification_enable()).percentage_reached:
         await asyncio.gather(
             wh.notify(wh.ReachedUsagePercent(username=user.username, user=user, used_percent=percent)),
@@ -194,7 +194,7 @@ async def data_usage_percent_reached(db: AsyncSession, percent: float, user: Use
         )
 
 
-async def expire_days_reached(db: AsyncSession, days: int, user: UserResponse, threshold: int) -> None:
+async def expire_days_reached(db: AsyncSession, days: int, user: UserNotificationResponse, threshold: int) -> None:
     if (await notification_enable()).days_left:
         await asyncio.gather(
             wh.notify(wh.ReachedDaysLeft(username=user.username, user=user, days_left=days)),

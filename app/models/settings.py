@@ -112,12 +112,8 @@ class NotificationSettings(BaseModel):
 
     @model_validator(mode="after")
     def check_notify_telegram_requires_token_and_id(self):
-        if (
-            self.notify_telegram
-            and not self.telegram_api_token
-            and (not self.telegram_admin_id and not self.telegram_channel_id)
-        ):
-            raise ValueError("Telegram notification cannot be enabled without token, admin_id and channel_id.")
+        if self.notify_telegram and not self.telegram_api_token:
+            raise ValueError("Telegram notification cannot be enabled without token.")
         return self
 
 

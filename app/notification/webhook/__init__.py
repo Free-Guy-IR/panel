@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.settings import webhook_settings
 from app.models.admin import AdminDetails
-from app.models.user import UserResponse, UserStatus
+from app.models.user import UserNotificationResponse, UserStatus
 
 queue = asyncio.Queue()
 
@@ -39,26 +39,26 @@ class UserNotification(Notification):
 
 class ReachedUsagePercent(UserNotification):
     action: Notification.Type = Notification.Type.reached_usage_percent
-    user: UserResponse
+    user: UserNotificationResponse
     used_percent: float
 
 
 class ReachedDaysLeft(UserNotification):
     action: Notification.Type = Notification.Type.reached_days_left
-    user: UserResponse
+    user: UserNotificationResponse
     days_left: int
 
 
 class UserCreated(UserNotification):
     action: Notification.Type = Notification.Type.user_created
     by: AdminDetails
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserUpdated(UserNotification):
     action: Notification.Type = Notification.Type.user_updated
     by: AdminDetails
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserDeleted(UserNotification):
@@ -68,45 +68,45 @@ class UserDeleted(UserNotification):
 
 class UserLimited(UserNotification):
     action: Notification.Type = Notification.Type.user_limited
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserExpired(UserNotification):
     action: Notification.Type = Notification.Type.user_expired
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserEnabled(UserNotification):
     action: Notification.Type = Notification.Type.user_enabled
     by: AdminDetails | None = None
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserDisabled(UserNotification):
     action: Notification.Type = Notification.Type.user_disabled
     by: AdminDetails | None = None
-    user: UserResponse
+    user: UserNotificationResponse
     reason: str | None = None
 
 
 class UserDataUsageReset(UserNotification):
     action: Notification.Type = Notification.Type.data_usage_reset
     by: AdminDetails
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserDataResetByNext(UserNotification):
     action: Notification.Type = Notification.Type.data_usage_reset
-    user: UserResponse
+    user: UserNotificationResponse
 
 
 class UserSubscriptionRevoked(UserNotification):
     action: Notification.Type = Notification.Type.subscription_revoked
     by: AdminDetails
-    user: UserResponse
+    user: UserNotificationResponse
 
 
-async def status_change(user: UserResponse):
+async def status_change(user: UserNotificationResponse):
     if user.status == UserStatus.limited:
         await notify(UserLimited(username=user.username, user=user))
     elif user.status == UserStatus.expired:

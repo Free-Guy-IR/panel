@@ -34,6 +34,7 @@ from app.models.user import (
     RemoveUsersResponse,
     UserCreate,
     UserModify,
+    UserNotificationResponse,
     UserResponse,
     UsersResponse,
 )
@@ -49,7 +50,7 @@ logger = get_logger("user-operation")
 
 class UserOperation(BaseOperation):
     @staticmethod
-    async def generate_subscription_url(user: UserResponse):
+    async def generate_subscription_url(user: UserNotificationResponse):
         salt = secrets.token_hex(8)
         settings = await subscription_settings()
         url_prefix = (
@@ -60,8 +61,8 @@ class UserOperation(BaseOperation):
         token = await create_subscription_token(user.username)
         return f"{url_prefix}/{XRAY_SUBSCRIPTION_PATH}/{token}"
 
-    async def validate_user(self, user: User) -> UserResponse:
-        user = UserResponse.model_validate(user)
+    async def validate_user(self, user: User) -> UserNotificationResponse:
+        user = UserNotificationResponse.model_validate(user)
         user.subscription_url = await self.generate_subscription_url(user)
         return user
 
@@ -229,7 +230,7 @@ class UserOperation(BaseOperation):
 
         return await get_user_usages(db, db_user.id, start, end, period, node_id)
 
-    async def get_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserResponse:
+    async def get_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserNotificationResponse:
         db_user = await self.get_validated_user(db, username, admin)
         return await self.validate_user(db_user)
 

@@ -1,5 +1,5 @@
 from app.notification.client import send_telegram_message
-from app.models.user import UserResponse
+from app.models.user import UserNotificationResponse
 from app.utils.system import readable_size
 from app.models.settings import NotificationSettings
 from app.settings import notification_settings
@@ -13,7 +13,7 @@ _status = {
 }
 
 
-async def user_status_change(user: UserResponse, by: str):
+async def user_status_change(user: UserNotificationResponse, by: str):
     data = (
         _status[user.status.value]
         + "\n➖➖➖➖➖➖➖➖➖\n"
@@ -31,7 +31,7 @@ async def user_status_change(user: UserResponse, by: str):
         await send_telegram_message(data, chat_id=user.admin.telegram_id)
 
 
-async def create_user(user: UserResponse, by: str):
+async def create_user(user: UserNotificationResponse, by: str):
     data = (
         "*🆕 #Create_User*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -53,7 +53,7 @@ async def create_user(user: UserResponse, by: str):
         await send_telegram_message(data, chat_id=user.admin.telegram_id)
 
 
-async def modify_user(user: UserResponse, by: str):
+async def modify_user(user: UserNotificationResponse, by: str):
     data = (
         "*✏️ #Modify_User*\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -75,7 +75,7 @@ async def modify_user(user: UserResponse, by: str):
         await send_telegram_message(data, chat_id=user.admin.telegram_id)
 
 
-async def remove_user(user: UserResponse, by: str):
+async def remove_user(user: UserNotificationResponse, by: str):
     data = (
         "🗑️ #Remove_User\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -93,7 +93,7 @@ async def remove_user(user: UserResponse, by: str):
         await send_telegram_message(data, chat_id=user.admin.telegram_id)
 
 
-async def reset_user_data_usage(user: UserResponse, by: str):
+async def reset_user_data_usage(user: UserNotificationResponse, by: str):
     data = (
         "🔁 #Reset_User_Data_Usage\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -112,7 +112,7 @@ async def reset_user_data_usage(user: UserResponse, by: str):
         await send_telegram_message(data, chat_id=user.admin.telegram_id)
 
 
-async def user_data_reset_by_next(user: UserResponse, by: str):
+async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
     data = (
         "🔁 #Reset_User_By_Next\n"
         + "➖➖➖➖➖➖➖➖➖\n"
@@ -132,7 +132,7 @@ async def user_data_reset_by_next(user: UserResponse, by: str):
         await send_telegram_message(data, chat_id=user.admin.telegram_id)
 
 
-async def user_subscription_revoked(user: UserResponse, by: str):
+async def user_subscription_revoked(user: UserNotificationResponse, by: str):
     data = (
         "🛑 #Revoke_User_Subscribtion\n"
         + "➖➖➖➖➖➖➖➖➖\n"

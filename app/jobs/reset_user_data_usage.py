@@ -4,7 +4,7 @@ from datetime import datetime as dt, timedelta as td, timezone as tz
 from app import scheduler
 from app.db import GetDB, crud
 from app.db.models import UserStatus, UserDataLimitResetStrategy, User
-from app.models.user import UserResponse
+from app.models.user import UserNotificationResponse
 from app import notification
 from app.core.manager import core_manager
 from app.node import node_manager
@@ -36,7 +36,7 @@ async def reset_user_data_usage():
             old_status = db_user.status
 
             db_user = await crud.reset_user_data_usage(db, db_user)
-            user = UserResponse.model_validate(db_user)
+            user = UserNotificationResponse.model_validate(db_user)
             asyncio.create_task(notification.reset_user_data_usage(user, SYSTEM_ADMIN))
 
             if old_status != db_user.status:
