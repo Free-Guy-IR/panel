@@ -64,7 +64,6 @@ async def review():
             for user in updated_users:
                 await change_status(user, UserStatus.limited)
 
-        users = await get_on_hold_to_active_users(db)
         if on_hold_users := await get_on_hold_to_active_users(db):
             updated_users = await start_users_expire(db, on_hold_users)
 
