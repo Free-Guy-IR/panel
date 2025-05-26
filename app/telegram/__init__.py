@@ -77,7 +77,7 @@ async def shutdown_telegram_bot():
             return
         try:
             await _bot.delete_webhook(drop_pending_updates=True)
-        except (TelegramNetworkError,TelegramRetryAfter, ProxyConnectionError) as err:
+        except (TelegramNetworkError, TelegramRetryAfter, ProxyConnectionError) as err:
             if hasattr(err, "message"):
                 logger.error(err.message)
             else:

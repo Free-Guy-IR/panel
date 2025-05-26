@@ -126,7 +126,7 @@ class XRayConfig(dict):
                 with open(certificate["certificateFile"], "rb") as file:
                     cert = file.read()
                     settings["sni"].extend(get_cert_SANs(cert))
-                
+
                 if certificate.get("keyFile", None):
                     with open(certificate["keyFile"], "rb") as file:
                         key = file.read()
@@ -146,7 +146,7 @@ class XRayConfig(dict):
                 if isinstance(cert, str):
                     cert = cert.encode()
                 settings["sni"].extend(get_cert_SANs(cert))
-        
+
         return tls_settings
 
     def _handle_reality_settings(self, tls_settings: dict, settings: dict, inbound_tag: str):

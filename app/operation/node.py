@@ -119,7 +119,7 @@ class NodeOperation(BaseOperation):
                 detail = e.detail
 
                 if len(detail) > 1024:
-                    detail = detail[: 1020] + "..."
+                    detail = detail[:1020] + "..."
                 else:
                     detail = detail
 
