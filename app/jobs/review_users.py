@@ -2,28 +2,26 @@ import asyncio
 
 from sqlalchemy.orm import Session
 
-from app import scheduler
+from app import notification, scheduler
 from app.db import GetDB
 from app.db.crud import (
+    get_active_to_expire_users,
+    get_active_to_limited_users,
+    get_days_left_reached_users,
+    get_on_hold_to_active_users,
+    get_usage_percentage_reached_users,
     reset_user_by_next,
     start_users_expire,
     update_users_status,
-    get_active_to_expire_users,
-    get_active_to_limited_users,
-    get_on_hold_to_active_users,
-    get_usage_percentage_reached_users,
-    get_days_left_reached_users,
 )
 from app.db.models import User, UserStatus
-from app.node import node_manager as node_manager
-from app.models.user import UserResponse
+from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import Webhook
+from app.models.user import UserResponse
+from app.node import node_manager as node_manager
 from app.settings import webhook_settings
 from app.utils.logger import get_logger
-from app import notification
-from app.jobs.dependencies import SYSTEM_ADMIN
 from config import JOB_REVIEW_USERS_INTERVAL
-
 
 logger = get_logger("review-users")
 
@@ -51,7 +49,7 @@ async def review():
 
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
 
-            if db_user.next_plan and (db_user.next_plan.fire_on_either or (db_user.is_limited and db_user.is_expired)):
+            if db_user.next_plan and (db_user.next_plan.fire_on_either or db_user.is_limited or db_user.is_expired):
                 await reset_user_by_next_report(db, db_user)
 
         if expired_users := await get_active_to_expire_users(db):
