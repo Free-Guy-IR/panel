@@ -124,3 +124,8 @@ clean:
 # Setup environment: check Python, install uv, and sync requirements
 .PHONY: setup
 setup: check-python install_uv requirements
+
+# Format code (front-end)
+.PHONY: fformat
+fformat:
+	@cd dashboard && pnpm exec prettier . --write
