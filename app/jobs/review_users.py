@@ -35,6 +35,8 @@ async def reset_user_by_next_report(db: Session, db_user: User):
 
     asyncio.create_task(notification.user_data_reset_by_next(user, SYSTEM_ADMIN))
 
+    logger.info(f'User "{db_user.username}" next plan activated')
+
 
 async def review():
     async with GetDB() as db:
@@ -49,7 +51,7 @@ async def review():
 
             logger.info(f'User "{db_user.username}" status changed to {status.value}')
 
-            if db_user.next_plan and (db_user.is_limited or db_user.is_expired):
+            if db_user.next_plan and db_user.status is not UserStatus.active:
                 await reset_user_by_next_report(db, db_user)
 
         if expired_users := await get_active_to_expire_users(db):
