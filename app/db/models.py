@@ -281,7 +281,6 @@ class NextPlan(Base):
     data_limit: Mapped[int] = mapped_column(BigInteger, default=0)
     expire: Mapped[Optional[int]] = mapped_column(default=None)
     add_remaining_traffic: Mapped[bool] = mapped_column(default=False, server_default="0")
-    fire_on_either: Mapped[bool] = mapped_column(default=True, server_default="0")
 
     user: Mapped["User"] = relationship(back_populates="next_plan")
     user_template: Mapped[Optional["UserTemplate"]] = relationship(back_populates="next_plans")

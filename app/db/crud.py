@@ -726,7 +726,6 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
             data_limit=modify.next_plan.data_limit,
             expire=modify.next_plan.expire,
             add_remaining_traffic=modify.next_plan.add_remaining_traffic,
-            fire_on_either=modify.next_plan.fire_on_either,
         )
     elif db_user.next_plan is not None:
         await db.delete(db_user.next_plan)

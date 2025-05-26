@@ -22,7 +22,6 @@ class NextPlanModel(BaseModel):
     data_limit: int | None = None
     expire: int | None = None
     add_remaining_traffic: bool = False
-    fire_on_either: bool = True
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -81,7 +80,11 @@ class UserCreate(UserWithValidator):
                     "vless": {},
                 },
                 "group_ids": [1, 3, 5],
-                "next_plan": {"data_limit": 0, "expire": 0, "add_remaining_traffic": False, "fire_on_either": True},
+                "next_plan": {
+                    "data_limit": 0,
+                    "expire": 0,
+                    "add_remaining_traffic": False,
+                },
                 "expire": 0,
                 "data_limit": 0,
                 "data_limit_reset_strategy": "no_reset",
@@ -114,7 +117,11 @@ class UserModify(UserWithValidator):
                     "vless": {},
                 },
                 "group_ids": [1, 3, 5],
-                "next_plan": {"data_limit": 0, "expire": 0, "add_remaining_traffic": False, "fire_on_either": True},
+                "next_plan": {
+                    "data_limit": 0,
+                    "expire": 0,
+                    "add_remaining_traffic": False,
+                },
                 "expire": 0,
                 "data_limit": 0,
                 "data_limit_reset_strategy": "no_reset",
