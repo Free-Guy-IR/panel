@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent } from '@/components/ui/card'
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useGetNodes } from '@/service/api'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
@@ -44,23 +44,17 @@ export default function NodeLogs() {
   const [showTimestamps, setShowTimestamps] = useState(false)
   const [selectedLevels, setSelectedLevels] = useState<LogLevel[]>(['debug', 'info', 'warning', 'error'])
   const [searchQuery, setSearchQuery] = useState('')
-  // Maximum number of logs to display (not affecting storage)
   const [maxLogsCount, setMaxLogsCount] = useState(1000)
-  // For custom log limit input
   const [isUnlimited, setIsUnlimited] = useState(false)
-  // Add state for controlling popover open/close
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   const eventSourceRef = useRef<EventSource | null>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
-  // Store logs in ref to avoid unnecessary re-renders
   const logsRef = useRef<LogEntry[]>([])
-  // Use a buffer for new logs to reduce state updates
   const pendingLogsRef = useRef<LogEntry[]>([])
-  // Debounce timer ref
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
-  // Maximum logs to keep in storage (separate from display limit)
   const maxStorageLogsRef = useRef<number>(10000)
+  const isNodeSwitchingRef = useRef<boolean>(false)
 
   const { data: nodes = [] } = useGetNodes({})
 
@@ -89,157 +83,227 @@ export default function NodeLogs() {
   }
 
   const determineLogLevel = (message: string): LogLevel => {
-    const lowerMessage = message.toLowerCase()
-    if (lowerMessage.includes('[error]')) return 'error'
-    if (lowerMessage.includes('[warning]') || lowerMessage.includes('[warn]')) return 'warning'
-    if (lowerMessage.includes('[info]')) return 'info'
-    if (lowerMessage.includes('[debug]')) return 'debug'
-    return 'none'
-  }
+    const lowerMessage = message.toLowerCase();
+    
+    // First check for exact matches with brackets
+    if (lowerMessage.includes('[error]')) return 'error';
+    if (lowerMessage.includes('[warning]') || lowerMessage.includes('[warn]')) return 'warning';
+    if (lowerMessage.includes('[info]')) return 'info';
+    if (lowerMessage.includes('[debug]')) return 'debug';
+    
+    // Then check for other patterns
+    if (lowerMessage.includes('warning:') || lowerMessage.includes('warn:')) return 'warning';
+    if (lowerMessage.includes('info:') || lowerMessage.includes('inf:')) return 'info';
+    if (lowerMessage.includes('debug:') || lowerMessage.includes('dbg:')) return 'debug';
+    
+    // Check for common patterns in the message
+    if (lowerMessage.includes('warning')) return 'warning';
+    if (lowerMessage.includes('info') || lowerMessage.includes('information')) return 'info';
+    if (lowerMessage.includes('debug')) return 'debug';
+    
+    // Default to info for connection logs and other common patterns
+    if (lowerMessage.includes('from') || lowerMessage.includes('connected') || lowerMessage.includes('connection')) return 'info';
+    
+    // If no level is detected, default to info
+    return 'info';
+  };
 
-  useEffect(() => {
-    if (selectedNode === 0) {
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
+  // Reset all log-related state when node changes
+  const resetLogState = useCallback(() => {
     setLogs([]);
+    setFilteredLogs([]);
     logsRef.current = [];
     pendingLogsRef.current = [];
     if (updateTimerRef.current) {
       clearTimeout(updateTimerRef.current);
       updateTimerRef.current = null;
     }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setIsLoading(true);
+    isNodeSwitchingRef.current = true;
+  }, [selectedNode]);
 
-    const baseUrl = (import.meta.env.VITE_BASE_API && typeof import.meta.env.VITE_BASE_API === 'string' && import.meta.env.VITE_BASE_API.trim() !== '/' && import.meta.env.VITE_BASE_API.startsWith('http')) ? import.meta.env.VITE_BASE_API : window.location.origin
-    const token = getAuthToken()
-    const eventSource = new EventSource(`${baseUrl}/api/node/${selectedNode}/logs`, {
+  // Handle node selection change
+  const handleNodeChange = useCallback((nodeId: number) => {
+    resetLogState();
+    setSelectedNode(nodeId);
+  }, [resetLogState]);
+
+  useEffect(() => {
+    if (selectedNode === 0) {
+      setIsLoading(false);
+      return;
+    }
+
+    const baseUrl = (import.meta.env.VITE_BASE_API && typeof import.meta.env.VITE_BASE_API === 'string' && import.meta.env.VITE_BASE_API.trim() !== '/' && import.meta.env.VITE_BASE_API.startsWith('http')) ? import.meta.env.VITE_BASE_API : window.location.origin;
+    const token = getAuthToken();
+    
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    const url = `${baseUrl}/api/node/${selectedNode}/logs`;
+    const eventSource = new EventSource(url, {
       fetch: (input: Request | URL | string, init?: RequestInit) => {
-        const headers = new Headers(init?.headers || {})
-        headers.set('Authorization', `Bearer ${token}`)
+        const headers = new Headers(init?.headers || {});
+        headers.set('Authorization', `Bearer ${token}`);
         return fetch(input, {
           ...init,
           headers,
-        })
+        });
       }
-    } as any)
-    eventSourceRef.current = eventSource
+    } as any);
+    
+    eventSourceRef.current = eventSource;
 
-    // Setup a recurring timer to batch-update logs
+    let isProcessing = false;
+
     const setupBatchUpdateTimer = () => {
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
       }
 
       updateTimerRef.current = setTimeout(() => {
-        if (pendingLogsRef.current.length > 0) {
-          // Combine existing logs with new ones
-          const combinedLogs = [...logsRef.current, ...pendingLogsRef.current];
+        if (pendingLogsRef.current.length > 0 && !isProcessing) {
+          isProcessing = true;
+          try {
+            const combinedLogs = [...logsRef.current, ...pendingLogsRef.current];
+            const storageLimit = isUnlimited ? Number.MAX_SAFE_INTEGER : maxStorageLogsRef.current;
+            const trimmedLogs = combinedLogs.length > storageLimit
+              ? combinedLogs.slice(-storageLimit)
+              : combinedLogs;
 
-          // Only limit the stored logs if we exceed the max storage count
-          const storageLimit = isUnlimited ? Number.MAX_SAFE_INTEGER : maxStorageLogsRef.current;
-          const trimmedLogs = combinedLogs.length > storageLimit
-            ? combinedLogs.slice(-storageLimit)
-            : combinedLogs;
-
-          // Update our refs
-          logsRef.current = trimmedLogs;
-          pendingLogsRef.current = [];
-
-          // Update state (triggers render)
-          setLogs(trimmedLogs);
+            logsRef.current = trimmedLogs;
+            pendingLogsRef.current = [];
+            setLogs(trimmedLogs);
+          } catch (error) {
+            console.error('Error processing logs:', error);
+          } finally {
+            isProcessing = false;
+          }
         }
 
-        // Continue the cycle
         setupBatchUpdateTimer();
-      }, 1000); // Update once per second maximum
+      }, 1000);
     };
 
     setupBatchUpdateTimer();
 
     eventSource.onmessage = (event) => {
-      let logEntry: Partial<LogEntry>
       try {
-        logEntry = JSON.parse(event.data)
-      } catch {
-        // If not JSON, treat as plain string
-        logEntry = {
-          timestamp: Date.now(),
-          message: event.data,
+        let logEntry: Partial<LogEntry>;
+        try {
+          logEntry = JSON.parse(event.data);
+        } catch {
+          logEntry = {
+            timestamp: Date.now(),
+            message: event.data,
+          };
         }
+
+        const level = determineLogLevel(logEntry.message || '');
+        const newEntry: LogEntry = {
+          timestamp: logEntry.timestamp || Date.now(),
+          message: logEntry.message || '',
+          level
+        };
+
+        pendingLogsRef.current.push(newEntry);
+      } catch (error) {
+        console.error('Error processing message:', error);
       }
-
-      // Determine log level from message
-      const level = determineLogLevel(logEntry.message || '')
-
-      const newEntry: LogEntry = {
-        timestamp: logEntry.timestamp || Date.now(),
-        message: logEntry.message || '',
-        level
-      }
-
-      // Add to pending logs buffer instead of updating state directly
-      pendingLogsRef.current.push(newEntry);
-    }
+    };
 
     eventSource.onerror = (error) => {
-      console.error('SSE Error:', error)
-      eventSource.close()
-      setIsLoading(false)
+      console.error('SSE Error:', error);
+      eventSource.close();
+      setIsLoading(false);
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;
       }
-    }
+    };
 
     eventSource.onopen = () => {
-      console.log('SSE connection opened')
-      setIsLoading(false)
-    }
+      setIsLoading(false);
+      isNodeSwitchingRef.current = false;
+    };
 
-    // Cleanup on unmount
     return () => {
       if (eventSourceRef.current) {
-        eventSourceRef.current.close()
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;
       }
-    }
-  }, [selectedNode])
+    };
+  }, [selectedNode, isUnlimited]);
 
   // Filter logs based on selected levels and search query
   useEffect(() => {
-    // Debounce filtering to prevent excessive calculations
     const debounceTimer = setTimeout(() => {
-      // Apply filters to all stored logs
-      const visibleLogs = logs.filter(log =>
-        selectedLevels.includes(log.level) &&
-        (searchQuery === '' || log.message.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
+      try {
+        const visibleLogs = logs.filter(log => {
+          const levelMatch = selectedLevels.includes(log.level);
+          const searchMatch = searchQuery === '' || log.message.toLowerCase().includes(searchQuery.toLowerCase());
+          return levelMatch && searchMatch;
+        });
 
-      // Apply display limit based on maxLogsCount setting
-      if (isUnlimited) {
-        setFilteredLogs(visibleLogs);
-      } else {
-        setFilteredLogs(visibleLogs.slice(-maxLogsCount));
+        const filteredLogs = isUnlimited 
+          ? visibleLogs 
+          : visibleLogs.slice(-maxLogsCount);
+        
+        setFilteredLogs(filteredLogs);
+      } catch (error) {
+        console.error('Error filtering logs:', error);
       }
     }, 100);
 
     return () => clearTimeout(debounceTimer);
   }, [logs, selectedLevels, searchQuery, maxLogsCount, isUnlimited]);
 
-  // Auto-scroll to bottom when new logs arrive
+  // Initialize with all log levels selected
   useEffect(() => {
-    if (autoScroll && autoScrollEnabled && logsContainerRef.current) {
-      setTimeout(() => {
+    setSelectedLevels(['debug', 'info', 'warning', 'error']);
+  }, []);
+
+  // Debug log when filtered logs change
+  useEffect(() => {
+    console.log('Filtered logs updated:', filteredLogs.length);
+  }, [filteredLogs]);
+
+  // Debug log when raw logs change
+  useEffect(() => {
+    console.log('Raw logs updated:', logs.length);
+  }, [logs]);
+
+  // Auto-scroll effect with improved node switching handling
+  useEffect(() => {
+    if (!isNodeSwitchingRef.current && autoScroll && autoScrollEnabled && logsContainerRef.current) {
+      const scrollToBottom = () => {
         if (logsContainerRef.current) {
-          logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
+          logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
         }
-      }, 100)
+      };
+
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(scrollToBottom);
     }
-  }, [filteredLogs, autoScroll, autoScrollEnabled])
+  }, [filteredLogs, autoScroll, autoScrollEnabled]);
+
+  // Update autoScrollEnabled when autoScroll changes
+  useEffect(() => {
+    if (autoScroll) {
+      setAutoScrollEnabled(true);
+      scrollToBottom();
+    }
+  }, [autoScroll]);
 
   // For windowed rendering
   const [visibleStartIndex, setVisibleStartIndex] = useState(0);
@@ -248,18 +312,18 @@ export default function NodeLogs() {
   const containerHeight = 600; // Container height in pixels
   const visibleItemsCount = Math.ceil(containerHeight / itemHeight) + 2 * bufferSize;
 
-  // Handle scroll events for windowed rendering
+  // Handle scroll events with improved node switching awareness
   const handleScroll = useMemo(() => {
     return (e: React.UIEvent<HTMLDivElement>) => {
+      if (isNodeSwitchingRef.current) return;
+
       const container = e.currentTarget;
-      // Calculate the first visible item index
       const scrollTop = container.scrollTop;
       const firstVisibleIndex = Math.max(
         0,
         Math.floor(scrollTop / itemHeight) - bufferSize
       );
 
-      // If the user scrolls up, disable auto-scroll
       if (container.scrollHeight - scrollTop - container.clientHeight > 50) {
         if (autoScrollEnabled) {
           setAutoScrollEnabled(false);
@@ -293,14 +357,9 @@ export default function NodeLogs() {
   // Calculate offset for the visible items
   const offsetY = Math.max(0, visibleStartIndex * itemHeight);
 
-  // Update autoScrollEnabled when autoScroll changes
-  useEffect(() => {
-    setAutoScrollEnabled(autoScroll);
-  }, [autoScroll]);
-
   const scrollToBottom = () => {
     if (logsContainerRef.current) {
-      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
       // Re-enable auto-scroll if it's turned on but was disabled by manual scrolling
       if (autoScroll && !autoScrollEnabled) {
         setAutoScrollEnabled(true);
@@ -311,7 +370,7 @@ export default function NodeLogs() {
         setVisibleStartIndex(maxStartIndex);
       }
     }
-  }
+  };
 
   const toggleLogLevel = (level: LogLevel) => {
     setSelectedLevels(prev =>
@@ -386,7 +445,7 @@ export default function NodeLogs() {
               <Label htmlFor="node-select" className="mb-1 block text-sm">{t('nodes.title')}</Label>
               <Select
                 value={selectedNode.toString()}
-                onValueChange={(value) => setSelectedNode(Number(value))}
+                onValueChange={(value) => handleNodeChange(Number(value))}
               >
                 <SelectTrigger id="node-select" className="w-full sm:w-[200px] h-8 text-xs sm:text-sm">
                   <SelectValue placeholder={t('nodes.selectNode')} />
