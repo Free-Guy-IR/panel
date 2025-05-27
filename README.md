@@ -61,21 +61,21 @@
 
 ## Table of Contents
 
-- [Overview](#overview)
-  - [Why using Marzban?](#why-using-marzban)
-    - [Features](#features)
-- [Installation guide](#installation-guide)
-- [Configuration](#configuration)
-- [Documentation](#documentation)
-- [API](#api)
-- [Backup](#backup)
-- [Telegram Bot](#telegram-bot)
-- [Marzban CLI](#marzban-cli)
-- [Gozaroah Node](#gozargah-node)
-- [Webhook notifications](#webhook-notifications)
-- [Donation](#donation)
-- [License](#license)
-- [Contributors](#contributors)
+-   [Overview](#overview)
+    -   [Why using Marzban?](#why-using-marzban)
+        -   [Features](#features)
+-   [Installation guide](#installation-guide)
+-   [Configuration](#configuration)
+-   [Documentation](#documentation)
+-   [API](#api)
+-   [Backup](#backup)
+-   [Telegram Bot](#telegram-bot)
+-   [Marzban CLI](#marzban-cli)
+-   [Gozaroah Node](#gozargah-node)
+-   [Webhook notifications](#webhook-notifications)
+-   [Donation](#donation)
+-   [License](#license)
+-   [Contributors](#contributors)
 
 # Overview
 
@@ -87,53 +87,61 @@ Marzban is user-friendly, feature-rich and reliable. It lets you to create diffe
 
 ### Features
 
-- Built-in **Web UI**
-- Fully **REST API** backend
-- [**Multiple Nodes**](#Gozargah-node) support (for infrastructure distribution & scalability)
-- Supports protocols **Vmess**, **VLESS**, **Trojan** and **Shadowsocks**
-- **Multi-protocol** for a single user
-- **Multi-user** on a single inbound
-- **Multi-inbound** on a **single port** (fallbacks support)
-- **Traffic** and **expiry date** limitations
-- **Periodic** traffic limit (e.g. daily, weekly, etc.)
-- **Subscription link** compatible with **V2ray** _(such as V2RayNG, SingBox, Nekoray, etc.)_, **Clash** and **ClashMeta**
-- Automated **Share link** and **QRcode** generator
-- System monitoring and **traffic statistics**
-- Customizable xray configuration
-- **TLS** and **REALITY** support
-- Integrated **Telegram Bot**
-- Integrated **Command Line Interface (CLI)**
-- **Multi-language**
-- **Multi-admin** support (WIP)
+-   Built-in **Web UI**
+-   Fully **REST API** backend
+-   [**Multiple Nodes**](#Gozargah-node) support (for infrastructure distribution & scalability)
+-   Supports protocols **Vmess**, **VLESS**, **Trojan** and **Shadowsocks**
+-   **Multi-protocol** for a single user
+-   **Multi-user** on a single inbound
+-   **Multi-inbound** on a **single port** (fallbacks support)
+-   **Traffic** and **expiry date** limitations
+-   **Periodic** traffic limit (e.g. daily, weekly, etc.)
+-   **Subscription link** compatible with **V2ray** _(such as V2RayNG, SingBox, Nekoray, etc.)_, **Clash** and **ClashMeta**
+-   Automated **Share link** and **QRcode** generator
+-   System monitoring and **traffic statistics**
+-   Customizable xray configuration
+-   **TLS** and **REALITY** support
+-   Integrated **Telegram Bot**
+-   Integrated **Command Line Interface (CLI)**
+-   **Multi-language**
+-   **Multi-admin** support (WIP)
 
 # Installation guide
+
+### ⚠️ The following commands will install the pre release versions (alpha/bela)
 
 Run the following command to install Marzban with SQLite database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install
+sudo bash -c "$(curl -sL https://github.com/ImMohammad20000/Marzban-scripts/raw/master/marzban.sh)" @ install --pre-release
 ```
 
 Run the following command to install Marzban with MySQL database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install --database mysql
+sudo bash -c "$(curl -sL https://github.com/ImMohammad20000/Marzban-scripts/raw/master/marzban.sh)" @ install --database mysql --pre-release
 ```
 
 Run the following command to install Marzban with MariaDB database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install --database mariadb
+sudo bash -c "$(curl -sL https://github.com/ImMohammad20000/Marzban-scripts/raw/master/marzban.sh)" @ install --database mariadb --pre-release
+```
+
+Run the following command to install Marzban with PostgreSQL database:
+
+```bash
+sudo bash -c "$(curl -sL https://github.com/ImMohammad20000/Marzban-scripts/raw/master/marzban.sh)" @ install --database postgresql --pre-release
 ```
 
 Once the installation is complete:
 
-- You will see the logs that you can stop watching them by closing the terminal or pressing `Ctrl+C`
-- The Marzban files will be located at `/opt/marzban`
-- The configuration file can be found at `/opt/marzban/.env` (refer to [configurations](#configuration) section to see variables)
-- The data files will be placed at `/var/lib/marzban`
-- For security reasons, the Marzban dashboard is not accessible via IP address. Therefore, you must [obtain SSL certificate](https://gozargah.github.io/marzban/en/examples/issue-ssl-certificate) and access your Marzban dashboard by opening a web browser and navigating to `https://YOUR_DOMAIN:8000/dashboard/` (replace YOUR_DOMAIN with your actual domain)
-- You can also use SSH port forwarding to access the Marzban dashboard locally without a domain. Replace `user@serverip` with your actual SSH username and server IP and Run the command below:
+-   You will see the logs that you can stop watching them by closing the terminal or pressing `Ctrl+C`
+-   The Marzban files will be located at `/opt/marzban`
+-   The configuration file can be found at `/opt/marzban/.env` (refer to [configurations](#configuration) section to see variables)
+-   The data files will be placed at `/var/lib/marzban`
+-   For security reasons, the Marzban dashboard is not accessible via IP address. Therefore, you must [obtain SSL certificate](https://gozargah.github.io/marzban/en/examples/issue-ssl-certificate) and access your Marzban dashboard by opening a web browser and navigating to `https://YOUR_DOMAIN:8000/dashboard/` (replace YOUR_DOMAIN with your actual domain)
+-   You can also use SSH port forwarding to access the Marzban dashboard locally without a domain. Replace `user@serverip` with your actual SSH username and server IP and Run the command below:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
@@ -290,7 +298,7 @@ By default the app will be run on `http://localhost:8000/dashboard`. You can con
 > You can set settings below using environment variables or placing them in `.env` file.
 
 | Variable                                 | Description                                                                                                              |
-|------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --- |
 | SUDO_USERNAME                            | Superuser's username                                                                                                     |
 | SUDO_PASSWORD                            | Superuser's password                                                                                                     |
 | SQLALCHEMY_DATABASE_URL                  | Database URL ([SQLAlchemy's docs](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls))                    |
@@ -306,7 +314,7 @@ By default the app will be run on `http://localhost:8000/dashboard`. You can con
 | CUSTOM_TEMPLATES_DIRECTORY               | Customized templates directory (default: `app/templates`)                                                                |
 | CLASH_SUBSCRIPTION_TEMPLATE              | The template that will be used for generating clash configs (default: `clash/default.yml`)                               |
 | SUBSCRIPTION_PAGE_TEMPLATE               | The template used for generating subscription info page (default: `subscription/index.html`)                             |
-| XRAY_SUBSCRIPTION_TEMPLATE               | The template that will be used for generating xray configs (default: `xray/default.yml`)                                 |\
+| XRAY_SUBSCRIPTION_TEMPLATE               | The template that will be used for generating xray configs (default: `xray/default.yml`)                                 | \   |
 | SINGBOX_SUBSCRIPTION_TEMPLATE            | The template that will be used for generating xray configs (default: `xray/default.yml`)                                 |
 | HOME_PAGE_TEMPLATE                       | Decoy page template (default: `home/index.html`)                                                                         |
 | JWT_ACCESS_TOKEN_EXPIRE_MINUTES          | Expire time for the Access Tokens in minutes, `0` considered as infinite (default: `1440`)                               |
