@@ -108,7 +108,7 @@ Marzban is user-friendly, feature-rich and reliable. It lets you to create diffe
 
 # Installation guide
 
-### ⚠️ The following commands will install the pre release versions (alpha/bela)
+### ⚠️ The following commands will install the pre release versions (alpha/beta)
 
 Run the following command to install Marzban with SQLite database:
 
