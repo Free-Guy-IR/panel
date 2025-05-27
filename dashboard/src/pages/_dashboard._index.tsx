@@ -49,7 +49,6 @@ export const nextPlanModelSchema = z.object({
   data_limit: z.number().min(0).optional(),
   expire: z.number().min(0).optional(),
   add_remaining_traffic: z.boolean().optional(),
-  fire_on_either: z.boolean().optional(),
 })
 
 export const userCreateSchema = z.object({

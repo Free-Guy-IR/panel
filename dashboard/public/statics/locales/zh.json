@@ -828,7 +828,6 @@
     "nextPlanDataLimit": "流量限制 (GB)",
     "nextPlanExpire": "到期（天）",
     "nextPlanAddRemainingTraffic": "添加剩余流量",
-    "nextPlanFireOnEither": "任一条件触发",
     "selectTemplate": "选择模板",
     "selectTemplatePlaceholder": "选择模板"
   },

@@ -521,8 +521,7 @@
     "nextPlanTemplateId": "Template ID",
     "nextPlanDataLimit": "Data Limit (GB)",
     "nextPlanExpire": "Expire (days)",
-    "nextPlanAddRemainingTraffic": "Add Remaining Traffic",
-    "nextPlanFireOnEither": "Fire On Either"
+    "nextPlanAddRemainingTraffic": "Add Remaining Traffic"
   },
   "inbound": "Inbound",
   "remark": "Host Name",
@@ -636,7 +635,6 @@
     "nextPlanDataLimit": "Data Limit (GB)",
     "nextPlanExpire": "Expire (days)",
     "nextPlanAddRemainingTraffic": "Add Remaining Traffic",
-    "nextPlanFireOnEither": "Fire On Either",
     "selectTemplate": "Select Template",
     "selectTemplatePlaceholder": "Choose a template",
     "proxySettingsAccordion": "Proxy Settings",

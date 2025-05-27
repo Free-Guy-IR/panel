@@ -665,8 +665,7 @@
     "nextPlanTemplateId": "ID шаблона",
     "nextPlanDataLimit": "Лимит данных (ГБ)",
     "nextPlanExpire": "Срок действия (дней)",
-    "nextPlanAddRemainingTraffic": "Добавить оставшийся трафик",
-    "nextPlanFireOnEither": "Сработать по любому условию"
+    "nextPlanAddRemainingTraffic": "Добавить оставшийся трафик"
   },
   "enable": "Включить",
   "host": {

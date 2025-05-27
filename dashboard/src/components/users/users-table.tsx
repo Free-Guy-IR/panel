@@ -48,7 +48,6 @@ const UsersTable = () => {
             data_limit: selectedUser?.next_plan.data_limit ? Number(selectedUser?.next_plan.data_limit) : undefined,
             expire: selectedUser?.next_plan.expire ? Number(selectedUser?.next_plan.expire) : undefined,
             add_remaining_traffic: selectedUser?.next_plan.add_remaining_traffic || false,
-            fire_on_either: selectedUser?.next_plan.fire_on_either || false,
           }
         : undefined,
     },
@@ -73,7 +72,6 @@ const UsersTable = () => {
               data_limit: selectedUser.next_plan.data_limit ? Number(selectedUser.next_plan.data_limit) : undefined,
               expire: selectedUser.next_plan.expire ? Number(selectedUser.next_plan.expire) : undefined,
               add_remaining_traffic: selectedUser.next_plan.add_remaining_traffic || false,
-              fire_on_either: selectedUser.next_plan.fire_on_either || false,
             }
           : undefined,
       }

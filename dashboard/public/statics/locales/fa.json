@@ -821,7 +821,6 @@
     "nextPlanDataLimit": "حجم داده (گیگابایت)",
     "nextPlanExpire": "انقضا (روز)",
     "nextPlanAddRemainingTraffic": "افزودن ترافیک باقی‌مانده",
-    "nextPlanFireOnEither": "فعال‌سازی با هرکدام",
     "selectTemplate": "انتخاب قالب",
     "selectTemplatePlaceholder": "یک قالب را انتخاب کنید"
   },

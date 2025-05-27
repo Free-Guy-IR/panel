@@ -3,7 +3,7 @@
  * Do not edit manually.
  * MarzbanAPI
  * Unified GUI Censorship Resistant Solution Powered by Xray
- * OpenAPI spec version: 1.0.0-alpha-4
+ * OpenAPI spec version: 1.0.0-alpha-6
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -123,6 +123,10 @@ export type ModifyCoreConfigParams = {
 export type GetAllGroupsParams = {
   offset?: number
   limit?: number
+}
+
+export type GetSystemStatsParams = {
+  admin_username?: string | null
 }
 
 export type GetAdminsParams = {
@@ -383,7 +387,7 @@ export interface UserTemplateResponse {
   expire_duration?: UserTemplateResponseExpireDuration
   username_prefix?: UserTemplateResponseUsernamePrefix
   username_suffix?: UserTemplateResponseUsernameSuffix
-  group_ids?: number[]
+  group_ids: number[]
   extra_settings?: UserTemplateResponseExtraSettings
   status?: UserTemplateResponseStatus
   reset_usages?: UserTemplateResponseResetUsages
@@ -476,7 +480,7 @@ export interface UserTemplateCreate {
   expire_duration?: UserTemplateCreateExpireDuration
   username_prefix?: UserTemplateCreateUsernamePrefix
   username_suffix?: UserTemplateCreateUsernameSuffix
-  group_ids?: number[]
+  group_ids: number[]
   extra_settings?: UserTemplateCreateExtraSettings
   status?: UserTemplateCreateStatus
   reset_usages?: UserTemplateCreateResetUsages
@@ -513,7 +517,7 @@ export const UserStatus = {
   on_hold: 'on_hold',
 } as const
 
-export type UserResponseAdmin = AdminBaseInfo | null
+export type UserResponseAdmin = AdminBase | null
 
 export type UserResponseOnlineAt = string | null
 
@@ -581,14 +585,25 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
 export type UserModifyDataLimit = number | null
 
 export type UserModifyExpire = string | number | null
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export interface UserModify {
   proxy_settings?: ProxyTableInput
@@ -604,17 +619,6 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -732,12 +736,20 @@ export interface TcpSettings {
   response?: TcpSettingsResponse
 }
 
+export type SystemStatsCpuUsage = number | null
+
+export type SystemStatsCpuCores = number | null
+
+export type SystemStatsMemUsed = number | null
+
+export type SystemStatsMemTotal = number | null
+
 export interface SystemStats {
   version: string
-  mem_total: number
-  mem_used: number
-  cpu_cores: number
-  cpu_usage: number
+  mem_total?: SystemStatsMemTotal
+  mem_used?: SystemStatsMemUsed
+  cpu_cores?: SystemStatsCpuCores
+  cpu_usage?: SystemStatsCpuUsage
   total_user: number
   online_users: number
   active_users: number
@@ -884,7 +896,7 @@ export interface SettingsSchemaOutput {
 
 export type SettingsSchemaInputSubscription = SubscriptionInput | null
 
-export type SettingsSchemaInputNotificationSettings = NotificationSettings | null
+export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
 
 export type SettingsSchemaInputWebhook = Webhook | null
 
@@ -994,6 +1006,8 @@ export interface NotificationSettings {
   max_retries: number
 }
 
+export type SettingsSchemaInputNotificationSettings = NotificationSettings | null
+
 export interface NotificationEnable {
   admin?: boolean
   core?: boolean
@@ -1006,8 +1020,6 @@ export interface NotificationEnable {
   days_left?: boolean
   percentage_reached?: boolean
 }
-
-export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
 
 export interface NotFound {
   detail?: string
@@ -1071,6 +1083,8 @@ export type NodeResponseNodeVersion = string | null
 
 export type NodeResponseXrayVersion = string | null
 
+export type NodeResponseApiKey = string | null
+
 export type NodeResponseCoreConfigId = number | null
 
 export interface NodeResponse {
@@ -1084,14 +1098,14 @@ export interface NodeResponse {
   keep_alive: number
   /** */
   max_logs?: number
-  core_config_id?: NodeResponseCoreConfigId
-  api_key: string
+  core_config_id: NodeResponseCoreConfigId
+  api_key: NodeResponseApiKey
   gather_logs?: boolean
   id: number
-  xray_version?: NodeResponseXrayVersion
-  node_version?: NodeResponseNodeVersion
+  xray_version: NodeResponseXrayVersion
+  node_version: NodeResponseNodeVersion
   status: NodeStatus
-  message?: NodeResponseMessage
+  message: NodeResponseMessage
 }
 
 export interface NodeRealtimeStats {
@@ -1119,8 +1133,6 @@ export type NodeModifyKeepAlive = number | null
 
 export type NodeModifyServerCa = string | null
 
-export type NodeModifyConnectionType = NodeConnectionType | null
-
 export type NodeModifyUsageCoefficient = number | null
 
 export type NodeModifyPort = number | null
@@ -1128,6 +1140,16 @@ export type NodeModifyPort = number | null
 export type NodeModifyAddress = string | null
 
 export type NodeModifyName = string | null
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
+
+export type NodeModifyConnectionType = NodeConnectionType | null
 
 export interface NodeModify {
   name?: NodeModifyName
@@ -1144,14 +1166,6 @@ export interface NodeModify {
   api_port?: NodeModifyApiPort
   status?: NodeModifyStatus
 }
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
 
 export interface NodeCreate {
   name: string
@@ -1180,7 +1194,6 @@ export interface NextPlanModel {
   data_limit?: NextPlanModelDataLimit
   expire?: NextPlanModelExpire
   add_remaining_traffic?: boolean
-  fire_on_either?: boolean
 }
 
 export type MuxSettingsOutputXray = XrayMuxSettings | null
@@ -1673,20 +1686,11 @@ export interface AdminCreate {
   username: string
 }
 
-export type AdminBaseInfoSubDomain = string | null
-
-export type AdminBaseInfoDiscordWebhook = string | null
-
-export type AdminBaseInfoTelegramId = number | null
-
 /**
- * Base model containing the core admin identification fields.
+ * Minimal admin model containing only the username.
  */
-export interface AdminBaseInfo {
+export interface AdminBase {
   username: string
-  telegram_id?: AdminBaseInfoTelegramId
-  discord_webhook?: AdminBaseInfoDiscordWebhook
-  sub_domain?: AdminBaseInfoSubDomain
 }
 
 /**
@@ -2241,47 +2245,57 @@ export const useResetAdminUsage = <TData = Awaited<ReturnType<typeof resetAdminU
  * Fetch system stats including memory, CPU, and user metrics.
  * @summary Get System Stats
  */
-export const getSystemStats = (signal?: AbortSignal) => {
-  return orvalFetcher<SystemStats>({ url: `/api/system`, method: 'GET', signal })
+export const getSystemStats = (params?: GetSystemStatsParams, signal?: AbortSignal) => {
+  return orvalFetcher<SystemStats>({ url: `/api/system`, method: 'GET', params, signal })
 }
 
-export const getGetSystemStatsQueryKey = () => {
-  return [`/api/system`] as const
+export const getGetSystemStatsQueryKey = (params?: GetSystemStatsParams) => {
+  return [`/api/system`, ...(params ? [params] : [])] as const
 }
 
-export const getGetSystemStatsQueryOptions = <TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized>>(options?: {
-  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>>
-}) => {
+export const getGetSystemStatsQueryOptions = <TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized | HTTPValidationError>>(
+  params?: GetSystemStatsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> },
+) => {
   const { query: queryOptions } = options ?? {}
 
-  const queryKey = queryOptions?.queryKey ?? getGetSystemStatsQueryKey()
+  const queryKey = queryOptions?.queryKey ?? getGetSystemStatsQueryKey(params)
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSystemStats>>> = ({ signal }) => getSystemStats(signal)
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSystemStats>>> = ({ signal }) => getSystemStats(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type GetSystemStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getSystemStats>>>
-export type GetSystemStatsQueryError = ErrorType<Unauthorized>
+export type GetSystemStatsQueryError = ErrorType<Unauthorized | HTTPValidationError>
 
-export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized>>(options: {
-  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>, 'initialData'>
-}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized>>(options?: {
-  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> &
-    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>, 'initialData'>
-}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized>>(options?: {
-  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>>
-}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized | HTTPValidationError>>(
+  params: undefined | GetSystemStatsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized | HTTPValidationError>>(
+  params?: GetSystemStatsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized | HTTPValidationError>>(
+  params?: GetSystemStatsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Get System Stats
  */
 
-export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized>>(options?: {
-  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>>
-}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-  const queryOptions = getGetSystemStatsQueryOptions(options)
+export function useGetSystemStats<TData = Awaited<ReturnType<typeof getSystemStats>>, TError = ErrorType<Unauthorized | HTTPValidationError>>(
+  params?: GetSystemStatsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemStats>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetSystemStatsQueryOptions(params, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
@@ -2950,6 +2964,48 @@ export function useGetAllCores<TData = Awaited<ReturnType<typeof getAllCores>>, 
   query.queryKey = queryOptions.queryKey
 
   return query
+}
+
+/**
+ * restart nodes related to the core config
+ * @summary Restart Core
+ */
+export const restartCore = (coreId: number, signal?: AbortSignal) => {
+  return orvalFetcher<void>({ url: `/api/core/${coreId}/restart`, method: 'POST', signal })
+}
+
+export const getRestartCoreMutationOptions = <TData = Awaited<ReturnType<typeof restartCore>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { coreId: number }, TContext>
+}) => {
+  const mutationKey = ['restartCore']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof restartCore>>, { coreId: number }> = props => {
+    const { coreId } = props ?? {}
+
+    return restartCore(coreId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { coreId: number }, TContext>
+}
+
+export type RestartCoreMutationResult = NonNullable<Awaited<ReturnType<typeof restartCore>>>
+
+export type RestartCoreMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Restart Core
+ */
+export const useRestartCore = <TData = Awaited<ReturnType<typeof restartCore>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { coreId: number }, TContext>
+}): UseMutationResult<TData, TError, { coreId: number }, TContext> => {
+  const mutationOptions = getRestartCoreMutationOptions(options)
+
+  return useMutation(mutationOptions)
 }
 
 /**

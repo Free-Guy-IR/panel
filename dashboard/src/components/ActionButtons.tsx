@@ -59,7 +59,6 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
             data_limit: user.next_plan.data_limit ? Number(user.next_plan.data_limit) : undefined,
             expire: user.next_plan.expire ? Number(user.next_plan.expire) : undefined,
             add_remaining_traffic: user.next_plan.add_remaining_traffic || false,
-            fire_on_either: user.next_plan.fire_on_either || false,
           }
         : undefined,
     },
@@ -83,7 +82,6 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
             data_limit: user.next_plan.data_limit ? Number(user.next_plan.data_limit) : undefined,
             expire: user.next_plan.expire ? Number(user.next_plan.expire) : undefined,
             add_remaining_traffic: user.next_plan.add_remaining_traffic || false,
-            fire_on_either: user.next_plan.fire_on_either || false,
           }
         : undefined,
     }

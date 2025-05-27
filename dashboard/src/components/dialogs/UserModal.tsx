@@ -1541,17 +1541,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                 </FormItem>
                               )}
                             />
-                            <FormField
-                              control={form.control}
-                              name="next_plan.fire_on_either"
-                              render={({ field }) => (
-                                <FormItem className="flex flex-row items-center gap-2">
-                                  <Switch checked={!!field.value} onCheckedChange={field.onChange} />
-                                  <FormLabel>{t('userDialog.nextPlanFireOnEither', { defaultValue: 'Fire On Either' })}</FormLabel>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
                           </div>
                         </div>
                       )}
