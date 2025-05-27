@@ -682,9 +682,11 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
 
     if modify.status is UserStatus.on_hold:
         db_user.expire = None
+        remove_expiration_reminder = True
 
     elif modify.expire == 0:
         db_user.expire = None
+        remove_expiration_reminder = True
         if db_user.status is UserStatus.expired:
             db_user.status = UserStatus.active
 
