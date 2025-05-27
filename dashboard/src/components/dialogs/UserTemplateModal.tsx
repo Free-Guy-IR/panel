@@ -1,29 +1,29 @@
-import { z } from 'zod'
-import { ShadowsocksMethods, useCreateUserTemplate, useModifyUserTemplate, UserStatusCreate, XTLSFlows, UserDataLimitResetStrategy, useGetAllGroups } from '@/service/api'
-import { UseFormReturn } from 'react-hook-form'
-import { Trans, useTranslation } from 'react-i18next'
-import useDirDetection from '@/hooks/use-dir-detection.tsx'
-import { toast } from '@/hooks/use-toast.ts'
-import { queryClient } from '@/utils/query-client.ts'
+import { Button } from '@/components/ui/button.tsx'
+import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx'
-import { cn } from '@/lib/utils.ts'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form.tsx'
 import { Input } from '@/components/ui/input.tsx'
-import { Button } from '@/components/ui/button.tsx'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.tsx'
-import { Search } from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
 import { Switch } from '@/components/ui/switch.tsx'
+import useDirDetection from '@/hooks/use-dir-detection.tsx'
+import { toast } from '@/hooks/use-toast.ts'
+import { cn } from '@/lib/utils.ts'
+import { ShadowsocksMethods, useCreateUserTemplate, useGetAllGroups, useModifyUserTemplate, UserDataLimitResetStrategy, UserStatusCreate, XTLSFlows } from '@/service/api'
+import { queryClient } from '@/utils/query-client.ts'
+import { Search } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { UseFormReturn } from 'react-hook-form'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
-import { Checkbox } from '@/components/ui/checkbox.tsx'
+import { z } from 'zod'
 
 export const userTemplateFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   status: z.enum([UserStatusCreate.active, UserStatusCreate.on_hold]).default(UserStatusCreate.active),
   username_prefix: z.string().optional(),
   username_suffix: z.string().optional(),
-  data_limit: z.number().optional(),
-  expire_duration: z.number().optional(),
+  data_limit: z.number().min(0).optional(),
+  expire_duration: z.number().min(0).optional(),
   on_hold_timeout: z.number().optional(),
   method: z.enum([ShadowsocksMethods['aes-128-gcm'], ShadowsocksMethods['aes-256-gcm'], ShadowsocksMethods['chacha20-ietf-poly1305'], ShadowsocksMethods['xchacha20-poly1305']]).optional(),
   flow: z.enum([XTLSFlows[''], XTLSFlows['xtls-rprx-vision']]).optional(),
@@ -83,8 +83,8 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
         name: values.name,
         data_limit: values.data_limit,
         expire_duration: values.expire_duration,
-        username_prefix: values.username_prefix,
-        username_suffix: values.username_suffix,
+        username_prefix: values.username_prefix ? values.username_prefix : undefined,
+        username_suffix: values.username_suffix ? values.username_suffix : undefined,
         group_ids: values.groups, // map groups to group_ids
         status: values.status,
         reset_usages: values.resetUsages,
@@ -239,6 +239,7 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                             }}
                             value={field.value ? Math.round(field.value / (1024 * 1024 * 1024)) : ''}
                             className="pr-10"
+                            min="0"
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">GB</span>
                         </div>
@@ -267,8 +268,8 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                   name="data_limit_reset_strategy"
                   render={({ field }) => {
                     // Only show if resetUsages is enabled
-                    const resetUsages = form.watch('resetUsages')
-                    if (!resetUsages) {
+                    const datalimit = form.watch('data_limit')
+                    if (!datalimit) {
                       return <></>
                     }
                     return (
@@ -311,6 +312,7 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                             }}
                             value={field.value ? Math.round(field.value / (24 * 60 * 60)) : ''}
                             className="pr-14"
+                            min="0"
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">Days</span>
                         </div>
