@@ -463,8 +463,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         ...preparedValues,
         data_limit: gbToBytes(preparedValues.data_limit as any),
         expire: normalizeExpire(preparedValues.expire),
-        // Send the on_hold_expire_duration in seconds
-        on_hold_expire_duration: preparedValues.on_hold_expire_duration ? preparedValues.on_hold_expire_duration * 86400 : undefined,
         // Only include proxy_settings if they are filled
         ...(hasProxySettings ? { proxy_settings: values.proxy_settings } : {}),
       }
@@ -1048,10 +1046,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       isError={hasError}
                                       placeholder={t('userDialog.onHoldExpireDurationPlaceholder', { defaultValue: 'e.g. 7' })}
                                       {...field}
-                                      value={field.value === null || field.value === undefined ? '' : field.value}
+                                      value={field.value === null || field.value === undefined ? '' : Math.round(field.value / (24 * 60 * 60))}
                                       onChange={e => {
                                         const value = e.target.value === '' ? undefined : parseInt(e.target.value, 10)
-                                        field.onChange(value)
+                                        field.onChange(value ? value * (24 * 60 * 60) : 1)
                                         handleFieldChange('on_hold_expire_duration', value)
                                       }}
                                       onBlur={() => handleFieldBlur('on_hold_expire_duration')}
