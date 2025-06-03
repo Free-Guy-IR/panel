@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Bot, Webhook, Shield, Globe, Smartphone, Send } from 'lucide-react'
@@ -196,8 +197,7 @@ export default function TelegramSettings() {
                         {t('settings.telegram.general.token')}
                       </FormLabel>
                       <FormControl>
-                        <Input
-                          type="password"
+                        <PasswordInput
                           placeholder={t('settings.telegram.general.tokenPlaceholder')}
                           {...field}
                           className="font-mono"
@@ -246,8 +246,7 @@ export default function TelegramSettings() {
                         {t('settings.telegram.general.webhookSecret')}
                       </FormLabel>
                       <FormControl>
-                        <Input
-                          type="password"
+                        <PasswordInput
                           placeholder={t('settings.telegram.general.webhookSecretPlaceholder')}
                           {...field}
                           className="font-mono"
@@ -332,7 +331,7 @@ export default function TelegramSettings() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 mt-auto border-t">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 mt-6 border-t">
             <div className="flex-1"></div>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:shrink-0">
               <Button 

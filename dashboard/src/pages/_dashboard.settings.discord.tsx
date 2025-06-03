@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Switch } from '@/components/ui/switch'
 import { Bot, Globe, MessageCircle } from 'lucide-react'
 import { useSettingsContext } from './_dashboard.settings'
@@ -180,8 +181,7 @@ export default function DiscordSettings() {
                         {t('settings.discord.general.token')}
                       </FormLabel>
                       <FormControl>
-                        <Input
-                          type="password"
+                        <PasswordInput
                           placeholder={t('settings.discord.general.tokenPlaceholder')}
                           {...field}
                           className="font-mono"
@@ -225,7 +225,7 @@ export default function DiscordSettings() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 mt-auto border-t">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 border-t mt-6">
             <div className="flex-1"></div>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:shrink-0">
               <Button 

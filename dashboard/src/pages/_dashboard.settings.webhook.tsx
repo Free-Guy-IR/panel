@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Switch } from '@/components/ui/switch'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +18,6 @@ import { toast } from 'sonner'
 const webhookSettingsSchema = z.object({
   enable: z.boolean().default(false),
   webhooks: z.array(z.object({
-    name: z.string().max(128, 'Name must be 128 characters or less').optional(),
     url: z.string().url('Please enter a valid URL'),
     secret: z.string().min(1, 'Secret is required'),
   })).default([]),
@@ -91,8 +91,6 @@ export default function WebhookSettings() {
           proxy_url: data.proxy_url?.trim() || undefined,
           // Ensure arrays are properly formatted
           webhooks: data.webhooks.map(webhook => ({
-            ...webhook,
-            name: webhook.name?.trim() || undefined,
             url: webhook.url.trim(),
             secret: webhook.secret.trim(),
           })),
@@ -122,7 +120,7 @@ export default function WebhookSettings() {
   }
 
   const addWebhook = () => {
-    appendWebhook({ name: '', url: '', secret: '' })
+    appendWebhook({ url: '', secret: '' })
   }
 
   const addDaysLeft = () => {
@@ -348,26 +346,7 @@ export default function WebhookSettings() {
                         </Button>
                       </div>
                       
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`webhooks.${index}.name`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm">
-                                {t('settings.webhook.webhooks.name')}
-                              </FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder={t('settings.webhook.webhooks.namePlaceholder')}
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
                           name={`webhooks.${index}.url`}
@@ -397,8 +376,7 @@ export default function WebhookSettings() {
                                 {t('settings.webhook.webhooks.secret')} *
                               </FormLabel>
                               <FormControl>
-                                <Input
-                                  type="password"
+                                <PasswordInput
                                   placeholder={t('settings.webhook.webhooks.secretPlaceholder')}
                                   {...field}
                                 />

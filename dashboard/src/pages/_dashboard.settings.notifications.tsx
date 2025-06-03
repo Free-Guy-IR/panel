@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Button } from '@/components/ui/button'
 import { useEffect } from 'react'
 import { z } from 'zod'
@@ -376,9 +377,9 @@ export default function NotificationSettings() {
                     name="notification_settings.telegram_api_token"
                     render={({ field }) => (
                       <FormControl>
-                        <Input 
+                        <PasswordInput 
                           {...field} 
-                          className="w-full" 
+                          className="w-full font-mono" 
                           placeholder='1234567890:ABC-DEF1234ghIkl-zyx57W2v1u123ew11'
                         />
                       </FormControl>
@@ -497,9 +498,9 @@ export default function NotificationSettings() {
                   name="notification_settings.discord_webhook_url"
                   render={({ field }) => (
                     <FormControl>
-                      <Input 
+                      <PasswordInput 
                         {...field} 
-                        className="w-full" 
+                        className="w-full font-mono" 
                         placeholder='https://discord.com/api/webhooks/1234567890/ABC-DEF1234ghIkl-zyx57W2v1u123ew11'
                       />
                     </FormControl>
