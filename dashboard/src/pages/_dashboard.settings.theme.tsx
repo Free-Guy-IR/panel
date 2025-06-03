@@ -93,7 +93,7 @@ export default function ThemeSettings() {
   return (
     <div className="flex flex-col gap-6 mt-6 pb-8">
       {/* Header Section */}
-      <div className="space-y-1">
+      <div className="space-y-1 px-4">
         <h2 className="text-2xl font-semibold tracking-tight">{t('theme.title')}</h2>
         <p className="text-sm text-muted-foreground">{t('theme.description')}</p>
       </div>

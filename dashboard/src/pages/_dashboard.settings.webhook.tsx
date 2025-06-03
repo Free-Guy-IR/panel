@@ -559,7 +559,7 @@ export default function WebhookSettings() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 mt-auto border-t">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 border-t mt-6">
             <div className="flex-1"></div>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:shrink-0">
               <Button

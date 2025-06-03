@@ -154,7 +154,7 @@ export default function NotificationSettings() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] p-4 sm:py-6 lg:py-8">
+      <div className="flex items-center justify-center min-h-[600px] p-4 sm:py-6 lg:py-8">
         <div className="text-center space-y-3">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="text-sm text-muted-foreground">{t('loading')}.</p>
@@ -182,7 +182,7 @@ export default function NotificationSettings() {
           {/* Filter Notification */}
           <div className="space-y-4 sm:space-y-6">
             <div className="space-y-2">
-              <h3 className="text-lg sm:text-xl font-semibold tracking-tight">{t('settings.notifications.filterTitle')}</h3>
+              <h3 className="text-lg font-semibold tracking-tight">{t('settings.notifications.filterTitle')}</h3>
               <p className="text-sm text-muted-foreground">{t('settings.notifications.filterDescription')}</p>
             </div>
             
@@ -344,7 +344,7 @@ export default function NotificationSettings() {
           <div className="space-y-4 sm:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
               <div className="space-y-1">
-                <h3 className="text-lg sm:text-xl font-semibold tracking-tight">
+                <h3 className="text-lg font-semibold tracking-tight">
                   {t('settings.notifications.telegram.title')}
                 </h3>
                 <p className="text-sm text-muted-foreground">{t('settings.notifications.telegram.description')}</p>
@@ -466,7 +466,7 @@ export default function NotificationSettings() {
           <div className="space-y-4 sm:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
               <div className="space-y-1">
-                <h3 className="text-lg sm:text-xl font-semibold tracking-tight">
+                <h3 className="text-lg font-semibold tracking-tight">
                   {t('settings.notifications.discord.title')}
                 </h3>
                 <p className="text-sm text-muted-foreground">{t('settings.notifications.discord.description')}</p>
@@ -514,7 +514,7 @@ export default function NotificationSettings() {
             <div className="space-y-4 sm:space-y-6">
               <Separator className="my-4" />
               <div className="space-y-1">
-                <h3 className="text-lg sm:text-xl font-semibold tracking-tight">{t('settings.notifications.advanced.title')}</h3>
+                <h3 className="text-lg font-semibold tracking-tight">{t('settings.notifications.advanced.title')}</h3>
                 <p className="text-sm text-muted-foreground">{t('settings.notifications.advanced.description')}</p>
               </div>
               
