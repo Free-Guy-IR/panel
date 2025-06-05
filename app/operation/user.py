@@ -64,7 +64,7 @@ class UserOperation(BaseOperation):
         user = UserNotificationResponse.model_validate(user)
         user.subscription_url = await self.generate_subscription_url(user)
         return user
-    
+
     async def update_user(self, db_user: User) -> UserNotificationResponse:
         user = await self.validate_user(db_user)
 
@@ -73,7 +73,7 @@ class UserOperation(BaseOperation):
             asyncio.create_task(node_manager.update_user(user, inbounds=user_inbounds))
         else:
             asyncio.create_task(node_manager.remove_user(user))
-        
+
         return user
 
     async def create_user(self, db: AsyncSession, new_user: UserCreate, admin: AdminDetails) -> UserResponse:
