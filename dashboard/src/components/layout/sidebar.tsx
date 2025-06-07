@@ -190,7 +190,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          <NavSecondary items={data.community} label="Community" />
+          {admin?.is_sudo && <NavSecondary items={data.community} label="Community" />}
           <NavSecondary items={data.navSecondary} className="mt-auto" />
           <div className="flex justify-between px-4 [&>:first-child]:[direction:ltr]">
             <GithubStar />

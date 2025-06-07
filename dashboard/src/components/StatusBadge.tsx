@@ -3,7 +3,7 @@ import { statusColors } from '@/constants/UserSettings'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { UserStatus } from '@/service/api'
-import { relativeExpiryDate } from '@/utils/dateFormatter'
+import { useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -23,7 +23,7 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
   }
   const unixTime = convertDateFormat(expiryDate)
 
-  const dateInfo = relativeExpiryDate(unixTime)
+  const dateInfo = useRelativeExpiryDate(unixTime)
   const StatusIcon = statusColors[userStatus]?.icon
 
   if (showOnlyExpiry) {
