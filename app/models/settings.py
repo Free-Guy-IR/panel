@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 from .validators import ProxyValidator, DiscordValidator, ListValidator
 
@@ -177,3 +177,5 @@ class SettingsSchema(BaseModel):
     notification_settings: NotificationSettings | None = Field(default=None)
     notification_enable: NotificationEnable | None = Field(default=None)
     subscription: Subscription | None = Field(default=None)
+
+    model_config = ConfigDict(from_attributes=True)
