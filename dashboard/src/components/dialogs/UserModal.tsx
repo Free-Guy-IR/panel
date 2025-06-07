@@ -1160,25 +1160,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                                   const [hours, minutes] = e.target.value.split(':')
                                                   const newDate = new Date(displayDate)
                                                   
-                                                  // Convert to Persian time if needed
-                                                  if (usePersianCalendar) {
-                                                    // Convert Persian time to Gregorian
-                                                    const persianDate = new Intl.DateTimeFormat('fa-IR', {
-                                                      year: 'numeric',
-                                                      month: '2-digit',
-                                                      day: '2-digit',
-                                                      hour: '2-digit',
-                                                      minute: '2-digit',
-                                                      hour12: false,
-                                                      calendar: 'persian'
-                                                    }).format(newDate)
-                                                    
-                                                    // Parse the Persian date
-                                                    const [year, month, day] = persianDate.split('/').map(Number)
-                                                    newDate.setFullYear(year, month - 1, day)
-                                                  }
-                                                  
+                                                  // Set hours and minutes
                                                   newDate.setHours(parseInt(hours), parseInt(minutes))
+                                                  
                                                   const now = new Date()
                                                   
                                                   // If same day, ensure time is not before current time
