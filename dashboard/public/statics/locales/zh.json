@@ -1110,5 +1110,7 @@
     "mins": "分钟",
     "ago": "前",
     "notConnectedYet": "尚未连接"
-  }
+  },
+  "node.xrayVersion": "Xray 版本",
+  "node.coreVersion": "核心版本"
 }

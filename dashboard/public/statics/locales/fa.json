@@ -1103,5 +1103,7 @@
     "mins": "دقیقه",
     "ago": "پیش"
   },
-  "notConnectedYet": "هنوز متصل نشده"
+  "notConnectedYet": "هنوز متصل نشده",
+  "node.xrayVersion": "نسخه Xray",
+  "node.coreVersion": "نسخه هسته"
 }

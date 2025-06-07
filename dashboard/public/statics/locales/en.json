@@ -1109,5 +1109,7 @@
     "mins": "mins",
     "ago": "ago"
   },
-  "notConnectedYet": "Not connected yet"
+  "notConnectedYet": "Not connected yet",
+  "node.xrayVersion": "Xray Version",
+  "node.coreVersion": "Core Version"
 }

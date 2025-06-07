@@ -1112,5 +1112,7 @@
     "mins": "мин",
     "ago": "назад"
   },
-  "notConnectedYet": "Еще не подключен"
+  "notConnectedYet": "Еще не подключен",
+  "node.xrayVersion": "Версия Xray",
+  "node.coreVersion": "Версия ядра"
 }
