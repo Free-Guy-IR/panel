@@ -633,6 +633,7 @@
   "userDialog.proxySettings.method": "加密方式",
   "userDialog.proxySettings.flow": "流 (Flow)",
   "userDialog.proxySettings.desc": "为此用户配置协议专属设置。",
+  "userDialog.expireDate": "过期日期",
   "username": "用户名",
   "users": "用户",
   "usersTable.copied": "已复制",
@@ -1093,5 +1094,20 @@
   "usersTable.resetUsagePrompt": "你确定要重置 «{{name}}» 的使用情况吗？",
   "usersTable.resetUsageSubmit": "重置使用情况",
   "usersTable.resetUsageSuccess": "用户「{{name}}」的使用情况已成功重置",
-  "usersTable.resetUsageFailed": "重置用户「{{name}}」的使用情况失败"
+  "usersTable.resetUsageFailed": "重置用户「{{name}}」的使用情况失败",
+  "time": {
+    "expires": "到期",
+    "expired": "已过期",
+    "year": "年",
+    "years": "年",
+    "month": "月",
+    "months": "月",
+    "day": "天",
+    "days": "天",
+    "hour": "小时",
+    "hours": "小时",
+    "min": "分钟",
+    "mins": "分钟",
+    "ago": "前"
+  }
 }

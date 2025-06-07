@@ -10,12 +10,11 @@ import { useTranslation } from 'react-i18next'
 type UserStatusProps = {
   expiryDate?: string | number | null | undefined
   status: UserStatus
-  extraText?: string | null
   showExpiry?: boolean
   showOnlyExpiry?: boolean // Added prop to only show expiry date without badge
 }
 
-export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: userStatus, extraText, showExpiry, showOnlyExpiry }) => {
+export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: userStatus, showExpiry, showOnlyExpiry }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const convertDateFormat = (expire: UserStatusProps['expiryDate']) => {

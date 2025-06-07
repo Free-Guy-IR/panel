@@ -1093,5 +1093,20 @@
   "usersTable.resetUsagePrompt": "Are you sure you want to reset the usage for «{{name}}»?",
   "usersTable.resetUsageSubmit": "Reset Usage",
   "usersTable.resetUsageSuccess": "User «{{name}}» usage has been reset successfully",
-  "usersTable.resetUsageFailed": "Failed to reset usage for user «{{name}}»"
+  "usersTable.resetUsageFailed": "Failed to reset usage for user «{{name}}»",
+  "time": {
+    "expires": "expires",
+    "expired": "expired",
+    "year": "year",
+    "years": "years",
+    "month": "month",
+    "months": "months",
+    "day": "day",
+    "days": "days",
+    "hour": "hour",
+    "hours": "hours",
+    "min": "min",
+    "mins": "mins",
+    "ago": "ago"
+  }
 }

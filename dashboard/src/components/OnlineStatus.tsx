@@ -25,8 +25,8 @@ export const OnlineStatus: FC<UserStatusProps> = ({ lastOnline }) => {
   const dateInfo = unixTime ? relativeExpiryDate(unixTime) : { status: '', time: 'Not Connected Yet' }
 
   return (
-    <span dir="ltr" className={cn('inline-block text-xs font-medium', dir === 'rtl' ? 'mr-0.5 md:mr-2' : 'ml-0.5 md:ml-2', 'text-gray-600 dark:text-gray-400')}>
-      {timeDifferenceInSeconds && timeDifferenceInSeconds <= 60 ? 'Online' : timeDifferenceInSeconds ? `${dateInfo.time} ago` : dateInfo.time}
+    <span className={cn('inline-block text-xs font-medium', dir === 'rtl' ? 'mr-0.5 md:mr-2' : 'ml-0.5 md:ml-2', 'text-gray-600 dark:text-gray-400')}>
+      {timeDifferenceInSeconds && timeDifferenceInSeconds <= 60 ? 'Online' : timeDifferenceInSeconds ? `${dateInfo.time}` : dateInfo.time}
     </span>
   )
 }

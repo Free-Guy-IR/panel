@@ -25,6 +25,8 @@ import {useNavigate} from 'react-router'
 import {toast} from 'sonner'
 import {z} from 'zod'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
+import {format} from 'date-fns'
+import {X} from 'lucide-react'
 
 export const userTemplateFormSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -77,6 +79,9 @@ export default function UserTemplateModal({
     const [timeType, setTimeType] = useState<'seconds' | 'hours' | 'days'>('seconds')
     const navigate = useNavigate()
     const {data: groupsData, isLoading: groupsLoading} = useGetAllGroups()
+    const [displayDate, setDisplayDate] = useState<Date | null>(null)
+    const [calendarOpen, setCalendarOpen] = useState(false)
+    const [usePersianCalendar, setUsePersianCalendar] = useState(false)
 
     const checkGroupsExist = useCallback(() => {
         if (!data?.groups || data.groups.length === 0) {
@@ -145,6 +150,10 @@ export default function UserTemplateModal({
             const fields = ['name', 'data_limit', 'expire_duration', 'username_prefix', 'username_suffix', 'groups', 'status', 'resetUsages', 'on_hold_timeout', 'data_limit_reset_strategy', 'method', 'flow']
             handleError({error, fields, form, contextKey: "groups"})
         }
+    }
+
+    const handleFieldChange = (field: keyof UserTemplatesFromValue, value: any) => {
+        form.setValue(field, value)
     }
 
     return (
@@ -499,12 +508,13 @@ export default function UserTemplateModal({
                                                                 className="pl-8"
                                                             />
                                                         </div>
-                                                        <div className="flex items-center gap-2 p-2 border rounded-md">
-                                                            <Checkbox checked={allSelected}
-                                                                      onCheckedChange={handleSelectAll}/>
-                                                            <span
-                                                                className="text-sm font-medium">{t('selectAll', {defaultValue: 'Select All'})}</span>
-                                                        </div>
+                                                        <label className="flex items-center border border-border gap-2 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                            <Checkbox 
+                                                                checked={filteredGroups.length > 0 && selectedGroups.length === filteredGroups.length}
+                                                                onCheckedChange={handleSelectAll} 
+                                                            />
+                                                            <span className="text-sm font-medium">{t('selectAll', {defaultValue: 'Select All' })}</span>
+                                                        </label>
                                                         <div
                                                             className="max-h-[200px] overflow-y-auto space-y-2 p-2 border rounded-md">
                                                             {filteredGroups.length === 0 ? (
