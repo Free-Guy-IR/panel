@@ -262,6 +262,29 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const { i18n } = useTranslation()
   const isPersianLocale = i18n.language === 'fa'
   const [usePersianCalendar, setUsePersianCalendar] = useState(isPersianLocale)
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
+  const [isFormValid, setIsFormValid] = useState(false)
+
+  // Update field handlers to track touched state and validate immediately
+  const handleFieldChange = (fieldName: string, value: any) => {
+    setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
+    const currentValues = {
+      ...form.getValues(),
+      [fieldName]: value,
+    }
+    const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
+    setIsFormValid(isValid)
+  }
+
+  // Add validation on field blur
+  const handleFieldBlur = (fieldName: string) => {
+    if (!touchedFields[fieldName]) {
+      setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
+      const currentValues = form.getValues()
+      const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
+      setIsFormValid(isValid)
+    }
+  }
 
   // Get the expire value from the form
   const expireValue = form.watch('expire')
@@ -416,22 +439,23 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
   useEffect(() => {
     if (status === 'on_hold') {
+      // Clear expire field and its errors
       form.setValue('expire', undefined)
       form.clearErrors('expire')
 
-      // Validate on_hold_expire_duration
+      // Set default on_hold_expire_duration if not set
       const duration = form.getValues('on_hold_expire_duration')
       if (!duration || duration < 1) {
-        form.setError('on_hold_expire_duration', {
-          type: 'manual',
-          message: t('validation.required', { field: t('userDialog.onHoldExpireDuration') }),
-        })
+        const defaultDuration = 7 * 24 * 60 * 60 // 7 days in seconds
+        form.setValue('on_hold_expire_duration', defaultDuration)
+        handleFieldChange('on_hold_expire_duration', defaultDuration)
       }
     } else {
+      // Clear on_hold_expire_duration field and its errors
       form.setValue('on_hold_expire_duration', undefined)
       form.clearErrors('on_hold_expire_duration')
     }
-  }, [status, form, t])
+  }, [status, form, t, handleFieldChange])
 
   useEffect(() => {
     if (!nextPlanEnabled) {
@@ -558,31 +582,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         })
       }
       return false
-    }
-  }
-
-  // Add state to track touched fields and form validity
-  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
-  const [isFormValid, setIsFormValid] = useState(false)
-
-  // Update field handlers to track touched state and validate immediately
-  const handleFieldChange = (fieldName: string, value: any) => {
-    setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
-    const currentValues = {
-      ...form.getValues(),
-      [fieldName]: value,
-    }
-    const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
-    setIsFormValid(isValid)
-  }
-
-  // Add validation on field blur
-  const handleFieldBlur = (fieldName: string) => {
-    if (!touchedFields[fieldName]) {
-      setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
-      const currentValues = form.getValues()
-      const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
-      setIsFormValid(isValid)
     }
   }
 

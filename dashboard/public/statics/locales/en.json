@@ -447,8 +447,8 @@
   "deleteUser.prompt": "Are you sure you want to remove <b>{{username}}</b>?",
   "deleteUser.title": "Remove User",
   "disabled": "disabled",
-  "expired": "Expired {{time}} ago",
   "expires": "Expires in {{time}}",
+  "expired": "Expired in {{time}}",
   "header.donation": "Donation",
   "header.hostSettings": "Host Settings",
   "header.logout": "Log out",
@@ -1108,5 +1108,6 @@
     "min": "min",
     "mins": "mins",
     "ago": "ago"
-  }
+  },
+  "notConnectedYet": "Not connected yet"
 }
