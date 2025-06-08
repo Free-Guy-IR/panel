@@ -155,7 +155,7 @@ async def get_users(
     limit: int = None,
     username: list[str] = Query(None),
     owner: list[str] | None = Query(None, alias="admin"),
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | None = Query(None,alias="group"),
     search: str | None = None,
     status: UserStatus | None = None,
     sort: str | None = None,
