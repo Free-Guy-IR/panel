@@ -95,17 +95,17 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
   const isDateDisabled = React.useCallback((date: Date) => {
     const year = date.getFullYear()
     const month = date.getMonth()
-    
+
     // If it's the current year, disable past months
     if (year === currentYear && month < currentMonth) {
       return true
     }
-    
+
     // If it's a past year, disable all dates
     if (year < currentYear) {
       return true
     }
-    
+
     // For future years, allow all dates
     return false
   }, [currentYear, currentMonth])
@@ -117,13 +117,13 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
         <PopoverTrigger asChild>
           <FormControl>
             <div className="relative w-full">
-              <Button 
+              <Button
                 dir={"ltr"}
-                variant={'outline'} 
+                variant={'outline'}
                 className={cn(
                   'w-full h-fit !mt-3.5 text-left font-normal',
                   !field.value && 'text-muted-foreground'
-                )} 
+                )}
                 type="button"
                 onClick={(e) => {
                   e.preventDefault()
@@ -200,11 +200,11 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
                     const [hours, minutes] = e.target.value.split(':')
                     const newDate = new Date(displayDate)
                     newDate.setHours(parseInt(hours), parseInt(minutes))
-                    
+
                     if (newDate.toDateString() === now.toDateString() && newDate < now) {
                       newDate.setTime(now.getTime())
                     }
-                    
+
                     const timestamp = Math.floor(newDate.getTime() / 1000)
                     field.onChange(timestamp)
                     handleFieldChange('expire', timestamp)
@@ -233,7 +233,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
         </PopoverContent>
       </Popover>
       {expireInfo && (
-        <p className={cn(!expireInfo.time && "hidden","text-xs text-muted-foreground")}>
+        <p className={cn(!expireInfo.time && "hidden", "text-xs text-muted-foreground")}>
           {expireInfo.time !== '0' && expireInfo.time !== '0s'
             ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
             : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
@@ -296,16 +296,13 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
   // Get the expire value from the form
   const expireValue = form.watch('expire')
-  let expireUnix: number | null = null
   let displayDate: Date | null = null
 
   // Handle various formats of expire value
   if (isDate(expireValue)) {
-    expireUnix = Math.floor(expireValue.getTime() / 1000)
     displayDate = expireValue
   } else if (typeof expireValue === 'string') {
     if (expireValue === '') {
-      expireUnix = null
       displayDate = null
     } else {
       const asNum = Number(expireValue)
@@ -314,12 +311,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         const date = new Date(timestamp)
         if (date.getFullYear() > 1970) {
           displayDate = date
-          expireUnix = asNum
         }
       } else {
         const date = new Date(expireValue)
         if (!isNaN(date.getTime()) && date.getFullYear() > 1970) {
-          expireUnix = Math.floor(date.getTime() / 1000)
           displayDate = date
         }
       }
@@ -328,7 +323,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     const date = new Date(expireValue * 1000)
     if (date.getFullYear() > 1970) {
       displayDate = date
-      expireUnix = expireValue
     }
   }
 
@@ -1748,9 +1742,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       />
                                     </div>
                                     <label className="flex items-center border border-border gap-2 p-3 rounded-md hover:bg-accent cursor-pointer">
-                                      <Checkbox 
+                                      <Checkbox
                                         checked={filteredGroups.length > 0 && selectedGroups.length === filteredGroups.length}
-                                        onCheckedChange={handleSelectAll} 
+                                        onCheckedChange={handleSelectAll}
                                       />
                                       <span className="text-sm font-medium">{t('selectAll', { defaultValue: 'Select All' })}</span>
                                     </label>
