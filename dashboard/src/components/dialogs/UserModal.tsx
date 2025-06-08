@@ -28,6 +28,7 @@ import { v4 as uuidv4, v5 as uuidv5, v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
 import { Calendar as PersianCalendar } from '@/components/ui/persian-calendar'
+import React from 'react'
 
 interface UserModalProps {
   isDialogOpen: boolean
@@ -67,6 +68,48 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
   const { t } = useTranslation()
   const expireInfo = useRelativeExpiryDate(displayDate ? Math.floor(displayDate.getTime() / 1000) : null)
 
+  const handleDateSelect = React.useCallback((date: Date | undefined) => {
+    if (date) {
+      const now = new Date()
+      if (date < now) {
+        date = now
+      } else {
+        date.setHours(now.getHours(), now.getMinutes())
+      }
+      const timestamp = Math.floor(date.getTime() / 1000)
+      field.onChange(timestamp)
+      handleFieldChange('expire', timestamp)
+    } else {
+      field.onChange('')
+      handleFieldChange('expire', undefined)
+    }
+    setCalendarOpen(false)
+  }, [field, handleFieldChange, setCalendarOpen])
+
+  // Get current date for comparison
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+
+  // Function to check if a date should be disabled
+  const isDateDisabled = React.useCallback((date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    
+    // If it's the current year, disable past months
+    if (year === currentYear && month < currentMonth) {
+      return true
+    }
+    
+    // If it's a past year, disable all dates
+    if (year < currentYear) {
+      return true
+    }
+    
+    // For future years, allow all dates
+    return false
+  }, [currentYear, currentMonth])
+
   return (
     <FormItem className="flex-1 flex flex-col">
       <FormLabel>{t('userDialog.expiryDate', { defaultValue: 'Expire date' })}</FormLabel>
@@ -82,6 +125,11 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
                   !field.value && 'text-muted-foreground'
                 )} 
                 type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setCalendarOpen(true)
+                }}
               >
                 {displayDate ? (
                   usePersianCalendar ? (
@@ -108,127 +156,79 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
             </div>
           </FormControl>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto p-0" align="start" onInteractOutside={(e) => {
+          e.preventDefault()
+          setCalendarOpen(false)
+        }}>
           {usePersianCalendar ? (
             <PersianCalendar
               mode="single"
               selected={displayDate || undefined}
-              onSelect={(date: Date | undefined) => {
-                if (date) {
-                  const now = new Date()
-                  if (date < now) {
-                    date = now
-                  } else {
-                    date.setHours(now.getHours(), now.getMinutes())
-                  }
-                  const timestamp = Math.floor(date.getTime() / 1000)
-                  field.onChange(timestamp)
-                  handleFieldChange('expire', timestamp)
-                  setCalendarOpen(false)
-                } else {
-                  field.onChange('')
-                  handleFieldChange('expire', undefined)
-                  setCalendarOpen(false)
-                }
-              }}
-              disabled={(date: Date) => date < new Date()}
+              onSelect={handleDateSelect}
+              disabled={isDateDisabled}
               captionLayout="dropdown"
-              fromDate={new Date()}
+              startMonth={now}
+              endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
               formatters={{
-                formatMonthDropdown: (date) => {
-                  const persianDate = new Intl.DateTimeFormat('fa-IR', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    calendar: 'persian'
-                  }).format(date)
-                  return persianDate.split(' ')[1]
-                },
-                formatYearDropdown: (date) => {
-                  const persianYear = new Intl.DateTimeFormat('fa-IR', {
-                    year: 'numeric',
-                    calendar: 'persian'
-                  }).format(date)
-                  return persianYear
-                }
+                formatMonthDropdown: (date) => date.toLocaleString("fa-IR", { month: "short" }),
               }}
-              fromMonth={new Date()}
-              toMonth={new Date(new Date().getFullYear() + 10, 11, 31)}
             />
           ) : (
             <Calendar
               mode="single"
               selected={displayDate || undefined}
-              onSelect={(date: Date | undefined) => {
-                if (date) {
-                  const now = new Date()
-                  if (date < now) {
-                    date = now
-                  } else {
-                    date.setHours(now.getHours(), now.getMinutes())
+              onSelect={handleDateSelect}
+              disabled={isDateDisabled}
+              captionLayout="dropdown"
+              startMonth={now}
+              endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
+              formatters={{
+                formatMonthDropdown: (date) => date.toLocaleString("default", { month: "short" }),
+              }}
+            />
+          )}
+          <div className="flex items-center gap-4 p-3 border-t">
+            <FormControl>
+              <Input
+                type="time"
+                value={displayDate ? format(displayDate, 'HH:mm') : format(now, 'HH:mm')}
+                min={displayDate && displayDate.toDateString() === now.toDateString() ? format(now, 'HH:mm') : undefined}
+                onChange={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (displayDate && e.target.value) {
+                    const [hours, minutes] = e.target.value.split(':')
+                    const newDate = new Date(displayDate)
+                    newDate.setHours(parseInt(hours), parseInt(minutes))
+                    
+                    if (newDate.toDateString() === now.toDateString() && newDate < now) {
+                      newDate.setTime(now.getTime())
+                    }
+                    
+                    const timestamp = Math.floor(newDate.getTime() / 1000)
+                    field.onChange(timestamp)
+                    handleFieldChange('expire', timestamp)
                   }
-                  const timestamp = Math.floor(date.getTime() / 1000)
-                  field.onChange(timestamp)
-                  handleFieldChange('expire', timestamp)
-                  setCalendarOpen(false)
-                } else {
+                }}
+              />
+            </FormControl>
+            {displayDate && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
                   field.onChange('')
                   handleFieldChange('expire', undefined)
                   setCalendarOpen(false)
-                }
-              }}
-              disabled={(date: Date) => date < new Date()}
-              captionLayout="dropdown"
-              fromDate={new Date()}
-              fromMonth={new Date()}
-              toMonth={new Date(new Date().getFullYear() + 10, 11, 31)}
-            />
-          )}
-          <div className="p-3 border-t">
-            <div className="flex items-center gap-4">
-              <FormControl>
-                <Input
-                  type="time"
-                  value={displayDate ? format(displayDate, 'HH:mm') : format(new Date(), 'HH:mm')}
-                  min={displayDate && displayDate.toDateString() === new Date().toDateString() ? format(new Date(), 'HH:mm') : undefined}
-                  onChange={(e) => {
-                    if (displayDate && e.target.value) {
-                      const [hours, minutes] = e.target.value.split(':')
-                      const newDate = new Date(displayDate)
-                      
-                      // Set hours and minutes
-                      newDate.setHours(parseInt(hours), parseInt(minutes))
-                      
-                      const now = new Date()
-                      
-                      // If same day, ensure time is not before current time
-                      if (newDate.toDateString() === now.toDateString() && newDate < now) {
-                        newDate.setTime(now.getTime())
-                      }
-                      
-                      const timestamp = Math.floor(newDate.getTime() / 1000)
-                      field.onChange(timestamp)
-                      handleFieldChange('expire', timestamp)
-                    }
-                  }}
-                />
-              </FormControl>
-              {displayDate && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => {
-                    field.onChange('')
-                    handleFieldChange('expire', undefined)
-                    setCalendarOpen(false)
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </PopoverContent>
       </Popover>
@@ -256,7 +256,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     { id: 'templates', label: 'templates.title', icon: Layers },
   ]
   const [nextPlanEnabled, setNextPlanEnabled] = useState(!!form.watch('next_plan'))
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(undefined)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const navigate = useNavigate()
   const [calendarOpen, setCalendarOpen] = useState(false)
   const { i18n } = useTranslation()
@@ -265,8 +265,16 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
   const [isFormValid, setIsFormValid] = useState(false)
 
-  // Update field handlers to track touched state and validate immediately
-  const handleFieldChange = (fieldName: string, value: any) => {
+  const handleModalOpenChange = React.useCallback((open: boolean) => {
+    if (!open) {
+      form.reset()
+      setTouchedFields({})
+      setIsFormValid(false)
+    }
+    onOpenChange(open)
+  }, [form, onOpenChange])
+
+  const handleFieldChange = React.useCallback((fieldName: string, value: any) => {
     setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
     const currentValues = {
       ...form.getValues(),
@@ -274,17 +282,17 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     }
     const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
     setIsFormValid(isValid)
-  }
+  }, [form, touchedFields])
 
-  // Add validation on field blur
-  const handleFieldBlur = (fieldName: string) => {
+  // Add handleFieldBlur function
+  const handleFieldBlur = React.useCallback((fieldName: string) => {
     if (!touchedFields[fieldName]) {
       setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
       const currentValues = form.getValues()
       const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
       setIsFormValid(isValid)
     }
-  }
+  }, [form, touchedFields])
 
   // Get the expire value from the form
   const expireValue = form.watch('expire')
@@ -508,7 +516,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   // Helper to clear group selection
   const clearGroups = () => form.setValue('group_ids', [])
   // Helper to clear template selection
-  const clearTemplate = () => setSelectedTemplateId(undefined)
+  const clearTemplate = () => setSelectedTemplateId(null)
 
   // Helper to check if a template is selected in next plan
   const nextPlanTemplateSelected = !!form.watch('next_plan.user_template_id')
@@ -585,76 +593,83 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     }
   }
 
-  const onSubmit = async (values: UseFormValues | UseEditFormValues) => {
+  // Update template selection handlers to use number type
+  const handleTemplateSelect = React.useCallback((val: string) => {
+    const currentValues = form.getValues()
+    if (val === 'none' || (selectedTemplateId && String(selectedTemplateId) === val)) {
+      setSelectedTemplateId(null)
+      clearGroups()
+    } else {
+      setSelectedTemplateId(Number(val))
+      clearGroups()
+      // Clear group selection when template is selected
+      form.setValue('group_ids', [])
+      handleFieldChange('group_ids', [])
+    }
+    // Trigger validation after template selection changes
+    const isValid = validateAllFields(currentValues, touchedFields)
+    setIsFormValid(isValid)
+  }, [form, selectedTemplateId, touchedFields, handleFieldChange])
+
+  // Update the template mutation calls
+  const handleTemplateMutation = React.useCallback(async (values: UseFormValues | UseEditFormValues) => {
+    if (!selectedTemplateId) return
+
+    setLoading(true)
+    try {
+      if (editingUser) {
+        await modifyUserWithTemplateMutation.mutateAsync({
+          username: values.username,
+          data: {
+            user_template_id: selectedTemplateId,
+            note: values.note,
+          },
+        })
+        toast.success(
+          t('userDialog.userEdited', {
+            username: values.username,
+            defaultValue: 'User «{{name}}» has been updated successfully',
+          }),
+        )
+      } else {
+        await createUserFromTemplateMutation.mutateAsync({
+          data: {
+            user_template_id: selectedTemplateId,
+            username: values.username,
+            note: values.note || undefined,
+          },
+        })
+        toast.success(
+          t('userDialog.userCreated', {
+            username: values.username,
+            defaultValue: 'User «{{name}}» has been created successfully',
+          }),
+        )
+      }
+      onOpenChange(false)
+      form.reset()
+      setSelectedTemplateId(null)
+    } catch (error: any) {
+      toast.error(
+        error?.response?._data?.detail ||
+        t(editingUser ? 'users.editError' : 'users.createError', {
+          name: values.username,
+          defaultValue: `Failed to ${editingUser ? 'update' : 'create'} user «{{name}}»`,
+        }),
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [editingUser, selectedTemplateId, form, onOpenChange, t])
+
+  const onSubmit = React.useCallback(async (values: UseFormValues | UseEditFormValues) => {
     try {
       form.clearErrors()
 
-      // If a template is selected in edit mode
-      if (editingUser && selectedTemplateId) {
-        setLoading(true)
-        try {
-          await modifyUserWithTemplateMutation.mutateAsync({
-            username: values.username,
-            data: {
-              user_template_id: selectedTemplateId,
-              note: values.note,
-            },
-          })
-          toast.success(
-            t('userDialog.userEdited', {
-              username: values.username,
-              defaultValue: 'User «{{name}}» has been updated successfully',
-            }),
-          )
-          onOpenChange(false)
-          form.reset()
-          setSelectedTemplateId(undefined)
-          return
-        } catch (error: any) {
-          toast.error(
-            error?.response?._data?.detail ||
-            t('users.editError', {
-              name: values.username,
-              defaultValue: 'Failed to update user «{{name}}»',
-            }),
-          )
-          setLoading(false)
-          return
-        }
-      }
-
-      // If a template is selected in create mode
+      // Handle template-based operations
       if (selectedTemplateId) {
-        setLoading(true)
-        try {
-          await createUserFromTemplateMutation.mutateAsync({
-            data: {
-              user_template_id: selectedTemplateId,
-              username: values.username,
-              note: values.note || undefined,
-            },
-          })
-          toast.success(
-            t('userDialog.userCreated', {
-              username: values.username,
-              defaultValue: 'User «{{name}}» has been created successfully',
-            }),
-          )
-          onOpenChange(false)
-          form.reset()
-          setSelectedTemplateId(undefined)
-          return
-        } catch (error: any) {
-          toast.error(
-            error?.response?._data?.detail ||
-            t('users.createError', {
-              name: values.username,
-              defaultValue: 'Failed to create user «{{name}}»',
-            }),
-          )
-          setLoading(false)
-          return
-        }
+        await handleTemplateMutation(values)
+        return
       }
 
       // Regular create/edit flow
@@ -747,7 +762,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     } finally {
       setLoading(false)
     }
-  }
+  }, [editingUser, editingUserId, form, handleTemplateMutation, onOpenChange, selectedTemplateId, status, t, touchedFields])
 
   function generateUsername() {
     // Example: random 8-char string
@@ -885,7 +900,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }, [i18n.language])
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
       <DialogContent className={`lg:min-w-[900px]  ${editingUser ? 'sm:h-auto h-full' : 'h-auto'}`}>
         <DialogHeader>
           <DialogTitle className={`${dir === 'rtl' ? 'text-right' : ''}`}>
@@ -930,7 +945,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                         size="icon"
                                         type="button"
                                         variant="ghost"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
                                           const newUsername = generateUsername()
                                           field.onChange(newUsername)
                                           handleFieldChange('username', newUsername)
@@ -1009,7 +1026,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       size="icon"
                                       type="button"
                                       variant="ghost"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
                                         const newUsername = generateUsername()
                                         field.onChange(newUsername)
                                         handleFieldChange('username', newUsername)
@@ -1301,7 +1320,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       size="icon"
                                       type="button"
                                       variant="ghost"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
                                         const newVal = generateUUID(uuidVersions.vmess, field.value)
                                         field.onChange(newVal)
                                         form.trigger('proxy_settings.vmess.id')
@@ -1354,7 +1375,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       size="icon"
                                       type="button"
                                       variant="ghost"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
                                         const newVal = generateUUID(uuidVersions.vless, field.value)
                                         field.onChange(newVal)
                                         form.trigger('proxy_settings.vless.id')
@@ -1424,7 +1447,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     size="icon"
                                     type="button"
                                     variant="ghost"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
                                       const newVal = generatePassword()
                                       field.onChange(newVal)
                                       form.trigger('proxy_settings.trojan.password')
@@ -1464,7 +1489,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     size="icon"
                                     type="button"
                                     variant="ghost"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
                                       const newVal = generatePassword()
                                       field.onChange(newVal)
                                       form.trigger('proxy_settings.shadowsocks.password')
@@ -1638,22 +1665,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                             <FormLabel>{t('userDialog.selectTemplate', { defaultValue: 'Select Template' })}</FormLabel>
                             <Select
                               value={selectedTemplateId ? String(selectedTemplateId) : 'none'}
-                              onValueChange={val => {
-                                const currentValues = form.getValues()
-                                if (val === 'none' || (selectedTemplateId && String(selectedTemplateId) === val)) {
-                                  setSelectedTemplateId(undefined)
-                                  clearGroups()
-                                } else {
-                                  setSelectedTemplateId(Number(val))
-                                  clearGroups()
-                                  // Clear group selection when template is selected
-                                  form.setValue('group_ids', [])
-                                  handleFieldChange('group_ids', [])
-                                }
-                                // Trigger validation after template selection changes
-                                const isValid = validateAllFields(currentValues, touchedFields)
-                                setIsFormValid(isValid)
-                              }}
+                              onValueChange={handleTemplateSelect}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder={t('userDialog.selectTemplatePlaceholder', { defaultValue: 'Choose a template' })} />
@@ -1697,7 +1709,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
                                 // Clear template selection when groups are selected
                                 if (checked && selectedTemplateId) {
-                                  setSelectedTemplateId(undefined)
+                                  setSelectedTemplateId(null)
                                   clearTemplate()
                                 }
 
@@ -1714,7 +1726,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
                                 // Clear template selection when groups are selected
                                 if (checked && selectedTemplateId) {
-                                  setSelectedTemplateId(undefined)
+                                  setSelectedTemplateId(null)
                                   clearTemplate()
                                 }
 
@@ -1795,7 +1807,11 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
             </div>
             {/* Cancel/Create buttons - always visible */}
             <div className="flex justify-end gap-2 mt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onOpenChange(false)
+              }}>
                 {t('cancel', { defaultValue: 'Cancel' })}
               </Button>
               <LoaderButton
