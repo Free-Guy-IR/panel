@@ -77,7 +77,6 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
         total={row.original.data_limit}
         totalUsedTraffic={row.original.lifetime_used_traffic}
         used={row.original.used_traffic}
-        dataLimitResetStrategy={row.original.data_limit_reset_strategy || undefined}
       />
       <div className="flex flex-col">
         <div className="flex items-center justify-between">

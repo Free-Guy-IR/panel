@@ -88,27 +88,21 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
 
   // Get current date for comparison
   const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth()
 
   // Function to check if a date should be disabled
   const isDateDisabled = React.useCallback((date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
+    // Create a new date object for today at midnight for accurate comparison
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
-    // If it's the current year, disable past months
-    if (year === currentYear && month < currentMonth) {
+    // Disable if the date is before today
+    if (compareDate < today) {
       return true
     }
 
-    // If it's a past year, disable all dates
-    if (year < currentYear) {
-      return true
-    }
-
-    // For future years, allow all dates
+    // For future dates, allow all
     return false
-  }, [currentYear, currentMonth])
+  }, [now])
 
   return (
     <FormItem className="flex-1 flex flex-col">
@@ -478,7 +472,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
   // Helper to convert expire field to needed schema
   function normalizeExpire(expire: Date | string | number | null | undefined): string | number | null | undefined {
-    if (expire === undefined || expire === null || expire === '') return undefined
+    if (expire === undefined || expire === null || expire === '') return 0
 
     // For number values, return directly (already a timestamp)
     if (typeof expire === 'number') return expire
@@ -503,8 +497,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       }
     }
 
-    // Return as is for any other case
-    return expire
+    // Return 0 for any other case
+    return 0
   }
 
   // Helper to clear group selection
