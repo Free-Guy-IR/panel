@@ -71,11 +71,34 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
   const handleDateSelect = React.useCallback((date: Date | undefined) => {
     if (date) {
       const now = new Date()
-      if (date < now) {
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+      
+      if (selectedDate < today) {
         date = now
-      } else {
-        date.setHours(now.getHours(), now.getMinutes())
       }
+      
+      if (selectedDate.getTime() === today.getTime()) {
+        // Convert to UTC and set to end of day
+        const utcDate = new Date(Date.UTC(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+          23, 59, 59
+        ))
+        date = utcDate
+      } else {
+        // Convert to UTC and set current time
+        const utcDate = new Date(Date.UTC(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+          now.getUTCHours(),
+          now.getUTCMinutes()
+        ))
+        date = utcDate
+      }
+      
       const timestamp = Math.floor(date.getTime() / 1000)
       field.onChange(timestamp)
       handleFieldChange('expire', timestamp)
