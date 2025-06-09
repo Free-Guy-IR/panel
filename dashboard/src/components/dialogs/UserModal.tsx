@@ -199,7 +199,16 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
                       newDate.setTime(now.getTime())
                     }
 
-                    const timestamp = Math.floor(newDate.getTime() / 1000)
+                    // Convert to UTC
+                    const utcDate = new Date(Date.UTC(
+                      newDate.getFullYear(),
+                      newDate.getMonth(),
+                      newDate.getDate(),
+                      newDate.getHours(),
+                      newDate.getMinutes()
+                    ))
+
+                    const timestamp = Math.floor(utcDate.getTime() / 1000)
                     field.onChange(timestamp)
                     handleFieldChange('expire', timestamp)
                   }
@@ -477,7 +486,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     // For number values, return directly (already a timestamp)
     if (typeof expire === 'number') return expire
 
-    // For Date objects, convert to Unix timestamp (seconds)
+    // For Date objects, convert to Unix timestamp (seconds) in UTC
     if (expire instanceof Date) {
       return Math.floor(expire.getTime() / 1000)
     }
@@ -490,8 +499,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         return asNum // Return as number if it's a valid numeric string
       }
 
-      // Try as date string
-      const asDate = new Date(expire)
+      // Try as date string - convert to UTC
+      const asDate = new Date(expire + 'Z')
       if (!isNaN(asDate.getTime())) {
         return Math.floor(asDate.getTime() / 1000)
       }
