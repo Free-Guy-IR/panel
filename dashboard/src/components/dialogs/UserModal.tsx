@@ -17,9 +17,8 @@ import { useCreateUser, useCreateUserFromTemplate, useGetAllGroups, useGetUsers,
 import { useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
 import { useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
 import { CalendarIcon, Layers, ListStart, Lock, RefreshCcw, Search, Users, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
@@ -56,6 +55,20 @@ const templateModifySchema = z.object({
 // Helper for UUID namespace (for v5)
 const UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
 
+// Add this helper function at the top level
+function getLocalISOTime(date: Date): string {
+  const tzOffset = -date.getTimezoneOffset();
+  const offsetSign = tzOffset >= 0 ? '+' : '-';
+  const pad = (num: number) => Math.abs(num).toString().padStart(2, '0');
+
+  const offsetHours = pad(Math.floor(tzOffset / 60));
+  const offsetMinutes = pad(tzOffset % 60);
+
+  return new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
+    .toISOString()
+    .slice(0, -1) + `${offsetSign}${offsetHours}:${offsetMinutes}`;
+}
+
 // Add this new component before the UserModal component
 const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen, setCalendarOpen, handleFieldChange }: {
   field: any
@@ -67,47 +80,61 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
 }) => {
   const { t } = useTranslation()
   const expireInfo = useRelativeExpiryDate(displayDate ? Math.floor(displayDate.getTime() / 1000) : null)
+  const [, startTransition] = useTransition()
 
   const handleDateSelect = React.useCallback((date: Date | undefined) => {
     if (date) {
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-      
+
       if (selectedDate < today) {
         date = now
       }
-      
+
       if (selectedDate.getTime() === today.getTime()) {
-        // Convert to UTC and set to end of day
-        const utcDate = new Date(Date.UTC(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate(),
-          23, 59, 59
-        ))
-        date = utcDate
+        // Set to end of day
+        date.setHours(23, 59, 59)
       } else {
-        // Convert to UTC and set current time
-        const utcDate = new Date(Date.UTC(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate(),
-          now.getUTCHours(),
-          now.getUTCMinutes()
-        ))
-        date = utcDate
+        // Set current time
+        date.setHours(now.getHours(), now.getMinutes())
       }
-      
-      const timestamp = Math.floor(date.getTime() / 1000)
-      field.onChange(timestamp)
-      handleFieldChange('expire', timestamp)
+
+      const isoString = getLocalISOTime(date)
+      startTransition(() => {
+        field.onChange(isoString)
+        handleFieldChange('expire', isoString)
+      })
     } else {
-      field.onChange('')
-      handleFieldChange('expire', undefined)
+      startTransition(() => {
+        field.onChange('')
+        handleFieldChange('expire', undefined)
+      })
     }
     setCalendarOpen(false)
-  }, [field, handleFieldChange, setCalendarOpen])
+  }, [field, handleFieldChange, setCalendarOpen, startTransition])
+
+  // Update time input handling to work with local time
+  const handleTimeChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (displayDate && e.target.value) {
+      const [hours, minutes] = e.target.value.split(':')
+      const newDate = new Date(displayDate)
+      newDate.setHours(parseInt(hours), parseInt(minutes))
+
+      const now = new Date()
+      if (newDate.toDateString() === now.toDateString() && newDate < now) {
+        newDate.setTime(now.getTime())
+      }
+
+      const isoString = getLocalISOTime(newDate)
+      startTransition(() => {
+        field.onChange(isoString)
+        handleFieldChange('expire', isoString)
+      })
+    }
+  }, [displayDate, field, handleFieldChange, startTransition])
 
   // Get current date for comparison
   const now = new Date()
@@ -160,8 +187,15 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
                       hour12: false
                     }).format(displayDate)
                   ) : (
-                    // Gregorian format
-                    format(displayDate, 'yyyy/MM/dd HH:mm')
+                    // Gregorian format - keep local time
+                    displayDate.toLocaleString('sv', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false
+                    }).replace('T', ' ')
                   )
                 ) : field.value && !isNaN(Number(field.value)) ? (
                   String(field.value)
@@ -184,6 +218,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
               onSelect={handleDateSelect}
               disabled={isDateDisabled}
               captionLayout="dropdown"
+              defaultMonth={displayDate || now}
               startMonth={now}
               endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
               formatters={{
@@ -197,7 +232,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
               onSelect={handleDateSelect}
               disabled={isDateDisabled}
               captionLayout="dropdown"
-              startMonth={now}
+              defaultMonth={displayDate || now}
               endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
               formatters={{
                 formatMonthDropdown: (date) => date.toLocaleString("default", { month: "short" }),
@@ -208,34 +243,9 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
             <FormControl>
               <Input
                 type="time"
-                value={displayDate ? format(displayDate, 'HH:mm') : format(now, 'HH:mm')}
-                min={displayDate && displayDate.toDateString() === now.toDateString() ? format(now, 'HH:mm') : undefined}
-                onChange={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  if (displayDate && e.target.value) {
-                    const [hours, minutes] = e.target.value.split(':')
-                    const newDate = new Date(displayDate)
-                    newDate.setHours(parseInt(hours), parseInt(minutes))
-
-                    if (newDate.toDateString() === now.toDateString() && newDate < now) {
-                      newDate.setTime(now.getTime())
-                    }
-
-                    // Convert to UTC
-                    const utcDate = new Date(Date.UTC(
-                      newDate.getFullYear(),
-                      newDate.getMonth(),
-                      newDate.getDate(),
-                      newDate.getHours(),
-                      newDate.getMinutes()
-                    ))
-
-                    const timestamp = Math.floor(utcDate.getTime() / 1000)
-                    field.onChange(timestamp)
-                    handleFieldChange('expire', timestamp)
-                  }
-                }}
+                value={displayDate ? displayDate.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false }) : now.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                min={displayDate && displayDate.toDateString() === now.toDateString() ? now.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
+                onChange={handleTimeChange}
               />
             </FormControl>
             {displayDate && (
@@ -331,23 +341,14 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     if (expireValue === '') {
       displayDate = null
     } else {
-      const asNum = Number(expireValue)
-      if (!isNaN(asNum)) {
-        const timestamp = asNum * 1000
-        const date = new Date(timestamp)
-        if (date.getFullYear() > 1970) {
-          displayDate = date
-        }
-      } else {
-        const date = new Date(expireValue)
-        if (!isNaN(date.getTime()) && date.getFullYear() > 1970) {
-          displayDate = date
-        }
+      const date = new Date(expireValue)
+      if (!isNaN(date.getTime())) {
+        displayDate = date
       }
     }
   } else if (typeof expireValue === 'number') {
     const date = new Date(expireValue * 1000)
-    if (date.getFullYear() > 1970) {
+    if (!isNaN(date.getTime())) {
       displayDate = date
     }
   }
@@ -503,34 +504,37 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }
 
   // Helper to convert expire field to needed schema
-  function normalizeExpire(expire: Date | string | number | null | undefined): string | number | null | undefined {
-    if (expire === undefined || expire === null || expire === '') return 0
+  function normalizeExpire(expire: Date | string | number | null | undefined): string | undefined {
+    if (expire === undefined || expire === null || expire === '') return undefined
 
-    // For number values, return directly (already a timestamp)
-    if (typeof expire === 'number') return expire
-
-    // For Date objects, convert to Unix timestamp (seconds) in UTC
+    // For Date objects, convert to ISO string with timezone
     if (expire instanceof Date) {
-      return Math.floor(expire.getTime() / 1000)
+      return getLocalISOTime(expire)
     }
 
     // For strings
     if (typeof expire === 'string') {
-      // Try as number first
-      const asNum = Number(expire)
-      if (!isNaN(asNum) && expire.trim() !== '') {
-        return asNum // Return as number if it's a valid numeric string
+      // If it's already an ISO string, return it
+      if (expire.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)) {
+        return expire
       }
 
-      // Try as date string - convert to UTC
-      const asDate = new Date(expire + 'Z')
+      // Try as date string
+      const asDate = new Date(expire)
       if (!isNaN(asDate.getTime())) {
-        return Math.floor(asDate.getTime() / 1000)
+        return getLocalISOTime(asDate)
       }
     }
 
-    // Return 0 for any other case
-    return 0
+    // For numbers (timestamps)
+    if (typeof expire === 'number') {
+      const date = new Date(expire * 1000)
+      if (!isNaN(date.getTime())) {
+        return getLocalISOTime(date)
+      }
+    }
+
+    return undefined
   }
 
   // Helper to clear group selection
