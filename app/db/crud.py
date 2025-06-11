@@ -112,7 +112,7 @@ def build_json_proxy_settings_search_condition(column, value: str):
         *[
             json_extract(column, field) == value
             for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-        ]
+        ],
     )
 
 
@@ -825,6 +825,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
             db_user.status = UserStatus.on_hold
             db_user.on_hold_expire_duration = db_user.next_plan.user_template.expire_duration
             db_user.on_hold_timeout = db_user.next_plan.user_template.on_hold_timeout
+            db_user.expire = None
         else:
             db_user.expire = timedelta(seconds=db_user.next_plan.user_template.expire_duration) + datetime.now(UTC)
 
