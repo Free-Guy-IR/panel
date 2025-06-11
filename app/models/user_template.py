@@ -31,7 +31,7 @@ class UserTemplate(BaseModel):
     status: UserStatusCreate | None = None
     reset_usages: bool | None = None
     on_hold_timeout: int | None = None
-    data_limit_reset_strategy: UserDataLimitResetStrategy = UserDataLimitResetStrategy.no_reset
+    data_limit_reset_strategy: UserDataLimitResetStrategy = Field(default=UserDataLimitResetStrategy.no_reset)
     is_disabled: bool | None = None
 
 
