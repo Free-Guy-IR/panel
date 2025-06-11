@@ -6,11 +6,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
+import { Calendar as PersianCalendar } from '@/components/ui/persian-calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import useDirDetection from '@/hooks/use-dir-detection'
+import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { cn } from '@/lib/utils'
 import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard._index'
 import { useCreateUser, useCreateUserFromTemplate, useGetAllGroups, useGetUsers, useGetUserTemplates, useModifyUser, useModifyUserWithTemplate } from '@/service/api'
@@ -18,16 +20,13 @@ import { useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
 import { useQueryClient } from '@tanstack/react-query'
 import { CalendarIcon, Layers, ListStart, Lock, RefreshCcw, Search, Users, X } from 'lucide-react'
-import { useEffect, useState, useTransition } from 'react'
+import React, { useEffect, useState, useTransition } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { v4 as uuidv4, v5 as uuidv5, v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
-import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
-import { Calendar as PersianCalendar } from '@/components/ui/persian-calendar'
-import React from 'react'
 
 interface UserModalProps {
   isDialogOpen: boolean
@@ -57,20 +56,25 @@ const UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
 
 // Add this helper function at the top level
 function getLocalISOTime(date: Date): string {
-  const tzOffset = -date.getTimezoneOffset();
-  const offsetSign = tzOffset >= 0 ? '+' : '-';
-  const pad = (num: number) => Math.abs(num).toString().padStart(2, '0');
+  const tzOffset = -date.getTimezoneOffset()
+  const offsetSign = tzOffset >= 0 ? '+' : '-'
+  const pad = (num: number) => Math.abs(num).toString().padStart(2, '0')
 
-  const offsetHours = pad(Math.floor(tzOffset / 60));
-  const offsetMinutes = pad(tzOffset % 60);
+  const offsetHours = pad(Math.floor(tzOffset / 60))
+  const offsetMinutes = pad(tzOffset % 60)
 
-  return new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
-    .toISOString()
-    .slice(0, -1) + `${offsetSign}${offsetHours}:${offsetMinutes}`;
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, -1) + `${offsetSign}${offsetHours}:${offsetMinutes}`
 }
 
 // Add this new component before the UserModal component
-const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen, setCalendarOpen, handleFieldChange }: {
+const ExpiryDateField = ({
+  field,
+  displayDate,
+  usePersianCalendar,
+  calendarOpen,
+  setCalendarOpen,
+  handleFieldChange,
+}: {
   field: any
   displayDate: Date | null
   usePersianCalendar: boolean
@@ -82,77 +86,86 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
   const expireInfo = useRelativeExpiryDate(displayDate ? Math.floor(displayDate.getTime() / 1000) : null)
   const [, startTransition] = useTransition()
 
-  const handleDateSelect = React.useCallback((date: Date | undefined) => {
-    if (date) {
-      const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const handleDateSelect = React.useCallback(
+    (date: Date | undefined) => {
+      if (date) {
+        const now = new Date()
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
-      if (selectedDate < today) {
-        date = now
-      }
+        if (selectedDate < today) {
+          date = now
+        }
 
-      if (selectedDate.getTime() === today.getTime()) {
-        // Set to end of day
-        date.setHours(23, 59, 59)
+        if (selectedDate.getTime() === today.getTime()) {
+          // Set to end of day
+          date.setHours(23, 59, 59)
+        } else {
+          // Set current time
+          date.setHours(now.getHours(), now.getMinutes())
+        }
+
+        const isoString = getLocalISOTime(date)
+        startTransition(() => {
+          field.onChange(isoString)
+          handleFieldChange('expire', isoString)
+        })
       } else {
-        // Set current time
-        date.setHours(now.getHours(), now.getMinutes())
+        startTransition(() => {
+          field.onChange('')
+          handleFieldChange('expire', undefined)
+        })
       }
-
-      const isoString = getLocalISOTime(date)
-      startTransition(() => {
-        field.onChange(isoString)
-        handleFieldChange('expire', isoString)
-      })
-    } else {
-      startTransition(() => {
-        field.onChange('')
-        handleFieldChange('expire', undefined)
-      })
-    }
-    setCalendarOpen(false)
-  }, [field, handleFieldChange, setCalendarOpen, startTransition])
+      setCalendarOpen(false)
+    },
+    [field, handleFieldChange, setCalendarOpen, startTransition],
+  )
 
   // Update time input handling to work with local time
-  const handleTimeChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (displayDate && e.target.value) {
-      const [hours, minutes] = e.target.value.split(':')
-      const newDate = new Date(displayDate)
-      newDate.setHours(parseInt(hours), parseInt(minutes))
+  const handleTimeChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (displayDate && e.target.value) {
+        const [hours, minutes] = e.target.value.split(':')
+        const newDate = new Date(displayDate)
+        newDate.setHours(parseInt(hours), parseInt(minutes))
 
-      const now = new Date()
-      if (newDate.toDateString() === now.toDateString() && newDate < now) {
-        newDate.setTime(now.getTime())
+        const now = new Date()
+        if (newDate.toDateString() === now.toDateString() && newDate < now) {
+          newDate.setTime(now.getTime())
+        }
+
+        const isoString = getLocalISOTime(newDate)
+        startTransition(() => {
+          field.onChange(isoString)
+          handleFieldChange('expire', isoString)
+        })
       }
-
-      const isoString = getLocalISOTime(newDate)
-      startTransition(() => {
-        field.onChange(isoString)
-        handleFieldChange('expire', isoString)
-      })
-    }
-  }, [displayDate, field, handleFieldChange, startTransition])
+    },
+    [displayDate, field, handleFieldChange, startTransition],
+  )
 
   // Get current date for comparison
   const now = new Date()
 
   // Function to check if a date should be disabled
-  const isDateDisabled = React.useCallback((date: Date) => {
-    // Create a new date object for today at midnight for accurate comparison
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const isDateDisabled = React.useCallback(
+    (date: Date) => {
+      // Create a new date object for today at midnight for accurate comparison
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
-    // Disable if the date is before today
-    if (compareDate < today) {
-      return true
-    }
+      // Disable if the date is before today
+      if (compareDate < today) {
+        return true
+      }
 
-    // For future dates, allow all
-    return false
-  }, [now])
+      // For future dates, allow all
+      return false
+    },
+    [now],
+  )
 
   return (
     <FormItem className="flex-1 flex flex-col">
@@ -162,14 +175,11 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
           <FormControl>
             <div className="relative w-full">
               <Button
-                dir={"ltr"}
+                dir={'ltr'}
                 variant={'outline'}
-                className={cn(
-                  'w-full h-fit !mt-3.5 text-left font-normal',
-                  !field.value && 'text-muted-foreground'
-                )}
+                className={cn('w-full h-fit !mt-3.5 text-left font-normal', !field.value && 'text-muted-foreground')}
                 type="button"
-                onClick={(e) => {
+                onClick={e => {
                   e.preventDefault()
                   e.stopPropagation()
                   setCalendarOpen(true)
@@ -184,18 +194,20 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
                       day: '2-digit',
                       hour: '2-digit',
                       minute: '2-digit',
-                      hour12: false
+                      hour12: false,
                     }).format(displayDate)
                   ) : (
                     // Gregorian format - keep local time
-                    displayDate.toLocaleString('sv', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: false
-                    }).replace('T', ' ')
+                    displayDate
+                      .toLocaleString('sv', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      })
+                      .replace('T', ' ')
                   )
                 ) : field.value && !isNaN(Number(field.value)) ? (
                   String(field.value)
@@ -207,10 +219,14 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
             </div>
           </FormControl>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start" onInteractOutside={(e) => {
-          e.preventDefault()
-          setCalendarOpen(false)
-        }}>
+        <PopoverContent
+          className="w-auto p-0"
+          align="start"
+          onInteractOutside={e => {
+            e.preventDefault()
+            setCalendarOpen(false)
+          }}
+        >
           {usePersianCalendar ? (
             <PersianCalendar
               mode="single"
@@ -222,7 +238,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
               startMonth={now}
               endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
               formatters={{
-                formatMonthDropdown: (date) => date.toLocaleString("fa-IR", { month: "short" }),
+                formatMonthDropdown: date => date.toLocaleString('fa-IR', { month: 'short' }),
               }}
             />
           ) : (
@@ -235,7 +251,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
               defaultMonth={displayDate || now}
               endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
               formatters={{
-                formatMonthDropdown: (date) => date.toLocaleString("default", { month: "short" }),
+                formatMonthDropdown: date => date.toLocaleString('default', { month: 'short' }),
               }}
             />
           )}
@@ -243,7 +259,11 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
             <FormControl>
               <Input
                 type="time"
-                value={displayDate ? displayDate.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false }) : now.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                value={
+                  displayDate
+                    ? displayDate.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false })
+                    : now.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false })
+                }
                 min={displayDate && displayDate.toDateString() === now.toDateString() ? now.toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
                 onChange={handleTimeChange}
               />
@@ -254,7 +274,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={(e) => {
+                onClick={e => {
                   e.preventDefault()
                   e.stopPropagation()
                   field.onChange('')
@@ -269,7 +289,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
         </PopoverContent>
       </Popover>
       {expireInfo && (
-        <p className={cn(!expireInfo.time && "hidden", "text-xs text-muted-foreground")}>
+        <p className={cn(!expireInfo.time && 'hidden', 'text-xs text-muted-foreground')}>
           {expireInfo.time !== '0' && expireInfo.time !== '0s'
             ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
             : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
@@ -283,7 +303,7 @@ const ExpiryDateField = ({ field, displayDate, usePersianCalendar, calendarOpen,
 export default function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserId, onSuccessCallback }: UserModalProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
-  const handleError = useDynamicErrorHandler();
+  const handleError = useDynamicErrorHandler()
   const [loading, setLoading] = useState(false)
   const status = form.watch('status')
   const [activeTab, setActiveTab] = useState<'groups' | 'templates'>('groups')
@@ -301,34 +321,43 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
   const [isFormValid, setIsFormValid] = useState(false)
 
-  const handleModalOpenChange = React.useCallback((open: boolean) => {
-    if (!open) {
-      form.reset()
-      setTouchedFields({})
-      setIsFormValid(false)
-    }
-    onOpenChange(open)
-  }, [form, onOpenChange])
+  const handleModalOpenChange = React.useCallback(
+    (open: boolean) => {
+      if (!open) {
+        form.reset()
+        setTouchedFields({})
+        setIsFormValid(false)
+      }
+      onOpenChange(open)
+    },
+    [form, onOpenChange],
+  )
 
-  const handleFieldChange = React.useCallback((fieldName: string, value: any) => {
-    setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
-    const currentValues = {
-      ...form.getValues(),
-      [fieldName]: value,
-    }
-    const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
-    setIsFormValid(isValid)
-  }, [form, touchedFields])
-
-  // Add handleFieldBlur function
-  const handleFieldBlur = React.useCallback((fieldName: string) => {
-    if (!touchedFields[fieldName]) {
+  const handleFieldChange = React.useCallback(
+    (fieldName: string, value: any) => {
       setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
-      const currentValues = form.getValues()
+      const currentValues = {
+        ...form.getValues(),
+        [fieldName]: value,
+      }
       const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
       setIsFormValid(isValid)
-    }
-  }, [form, touchedFields])
+    },
+    [form, touchedFields],
+  )
+
+  // Add handleFieldBlur function
+  const handleFieldBlur = React.useCallback(
+    (fieldName: string) => {
+      if (!touchedFields[fieldName]) {
+        setTouchedFields(prev => ({ ...prev, [fieldName]: true }))
+        const currentValues = form.getValues()
+        const isValid = validateAllFields(currentValues, { ...touchedFields, [fieldName]: true })
+        setIsFormValid(isValid)
+      }
+    },
+    [form, touchedFields],
+  )
 
   // Get the expire value from the form
   const expireValue = form.watch('expire')
@@ -618,133 +647,40 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }
 
   // Update template selection handlers to use number type
-  const handleTemplateSelect = React.useCallback((val: string) => {
-    const currentValues = form.getValues()
-    if (val === 'none' || (selectedTemplateId && String(selectedTemplateId) === val)) {
-      setSelectedTemplateId(null)
-      clearGroups()
-    } else {
-      setSelectedTemplateId(Number(val))
-      clearGroups()
-      // Clear group selection when template is selected
-      form.setValue('group_ids', [])
-      handleFieldChange('group_ids', [])
-    }
-    // Trigger validation after template selection changes
-    const isValid = validateAllFields(currentValues, touchedFields)
-    setIsFormValid(isValid)
-  }, [form, selectedTemplateId, touchedFields, handleFieldChange])
+  const handleTemplateSelect = React.useCallback(
+    (val: string) => {
+      const currentValues = form.getValues()
+      if (val === 'none' || (selectedTemplateId && String(selectedTemplateId) === val)) {
+        setSelectedTemplateId(null)
+        clearGroups()
+      } else {
+        setSelectedTemplateId(Number(val))
+        clearGroups()
+        // Clear group selection when template is selected
+        form.setValue('group_ids', [])
+        handleFieldChange('group_ids', [])
+      }
+      // Trigger validation after template selection changes
+      const isValid = validateAllFields(currentValues, touchedFields)
+      setIsFormValid(isValid)
+    },
+    [form, selectedTemplateId, touchedFields, handleFieldChange],
+  )
 
   // Update the template mutation calls
-  const handleTemplateMutation = React.useCallback(async (values: UseFormValues | UseEditFormValues) => {
-    if (!selectedTemplateId) return
-
-    setLoading(true)
-    try {
-      if (editingUser) {
-        await modifyUserWithTemplateMutation.mutateAsync({
-          username: values.username,
-          data: {
-            user_template_id: selectedTemplateId,
-            note: values.note,
-          },
-        })
-        toast.success(
-          t('userDialog.userEdited', {
-            username: values.username,
-            defaultValue: 'User «{{name}}» has been updated successfully',
-          }),
-        )
-      } else {
-        await createUserFromTemplateMutation.mutateAsync({
-          data: {
-            user_template_id: selectedTemplateId,
-            username: values.username,
-            note: values.note || undefined,
-          },
-        })
-        toast.success(
-          t('userDialog.userCreated', {
-            username: values.username,
-            defaultValue: 'User «{{name}}» has been created successfully',
-          }),
-        )
-      }
-      onOpenChange(false)
-      form.reset()
-      setSelectedTemplateId(null)
-    } catch (error: any) {
-      toast.error(
-        error?.response?._data?.detail ||
-        t(editingUser ? 'users.editError' : 'users.createError', {
-          name: values.username,
-          defaultValue: `Failed to ${editingUser ? 'update' : 'create'} user «{{name}}»`,
-        }),
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [editingUser, selectedTemplateId, form, onOpenChange, t])
-
-  const onSubmit = React.useCallback(async (values: UseFormValues | UseEditFormValues) => {
-    try {
-      form.clearErrors()
-
-      // Handle template-based operations
-      if (selectedTemplateId) {
-        await handleTemplateMutation(values)
-        return
-      }
-
-      // Regular create/edit flow
-      if (!validateAllFields(values, touchedFields)) {
-        return
-      }
-
-      // Convert data to the right format before validation
-      const preparedValues = {
-        ...values,
-        data_limit: typeof values.data_limit === 'string' ? parseFloat(values.data_limit) : values.data_limit,
-        on_hold_expire_duration: values.on_hold_expire_duration
-          ? typeof values.on_hold_expire_duration === 'string'
-            ? parseInt(values.on_hold_expire_duration, 10)
-            : values.on_hold_expire_duration
-          : undefined,
-        expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
-        group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
-        status: values.status,
-      }
-
-      // Remove next_plan.data_limit and next_plan.expire if next_plan.user_template_id is set
-      if (preparedValues.next_plan && preparedValues.next_plan.user_template_id) {
-        delete preparedValues.next_plan.data_limit
-        delete preparedValues.next_plan.expire
-      }
-
-      // Check if proxy settings are filled
-      const hasProxySettings = values.proxy_settings && Object.values(values.proxy_settings).some(settings => settings && Object.values(settings).some(value => value !== undefined && value !== ''))
+  const handleTemplateMutation = React.useCallback(
+    async (values: UseFormValues | UseEditFormValues) => {
+      if (!selectedTemplateId) return
 
       setLoading(true)
-      // Convert data_limit from GB to bytes
-      const sendValues = {
-        ...preparedValues,
-        data_limit: gbToBytes(preparedValues.data_limit as any),
-        expire: normalizeExpire(preparedValues.expire),
-        // Only include proxy_settings if they are filled
-        ...(hasProxySettings ? { proxy_settings: values.proxy_settings } : {}),
-      }
-
-      // Remove proxy_settings from the payload if it's empty or undefined
-      if (!hasProxySettings) {
-        delete sendValues.proxy_settings
-      }
-
-      // Make API calls to the backend
-      if (editingUser && editingUserId) {
-        try {
-          await modifyUserMutation.mutateAsync({
-            username: sendValues.username,
-            data: sendValues,
+      try {
+        if (editingUser) {
+          await modifyUserWithTemplateMutation.mutateAsync({
+            username: values.username,
+            data: {
+              user_template_id: selectedTemplateId,
+              note: values.note,
+            },
           })
           toast.success(
             t('userDialog.userEdited', {
@@ -752,18 +688,13 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               defaultValue: 'User «{{name}}» has been updated successfully',
             }),
           )
-        } catch (error) {
-          console.error('Modify user error:', error)
-          throw error
-        }
-      } else {
-        try {
-          const createData = {
-            ...sendValues,
-            status: (sendValues.status === 'active' ? 'active' : sendValues.status) as 'active' | 'on_hold',
-          }
-          await createUserMutation.mutateAsync({
-            data: createData,
+        } else {
+          await createUserFromTemplateMutation.mutateAsync({
+            data: {
+              user_template_id: selectedTemplateId,
+              username: values.username,
+              note: values.note || undefined,
+            },
           })
           toast.success(
             t('userDialog.userCreated', {
@@ -771,22 +702,129 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               defaultValue: 'User «{{name}}» has been created successfully',
             }),
           )
-        } catch (error) {
-          console.error('Create user error:', error)
-          throw error
         }
+        onOpenChange(false)
+        form.reset()
+        setSelectedTemplateId(null)
+      } catch (error: any) {
+        toast.error(
+          error?.response?._data?.detail ||
+            t(editingUser ? 'users.editError' : 'users.createError', {
+              name: values.username,
+              defaultValue: `Failed to ${editingUser ? 'update' : 'create'} user «{{name}}»`,
+            }),
+        )
+      } finally {
+        setLoading(false)
       }
+    },
+    [editingUser, selectedTemplateId, form, onOpenChange, t],
+  )
 
-      onOpenChange(false)
-      form.reset()
-      setTouchedFields({})
-    } catch (error: any) {
-      const fields = ['username', 'data_limit', 'expire', 'note', 'data_limit_reset_strategy', 'on_hold_expire_duration', 'on_hold_timeout', 'group_ids']
-      handleError({ error, fields, form, contextKey: "users" })
-    } finally {
-      setLoading(false)
-    }
-  }, [editingUser, editingUserId, form, handleTemplateMutation, onOpenChange, selectedTemplateId, status, t, touchedFields])
+  const onSubmit = React.useCallback(
+    async (values: UseFormValues | UseEditFormValues) => {
+      try {
+        form.clearErrors()
+
+        // Handle template-based operations
+        if (selectedTemplateId) {
+          await handleTemplateMutation(values)
+          return
+        }
+
+        // Regular create/edit flow
+        if (!validateAllFields(values, touchedFields)) {
+          return
+        }
+
+        // Convert data to the right format before validation
+        const preparedValues = {
+          ...values,
+          data_limit: typeof values.data_limit === 'string' ? parseFloat(values.data_limit) : values.data_limit,
+          on_hold_expire_duration: values.on_hold_expire_duration
+            ? typeof values.on_hold_expire_duration === 'string'
+              ? parseInt(values.on_hold_expire_duration, 10)
+              : values.on_hold_expire_duration
+            : undefined,
+          expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
+          group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
+          status: values.status,
+        }
+
+        // Remove next_plan.data_limit and next_plan.expire if next_plan.user_template_id is set
+        if (preparedValues.next_plan && preparedValues.next_plan.user_template_id) {
+          delete preparedValues.next_plan.data_limit
+          delete preparedValues.next_plan.expire
+        }
+
+        // Check if proxy settings are filled
+        const hasProxySettings = values.proxy_settings && Object.values(values.proxy_settings).some(settings => settings && Object.values(settings).some(value => value !== undefined && value !== ''))
+
+        setLoading(true)
+        // Convert data_limit from GB to bytes
+        const sendValues = {
+          ...preparedValues,
+          data_limit: gbToBytes(preparedValues.data_limit as any),
+          expire: normalizeExpire(preparedValues.expire),
+          // Only include proxy_settings if they are filled
+          ...(hasProxySettings ? { proxy_settings: values.proxy_settings } : {}),
+        }
+
+        // Remove proxy_settings from the payload if it's empty or undefined
+        if (!hasProxySettings) {
+          delete sendValues.proxy_settings
+        }
+
+        // Make API calls to the backend
+        if (editingUser && editingUserId) {
+          try {
+            await modifyUserMutation.mutateAsync({
+              username: sendValues.username,
+              data: sendValues,
+            })
+            toast.success(
+              t('userDialog.userEdited', {
+                username: values.username,
+                defaultValue: 'User «{{name}}» has been updated successfully',
+              }),
+            )
+          } catch (error) {
+            console.error('Modify user error:', error)
+            throw error
+          }
+        } else {
+          try {
+            const createData = {
+              ...sendValues,
+              status: (sendValues.status === 'active' ? 'active' : sendValues.status) as 'active' | 'on_hold',
+            }
+            await createUserMutation.mutateAsync({
+              data: createData,
+            })
+            toast.success(
+              t('userDialog.userCreated', {
+                username: values.username,
+                defaultValue: 'User «{{name}}» has been created successfully',
+              }),
+            )
+          } catch (error) {
+            console.error('Create user error:', error)
+            throw error
+          }
+        }
+
+        onOpenChange(false)
+        form.reset()
+        setTouchedFields({})
+      } catch (error: any) {
+        const fields = ['username', 'data_limit', 'expire', 'note', 'data_limit_reset_strategy', 'on_hold_expire_duration', 'on_hold_timeout', 'group_ids']
+        handleError({ error, fields, form, contextKey: 'users' })
+      } finally {
+        setLoading(false)
+      }
+    },
+    [editingUser, editingUserId, form, handleTemplateMutation, onOpenChange, selectedTemplateId, status, t, touchedFields],
+  )
 
   function generateUsername() {
     // Example: random 8-char string
@@ -874,13 +912,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       // For edit mode, only validate fields that have been changed
       const allFieldsTouched = editingUser
         ? {}
-        : Object.keys(currentValues).reduce(
-          (acc, key) => {
+        : Object.keys(currentValues).reduce((acc, key) => {
             acc[key] = true
             return acc
-          },
-          {} as Record<string, boolean>,
-        )
+          }, {} as Record<string, boolean>)
       const isValid = validateAllFields(currentValues, allFieldsTouched)
       setIsFormValid(isValid)
       setTouchedFields(allFieldsTouched)
@@ -969,7 +1004,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                         size="icon"
                                         type="button"
                                         variant="ghost"
-                                        onClick={(e) => {
+                                        onClick={e => {
                                           e.preventDefault()
                                           e.stopPropagation()
                                           const newUsername = generateUsername()
@@ -1050,7 +1085,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       size="icon"
                                       type="button"
                                       variant="ghost"
-                                      onClick={(e) => {
+                                      onClick={e => {
                                         e.preventDefault()
                                         e.stopPropagation()
                                         const newUsername = generateUsername()
@@ -1344,7 +1379,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       size="icon"
                                       type="button"
                                       variant="ghost"
-                                      onClick={(e) => {
+                                      onClick={e => {
                                         e.preventDefault()
                                         e.stopPropagation()
                                         const newVal = generateUUID(uuidVersions.vmess, field.value)
@@ -1399,7 +1434,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       size="icon"
                                       type="button"
                                       variant="ghost"
-                                      onClick={(e) => {
+                                      onClick={e => {
                                         e.preventDefault()
                                         e.stopPropagation()
                                         const newVal = generateUUID(uuidVersions.vless, field.value)
@@ -1471,7 +1506,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     size="icon"
                                     type="button"
                                     variant="ghost"
-                                    onClick={(e) => {
+                                    onClick={e => {
                                       e.preventDefault()
                                       e.stopPropagation()
                                       const newVal = generatePassword()
@@ -1513,7 +1548,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     size="icon"
                                     type="button"
                                     variant="ghost"
-                                    onClick={(e) => {
+                                    onClick={e => {
                                       e.preventDefault()
                                       e.stopPropagation()
                                       const newVal = generatePassword()
@@ -1582,7 +1617,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                             name="next_plan.user_template_id"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>{t('userDialog.nextPlanTemplateId', { defaultValue: 'Template ID' })}</FormLabel>
+                                <FormLabel>{t('userDialog.nextPlanTemplateId', { defaultValue: 'Template' })}</FormLabel>
                                 <FormControl>
                                   <Select
                                     value={field.value ? String(field.value) : 'none'}
@@ -1621,7 +1656,17 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                   <FormItem>
                                     <FormLabel>{t('userDialog.nextPlanExpire', { defaultValue: 'Expire' })}</FormLabel>
                                     <FormControl>
-                                      <Input type="number" min="0" {...field} value={field.value ?? ''} />
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        {...field}
+                                        value={field.value ? Math.round(field.value / (1024 * 1024 * 1024)) : ''}
+                                        onChange={e => {
+                                          const value = parseInt(e.target.value)
+                                          // Convert GB to bytes (1 GB = 1024 * 1024 * 1024 bytes)
+                                          field.onChange(value ? value * 1024 * 1024 * 1024 : 0)
+                                        }}
+                                      />
                                     </FormControl>
                                     <span className="text-xs text-muted-foreground">{t('userDialog.days', { defaultValue: 'Days' })}</span>
                                     <FormMessage />
@@ -1635,7 +1680,17 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                   <FormItem>
                                     <FormLabel>{t('userDialog.nextPlanDataLimit', { defaultValue: 'Data Limit' })}</FormLabel>
                                     <FormControl>
-                                      <Input type="number" min="0" step="any" {...field} value={field.value ?? ''} />
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        {...field}
+                                        onChange={e => {
+                                          const value = parseInt(e.target.value)
+                                          field.onChange(value ? value * 24 * 60 * 60 : 0)
+                                        }}
+                                        value={field.value ? Math.round(field.value / (24 * 60 * 60)) : ''}
+                                      />
                                     </FormControl>
                                     <span className="text-xs text-muted-foreground">GB</span>
                                     <FormMessage />
@@ -1669,8 +1724,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                         <button
                           key={tab.id}
                           onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                          className={`relative flex-1 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id ? 'text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-                            }`}
+                          className={`relative flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                            activeTab === tab.id ? 'text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+                          }`}
                           type="button"
                         >
                           <div className="flex items-center gap-1.5 justify-center">
@@ -1687,10 +1743,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                         ) : (
                           <div className="space-y-4 pt-4">
                             <FormLabel>{t('userDialog.selectTemplate', { defaultValue: 'Select Template' })}</FormLabel>
-                            <Select
-                              value={selectedTemplateId ? String(selectedTemplateId) : 'none'}
-                              onValueChange={handleTemplateSelect}
-                            >
+                            <Select value={selectedTemplateId ? String(selectedTemplateId) : 'none'} onValueChange={handleTemplateSelect}>
                               <SelectTrigger>
                                 <SelectValue placeholder={t('userDialog.selectTemplatePlaceholder', { defaultValue: 'Choose a template' })} />
                               </SelectTrigger>
@@ -1772,10 +1825,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       />
                                     </div>
                                     <label className="flex items-center border border-border gap-2 p-3 rounded-md hover:bg-accent cursor-pointer">
-                                      <Checkbox
-                                        checked={filteredGroups.length > 0 && selectedGroups.length === filteredGroups.length}
-                                        onCheckedChange={handleSelectAll}
-                                      />
+                                      <Checkbox checked={filteredGroups.length > 0 && selectedGroups.length === filteredGroups.length} onCheckedChange={handleSelectAll} />
                                       <span className="text-sm font-medium">{t('selectAll', { defaultValue: 'Select All' })}</span>
                                     </label>
                                     <div className="max-h-[200px] overflow-y-auto space-y-2 p-2 border rounded-md">
@@ -1831,11 +1881,15 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
             </div>
             {/* Cancel/Create buttons - always visible */}
             <div className="flex justify-end gap-2 mt-4">
-              <Button type="button" variant="outline" onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onOpenChange(false)
-              }}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={e => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onOpenChange(false)
+                }}
+              >
                 {t('cancel', { defaultValue: 'Cancel' })}
               </Button>
               <LoaderButton
