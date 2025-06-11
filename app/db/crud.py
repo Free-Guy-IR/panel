@@ -727,6 +727,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
 
     if modify.next_plan is not None:
         db_user.next_plan = NextPlan(
+            user_id=db_user.id,
             user_template_id=modify.next_plan.user_template_id,
             data_limit=modify.next_plan.data_limit,
             expire=modify.next_plan.expire,
@@ -766,7 +767,7 @@ async def reset_user_data_usage(db: AsyncSession, db_user: User) -> User:
     """
     await db_user.awaitable_attrs.node_usages
     usage_log = UserUsageResetLogs(
-        user=db_user,
+        user_id=db_user.id,
         used_traffic_at_reset=db_user.used_traffic,
     )
     db.add(usage_log)
@@ -799,7 +800,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
     """
     await db_user.awaitable_attrs.node_usages
     usage_log = UserUsageResetLogs(
-        user=db_user,
+        user_id=db_user.id,
         used_traffic_at_reset=db_user.used_traffic,
     )
     db.add(usage_log)
