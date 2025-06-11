@@ -107,12 +107,10 @@ def build_json_proxy_settings_search_condition(column, value: str):
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgreSQL, MySQL, SQLite.
     """
-    return or_(
-        *[
-            json_extract(column, field) == value
-            for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
-        ]
-    )
+    return or_(*[
+        json_extract(column, field) == value
+        for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
+    ])
 
 
 async def add_default_host(db: AsyncSession, inbound: ProxyInbound):
@@ -806,7 +804,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
     db.add(usage_log)
 
     db_user.node_usages.clear()
-    db_user.status = UserStatus.active.value
+    db_user.status = UserStatus.active
 
     if db_user.next_plan.user_template_id is None:
         db_user.data_limit = db_user.next_plan.data_limit + (
@@ -814,11 +812,22 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
         )
         db_user.expire = timedelta(seconds=db_user.next_plan.expire) + datetime.now(UTC)
     else:
+        await db_user.next_plan.awaitable_attrs.user_template
+        await db_user.next_plan.user_template.awaitable_attrs.groups
         db_user.groups = db_user.next_plan.user_template.groups
         db_user.data_limit = db_user.next_plan.user_template.data_limit + (
             0 if db_user.next_plan.add_remaining_traffic else db_user.data_limit or 0 - db_user.used_traffic
         )
-        db_user.expire = timedelta(seconds=db_user.next_plan.user_template.expire_duration) + datetime.now(UTC)
+        if db_user.next_plan.user_template.status is UserStatus.on_hold:
+            db_user.status = UserStatus.on_hold
+            db_user.on_hold_expire_duration = db_user.next_plan.user_template.expire_duration
+            db_user.on_hold_timeout = db_user.next_plan.user_template.on_hold_timeout
+        else:
+            db_user.expire = timedelta(seconds=db_user.next_plan.user_template.expire_duration) + datetime.now(UTC)
+
+        db_user.proxy_settings["vless"]["flow"] = db_user.next_plan.user_template.extra_settings["flow"]
+        db_user.proxy_settings["shadowsocks"]["method"] = db_user.next_plan.user_template.extra_settings["method"]
+        db_user.data_limit_reset_strategy = db_user.next_plan.user_template.data_limit_reset_strategy
 
     db_user.used_traffic = 0
     await db.delete(db_user.next_plan)
