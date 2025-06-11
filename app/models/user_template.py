@@ -24,8 +24,8 @@ class UserTemplate(BaseModel):
     expire_duration: int | None = Field(
         ge=0, default=None, description="expire_duration can be 0 or greater in seconds"
     )
-    username_prefix: str | None = Field(max_length=20, min_length=1, default=None)
-    username_suffix: str | None = Field(max_length=20, min_length=1, default=None)
+    username_prefix: str | None = Field(max_length=20, default=None)
+    username_suffix: str | None = Field(max_length=20, default=None)
     group_ids: list[int]
     extra_settings: ExtraSettings | None = None
     status: UserStatusCreate | None = None
@@ -39,6 +39,11 @@ class UserTemplateWithValidator(UserTemplate):
     @field_validator("status", mode="before", check_fields=False)
     def validate_status(cls, status, values):
         return UserValidator.validate_status(status, values)
+
+    @field_validator("username_prefix", "username_suffix", check_fields=False)
+    @classmethod
+    def validate_username(cls, v):
+        return UserValidator.validate_username(v)
 
 
 class UserTemplateCreate(UserTemplateWithValidator):
