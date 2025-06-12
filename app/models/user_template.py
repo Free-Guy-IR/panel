@@ -43,7 +43,7 @@ class UserTemplateWithValidator(UserTemplate):
     @field_validator("username_prefix", "username_suffix", check_fields=False)
     @classmethod
     def validate_username(cls, v):
-        return UserValidator.validate_username(v)
+        return UserValidator.validate_username(v, False)
 
 
 class UserTemplateCreate(UserTemplateWithValidator):
