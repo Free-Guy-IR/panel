@@ -483,7 +483,7 @@ class Node(Base):
     core_config: Mapped[Optional["CoreConfig"]] = relationship("CoreConfig", init=False)
     stats: Mapped[List["NodeStat"]] = relationship(back_populates="node", cascade="all, delete-orphan", init=False)
     status: Mapped[NodeStatus] = mapped_column(SQLEnum(NodeStatus), default=NodeStatus.connecting)
-    last_status_change: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc))
+    last_status_change: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), init=False)
     uplink: Mapped[int] = mapped_column(BigInteger, default=0)
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
     usage_coefficient: Mapped[float] = mapped_column(Float, server_default=text("1.0"), default=1)
