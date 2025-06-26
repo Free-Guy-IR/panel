@@ -600,6 +600,7 @@
       "info.examples": "Examples:"
     },
     "muxSettings": "Mux Settings",
+    "enableMux": "Enable Mux",
     "xraySettings": "Xray Settings",
     "singBoxSettings": "Sing-box Settings",
     "clashSettings": "Clash Settings",
@@ -620,6 +621,7 @@
     "statistic": "Enable Statistics",
     "onlyTcp": "Only TCP",
     "brutal": {
+      "enable": "Enable Brutal",
       "title": "Brutal Settings",
       "upMbps": "Upload Speed (Mbps)",
       "downMbps": "Download Speed (Mbps)"
@@ -841,6 +843,7 @@
     "resetUsageSuccess": "Usage for user «{{name}}» has been reset.",
     "revokeSubSuccess": "Subscription for user «{{name}}» has been revoked.",
     "activeNextPlanSuccess": "Next plan for user «{{name}}» has been activated.",
+    "activeNextPlanError": "failed to activate next plan for user «{{name}}».",
     "deleteConfirmTitle": "Remove User",
     "deleteConfirm": "Are you sure you want to remove user «{{name}}»?",
     "nextPlanTitle": "Next Plan",
@@ -861,7 +864,8 @@
     "proxySettings.flow": "Flow",
     "proxySettings.desc": "Configure protocol-specific settings for this user.",
     "selectNode": "Select Node",
-    "allNodes": "All Nodes"
+    "allNodes": "All Nodes",
+    "activeNextPlan": "Active Next Plan"
   },
   "users": "Users",
   "usersTable.copied": "Copied",

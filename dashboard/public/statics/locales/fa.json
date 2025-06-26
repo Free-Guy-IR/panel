@@ -537,6 +537,7 @@
       "info.examples": "مثال‌ها:"
     },
     "muxSettings": "تنظیمات Mux",
+    "enableMux": "فعال‌سازی Mux",
     "xraySettings": "تنظیمات Xray",
     "singBoxSettings": "تنظیمات Sing-box",
     "clashSettings": "تنظیمات Clash",
@@ -557,6 +558,7 @@
     "statistic": "فعال‌سازی آمار",
     "onlyTcp": "فقط TCP",
     "brutal": {
+      "enable": "فعال‌سازی Brutal",
       "title": "تنظیمات Brutal",
       "upMbps": "سرعت آپلود (مگابیت بر ثانیه)",
       "downMbps": "سرعت دانلود (مگابیت بر ثانیه)"
@@ -1056,6 +1058,7 @@
     "resetUsageSuccess": "مصرف کاربر «{{name}}» بازنشانی شد.",
     "revokeSubSuccess": "اشتراک کاربر «{{name}}» لغو شد.",
     "activeNextPlanSuccess": "پلن بعدی برای کاربر «{{name}}» فعال شد.",
+    "activeNextPlanError": "فعال‌سازی پلن بعدی برای کاربر «{{name}}» با شکست مواجه شد.",
     "deleteConfirmTitle": "حذف کاربر",
     "deleteConfirm": "آیا مطمئن هستید که می‌خواهید کاربر «{{name}}» را حذف کنید؟",
     "nextPlanTitle": "پلن بعدی",
@@ -1066,7 +1069,8 @@
     "selectTemplate": "انتخاب قالب",
     "selectTemplatePlaceholder": "یک قالب را انتخاب کنید",
     "selectNode": "انتخاب گره",
-    "allNodes": "همه گره‌ها"
+    "allNodes": "همه گره‌ها",
+    "activeNextPlan": "فعال‌سازی پلن بعدی"
   },
   "sidebar.expand": "باز کردن منو",
   "sidebar.collapse": "بستن منو",

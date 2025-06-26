@@ -767,6 +767,7 @@
       "heartbeatPeriod": "心跳周期"
     },
     "muxSettings": "多路复用设置",
+    "enableMux": "启用 Mux",
     "xraySettings": "Xray 设置",
     "singBoxSettings": "Sing-box 设置",
     "clashSettings": "Clash 设置",
@@ -787,6 +788,7 @@
     "statistic": "启用统计",
     "onlyTcp": "仅 TCP",
     "brutal": {
+      "enable": "启用 Brutal",
       "title": "Brutal 设置",
       "upMbps": "上传速度 (Mbps)",
       "downMbps": "下载速度 (Mbps)"
@@ -1062,6 +1064,7 @@
     "resetUsageSuccess": "用户「{{name}}」的用量已重置。",
     "revokeSubSuccess": "用户「{{name}}」的订阅已撤销。",
     "activeNextPlanSuccess": "用户「{{name}}」的下一个套餐已激活。",
+    "activeNextPlanError": "无法为用户「{{name}}」激活下一个计划。",
     "deleteConfirmTitle": "删除用户",
     "deleteConfirm": "您确定要删除用户「{{name}}」吗？",
     "nextPlanTitle": "下一个套餐",
@@ -1072,7 +1075,8 @@
     "selectTemplate": "选择模板",
     "selectTemplatePlaceholder": "选择模板",
     "selectNode": "选择节点",
-    "allNodes": "所有节点"
+    "allNodes": "所有节点",
+    "activeNextPlan": "激活下一个套餐"
   },
   "sidebar.expand": "展开侧边栏",
   "sidebar.collapse": "折叠侧边栏",

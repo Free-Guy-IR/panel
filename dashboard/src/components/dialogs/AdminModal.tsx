@@ -177,7 +177,7 @@ export default function AdminModal({
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[750px] h-full sm:h-auto ">
+            <DialogContent className="max-w-[750px] h-full sm:h-auto "  onOpenAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>{editingAdmin ? t('admins.editAdmin') : t('admins.createAdmin')}</DialogTitle>
                 </DialogHeader>
@@ -375,12 +375,15 @@ export default function AdminModal({
                                 name="is_sudo"
                                 render={({field}) => (
                                     <FormItem
-                                        className="flex flex-row items-center justify-between rounded-lg border p-4 w-full">
+                                        className="flex flex-row items-center justify-between rounded-lg border p-4 w-full cursor-pointer"
+                                        onClick={() => field.onChange(!field.value)}>
                                         <div className="space-y-0.5">
                                             <FormLabel className="text-base">{t('admins.sudo')}</FormLabel>
                                         </div>
                                         <FormControl>
-                                            <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                                            <div onClick={e => e.stopPropagation()}>
+                                                <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                                            </div>
                                         </FormControl>
                                     </FormItem>
                                 )}

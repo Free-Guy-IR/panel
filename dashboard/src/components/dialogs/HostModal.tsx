@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
-import { getHosts, getInbounds, UserStatus } from '@/service/api'
+import {getHosts, getInbounds, UserStatus} from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
 import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2 } from 'lucide-react'
@@ -139,7 +139,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
-      <DialogContent className="w-full h-full max-w-2xl md:max-h-[95dvh]">
+      <DialogContent className="w-full h-full max-w-2xl md:max-h-[95dvh]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className={cn(dir === 'rtl' ? 'text-right' : 'text-left')}>{editingHost ? t('editHost.title') : t('hostsDialog.addHost')}</DialogTitle>
         </DialogHeader>
@@ -531,15 +531,18 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                         control={form.control}
                         name="random_user_agent"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                    onClick={() => field.onChange(!field.value)}>
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">{t('hostsDialog.randomUserAgent')}</FormLabel>
                             </div>
                             <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                              <div onClick={e => e.stopPropagation()}>
+                                <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                              </div>
                             </FormControl>
                           </FormItem>
-                        )}
+                          )}
                       />
 
                       <div className="space-y-2">
@@ -763,30 +766,36 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                         control={form.control}
                         name="allowinsecure"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                    onClick={() => field.onChange(!field.value)}>
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">{t('hostsDialog.allowInsecure')}</FormLabel>
                             </div>
                             <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                              <div onClick={e => e.stopPropagation()}>
+                                <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                              </div>
                             </FormControl>
                           </FormItem>
-                        )}
+                          )}
                       />
 
                       <FormField
                         control={form.control}
                         name="use_sni_as_host"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                    onClick={() => field.onChange(!field.value)}>
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">{t('hostsDialog.useSniAsHost')}</FormLabel>
                             </div>
                             <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                              <div onClick={e => e.stopPropagation()}>
+                                <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                              </div>
                             </FormControl>
                           </FormItem>
-                        )}
+                          )}
                       />
                     </div>
                   </AccordionContent>
@@ -851,12 +860,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                               control={form.control}
                               name="transport_settings.xhttp_settings.no_grpc_header"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                          onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
                                     <FormLabel className="text-base">{t('hostsDialog.xhttp.noGrpcHeader')}</FormLabel>
                                   </div>
                                   <FormControl>
-                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                                    </div>
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -1080,12 +1092,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                               control={form.control}
                               name="transport_settings.grpc_settings.multi_mode"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                          onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
                                     <FormLabel className="text-base">{t('hostsDialog.grpc.multiMode')}</FormLabel>
                                   </div>
                                   <FormControl>
-                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <Switch checked={field.value} onCheckedChange={field.onChange}/>
+                                    </div>
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -1888,6 +1903,26 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                         {/* Xray Settings */}
                         <TabsContent dir={dir} value="xray">
                           <div className="space-y-4">
+                            <FormField
+                                control={form.control}
+                                name="mux_settings.xray.enable"
+                                render={({ field }) => (
+                                    <FormItem
+                                        className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                        onClick={() => field.onChange(!field.value)}
+                                    >
+                                      <div className="space-y-0.5">
+                                        <FormLabel className="text-base">{t('hostsDialog.enableMux')}</FormLabel>
+                                      </div>
+                                      <FormControl>
+                                      <div onClick={e => e.stopPropagation()}>
+                                          <Switch checked={field.value || false} onCheckedChange={field.onChange}/>
+                                        </div>
+                                      </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            {form.watch('mux_settings.xray.enable') === true ?
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <FormField
                                 control={form.control}
@@ -1942,13 +1977,32 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   </FormItem>
                                 )}
                               />
-                            </div>
+                            </div> :null}
                           </div>
                         </TabsContent>
 
                         {/* Sing-box Settings */}
                         <TabsContent dir={dir} value="sing_box">
                           <div className="space-y-4">
+                            <FormField
+                                control={form.control}
+                                name="mux_settings.sing_box.enable"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                              onClick={() => field.onChange(!field.value)}>
+                                      <div className="space-y-0.5">
+                                        <FormLabel className="text-base">{t('hostsDialog.enableMux')}</FormLabel>
+                                      </div>
+                                      <FormControl>
+                                        <div onClick={e => e.stopPropagation()}>
+                                        <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                                        </div>
+                                      </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            {form.watch('mux_settings.sing_box.enable') === true ?
+                                <>
                             <FormField
                               control={form.control}
                               name="mux_settings.sing_box.protocol"
@@ -2019,6 +2073,24 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
                             <div className="space-y-4">
                               <h4 className="text-sm font-medium">{t('hostsDialog.brutal.title')}</h4>
+                              <FormField
+                                  control={form.control}
+                                  name="mux_settings.sing_box.brutal.enable"
+                                  render={({ field }) => (
+                                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                                onClick={() => field.onChange(!field.value)}>
+                                        <div className="space-y-0.5">
+                                          <FormLabel className="text-base">{t("hostsDialog.brutal.enable")}</FormLabel>
+                                        </div>
+                                        <FormControl>
+                                          <div  onClick={e => e.stopPropagation()}>
+                                          <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                                          </div>
+                                        </FormControl>
+                                      </FormItem>
+                                  )}
+                              />
+                              {form.watch('mux_settings.sing_box.brutal.enable') === true ?
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField
                                   control={form.control}
@@ -2047,29 +2119,53 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                     </FormItem>
                                   )}
                                 />
-                              </div>
+                              </div>:null}
                             </div>
 
                             <FormField
                               control={form.control}
                               name="mux_settings.sing_box.padding"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                          onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
                                     <FormLabel className="text-base">{t('hostsDialog.padding')}</FormLabel>
                                   </div>
                                   <FormControl>
+                                    <div onClick={e => e.stopPropagation()}>
                                     <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                                    </div>
                                   </FormControl>
                                 </FormItem>
                               )}
                             />
+                                </>
+                                :null}
                           </div>
                         </TabsContent>
 
                         {/* Clash Settings */}
                         <TabsContent dir={dir} value="clash">
                           <div className="space-y-4">
+                            <FormField
+                                control={form.control}
+                                name="mux_settings.clash.enable"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                              onClick={() => field.onChange(!field.value)}>
+                                      <div className="space-y-0.5">
+                                        <FormLabel className="text-base">{t('hostsDialog.enableMux')}</FormLabel>
+                                      </div>
+                                      <FormControl>
+                                        <div onClick={e => e.stopPropagation()}>
+                                          <Switch checked={field.value || false} onCheckedChange={field.onChange}/>
+                                        </div>
+                                      </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            {form.watch('mux_settings.clash.enable') === true ?
+                            <>
                             <FormField
                               control={form.control}
                               name="mux_settings.clash.protocol"
@@ -2140,6 +2236,24 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
                             <div className="space-y-4">
                               <h4 className="text-sm font-medium">{t('hostsDialog.brutal.title')}</h4>
+                              <FormField
+                                  control={form.control}
+                                  name="mux_settings.clash.brutal.enable"
+                                  render={({ field }) => (
+                                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                                onClick={() => field.onChange(!field.value)}>
+                                        <div className="space-y-0.5">
+                                          <FormLabel className="text-base">{t("hostsDialog.brutal.enable")}</FormLabel>
+                                        </div>
+                                        <FormControl>
+                                          <div onClick={e => e.stopPropagation()}>
+                                            <Switch checked={field.value || false} onCheckedChange={field.onChange}/>
+                                          </div>
+                                        </FormControl>
+                                      </FormItem>
+                                  )}
+                              />
+                              {form.watch('mux_settings.clash.brutal.enable') === true ?
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField
                                   control={form.control}
@@ -2168,20 +2282,23 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                     </FormItem>
                                   )}
                                 />
-                              </div>
+                              </div>:null}
                             </div>
 
                             <FormField
                               control={form.control}
                               name="mux_settings.clash.padding"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                          onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
                                     <FormLabel className="text-base">{t('hostsDialog.padding')}</FormLabel>
                                   </div>
                                   <FormControl>
-                                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                                  </FormControl>
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <Switch checked={field.value ?? false} onCheckedChange={field.onChange}/>
+                                    </div>
+                                    </FormControl>
                                 </FormItem>
                               )}
                             />
@@ -2190,12 +2307,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                               control={form.control}
                               name="mux_settings.clash.statistic"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                          onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
                                     <FormLabel className="text-base">{t('hostsDialog.statistic')}</FormLabel>
                                   </div>
                                   <FormControl>
-                                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <Switch checked={field.value ?? false} onCheckedChange={field.onChange}/>
+                                    </div>
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -2205,16 +2325,20 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                               control={form.control}
                               name="mux_settings.clash.only_tcp"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 cursor-pointer"
+                                          onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
                                     <FormLabel className="text-base">{t('hostsDialog.onlyTcp')}</FormLabel>
                                   </div>
                                   <FormControl>
-                                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <Switch checked={field.value ?? false} onCheckedChange={field.onChange}/>
+                                    </div>
                                   </FormControl>
                                 </FormItem>
                               )}
                             />
+                          </>:null}
                           </div>
                         </TabsContent>
                       </Tabs>
