@@ -180,7 +180,7 @@ class BaseHost(BaseModel):
     random_user_agent: bool = False
     use_sni_as_host: bool = False
     priority: int
-    status: list[UserStatus] = []
+    status: set[UserStatus] = Field(default_factory=set)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -203,7 +203,3 @@ class CreateHost(BaseHost):
             raise ValueError("Invalid formatting variables")
 
         return v
-
-    @field_validator("status", mode="after")
-    def deduplicate_status(cls, v):
-        return ListValidator.deduplicate_values(v)
