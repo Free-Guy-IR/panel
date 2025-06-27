@@ -11,7 +11,7 @@ from typing import List, Optional, Union
 
 from sqlalchemy import String, and_, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.functions import coalesce
 
 from app.db.base import DATABASE_DIALECT
@@ -39,10 +39,11 @@ from app.db.models import (
     UserStatus,
     UserTemplate,
     UserUsageResetLogs,
+    users_groups_association,
 )
 from app.models.admin import AdminCreate, AdminModify
 from app.models.core import CoreCreate
-from app.models.group import GroupCreate, GroupModify
+from app.models.group import BulkGroup, GroupCreate, GroupModify
 from app.models.host import CreateHost
 from app.models.node import NodeCreate, NodeModify
 from app.models.proxy import ProxyTable
@@ -895,27 +896,37 @@ async def update_user_sub(db: AsyncSession, db_user: User, user_agent: str) -> U
 
 async def reset_all_users_data_usage(db: AsyncSession, admin: Optional[Admin] = None):
     """
-    Resets the data usage for all users or users under a specific admin.
+    Efficiently resets data usage for all users, or users under a specific admin if provided.
+
+    This function performs a high-performance reset by executing bulk database operations
+    rather than iterating over ORM-mapped objects, improving speed and reducing memory usage.
+
+    Operations performed:
+        - Sets `used_traffic` to 0 for all target users.
+        - Sets `status` to `active` for all users, unless filtered by admin.
+        - Deletes all related `UserUsageResetLogs`, `NodeUserUsage`, and `NextPlan` entries.
 
     Args:
-        db (AsyncSession): Database session.
-        admin (Optional[Admin]): Admin to filter users by, if any.
+        db (AsyncSession): The SQLAlchemy async session used for database operations.
+        admin (Optional[Admin]): If provided, only resets data usage for users belonging to this admin.
+                                 If None, resets usage for all users in the system.
+
+    Notes:
+        - All operations are executed in bulk for performance.
+        - This function assumes proper foreign key constraints and cascading rules are in place.
+        - The function commits changes at the end of the operation.
     """
-    query = select(User).options(selectinload(User.node_usages))
+    user_ids_query = select(User.id).where(User.admin_id == admin.id) if admin else select(User.id)
+    user_ids = (await db.execute(user_ids_query)).scalars().all()
 
-    if admin:
-        query = query.where(User.admin == admin)
+    if not user_ids:
+        return
 
-    for dbuser in (await db.execute(query)).scalars().all():
-        dbuser.used_traffic = 0
-        if dbuser.status not in [UserStatus.on_hold, UserStatus.expired, UserStatus.disabled]:
-            dbuser.status = UserStatus.active
-        dbuser.usage_logs.clear()
-        dbuser.node_usages.clear()
-        if dbuser.next_plan:
-            await db.delete(dbuser.next_plan)
-            dbuser.next_plan = None
-        await db.add(dbuser)
+    await db.execute(update(User).where(User.id.in_(user_ids)).values(used_traffic=0, status=UserStatus.active))
+
+    await db.execute(delete(UserUsageResetLogs).where(UserUsageResetLogs.user_id.in_(user_ids)))
+    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id.in_(user_ids)))
+    await db.execute(delete(NextPlan).where(NextPlan.user_id.in_(user_ids)))
 
     await db.commit()
 
@@ -2085,6 +2096,106 @@ async def remove_group(db: AsyncSession, dbgroup: Group):
     """
     await db.delete(dbgroup)
     await db.commit()
+
+
+async def _resolve_target_user_ids(db: AsyncSession, bulk_model: BulkGroup) -> set[int]:
+    """Resolve all user IDs based on users/admins or return all users if unspecified."""
+    user_ids = set()
+
+    if bulk_model.users:
+        result = await db.execute(select(User.id).where(User.id.in_(bulk_model.users)))
+        user_ids.update({row[0] for row in result.all()})
+
+    if bulk_model.admins:
+        result = await db.execute(select(User.id).where(User.admin_id.in_(bulk_model.admins)))
+        user_ids.update({row[0] for row in result.all()})
+
+    return user_ids
+
+
+async def bulk_add_groups_to_users(db: AsyncSession, bulk_model: BulkGroup) -> List["User"]:
+    """
+    Bulk add groups to users and return list of affected User objects.
+    """
+    conditions = [users_groups_association.c.groups_id.in_(bulk_model.group_ids)]
+
+    user_ids = set()
+    target_all_users = True
+
+    if bulk_model.users or bulk_model.admins:
+        target_all_users = False
+        user_ids = await _resolve_target_user_ids(db, bulk_model)
+        conditions.append(users_groups_association.c.user_id.in_(user_ids))
+
+    # Fetch existing associations
+    existing = await db.execute(
+        select(users_groups_association).where(
+            and_(*conditions),
+        )
+    )
+
+    existing_pairs = {(r.user_id, r.groups_id) for r in existing.all()}
+
+    if not existing_pairs:
+        return []
+    
+    if target_all_users:
+        result = await db.execute(select(User.id))
+        user_ids = {row[0] for row in result.all()}
+
+    # Prepare new associations
+    new_rows = [
+        {"user_id": uid, "groups_id": gid}
+        for uid in user_ids
+        for gid in bulk_model.group_ids
+        if (uid, gid) not in existing_pairs
+    ]
+
+    if not new_rows:
+        return []
+
+    await db.execute(users_groups_association.insert(), new_rows)
+    await db.commit()
+
+    result = await db.execute(select(User).where(User.id.in_({r["user_id"] for r in new_rows})))
+    users = result.scalars().all()
+    for user in users:
+        await load_user_attrs(user)
+    return users
+
+
+async def bulk_remove_groups_from_users(db: AsyncSession, bulk_model: BulkGroup) -> List["User"]:
+    """
+    Bulk remove groups from users and return list of affected User objects.
+    """
+    conditions = [users_groups_association.c.groups_id.in_(bulk_model.group_ids)]
+
+    if bulk_model.users or bulk_model.admins:
+        user_ids = await _resolve_target_user_ids(db, bulk_model)
+        conditions.append(users_groups_association.c.user_id.in_(user_ids))
+
+    # Identify affected users
+    result = await db.execute(
+        select(User)
+        .distinct()
+        .join(users_groups_association, User.id == users_groups_association.c.user_id)
+        .where(and_(*conditions))
+    )
+    users = result.scalars().all()
+
+    if not users:
+        return []
+
+    await db.execute(
+        delete(users_groups_association).where(
+            users_groups_association.c.user_id.in_([u.id for u in users]),
+            users_groups_association.c.groups_id.in_(bulk_model.group_ids),
+        )
+    )
+    await db.commit()
+    for user in users:
+        await load_user_attrs(user)
+    return users
 
 
 async def get_core_config_by_id(db: AsyncSession, core_id: int) -> CoreConfig | None:
