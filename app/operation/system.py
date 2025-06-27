@@ -50,10 +50,10 @@ class SystemOperation(BaseOperation):
 
         return SystemStats(
             version=__version__,
-            mem_total=mem.total if admin.is_sudo else None,
-            mem_used=mem.used if admin.is_sudo else None,
-            cpu_cores=cpu.cores if admin.is_sudo else None,
-            cpu_usage=cpu.percent if admin.is_sudo else None,
+            mem_total=mem.total,
+            mem_used=mem.used,
+            cpu_cores=cpu.cores,
+            cpu_usage=cpu.percent,
             total_user=total_user,
             online_users=online_users,
             active_users=active_users,
