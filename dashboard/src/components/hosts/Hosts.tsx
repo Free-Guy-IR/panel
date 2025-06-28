@@ -65,7 +65,7 @@ export interface HostFormValues {
     id?: number
     remark: string
     address: string
-    port: number
+    port: number | null
     inbound_tag: string
     status: ('active' | 'disabled' | 'limited' | 'expired' | 'on_hold')[]
     host?: string
@@ -297,7 +297,10 @@ const transportSettingsSchema = z
 export const HostFormSchema = z.object({
     remark: z.string().min(1, 'Remark is required'),
     address: z.string().min(1, 'Address is required'),
-    port: z.number().min(1, 'Port must be at least 1').max(65535, 'Port must be at most 65535'),
+    port: z.union([
+        z.number().min(1, 'Port must be at least 1').max(65535, 'Port must be at most 65535'),
+        z.null()
+    ]).optional(),
     inbound_tag: z.string().min(1, 'Inbound tag is required'),
     status: z.array(z.string()).default([]),
     host: z.string().default(''),
@@ -394,7 +397,7 @@ export const HostFormSchema = z.object({
 const initialDefaultValues: HostFormValues = {
     remark: '',
     address: '',
-    port: 443,
+    port: null,
     inbound_tag: '',
     status: [],
     host: '',
@@ -450,7 +453,7 @@ export default function Hosts({data, onAddHost, isDialogOpen, onSubmit, editingH
         const formData: HostFormValues = {
             remark: host.remark || '',
             address: host.address || '',
-            port: host.port ? Number(host.port) : 443,
+            port: host.port ? Number(host.port) : null,
             inbound_tag: host.inbound_tag || '',
             status: host.status || [],
             host: host.host || '',

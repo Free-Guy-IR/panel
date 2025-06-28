@@ -42,8 +42,8 @@ const FlagFromIP: React.FC<FlagFromIPProps> = ({ ip }) => {
           return
         }
       }
-      const { data } = await axios.get(`https://freeipapi.com/api/json/${targetIP}`)
-      if (data && data.countryCode) {
+      const { data } = await axios.get(`http://ip-api.com/json/${targetIP}?fields=status,countryCode`)
+      if (data && data.status === 'success' && data.countryCode) {
         const countryCode = data.countryCode.toUpperCase()
         const flagEmoji = generateFlagEmoji(countryCode)
         setFlag(flagEmoji)
