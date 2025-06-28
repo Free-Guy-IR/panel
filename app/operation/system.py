@@ -4,7 +4,9 @@ from datetime import timedelta
 from app import __version__
 from app.core.manager import core_manager
 from app.db import AsyncSession
-from app.db.crud import count_online_users, get_admin, get_system_usage, get_users_count
+from app.db.crud.admin import get_admin
+from app.db.crud.general import get_system_usage
+from app.db.crud.user import count_online_users, get_users_count
 from app.db.models import UserStatus
 from app.models.admin import AdminDetails
 from app.models.system import SystemStats

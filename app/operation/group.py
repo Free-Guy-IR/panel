@@ -2,15 +2,9 @@ import asyncio
 
 from app import notification
 from app.db import AsyncSession
-from app.db.crud import (
-    bulk_add_groups_to_users,
-    bulk_remove_groups_from_users,
-    create_group,
-    get_group,
-    get_users,
-    modify_group,
-    remove_group,
-)
+from app.db.crud.bulk import bulk_add_groups_to_users, bulk_remove_groups_from_users
+from app.db.crud.group import create_group, get_group, modify_group, remove_group
+from app.db.crud.user import get_users
 from app.db.models import Admin
 from app.models.group import BulkGroup, Group, GroupCreate, GroupModify, GroupResponse, GroupsResponse
 from app.models.user import UserResponse
