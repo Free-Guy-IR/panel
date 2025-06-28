@@ -1,74 +1,140 @@
+
+
 # Contribute to Marzban
 
-Thanks for considering contributing to Marzban!
+Thanks for considering contributing to **Marzban**!
 
-## Questions
+## 🙋 Questions
 
-Please don't ask your questions in issues. Instead, use one of the following ways to ask:
+Please **don’t use GitHub Issues** to ask questions. Instead, use one of the following platforms:
 
-- Ask on our telegram group: [@Gozargah_Marzban](https://t.me/gozargah_marzban)
-- Ask on our [GitHub Discussions](https://github.com/gozargah/marzban/discussions) for long term discussion or larger questions.
+* 💬 Telegram: [@Gozargah\_Marzban](https://t.me/gozargah_marzban)
+* 🗣️ GitHub Discussions: [Marzban Discussions](https://github.com/gozargah/marzban/discussions)
 
-## Reporting issues
+## 🐞 Reporting Issues
 
-Include the following information in your post:
+When reporting a bug or issue, please include:
 
-- Describe what you expected to happen.
-- Describe what actually happened. Include server logs or any error that browser shows.
-- If possible, post your xray json config file and what you have set in env (by censoring critical information).
-- Also tell the version of Marzban and docker (if you use docker) you are using.
+* ✅ What you expected to happen
+* ❌ What actually happened (include server logs or browser errors)
+* ⚙️ Your `xray` JSON config and `.env` settings (censor sensitive info)
+* 🔢 Your Marzban version and Docker version (if applicable)
 
-# Submitting a Pull Request
+---
 
-If there is not an open issue for what you want to submit, prefer opening one for discussion before working on a PR. You can work on any issue that doesn't have an open PR linked to it or a maintainer assigned to it. These show up in the sidebar. No need to ask if you can work on an issue that interests you.
+# 🚀 Submitting a Pull Request
 
-## Branches
+If there's no open issue for your idea, consider opening one for discussion **before submitting a PR**.
 
-When starting development on this project, please make sure to create a new branch off the `next` branch. This helps to keep the `master` branch stable and free of any development work that may not be complete or fully tested.
+You can contribute to any issue that:
 
-## Project Structure
+* Has no PR linked
+* Has no maintainer assigned
 
-```
+No need to ask for permission!
+
+## 🔀 Branching Strategy
+
+* Always branch off of the `next` branch
+* Keep `master` stable and production-ready
+
+---
+
+# 📁 Project Structure
+
+```text
 .
-├── app                      # Backend code (FastAPI - Python)
-├── cli                      # CLI code (Typer - Python)
-└── dashboard            # Frontend code (React - Typescript)
-└── tests                 # API tests
+├── app          # Backend code (FastAPI - Python)
+├── cli          # CLI code (Typer - Python)
+├── dashboard    # Frontend code (React - TypeScript)
+└── tests        # API tests
 ```
 
-## Backend
+---
 
-Backend is built using FastAPI and uses SQLAlchemy as the ORM for database operations. All Pydantic models can be found in the `app/models` directory, while all database-related operations and models are in the `app/db` directory. The migration scripts for the database (Alembic) can be found in the `app/db/migrations` directory.
+## 🧠 Backend (FastAPI)
 
-### Python Code Formatting
+The backend is built with **FastAPI** and **SQLAlchemy**:
 
-To maintain consistency in the codebase, we require all code to be formatted using
+* **Pydantic models**: `app/models`
+* **Database models & operations**: `app/db`
+* **Migrations (Alembic)**: `app/db/migrations`
+
+### 📘 API Docs (Swagger / ReDoc)
+
+Enable the `DOCS` flag in your `.env` file to access:
+
+* Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+* ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### 🎯 Code Formatting
+
+Format and lint code with:
 
 ```bash
 make check
 make format
 ```
 
-## Frontend
+### 🗃️ Database Migrations
 
-Frontend is pre-built and served by FastAPI from the `dashboard/build` directory. To rebuild the frontend, first make sure you have the necessary dependencies installed by running `pnpm install` in the `dashboard` directory. Then, simply remove the `dashboard/build` directory and run the Python code again, and it will rebuild the frontend automatically.
+To apply Alembic migrations to your database, run:
 
-### Components Library
+```bash
+make run-migration
+```
 
-Frontend uses `Tailwind (Shadcn)` as the component library, so please adhere to the `Tailwind (Shadcn)` approach when contributing. Strive to create components that are cohesive and serve a single purpose. Keep in mind that readability and maintainability are more important than brevity, so prioritize those factors when writing your code.
+---
 
-## Marzban CLI
+## 💻 Frontend (React + Tailwind)
 
-Marzban CLI is built using [Textual](https://textual.textualize.io/), and its commands' code can be found in `cli` directory.
+> ⚠️ **We no longer upload pre-built frontend files.**
 
-## Debug Mode
+The frontend is located in the `dashboard` directory and is built using:
 
-To run the project in debug mode with auto-reload, you can set the environment variable `DEBUG` to `true`. then by running the `main.py`, the backend and frontend will run separately on different ports.
+* **React + TypeScript**
+* **Tailwind CSS (Shadcn UI)**
+
+To build:
+
+```bash
+pnpm install
+```
+
+Remove the `dashboard/build` directory and restart the Python backend — the frontend will auto-rebuild (except in debug mode).
+
+### 🧩 Component Guidelines
+
+* Follow **Tailwind + Shadcn** best practices
+* Keep components **single-purpose**
+* Prioritize **readability** and **maintainability**
+
+---
+
+## 🛠️ Marzban CLI
+
+Marzban’s CLI is built using [Textual](https://textual.textualize.io/).
+
+* CLI codebase: `cli/`
+
+---
+
+## 🐛 Debug Mode
+
+To run the project in debug mode with auto-reload, you can set the environment variable DEBUG to true. then by running the main.py, the backend and frontend will run separately on different ports.
 
 Note that you must first install the necessary npm packages by running npm install inside the dashboard directory before running in debug mode.
+
+Install frontend dependencies:
 
 ```bash
 make install-front
 ```
 
-If you run the project with debug mode off and delete the `dashboard/build` directory, the frontend will be rebuilt automatically on the next run. However, no rebuild will occur while inside debug mode."
+Run the backend (`main.py`)
+
+> ⚠️ In debug mode, the frontend will **not rebuild automatically** if you delete `dashboard/build`.
+
+---
+
+Feel free to reach out via [Telegram](https://t.me/gozargah_marzban) or GitHub Discussions if you have any questions. Happy contributing! 🚀
