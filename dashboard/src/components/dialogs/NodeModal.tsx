@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { useTranslation } from 'react-i18next'
 import { UseFormReturn } from 'react-hook-form'
 import {
@@ -39,6 +40,7 @@ export const nodeFormSchema = z.object({
     max_logs: z.number().min(1, 'Max logs is required'),
     api_key: z.string().min(1, 'API key is required'),
     core_config_id: z.number().min(1, 'Core configuration is required'),
+    gather_logs: z.boolean().default(true),
 })
 
 export type NodeFormValues = z.infer<typeof nodeFormSchema>
@@ -124,6 +126,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                         max_logs: nodeData.max_logs,
                         api_key: (nodeData.api_key as string) || '',
                         core_config_id: nodeData.core_config_id || cores?.cores?.[0]?.id,
+                        gather_logs: nodeData.gather_logs ?? true,
                     })
                 } catch (error) {
                     console.error('Error fetching node data:', error)
@@ -146,6 +149,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                 max_logs: 1000,
                 api_key: '',
                 core_config_id: cores?.cores?.[0]?.id,
+                gather_logs: true,
             })
         }
     }, [editingNode, editingNodeId, isDialogOpen])
@@ -501,7 +505,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                         }}
                                     />
 
-                                    <Accordion type="single" collapsible className="w-full my-4">
+                                    <Accordion type="single" collapsible className="w-full mb-4 mt-0 pb-4">
                                         <AccordionItem className="border px-4 rounded-sm [&_[data-state=open]]:no-underline [&_[data-state=closed]]:no-underline" value="advanced-settings">
                                             <AccordionTrigger>
                                                 <div className="flex items-center gap-2">
@@ -654,6 +658,29 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                                                 </FormItem>
                                                             )
                                                         }}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="gather_logs"
+                                                        render={({ field }) => (
+                                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                                                <div className="space-y-0.5">
+                                                                    <FormLabel className="text-base">
+                                                                        {t('nodeModal.gatherLogs')}
+                                                                    </FormLabel>
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        {t('nodeModal.gatherLogsDescription')}
+                                                                    </p>
+                                                                </div>
+                                                                <FormControl>
+                                                                    <Switch
+                                                                        checked={field.value}
+                                                                        onCheckedChange={field.onChange}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
                                                     />
                                                 </div>
                                             </AccordionContent>

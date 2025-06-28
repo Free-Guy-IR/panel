@@ -958,7 +958,9 @@
     "statusCheck": "Проверить статус",
     "statusChecking": "Проверка...",
     "reconnect": "Переподключить",
-    "reconnecting": "Переподключение..."
+    "reconnecting": "Переподключение...",
+    "gatherLogs": "Сбор логов",
+    "gatherLogsDescription": "Включить сбор логов с этого узла для мониторинга и отладки"
   },
   "theme": {
     "title": "Тема",

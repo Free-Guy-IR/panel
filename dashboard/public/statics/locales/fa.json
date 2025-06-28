@@ -876,7 +876,9 @@
     "statusCheck": "بررسی وضعیت",
     "statusChecking": "در حال بررسی...",
     "reconnect": "دوباره متصل کن",
-    "reconnecting": "در حال دوباره متصل کردن..."
+    "reconnecting": "در حال دوباره متصل کردن...",
+    "gatherLogs": "جمع‌آوری لاگ‌ها",
+    "gatherLogsDescription": "فعال‌سازی جمع‌آوری لاگ‌ها از این گره برای نظارت و عیب‌یابی"
   },
   "nodes": {
     "title": "گره‌ها",

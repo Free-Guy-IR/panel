@@ -947,6 +947,8 @@
     "statusChecking": "检查中...",
     "reconnect": "重新连接",
     "reconnecting": "重新连接中...",
+    "gatherLogs": "收集日志",
+    "gatherLogsDescription": "启用从此节点收集日志以进行监控和调试",
     "hideDetails": "隐藏详情",
     "showDetails": "显示详情",
     "errorDetails": "错误详情",

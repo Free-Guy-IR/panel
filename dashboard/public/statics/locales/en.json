@@ -978,7 +978,9 @@
     "statusCheck": "Check Status",
     "statusChecking": "Checking...",
     "reconnect": "Reconnect",
-    "reconnecting": "Reconnecting..."
+    "reconnecting": "Reconnecting...",
+    "gatherLogs": "Gather Logs",
+    "gatherLogsDescription": "Enable log collection from this node for monitoring and debugging purposes"
   },
   "theme": {
     "title": "Theme",
