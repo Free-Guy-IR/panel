@@ -2,8 +2,6 @@ from enum import Enum
 from app.db.models import ProxyHostSecurity, ProxyHostALPN, ProxyHostFingerprint, UserStatus
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.validators import ListValidator
-
 
 class XHttpModes(str, Enum):
     auto = "auto"
