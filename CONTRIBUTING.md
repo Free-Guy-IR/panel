@@ -61,6 +61,8 @@ The backend is built with **FastAPI** and **SQLAlchemy**:
 * **backend logic should go in**: `app/operations`
 * **Migrations (Alembic)**: `app/db/migrations`
 
+🧩 **Note**: Ensure **all backend logic is organized and implemented in the `operations` module**. This keeps route handling, database access, and service logic clearly separated and easier to maintain.
+
 ### 📘 API Docs (Swagger / ReDoc)
 
 Enable the `DOCS` flag in your `.env` file to access:
