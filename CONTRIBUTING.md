@@ -58,6 +58,7 @@ The backend is built with **FastAPI** and **SQLAlchemy**:
 
 * **Pydantic models**: `app/models`
 * **Database models & operations**: `app/db`
+* **backend logic should go in**: `app/operations`
 * **Migrations (Alembic)**: `app/db/migrations`
 
 ### 📘 API Docs (Swagger / ReDoc)
