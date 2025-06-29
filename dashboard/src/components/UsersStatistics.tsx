@@ -3,9 +3,9 @@ import { cn } from '@/lib/utils'
 import { useGetSystemStats } from '@/service/api'
 import { numberWithCommas } from '@/utils/formatByte'
 import { Users, Wifi } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardTitle } from './ui/card'
-import { useEffect, useState } from 'react'
 
 const CountUp = ({ end, duration = 1500 }: { end: number; duration?: number }) => {
   const [count, setCount] = useState(0)
@@ -45,8 +45,8 @@ const UsersStatistics = () => {
 
   const { data } = useGetSystemStats(undefined, {
     query: {
-      refetchInterval: 5000
-    }
+      refetchInterval: 5000,
+    },
   })
 
   useEffect(() => {

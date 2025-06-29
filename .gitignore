@@ -164,3 +164,6 @@ xray-core
 
 *Zone.Identifier
 .DS_Store
+
+#ignore node-module for dashboard
+node_modules/
