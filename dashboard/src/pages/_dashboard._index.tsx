@@ -270,7 +270,7 @@ const Dashboard = () => {
             {is_sudo ? (
               <>
                 {/* Admin search input */}
-                <div className="relative w-full mb-4" dir={dir}>
+                <div className="relative w-full sm:w-80 md:w-96 mb-4" dir={dir}>
                   <SearchIcon className={`absolute ${dir === 'rtl' ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
                   <Input
                     placeholder={t('search')}

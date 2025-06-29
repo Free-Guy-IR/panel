@@ -11,6 +11,7 @@ import {toast} from 'sonner'
 import {queryClient} from '@/utils/query-client.ts'
 import {PasswordInput} from '@/components/ui/password-input'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
+import {LoaderButton} from '@/components/ui/loader-button'
 
 interface AdminModalProps {
     isDialogOpen: boolean
@@ -371,7 +372,13 @@ export default function AdminModal({
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                                 {t('cancel')}
                             </Button>
-                            <Button type="submit">{editingAdmin ? t('save') : t('create')}</Button>
+                            <LoaderButton 
+                                type="submit" 
+                                isLoading={addAdminMutation.isPending || modifyAdminMutation.isPending}
+                                loadingText={editingAdmin ? t('modifying') : t('creating')}
+                            >
+                                {editingAdmin ? t('save') : t('create')}
+                            </LoaderButton>
                         </div>
                     </form>
                 </Form>
