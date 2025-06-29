@@ -319,6 +319,7 @@ const Dashboard = () => {
         onCreateAdmin={handleCreateAdmin}
         onCreateTemplate={handleCreateTemplate}
         onCreateCore={handleCreateCore}
+        isSudo={is_sudo}
       />
     </div>
   )

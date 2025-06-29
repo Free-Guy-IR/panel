@@ -12,6 +12,7 @@ import {queryClient} from '@/utils/query-client.ts'
 import {PasswordInput} from '@/components/ui/password-input'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
 import {LoaderButton} from '@/components/ui/loader-button'
+import useDirDetection from '@/hooks/use-dir-detection'
 
 interface AdminModalProps {
     isDialogOpen: boolean
@@ -122,6 +123,7 @@ export default function AdminModal({
                                        form
                                    }: AdminModalProps) {
     const {t} = useTranslation()
+    const dir = useDirDetection()
     const handleError = useDynamicErrorHandler();
     const addAdminMutation = useCreateAdmin()
     const modifyAdminMutation = useModifyAdmin()
@@ -177,7 +179,7 @@ export default function AdminModal({
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-[750px] h-full sm:h-auto "  onOpenAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>{editingAdmin ? t('admins.editAdmin') : t('admins.createAdmin')}</DialogTitle>
+                    <DialogTitle className={`${dir === 'rtl' ? 'text-right' : 'text-left'}`} dir={dir}>{editingAdmin ? t('admins.editAdmin') : t('admins.createAdmin')}</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

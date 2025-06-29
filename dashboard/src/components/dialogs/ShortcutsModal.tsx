@@ -32,6 +32,7 @@ interface QuickActionsModalProps {
   onCreateAdmin?: () => void
   onCreateTemplate?: () => void
   onCreateCore?: () => void
+  isSudo?: boolean
 }
 
 const QuickActionsModal = ({ 
@@ -43,7 +44,8 @@ const QuickActionsModal = ({
   onCreateNode,
   onCreateAdmin,
   onCreateTemplate,
-  onCreateCore
+  onCreateCore,
+  isSudo = false
 }: QuickActionsModalProps) => {
   const { t } = useTranslation()
 
@@ -58,61 +60,64 @@ const QuickActionsModal = ({
       disabled: false,
       category: 'users'
     },
-    {
-      id: '2',
-      name: t('createGroup'),
-      description: t('manageGroups'),
-      icon: <Users2 className="h-5 w-5" />,
-      action: onCreateGroup,
-      disabled: false,
-      category: 'users'
-    },
-    {
-      id: '3',
-      name: t('templates.addTemplate'),
-      description: t('templates.description', { defaultValue: 'Manage your Templates.' }),
-      icon: <LayoutTemplate className="h-5 w-5" />,
-      action: onCreateTemplate || (() => {}),
-      disabled: !onCreateTemplate,
-      category: 'users'
-    },
-    {
-      id: '4',
-      name: t('hostsDialog.addHost'),
-      description: t('manageHosts'),
-      icon: <ListTodo className="h-5 w-5" />,
-      action: onCreateHost,
-      disabled: false,
-      category: 'system'
-    },
-    {
-      id: '5',
-      name: t('nodes.addNode'),
-      description: t('manageNodes'),
-      icon: <Share2Icon className="h-5 w-5" />,
-      action: onCreateNode,
-      disabled: false,
-      category: 'system'
-    },
-    {
-      id: '6',
-      name: t('coreConfigModal.addConfig'),
-      description: t('settings.cores.description', { defaultValue: 'Manage Your Cores' }),
-      icon: <Cpu className="h-5 w-5" />,
-      action: onCreateCore || (() => {}),
-      disabled: !onCreateCore,
-      category: 'system'
-    },
-    // Admin Management
-    {
-      id: '7',
-      name: t('admins.createAdmin'),
-      description: t('admins.description', { defaultValue: 'Manage system administrators' }),
-      icon: <UserCog className="h-5 w-5" />,
-      action: onCreateAdmin || (() => {}),
-      disabled: !onCreateAdmin,
-      category: 'management'
-    }
+    // Only show these actions for sudo admins
+    ...(isSudo ? [
+      {
+        id: '2',
+        name: t('createGroup'),
+        description: t('manageGroups'),
+        icon: <Users2 className="h-5 w-5" />,
+        action: onCreateGroup,
+        disabled: false,
+        category: 'users'
+      },
+      {
+        id: '3',
+        name: t('templates.addTemplate'),
+        description: t('templates.description', { defaultValue: 'Manage your Templates.' }),
+        icon: <LayoutTemplate className="h-5 w-5" />,
+        action: onCreateTemplate || (() => {}),
+        disabled: !onCreateTemplate,
+        category: 'users'
+      },
+      {
+        id: '4',
+        name: t('hostsDialog.addHost'),
+        description: t('manageHosts'),
+        icon: <ListTodo className="h-5 w-5" />,
+        action: onCreateHost,
+        disabled: false,
+        category: 'system'
+      },
+      {
+        id: '5',
+        name: t('nodes.addNode'),
+        description: t('manageNodes'),
+        icon: <Share2Icon className="h-5 w-5" />,
+        action: onCreateNode,
+        disabled: false,
+        category: 'system'
+      },
+      {
+        id: '6',
+        name: t('coreConfigModal.addConfig'),
+        description: t('settings.cores.description', { defaultValue: 'Manage Your Cores' }),
+        icon: <Cpu className="h-5 w-5" />,
+        action: onCreateCore || (() => {}),
+        disabled: !onCreateCore,
+        category: 'system'
+      },
+      // Admin Management
+      {
+        id: '7',
+        name: t('admins.createAdmin'),
+        description: t('admins.description', { defaultValue: 'Manage system administrators' }),
+        icon: <UserCog className="h-5 w-5" />,
+        action: onCreateAdmin || (() => {}),
+        disabled: !onCreateAdmin,
+        category: 'management'
+      }
+    ] : [])
   ]
 
   const categories = {
