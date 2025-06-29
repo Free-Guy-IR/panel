@@ -14,6 +14,7 @@ from app.models.user import (
     UserModify,
     UserResponse,
     UsersResponse,
+    BulkUser,
 )
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
@@ -268,3 +269,41 @@ async def modify_user_with_template(
     admin: AdminDetails = Depends(get_current),
 ):
     return await user_operator.modify_user_with_template(db, username, modify_template_user, admin)
+
+
+@router.post("s/bulk/expire", summary="Bulk sum/sub to expire of users", response_description="Success confirmation")
+async def bulk_modify_users_expire(
+    bulk_model: BulkUser,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(check_sudo_admin),
+):
+    """
+    Bulk expire users based on the provided criteria.
+
+    - **amount**: amount to adjust the user's quota (in seconds, positive to increase, negative to decrease) required
+    - **user_ids**: Optional list of user IDs to modify
+    - **admins**: Optional list of admin IDs — their users will be targeted
+    - **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
+    - **group_ids**: Optional list of group IDs to filter users by their group membership
+    """
+    return await user_operator.bulk_modify_expire(db, bulk_model)
+
+
+@router.post(
+    "s/bulk/data_limit", summary="Bulk sum/sub to data limit of users", response_description="Success confirmation"
+)
+async def bulk_modify_users_datalimit(
+    bulk_model: BulkUser,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(check_sudo_admin),
+):
+    """
+    Bulk modify users' data limit based on the provided criteria.
+
+    - **amount**: amount to adjust the user's quota (positive to increase, negative to decrease) required
+    - **user_ids**: Optional list of user IDs to modify
+    - **admins**: Optional list of admin IDs — their users will be targeted
+    - **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
+    - **group_ids**: Optional list of group IDs to filter users by their group membership
+    """
+    return await user_operator.bulk_modify_datalimit(db, bulk_model)

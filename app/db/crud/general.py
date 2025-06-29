@@ -1,4 +1,4 @@
-from sqlalchemy import func, String, or_, select
+from sqlalchemy import func, String, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import DATABASE_DIALECT
@@ -27,6 +27,20 @@ def _build_trunc_expression(period: Period, column):
         return func.date_format(column, MYSQL_FORMATS[period.value])
     elif DATABASE_DIALECT == "sqlite":
         return func.strftime(SQLITE_FORMATS[period.value], column)
+
+    raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
+
+
+def get_datetime_add_expression(datetime_column, seconds: int):
+    """
+    Get database-specific datetime addition expression
+    """
+    if DATABASE_DIALECT == "mysql":
+        return func.date_add(datetime_column, text("INTERVAL :seconds SECOND").bindparams(seconds=seconds))
+    elif DATABASE_DIALECT == "postgresql":
+        return datetime_column + func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+    elif DATABASE_DIALECT == "sqlite":
+        return func.datetime(datetime_column, f"+{seconds} seconds")
 
     raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
 

@@ -2,7 +2,7 @@ import asyncio
 
 from app import notification
 from app.db import AsyncSession
-from app.db.crud.bulk import bulk_add_groups_to_users, bulk_remove_groups_from_users
+from app.db.crud.bulk import add_groups_to_users, remove_groups_from_users
 from app.db.crud.group import create_group, get_group, modify_group, remove_group
 from app.db.crud.user import get_users
 from app.db.models import Admin
@@ -72,7 +72,7 @@ class GroupOperation(BaseOperation):
     async def bulk_add_groups(self, db: AsyncSession, bulk_model: BulkGroup):
         await self.validate_all_groups(db, bulk_model)
 
-        users = await bulk_add_groups_to_users(db, bulk_model)
+        users = await add_groups_to_users(db, bulk_model)
 
         await asyncio.gather(
             *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
@@ -81,7 +81,7 @@ class GroupOperation(BaseOperation):
     async def bulk_remove_groups(self, db: AsyncSession, bulk_model: BulkGroup):
         await self.validate_all_groups(db, bulk_model)
 
-        users = await bulk_remove_groups_from_users(db, bulk_model)
+        users = await remove_groups_from_users(db, bulk_model)
 
         await asyncio.gather(
             *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]

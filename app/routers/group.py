@@ -188,7 +188,7 @@ async def bulk_add_groups_to_users(
     summary="Bulk remove groups from users",
     response_description="Success confirmation",
 )
-async def bulk_remove_groups_to_users(
+async def bulk_remove_users_from_groups(
     bulk_group: BulkGroup, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(get_current)
 ):
     """

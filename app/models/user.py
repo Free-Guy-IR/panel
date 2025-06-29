@@ -143,3 +143,11 @@ class CreateUserFromTemplate(ModifyUserByTemplate):
     @classmethod
     def validate_username(cls, v):
         return UserValidator.validate_username(v)
+
+
+class BulkUser(BaseModel):
+    amount: int
+    group_ids: set[int] = Field(default_factory=set)
+    admins: set[int] = Field(default_factory=set)
+    users: set[int] = Field(default_factory=set)
+    status: set[UserStatus] = Field(default_factory=set)

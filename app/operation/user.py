@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
-from app.db.crud.bulk import reset_all_users_data_usage
+from app.db.crud.bulk import reset_all_users_data_usage, update_users_datalimit, update_users_expire
 from app.db.crud.user import (
     UsersSortingOptions,
     create_user,
@@ -36,6 +36,7 @@ from app.models.user import (
     UserNotificationResponse,
     UserResponse,
     UsersResponse,
+    BulkUser,
 )
 from app.node import node_manager as node_manager
 from app.operation import BaseOperation
@@ -442,3 +443,17 @@ class UserOperation(BaseOperation):
             await self._reset_user_data_usage(db, db_user, admin)
 
         return await self._modify_user(db, db_user, modify_user, admin)
+
+    async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser):
+        users = await update_users_expire(db, bulk_model)
+
+        await asyncio.gather(*[self.update_user(user) for user in users])
+
+        return {}
+
+    async def bulk_modify_datalimit(self, db: AsyncSession, bulk_model: BulkUser):
+        users = await update_users_datalimit(db, bulk_model)
+
+        await asyncio.gather(*[self.update_user(user) for user in users])
+
+        return users
