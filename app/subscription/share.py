@@ -2,16 +2,15 @@ import base64
 import random
 import secrets
 from collections import defaultdict
-from datetime import datetime as dt
-from datetime import timedelta, timezone
+from datetime import datetime as dt, timedelta, timezone
 
 from jdatetime import date as jd
 
 from app.core.hosts import hosts as hosts_storage
 from app.core.manager import core_manager
 from app.db.models import User, UserStatus
-from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 from app.settings import subscription_settings
+from app.utils.system import get_public_ip, get_public_ipv6, readable_size
 
 from . import (
     ClashConfiguration,
@@ -153,6 +152,10 @@ def setup_format_variables(extra_data: dict) -> dict:
     on_hold_expire_duration = extra_data.get("on_hold_expire_duration")
     now = dt.now(timezone.utc)
 
+    admin_username = ""
+    if admin_data := extra_data.get("admin"):
+        admin_username = admin_data.username
+
     if user_status != UserStatus.on_hold:
         if expire is not None:
             expire = expire.astimezone(timezone.utc)
@@ -215,6 +218,7 @@ def setup_format_variables(extra_data: dict) -> dict:
             "TIME_LEFT": time_left,
             "STATUS_EMOJI": status_emoji,
             "USAGE_PERCENTAGE": usage_Percentage,
+            "ADMIN_USERNAME": admin_username,
         },
     )
 
@@ -289,7 +293,7 @@ async def process_host(
             "random_user_agent": host["random_user_agent"],
             "http_headers": host["http_headers"],
             "mux_settings": host["mux_settings"],
-        }
+        },
     )
     if ts := host["transport_settings"]:
         for v in ts.values():
