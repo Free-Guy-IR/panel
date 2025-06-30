@@ -237,9 +237,26 @@ async def update_node_status(
     return db_node
 
 
-async def clear_usage_data(db: AsyncSession, table: UsageTable):
+def _table_model(table: UsageTable):
     if table == UsageTable.node_user_usages:
-        await db.execute(delete(NodeUserUsage))
-    elif table == UsageTable.node_usages:
-        await db.execute(delete(NodeUsage))
+        return NodeUserUsage
+    if table == UsageTable.node_usages:
+        return NodeUsage
+    raise ValueError("Invalid table enum")
+
+
+async def clear_usage_data(
+    db: AsyncSession, table: UsageTable, start: datetime | None = None, end: datetime | None = None
+):
+    filters = []
+    if start:
+        filters.append(getattr(_table_model(table), "created_at") >= start)
+    if end:
+        filters.append(getattr(_table_model(table), "created_at") < end)
+
+    stmt = delete(_table_model(table))
+    if filters:
+        stmt = stmt.where(and_(*filters))
+
+    await db.execute(stmt)
     await db.commit()

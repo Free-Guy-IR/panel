@@ -180,14 +180,22 @@ async def user_online_ip_list(
     summary="Clear usage data from a specified table",
 )
 async def clear_usage_data(
-    table: UsageTable, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
+    table: UsageTable,
+    start: dt | None = Query(None),
+    end: dt | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(check_sudo_admin),
 ):
     """
     Deletes **all rows** from the selected usage data table. Use with caution.
 
     Allowed tables:
-    - `node_user_usages`: Deletes user-specific node usage traffic records.
-    - `node_usages`: Deletes node-level aggregated traffic (uplink/downlink) records.
+        - `node_user_usages`: Deletes user-specific node usage traffic records.
+        - `node_usages`: Deletes node-level aggregated traffic (uplink/downlink) records.
+
+    **Optional filters:**
+        - `start`: ISO 8601 timestamp to filter from (inclusive)
+        - `end`: ISO 8601 timestamp to filter to (exclusive)
 
     ⚠️ This operation is irreversible. Ensure correct usage in production environments.
     """

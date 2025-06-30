@@ -335,9 +335,14 @@ class NodeOperation(BaseOperation):
 
         return NodeResponse.model_validate(db_node)
 
-    async def clear_usage_data(self, db: AsyncSession, table: UsageTable):
+    async def clear_usage_data(
+        self, db: AsyncSession, table: UsageTable, start: dt | None = None, end: dt | None = None
+    ):
+        if start and end and start >= end:
+            await self.raise_error(code=400, message="Start time must be before end time.")
+
         try:
-            await clear_usage_data(db, table)
+            await clear_usage_data(db, table, start, end)
             return {"detail": f"All data from '{table}' has been deleted successfully."}
         except Exception as e:
             await self.raise_error(code=400, message=f"Deletion failed due to server error: {str(e)}")
