@@ -1,32 +1,32 @@
 import asyncio
 from datetime import datetime as dt
 
-from sqlalchemy.exc import IntegrityError
 from GozargahNodeBridge import GozargahNode, NodeAPIError
+from sqlalchemy.exc import IntegrityError
 
-from app.operation import BaseOperation
-from app.models.stats import NodeRealtimeStats, Period, NodeUsageStatsList, NodeStatsList
-from app.models.node import NodeCreate, NodeResponse, NodeModify
-from app.models.admin import AdminDetails
-from app.db.models import Node, NodeStatus
+from app import notification
+from app.core.manager import core_manager
 from app.db import AsyncSession
+from app.db.base import GetDB
 from app.db.crud.node import (
+    clear_usage_data,
     create_node,
     get_node_by_id,
-    update_node_status,
+    get_node_stats,
     get_nodes,
-    remove_node,
     get_nodes_usage,
     modify_node,
-    get_node_stats,
+    remove_node,
+    update_node_status,
 )
 from app.db.crud.user import get_user
-from app.db.base import GetDB
-from app.core.manager import core_manager
+from app.db.models import Node, NodeStatus
+from app.models.admin import AdminDetails
+from app.models.node import NodeCreate, NodeModify, NodeResponse, UsageTable
+from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
 from app.node import core_users, node_manager
+from app.operation import BaseOperation
 from app.utils.logger import get_logger
-from app import notification
-
 
 MAX_MESSAGE_LENGTH = 128
 
@@ -334,3 +334,10 @@ class NodeOperation(BaseOperation):
             await self.raise_error(message=e.detail, code=e.code)
 
         return NodeResponse.model_validate(db_node)
+
+    async def clear_usage_data(self, db: AsyncSession, table: UsageTable):
+        try:
+            await clear_usage_data(db, table)
+            return {"detail": f"All data from '{table}' has been deleted successfully."}
+        except Exception as e:
+            await self.raise_error(code=400, message=f"Deletion failed due to server error: {str(e)}")

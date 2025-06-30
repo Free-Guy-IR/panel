@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Node, NodeStatus, NodeUsage, NodeStat
-from app.models.node import NodeCreate, NodeModify
-from app.models.stats import Period, NodeUsageStatsList, NodeUsageStat, NodeStatsList, NodeStats
+from app.db.models import Node, NodeStat, NodeStatus, NodeUsage, NodeUserUsage
+from app.models.node import NodeCreate, NodeModify, UsageTable
+from app.models.stats import NodeStats, NodeStatsList, NodeUsageStat, NodeUsageStatsList, Period
 
 from .general import _build_trunc_expression
 
@@ -235,3 +235,11 @@ async def update_node_status(
     await db.commit()
     await db.refresh(db_node)
     return db_node
+
+
+async def clear_usage_data(db: AsyncSession, table: UsageTable):
+    if table == UsageTable.node_user_usages:
+        await db.execute(delete(NodeUserUsage))
+    elif table == UsageTable.node_usages:
+        await db.execute(delete(NodeUsage))
+    await db.commit()

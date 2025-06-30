@@ -1,19 +1,19 @@
 import asyncio
-from typing import AsyncGenerator
 from datetime import datetime as dt
+from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
-from .authentication import check_sudo_admin
+from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings, UsageTable
 from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
-from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings
-from app.operation.node import NodeOperation
 from app.operation import OperatorType
+from app.operation.node import NodeOperation
 from app.utils import responses
 
+from .authentication import check_sudo_admin
 
 node_operator = NodeOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses._401, 403: responses._403})
@@ -173,3 +173,22 @@ async def user_online_ip_list(
 ):
     """Retrieve user ips by node."""
     return await node_operator.get_user_ip_list_by_node(db=db, node_id=node_id, username=username)
+
+
+@router.delete(
+    "s/clear_usage_data/{table}",
+    summary="Clear usage data from a specified table",
+)
+async def clear_usage_data(
+    table: UsageTable, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
+):
+    """
+    Deletes **all rows** from the selected usage data table. Use with caution.
+
+    Allowed tables:
+    - `node_user_usages`: Deletes user-specific node usage traffic records.
+    - `node_usages`: Deletes node-level aggregated traffic (uplink/downlink) records.
+
+    ⚠️ This operation is irreversible. Ensure correct usage in production environments.
+    """
+    return await node_operator.clear_usage_data(db, table)

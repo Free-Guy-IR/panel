@@ -1,4 +1,5 @@
 import re
+from enum import Enum
 from uuid import UUID
 
 from cryptography.x509 import load_pem_x509_certificate
@@ -9,6 +10,11 @@ from app.db.models import NodeConnectionType, NodeStatus
 # Basic PEM format validation
 CERT_PATTERN = r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
 KEY_PATTERN = r"-----BEGIN (?:RSA )?PRIVATE KEY-----"
+
+
+class UsageTable(str, Enum):
+    node_user_usages = "node_user_usages"
+    node_usages = "node_usages"
 
 
 class NodeSettings(BaseModel):
