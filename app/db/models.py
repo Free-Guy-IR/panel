@@ -141,7 +141,7 @@ class User(Base):
         SQLEnum(UserDataLimitResetStrategy),
         default=UserDataLimitResetStrategy.no_reset,
     )
-    expire: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=None)
+    _expire: Mapped[Optional[dt]] = mapped_column("expire", DateTime(timezone=True), default=None, init=False)
     admin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admins.id"), default=None)
     sub_revoked_at: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=None)
     sub_updated_at: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=None)
@@ -153,6 +153,20 @@ class User(Base):
     auto_delete_in_days: Mapped[Optional[int]] = mapped_column(default=None)
     edit_at: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=None)
     last_status_change: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=None)
+
+    @hybrid_property
+    def expire(self) -> Optional[dt]:
+        if self._expire and self._expire.tzinfo is None:
+            return self._expire.replace(tzinfo=tz.utc)
+        return self._expire
+
+    @expire.inplace.expression
+    def expire(cls):
+        return cls._expire
+
+    @expire.setter
+    def expire(self, value: Optional[dt]):
+        self._expire = value
 
     @hybrid_property
     def reseted_usage(self) -> int:
