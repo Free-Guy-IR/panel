@@ -14,6 +14,7 @@ import {
   Bell,
   BookOpen,
   Cpu,
+  Database,
   FileText,
   GithubIcon,
   LayoutDashboardIcon,
@@ -199,6 +200,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   title: 'settings.webhook.title',
                   url: '/settings/webhook',
                   icon: Webhook,
+                },
+                {
+                  title: 'settings.cleanup.title',
+                  url: '/settings/cleanup',
+                  icon: Database,
                 },
                 {
                   title: 'theme.title',

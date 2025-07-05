@@ -177,9 +177,12 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
                 if (node.status === 'connected') {
                     setConnectionStatus('success')
-                } else {
+                } else if (node.status === 'error') {
                     setConnectionStatus('error')
-                    setErrorDetails(node.message || 'Node is not connected')
+                    setErrorDetails(node.message || 'Node has an error')
+                } else {
+                    setConnectionStatus('idle')
+                    setErrorDetails(null)
                 }
             } else {
                 // For new nodes, we can't check status before creation
@@ -242,9 +245,12 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     const node = await getNode(nodeId)
                     if (node && node.status === 'connected') {
                         setConnectionStatus('success')
-                    } else {
+                    } else if (node && node.status === 'error') {
                         setConnectionStatus('error')
-                        setErrorDetails(node?.message || 'Failed to get node information')
+                        setErrorDetails(node?.message || 'Node has an error')
+                    } else {
+                        setConnectionStatus('idle')
+                        setErrorDetails(null)
                     }
                 } catch (error: any) {
                     setConnectionStatus('error')

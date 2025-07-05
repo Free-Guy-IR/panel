@@ -98,16 +98,16 @@
       "filterTitle": "通知过滤器",
       "filterDescription": "选择应触发通知的事件，以便了解重要的系统活动",
       "types": {
-        "admin": "管理员事件",
-        "core": "核心系统",
-        "group": "群组变更",
-        "host": "主机事件",
-        "login": "登录活动",
-        "node": "节点状态",
-        "user": "用户活动",
-        "userTemplate": "模板事件",
-        "daysLeft": "到期警告",
-        "percentageReached": "使用量警告"
+        "admin": "管理员",
+        "core": "核心",
+        "group": "群组",
+        "host": "主机",
+        "login": "登录",
+        "node": "节点",
+        "user": "用户",
+        "userTemplate": "模板",
+        "daysLeft": "到期",
+        "percentageReached": "使用量"
       },
       "telegram": {
         "title": "Telegram",
@@ -289,6 +289,42 @@
           "description": "当用户达到指定使用百分比时发送通知",
           "empty": "未设置触发器"
         }
+      }
+    },
+    "cleanup": {
+      "title": "清理",
+      "description": "管理过期账户和重置数据使用量以进行系统维护",
+      "loadError": "加载清理设置失败，请重试。",
+      "saveSuccess": "清理操作成功完成",
+      "saveFailed": "清理操作失败",
+      "cancelSuccess": "清理操作已取消",
+      "expiredUsers": {
+        "title": "删除过期账户",
+        "description": "删除在特定日期范围内过期的账户",
+        "expiredAfter": "过期时间晚于",
+        "expiredBefore": "过期时间早于",
+        "expiredAfterPlaceholder": "选择开始日期",
+        "expiredBeforePlaceholder": "选择结束日期",
+        "dateRange": "日期范围",
+        "deleteExpired": "删除过期账户",
+        "deleting": "删除中...",
+        "deleteSuccess": "成功删除 {{count}} 个过期账户",
+        "deleteFailed": "删除过期账户失败",
+        "confirmDelete": "删除过期账户",
+        "confirmDeleteMessage": "您确定要删除所选日期范围内的所有过期账户吗？此操作无法撤销。",
+        "noDateSelected": "请至少选择一个日期",
+        "selectDateRange": "选择要删除过期账户的日期范围（只能选择过去的日期）"
+      },
+      "resetUsage": {
+        "title": "重置所有数据使用量",
+        "description": "重置系统中所有账户的数据使用量",
+        "resetAll": "重置所有使用量",
+        "resetting": "重置中...",
+        "resetSuccess": "所有数据使用量重置成功",
+        "resetFailed": "重置数据使用量失败",
+        "confirmReset": "重置所有数据使用量",
+        "confirmResetMessage": "您确定要重置所有账户的数据使用量吗？此操作无法撤销。",
+        "warning": "此操作将重置系统中所有账户的数据使用量"
       }
     },
     "theme": {
@@ -657,6 +693,7 @@
   "userDialog.editUserTitle": "用户编辑",
   "userDialog.endDate": "结束日期",
   "userDialog.expiryDate": "过期日期",
+  "userDialog.timeOutDate": "超时日期",
   "userDialog.generatedByDefault": "默认自动生成",
   "userDialog.hours": "小时",
   "userDialog.method": "加密方式",
