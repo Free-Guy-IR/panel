@@ -102,16 +102,16 @@
       "filterTitle": "Filter Notifications",
       "filterDescription": "Select events that should trigger notifications for important system activities",
       "types": {
-        "admin": "Admin Events",
-        "core": "Core System",
-        "group": "Group Changes",
-        "host": "Host Events",
-        "login": "Login Activity",
-        "node": "Node Status",
-        "user": "User Activity",
-        "userTemplate": "Template Events",
-        "daysLeft": "Expiration Alerts",
-        "percentageReached": "Usage Alerts"
+        "admin": "Admin",
+        "core": "Core",
+        "group": "Groups",
+        "host": "Hosts",
+        "login": "Login",
+        "node": "Nodes",
+        "user": "Users",
+        "userTemplate": "Templates",
+        "daysLeft": "Expiration",
+        "percentageReached": "Usage"
       },
       "telegram": {
         "title": "Telegram",
@@ -293,7 +293,43 @@
           "title": "Usage Percentage Notifications",
           "description": "Notify when users reach specific usage percentages",
           "empty": "No triggers set"
+                  }
         }
+      },
+    "cleanup": {
+      "title": "Cleanup",
+      "description": "Manage expired accounts and reset data usage for system maintenance",
+      "loadError": "Failed to load cleanup settings. Please try again.",
+      "saveSuccess": "Cleanup operation completed successfully",
+      "saveFailed": "Failed to complete cleanup operation",
+      "cancelSuccess": "Cleanup operation cancelled",
+      "expiredUsers": {
+        "title": "Delete Expired Accounts",
+        "description": "Remove accounts that have expired within a specific date range",
+        "expiredAfter": "Expired After",
+        "expiredBefore": "Expired Before",
+        "expiredAfterPlaceholder": "Select start date",
+        "expiredBeforePlaceholder": "Select end date", 
+        "dateRange": "Date Range",
+        "deleteExpired": "Delete Expired",
+        "deleting": "Deleting...",
+        "deleteSuccess": "{{count}} expired accounts deleted successfully",
+        "deleteFailed": "Failed to delete expired accounts",
+        "confirmDelete": "Delete Expired Accounts",
+        "confirmDeleteMessage": "Are you sure you want to delete all expired accounts in the selected date range? This action cannot be undone.",
+        "noDateSelected": "Please select at least one date",
+        "selectDateRange": "Select the date range for expired accounts to delete (only past dates are selectable)"
+      },
+      "resetUsage": {
+        "title": "Reset All Data Usage",
+        "description": "Reset data usage for all accounts in the system",
+        "resetAll": "Reset All Usage",
+        "resetting": "Resetting...",
+        "resetSuccess": "All data usage reset successfully",
+        "resetFailed": "Failed to reset data usage",
+        "confirmReset": "Reset All Data Usage",
+        "confirmResetMessage": "Are you sure you want to reset data usage for all accounts? This action cannot be undone.",
+        "warning": "This will reset data usage for ALL accounts in the system"
       }
     },
     "theme": {
