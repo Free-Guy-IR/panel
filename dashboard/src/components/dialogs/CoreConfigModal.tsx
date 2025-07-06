@@ -419,6 +419,22 @@ export default function CoreConfigModal({
         }
     }, [])
 
+    // Handle Monaco Editor web component registration errors
+    useEffect(() => {
+        const originalError = console.error
+        console.error = (...args) => {
+            // Suppress the specific web component registration error
+            if (args[0]?.message?.includes('custom element with name') && args[0]?.message?.includes('has already been defined')) {
+                return
+            }
+            originalError.apply(console, args)
+        }
+
+        return () => {
+            console.error = originalError
+        }
+    }, [])
+
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-full sm:max-w-[1000px] h-full sm:h-auto px-4 py-6" onOpenAutoFocus={(e) => e.preventDefault()}>

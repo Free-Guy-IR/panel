@@ -13,16 +13,27 @@ interface StatisticsProps {
   isLoading: boolean
   error: any
   selectedServer: string
+  is_sudo: boolean
 }
 
-export default function Statistics({ data, isLoading, error, selectedServer }: StatisticsProps) {
+export default function Statistics({ data, isLoading, error, selectedServer, is_sudo }: StatisticsProps) {
   const { t } = useTranslation()
 
-  const { isLoading: isLoadingNodes, error: nodesError } = useGetNodes()
-  const selectedNodeId = selectedServer === 'master' ? undefined : parseInt(selectedServer, 10)
+  // Only fetch nodes for sudo admins
+  const { isLoading: isLoadingNodes, error: nodesError } = useGetNodes(undefined, {
+    query: {
+      enabled: is_sudo, // Only fetch nodes for sudo admins
+    },
+  })
+
+  // For non-sudo admins, selectedServer should always be 'master'
+  const actualSelectedServer = is_sudo ? selectedServer : 'master'
+  const selectedNodeId = actualSelectedServer === 'master' ? undefined : parseInt(actualSelectedServer, 10)
+
+  // Only fetch node stats for sudo admins when a node is selected
   const { data: nodeStats, isLoading: isLoadingNodeStats } = useRealtimeNodeStats(selectedNodeId || 0, {
     query: {
-      enabled: !!selectedNodeId,
+      enabled: is_sudo && !!selectedNodeId, // Only fetch node stats for sudo admins with selected node
       refetchInterval: 5000, // Update every 5 seconds
     },
   })
@@ -35,11 +46,11 @@ export default function Statistics({ data, isLoading, error, selectedServer }: S
     }
   }, [selectedServer])
 
-  if ((selectedServer === 'master' && isLoading) || isLoadingNodes || (selectedNodeId && isLoadingNodeStats)) {
-    return <StatisticsSkeletons />
+  if ((actualSelectedServer === 'master' && isLoading) || (is_sudo && isLoadingNodes) || (is_sudo && selectedNodeId && isLoadingNodeStats)) {
+    return <StatisticsSkeletons is_sudo={is_sudo} />
   }
 
-  if (error || nodesError) {
+  if (error || (is_sudo && nodesError)) {
     return (
       <div className="space-y-8">
         <div className="flex items-center justify-between">
@@ -59,11 +70,11 @@ export default function Statistics({ data, isLoading, error, selectedServer }: S
   }
 
   // Get the current stats based on selection
-  const currentStats = selectedServer === 'master' ? (data as SystemStats) : (nodeStats as NodeRealtimeStats)
+  const currentStats = actualSelectedServer === 'master' ? (data as SystemStats) : (nodeStats as NodeRealtimeStats)
 
   return (
     <div className="space-y-8">
-      {/* System Statistics Section */}
+      {/* System Statistics Section - show for all admins */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -76,13 +87,15 @@ export default function Statistics({ data, isLoading, error, selectedServer }: S
         </div>
       </div>
 
-      {/* Charts Section */}
+      {/* Charts Section - only show for sudo admins */}
       <div className="space-y-8">
-        <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '200ms', animationFillMode: 'both' }}>
-          <CostumeBarChart nodeId={selectedNodeId} />
-        </div>
+        {is_sudo && (
+          <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '200ms', animationFillMode: 'both' }}>
+            <CostumeBarChart nodeId={selectedNodeId} />
+          </div>
+        )}
         <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '300ms', animationFillMode: 'both' }}>
-          <AreaCostumeChart nodeId={selectedNodeId} currentStats={currentStats} realtimeStats={selectedServer === 'master' ? data : nodeStats || undefined} />
+          <AreaCostumeChart nodeId={selectedNodeId} currentStats={currentStats} realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} />
         </div>
       </div>
 
@@ -102,10 +115,10 @@ export default function Statistics({ data, isLoading, error, selectedServer }: S
   )
 }
 
-function StatisticsSkeletons() {
+function StatisticsSkeletons({ is_sudo }: { is_sudo: boolean }) {
   return (
     <div className="space-y-8">
-      {/* System Stats Skeleton */}
+      {/* System Stats Skeleton - show for all admins */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -130,13 +143,15 @@ function StatisticsSkeletons() {
         </div>
       </div>
 
-      {/* Charts Skeleton */}
-      <div className="space-y-8">
-        <Skeleton className="h-[400px] w-full" />
-        <Skeleton className="h-[360px] w-full" />
-      </div>
+      {/* Charts Skeleton - only show for sudo admins */}
+      {is_sudo && (
+        <div className="space-y-8">
+          <Skeleton className="h-[400px] w-full" />
+          <Skeleton className="h-[360px] w-full" />
+        </div>
+      )}
 
-      {/* Users Stats Skeleton */}
+      {/* Users Stats Skeleton - Show for all admins */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>

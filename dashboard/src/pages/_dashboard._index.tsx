@@ -5,11 +5,10 @@ import HostModal from '@/components/dialogs/HostModal'
 import NodeModal from '@/components/dialogs/NodeModal'
 import AdminModal from '@/components/dialogs/AdminModal'
 import UserTemplateModal from '@/components/dialogs/UserTemplateModal'
-import CoreConfigModal from '@/components/dialogs/CoreConfigModal'
 import QuickActionsModal from '@/components/dialogs/ShortcutsModal'
 import { Separator } from '@/components/ui/separator'
 import { Bookmark, UserRound, UserCog, ChevronDown, Check } from 'lucide-react'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { UseEditFormValues, UseFormValues, UserFormDefaultValues } from './_dashboard.users'
 import { useQueryClient } from '@tanstack/react-query'
@@ -33,6 +32,9 @@ import { cn } from '@/lib/utils'
 import type { AdminDetails } from '@/service/api'
 import { Loader2 } from 'lucide-react'
 import { debounce } from 'es-toolkit'
+
+// Lazy load CoreConfigModal to prevent Monaco Editor from loading until needed
+const CoreConfigModal = lazy(() => import('@/components/dialogs/CoreConfigModal'))
 
 const PAGE_SIZE = 20;
 
@@ -75,10 +77,18 @@ const Dashboard = () => {
   ) {
     usernameParam = adminSearch;
   }
+  
+  const is_sudo = currentAdmin?.is_sudo || false
+  
+  // Only fetch admins for sudo admins
   const { data: fetchedAdmins = [] } = useGetAdmins({
     limit: PAGE_SIZE,
     offset,
     ...(usernameParam ? { username: usernameParam } : {}),
+  }, {
+    query: {
+      enabled: is_sudo, // Only fetch admins for sudo admins
+    },
   })
 
   // When fetchedAdmins changes, update admins and hasMore
@@ -312,8 +322,6 @@ const Dashboard = () => {
     },
   })
 
-  const is_sudo = currentAdmin?.is_sudo || false
-
   // Filter out current admin and 'system'
   const filteredAdmins = admins.filter(
     admin =>
@@ -348,6 +356,7 @@ const Dashboard = () => {
           <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
             <DashboardStatistics systemData={systemStatsData} />
           </div>
+          <Separator className="my-4" />
           <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '250ms', animationFillMode: 'both' }}>
             {is_sudo ? (
               <>
@@ -508,10 +517,21 @@ const Dashboard = () => {
       <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={refreshAllUserData} />
       <GroupModal isDialogOpen={isGroupModalOpen} onOpenChange={setGroupModalOpen} form={groupForm} editingGroup={false} />
       <HostModal isDialogOpen={isHostModalOpen} onOpenChange={setHostModalOpen} onSubmit={handleHostSubmit} form={hostForm} />
-      <NodeModal isDialogOpen={isNodeModalOpen} onOpenChange={setNodeModalOpen} form={nodeForm} editingNode={false} />
-      <AdminModal isDialogOpen={isAdminModalOpen} onOpenChange={setAdminModalOpen} form={adminForm} editingAdmin={false} editingAdminUserName="" />
+      {/* Only render NodeModal for sudo admins */}
+      {is_sudo && (
+        <NodeModal isDialogOpen={isNodeModalOpen} onOpenChange={setNodeModalOpen} form={nodeForm} editingNode={false} />
+      )}
+      {/* Only render AdminModal for sudo admins */}
+      {is_sudo && (
+        <AdminModal isDialogOpen={isAdminModalOpen} onOpenChange={setAdminModalOpen} form={adminForm} editingAdmin={false} editingAdminUserName="" />
+      )}
       <UserTemplateModal isDialogOpen={isTemplateModalOpen} onOpenChange={setTemplateModalOpen} form={templateForm} editingUserTemplate={false} />
-      <CoreConfigModal isDialogOpen={isCoreModalOpen} onOpenChange={setCoreModalOpen} form={coreForm} editingCore={false} />
+      {/* Only render CoreConfigModal for sudo admins */}
+      {is_sudo && (
+        <Suspense fallback={<div />}>
+          <CoreConfigModal isDialogOpen={isCoreModalOpen} onOpenChange={setCoreModalOpen} form={coreForm} editingCore={false} />
+        </Suspense>
+      )}
       <QuickActionsModal
         open={isQuickActionsModalOpen}
         onClose={() => setQuickActionsModalOpen(false)}

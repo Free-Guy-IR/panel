@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { queryClient } from '@/utils/query-client.ts'
-import { toast } from '@/hooks/use-toast.ts'
+import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 
 const initialDefaultValues: Partial<UserTemplatesFromValue> = {
@@ -74,8 +74,7 @@ export default function UserTemplates() {
         },
       })
 
-      toast({
-        title: t('success', { defaultValue: 'Success' }),
+      toast.success(t('success', { defaultValue: 'Success' }), {
         description: t(template.is_disabled ? 'templates.enableSuccess' : 'templates.disableSuccess', {
           name: template.name,
           defaultValue: `Template "{name}" has been ${template.is_disabled ? 'enabled' : 'disabled'} successfully`,
@@ -87,13 +86,11 @@ export default function UserTemplates() {
         queryKey: ['/api/user_templates'],
       })
     } catch (error) {
-      toast({
-        title: t('error', { defaultValue: 'Error' }),
+      toast.error(t('error', { defaultValue: 'Error' }), {
         description: t(template.is_disabled ? 'templates.enableFailed' : 'templates.disableFailed', {
           name: template.name,
           defaultValue: `Failed to ${template.is_disabled ? 'enable' : 'disable'} Template "{name}"`,
         }),
-        variant: 'destructive',
       })
     }
   }

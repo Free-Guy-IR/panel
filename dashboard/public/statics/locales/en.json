@@ -327,6 +327,29 @@
         "confirmReset": "Reset All Data Usage",
         "confirmResetMessage": "Are you sure you want to reset data usage for all accounts? This action cannot be undone.",
         "warning": "This will reset data usage for ALL accounts in the system"
+      },
+      "clearUsageData": {
+        "title": "Clear Usage Data",
+        "description": "Permanently delete usage data from selected database tables",
+        "selectTable": "Select Table",
+        "selectTablePlaceholder": "Choose a table to clear",
+        "noTableSelected": "Please select a table to clear",
+        "dataAfter": "Data After",
+        "dataBefore": "Data Before",
+        "dataAfterPlaceholder": "Select start date",
+        "dataBeforePlaceholder": "Select end date",
+        "selectDateRange": "Select date range to filter data by creation time (optional - leave blank to clear all data)",
+        "clearData": "Clear Data",
+        "clearing": "Clearing...",
+        "clearSuccess": "Successfully cleared data from {{table}}",
+        "clearFailed": "Failed to clear usage data",
+        "confirmClear": "Confirm Clear Data",
+        "confirmClearMessage": "Are you sure you want to permanently delete all data from the {{table}} table? This action cannot be undone.",
+        "warning": "Warning: This will permanently delete all usage data from the selected table. This action cannot be undone.",
+        "tables": {
+          "nodeUserUsages": "Node User Usages",
+          "userUsages": "User Usages"
+        }
       }
     },
     "theme": {

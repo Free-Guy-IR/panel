@@ -322,6 +322,29 @@
         "confirmReset": "重置所有数据使用量",
         "confirmResetMessage": "您确定要重置所有账户的数据使用量吗？此操作无法撤销。",
         "warning": "此操作将重置系统中所有账户的数据使用量"
+      },
+      "clearUsageData": {
+        "title": "清除使用数据",
+        "description": "从选定的数据库表中永久删除使用数据",
+        "selectTable": "选择表",
+        "selectTablePlaceholder": "选择要清除的表",
+        "noTableSelected": "请选择要清除的表",
+        "dataAfter": "数据晚于",
+        "dataBefore": "数据早于",
+        "dataAfterPlaceholder": "选择开始日期",
+        "dataBeforePlaceholder": "选择结束日期",
+        "selectDateRange": "选择日期范围以按创建时间过滤数据（可选 - 留空以清除所有数据）",
+        "clearData": "清除数据",
+        "clearing": "清除中...",
+        "clearSuccess": "成功清除 {{table}} 表中的数据",
+        "clearFailed": "清除使用数据失败",
+        "confirmClear": "确认清除数据",
+        "confirmClearMessage": "您确定要永久删除 {{table}} 表中的所有数据吗？此操作无法撤销。",
+        "warning": "警告：此操作将永久删除所选表中的所有使用数据。此操作无法撤销。",
+        "tables": {
+          "nodeUserUsages": "节点用户使用情况",
+          "userUsages": "用户使用情况"
+        }
       }
     },
     "theme": {
