@@ -16,7 +16,7 @@ import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { cn } from '@/lib/utils'
 import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard.users'
 import { useCreateUser, useCreateUserFromTemplate, useGetAllGroups, useGetUsers, useGetUserTemplates, useModifyUser, useModifyUserWithTemplate } from '@/service/api'
-import { useRelativeExpiryDate } from '@/utils/dateFormatter'
+import { useRelativeExpiryDate, dateUtils } from '@/utils/dateFormatter'
 import { SubscriptionInfo } from '@/components/SubscriptionInfo'
 import { formatBytes } from '@/utils/formatByte'
 import { useQueryClient } from '@tanstack/react-query'
@@ -107,7 +107,7 @@ const ExpiryDateField = ({
         const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
         if (selectedDate < today) {
-          date = now
+          date = new Date(now)
         }
 
         if (selectedDate.getTime() === today.getTime()) {
@@ -174,7 +174,29 @@ const ExpiryDateField = ({
         return true
       }
 
-      // For future dates, allow all
+      // Disable if the year is before current year
+      if (date.getFullYear() < now.getFullYear()) {
+        return true
+      }
+
+      // Disable if the year is more than 15 years in the future
+      if (date.getFullYear() > now.getFullYear() + 15) {
+        return true
+      }
+
+      // For current year, disable past months
+      if (date.getFullYear() === now.getFullYear()) {
+        // If the month is before current month, disable it
+        if (date.getMonth() < now.getMonth()) {
+          return true
+        }
+        // If it's the current month, disable past days
+        if (date.getMonth() === now.getMonth() && compareDate < today) {
+          return true
+        }
+      }
+
+      // Allow all other dates
       return false
     },
     [now],
@@ -243,6 +265,7 @@ const ExpiryDateField = ({
             e.preventDefault()
             setCalendarOpen(false)
           }}
+          onEscapeKeyDown={() => setCalendarOpen(false)}
         >
           {usePersianCalendar ? (
             <PersianCalendar
@@ -252,8 +275,8 @@ const ExpiryDateField = ({
               disabled={isDateDisabled}
               captionLayout="dropdown"
               defaultMonth={displayDate || now}
-              startMonth={now}
-              endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
+              startMonth={new Date(now.getFullYear(), now.getMonth(), 1)}
+              endMonth={new Date(now.getFullYear() + 15, 11, 31)}
               formatters={{
                 formatMonthDropdown: date => date.toLocaleString('fa-IR', { month: 'short' }),
               }}
@@ -266,7 +289,8 @@ const ExpiryDateField = ({
               disabled={isDateDisabled}
               captionLayout="dropdown"
               defaultMonth={displayDate || now}
-              endMonth={new Date(now.getFullYear() + 10, now.getMonth(), now.getDate())}
+              startMonth={new Date(now.getFullYear(), now.getMonth(), 1)}
+              endMonth={new Date(now.getFullYear() + 15, 11, 31)}
               formatters={{
                 formatMonthDropdown: date => date.toLocaleString('default', { month: 'short' }),
               }}
@@ -347,10 +371,19 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const [nextPlanEnabled, setNextPlanEnabled] = useState(!!form.watch('next_plan'))
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const navigate = useNavigate()
-  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [expireCalendarOpen, setExpireCalendarOpen] = useState(false)
+  const [onHoldCalendarOpen, setOnHoldCalendarOpen] = useState(false)
   const { i18n } = useTranslation()
   const isPersianLocale = i18n.language === 'fa'
   const [usePersianCalendar, setUsePersianCalendar] = useState(isPersianLocale)
+  
+  // Reset calendar state when modal opens/closes
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setExpireCalendarOpen(false)
+      setOnHoldCalendarOpen(false)
+    }
+  }, [isDialogOpen])
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
   const [isFormValid, setIsFormValid] = useState(false)
 
@@ -399,7 +432,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   let displayDate: Date | null = null
   let onHoldDisplayDate: Date | null = null
 
-  // Handle various formats of expire value
+  // Handle various formats of expire value using the same logic as OnlineBadge/OnlineStatus
   const parseDateValue = (value: unknown): Date | null => {
     if (isDate(value)) {
       return value
@@ -407,39 +440,25 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       if (value === '') {
         return null
       } else {
-        const utcString = value.trim()
-
-        // Check if this is a timezone-aware string (from user input)
-        // Look for timezone offset patterns like +03:30, -05:00, or Z at the end
-        const hasTimezone = /[+-]\d{2}:\d{2}$/.test(utcString) || utcString.endsWith('Z')
-
-        if (hasTimezone) {
-          // This is from user input - already has timezone info
-          const date = new Date(utcString)
-          if (!isNaN(date.getTime())) {
-            return date
+        // Use the same dateUtils.toDayjs logic as other components
+        try {
+          const dayjsDate = dateUtils.toDayjs(value.trim())
+          if (dayjsDate.isValid()) {
+            return dayjsDate.toDate()
           }
-        } else {
-          // This is from backend - treat as UTC and convert to local
-          let utcDateString = utcString
-          if (!utcDateString.includes('T')) {
-            utcDateString += 'T00:00:00'
-          }
-          if (!utcDateString.endsWith('Z')) {
-            utcDateString += 'Z'
-          }
-
-          const date = new Date(utcDateString)
-          if (!isNaN(date.getTime())) {
-            return date
-          }
+        } catch (error) {
+          // If dayjs parsing fails, return null
         }
       }
     } else if (typeof value === 'number') {
-      // Handle Unix timestamp (seconds) - convert to milliseconds and create Date
-      const date = new Date(value * 1000)
-      if (!isNaN(date.getTime())) {
-        return date
+      // Handle Unix timestamp (seconds) using the same logic as other components
+      try {
+        const dayjsDate = dateUtils.toDayjs(value)
+        if (dayjsDate.isValid()) {
+          return dayjsDate.toDate()
+        }
+      } catch (error) {
+        // If dayjs parsing fails, return null
       }
     }
     return null
@@ -570,14 +589,16 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         form.setValue('on_hold_expire_duration', defaultDuration)
         handleFieldChange('on_hold_expire_duration', defaultDuration)
       }
+      // Clear expire field when switching to on_hold status
+      form.setValue('expire', undefined)
+      form.clearErrors('expire')
     } else {
-      // Clear on_hold_expire_duration field and its errors
+      // Clear on_hold fields when switching away from on_hold status
       form.setValue('on_hold_expire_duration', undefined)
       form.clearErrors('on_hold_expire_duration')
+      form.setValue('on_hold_timeout', undefined)
+      form.clearErrors('on_hold_timeout')
     }
-    // to prevent the datepicker showing 604800, expire has to be reseted each time
-    form.setValue('expire', undefined)
-    form.clearErrors('expire')
   }, [status, form, t, handleFieldChange])
 
   useEffect(() => {
@@ -597,7 +618,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     return Math.round(num * 1024 * 1024 * 1024)
   }
 
-  // Helper to convert expire field to needed schema
+  // Helper to convert expire field to needed schema using the same logic as other components
   function normalizeExpire(expire: Date | string | number | null | undefined): string | undefined {
     if (expire === undefined || expire === null || expire === '') return undefined
 
@@ -606,26 +627,14 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       return getLocalISOTime(expire)
     }
 
-    // For strings
-    if (typeof expire === 'string') {
-      // If it's already an ISO string, return it
-      if (expire.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)) {
-        return expire
+    // For strings and numbers, use the same dateUtils logic as other components
+    try {
+      const dayjsDate = dateUtils.toDayjs(expire)
+      if (dayjsDate.isValid()) {
+        return getLocalISOTime(dayjsDate.toDate())
       }
-
-      // Try as date string
-      const asDate = new Date(expire)
-      if (!isNaN(asDate.getTime())) {
-        return getLocalISOTime(asDate)
-      }
-    }
-
-    // For numbers (timestamps)
-    if (typeof expire === 'number') {
-      const date = new Date(expire * 1000)
-      if (!isNaN(date.getTime())) {
-        return getLocalISOTime(date)
-      }
+    } catch (error) {
+      // If dayjs parsing fails, return undefined
     }
 
     return undefined
@@ -1174,209 +1183,211 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                       />
                     )}
                   </div>
-                  {/* Hide data_limit and expire if template is selected */}
-                  {!selectedTemplateId && (
-                    <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
-                      <FormField
-                        control={form.control}
-                        name="data_limit"
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
-                            <FormControl>
-                              <div className="relative w-full">
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
-                                  onChange={e => {
-                                    const value = e.target.value
-                                    // Allow empty string
-                                    if (value === '') {
-                                      field.onChange(undefined)
-                                      handleFieldChange('data_limit', undefined)
-                                      return
-                                    }
-                                    // Allow only numbers and decimal point
-                                    if (/^\d*\.?\d*$/.test(value)) {
-                                      const numValue = parseFloat(value)
-                                      if (!isNaN(numValue)) {
-                                        field.onChange(numValue)
-                                        handleFieldChange('data_limit', numValue)
+                  {/* Data limit and expire fields - show data_limit only when no template is selected */}
+                  <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
+                    {!selectedTemplateId && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="data_limit"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
+                              <FormControl>
+                                <div className="relative w-full">
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
+                                    onChange={e => {
+                                      const value = e.target.value
+                                      // Allow empty string
+                                      if (value === '') {
+                                        field.onChange(undefined)
+                                        handleFieldChange('data_limit', undefined)
+                                        return
                                       }
-                                    }
-                                  }}
-                                  onKeyDown={e => {
-                                    const currentValue = field.value === undefined ? 0 : field.value
-                                    if (e.key === 'ArrowUp') {
-                                      e.preventDefault()
-                                      const newValue = currentValue + 1
-                                      field.onChange(newValue)
-                                      handleFieldChange('data_limit', newValue)
-                                    } else if (e.key === 'ArrowDown') {
-                                      e.preventDefault()
-                                      const newValue = Math.max(0, currentValue - 1)
-                                      field.onChange(newValue)
-                                      handleFieldChange('data_limit', newValue)
-                                    }
-                                  }}
-                                  onBlur={() => {
-                                    handleFieldChange('data_limit', field.value)
-                                  }}
-                                  value={field.value === undefined ? '' : field.value}
-                                  className="pr-20"
-                                />
-                                <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
-                                  <div className="flex flex-col border-l border-input">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-4 w-4 rounded-none border-b border-input hover:bg-accent hover:text-accent-foreground"
-                                      onClick={() => {
-                                        const currentValue = field.value === undefined ? 0 : field.value
+                                      // Allow only numbers and decimal point
+                                      if (/^\d*\.?\d*$/.test(value)) {
+                                        const numValue = parseFloat(value)
+                                        if (!isNaN(numValue)) {
+                                          field.onChange(numValue)
+                                          handleFieldChange('data_limit', numValue)
+                                        }
+                                      }
+                                    }}
+                                    onKeyDown={e => {
+                                      const currentValue = field.value === undefined ? 0 : field.value
+                                      if (e.key === 'ArrowUp') {
+                                        e.preventDefault()
                                         const newValue = currentValue + 1
                                         field.onChange(newValue)
                                         handleFieldChange('data_limit', newValue)
-                                      }}
-                                    >
-                                      <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className="h-3 w-3"
-                                      >
-                                        <path d="m5 15 7-7 7 7" />
-                                      </svg>
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-4 w-4 rounded-none hover:bg-accent hover:text-accent-foreground"
-                                      onClick={() => {
-                                        const currentValue = field.value === undefined ? 0 : field.value
+                                      } else if (e.key === 'ArrowDown') {
+                                        e.preventDefault()
                                         const newValue = Math.max(0, currentValue - 1)
                                         field.onChange(newValue)
                                         handleFieldChange('data_limit', newValue)
-                                      }}
-                                    >
-                                      <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className="h-3 w-3"
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      handleFieldChange('data_limit', field.value)
+                                    }}
+                                    value={field.value === undefined ? '' : field.value}
+                                    className="pr-20"
+                                  />
+                                  <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+                                    <div className="flex flex-col border-l border-input">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-4 w-4 rounded-none border-b border-input hover:bg-accent hover:text-accent-foreground"
+                                        onClick={() => {
+                                          const currentValue = field.value === undefined ? 0 : field.value
+                                          const newValue = currentValue + 1
+                                          field.onChange(newValue)
+                                          handleFieldChange('data_limit', newValue)
+                                        }}
                                       >
-                                        <path d="m19 9-7 7-7-7" />
-                                      </svg>
-                                    </Button>
+                                        <svg
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          width="12"
+                                          height="12"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="h-3 w-3"
+                                        >
+                                          <path d="m5 15 7-7 7 7" />
+                                        </svg>
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-4 w-4 rounded-none hover:bg-accent hover:text-accent-foreground"
+                                        onClick={() => {
+                                          const currentValue = field.value === undefined ? 0 : field.value
+                                          const newValue = Math.max(0, currentValue - 1)
+                                          field.onChange(newValue)
+                                          handleFieldChange('data_limit', newValue)
+                                        }}
+                                      >
+                                        <svg
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          width="12"
+                                          height="12"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="h-3 w-3"
+                                        >
+                                          <path d="m19 9-7 7-7-7" />
+                                        </svg>
+                                      </Button>
+                                    </div>
+                                    <span className="pointer-events-none ml-1 text-muted-foreground">GB</span>
                                   </div>
-                                  <span className="pointer-events-none ml-1 text-muted-foreground">GB</span>
                                 </div>
-                              </div>
-                            </FormControl>
-                            {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
-                              <p className="mt-1 text-xs text-muted-foreground">{formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}</p>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {form.watch('data_limit') !== undefined && form.watch('data_limit') !== null && Number(form.watch('data_limit')) > 0 && (
-                        <FormField
-                          control={form.control}
-                          name="data_limit_reset_strategy"
-                          render={({ field }) => (
-                            <FormItem className="flex-1">
-                              <FormLabel>{t('userDialog.periodicUsageReset', { defaultValue: 'Periodic Usage Reset' })}</FormLabel>
-                              <Select
-                                onValueChange={value => {
-                                  field.onChange(value)
-                                  handleFieldChange('data_limit_reset_strategy', value)
-                                }}
-                                value={field.value || ''}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={t('userDialog.resetStrategyNo', { defaultValue: 'No' })} />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="no_reset">{t('userDialog.resetStrategyNo', { defaultValue: 'No' })}</SelectItem>
-                                  <SelectItem value="day">{t('userDialog.resetStrategyDaily', { defaultValue: 'Daily' })}</SelectItem>
-                                  <SelectItem value="week">{t('userDialog.resetStrategyWeekly', { defaultValue: 'Weekly' })}</SelectItem>
-                                  <SelectItem value="month">{t('userDialog.resetStrategyMonthly', { defaultValue: 'Monthly' })}</SelectItem>
-                                  <SelectItem value="year">{t('userDialog.resetStrategyAnnually', { defaultValue: 'Annually' })}</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              </FormControl>
+                              {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
+                                <p className="mt-1 text-xs text-muted-foreground">{formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}</p>
+                              )}
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                      )}
-                      <div className="flex items-start gap-4 lg:w-52">
-                        {status === 'on_hold' ? (
+                        {form.watch('data_limit') !== undefined && form.watch('data_limit') !== null && Number(form.watch('data_limit')) > 0 && (
                           <FormField
                             control={form.control}
-                            name="on_hold_expire_duration"
-                            render={({ field }) => {
-                              const hasError = !!form.formState.errors.on_hold_expire_duration
-                              return (
-                                <FormItem className="flex-1">
-                                  <FormLabel>{t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration (days)' })}</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      min="1"
-                                      isError={hasError}
-                                      placeholder={t('userDialog.onHoldExpireDurationPlaceholder', { defaultValue: 'e.g. 7' })}
-                                      {...field}
-                                      value={field.value === null || field.value === undefined ? '' : Math.round(field.value / (24 * 60 * 60))}
-                                      onChange={e => {
-                                        const value = e.target.value === '' ? undefined : parseInt(e.target.value, 10)
-                                        field.onChange(value ? value * (24 * 60 * 60) : 1)
-                                        handleFieldChange('on_hold_expire_duration', value)
-                                      }}
-                                      onBlur={() => handleFieldBlur('on_hold_expire_duration')}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )
-                            }}
-                          />
-                        ) : (
-                          <FormField
-                            control={form.control}
-                            name="expire"
+                            name="data_limit_reset_strategy"
                             render={({ field }) => (
-                              <ExpiryDateField
-                                field={field}
-                                displayDate={displayDate}
-                                usePersianCalendar={usePersianCalendar}
-                                calendarOpen={calendarOpen}
-                                setCalendarOpen={setCalendarOpen}
-                                handleFieldChange={handleFieldChange}
-                                label={t('userDialog.expiryDate', { defaultValue: 'Expire date' })}
-                              />
+                              <FormItem className="flex-1">
+                                <FormLabel>{t('userDialog.periodicUsageReset', { defaultValue: 'Periodic Usage Reset' })}</FormLabel>
+                                <Select
+                                  onValueChange={value => {
+                                    field.onChange(value)
+                                    handleFieldChange('data_limit_reset_strategy', value)
+                                  }}
+                                  value={field.value || ''}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={t('userDialog.resetStrategyNo', { defaultValue: 'No' })} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="no_reset">{t('userDialog.resetStrategyNo', { defaultValue: 'No' })}</SelectItem>
+                                    <SelectItem value="day">{t('userDialog.resetStrategyDaily', { defaultValue: 'Daily' })}</SelectItem>
+                                    <SelectItem value="week">{t('userDialog.resetStrategyWeekly', { defaultValue: 'Weekly' })}</SelectItem>
+                                    <SelectItem value="month">{t('userDialog.resetStrategyMonthly', { defaultValue: 'Monthly' })}</SelectItem>
+                                    <SelectItem value="year">{t('userDialog.resetStrategyAnnually', { defaultValue: 'Annually' })}</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
                             )}
                           />
                         )}
-                      </div>
+                      </>
+                    )}
+                    <div className="flex items-start gap-4 lg:w-52">
+                      {status === 'on_hold' ? (
+                        <FormField
+                          control={form.control}
+                          name="on_hold_expire_duration"
+                          render={({ field }) => {
+                            const hasError = !!form.formState.errors.on_hold_expire_duration
+                            return (
+                              <FormItem className="flex-1">
+                                <FormLabel>{t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration (days)' })}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    isError={hasError}
+                                    placeholder={t('userDialog.onHoldExpireDurationPlaceholder', { defaultValue: 'e.g. 7' })}
+                                    {...field}
+                                    value={field.value === null || field.value === undefined ? '' : Math.round(field.value / (24 * 60 * 60))}
+                                    onChange={e => {
+                                      const value = e.target.value === '' ? undefined : parseInt(e.target.value, 10)
+                                      field.onChange(value ? value * (24 * 60 * 60) : 1)
+                                      handleFieldChange('on_hold_expire_duration', value)
+                                    }}
+                                    onBlur={() => handleFieldBlur('on_hold_expire_duration')}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )
+                          }}
+                        />
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="expire"
+                          render={({ field }) => (
+                            <ExpiryDateField
+                              field={field}
+                              displayDate={displayDate}
+                              usePersianCalendar={usePersianCalendar}
+                              calendarOpen={expireCalendarOpen}
+                              setCalendarOpen={setExpireCalendarOpen}
+                              handleFieldChange={handleFieldChange}
+                              label={t('userDialog.expiryDate', { defaultValue: 'Expire date' })}
+                            />
+                          )}
+                        />
+                      )}
                     </div>
-                  )}
+                  </div>
                   {status === 'on_hold' && (
                     <FormField
                       control={form.control}
@@ -1386,8 +1397,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           field={field}
                           displayDate={onHoldDisplayDate}
                           usePersianCalendar={usePersianCalendar}
-                          calendarOpen={calendarOpen}
-                          setCalendarOpen={setCalendarOpen}
+                          calendarOpen={onHoldCalendarOpen}
+                          setCalendarOpen={setOnHoldCalendarOpen}
                           handleFieldChange={handleFieldChange}
                           label={t('userDialog.timeOutDate', { defaultValue: 'Expire date' })}
                         />

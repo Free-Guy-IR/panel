@@ -1082,8 +1082,36 @@
     "statusChecking": "Checking...",
     "reconnect": "Reconnect",
     "reconnecting": "Reconnecting...",
+    "sync": "Sync",
+    "syncing": "Syncing...",
+    "syncSuccess": "Node synchronized successfully",
+    "syncFailed": "Failed to sync node",
     "gatherLogs": "Gather Logs",
-    "gatherLogsDescription": "Enable log collection from this node for monitoring and debugging purposes"
+    "gatherLogsDescription": "Enable log collection from this node for monitoring and debugging purposes",
+    "statusMessages": {
+      "checkUnavailableForNew": "Status check not available for new nodes. Create the node first to check its status."
+    },
+    "onlineStats": {
+      "button": "Online Stats",
+      "title": "Online User Statistics",
+      "ipListTitle": "IP Addresses for {{username}}",
+      "nodeInfo": "Node: {{nodeName}}",
+      "searchPlaceholder": "Enter username to search...",
+      "enterUsername": "Please enter a username",
+      "refreshed": "Data refreshed successfully",
+      "refreshFailed": "Failed to refresh data",
+      "backToStats": "Back to Stats",
+      "ipAddresses": "IP addresses",
+      "errorLoading": "Error loading user stats",
+      "userNotOnline": "User is not online",
+      "searchUser": "Search for a user to view their online stats",
+      "autoRefresh": "Auto-refreshing every 5 seconds",
+      "connections": "connections",
+      "protocols": "protocols",
+      "viewIPs": "View IPs",
+      "userNotFound": "User '{{username}}' not found or not online",
+      "errorLoadingIPs": "Error loading user IP addresses"
+    }
   },
   "theme": {
     "title": "Theme",
