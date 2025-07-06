@@ -74,6 +74,11 @@ export type SetOwnerParams = {
   admin_username: string
 }
 
+export type ClearUsageDataParams = {
+  start?: string | null
+  end?: string | null
+}
+
 export type UserOnlineIpList200 = { [key: string]: { [key: string]: number } }
 
 export type UserOnlineStats200 = { [key: string]: number }
@@ -585,19 +590,6 @@ export type UserModifyDataLimit = number | null
 
 export type UserModifyExpire = string | number | null
 
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 export interface UserModify {
   proxy_settings?: ProxyTableInput
   expire?: UserModifyExpire
@@ -612,6 +604,19 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -651,6 +656,14 @@ export interface UserCreate {
   username: string
   status?: UserCreateStatus
 }
+
+export type UsageTable = (typeof UsageTable)[keyof typeof UsageTable]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UsageTable = {
+  node_user_usages: 'node_user_usages',
+  node_usages: 'node_usages',
+} as const
 
 export interface Unauthorized {
   detail?: string
@@ -890,8 +903,6 @@ export interface SettingsSchemaOutput {
 
 export type SettingsSchemaInputSubscription = SubscriptionInput | null
 
-export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
-
 export type SettingsSchemaInputNotificationSettings = NotificationSettings | null
 
 export type SettingsSchemaInputWebhook = Webhook | null
@@ -1015,6 +1026,8 @@ export interface NotificationEnable {
   percentage_reached?: boolean
 }
 
+export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
+
 export interface NotFound {
   detail?: string
 }
@@ -1135,16 +1148,6 @@ export type NodeModifyAddress = string | null
 
 export type NodeModifyName = string | null
 
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
-
-export type NodeModifyConnectionType = NodeConnectionType | null
-
 export interface NodeModify {
   name?: NodeModifyName
   address?: NodeModifyAddress
@@ -1160,6 +1163,16 @@ export interface NodeModify {
   api_port?: NodeModifyApiPort
   status?: NodeModifyStatus
 }
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
+
+export type NodeModifyConnectionType = NodeConnectionType | null
 
 export interface NodeCreate {
   name: string
@@ -1290,13 +1303,6 @@ export interface HTTPException {
   detail: string
 }
 
-export interface GroupsResponse {
-  groups: GroupResponse[]
-  total: number
-}
-
-export type GroupResponseInboundTags = string[] | null
-
 export interface GroupResponse {
   /**
    * @minLength 3
@@ -1308,6 +1314,13 @@ export interface GroupResponse {
   id: number
   total_users?: number
 }
+
+export interface GroupsResponse {
+  groups: GroupResponse[]
+  total: number
+}
+
+export type GroupResponseInboundTags = string[] | null
 
 export type GroupModifyInboundTags = string[] | null
 
@@ -1506,6 +1519,14 @@ export interface ClashMuxSettings {
   brutal?: ClashMuxSettingsBrutal
   statistic?: boolean
   only_tcp?: boolean
+}
+
+export interface BulkUser {
+  amount: number
+  group_ids?: number[]
+  admins?: number[]
+  users?: number[]
+  status?: UserStatus[]
 }
 
 export interface BulkGroup {
@@ -2772,48 +2793,48 @@ Notes:
 - Returns list of affected users (those who had groups removed)
  * @summary Bulk remove groups from users
  */
-export const bulkRemoveGroupsToUsers = (bulkGroup: BodyType<BulkGroup>, signal?: AbortSignal) => {
+export const bulkRemoveUsersFromGroups = (bulkGroup: BodyType<BulkGroup>, signal?: AbortSignal) => {
   return orvalFetcher<unknown>({ url: `/api/groups/bulk/remove`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: bulkGroup, signal })
 }
 
-export const getBulkRemoveGroupsToUsersMutationOptions = <
-  TData = Awaited<ReturnType<typeof bulkRemoveGroupsToUsers>>,
+export const getBulkRemoveUsersFromGroupsMutationOptions = <
+  TData = Awaited<ReturnType<typeof bulkRemoveUsersFromGroups>>,
   TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkGroup> }, TContext>
 }) => {
-  const mutationKey = ['bulkRemoveGroupsToUsers']
+  const mutationKey = ['bulkRemoveUsersFromGroups']
   const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
     : { mutation: { mutationKey } }
 
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkRemoveGroupsToUsers>>, { data: BodyType<BulkGroup> }> = props => {
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkRemoveUsersFromGroups>>, { data: BodyType<BulkGroup> }> = props => {
     const { data } = props ?? {}
 
-    return bulkRemoveGroupsToUsers(data)
+    return bulkRemoveUsersFromGroups(data)
   }
 
   return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<BulkGroup> }, TContext>
 }
 
-export type BulkRemoveGroupsToUsersMutationResult = NonNullable<Awaited<ReturnType<typeof bulkRemoveGroupsToUsers>>>
-export type BulkRemoveGroupsToUsersMutationBody = BodyType<BulkGroup>
-export type BulkRemoveGroupsToUsersMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+export type BulkRemoveUsersFromGroupsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkRemoveUsersFromGroups>>>
+export type BulkRemoveUsersFromGroupsMutationBody = BodyType<BulkGroup>
+export type BulkRemoveUsersFromGroupsMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
 
 /**
  * @summary Bulk remove groups from users
  */
-export const useBulkRemoveGroupsToUsers = <
-  TData = Awaited<ReturnType<typeof bulkRemoveGroupsToUsers>>,
+export const useBulkRemoveUsersFromGroups = <
+  TData = Awaited<ReturnType<typeof bulkRemoveUsersFromGroups>>,
   TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkGroup> }, TContext>
 }): UseMutationResult<TData, TError, { data: BodyType<BulkGroup> }, TContext> => {
-  const mutationOptions = getBulkRemoveGroupsToUsersMutationOptions(options)
+  const mutationOptions = getBulkRemoveUsersFromGroupsMutationOptions(options)
 
   return useMutation(mutationOptions)
 }
@@ -4255,6 +4276,58 @@ export function useUserOnlineIpList<TData = Awaited<ReturnType<typeof userOnline
 }
 
 /**
+ * Deletes **all rows** from the selected usage data table. Use with caution.
+
+Allowed tables:
+    - `node_user_usages`: Deletes user-specific node usage traffic records.
+    - `node_usages`: Deletes node-level aggregated traffic (uplink/downlink) records.
+
+**Optional filters:**
+    - `start`: ISO 8601 timestamp to filter from (inclusive)
+    - `end`: ISO 8601 timestamp to filter to (exclusive)
+
+⚠️ This operation is irreversible. Ensure correct usage in production environments.
+ * @summary Clear usage data from a specified table
+ */
+export const clearUsageData = (table: UsageTable, params?: ClearUsageDataParams) => {
+  return orvalFetcher<unknown>({ url: `/api/nodes/clear_usage_data/${table}`, method: 'DELETE', params })
+}
+
+export const getClearUsageDataMutationOptions = <TData = Awaited<ReturnType<typeof clearUsageData>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { table: UsageTable; params?: ClearUsageDataParams }, TContext>
+}) => {
+  const mutationKey = ['clearUsageData']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearUsageData>>, { table: UsageTable; params?: ClearUsageDataParams }> = props => {
+    const { table, params } = props ?? {}
+
+    return clearUsageData(table, params)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { table: UsageTable; params?: ClearUsageDataParams }, TContext>
+}
+
+export type ClearUsageDataMutationResult = NonNullable<Awaited<ReturnType<typeof clearUsageData>>>
+
+export type ClearUsageDataMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Clear usage data from a specified table
+ */
+export const useClearUsageData = <TData = Awaited<ReturnType<typeof clearUsageData>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { table: UsageTable; params?: ClearUsageDataParams }, TContext>
+}): UseMutationResult<TData, TError, { table: UsageTable; params?: ClearUsageDataParams }, TContext> => {
+  const mutationOptions = getClearUsageDataMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
  * Create a new user
 
 - **username**: 3 to 32 characters, can include a-z, 0-9, and underscores.
@@ -5099,6 +5172,110 @@ export const useModifyUserWithTemplate = <TData = Awaited<ReturnType<typeof modi
   mutation?: UseMutationOptions<TData, TError, { username: string; data: BodyType<ModifyUserByTemplate> }, TContext>
 }): UseMutationResult<TData, TError, { username: string; data: BodyType<ModifyUserByTemplate> }, TContext> => {
   const mutationOptions = getModifyUserWithTemplateMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * Bulk expire users based on the provided criteria.
+
+- **amount**: amount to adjust the user's quota (in seconds, positive to increase, negative to decrease) required
+- **user_ids**: Optional list of user IDs to modify
+- **admins**: Optional list of admin IDs — their users will be targeted
+- **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
+- **group_ids**: Optional list of group IDs to filter users by their group membership
+ * @summary Bulk sum/sub to expire of users
+ */
+export const bulkModifyUsersExpire = (bulkUser: BodyType<BulkUser>, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/api/users/bulk/expire`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: bulkUser, signal })
+}
+
+export const getBulkModifyUsersExpireMutationOptions = <
+  TData = Awaited<ReturnType<typeof bulkModifyUsersExpire>>,
+  TError = ErrorType<Unauthorized | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUser> }, TContext>
+}) => {
+  const mutationKey = ['bulkModifyUsersExpire']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkModifyUsersExpire>>, { data: BodyType<BulkUser> }> = props => {
+    const { data } = props ?? {}
+
+    return bulkModifyUsersExpire(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<BulkUser> }, TContext>
+}
+
+export type BulkModifyUsersExpireMutationResult = NonNullable<Awaited<ReturnType<typeof bulkModifyUsersExpire>>>
+export type BulkModifyUsersExpireMutationBody = BodyType<BulkUser>
+export type BulkModifyUsersExpireMutationError = ErrorType<Unauthorized | HTTPValidationError>
+
+/**
+ * @summary Bulk sum/sub to expire of users
+ */
+export const useBulkModifyUsersExpire = <TData = Awaited<ReturnType<typeof bulkModifyUsersExpire>>, TError = ErrorType<Unauthorized | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUser> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<BulkUser> }, TContext> => {
+  const mutationOptions = getBulkModifyUsersExpireMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * Bulk modify users' data limit based on the provided criteria.
+
+- **amount**: amount to adjust the user's quota (positive to increase, negative to decrease) required
+- **user_ids**: Optional list of user IDs to modify
+- **admins**: Optional list of admin IDs — their users will be targeted
+- **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
+- **group_ids**: Optional list of group IDs to filter users by their group membership
+ * @summary Bulk sum/sub to data limit of users
+ */
+export const bulkModifyUsersDatalimit = (bulkUser: BodyType<BulkUser>, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/api/users/bulk/data_limit`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: bulkUser, signal })
+}
+
+export const getBulkModifyUsersDatalimitMutationOptions = <
+  TData = Awaited<ReturnType<typeof bulkModifyUsersDatalimit>>,
+  TError = ErrorType<Unauthorized | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUser> }, TContext>
+}) => {
+  const mutationKey = ['bulkModifyUsersDatalimit']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkModifyUsersDatalimit>>, { data: BodyType<BulkUser> }> = props => {
+    const { data } = props ?? {}
+
+    return bulkModifyUsersDatalimit(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<BulkUser> }, TContext>
+}
+
+export type BulkModifyUsersDatalimitMutationResult = NonNullable<Awaited<ReturnType<typeof bulkModifyUsersDatalimit>>>
+export type BulkModifyUsersDatalimitMutationBody = BodyType<BulkUser>
+export type BulkModifyUsersDatalimitMutationError = ErrorType<Unauthorized | HTTPValidationError>
+
+/**
+ * @summary Bulk sum/sub to data limit of users
+ */
+export const useBulkModifyUsersDatalimit = <TData = Awaited<ReturnType<typeof bulkModifyUsersDatalimit>>, TError = ErrorType<Unauthorized | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUser> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<BulkUser> }, TContext> => {
+  const mutationOptions = getBulkModifyUsersDatalimitMutationOptions(options)
 
   return useMutation(mutationOptions)
 }

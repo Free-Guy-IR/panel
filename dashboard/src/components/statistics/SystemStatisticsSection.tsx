@@ -1,11 +1,15 @@
-import useDirDetection from '@/hooks/use-dir-detection'
-import { cn } from '@/lib/utils'
-import { SystemStats } from '@/service/api'
-import { formatBytes } from '@/utils/formatByte'
-import { Cpu, MemoryStick, Database, Users, TrendingUp, TrendingDown } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
+import { SystemStats, NodeRealtimeStats } from '@/service/api'
 import { useTranslation } from 'react-i18next'
-import { Card, CardContent } from '../ui/card'
+import { Cpu, MemoryStick, Database, TrendingUp, TrendingDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import useDirDetection from '@/hooks/use-dir-detection'
+import { formatBytes } from '@/utils/formatByte'
+import { useEffect, useState } from 'react'
+
+interface SystemStatisticsSectionProps {
+  currentStats?: SystemStats | NodeRealtimeStats | null
+}
 
 const CountUp = ({ end, duration = 1500, suffix = '' }: { end: number; duration?: number; suffix?: string }) => {
   const [count, setCount] = useState(0)
@@ -37,34 +41,44 @@ const CountUp = ({ end, duration = 1500, suffix = '' }: { end: number; duration?
   return <>{count}{suffix}</>
 }
 
-const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefined }) => {
+export default function SystemStatisticsSection({ currentStats }: SystemStatisticsSectionProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [prevData, setPrevData] = useState<any>(null)
   const [isIncreased, setIsIncreased] = useState<Record<string, boolean>>({})
 
   const getTotalTrafficValue = () => {
-    if (!systemData) return 0
+    if (!currentStats) return 0
     
-    // For master server stats - use total traffic
-    return Number(systemData.incoming_bandwidth) + Number(systemData.outgoing_bandwidth)
+    if ('incoming_bandwidth' in currentStats && 'outgoing_bandwidth' in currentStats) {
+      // Master server stats - use total traffic
+      const stats = currentStats as SystemStats
+      return Number(stats.incoming_bandwidth) + Number(stats.outgoing_bandwidth)
+    } else if ('incoming_bandwidth_speed' in currentStats && 'outgoing_bandwidth_speed' in currentStats) {
+      // Node stats - for now, use speed values as proxy
+      // Note: In a real implementation, you might want to accumulate these values over time
+      const stats = currentStats as NodeRealtimeStats
+      return Number(stats.incoming_bandwidth_speed) + Number(stats.outgoing_bandwidth_speed)
+    }
+    
+    return 0
   }
 
   const getMemoryUsage = () => {
-    if (!systemData) return { used: 0, total: 0, percentage: 0 }
+    if (!currentStats) return { used: 0, total: 0, percentage: 0 }
     
-    const memUsed = Number(systemData.mem_used) || 0
-    const memTotal = Number(systemData.mem_total) || 0
+    const memUsed = Number(currentStats.mem_used) || 0
+    const memTotal = Number(currentStats.mem_total) || 0
     const percentage = memTotal > 0 ? (memUsed / memTotal) * 100 : 0
     
     return { used: memUsed, total: memTotal, percentage }
   }
 
   const getCpuInfo = () => {
-    if (!systemData) return { usage: 0, cores: 0 }
+    if (!currentStats) return { usage: 0, cores: 0 }
     
-    let cpuUsage = Number(systemData.cpu_usage) || 0
-    const cpuCores = Number(systemData.cpu_cores) || 0
+    let cpuUsage = Number(currentStats.cpu_usage) || 0
+    const cpuCores = Number(currentStats.cpu_cores) || 0
     
     // Fix potential decimal issue - if usage is between 0-1, it's likely a decimal representation
     if (cpuUsage > 0 && cpuUsage <= 1) {
@@ -81,21 +95,19 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
   const cpu = getCpuInfo()
 
   useEffect(() => {
-    if (prevData && systemData) {
+    if (prevData && currentStats) {
       setIsIncreased({
         cpu_usage: cpu.usage > prevData.cpu_usage,
-        mem_usage: (systemData.mem_used ?? 0) > prevData.mem_used,
+        mem_usage: (currentStats.mem_used ?? 0) > prevData.mem_used,
         total_traffic: getTotalTrafficValue() > (prevData.total_traffic || 0),
-        online_users: systemData.online_users > prevData.online_users,
       })
     }
     setPrevData({
       cpu_usage: cpu.usage,
-      mem_used: systemData?.mem_used ?? 0,
+      mem_used: currentStats?.mem_used ?? 0,
       total_traffic: getTotalTrafficValue(),
-      online_users: systemData?.online_users ?? 0,
     })
-  }, [systemData])
+  }, [currentStats])
 
   return (
     <div className={cn('flex flex-col items-center justify-between gap-x-4 gap-y-4 lg:flex-row', dir === 'rtl' && 'lg:flex-row-reverse')}>
@@ -164,7 +176,7 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
                   <p className="text-sm font-medium text-muted-foreground">{t('statistics.ramUsage')}</p>
                   <div className="flex items-center gap-2">
                     <span dir="ltr" className={cn('text-2xl font-bold transition-all duration-500', isIncreased.mem_usage ? 'animate-zoom-out' : '')} style={{ animationDuration: '400ms' }}>
-                      {systemData ? (
+                      {currentStats ? (
                         <span>
                           <CountUp end={Number(formatBytes(memory.used, 1, false)) ?? 0} />/{formatBytes(memory.total, 1, true)}
                         </span>
@@ -219,43 +231,6 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
           </CardContent>
         </Card>
       </div>
-
-      {/* Online Users */}
-      <div className="w-full animate-fade-in" style={{ animationDuration: '600ms', animationDelay: '350ms' }}>
-        <Card dir={dir} className="group relative w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
-          <div
-            className={cn(
-              'absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 transition-opacity duration-500',
-              'dark:from-primary/5 dark:to-transparent',
-              'group-hover:opacity-100',
-            )}
-          />
-          <CardContent className="relative z-10 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">{t('statistics.onlineUsers')}</p>
-                  <div className="flex items-center gap-2">
-                    <span dir="ltr" className={cn('text-2xl font-bold transition-all duration-500', isIncreased.online_users ? 'animate-zoom-out' : '')} style={{ animationDuration: '400ms' }}>
-                      <CountUp end={systemData?.online_users || 0} />
-                    </span>
-                    {isIncreased.online_users !== undefined && (
-                      <div className={cn('flex items-center text-xs', isIncreased.online_users ? 'text-green-500' : 'text-red-500')}>
-                        {isIncreased.online_users ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
-}
-
-export default DashboardStatistics
+} 

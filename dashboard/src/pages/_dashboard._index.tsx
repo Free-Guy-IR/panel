@@ -324,26 +324,27 @@ const Dashboard = () => {
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
-        <div className="w-full mx-auto py-4 md:pt-6 gap-4 flex items-start justify-between flex-row px-4">
-          <div className="flex flex-col gap-y-1 flex-1 min-w-0">
-            <h1 className="font-medium text-lg sm:text-xl">{t('dashboard')}</h1>
-            <span className="whitespace-normal text-muted-foreground text-xs sm:text-sm">{t('dashboardDescription')}</span>
+        <div className="w-full mx-auto py-3 md:py-4 lg:pt-6 gap-2 sm:gap-4 flex items-start justify-between flex-row px-3 sm:px-4">
+          <div className="flex flex-col gap-y-1 flex-1 min-w-0 pr-2 sm:pr-0">
+            <h1 className="font-medium text-base sm:text-lg lg:text-xl truncate">{t('dashboard')}</h1>
+            <span className="whitespace-normal text-muted-foreground text-xs sm:text-sm leading-relaxed">{t('dashboardDescription')}</span>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Button onClick={handleOpenQuickActions} size="sm" variant="outline" className="hidden sm:flex">
-              <Bookmark className="h-4 w-4 mr-2" />
-              {t('quickActions.title')}
+          <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+            <Button onClick={handleOpenQuickActions} size="sm" variant="outline" className="hidden sm:flex text-xs sm:text-sm">
+              <Bookmark className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden md:inline">{t('quickActions.title')}</span>
+              <span className="md:hidden">Quick</span>
             </Button>
-            <Button onClick={handleOpenQuickActions} size="sm" variant="outline" className="sm:hidden">
-              <Bookmark className="h-4 w-4" />
+            <Button onClick={handleOpenQuickActions} size="sm" variant="outline" className="sm:hidden p-2">
+              <Bookmark className="h-3 w-3" />
             </Button>
           </div>
         </div>
         <Separator />
       </div>
 
-      <div className="w-full px-4 pt-2">
-        <div className="flex flex-col gap-6">
+      <div className="w-full px-3 sm:px-4 pt-2">
+        <div className="flex flex-col gap-4 sm:gap-6">
           <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
             <DashboardStatistics systemData={systemStatsData} />
           </div>
@@ -351,26 +352,26 @@ const Dashboard = () => {
             {is_sudo ? (
               <>
                 {/* Admin Switcher for Sudo */}
-                <div className="relative w-full max-w-sm mb-4" dir={dir}>
+                <div className="relative w-full max-w-xs sm:max-w-sm lg:max-w-md mb-3 sm:mb-4" dir={dir}>
                   <Popover open={dropdownOpen} onOpenChange={setDropdownOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-between h-9 px-3 hover:bg-muted/50 transition-colors",
-                          "text-sm font-medium min-w-0"
+                          "w-full justify-between h-8 sm:h-9 px-2 sm:px-3 hover:bg-muted/50 transition-colors",
+                          "text-xs sm:text-sm font-medium min-w-0"
                         )}
                       >
                         <div className={cn(
-                          "flex items-center gap-2 min-w-0 flex-1",
+                          "flex items-center gap-1 sm:gap-2 min-w-0 flex-1",
                           dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'
                         )}>
-                          <Avatar className="h-5 w-5 flex-shrink-0">
+                          <Avatar className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0">
                             <AvatarFallback className="bg-muted text-xs font-medium">
                               {selectedAdmin?.username?.charAt(0).toUpperCase() || '?'}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="truncate text-sm">
+                          <span className="truncate text-xs sm:text-sm">
                             {selectedAdmin?.username || t('selectAdmin')}
                           </span>
                           {selectedAdmin && (
@@ -387,7 +388,7 @@ const Dashboard = () => {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                      className="w-72 sm:w-80 p-1"
+                      className="w-64 sm:w-72 lg:w-80 p-1"
                       sideOffset={4}
                       align={dir === 'rtl' ? 'end' : 'start'}
                     >
@@ -395,11 +396,11 @@ const Dashboard = () => {
                         <CommandInput
                           placeholder={t('search')}
                           onValueChange={debouncedSearch}
-                          className="h-8 text-sm mb-1"
+                          className="h-7 sm:h-8 text-xs sm:text-sm mb-1"
                         />
                         <CommandList>
                           <CommandEmpty>
-                            <div className="py-4 text-center text-sm text-muted-foreground">
+                            <div className="py-3 sm:py-4 text-center text-xs sm:text-sm text-muted-foreground">
                               {t('noAdminsFound') || 'No admins found'}
                             </div>
                           </CommandEmpty>
@@ -411,16 +412,16 @@ const Dashboard = () => {
                                 setDropdownOpen(false)
                               }}
                               className={cn(
-                                "flex items-center gap-2 px-2 py-1.5 min-w-0",
+                                "flex items-center gap-2 px-2 py-1.5 min-w-0 text-xs sm:text-sm",
                                 dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'
                               )}
                             >
-                              <Avatar className="h-5 w-5 flex-shrink-0">
+                              <Avatar className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0">
                                 <AvatarFallback className="bg-primary/10 text-xs font-medium">
                                   {currentAdmin.username.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="text-sm truncate flex-1">
+                              <span className="truncate flex-1">
                                 {currentAdmin.username}
                               </span>
                               <div className="flex items-center gap-1 flex-shrink-0">
@@ -444,16 +445,16 @@ const Dashboard = () => {
                                 setDropdownOpen(false)
                               }}
                               className={cn(
-                                "flex items-center gap-2 px-2 py-1.5 min-w-0",
+                                "flex items-center gap-2 px-2 py-1.5 min-w-0 text-xs sm:text-sm",
                                 dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'
                               )}
                             >
-                              <Avatar className="h-5 w-5 flex-shrink-0">
+                              <Avatar className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0">
                                 <AvatarFallback className="bg-muted text-xs font-medium">
                                   {admin.username.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="text-sm truncate flex-1">
+                              <span className="truncate flex-1">
                                 {admin.username}
                               </span>
                               <div className="flex items-center gap-1 flex-shrink-0">
@@ -480,7 +481,7 @@ const Dashboard = () => {
                   </Popover>
                 </div>
                 {/* Show only the selected admin's card */}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:gap-4">
                   {selectedAdmin && (
                     <AdminStatisticsCard
                       key={selectedAdmin.username}
