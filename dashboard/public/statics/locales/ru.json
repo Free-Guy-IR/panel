@@ -86,6 +86,8 @@
   "documentation": "Документация",
   "discussionGroup": "Группа обсуждений",
   "github": "GitHub",
+  "community": "Сообщество",
+  "supportUs": "Поддержать нас",
   "manageHosts": "Управление и контроль хостов.",
   "manageSettings": "Управление и контроль настроек.",
   "settings": {
@@ -1197,7 +1199,13 @@
     "proxySettings.desc": "Настройте параметры протокола для этого пользователя.",
     "selectNode": "Выберите узел",
     "allNodes": "Все узлы",
-    "activeNextPlan": "Активировать следующий план"
+    "activeNextPlan": "Активировать следующий план",
+    "unknownClient": "Неизвестный клиент",
+    "selectedGroups": "{{count}} групп выбрано",
+    "editError": "Не удалось обновить пользователя «{{name}}»",
+    "createError": "Не удалось создать пользователя «{{name}}»",
+    "selectStatus": "Выберите статус",
+    "selectedTemplates": "Выбрано шаблонов: {{count}}"
   },
   "sidebar.expand": "Развернуть меню",
   "sidebar.collapse": "Свернуть меню",
@@ -1291,5 +1299,8 @@
     "success": "Владелец пользователя {{username}} успешно изменён на {{admin}}.",
     "error": "Не удалось изменить владельца пользователя {{username}} на {{admin}}.",
     "loadError": "Не удалось загрузить список администраторов."
-  }
+  },
+  "inboundTags": "Входящие теги",
+  "searchInbounds": "Поиск входящих...",
+  "noInboundsFound": "Входящие не найдены"
 }

@@ -80,6 +80,8 @@
   "documentation": "文档",
   "discussionGroup": "讨论组",
   "github": "GitHub",
+  "community": "社区",
+  "supportUs": "支持我们",
   "manageHosts": "管理和控制主机。",
   "manageSettings": "管理和控制设置。",
   "settings": {
@@ -762,6 +764,7 @@
   "userDialog.proxySettings.flow": "流 (Flow)",
   "userDialog.proxySettings.desc": "为此用户配置协议专属设置。",
   "userDialog.expireDate": "过期日期",
+  "userDialog.selectedGroups": "已选择 {{count}} 个分组",
   "username": "用户名",
   "users": "用户",
   "usersTable.copied": "已复制",
@@ -1250,7 +1253,11 @@
     "selectTemplatePlaceholder": "选择模板",
     "selectNode": "选择节点",
     "allNodes": "所有节点",
-    "activeNextPlan": "激活下一个套餐"
+    "activeNextPlan": "激活下一个套餐",
+    "editError": "更新用户 «{{name}}» 失败",
+    "createError": "创建用户 «{{name}}» 失败",
+    "selectStatus": "选择状态",
+    "selectedTemplates": "已选择 {{count}} 个模板"
   },
   "sidebar.expand": "展开侧边栏",
   "sidebar.collapse": "折叠侧边栏",
@@ -1342,5 +1349,8 @@
       "description": "开始创建您的第一个用户账户",
       "createFirstUser": "创建第一个用户"
     }
-  }
+  },
+  "inboundTags": "入站标签",
+  "searchInbounds": "搜索入站...",
+  "noInboundsFound": "未找到入站"
 }

@@ -18,6 +18,8 @@
   "documentation": "مستندات",
   "discussionGroup": "گروه گفتگو",
   "github": "گیت‌هاب",
+  "community": "جامعه",
+  "supportUs": "پشتیبانی از ما",
   "manageHosts": "مدیریت و کنترل هاست‌ها.",
   "manageSettings": "مدیریت و کنترل تنظیمات.",
   "monitorUsers": "مدیریت کاربران",
@@ -924,6 +926,8 @@
     "editSuccess": "گروه «{{name}}» با موفقیت ویرایش شد",
     "disableSuccess": "گروه «{{name}}» با موفقیت غیرفعال شد",
     "disableFailed": "غیرفعال‌سازی گروه «{{name}}» با خطا مواجه شد",
+    "enableSuccess": "گروه «{{name}}» با موفقیت فعال شد",
+    "enableFailed": "فعال‌سازی گروه «{{name}}» با خطا مواجه شد",
     "editFailed": "ویرایش گروه «{{name}}» با خطا مواجه شد",
     "deleteSuccess": "گروه «{{name}}» با موفقیت حذف شد",
     "deleteFailed": "حذف گروه «{{name}}» با خطا مواجه شد",
@@ -1209,7 +1213,12 @@
     "selectTemplatePlaceholder": "یک قالب را انتخاب کنید",
     "selectNode": "انتخاب گره",
     "allNodes": "همه گره‌ها",
-    "activeNextPlan": "فعال‌سازی پلن بعدی"
+    "activeNextPlan": "فعال‌سازی پلن بعدی",
+    "selectedGroups": "{{count}} گروه انتخاب شده",
+    "editError": "خطا در ویرایش کاربر «{{name}}»",
+    "createError": "خطا در ایجاد کاربر «{{name}}»",
+    "selectStatus": "انتخاب وضعیت",
+    "selectedTemplates": "{{count}} قالب انتخاب شده"
   },
   "sidebar.expand": "باز کردن منو",
   "sidebar.collapse": "بستن منو",
@@ -1291,5 +1300,8 @@
     "success": "مالک کاربر {{username}} با موفقیت به {{admin}} تغییر یافت.",
     "error": "تغییر مالک کاربر {{username}} به {{admin}} ناموفق بود.",
     "loadError": "بارگذاری لیست مدیران ناموفق بود."
-  }
+  },
+  "inboundTags": "تگ‌های ورودی",
+  "searchInbounds": "جستجوی ورودی‌ها...",
+  "noInboundsFound": "هیچ ورودی‌ای یافت نشد"
 }

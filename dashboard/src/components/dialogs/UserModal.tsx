@@ -613,9 +613,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   // Helper to convert GB to bytes
   function gbToBytes(gb: string | number | undefined): number | undefined {
     if (gb === undefined || gb === null || gb === '') return undefined
-    const num = typeof gb === 'string' ? parseFloat(gb) : gb
-    if (isNaN(num)) return undefined
-    return Math.round(num * 1024 * 1024 * 1024)
+    return Math.round(Number(gb) * 1024 * 1024 * 1024)
   }
 
   // Helper to convert expire field to needed schema using the same logic as other components
@@ -783,7 +781,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       } catch (error: any) {
         toast.error(
           error?.response?._data?.detail ||
-            t(editingUser ? 'users.editError' : 'users.createError', {
+            t(editingUser ? 'userDialog.editError' : 'userDialog.createError', {
               name: values.username,
               defaultValue: `Failed to ${editingUser ? 'update' : 'create'} user «{{name}}»`,
             }),
@@ -1116,7 +1114,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                   value={field.value || ''}
                                 >
                                   <SelectTrigger>
-                                    <SelectValue placeholder={t('users.selectStatus', { defaultValue: 'Select status' })} />
+                                    <SelectValue placeholder={t('userDialog.selectStatus', { defaultValue: 'Select status' })} />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="active">{t('status.active', { defaultValue: 'Active' })}</SelectItem>
@@ -1194,108 +1192,24 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                             <FormItem className="flex-1">
                               <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
                               <FormControl>
-                                <div className="relative w-full">
-                                  <Input
-                                    type="text"
-                                    inputMode="decimal"
-                                    placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
-                                    onChange={e => {
-                                      const value = e.target.value
-                                      // Allow empty string
-                                      if (value === '') {
-                                        field.onChange(undefined)
-                                        handleFieldChange('data_limit', undefined)
-                                        return
-                                      }
-                                      // Allow only numbers and decimal point
-                                      if (/^\d*\.?\d*$/.test(value)) {
-                                        const numValue = parseFloat(value)
-                                        if (!isNaN(numValue)) {
-                                          field.onChange(numValue)
-                                          handleFieldChange('data_limit', numValue)
-                                        }
-                                      }
-                                    }}
-                                    onKeyDown={e => {
-                                      const currentValue = field.value === undefined ? 0 : field.value
-                                      if (e.key === 'ArrowUp') {
-                                        e.preventDefault()
-                                        const newValue = currentValue + 1
-                                        field.onChange(newValue)
-                                        handleFieldChange('data_limit', newValue)
-                                      } else if (e.key === 'ArrowDown') {
-                                        e.preventDefault()
-                                        const newValue = Math.max(0, currentValue - 1)
-                                        field.onChange(newValue)
-                                        handleFieldChange('data_limit', newValue)
-                                      }
-                                    }}
-                                    onBlur={() => {
-                                      handleFieldChange('data_limit', field.value)
-                                    }}
-                                    value={field.value === undefined ? '' : field.value}
-                                    className="pr-20"
-                                  />
-                                  <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
-                                    <div className="flex flex-col border-l border-input">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-4 w-4 rounded-none border-b border-input hover:bg-accent hover:text-accent-foreground"
-                                        onClick={() => {
-                                          const currentValue = field.value === undefined ? 0 : field.value
-                                          const newValue = currentValue + 1
-                                          field.onChange(newValue)
-                                          handleFieldChange('data_limit', newValue)
-                                        }}
-                                      >
-                                        <svg
-                                          xmlns="http://www.w3.org/2000/svg"
-                                          width="12"
-                                          height="12"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          className="h-3 w-3"
-                                        >
-                                          <path d="m5 15 7-7 7 7" />
-                                        </svg>
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-4 w-4 rounded-none hover:bg-accent hover:text-accent-foreground"
-                                        onClick={() => {
-                                          const currentValue = field.value === undefined ? 0 : field.value
-                                          const newValue = Math.max(0, currentValue - 1)
-                                          field.onChange(newValue)
-                                          handleFieldChange('data_limit', newValue)
-                                        }}
-                                      >
-                                        <svg
-                                          xmlns="http://www.w3.org/2000/svg"
-                                          width="12"
-                                          height="12"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          className="h-3 w-3"
-                                        >
-                                          <path d="m19 9-7 7-7-7" />
-                                        </svg>
-                                      </Button>
-                                    </div>
-                                    <span className="pointer-events-none ml-1 text-muted-foreground">GB</span>
-                                  </div>
-                                </div>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
+                                  {...field}
+                                  value={field.value === undefined || field.value === null ? '' : field.value}
+                                  onChange={e => {
+                                    const value = e.target.value === '' ? 0 : parseFloat(e.target.value)
+                                    if (!isNaN(value) && value >= 0) {
+                                      field.onChange(value)
+                                      handleFieldChange('data_limit', value)
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    handleFieldChange('data_limit', field.value || 0)
+                                  }}
+                                />
                               </FormControl>
                               {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
                                 <p className="mt-1 text-xs text-muted-foreground">{formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}</p>
@@ -1761,12 +1675,13 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                       <Input
                                         type="number"
                                         min="0"
+                                        step="any"
                                         {...field}
-                                        value={field.value ? Math.round(field.value / (1024 * 1024 * 1024)) : ''}
+                                        value={field.value ? dateUtils.secondsToDays(field.value) || '' : ''}
                                         onChange={e => {
-                                          const value = parseInt(e.target.value)
-                                          // Convert GB to bytes (1 GB = 1024 * 1024 * 1024 bytes)
-                                          field.onChange(value ? value * 1024 * 1024 * 1024 : 0)
+                                          const days = e.target.value ? Number(e.target.value) : 0
+                                          const seconds = dateUtils.daysToSeconds(days)
+                                          field.onChange(seconds)
                                         }}
                                       />
                                     </FormControl>
@@ -1788,10 +1703,11 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                         step="any"
                                         {...field}
                                         onChange={e => {
-                                          const value = parseInt(e.target.value)
-                                          field.onChange(value ? value * 24 * 60 * 60 : 0)
+                                          const value = e.target.value ? Number(e.target.value) : 0
+                                          // Convert GB to bytes (1 GB = 1024 * 1024 * 1024 bytes)
+                                          field.onChange(value ? value * 1024 * 1024 * 1024 : 0)
                                         }}
-                                        value={field.value ? Math.round(field.value / (24 * 60 * 60)) : ''}
+                                        value={field.value ? Math.round(field.value / (1024 * 1024 * 1024)) : ''}
                                       />
                                     </FormControl>
                                     <span className="text-xs text-muted-foreground">GB</span>
@@ -1860,7 +1776,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                             </Select>
                             {selectedTemplateId && (
                               <div className="text-sm text-muted-foreground">
-                                {t('users.selectedTemplates', {
+                                {t('userDialog.selectedTemplates', {
                                   count: 1,
                                   defaultValue: '1 template selected',
                                 })}
@@ -1963,7 +1879,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     </div>
                                     {selectedGroups.length > 0 && (
                                       <div className="text-sm text-muted-foreground">
-                                        {t('users.selectedGroups', {
+                                        {t('userDialog.selectedGroups', {
                                           count: selectedGroups.length,
                                           defaultValue: '{{count}} groups selected',
                                         })}

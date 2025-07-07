@@ -218,7 +218,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ],
     navSecondary: [
       {
-        title: 'Support Us',
+        title: t('supportUs'),
         url: DONATION_URL,
         icon: LifeBuoy,
         target: '_blank',
@@ -272,7 +272,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          {admin?.is_sudo && <NavSecondary items={data.community} label="Community" />}
+          {admin?.is_sudo && <NavSecondary items={data.community} label={t('community')} />}
           <NavSecondary items={data.navSecondary} className="mt-auto" />
           <div className="flex justify-between px-4 [&>:first-child]:[direction:ltr]">
             <GithubStar />

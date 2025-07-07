@@ -85,6 +85,8 @@
   "documentation": "Documentation",
   "discussionGroup": "Discussion Group",
   "github": "GitHub",
+  "community": "Community",
+  "supportUs": "Support Us",
   "manageHosts": "Manage and control hosts.",
   "manageSettings": "Manage and control settings.",
   "settings": {
@@ -290,9 +292,9 @@
           "title": "Usage Percentage Notifications",
           "description": "Notify when users reach specific usage percentages",
           "empty": "No triggers set"
-                  }
         }
-      },
+      }
+    },
     "cleanup": {
       "title": "Cleanup",
       "description": "Manage expired accounts and reset data usage for system maintenance",
@@ -1009,7 +1011,12 @@
     "subscriptionUpdated": "Last Updated",
     "lastClient": "Last Client",
     "subscriptionNotAccessed": "Not accessed yet",
-    "unknownClient": "Unknown client"
+    "unknownClient": "Unknown client",
+    "selectedGroups": "{{count}} groups selected",
+    "editError": "Failed to update user «{{name}}»",
+    "createError": "Failed to create user «{{name}}»",
+    "selectStatus": "Select status",
+    "selectedTemplates": "{{count}} template(s) selected"
   },
   "users": "Users",
   "usersTable.copied": "Copied",

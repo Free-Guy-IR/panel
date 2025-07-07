@@ -86,7 +86,7 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
               </div>
             </div>
             <div className="text-sm text-muted-foreground truncate">
-              {t('totalUsers')}: {group.total_users || 0}
+              {t('admins.total.users')}: {group.total_users || 0}
             </div>
           </div>
           <DropdownMenu>
