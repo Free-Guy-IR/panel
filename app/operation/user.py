@@ -93,6 +93,8 @@ class UserOperation(BaseOperation):
 
         logger.info(f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"')
 
+        asyncio.create_task(notification.create_user(user, admin))
+
         return user
 
     async def _modify_user(
