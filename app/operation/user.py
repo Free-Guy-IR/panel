@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
-from app.db.crud.bulk import reset_all_users_data_usage, update_users_datalimit, update_users_expire
+from app.db.crud.bulk import reset_all_users_data_usage, update_users_datalimit, update_users_expire, update_users_proxy_settings
 from app.db.crud.user import (
     UsersSortingOptions,
     create_user,
@@ -28,6 +28,8 @@ from app.db.models import User, UserStatus, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.stats import Period, UserUsageStatsList
 from app.models.user import (
+    BulkUser,
+    BulkUsersProxy,
     CreateUserFromTemplate,
     ModifyUserByTemplate,
     RemoveUsersResponse,
@@ -36,7 +38,6 @@ from app.models.user import (
     UserNotificationResponse,
     UserResponse,
     UsersResponse,
-    BulkUser,
 )
 from app.node import node_manager as node_manager
 from app.operation import BaseOperation
@@ -458,4 +459,11 @@ class UserOperation(BaseOperation):
 
         await asyncio.gather(*[self.update_user(user) for user in users])
 
-        return users
+        return {}
+
+    async def bulk_modify_proxy_settings(self, db: AsyncSession, bulk_model: BulkUsersProxy):
+        users = await update_users_proxy_settings(db, bulk_model)
+
+        await asyncio.gather(*[self.update_user(user) for user in users])
+
+        return {}
