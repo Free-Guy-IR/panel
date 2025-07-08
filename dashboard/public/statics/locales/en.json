@@ -572,6 +572,7 @@
   "deleteUser.prompt": "Are you sure you want to remove {{username}}?",
   "deleteUser.title": "Remove User",
   "disabled": "disabled",
+  "expire": "Expire",
   "expires": "Expires in {{time}}",
   "expired": "Expired in {{time}}",
   "header.donation": "Donation",
@@ -1032,6 +1033,8 @@
   "statistics.ramUsage": "RAM Usage",
   "statistics.cpuUsage": "CPU Usage",
   "statistics.cores": "cores",
+  "statistics.realTimeData": "Real-Time Data",
+  "statistics.realtimeDescription": "Live statistics and charts for your servers and users.",
   "enable": "Enable",
   "host": {
     "enableSuccess": "Host «{{name}}» has been enabled successfully",

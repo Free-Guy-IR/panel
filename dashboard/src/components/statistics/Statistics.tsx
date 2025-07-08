@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { CostumeBarChart } from '../charts/CostumeBarChart'
 import { EmptyState } from '../charts/EmptyState'
 import SystemStatisticsSection from './SystemStatisticsSection'
-import UserStatisticsSection from './UserStatisticsSection'
 import { AreaCostumeChart } from '../charts/AreaCostumeChart'
 
 interface StatisticsProps {
@@ -98,19 +97,6 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
           <AreaCostumeChart nodeId={selectedNodeId} currentStats={currentStats} realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} />
         </div>
       </div>
-
-      {/* Users Statistics Section - Show for all servers since user stats are not related to node data */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">{t('statistics.users')}</h2>
-            <p className="text-sm">{t('statistics.userStatisticsDescription')}</p>
-          </div>
-        </div>
-        <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '400ms', animationFillMode: 'both' }}>
-          <UserStatisticsSection data={data} />
-        </div>
-      </div>
     </div>
   )
 }
@@ -150,37 +136,6 @@ function StatisticsSkeletons({ is_sudo }: { is_sudo: boolean }) {
           <Skeleton className="h-[360px] w-full" />
         </div>
       )}
-
-      {/* Users Stats Skeleton - Show for all admins */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-6 w-[100px] mb-2" />
-            <Skeleton className="h-4 w-[150px]" />
-          </div>
-        </div>
-        <div className="rounded-lg border">
-          <div className="p-6 border-b">
-            <Skeleton className="h-6 w-[100px] mb-2" />
-            <Skeleton className="h-4 w-[150px]" />
-          </div>
-          <div className="p-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="rounded-lg border p-6">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-9 w-9 rounded-lg" />
-                    <div className="flex-1">
-                      <Skeleton className="h-4 w-[100px] mb-2" />
-                      <Skeleton className="h-8 w-[80px]" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

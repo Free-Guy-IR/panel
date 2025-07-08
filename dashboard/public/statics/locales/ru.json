@@ -12,6 +12,8 @@
   "selectAll": "Выбрать все",
   "statistics.realTimeStats": "Статистика в реальном времени",
   "statistics.serverPerformance": "Производительность сервера",
+  "statistics.realTimeData": "Данные в реальном времени",
+  "statistics.realtimeDescription": "Живая статистика и графики для ваших серверов и пользователей.",
   "hosts": "Хосты",
   "success": "Успешно",
   "error": "Ошибка",

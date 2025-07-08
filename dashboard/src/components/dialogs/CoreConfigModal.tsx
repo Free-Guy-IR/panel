@@ -446,7 +446,7 @@ export default function CoreConfigModal({
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <div className="max-h-[72dvh] overflow-y-auto pr-4 -mr-4 px-2">
+                        <div className="max-h-[69dvh] sm:max-h-[72dvh] overflow-y-auto pr-4 -mr-4 px-2">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <h3 className="text-lg font-semibold mb-4">{t('coreConfigModal.jsonConfig')}</h3>

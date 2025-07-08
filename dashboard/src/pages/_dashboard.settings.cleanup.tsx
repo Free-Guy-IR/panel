@@ -233,7 +233,7 @@ export default function CleanupSettings() {
                   {t('settings.cleanup.expiredUsers.confirmDeleteMessage')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              <AlertDialogFooter className={cn("gap-2", dir === 'rtl' ? 'flex-row-reverse' : '')}>
+              <AlertDialogFooter className="gap-2">
                 <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDeleteExpired}
@@ -284,7 +284,7 @@ export default function CleanupSettings() {
                   {t('settings.cleanup.resetUsage.confirmResetMessage')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              <AlertDialogFooter className={cn("gap-2", dir === 'rtl' ? 'flex-row-reverse' : '')}>
+              <AlertDialogFooter className="gap-2">
                 <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleResetUsage}
@@ -453,7 +453,7 @@ export default function CleanupSettings() {
                   {t('settings.cleanup.clearUsageData.confirmClearMessage', { table: selectedTable })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              <AlertDialogFooter className={cn("gap-2", dir === 'rtl' ? 'flex-row-reverse' : '')}>
+              <AlertDialogFooter className="gap-2">
                 <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleClearUsageData}

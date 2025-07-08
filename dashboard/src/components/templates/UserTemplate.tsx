@@ -125,8 +125,8 @@ const UserTemplate = ({
                 <span dir="ltr">{!template.data_limit || template.data_limit === 0 ? <Infinity className="w-4 h-4"></Infinity> : formatBytes(template.data_limit ? template.data_limit : 0)}</span>
               </p>
               <p className={'flex items-center gap-x-1'}>
-                {t('expire')}:{' '}
-                <span dir="ltr">{!template.expire_duration || template.expire_duration === 0 ? <Infinity className="w-4 h-4"></Infinity> : `${template.expire_duration / 60 / 60 / 24} Days`}</span>
+                {t('expire')}:
+                <span>{!template.expire_duration || template.expire_duration === 0 ? <Infinity className="w-4 h-4"></Infinity> : `${template.expire_duration / 60 / 60 / 24} ${t('dateInfo.day')}`}</span>
               </p>
             </div>
           </CardDescription>

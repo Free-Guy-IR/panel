@@ -13,16 +13,14 @@ import {
     Search, 
     RefreshCw, 
     Loader2, 
-    Globe, 
-    MapPin, 
     Activity,
     Eye,
-    AlertCircle
+    AlertCircle,
+    ArrowLeft
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { formatBytes } from '@/utils/formatByte'
 
 interface UserOnlineStatsDialogProps {
     isOpen: boolean
@@ -38,9 +36,8 @@ interface UserStatsCardProps {
     onViewIPs: (username: string) => void
 }
 
-const UserStatsCard = ({ username, stats, nodeId, onViewIPs }: UserStatsCardProps) => {
+const UserStatsCard = ({ username, stats, onViewIPs }: UserStatsCardProps) => {
     const { t } = useTranslation()
-    const dir = useDirDetection()
     
     const totalConnections = Object.values(stats).reduce((sum, val) => sum + val, 0)
     const activeProtocols = Object.keys(stats).filter(proto => stats[proto] > 0)
@@ -48,13 +45,13 @@ const UserStatsCard = ({ username, stats, nodeId, onViewIPs }: UserStatsCardProp
     return (
         <Card className="hover:bg-accent/50 transition-colors">
             <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
                         <Activity className="h-4 w-4 text-green-500" />
-                        {username}
+                        <span className="break-all" dir="ltr">{username}</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs">
-                        {totalConnections} {t('nodeModal.onlineStats.connections', { defaultValue: 'connections' })}
+                    <Badge variant="secondary" className="text-xs self-start sm:self-auto">
+                        <span dir="ltr">{totalConnections}</span> {t('nodeModal.onlineStats.connections', { defaultValue: 'connections' })}
                     </Badge>
                 </div>
             </CardHeader>
@@ -63,19 +60,19 @@ const UserStatsCard = ({ username, stats, nodeId, onViewIPs }: UserStatsCardProp
                     <div className="flex flex-wrap gap-1">
                         {activeProtocols.map(protocol => (
                             <Badge key={protocol} variant="outline" className="text-xs">
-                                {protocol}: {stats[protocol]}
+                                {protocol}: <span dir="ltr">{stats[protocol]}</span>
                             </Badge>
                         ))}
                     </div>
-                    <div className="flex justify-between items-center pt-2">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 pt-2">
                         <div className="text-xs text-muted-foreground">
-                            {activeProtocols.length} {t('nodeModal.onlineStats.protocols', { defaultValue: 'protocols' })}
+                            <span dir="ltr">{activeProtocols.length}</span> {t('nodeModal.onlineStats.protocols', { defaultValue: 'protocols' })}
                         </div>
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onViewIPs(username)}
-                            className="h-6 text-xs"
+                            className="h-6 text-xs self-start sm:self-auto"
                         >
                             <Eye className="h-3 w-3 mr-1" />
                             {t('nodeModal.onlineStats.viewIPs', { defaultValue: 'View IPs' })}
@@ -122,7 +119,13 @@ export default function UserOnlineStatsModal({
         { 
             query: { 
                 enabled: !!(isOpen && nodeId && specificUsername),
-                refetchInterval: isOpen ? 5000 : false // Only refresh when modal is open
+                refetchInterval: (query) => {
+                    // Stop auto-refresh if there's an error or if modal is closed
+                    if (!isOpen || query.state.error) {
+                        return false
+                    }
+                    return 5000 // Refresh every 5 seconds only if successful
+                }
             } 
         }
     )
@@ -148,7 +151,6 @@ export default function UserOnlineStatsModal({
     // Query for user IP list (when viewing IPs)
     const { 
         data: userIPs, 
-        isLoading: isLoadingIPs,
         error: userIPsError,
         refetch: refetchIPs 
     } = useUserOnlineIpList(
@@ -157,7 +159,13 @@ export default function UserOnlineStatsModal({
         { 
             query: { 
                 enabled: !!(isOpen && nodeId && viewingIPs),
-                refetchInterval: isOpen ? 5000 : false // Only refresh when modal is open
+                refetchInterval: (query) => {
+                    // Stop auto-refresh if there's an error or if modal is closed
+                    if (!isOpen || query.state.error) {
+                        return false
+                    }
+                    return 5000 // Refresh every 5 seconds only if successful
+                }
             } 
         }
     )
@@ -220,35 +228,32 @@ export default function UserOnlineStatsModal({
 
         return (
             <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <Button variant="ghost" onClick={handleBackToStats} className="text-sm">
-                        ← {t('nodeModal.onlineStats.backToStats', { defaultValue: 'Back to Stats' })}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <Button variant="ghost" onClick={handleBackToStats} className="text-sm px-0 mb-2 self-start">
+                        <ArrowLeft className={cn("h-4 w-4", dir === 'rtl' && 'rotate-180')} />
+                        <span dir={dir}>{t('nodeModal.onlineStats.backToStats', { defaultValue: 'Back to Stats' })}</span>
                     </Button>
-                    <Badge variant="secondary">
-                        {Object.keys(userIPs).length} {t('nodeModal.onlineStats.ipAddresses', { defaultValue: 'IP addresses' })}
+                    <Badge variant="secondary" className="flex items-center gap-x-1 self-start sm:self-auto">
+                        <span dir="ltr">{Object.keys(userIPs).length}</span> {t('nodeModal.onlineStats.ipAddresses', { defaultValue: 'IP addresses' })}
                     </Badge>
                 </div>
-                
-                <ScrollArea className="h-[400px]">
-                    <div className="space-y-2">
+                <ScrollArea className="h-[300px] sm:h-[400px]">
+                    <ul className="space-y-2">
                         {Object.entries(userIPs).map(([ip, protocols]) => (
-                            <Card key={ip} className="p-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Globe className="h-4 w-4 text-blue-500" />
-                                        <span className="font-mono text-sm">{ip}</span>
-                                    </div>
-                                    <div className="flex gap-1">
+                            <li key={ip} className="flex items-center bg-accent/40 rounded px-3 py-2">
+                                <div className="flex flex-col gap-1 w-full">
+                                    <span className="font-mono text-sm break-all" dir="ltr">{ip}</span>
+                                    <div className="flex flex-wrap gap-2 mt-1">
                                         {Object.entries(protocols as { [key: string]: number }).map(([protocol, count]) => (
-                                            <Badge key={protocol} variant="outline" className="text-xs">
+                                            <span key={protocol} className="text-xs bg-muted px-2 py-0.5 rounded" dir="ltr">
                                                 {protocol}: {count}
-                                            </Badge>
+                                            </span>
                                         ))}
                                     </div>
                                 </div>
-                            </Card>
+                            </li>
                         ))}
-                    </div>
+                    </ul>
                 </ScrollArea>
             </div>
         )
@@ -257,30 +262,32 @@ export default function UserOnlineStatsModal({
     const renderUserStats = () => {
         if (isLoadingUserStats) {
             return (
-                <div className="flex items-center justify-center h-32">
+                <div className="flex flex-col items-center justify-center h-32 gap-2">
                     <Loader2 className="h-6 w-6 animate-spin" />
-                    <span className="ml-2">{t('loading', { defaultValue: 'Loading...' })}</span>
+                    <span className="text-sm" dir={dir}>{t('loading', { defaultValue: 'Loading...' })}</span>
                 </div>
             )
         }
 
         if (userStatsError) {
             return (
-                <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    <AlertCircle className="h-5 w-5 mr-2" />
-                    {t('nodeModal.onlineStats.errorLoading', { defaultValue: 'Error loading user stats' })}
+                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2 text-center px-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <span className="text-sm" dir={dir}>{t('nodeModal.onlineStats.errorLoading', { defaultValue: 'Error loading user stats' })}</span>
                 </div>
             )
         }
 
         if (!filteredStats || Object.keys(filteredStats).length === 0) {
             return (
-                <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    <Users className="h-5 w-5 mr-2" />
-                    {specificUsername 
-                        ? t('nodeModal.onlineStats.userNotOnline', { defaultValue: 'User is not online' })
-                        : t('nodeModal.onlineStats.searchUser', { defaultValue: 'Search for a user to view their online stats' })
-                    }
+                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2 text-center px-4">
+                    <Users className="h-5 w-5" />
+                    <span className="text-sm" dir={dir}>
+                        {specificUsername 
+                            ? t('nodeModal.onlineStats.userNotOnline', { defaultValue: 'User is not online' })
+                            : t('nodeModal.onlineStats.searchUser', { defaultValue: 'Search for a user to view their online stats' })
+                        }
+                    </span>
                 </div>
             )
         }
@@ -299,10 +306,11 @@ export default function UserOnlineStatsModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl h-[600px] flex flex-col">
+            <DialogContent className="max-w-full sm:max-w-2xl h-[90vh] sm:h-[600px] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle className={cn('text-xl font-semibold flex items-center gap-2', dir === 'rtl' && 'sm:text-right')}>
-                        <Activity className="h-5 w-5" />
+                                    <DialogTitle className={cn('text-xl font-semibold flex items-center gap-2', dir === 'rtl' && 'sm:text-right')}>
+                    <Activity className="h-5 w-5" />
+                    <span>
                         {viewingIPs 
                             ? t('nodeModal.onlineStats.ipListTitle', { 
                                 defaultValue: 'IP Addresses for {{username}}', 
@@ -310,7 +318,8 @@ export default function UserOnlineStatsModal({
                               })
                             : t('nodeModal.onlineStats.title', { defaultValue: 'Online User Statistics' })
                         }
-                    </DialogTitle>
+                    </span>
+                </DialogTitle>
                     {nodeName && (
                         <p className={cn('text-sm text-muted-foreground', dir === 'rtl' && 'sm:text-right')}>
                             {t('nodeModal.onlineStats.nodeInfo', { 
@@ -323,7 +332,7 @@ export default function UserOnlineStatsModal({
 
                 {/* Search Bar - Only show when not viewing IPs */}
                 {!viewingIPs && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                         <div className="flex-1">
                             <Input
                                 placeholder={t('nodeModal.onlineStats.searchPlaceholder', { 
@@ -333,23 +342,26 @@ export default function UserOnlineStatsModal({
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 className="w-full"
+                                dir="ltr"
                             />
                         </div>
-                        <Button 
-                            onClick={handleSearch}
-                            disabled={!searchTerm.trim() || isLoadingUserStats}
-                            className="shrink-0"
-                        >
-                            <Search className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                            variant="outline" 
-                            onClick={handleRefresh}
-                            disabled={refreshing || (!specificUsername && !viewingIPs)}
-                            className="shrink-0"
-                        >
-                            <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button 
+                                onClick={handleSearch}
+                                disabled={!searchTerm.trim() || isLoadingUserStats}
+                                className="flex-1 sm:flex-none"
+                            >
+                                <Search className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                                variant="outline" 
+                                onClick={handleRefresh}
+                                disabled={refreshing || (!specificUsername && !viewingIPs)}
+                                className="flex-1 sm:flex-none"
+                            >
+                                <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+                            </Button>
+                        </div>
                     </div>
                 )}
 
@@ -364,7 +376,7 @@ export default function UserOnlineStatsModal({
                 {(specificUsername || viewingIPs) && (
                     <div className="text-xs text-muted-foreground text-center py-2 border-t">
                         <Activity className="h-3 w-3 inline mr-1" />
-                        {t('nodeModal.onlineStats.autoRefresh', { defaultValue: 'Auto-refreshing every 5 seconds' })}
+                        <span dir={dir}>{t('nodeModal.onlineStats.autoRefresh', { defaultValue: 'Auto-refreshing every 5 seconds' })}</span>
                     </div>
                 )}
             </DialogContent>

@@ -122,13 +122,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: '/users',
         icon: UsersIcon,
       },
-      {
-        title: 'statistics',
-        url: '/statistics',
-        icon: PieChart,
-      },
       ...(admin?.is_sudo
         ? [
+            {
+              title: 'statistics',
+              url: '/statistics',
+              icon: PieChart,
+            },
             {
               title: 'hosts',
               url: '/hosts',

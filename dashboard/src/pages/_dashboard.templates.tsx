@@ -46,7 +46,6 @@ export default function UserTemplates() {
       groups: userTemplate.group_ids || undefined,
       username_prefix: userTemplate.username_prefix || undefined,
       username_suffix: userTemplate.username_suffix || undefined,
-      resetUsages: userTemplate.reset_usages || undefined,
       on_hold_timeout: typeof userTemplate.on_hold_timeout === 'number' ? userTemplate.on_hold_timeout : undefined,
       data_limit_reset_strategy: userTemplate.data_limit_reset_strategy || undefined,
     })

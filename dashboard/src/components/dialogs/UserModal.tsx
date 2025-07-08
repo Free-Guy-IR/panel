@@ -1,7 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -11,20 +10,20 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import GroupsSelector from '@/components/common/GroupsSelector'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { cn } from '@/lib/utils'
 import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard.users'
-import { useCreateUser, useCreateUserFromTemplate, useGetAllGroups, useGetUsers, useGetUserTemplates, useModifyUser, useModifyUserWithTemplate } from '@/service/api'
+import { useCreateUser, useCreateUserFromTemplate, useGetUsers, useGetUserTemplates, useModifyUser, useModifyUserWithTemplate } from '@/service/api'
 import { useRelativeExpiryDate, dateUtils } from '@/utils/dateFormatter'
 import { SubscriptionInfo } from '@/components/SubscriptionInfo'
 import { formatBytes } from '@/utils/formatByte'
 import { useQueryClient } from '@tanstack/react-query'
-import { CalendarIcon, Layers, ListStart, Lock, RefreshCcw, Search, Users, X } from 'lucide-react'
+import { CalendarIcon, Layers, ListStart, Lock, RefreshCcw, Users, X } from 'lucide-react'
 import React, { useEffect, useState, useTransition } from 'react'
 import { UseFormReturn } from 'react-hook-form'
-import { Trans, useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { v4 as uuidv4, v5 as uuidv5, v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
@@ -370,7 +369,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   ]
   const [nextPlanEnabled, setNextPlanEnabled] = useState(!!form.watch('next_plan'))
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
-  const navigate = useNavigate()
   const [expireCalendarOpen, setExpireCalendarOpen] = useState(false)
   const [onHoldCalendarOpen, setOnHoldCalendarOpen] = useState(false)
   const { i18n } = useTranslation()
@@ -480,16 +478,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
   // Fetch data for tabs with proper caching and refetch on page view
   const { data: templatesData, isLoading: templatesLoading } = useGetUserTemplates(undefined, {
-    query: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes
-      refetchOnWindowFocus: true,
-      refetchOnMount: true,
-      refetchOnReconnect: true,
-    },
-  })
-
-  const { data: groupsData, isLoading: groupsLoading } = useGetAllGroups(undefined, {
     query: {
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes
@@ -1784,114 +1772,32 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                             )}
                           </div>
                         ))}
-                      {activeTab === 'groups' &&
-                        (groupsLoading ? (
-                          <div>{t('Loading...', { defaultValue: 'Loading...' })}</div>
-                        ) : (
-                          <FormField
-                            control={form.control}
-                            name="group_ids"
-                            render={({ field }) => {
-                              const [searchQuery, setSearchQuery] = useState('')
-                              const selectedGroups = field.value || []
-                              const filteredGroups = (groupsData?.groups || []).filter((group: any) => group.name.toLowerCase().includes(searchQuery.toLowerCase()))
-
-                              const handleSelectAll = (checked: boolean) => {
-                                const newGroups = checked ? filteredGroups.map((group: any) => group.id) : []
-
-                                field.onChange(newGroups)
-                                handleFieldChange('group_ids', newGroups)
+                      {activeTab === 'groups' && (
+                        <FormField
+                          control={form.control}
+                          name="group_ids"
+                          render={({ field }) => (
+                            <GroupsSelector
+                              control={form.control}
+                              name="group_ids"
+                              onGroupsChange={(groups) => {
+                                field.onChange(groups)
+                                handleFieldChange('group_ids', groups)
 
                                 // Clear template selection when groups are selected
-                                if (checked && selectedTemplateId) {
+                                if (groups.length > 0 && selectedTemplateId) {
                                   setSelectedTemplateId(null)
                                   clearTemplate()
                                 }
 
                                 // Trigger validation after group selection changes
-                                const isValid = validateAllFields({ ...form.getValues(), group_ids: newGroups }, touchedFields)
+                                const isValid = validateAllFields({ ...form.getValues(), group_ids: groups }, touchedFields)
                                 setIsFormValid(isValid)
-                              }
-
-                              const handleGroupChange = (checked: boolean, groupId: number) => {
-                                const newGroups = checked ? [...selectedGroups, groupId] : selectedGroups.filter(id => id !== groupId)
-
-                                field.onChange(newGroups)
-                                handleFieldChange('group_ids', newGroups)
-
-                                // Clear template selection when groups are selected
-                                if (checked && selectedTemplateId) {
-                                  setSelectedTemplateId(null)
-                                  clearTemplate()
-                                }
-
-                                // Trigger validation after group selection changes
-                                const isValid = validateAllFields({ ...form.getValues(), group_ids: newGroups }, touchedFields)
-                                setIsFormValid(isValid)
-                              }
-
-                              return (
-                                <FormItem>
-                                  <div className="space-y-4 pt-4">
-                                    <div className="relative">
-                                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                      <Input
-                                        placeholder={t('search', { defaultValue: 'Search' }) + ' ' + t('groups', { defaultValue: 'groups' })}
-                                        value={searchQuery}
-                                        onChange={e => setSearchQuery(e.target.value)}
-                                        className="pl-8"
-                                      />
-                                    </div>
-                                    <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-3 hover:bg-accent">
-                                      <Checkbox checked={filteredGroups.length > 0 && selectedGroups.length === filteredGroups.length} onCheckedChange={handleSelectAll} />
-                                      <span className="text-sm font-medium">{t('selectAll', { defaultValue: 'Select All' })}</span>
-                                    </label>
-                                    <div className="max-h-[200px] space-y-2 overflow-y-auto rounded-md border p-2">
-                                      {filteredGroups.length === 0 ? (
-                                        <div className="flex w-full flex-col gap-4 rounded-md border border-yellow-500 p-4">
-                                          <span className="text-sm font-bold text-yellow-500">{t('warning')}</span>
-                                          <span className="text-sm font-medium text-foreground">
-                                            <Trans
-                                              i18nKey={'templates.groupsExistingWarning'}
-                                              components={{
-                                                a: (
-                                                  <a
-                                                    href="/groups"
-                                                    className="font-bold text-primary hover:underline"
-                                                    onClick={e => {
-                                                      e.preventDefault()
-                                                      navigate('/groups')
-                                                    }}
-                                                  />
-                                                ),
-                                              }}
-                                            />
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        filteredGroups.map((group: any) => (
-                                          <label key={group.id} className="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-accent">
-                                            <Checkbox checked={selectedGroups.includes(group.id)} onCheckedChange={checked => handleGroupChange(!!checked, group.id)} />
-                                            <span className="text-sm">{group.name}</span>
-                                          </label>
-                                        ))
-                                      )}
-                                    </div>
-                                    {selectedGroups.length > 0 && (
-                                      <div className="text-sm text-muted-foreground">
-                                        {t('userDialog.selectedGroups', {
-                                          count: selectedGroups.length,
-                                          defaultValue: '{{count}} groups selected',
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <FormMessage />
-                                </FormItem>
-                              )
-                            }}
-                          />
-                        ))}
+                              }}
+                            />
+                          )}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1913,7 +1819,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               <LoaderButton
                 type="submit"
                 isLoading={loading}
-                disabled={(!isFormValid && !selectedTemplateId) || (!selectedTemplateId && groupsData?.groups?.length === 0)}
+                disabled={!isFormValid && !selectedTemplateId}
                 loadingText={editingUser ? t('modifying') : t('creating')}
               >
                 {editingUser ? t('modify', { defaultValue: 'Modify' }) : t('create', { defaultValue: 'Create' })}

@@ -790,7 +790,7 @@
   "statistics.viewRealtime": "查看实时",
   "statistics.historical": "历史",
   "statistics.realtime": "实时",
-  "statistics.realtimeDescription": "实时服务器性能指标，每隔几秒更新",
+  "statistics.realtimeDescription": "为您的服务器和用户提供实时统计和图表。",
   "statistics.historicalDescription": "所选时间范围内的历史服务器性能数据",
   "statistics.selectTimeRange": "选择时间范围",
   "statistics.selectTimeRangeDescription": "选择用于历史数据分析的时间段",

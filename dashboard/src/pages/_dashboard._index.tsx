@@ -181,7 +181,6 @@ const Dashboard = () => {
       method: undefined,
       flow: undefined,
       groups: [],
-      resetUsages: false,
       data_limit_reset_strategy: undefined,
     },
   })
