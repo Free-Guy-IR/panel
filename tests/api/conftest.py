@@ -84,6 +84,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch):
                 "clash_meta": True,
                 "outline": True,
             },
+            "general": {"default_flow": "", "default_method": "chacha20-ietf-poly1305"},
         },
     }
     db_settings = Settings(**settings)
