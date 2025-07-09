@@ -2,14 +2,14 @@ from app.notification.client import send_telegram_message
 from app.models.user_template import UserTemplateResponse
 from app.models.settings import NotificationSettings
 from app.settings import notification_settings
-from app.utils.helpers import escape_tg_markdown
+from app.utils.helpers import escape_tg_html
 
-from .utils import escape_md_template
+from .utils import escape_html_template
 from . import messages
 
 
 async def create_user_template(user_template: UserTemplateResponse, by: str):
-    name, prefix, suffix, by = escape_md_template(user_template, by)
+    name, prefix, suffix, by = escape_html_template(user_template, by)
     data = messages.CREATE_USER_TEMPLATE.format(
         name=name,
         data_limit=user_template.data_limit,
@@ -26,7 +26,7 @@ async def create_user_template(user_template: UserTemplateResponse, by: str):
 
 
 async def modify_user_template(user_template: UserTemplateResponse, by: str):
-    name, prefix, suffix, by = escape_md_template(user_template, by)
+    name, prefix, suffix, by = escape_html_template(user_template, by)
     data = messages.MODIFY_USER_TEMPLATE.format(
         name=name,
         data_limit=user_template.data_limit,
@@ -43,7 +43,7 @@ async def modify_user_template(user_template: UserTemplateResponse, by: str):
 
 
 async def remove_user_template(name: str, by: str):
-    name, by = escape_tg_markdown((name, by))
+    name, by = escape_tg_html((name, by))
     data = messages.REMOVE_USER_TEMPLATE.format(name=name, by=by)
     settings: NotificationSettings = await notification_settings()
     if settings.notify_telegram:

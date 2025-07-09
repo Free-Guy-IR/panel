@@ -11,11 +11,10 @@ from . import colors, messages
 
 async def create_group(group: GroupResponse, by: str):
     name, by = escape_ds_markdown((group.name, by))
-    inbound_tags = escape_ds_markdown(", ".join(group.inbound_tags))
     message = copy.deepcopy(messages.CREATE_GROUP)
     message["description"] = message["description"].format(
         name=name,
-        inbound_tags=inbound_tags,
+        inbound_tags=group.inbound_tags,
         is_disabled=group.is_disabled,
     )
     message["footer"]["text"] = message["footer"]["text"].format(id=group.id, by=by)
@@ -31,11 +30,10 @@ async def create_group(group: GroupResponse, by: str):
 
 async def modify_group(group: GroupResponse, by: str):
     name, by = escape_ds_markdown((group.name, by))
-    inbound_tags = escape_ds_markdown(", ".join(group.inbound_tags))
     message = copy.deepcopy(messages.MODIFY_GROUP)
     message["description"] = message["description"].format(
         name=name,
-        inbound_tags=inbound_tags,
+        inbound_tags=group.inbound_tags,
         is_disabled=group.is_disabled,
     )
     message["footer"]["text"] = message["footer"]["text"].format(id=group.id, by=by)
@@ -52,7 +50,7 @@ async def modify_group(group: GroupResponse, by: str):
 async def remove_group(group_id: int, by: str):
     message = copy.deepcopy(messages.REMOVE_GROUP)
     message["description"] = message["description"].format(id=group_id)
-    message["footer"]["text"] = message["footer"]["text"].format(by=escape_ds_markdown(by))
+    message["footer"]["text"] = message["footer"]["text"].format(by=escape_ds_markdown((by,)))
     data = {
         "content": "",
         "embeds": [message],

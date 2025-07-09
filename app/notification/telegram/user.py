@@ -4,20 +4,20 @@ from app.utils.system import readable_size
 from app.models.settings import NotificationSettings
 from app.settings import notification_settings
 
-from .utils import escape_md_user
+from .utils import escape_html_user
 from . import messages
 
 _status = {
-    "active": "**✅ #Activated**",
-    "on_hold": "**🕔 #On_Hold**",
-    "disabled": "**❌ #Disabled**",
-    "limited": "**🪫 #Limited**",
-    "expired": "**📅 #Expired**",
+    "active": "<b>✅ #Activated</b>",
+    "on_hold": "<b>🕔 #On_Hold</b>",
+    "disabled": "<b>❌ #Disabled</b>",
+    "limited": "<b>🪫 #Limited</b>",
+    "expired": "<b>📅 #Expired</b>",
 }
 
 
 async def user_status_change(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.USER_STATUS_CHANGE.format(
         status=_status[user.status.value],
         username=username,
@@ -34,7 +34,7 @@ async def user_status_change(user: UserNotificationResponse, by: str):
 
 
 async def create_user(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.CREATE_USER.format(
         username=username,
         data_limit=readable_size(user.data_limit) if user.data_limit else "Unlimited",
@@ -54,7 +54,7 @@ async def create_user(user: UserNotificationResponse, by: str):
 
 
 async def modify_user(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.MODIFY_USER.format(
         username=username,
         data_limit=readable_size(user.data_limit) if user.data_limit else "Unlimited",
@@ -74,7 +74,7 @@ async def modify_user(user: UserNotificationResponse, by: str):
 
 
 async def remove_user(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.REMOVE_USER.format(
         username=username,
         admin_username=admin_username,
@@ -90,7 +90,7 @@ async def remove_user(user: UserNotificationResponse, by: str):
 
 
 async def reset_user_data_usage(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.RESET_USER_DATA_USAGE.format(
         username=username,
         data_limit=readable_size(user.data_limit) if user.data_limit else "Unlimited",
@@ -107,7 +107,7 @@ async def reset_user_data_usage(user: UserNotificationResponse, by: str):
 
 
 async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.USER_DATA_RESET_BY_NEXT.format(
         username=username,
         data_limit=readable_size(user.data_limit) if user.data_limit else "Unlimited",
@@ -125,7 +125,7 @@ async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
 
 
 async def user_subscription_revoked(user: UserNotificationResponse, by: str):
-    username, admin_username, by = escape_md_user(user, by)
+    username, admin_username, by = escape_html_user(user, by)
     data = messages.USER_SUBSCRIPTION_REVOKED.format(
         username=username,
         admin_username=admin_username,

@@ -30,9 +30,7 @@ async def user_status_change(user: UserNotificationResponse, by: str):
     message = copy.deepcopy(messages.USER_STATUS_CHANGE)
     message["title"] = message["title"].format(status=_status[user.status.value])
     message["description"] = message["description"].format(username=username)
-    message["footer"]["text"] = message["footer"]["text"].format(
-        admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],
@@ -55,9 +53,7 @@ async def create_user(user: UserNotificationResponse, by: str):
         data_limit_reset_strategy=user.data_limit_reset_strategy.value,
         has_next_plan=bool(user.next_plan),
     )
-    message["footer"]["text"] = message["footer"]["text"].format(
-        admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],
@@ -80,9 +76,7 @@ async def modify_user(user: UserNotificationResponse, by: str):
         data_limit_reset_strategy=user.data_limit_reset_strategy.value,
         has_next_plan=bool(user.next_plan),
     )
-    message["footer"]["text"] = message["footer"]["text"].format(
-        admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],
@@ -99,9 +93,7 @@ async def remove_user(user: UserNotificationResponse, by: str):
     username, admin_username, by = escape_md_user(user, by)
     message = copy.deepcopy(messages.REMOVE_USER)
     message["description"] = message["description"].format(username=username)
-    message["footer"]["text"] = message["footer"]["text"].format(
-        id=user.id, admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(id=user.id, admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],
@@ -121,9 +113,7 @@ async def reset_user_data_usage(user: UserNotificationResponse, by: str):
         username=username,
         data_limit=readable_size(user.data_limit) if user.data_limit else "Unlimited",
     )
-    message["footer"]["text"] = message["footer"]["text"].format(
-        id=user.id, admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(id=user.id, admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],
@@ -144,9 +134,7 @@ async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
         data_limit=readable_size(user.data_limit) if user.data_limit else "Unlimited",
         expire_date=user.expire if user.expire else "Never",
     )
-    message["footer"]["text"] = message["footer"]["text"].format(
-        id=user.id, admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(id=user.id, admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],
@@ -163,9 +151,7 @@ async def user_subscription_revoked(user: UserNotificationResponse, by: str):
     username, admin_username, by = escape_md_user(user, by)
     message = copy.deepcopy(messages.USER_SUBSCRIPTION_REVOKED)
     message["description"] = message["description"].format(username=username)
-    message["footer"]["text"] = message["footer"]["text"].format(
-        id=user.id, admin_username=admin_username, by=by
-    )
+    message["footer"]["text"] = message["footer"]["text"].format(id=user.id, admin_username=admin_username, by=by)
     data = {
         "content": "",
         "embeds": [message],

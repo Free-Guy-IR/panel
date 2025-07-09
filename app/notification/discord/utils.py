@@ -1,7 +1,6 @@
 from app.utils.helpers import escape_ds_markdown
 from app.models.user import UserNotificationResponse
 from app.models.host import BaseHost
-from app.models.node import NodeResponse
 from app.models.user_template import UserTemplateResponse
 from app.models.core import CoreResponse
 
@@ -18,7 +17,14 @@ def escape_md_host(host: BaseHost, by: str) -> tuple[str, str, str, str]:
 
 def escape_md_template(template: UserTemplateResponse, by: str) -> tuple[str, str, str, str]:
     """Escapes markdown special characters in template and by strings for Discord."""
-    return escape_ds_markdown((template.name, template.username_prefix, template.username_suffix, by))
+    return escape_ds_markdown(
+        (
+            template.name,
+            template.username_prefix if template.username_prefix else "",
+            template.username_suffix if template.username_suffix else "",
+            by,
+        )
+    )
 
 
 def escape_md_core(core: CoreResponse, by: str) -> tuple[str, str, str, str]:

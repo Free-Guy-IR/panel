@@ -1,5 +1,6 @@
 import re
 import json
+import html
 from datetime import datetime as dt, timezone as tz
 from typing import Union
 from uuid import UUID
@@ -66,10 +67,9 @@ def format_cli_validation_error(errors: ValidationError, notify: callable):
             )
 
 
-def escape_tg_markdown(list: tuple[str]) -> tuple[str]:
-    """Escapes markdown special characters for the telegram legacy parser."""
-    escape_chars = r"[_*`\[]"
-    return tuple(re.sub(escape_chars, r"\\\g<0>", text) for text in list)
+def escape_tg_html(list: tuple[str]) -> tuple[str]:
+    """Escapes HTML special characters for the telegram HTML parser."""
+    return tuple(html.escape(text) for text in list)
 
 
 def escape_ds_markdown(list: tuple[str]) -> tuple[str]:

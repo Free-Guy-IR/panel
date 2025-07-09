@@ -60,7 +60,7 @@ async def remove_host(host: BaseHost, by: str):
 
 
 async def modify_hosts(by: str):
-    by = escape_ds_markdown(by)
+    by = escape_ds_markdown((by,))
     message = copy.deepcopy(messages.MODIFY_HOSTS)
     message["description"] = message["description"].format(by=by)
     data = {
