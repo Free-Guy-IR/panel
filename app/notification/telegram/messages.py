@@ -91,8 +91,8 @@ MODIFY_ADMIN = """
 ➖➖➖➖➖➖➖➖➖
 <b>Username:</b> <code>{username}</code>
 <b>Is Sudo:</b> <code>{is_sudo}</code>
-<b>Is Disabled:</b> {is_disabled}
-<b>Used Traffic:</b> {used_traffic}
+<b>Is Disabled:</b> <code>{is_disabled}</code>
+<b>Used Traffic:</b> <code>{used_traffic}</code>
 ➖➖➖➖➖➖➖➖➖
 <i>By: #{by}</i>
 """
@@ -116,7 +116,7 @@ ADMIN_LOGIN = """
 <i>Status</i>: {status}
 ➖➖➖➖➖➖➖➖➖
 <b>Username:</b> <code>{username}</code>
-<b>Password:</b> {password}
+<b>Password:</b> <code>{password}</code>
 <b>IP:</b> <code>{client_ip}</code>
 """
 
@@ -194,8 +194,8 @@ CONNECT_NODE = """
 #Connect_Node
 ➖➖➖➖➖➖➖➖➖
 <b>Name:</b> <code>{name}</code>
-<b>Node Version:</b> {node_version}
-<b>Core Version:</b> {core_version}
+<b>Node Version:</b> <code>{node_version}</code>
+<b>Core Version:</b> <code>{core_version}</code>
 ➖➖➖➖➖➖➖➖➖
 <i>ID</i>: <code>{id}</code>
 """

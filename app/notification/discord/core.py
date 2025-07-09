@@ -49,9 +49,10 @@ async def modify_core(core: CoreResponse, by: str):
 
 
 async def remove_core(core_id: int, by: str):
+    by, _ = escape_ds_markdown((by,))
     message = copy.deepcopy(messages.REMOVE_CORE)
     message["description"] = message["description"].format(id=core_id)
-    message["footer"]["text"] = message["footer"]["text"].format(by=escape_ds_markdown((by,)))
+    message["footer"]["text"] = message["footer"]["text"].format(by=by)
     data = {
         "content": "",
         "embeds": [message],

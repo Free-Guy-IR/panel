@@ -55,9 +55,10 @@ async def remove_node(node: NodeResponse, by: str):
 
 
 async def connect_node(node: NodeResponse):
+    name, _ = escape_ds_markdown((node.name,))
     message = copy.deepcopy(messages.CONNECT_NODE)
     message["description"] = message["description"].format(
-        name=escape_ds_markdown((node.name,)), node_version=node.node_version, core_version=node.xray_version
+        name=name, node_version=node.node_version, core_version=node.xray_version
     )
     message["footer"]["text"] = message["footer"]["text"].format(id=node.id)
     data = {

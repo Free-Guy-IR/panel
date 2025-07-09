@@ -48,9 +48,10 @@ async def modify_group(group: GroupResponse, by: str):
 
 
 async def remove_group(group_id: int, by: str):
+    by, _ = escape_ds_markdown((by,))
     message = copy.deepcopy(messages.REMOVE_GROUP)
     message["description"] = message["description"].format(id=group_id)
-    message["footer"]["text"] = message["footer"]["text"].format(by=escape_ds_markdown((by,)))
+    message["footer"]["text"] = message["footer"]["text"].format(by=by)
     data = {
         "content": "",
         "embeds": [message],
