@@ -66,7 +66,18 @@ def format_cli_validation_error(errors: ValidationError, notify: callable):
             )
 
 
-def escape_markdown(text: str) -> str:
-    """Escapes markdown special characters for the legacy parser."""
+def escape_tg_markdown(list: tuple[str]) -> tuple[str]:
+    """Escapes markdown special characters for the telegram legacy parser."""
     escape_chars = r"[_*`\[]"
-    return re.sub(escape_chars, r"\\\g<0>", text)
+    return tuple(re.sub(escape_chars, r"\\\g<0>", text) for text in list)
+
+
+def escape_ds_markdown(list: tuple[str]) -> tuple[str]:
+    """Escapes markdown special characters for Discord."""
+    # Discord markdown characters to escape: *, _, `, ~, >, |, [, ], (, )
+    # For general text, escaping *, _, `, ~ is usually sufficient to prevent unintended formatting.
+    # Other characters like >, |, [, ], (, ) are often handled by Discord's parser
+    # or are part of specific markdown constructs (e.g., links, blockquotes)
+    # that might not need general escaping.
+    escape_chars = r"[*_`~]"
+    return tuple(re.sub(escape_chars, r"\\\g<0>", text) for text in list)

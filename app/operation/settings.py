@@ -39,6 +39,6 @@ class SettingsOperation(BaseOperation):
 
         return new_settings
 
-    async def get_general_settings(self,db: AsyncSession):
+    async def get_general_settings(self, db: AsyncSession):
         settings = await self.get_settings(db)
         return settings.general

@@ -2,7 +2,6 @@ import httpx
 import asyncio
 
 from app.models.settings import NotificationSettings
-from app.utils.helpers import escape_markdown
 from app.settings import notification_settings
 from app.utils.logger import get_logger
 from app import on_startup
@@ -32,9 +31,6 @@ logger = get_logger("Notification")
 
 
 async def send_discord_webhook(json_data, webhook):
-    if "content" in json_data:
-        json_data["content"] = escape_markdown(json_data["content"])
-
     max_retries = (await notification_settings()).max_retries
     retries = 0
     while retries < max_retries:
@@ -79,7 +75,7 @@ async def send_telegram_message(
         return
 
     base_url = f"https://api.telegram.org/bot{settings.telegram_api_token}/sendMessage"
-    payload = {"parse_mode": "Markdown", "text": escape_markdown(message)}
+    payload = {"parse_mode": "Markdown", "text": message}
 
     # Determine the target chat/channel/topic
     if topic_id and channel_id:

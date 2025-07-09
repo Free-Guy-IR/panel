@@ -8,7 +8,12 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
-from app.db.crud.bulk import reset_all_users_data_usage, update_users_datalimit, update_users_expire, update_users_proxy_settings
+from app.db.crud.bulk import (
+    reset_all_users_data_usage,
+    update_users_datalimit,
+    update_users_expire,
+    update_users_proxy_settings,
+)
 from app.db.crud.user import (
     UsersSortingOptions,
     create_user,
