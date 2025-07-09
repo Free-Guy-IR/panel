@@ -1,3 +1,4 @@
+import re
 import json
 from datetime import datetime as dt, timezone as tz
 from typing import Union
@@ -63,3 +64,9 @@ def format_cli_validation_error(errors: ValidationError, notify: callable):
                 message=err.strip(),
                 severity="error",
             )
+
+
+def escape_markdown(text: str) -> str:
+    """Escapes markdown special characters for the legacy parser."""
+    escape_chars = r"[_*`\[]"
+    return re.sub(escape_chars, r"\\\g<0>", text)
