@@ -391,6 +391,8 @@ ProxyHostFingerprint = Enum(
         "qq": "qq",
         "random": "random",
         "randomized": "randomized",
+        "randomizednoalpn": "randomizednoalpn",
+        "unsafe": "unsafe",
     },
 )
 
