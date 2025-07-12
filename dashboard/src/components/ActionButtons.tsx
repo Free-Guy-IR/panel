@@ -401,11 +401,11 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
                 <AlertDialogContent dir={dir}>
                     <AlertDialogHeader>
                         <AlertDialogTitle
-                            className={cn(dir === 'rtl' && 'text-right')}>{t('usersTable.deleteUserTitle')}</AlertDialogTitle>
+                            className={cn(dir === 'rtl' && 'sm:text-right')}>{t('usersTable.deleteUserTitle')}</AlertDialogTitle>
                         <AlertDialogDescription
-                            className={cn(dir === 'rtl' && 'text-right')}>{t('usersTable.deleteUserPrompt', { name: user.username })}</AlertDialogDescription>
+                            className={cn(dir === 'rtl' && 'sm:text-right')}>{t('usersTable.deleteUserPrompt', { name: user.username })}</AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="flex items-center gap-2">
+                    <AlertDialogFooter className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 sm:gap-0', dir === 'rtl' && 'sm:flex-row-reverse sm:space-x-reverse')}>
                         <AlertDialogCancel
                             onClick={() => setDeleteDialogOpen(false)}>{t('usersTable.cancel')}</AlertDialogCancel>
                         <AlertDialogAction variant="destructive" onClick={confirmDelete}
@@ -421,11 +421,11 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
                 <AlertDialogContent dir={dir}>
                     <AlertDialogHeader>
                         <AlertDialogTitle
-                            className={cn(dir === 'rtl' && 'text-right')}>{t('usersTable.resetUsageTitle')}</AlertDialogTitle>
+                            className={cn(dir === 'rtl' && 'sm:text-right')}>{t('usersTable.resetUsageTitle')}</AlertDialogTitle>
                         <AlertDialogDescription
-                            className={cn(dir === 'rtl' && 'text-right')}>{t('usersTable.resetUsagePrompt', { name: user.username })}</AlertDialogDescription>
+                            className={cn(dir === 'rtl' && 'sm:text-right')}>{t('usersTable.resetUsagePrompt', { name: user.username })}</AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="flex items-center gap-2">
+                    <AlertDialogFooter className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 sm:gap-0', dir === 'rtl' && 'sm:flex-row-reverse sm:space-x-reverse')}>
                         <AlertDialogCancel
                             onClick={() => setResetUsageDialogOpen(false)}>{t('usersTable.cancel')}</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmResetUsage} disabled={resetUserDataUsageMutation.isPending}>
@@ -440,11 +440,11 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
                 <AlertDialogContent dir={dir}>
                     <AlertDialogHeader>
                         <AlertDialogTitle
-                            className={cn(dir === 'rtl' && 'text-right')}>{t('revokeUserSub.title')}</AlertDialogTitle>
+                            className={cn(dir === 'rtl' && 'sm:text-right')}>{t('revokeUserSub.title')}</AlertDialogTitle>
                         <AlertDialogDescription
-                            className={cn(dir === 'rtl' && 'text-right')}>{t('revokeUserSub.prompt', { username: user.username })}</AlertDialogDescription>
+                            className={cn(dir === 'rtl' && 'sm:text-right')}>{t('revokeUserSub.prompt', { username: user.username })}</AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="flex items-center gap-2">
+                    <AlertDialogFooter className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 sm:gap-0', dir === 'rtl' && 'sm:flex-row-reverse sm:space-x-reverse')}>
                         <AlertDialogCancel
                             onClick={() => setRevokeSubDialogOpen(false)}>{t('usersTable.cancel')}</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmRevokeSubscription}

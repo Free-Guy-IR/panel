@@ -1312,6 +1312,8 @@
     "hours": "小时",
     "min": "分钟",
     "mins": "分钟",
+    "second": "秒",
+    "seconds": "秒",
     "ago": "前",
     "notConnectedYet": "尚未连接"
   },
