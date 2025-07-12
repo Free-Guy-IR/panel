@@ -102,6 +102,7 @@
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.19.1",
     "vite": "^6.2.4",
+    "vite-plugin-pwa": "^1.0.1",
     "vite-plugin-svgr": "^4.3.0",
     "wait-port": "^1.1.0"
   },
