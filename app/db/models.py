@@ -456,14 +456,6 @@ class JWT(Base):
     secret_key: Mapped[str] = mapped_column(String(64), default=lambda: os.urandom(32).hex())
 
 
-class TLS(Base):
-    __tablename__ = "tls"
-
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    key: Mapped[str] = mapped_column(String(4096), nullable=False)
-    certificate: Mapped[str] = mapped_column(String(2048), nullable=False)
-
-
 class NodeConnectionType(str, Enum):
     grpc = "grpc"
     rest = "rest"
