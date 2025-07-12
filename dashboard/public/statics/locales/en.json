@@ -775,7 +775,8 @@
       "status_text": "User status",
       "status_emoji": "User status as an emoji (✅,⌛️,🪫,❌,🔌)",
       "protocol": "Proxy protocol (e.g. VMess)",
-      "transport": "Proxy transport method (e.g. ws)"
+      "transport": "Proxy transport method (e.g. ws)",
+      "admin_username": "Admin username"
     },
     "advancedOptions": "Advanced Options",
     "hos.info": "By default, if a request host is set in the XRAY configuration, it will be used. However, if needed, you can set a custom request host here.",
@@ -1034,7 +1035,13 @@
   "statistics.cpuUsage": "CPU Usage",
   "statistics.cores": "cores",
   "statistics.realTimeData": "Real-Time Data",
+  "statistics.historicalData": "Historical Data",
+  "statistics.viewHistorical": "View Historical",
+  "statistics.viewRealtime": "View Realtime",
+  "statistics.historical": "Historical",
+  "statistics.realtime": "Realtime",
   "statistics.realtimeDescription": "Live statistics and charts for your servers and users.",
+  "statistics.historicalDescription": "Historical server performance data for the selected time range",
   "enable": "Enable",
   "host": {
     "enableSuccess": "Host «{{name}}» has been enabled successfully",
