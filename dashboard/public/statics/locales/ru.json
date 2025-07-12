@@ -96,8 +96,8 @@
   "github": "GitHub",
   "community": "Сообщество",
   "supportUs": "Поддержать нас",
-  "manageHosts": "Управление и контроль хостов.",
-  "manageSettings": "Управление и контроль настроек.",
+  "manageHosts": "Управление и контроль хостов",
+  "manageSettings": "Управление и контроль настроек",
   "settings": {
     "title": "Настройки",
     "notifications": {
@@ -471,7 +471,7 @@
   "userTemplateModal.title": "Создать шаблон пользователя",
   "templates": {
     "title": "Шаблоны",
-    "description": "Управление шаблонами.",
+    "description": "Управление шаблонами",
     "addTemplate": "Создать шаблон",
     "editSuccess": "Шаблон пользователя «{{name}}» успешно обновлен",
     "createSuccess": "Шаблон пользователя «{{name}}» успешно создан",

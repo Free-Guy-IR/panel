@@ -20,8 +20,8 @@
   "github": "گیت‌هاب",
   "community": "جامعه",
   "supportUs": "پشتیبانی از ما",
-  "manageHosts": "مدیریت و کنترل هاست‌ها.",
-  "manageSettings": "مدیریت و کنترل تنظیمات.",
+  "manageHosts": "مدیریت و کنترل هاست‌ها",
+  "manageSettings": "مدیریت و کنترل تنظیمات",
   "monitorUsers": "مدیریت کاربران",
   "alltime": "همه زمان",
   "settings": {
@@ -406,7 +406,7 @@
   "userTemplateModal.title": "ایجاد قالب کاربر",
   "templates": {
     "title": "قالب‌ها",
-    "description": "مدیریت قالب‌های شما.",
+    "description": "مدیریت قالب‌های شما",
     "addTemplate": "ایجاد قالب",
     "editSuccess": "قالب کاربر «{{name}}» با موفقیت به‌روزرسانی شد",
     "createSuccess": "قالب کاربر «{{name}}» با موفقیت ایجاد شد",

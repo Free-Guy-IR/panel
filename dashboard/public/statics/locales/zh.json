@@ -82,8 +82,8 @@
   "github": "GitHub",
   "community": "社区",
   "supportUs": "支持我们",
-  "manageHosts": "管理和控制主机。",
-  "manageSettings": "管理和控制设置。",
+  "manageHosts": "管理和控制主机",
+  "manageSettings": "管理和控制设置",
   "settings": {
     "title": "设置",
     "notifications": {
@@ -500,7 +500,7 @@
   "userTemplateModal.title": "创建用户模板",
   "templates": {
     "title": "模板",
-    "description": "管理您的模板。",
+    "description": "管理您的模板",
     "addTemplate": "创建模板",
     "editSuccess": "用户模板「{{name}}」已成功更新",
     "createSuccess": "用户模板「{{name}}」已成功创建",
