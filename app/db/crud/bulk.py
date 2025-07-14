@@ -1,5 +1,6 @@
 from datetime import datetime as dt, timezone as tz
 from typing import List, Optional
+from unittest import result
 
 from sqlalchemy import and_, case, cast, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -392,6 +393,8 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
     stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
 
     result = await db.execute(stmt)
-    await db.commit()
     updated_users = result.scalars().all()
+    await db.commit()
+    for user in updated_users:
+        await load_user_attrs(user)
     return updated_users
