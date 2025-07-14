@@ -20,7 +20,7 @@ from app.db.models import (
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUsersProxy
 
-from .general import get_datetime_add_expression, json_extract
+from .general import get_datetime_add_expression
 from .user import load_user_attrs
 
 
@@ -341,20 +341,18 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
     """
     conditions = create_conditions(bulk_model)
 
-    # Apply user-level filters
     if bulk_model.users:
         conditions.append(User.id.in_(bulk_model.users))
 
-    # Filter out users who already have the target values (optional optimization)
-    if bulk_model.flow is not None:
-        conditions.append(json_extract(User.proxy_settings, "$.vless.flow") != str(bulk_model.flow.value))
-
-    if bulk_model.method is not None:
-        conditions.append(json_extract(User.proxy_settings, "$.shadowsocks.method") != str(bulk_model.method.value))
-
-    stmt = select(User).where(*conditions)
-
     if DATABASE_DIALECT == "postgresql":
+        if bulk_model.flow is not None:
+            conditions.append(
+                User.proxy_settings.cast(JSONB)["vless"]["flow"].astext != str(bulk_model.flow.value)
+            )
+        if bulk_model.method is not None:
+            conditions.append(
+                User.proxy_settings.cast(JSONB)["shadowsocks"]["method"].astext != str(bulk_model.method.value)
+            )
         proxy_settings_expr = cast(User.proxy_settings, JSONB)
 
         if bulk_model.flow is not None:
@@ -371,10 +369,16 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
                 cast(f"{bulk_model.method.value}", JSONB),
                 True,
             )
-
-        stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
-
     else:
+        if bulk_model.flow is not None:
+            conditions.append(
+                func.json_extract(User.proxy_settings, "$.vless.flow") != str(bulk_model.flow.value)
+            )
+        if bulk_model.method is not None:
+            conditions.append(
+                func.json_extract(User.proxy_settings, "$.shadowsocks.method") != str(bulk_model.method.value)
+            )
+
         proxy_settings_expr = User.proxy_settings
 
         if bulk_model.flow is not None:
@@ -385,7 +389,7 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
                 proxy_settings_expr, "$.shadowsocks.method", f"{bulk_model.method.value}"
             )
 
-        stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
+    stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
 
     result = await db.execute(stmt)
     await db.commit()

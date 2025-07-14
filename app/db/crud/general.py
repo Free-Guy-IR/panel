@@ -1,8 +1,9 @@
-from sqlalchemy import func, String, or_, select, text
+from sqlalchemy import String, func, or_, select, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import DATABASE_DIALECT
-from app.db.models import System, JWT
+from app.db.models import JWT, System
 from app.models.stats import Period
 
 MYSQL_FORMATS = {
@@ -53,7 +54,7 @@ def json_extract(column, path: str):
     """
     match DATABASE_DIALECT:
         case "postgresql":
-            return func.jsonb_path_query(column, path).cast(String)
+            return func.jsonb_path_query(column.cast(JSONB), path).cast(String)
         case "mysql":
             return func.json_unquote(func.json_extract(column, path)).cast(String)
         case "sqlite":
