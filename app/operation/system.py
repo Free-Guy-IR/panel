@@ -25,14 +25,14 @@ class SystemOperation(BaseOperation):
 
         system = await get_system_usage(db)
 
-        admin = None
+        admin_param = None
         admin_id = None
         if admin.is_sudo and admin_username:
-            admin = await get_admin(db, admin_username)
+            admin_param = await get_admin(db, admin_username)
         elif not admin.is_sudo:
-            admin = await get_admin(db, admin.username)
-        if admin:
-            admin_id = admin.id
+            admin_param = await get_admin(db, admin.username)
+        if admin_param:
+            admin_id = admin_param.id
 
         # Gather remaining async CRUD operations together
         (
