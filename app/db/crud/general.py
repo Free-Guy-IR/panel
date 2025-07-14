@@ -54,7 +54,11 @@ def json_extract(column, path: str):
     """
     match DATABASE_DIALECT:
         case "postgresql":
-            return func.jsonb_path_query(column.cast(JSONB), path).cast(String)
+            keys = path.replace('$.', '').split('.')
+            expr = column
+            for key in keys:
+                expr = expr.op('->>')(key) if key == keys[-1] else expr.op('->')(key)
+            return expr.cast(String)
         case "mysql":
             return func.json_unquote(func.json_extract(column, path)).cast(String)
         case "sqlite":
