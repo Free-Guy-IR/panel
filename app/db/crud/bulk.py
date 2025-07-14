@@ -145,24 +145,17 @@ async def add_groups_to_users(db: AsyncSession, bulk_model: BulkGroup) -> List[U
     """
     Bulk add groups to users and return list of affected User objects.
     """
-    conditions = [users_groups_association.c.groups_id.in_(bulk_model.group_ids)]
-
+    
     user_ids = await _resolve_target_user_ids(db, bulk_model)
 
-    if bulk_model.users or bulk_model.admins:
-        conditions.append(users_groups_association.c.user_id.in_(user_ids))
+    stmt = select(users_groups_association)
+    if bulk_model.users or bulk_model.admins or bulk_model.has_group_ids:
+        stmt = stmt.where(users_groups_association.c.user_id.in_(user_ids))
 
     # Fetch existing associations
-    existing = await db.execute(
-        select(users_groups_association).where(
-            and_(*conditions),
-        )
-    )
+    existing = await db.execute(stmt)
 
     existing_pairs = {(r.user_id, r.groups_id) for r in existing.all()}
-
-    if not existing_pairs:
-        return []
 
     # Prepare new associations
     new_rows = [
