@@ -189,11 +189,13 @@ async def remove_groups_from_users(db: AsyncSession, bulk_model: BulkGroup) -> L
         conditions.append(users_groups_association.c.user_id.in_(user_ids))
 
     # Identify affected users
-    result = await db.execute(
-        select(User)
-        .distinct()
-        .join(users_groups_association, User.id == users_groups_association.c.user_id)
+    subquery = (
+        select(users_groups_association.c.user_id)
         .where(and_(*conditions))
+        .distinct()
+    )
+    result = await db.execute(
+        select(User).where(User.id.in_(subquery))
     )
     users = result.scalars().all()
 
