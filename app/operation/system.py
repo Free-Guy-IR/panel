@@ -44,7 +44,7 @@ class SystemOperation(BaseOperation):
             limited_users,
             online_users,
         ) = await asyncio.gather(
-            get_users_count(db, admin=admin_id),
+            get_users_count(db, None, admin_id),
             get_users_count(db, UserStatus.active, admin_id),
             get_users_count(db, UserStatus.disabled, admin_id),
             get_users_count(db, UserStatus.on_hold, admin_id),
