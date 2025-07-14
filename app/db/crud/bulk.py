@@ -328,34 +328,24 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> List
 
 async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersProxy):
     """
-    Bulk update the `proxy_settings` JSON field for users across PostgreSQL, MySQL, or SQLite.
-
-    Uses `json_extract` for filtering users who don't already have the target `flow` or `method`.
-
-    Args:
-        db (AsyncSession): SQLAlchemy async session.
-        bulk_model (BulkUsersProxy): Contains target flow/method and filters.
-
-    Raises:
-        NotImplementedError: If DB dialect is not supported.
-        SQLAlchemyError: If DB operation fails.
+    Bulk update the `proxy_settings` JSON field for users and return updated rows.
     """
     conditions = create_conditions(bulk_model)
 
     if bulk_model.users:
         conditions.append(User.id.in_(bulk_model.users))
 
-    if DATABASE_DIALECT == "postgresql":
-        if bulk_model.flow is not None:
-            conditions.append(
-                User.proxy_settings.cast(JSONB)["vless"]["flow"].astext != str(bulk_model.flow.value)
-            )
-        if bulk_model.method is not None:
-            conditions.append(
-                User.proxy_settings.cast(JSONB)["shadowsocks"]["method"].astext != str(bulk_model.method.value)
-            )
-        proxy_settings_expr = cast(User.proxy_settings, JSONB)
+    # First select the users that will be updated
+    select_stmt = select(User).where(*conditions)
+    result = await db.execute(select_stmt)
+    users_to_update = result.scalars().all()
 
+    if not users_to_update:
+        return []
+
+    # Prepare the update statement
+    if DATABASE_DIALECT == "postgresql":
+        proxy_settings_expr = cast(User.proxy_settings, JSONB)
         if bulk_model.flow is not None:
             proxy_settings_expr = func.jsonb_set(
                 proxy_settings_expr,
@@ -371,30 +361,26 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
                 True,
             )
     else:
-        if bulk_model.flow is not None:
-            conditions.append(
-                func.json_extract(User.proxy_settings, "$.vless.flow") != str(bulk_model.flow.value)
-            )
-        if bulk_model.method is not None:
-            conditions.append(
-                func.json_extract(User.proxy_settings, "$.shadowsocks.method") != str(bulk_model.method.value)
-            )
-
         proxy_settings_expr = User.proxy_settings
-
         if bulk_model.flow is not None:
             proxy_settings_expr = func.json_set(proxy_settings_expr, "$.vless.flow", f"{bulk_model.flow.value}")
-
         if bulk_model.method is not None:
             proxy_settings_expr = func.json_set(
                 proxy_settings_expr, "$.shadowsocks.method", f"{bulk_model.method.value}"
             )
 
-    stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
-
-    result = await db.execute(stmt)
-    updated_users = result.scalars().all()
+    # Perform the update
+    update_stmt = (
+        update(User)
+        .where(*conditions)
+        .values(proxy_settings=proxy_settings_expr)
+    )
+    await db.execute(update_stmt)
     await db.commit()
-    for user in updated_users:
+
+    # Refresh the user objects to get updated values
+    for user in users_to_update:
+        await db.refresh(user)
         await load_user_attrs(user)
-    return updated_users
+
+    return users_to_update
