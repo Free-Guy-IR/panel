@@ -42,13 +42,13 @@ class SystemOperation(BaseOperation):
             limited_users,
             online_users,
         ) = await asyncio.gather(
-            get_users_count(db, admin_id=admin_id),
-            get_users_count(db, status=UserStatus.active, admin_id=admin_id),
-            get_users_count(db, status=UserStatus.disabled, admin_id=admin_id),
-            get_users_count(db, status=UserStatus.on_hold, admin_id=admin_id),
-            get_users_count(db, status=UserStatus.expired, admin_id=admin_id),
-            get_users_count(db, status=UserStatus.limited, admin_id=admin_id),
-            count_online_users(db, timedelta(minutes=2), admin_id=admin_id),
+            get_users_count(db, None, admin_id),
+            get_users_count(db, UserStatus.active, admin_id),
+            get_users_count(db, UserStatus.disabled, admin_id),
+            get_users_count(db, UserStatus.on_hold, admin_id),
+            get_users_count(db, UserStatus.expired, admin_id),
+            get_users_count(db, UserStatus.limited, admin_id),
+            count_online_users(db, timedelta(minutes=2), admin_id),
         )
 
         return SystemStats(
