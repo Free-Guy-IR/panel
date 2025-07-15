@@ -1,6 +1,5 @@
 from datetime import datetime as dt, timezone as tz
 from typing import List, Optional
-from unittest import result
 
 from sqlalchemy import and_, case, cast, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -146,7 +145,7 @@ async def add_groups_to_users(db: AsyncSession, bulk_model: BulkGroup) -> List[U
     """
     Bulk add groups to users and return list of affected User objects.
     """
-    
+
     user_ids = await _resolve_target_user_ids(db, bulk_model)
 
     stmt = select(users_groups_association)
@@ -190,14 +189,8 @@ async def remove_groups_from_users(db: AsyncSession, bulk_model: BulkGroup) -> L
         conditions.append(users_groups_association.c.user_id.in_(user_ids))
 
     # Identify affected users
-    subquery = (
-        select(users_groups_association.c.user_id)
-        .where(and_(*conditions))
-        .distinct()
-    )
-    result = await db.execute(
-        select(User).where(User.id.in_(subquery))
-    )
+    subquery = select(users_groups_association.c.user_id).where(and_(*conditions)).distinct()
+    result = await db.execute(select(User).where(User.id.in_(subquery)))
     users = result.scalars().all()
 
     if not users:
@@ -370,11 +363,7 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
             )
 
     # Perform the update
-    update_stmt = (
-        update(User)
-        .where(*conditions)
-        .values(proxy_settings=proxy_settings_expr)
-    )
+    update_stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
     await db.execute(update_stmt)
     await db.commit()
 

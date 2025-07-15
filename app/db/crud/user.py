@@ -417,7 +417,7 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
     remove_usage_reminder = False
     remove_expiration_reminder = False
 
-    if modify.proxy_settings:
+    if modify.proxy_settings is not None:
         db_user.proxy_settings = modify.proxy_settings.dict()
     if modify.group_ids:
         db_user.groups = await get_groups_by_ids(db, modify.group_ids)
