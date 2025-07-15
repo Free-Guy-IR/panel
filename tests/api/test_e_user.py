@@ -89,14 +89,24 @@ def test_users_get(access_token):
 
 def test_user_subscriptions(access_token):
     """Test that the user subscriptions route is accessible."""
-    user_subscription_formats = ["","info", "sing_box", "clash_meta", "clash", "outline", "links", "links_base64", "xray"]
+    user_subscription_formats = [
+        "",
+        "info",
+        "sing_box",
+        "clash_meta",
+        "clash",
+        "outline",
+        "links",
+        "links_base64",
+        "xray",
+    ]
 
     users = test_users_get(access_token)
 
     for user in users:
         for usf in user_subscription_formats:
             url = f"{user['subscription_url']}/{usf}"
-            response = client.get(url,headers={"Accept": "text/html"} if usf == "" else None)
+            response = client.get(url, headers={"Accept": "text/html"} if usf == "" else None)
             assert response.status_code == status.HTTP_200_OK
 
 
