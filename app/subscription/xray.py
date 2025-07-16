@@ -34,7 +34,7 @@ class XrayConfig(BaseSubscription):
             "show": False,
             "fingerprint": fp,
         }
-        if fp:
+        if alpn:
             tls_settings["alpn"] = [alpn] if not isinstance(alpn, list) else alpn
 
         return self._remove_none_values(tls_settings)
