@@ -40,7 +40,7 @@ def get_datetime_add_expression(datetime_column, seconds: int):
     elif DATABASE_DIALECT == "postgresql":
         return datetime_column + func.make_interval(0, 0, 0, 0, 0, 0, seconds)
     elif DATABASE_DIALECT == "sqlite":
-        return func.datetime(datetime_column, f"+{seconds} seconds")
+        return func.datetime(func.strftime("%s", datetime_column) + seconds, "unixepoch")
 
     raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
 

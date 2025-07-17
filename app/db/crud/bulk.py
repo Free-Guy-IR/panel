@@ -251,7 +251,7 @@ async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> List[Us
 
     await db.execute(
         update(User)
-        .where(and_(or_(*conditions), User.expire.isnot(None)))
+        .where(and_(or_(*conditions), User.id.in_(bulk_model.users), User.expire.isnot(None)))
         .values(expire=new_expire, status=case(*status_cases, else_=User.status))
     )
     await db.commit()
