@@ -1,6 +1,7 @@
-from datetime import datetime
 import re
+from datetime import datetime
 from decimal import Decimal
+
 from app.db.models import UserStatusCreate
 
 
@@ -100,7 +101,7 @@ class PasswordValidator:
 class UserValidator:
     @staticmethod
     def validate_status(status, values):
-        on_hold_expire = values.data.get("on_hold_expire_duration")
+        on_hold_expire = values.data.get("on_hold_expire_duration") or values.data.get("expire_duration")
         expire = values.data.get("expire")
         if status == UserStatusCreate.on_hold:
             if on_hold_expire == 0 or on_hold_expire is None:
