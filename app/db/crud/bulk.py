@@ -376,13 +376,27 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
     """
     Bulk update the `proxy_settings` JSON field for users and return updated rows.
     """
-    conditions = create_conditions(bulk_model)
+    other_conditions = create_conditions(bulk_model)
+    user_ids = bulk_model.users or []
 
-    if bulk_model.users:
-        conditions.append(User.id.in_(bulk_model.users))
+    # Create a flexible filter that handles all cases
+    filter_conditions = []
+    if user_ids:
+        filter_conditions.append(User.id.in_(user_ids))
+    if other_conditions:
+        filter_conditions.append(and_(*other_conditions))
+
+    # Combine user_ids and other_conditions with OR if both exist
+    if len(filter_conditions) > 1:
+        final_filter = or_(*filter_conditions)
+    elif filter_conditions:
+        final_filter = filter_conditions[0]
+    else:
+        # If no conditions, apply to all users
+        final_filter = True
 
     # First select the users that will be updated
-    select_stmt = select(User).where(*conditions)
+    select_stmt = select(User).where(final_filter)
     result = await db.execute(select_stmt)
     users_to_update = result.scalars().all()
 
@@ -416,7 +430,7 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
             )
 
     # Perform the update
-    update_stmt = update(User).where(*conditions).values(proxy_settings=proxy_settings_expr)
+    update_stmt = update(User).where(final_filter).values(proxy_settings=proxy_settings_expr)
     await db.execute(update_stmt)
     await db.commit()
 
