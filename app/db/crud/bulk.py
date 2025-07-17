@@ -263,8 +263,7 @@ async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> List[Us
         for user in users:
             await load_user_attrs(user)
         return users
-    else:
-        return []
+    return []
 
 
 async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> List[User]:
@@ -317,9 +316,11 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> List
     # Return the users whose status changed
     if status_changed_user_ids:
         result = await db.execute(select(User).where(User.id.in_(status_changed_user_ids)))
-        return result.scalars().all()
-    else:
-        return []
+        users = result.scalars().all()
+        for user in users:
+            await load_user_attrs(user)
+        return users
+    return []
 
 
 async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersProxy):
