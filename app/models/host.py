@@ -1,6 +1,8 @@
 from enum import Enum
-from app.db.models import ProxyHostSecurity, ProxyHostALPN, ProxyHostFingerprint, UserStatus
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.db.models import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity, UserStatus
 
 
 class XHttpModes(str, Enum):
@@ -28,8 +30,15 @@ class XrayFragmentSettings(BaseModel):
     interval: str = Field(pattern=r"^[\d-]{1,16}$")
 
 
+class SingBoxFragmentSettings(BaseModel):
+    fragment: bool = Field(default=False)
+    fragment_fallback_delay: str = Field("", pattern=r"\b+ms")
+    record_fragment: bool = Field(default=False)
+
+
 class FragmentSettings(BaseModel):
     xray: XrayFragmentSettings | None = Field(default=None)
+    sing_box: SingBoxFragmentSettings | None = Field(default=None)
 
 
 class XrayNoiseSettings(BaseModel):
