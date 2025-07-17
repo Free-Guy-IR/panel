@@ -1,7 +1,7 @@
 {
   "marzban": "Marzban",
   "dashboard": "Dashboard",
-  "master": "Master",
+  "master": "All Nodes",
   "dashboardDescription": "Marzban Management Dashboard",
   "active": "active",
   "online": "Online",
@@ -1073,7 +1073,8 @@
     "enableSuccess": "Group «{{name}}» has been enabled successfully",
     "enableFailed": "Failed to enable group «{{name}}»",
     "disableSuccess": "Group «{{name}}» has been disabled successfully",
-    "disableFailed": "Failed to disable group «{{name}}»"
+    "disableFailed": "Failed to disable group «{{name}}»",
+    "deleteConfirmation": "Remove Group"
   },
   "name": "Name",
   "inboundTags": "Inbound Tags",
@@ -1304,7 +1305,6 @@
   "statistics.selectTimeRangeDescription": "Choose a date range above to view traffic usage statistics.",
   "statistics.noDataInRange": "No Data in Selected Range",
   "statistics.noDataInRangeDescription": "No traffic data found for the selected time period. Try selecting a different date range.",
-
   "statistics.selectNodeToView": "Select a node to view detailed statistics",
   "statistics.userStatisticsDescription": "Overview of user account status and activity",
   "errors.connectionFailed": "Connection failed. Please check your network and try again.",
@@ -1399,7 +1399,13 @@
     "groupsCount": "{{count}} groups",
     "targetsCount": "{{count}} targets",
     "applyTo": "Apply To",
-    "applyToDesc": "Select the user or admin you want to apply settings"
+    "applyToDesc": "Select the user or admin you want to apply settings",
+    "confirmApplyExpireDescriptionAll": "Are you sure you want to apply the expiration date {{expireDate}} to ALL users, admins, and groups? This will update the expiration date for everyone.",
+    "confirmApplyExpireDescription": "Are you sure you want to apply the expiration date {{expireDate}} to {{totalTargets}} target(s)? This will update the expiration date for all selected groups, users, and admins.",
+    "confirmApplyDataLimitDescriptionAll": "Are you sure you want to apply the data limit of {{dataLimit}} GB to ALL users, admins, and groups? This will update the data limit for everyone.",
+    "confirmApplyProxyDescriptionAll": "Are you sure you want to apply the proxy settings to ALL users, admins, and groups? This will update the proxy settings for everyone.",
+    "confirmApplyGroupsDescriptionAll": "Are you sure you want to apply the group changes to ALL users, admins, and groups? This will update the groups for everyone.",
+    "confirmApplyGroupsDescription": "Are you sure you want to apply the group changes to {{totalTargets}} target(s)? This will update the groups for all selected users and admins."
   },
   "operationSuccess": "Operation successful!",
   "operationFailed": "Operation failed!",

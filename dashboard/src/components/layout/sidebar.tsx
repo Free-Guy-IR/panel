@@ -144,6 +144,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: Users2,
             },
             {
+              title: 'admins.title',
+              url: '/admins',
+              icon: UserCog,
+            },
+            {
+              title: 'nodes.title',
+              url: '/nodes',
+              icon: Share2Icon,
+              items: [
+                {
+                  title: 'nodes.title',
+                  url: '/nodes',
+                  icon: Share2Icon,
+                },
+                {
+                  title: 'settings.cores.title',
+                  url: '/nodes/cores',
+                  icon: Cpu,
+                },
+                {
+                  title: 'nodes.logs.title',
+                  url: '/nodes/logs',
+                  icon: FileText,
+                },
+              ],
+            },
+            {
+              title: 'templates.title',
+              url: '/templates',
+              icon: LayoutTemplate,
+            },
+            {
               title: 'bulk.title',
               url: '/bulk',
               icon: Layers,
@@ -169,38 +201,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   icon: ArrowUpDown,
                 },
               ],
-            },
-            {
-              title: 'templates.title',
-              url: '/templates',
-              icon: LayoutTemplate,
-            },
-            {
-              title: 'nodes.title',
-              url: '/nodes',
-              icon: Share2Icon,
-              items: [
-                {
-                  title: 'nodes.title',
-                  url: '/nodes',
-                  icon: Share2Icon,
-                },
-                {
-                  title: 'settings.cores.title',
-                  url: '/nodes/cores',
-                  icon: Cpu,
-                },
-                {
-                  title: 'nodes.logs.title',
-                  url: '/nodes/logs',
-                  icon: FileText,
-                },
-              ],
-            },
-            {
-              title: 'admins.title',
-              url: '/admins',
-              icon: UserCog,
             },
             {
               title: 'settings.title',

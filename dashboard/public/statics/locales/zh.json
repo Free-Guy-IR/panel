@@ -2,7 +2,7 @@
   "active": "激活",
   "platform": "平台",
   "dashboard": "仪表板",
-  "master": "主服务器",
+  "master": "所有节点",
   "dashboardDescription": "Marzban 管理仪表板",
   "allStatuses": "所有状态",
   "status": "状态",
@@ -1056,7 +1056,8 @@
     "enableSuccess": "群组「{{name}}」已成功启用",
     "enableFailed": "启用群组「{{name}}」失败",
     "disableSuccess": "群组「{{name}}」已成功禁用",
-    "disableFailed": "禁用群组「{{name}}」失败"
+    "disableFailed": "禁用群组「{{name}}」失败",
+    "deleteConfirmation": "移除群组"
   },
   "name": "名称",
   "nodeModal": {
@@ -1291,7 +1292,6 @@
   "statistics.waitingForDataDescription": "实时统计数据将在数据流开始后显示在这里。",
   "statistics.noDataInRange": "所选范围内无数据",
   "statistics.noDataInRangeDescription": "在所选时间段内未找到流量数据。请尝试选择不同的日期范围。",
-
   "statistics.selectNodeToView": "选择一个节点以查看详细统计信息",
   "statistics.userStatisticsDescription": "用户账户状态和活动概览",
   "errors.connectionFailed": "连接失败。请检查您的网络并重试。",
@@ -1424,7 +1424,12 @@
     "addDataLimit": "增加数据限额",
     "subtractDataLimit": "减少数据限额",
     "applyToDataLimitDesc": "选择要应用数据限额的分组、用户或管理员",
-    "noLimitSet": "未设置限额"
+    "noLimitSet": "未设置限额",
+    "confirmApplyExpireDescriptionAll": "您确定要将到期日期 {{expireDate}} 应用于所有用户、管理员和群组吗？这将更新所有人的到期日期。",
+    "confirmApplyDataLimitDescriptionAll": "您确定要将数据限额 {{dataLimit}} GB 应用于所有用户、管理员和群组吗？这将更新所有人的数据限额。",
+    "confirmApplyProxyDescriptionAll": "您确定要将代理设置应用于所有用户、管理员和群组吗？这将更新所有人的代理设置。",
+    "confirmApplyGroupsDescriptionAll": "您确定要将分组更改应用于所有用户、管理员和群组吗？这将更新所有人的分组。",
+    "confirmApplyGroupsDescription": "您确定要将分组更改应用于 {{totalTargets}} 个目标吗？这将更新所有选定用户和管理员的分组。"
   },
   "operationSuccess": "操作成功！",
   "operationFailed": "操作失败！",

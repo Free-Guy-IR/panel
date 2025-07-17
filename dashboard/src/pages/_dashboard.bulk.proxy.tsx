@@ -65,14 +65,6 @@ export default function BulkProxyPage() {
       return
     }
 
-    const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
-    if (totalTargets === 0) {
-      toast.error(t("error", { defaultValue: "Error" }), {
-        description: t("bulk.noTargetsSelected", { defaultValue: "Please select at least one target." }),
-      })
-      return
-    }
-
     setShowConfirmDialog(true)
   }
 
@@ -107,6 +99,10 @@ export default function BulkProxyPage() {
   }
 
   const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
+  const isApplyToAll = totalTargets === 0
+
+  const hasValidFlow = selectedFlow && selectedFlow !== "none";
+  const hasValidMethod = selectedMethod;
 
   return (
     <div className="flex flex-col w-full space-y-6 mt-3">
@@ -249,11 +245,7 @@ export default function BulkProxyPage() {
           <Button
             onClick={handleApply}
             className="flex items-center gap-2 px-6"
-            disabled={
-              ((!selectedFlow || selectedFlow === "none") && !selectedMethod) || 
-              totalTargets === 0 || 
-              mutation.isPending
-            }
+            disabled={!hasValidFlow && !hasValidMethod || mutation.isPending}
             size="lg"
           >
             <Settings className="h-4 w-4" />
@@ -270,13 +262,14 @@ export default function BulkProxyPage() {
               {t("bulk.confirmApplyProxyTitle", { defaultValue: "Confirm Apply Proxy Settings" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("bulk.confirmApplyProxyDescription", {
-                defaultValue:
-                  "Are you sure you want to apply proxy settings (Flow: {{flow}}, Method: {{method}}) to {{totalTargets}} target(s)? This action will update the proxy settings for all selected groups, users, and admins.",
-                flow: selectedFlow || "None",
-                method: selectedMethod || "None",
-                totalTargets,
-              })}
+              {isApplyToAll
+                ? t("bulk.confirmApplyProxyDescriptionAll", {
+                    defaultValue: "Are you sure you want to apply the proxy settings to ALL users, admins, and groups? This will update the proxy settings for everyone.",
+                  })
+                : t("bulk.confirmApplyProxyDescription", {
+                    totalTargets,
+                    defaultValue: "Are you sure you want to apply proxy settings to {{totalTargets}} target(s)? This action will update the proxy settings for all selected groups, users, and admins.",
+                  })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

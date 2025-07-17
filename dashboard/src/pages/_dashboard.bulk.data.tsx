@@ -66,14 +66,6 @@ export default function BulkDataPage() {
       return
     }
 
-    const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
-    if (totalTargets === 0) {
-      toast.error(t("error", { defaultValue: "Error" }), {
-        description: t("bulk.noTargetsSelected", { defaultValue: "Please select at least one target." }),
-      })
-      return
-    }
-
     setShowConfirmDialog(true)
   }
 
@@ -93,6 +85,7 @@ export default function BulkDataPage() {
       group_ids: selectedGroups.length ? selectedGroups : undefined,
       users: selectedUsers.length ? selectedUsers : undefined,
       admins: selectedAdmins.length ? selectedAdmins : undefined,
+      // If all are empty, treat as 'apply to all' (no filters)
     }
 
     mutation.mutate(
@@ -117,6 +110,7 @@ export default function BulkDataPage() {
   }
 
   const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
+  const isApplyToAll = totalTargets === 0
 
   return (
     <div className="flex flex-col w-full space-y-6 mt-3">
@@ -167,14 +161,14 @@ export default function BulkDataPage() {
                   value={dataLimit === undefined ? "" : dataLimit}
                   onChange={(e) => {
                     const value = Number.parseFloat(e.target.value)
-                    // Prevent negative numbers
-                    if (!isNaN(value) && value >= 0) {
+                    // Allow negative numbers for subtract, positive for add
+                    if (!isNaN(value)) {
                       setDataLimit(value)
                     } else if (e.target.value === "") {
                       setDataLimit(undefined)
                     }
                   }}
-                  min="0"
+                  // Remove min="0" to allow negative values if you want
                   step="1"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">GB</span>
@@ -264,10 +258,10 @@ export default function BulkDataPage() {
           </div>
 
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <Badge variant="outline" className="flex items-center gap-1">
+            <Badge variant="outline" className="flex items-center gap-2">
               <HardDrive className="h-3 w-3" />
               {dataLimit !== undefined ? (
-                <span className="flex items-center gap-1">
+                <span dir="ltr" className="flex items-center gap-1">
                   {operation === "add" ? <Plus className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
                   {formatBytes(gbToBytes(dataLimit))}
                 </span>
@@ -284,7 +278,7 @@ export default function BulkDataPage() {
           <Button
             onClick={handleApply}
             className="flex items-center gap-2 px-6"
-            disabled={dataLimit === undefined || dataLimit < 0 || totalTargets === 0 || mutation.isPending}
+            disabled={dataLimit === undefined || mutation.isPending}
             size="lg"
           >
             <HardDrive className="h-4 w-4" />
@@ -301,21 +295,16 @@ export default function BulkDataPage() {
               {t("bulk.confirmApplyDataLimitTitle", { defaultValue: "Confirm Apply Data Limit" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {operation === "add" ? (
-                t("bulk.confirmAddDataLimitDescription", {
-                  defaultValue:
-                    "Are you sure you want to add {{dataLimit}} to the data limit of {{totalTargets}} target(s)? This action will increase the data limit for all selected groups, users, and admins.",
-                  dataLimit: formatBytes(gbToBytes(dataLimit || 0)),
-                  totalTargets,
-                })
-              ) : (
-                t("bulk.confirmSubtractDataLimitDescription", {
-                  defaultValue:
-                    "Are you sure you want to subtract {{dataLimit}} from the data limit of {{totalTargets}} target(s)? This action will decrease the data limit for all selected groups, users, and admins.",
-                  dataLimit: formatBytes(gbToBytes(dataLimit || 0)),
-                  totalTargets,
-                })
-              )}
+              {isApplyToAll
+                ? t("bulk.confirmApplyDataLimitDescriptionAll", {
+                    dataLimit,
+                    defaultValue: "Are you sure you want to apply the data limit of {{dataLimit}} GB to ALL users, admins, and groups? This will update the data limit for everyone.",
+                  })
+                : t("bulk.confirmApplyDataLimitDescription", {
+                    dataLimit,
+                    totalTargets,
+                    defaultValue: "Are you sure you want to apply the data limit of {{dataLimit}} GB to {{totalTargets}} target(s)? This will update the data limit for all selected groups, users, and admins.",
+                  })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

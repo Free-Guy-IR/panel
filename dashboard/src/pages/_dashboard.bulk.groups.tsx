@@ -75,8 +75,9 @@ export default function BulkGroupsPage() {
     )
   }
 
-  const totalTargets = selectedUsers.length + selectedAdmins.length + selectedHasGroups.length
-  const totalGroups = selectedGroups.length
+  const totalTargets = selectedUsers.length + selectedAdmins.length + selectedHasGroups.length;
+  const totalGroups = selectedGroups.length;
+  const isApplyToAll = totalTargets === 0;
 
   return (
     <div className="flex flex-col w-full space-y-6 mt-3">
@@ -203,7 +204,7 @@ export default function BulkGroupsPage() {
             <Button
               onClick={() => setShowAddDialog(true)}
               className="flex items-center gap-2 px-6"
-              disabled={totalGroups === 0 || totalTargets === 0}
+              disabled={totalGroups === 0 || addMutation.isPending}
               size="lg"
             >
               <Plus className="h-4 w-4" />
@@ -232,12 +233,16 @@ export default function BulkGroupsPage() {
               {t("bulk.confirmAddGroupsTitle", { defaultValue: "Confirm Add Groups" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("bulk.confirmAddGroupsDescription", {
-                defaultValue:
-                  "Are you sure you want to add {{totalGroups}} group(s) to {{totalTargets}} target(s)? This action will assign the selected groups to all selected users and admins.",
-                totalGroups,
-                totalTargets,
-              })}
+              {isApplyToAll
+                ? t("bulk.confirmApplyGroupsDescriptionAll", {
+                    totalGroups,
+                    defaultValue: "Are you sure you want to apply the group changes to ALL users, admins, and groups? This will update the groups for everyone.",
+                  })
+                : t("bulk.confirmApplyGroupsDescription", {
+                    totalGroups,
+                    totalTargets,
+                    defaultValue: "Are you sure you want to apply the group changes to {{totalTargets}} target(s)? This will update the groups for all selected users and admins.",
+                  })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

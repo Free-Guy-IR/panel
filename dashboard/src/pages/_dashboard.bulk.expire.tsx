@@ -7,17 +7,13 @@ import {
   useGetAdmins,
   useBulkModifyUsersExpire,
 } from "@/service/api"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslation } from "react-i18next"
-import { useEffect, useTransition, useCallback } from "react"
-import { Calendar as PersianCalendar } from "@/components/ui/persian-calendar"
+import { useEffect } from "react"
 import { Input } from "@/components/ui/input"
-import { X, CalendarIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { CalendarIcon } from "lucide-react"
 import { useRelativeExpiryDate } from "@/utils/dateFormatter"
 import {
   AlertDialog,
@@ -32,202 +28,99 @@ import {
 import { toast } from "sonner"
 import { Users2, User, Shield } from "lucide-react"
 import { SelectorPanel } from "@/components/bulk/SelectorPanel"
-import { format } from "date-fns"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import useDirDetection from '@/hooks/use-dir-detection'
 
 const ExpiryDateField = ({
   value,
   onChange,
-  label,
 }: {
-  value: Date | undefined
-  onChange: (date: Date | undefined) => void
-  label: string
+  value: number | undefined // seconds
+  onChange: (seconds: number | undefined) => void
 }) => {
-  const { t, i18n } = useTranslation()
-  const expireInfo = useRelativeExpiryDate(value ? Math.floor(value.getTime() / 1000) : null)
-  const [calendarOpen, setCalendarOpen] = useState(false)
-  const [usePersianCalendar, setUsePersianCalendar] = useState(i18n.language === 'fa')
-  const [, startTransition] = useTransition()
-  const now = new Date()
+  const { t } = useTranslation()
+  const dir = useDirDetection()
+  const expireInfo = useRelativeExpiryDate(value ? Math.floor(Date.now() / 1000) + value : null)
+  type ExpiryUnit = 'seconds' | 'minutes' | 'hours' | 'days' | 'months'
+  const [unit, setUnit] = useState<ExpiryUnit>('days')
+  const [amount, setAmount] = useState<string>('')
 
+  // When amount or unit changes, update the seconds
   useEffect(() => {
-    setUsePersianCalendar(i18n.language === 'fa')
-  }, [i18n.language])
+    if (amount === '' || isNaN(Number(amount))) {
+      onChange(undefined)
+      return
+    }
+    const num = Number(amount)
+    if (num === 0) {
+      onChange(undefined)
+      return
+    }
+    let seconds = num
+    switch (unit) {
+      case 'minutes': seconds = num * 60; break
+      case 'hours': seconds = num * 3600; break
+      case 'days': seconds = num * 86400; break
+      case 'months': seconds = num * 2592000; break // 30 days
+      // seconds: do nothing
+    }
+    onChange(seconds)
+  }, [amount, unit])
 
-  const handleDateSelect = useCallback(
-    (date: Date | undefined) => {
-      if (date) {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-        if (selectedDate < today) {
-          date = new Date(now)
-        }
-        if (selectedDate.getTime() === today.getTime()) {
-          date.setHours(23, 59, 59)
-        } else {
-          date.setHours(now.getHours(), now.getMinutes())
-        }
-        startTransition(() => {
-          onChange(date)
-        })
-      } else {
-        startTransition(() => {
-          onChange(undefined)
-        })
-      }
-      setCalendarOpen(false)
-    },
-    [onChange, now],
-  )
+  // Preview: show the relative time from now
+  const preview = value
+    ? t('bulk.previewSeconds', { count: value, defaultValue: `+${value} seconds` })
+    : t('bulk.noDateSelected', { defaultValue: 'No date selected' })
 
-  const handleTimeChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      if (value && e.target.value) {
-        const [hours, minutes] = e.target.value.split(':')
-        const newDate = new Date(value)
-        newDate.setHours(parseInt(hours), parseInt(minutes))
-        if (newDate.toDateString() === now.toDateString() && newDate < now) {
-          newDate.setTime(now.getTime())
-        }
-        startTransition(() => {
-          onChange(newDate)
-        })
-      }
-    },
-    [value, onChange, now],
-  )
-
-  const isDateDisabled = useCallback(
-    (date: Date) => {
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-      if (compareDate < today) return true
-      if (date.getFullYear() < now.getFullYear()) return true
-      if (date.getFullYear() > now.getFullYear() + 15) return true
-      if (date.getFullYear() === now.getFullYear()) {
-        if (date.getMonth() < now.getMonth()) return true
-        if (date.getMonth() === now.getMonth() && compareDate < today) return true
-      }
-      return false
-    },
-    [now],
-  )
+  // Direction-aware classes
+  const inputRadius = dir === 'rtl' ? 'rounded-r-full rounded-l-none' : 'rounded-l-full rounded-r-none'
+  const selectRadius = dir === 'rtl' ? 'rounded-l-full rounded-r-none' : 'rounded-r-full rounded-l-none'
+  const inputBorderFix = dir === 'rtl' ? 'border-l-0' : 'border-r-0'
+  const selectBorderFix = dir === 'rtl' ? 'border-r-0' : 'border-l-0'
 
   return (
-    <div className="flex flex-1 flex-col">
-      <label className="mb-1 text-sm font-medium">{label}</label>
-      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-        <PopoverTrigger asChild>
-          <div className="relative w-full">
-            <Button
-              dir={'ltr'}
-              variant={'outline'}
-              className={cn('!mt-3.5 h-fit w-full text-left font-normal', !value && 'text-muted-foreground')}
-              type="button"
-              onClick={e => {
-                e.preventDefault()
-                e.stopPropagation()
-                setCalendarOpen(true)
-              }}
-            >
-              {value ? (
-                usePersianCalendar ? (
-                  value.toLocaleDateString('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }) +
-                  ' ' +
-                  value.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', hour12: false })
-                ) : (
-                  value.toLocaleDateString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' }) +
-                  ' ' +
-                  value.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
-                )
-              ) : (
-                <span>{t('userDialog.expireDate', { defaultValue: 'Expire date' })}</span>
-              )}
-              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-            </Button>
-          </div>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-auto p-0"
-          align="start"
-          onInteractOutside={e => {
-            e.preventDefault()
-            setCalendarOpen(false)
-          }}
-          onEscapeKeyDown={() => setCalendarOpen(false)}
-        >
-          {usePersianCalendar ? (
-            <PersianCalendar
-              mode="single"
-              selected={value}
-              onSelect={handleDateSelect}
-              disabled={isDateDisabled}
-              captionLayout="dropdown"
-              defaultMonth={value || now}
-              startMonth={new Date(now.getFullYear(), now.getMonth(), 1)}
-              endMonth={new Date(now.getFullYear() + 15, 11, 31)}
-              formatters={{
-                formatMonthDropdown: date => date.toLocaleString('fa-IR', { month: 'short' }),
-              }}
-            />
-          ) : (
-            <Calendar
-              mode="single"
-              selected={value}
-              onSelect={handleDateSelect}
-              disabled={isDateDisabled}
-              captionLayout="dropdown"
-              defaultMonth={value || now}
-              startMonth={new Date(now.getFullYear(), now.getMonth(), 1)}
-              endMonth={new Date(now.getFullYear() + 15, 11, 31)}
-              formatters={{
-                formatMonthDropdown: date => date.toLocaleString('default', { month: 'short' }),
-              }}
-            />
+    <div className="w-full flex flex-col md:flex-row gap-4 p-0 sm:p-2 items-center justify-between" dir={dir}>
+      <div className="flex flex-col gap-1 w-full max-w-md items-center">
+        <div className={`flex gap-0 w-full justify-center items-center`}>
+          <Input
+            type="number"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            placeholder={""}
+            className={`text-sm font-normal ${inputRadius} ${inputBorderFix} border border-input bg-background px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all w-32 text-center shadow-none hover:border-primary/60 focus:border-primary/80`}
+            min="-999999"
+            max="999999"
+            inputMode="numeric"
+            aria-label={"0"}
+            dir={dir}
+          />
+          <Select value={unit} onValueChange={v => setUnit(v as ExpiryUnit)}>
+            <SelectTrigger className={`${selectRadius} flex px-4 ${selectBorderFix}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-50" dir={dir}>
+              <SelectGroup>
+                <SelectItem value="seconds">{t('time.seconds', { defaultValue: 'Seconds' })}</SelectItem>
+                <SelectItem value="minutes">{t('time.mins', { defaultValue: 'Minutes' })}</SelectItem>
+                <SelectItem value="hours">{t('time.hours', { defaultValue: 'Hours' })}</SelectItem>
+                <SelectItem value="days">{t('time.days', { defaultValue: 'Days' })}</SelectItem>
+                <SelectItem value="months">{t('time.months', { defaultValue: 'Months' })}</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="flex flex-col items-center w-fit">
+        <div className="w-full px-20 max-w-md rounded-lg border border-primary/10 py-2 flex flex-col items-center gap-1 bg-background" dir={dir}>
+          <span className="text-sm font-medium text-primary text-center break-all leading-tight w-full" dir="ltr">{preview}</span>
+          {expireInfo && expireInfo.time && (
+            <span className="text-xs text-muted-foreground text-center w-full" dir={dir}>{expireInfo.time !== '0' && expireInfo.time !== '0s'
+              ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
+              : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
+            </span>
           )}
-          <div className="flex items-center gap-4 border-t p-3">
-            <Input
-              type="time"
-              value={
-                value
-                  ? value.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
-                  : now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
-              }
-              min={
-                value && value.toDateString() === now.toDateString()
-                  ? now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
-                  : undefined
-              }
-              onChange={handleTimeChange}
-            />
-            {value && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={e => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onChange(undefined)
-                  setCalendarOpen(false)
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
-      {expireInfo && (
-        <p className={cn(!expireInfo.time && 'hidden', 'text-xs text-muted-foreground mt-2')}>
-          {expireInfo.time !== '0' && expireInfo.time !== '0s'
-            ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
-            : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
-        </p>
-      )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -238,8 +131,8 @@ export default function BulkExpirePage() {
   const { data: adminsData } = useGetAdmins()
   const { data: groupsData } = useGetAllGroups()
 
-  // State for expire date
-  const [expireDate, setExpireDate] = useState<Date | undefined>(undefined)
+  // State for expire seconds
+  const [expireSeconds, setExpireSeconds] = useState<number | undefined>(undefined)
 
   // State for the three sections
   const [selectedGroups, setSelectedGroups] = useState<number[]>([])
@@ -257,17 +150,9 @@ export default function BulkExpirePage() {
   const mutation = useBulkModifyUsersExpire()
 
   const handleApply = () => {
-    if (!expireDate) {
+    if (!expireSeconds) {
       toast.error(t("error", { defaultValue: "Error" }), {
         description: t("bulk.expireDateRequired", { defaultValue: "Please select an expire date." }),
-      })
-      return
-    }
-
-    const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
-    if (totalTargets === 0) {
-      toast.error(t("error", { defaultValue: "Error" }), {
-        description: t("bulk.noTargetsSelected", { defaultValue: "Please select at least one target." }),
       })
       return
     }
@@ -276,13 +161,14 @@ export default function BulkExpirePage() {
   }
 
   const confirmApply = () => {
-    if (!expireDate) return
+    if (!expireSeconds) return
 
     const payload = {
-      amount: Math.floor(expireDate.getTime() / 1000), // Convert to seconds
+      amount: expireSeconds,
       group_ids: selectedGroups.length ? selectedGroups : undefined,
       users: selectedUsers.length ? selectedUsers : undefined,
       admins: selectedAdmins.length ? selectedAdmins : undefined,
+      // If all are empty, treat as 'apply to all' (no filters)
     }
 
     mutation.mutate(
@@ -291,7 +177,7 @@ export default function BulkExpirePage() {
         onSuccess: () => {
           toast.success(t("operationSuccess", { defaultValue: "Operation successful!" }))
           // Reset selections after successful operation
-          setExpireDate(undefined)
+          setExpireSeconds(undefined)
           setSelectedGroups([])
           setSelectedUsers([])
           setSelectedAdmins([])
@@ -306,18 +192,7 @@ export default function BulkExpirePage() {
   }
 
   const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
-  const { i18n } = useTranslation()
-  const isPersianLocale = i18n.language === 'fa'
-  const formatDate = (date: Date) => {
-    if (isPersianLocale) {
-      return new Intl.DateTimeFormat('fa-IR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(date)
-    }
-    return format(date, 'PPP')
-  }
+  const isApplyToAll = totalTargets === 0
 
   return (
     <div className="flex flex-col w-full space-y-6 mt-3">
@@ -333,9 +208,8 @@ export default function BulkExpirePage() {
         <CardContent>
           <div className="space-y-2">
             <ExpiryDateField
-              value={expireDate}
-              onChange={setExpireDate}
-              label={t("bulk.expireDate", { defaultValue: "Expire Date" })}
+              value={expireSeconds}
+              onChange={setExpireSeconds}
             />
           </div>
         </CardContent>
@@ -423,7 +297,7 @@ export default function BulkExpirePage() {
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <Badge variant="outline" className="flex items-center gap-1">
               <CalendarIcon className="h-3 w-3" />
-              {expireDate ? formatDate(expireDate) : t("bulk.noDateSelected", { defaultValue: "No date selected" })}
+              {expireSeconds ? `${expireSeconds}s` : t("bulk.noDateSelected", { defaultValue: "No date selected" })}
             </Badge>
             <Badge variant="outline" className="flex items-center gap-1">
               <User className="h-3 w-3" />
@@ -434,7 +308,7 @@ export default function BulkExpirePage() {
           <Button
             onClick={handleApply}
             className="flex items-center gap-2 px-6"
-            disabled={!expireDate || totalTargets === 0 || mutation.isPending}
+            disabled={!expireSeconds || mutation.isPending}
             size="lg"
           >
             <CalendarIcon className="h-4 w-4" />
@@ -451,12 +325,18 @@ export default function BulkExpirePage() {
               {t("bulk.confirmApplyExpireTitle", { defaultValue: "Confirm Apply Expire Date" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("bulk.confirmApplyExpireDescription", {
-                defaultValue:
-                  "Are you sure you want to apply expire date {{expireDate}} to {{totalTargets}} target(s)? This action will update the expiration date for all selected groups, users, and admins.",
-                expireDate: expireDate ? formatDate(expireDate) : "",
-                totalTargets,
-              })}
+              {isApplyToAll
+                ? t("bulk.confirmApplyExpireDescriptionAll", {
+                    defaultValue:
+                      "Are you sure you want to apply the expiration date {{expireDate}} to ALL users, admins, and groups? This will update the expiration date for everyone.",
+                    expireDate: expireSeconds ? `${expireSeconds}s` : "",
+                  })
+                : t("bulk.confirmApplyExpireDescription", {
+                    defaultValue:
+                      "Are you sure you want to apply the expiration date {{expireDate}} to {{totalTargets}} target(s)? This will update the expiration date for all selected groups, users, and admins.",
+                    expireDate: expireSeconds ? `${expireSeconds}s` : "",
+                    totalTargets,
+                  })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
