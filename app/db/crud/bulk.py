@@ -208,41 +208,37 @@ async def remove_groups_from_users(db: AsyncSession, bulk_model: BulkGroup) -> L
     return users
 
 
-def create_conditions(bulk_model: BulkUser | BulkUsersProxy) -> list[BinaryExpression]:
-    conditions = []
+def _create_final_filter(bulk_model: BulkUser | BulkUsersProxy):
+    """Create a comprehensive SQLAlchemy filter condition from a bulk model."""
+    other_conditions = []
     if hasattr(bulk_model, "status") and bulk_model.status:
-        conditions.append(User.status.in_([i.value for i in bulk_model.status]))
+        other_conditions.append(User.status.in_([i.value for i in bulk_model.status]))
     if bulk_model.admins:
-        conditions.append(User.admin_id.in_([i for i in bulk_model.admins]))
+        other_conditions.append(User.admin_id.in_([i for i in bulk_model.admins]))
     if bulk_model.group_ids:
-        conditions.append(User.groups.any(Group.id.in_(bulk_model.group_ids)))
+        other_conditions.append(User.groups.any(Group.id.in_(bulk_model.group_ids)))
 
-    return conditions
-
-
-async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> List[User]:
-    """
-    Bulk update user expiration dates and return list of User objects where status changed.
-    Works with MySQL, PostgreSQL, and SQLite.
-    """
-    other_conditions = create_conditions(bulk_model)
     user_ids = bulk_model.users or []
 
-    # Create a flexible filter that handles all cases
     filter_conditions = []
     if user_ids:
         filter_conditions.append(User.id.in_(user_ids))
     if other_conditions:
         filter_conditions.append(and_(*other_conditions))
 
-    # Combine user_ids and other_conditions with OR if both exist
     if len(filter_conditions) > 1:
-        final_filter = or_(*filter_conditions)
+        return or_(*filter_conditions)
     elif filter_conditions:
-        final_filter = filter_conditions[0]
+        return filter_conditions[0]
     else:
-        # If no conditions, apply to all users
-        final_filter = True
+        return True
+
+
+async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> List[User]:
+    """
+    Bulk update user expiration dates and return list of User objects where status changed.
+    """
+    final_filter = _create_final_filter(bulk_model)
 
     # Get database-specific datetime addition expression
     new_expire = get_datetime_add_expression(User.expire, bulk_model.amount)
@@ -298,24 +294,7 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> List
     """
     Bulk update user data limits and return list of User objects where status changed.
     """
-    other_conditions = create_conditions(bulk_model)
-    user_ids = bulk_model.users or []
-
-    # Create a flexible filter that handles all cases
-    filter_conditions = []
-    if user_ids:
-        filter_conditions.append(User.id.in_(user_ids))
-    if other_conditions:
-        filter_conditions.append(and_(*other_conditions))
-
-    # Combine user_ids and other_conditions with OR if both exist
-    if len(filter_conditions) > 1:
-        final_filter = or_(*filter_conditions)
-    elif filter_conditions:
-        final_filter = filter_conditions[0]
-    else:
-        # If no conditions, apply to all users
-        final_filter = True
+    final_filter = _create_final_filter(bulk_model)
 
     # First, get the users that will have status changes BEFORE updating
     status_change_conditions = or_(
@@ -376,24 +355,7 @@ async def update_users_proxy_settings(db: AsyncSession, bulk_model: BulkUsersPro
     """
     Bulk update the `proxy_settings` JSON field for users and return updated rows.
     """
-    other_conditions = create_conditions(bulk_model)
-    user_ids = bulk_model.users or []
-
-    # Create a flexible filter that handles all cases
-    filter_conditions = []
-    if user_ids:
-        filter_conditions.append(User.id.in_(user_ids))
-    if other_conditions:
-        filter_conditions.append(and_(*other_conditions))
-
-    # Combine user_ids and other_conditions with OR if both exist
-    if len(filter_conditions) > 1:
-        final_filter = or_(*filter_conditions)
-    elif filter_conditions:
-        final_filter = filter_conditions[0]
-    else:
-        # If no conditions, apply to all users
-        final_filter = True
+    final_filter = _create_final_filter(bulk_model)
 
     # First select the users that will be updated
     select_stmt = select(User).where(final_filter)
