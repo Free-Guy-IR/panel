@@ -239,7 +239,13 @@ async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> List[Us
 
     # Get IDs of users whose status will change
     result = await db.execute(
-        select(User.id).where(and_(or_(*conditions), User.expire.isnot(None), status_change_conditions))
+        select(User.id).where(
+            and_(
+                or_(and_(*conditions), User.id.in_([i for i in bulk_model.users])),
+                User.expire.isnot(None),
+                status_change_conditions,
+            )
+        )
     )
     status_changed_user_ids = [row[0] for row in result.fetchall()]
 
@@ -251,7 +257,12 @@ async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> List[Us
 
     await db.execute(
         update(User)
-        .where(and_(or_(*conditions), User.id.in_(bulk_model.users), User.expire.isnot(None)))
+        .where(
+            and_(
+                or_(and_(*conditions), User.id.in_([i for i in bulk_model.users])),
+                User.expire.isnot(None),
+            )
+        )
         .values(expire=new_expire, status=case(*status_cases, else_=User.status))
     )
     await db.commit()
@@ -281,10 +292,12 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> List
     # Get IDs of users whose status will change
     result = await db.execute(
         select(User.id).where(
-            and_(or_(and_(*conditions)), User.id.in_([i for i in bulk_model.users])),
-            User.data_limit.isnot(None),
-            User.data_limit != 0,
-            status_change_conditions,
+            and_(
+                or_(and_(*conditions), User.id.in_([i for i in bulk_model.users])),
+                User.data_limit.isnot(None),
+                User.data_limit != 0,
+                status_change_conditions,
+            )
         )
     )
     status_changed_user_ids = [row[0] for row in result.fetchall()]
@@ -304,9 +317,11 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> List
     await db.execute(
         update(User)
         .where(
-            and_(or_(and_(*conditions), User.id.in_([i for i in bulk_model.users]))),
-            User.data_limit.isnot(None),
-            User.data_limit != 0,
+            and_(
+                or_(and_(*conditions), User.id.in_([i for i in bulk_model.users])),
+                User.data_limit.isnot(None),
+                User.data_limit != 0,
+            )
         )
         .values(data_limit=User.data_limit + bulk_model.amount, status=case(*status_cases, else_=User.status))
     )
