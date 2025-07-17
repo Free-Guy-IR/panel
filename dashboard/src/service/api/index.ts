@@ -151,15 +151,19 @@ export interface XrayNoiseSettings {
   delay: string
 }
 
-export type XrayMuxSettingsXudpConcurrency = number | null
+export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
-export type XrayMuxSettingsConcurrency = number | null
+export type XrayMuxSettingsOutputConcurrency = number | null
 
-export interface XrayMuxSettings {
+export type XrayMuxSettingsInputXudpConcurrency = number | null
+
+export type XrayMuxSettingsInputConcurrency = number | null
+
+export interface XrayMuxSettingsInput {
   enable?: boolean
-  concurrency?: XrayMuxSettingsConcurrency
-  xudp_concurrency?: XrayMuxSettingsXudpConcurrency
-  xudp_proxy_443?: Xudp
+  concurrency?: XrayMuxSettingsInputConcurrency
+  xudp_concurrency?: XrayMuxSettingsInputXudpConcurrency
+  xudp_proxy_udp_443?: Xudp
 }
 
 export interface XrayFragmentSettings {
@@ -179,6 +183,13 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
+
+export interface XrayMuxSettingsOutput {
+  enable?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
 
 export type XTLSFlows = (typeof XTLSFlows)[keyof typeof XTLSFlows]
 
@@ -201,12 +212,12 @@ export type XMuxSettingsOutputMaxConnections = string | null
 export type XMuxSettingsOutputMaxConcurrency = string | null
 
 export interface XMuxSettingsOutput {
-  max_concurrency?: XMuxSettingsOutputMaxConcurrency
-  max_connections?: XMuxSettingsOutputMaxConnections
-  c_max_reuse_times?: XMuxSettingsOutputCMaxReuseTimes
-  c_max_lifetime?: XMuxSettingsOutputCMaxLifetime
-  h_max_request_times?: XMuxSettingsOutputHMaxRequestTimes
-  h_keep_alive_period?: XMuxSettingsOutputHKeepAlivePeriod
+  maxConcurrency?: XMuxSettingsOutputMaxConcurrency
+  maxConnections?: XMuxSettingsOutputMaxConnections
+  cMaxReuseTimes?: XMuxSettingsOutputCMaxReuseTimes
+  cMaxLifetime?: XMuxSettingsOutputCMaxLifetime
+  hMaxRequestTimes?: XMuxSettingsOutputHMaxRequestTimes
+  hKeepAlivePeriod?: XMuxSettingsOutputHKeepAlivePeriod
 }
 
 export type XMuxSettingsInputHKeepAlivePeriod = string | number | null
@@ -234,10 +245,6 @@ export type XHttpSettingsOutputDownloadSettings = number | null
 
 export type XHttpSettingsOutputXmux = XMuxSettingsOutput | null
 
-export type XHttpSettingsOutputScStreamUpServerSecs = string | null
-
-export type XHttpSettingsOutputScMaxBufferedPosts = string | null
-
 export type XHttpSettingsOutputScMinPostsIntervalMs = string | null
 
 export type XHttpSettingsOutputScMaxEachPostBytes = string | null
@@ -252,8 +259,6 @@ export interface XHttpSettingsOutput {
   x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
   sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
   sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  sc_max_buffered_posts?: XHttpSettingsOutputScMaxBufferedPosts
-  sc_stream_up_server_secs?: XHttpSettingsOutputScStreamUpServerSecs
   xmux?: XHttpSettingsOutputXmux
   download_settings?: XHttpSettingsOutputDownloadSettings
 }
@@ -261,10 +266,6 @@ export interface XHttpSettingsOutput {
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
-
-export type XHttpSettingsInputScStreamUpServerSecs = string | number | null
-
-export type XHttpSettingsInputScMaxBufferedPosts = string | number | null
 
 export type XHttpSettingsInputScMinPostsIntervalMs = string | number | null
 
@@ -290,8 +291,6 @@ export interface XHttpSettingsInput {
   x_padding_bytes?: XHttpSettingsInputXPaddingBytes
   sc_max_each_post_bytes?: XHttpSettingsInputScMaxEachPostBytes
   sc_min_posts_interval_ms?: XHttpSettingsInputScMinPostsIntervalMs
-  sc_max_buffered_posts?: XHttpSettingsInputScMaxBufferedPosts
-  sc_stream_up_server_secs?: XHttpSettingsInputScStreamUpServerSecs
   xmux?: XHttpSettingsInputXmux
   download_settings?: XHttpSettingsInputDownloadSettings
 }
@@ -594,8 +593,10 @@ export type UserModifyDataLimit = number | null
 
 export type UserModifyExpire = string | number | null
 
+export type UserModifyProxySettings = ProxyTableInput | null
+
 export interface UserModify {
-  proxy_settings?: ProxyTableInput
+  proxy_settings?: UserModifyProxySettings
   expire?: UserModifyExpire
   /** data_limit can be 0 or greater */
   data_limit?: UserModifyDataLimit
@@ -866,6 +867,13 @@ export interface SingBoxMuxSettings {
   brutal?: SingBoxMuxSettingsBrutal
 }
 
+export interface SingBoxFragmentSettings {
+  fragment?: boolean
+  /** @pattern \b+ms */
+  fragment_fallback_delay?: string
+  record_fragment?: boolean
+}
+
 export type ShadowsocksMethods = (typeof ShadowsocksMethods)[keyof typeof ShadowsocksMethods]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -880,6 +888,11 @@ export interface ShadowsocksSettings {
   /** @minLength 22 */
   password?: string
   method?: ShadowsocksMethods
+}
+
+export interface General {
+  default_flow?: XTLSFlows
+  default_method?: ShadowsocksMethods
 }
 
 export type SettingsSchemaOutputGeneral = General | null
@@ -1213,7 +1226,7 @@ export interface NextPlanModel {
   add_remaining_traffic?: boolean
 }
 
-export type MuxSettingsOutputXray = XrayMuxSettings | null
+export type MuxSettingsOutputXray = XrayMuxSettingsOutput | null
 
 export type MuxSettingsOutputClash = ClashMuxSettings | null
 
@@ -1225,7 +1238,7 @@ export interface MuxSettingsOutput {
   xray?: MuxSettingsOutputXray
 }
 
-export type MuxSettingsInputXray = XrayMuxSettings | null
+export type MuxSettingsInputXray = XrayMuxSettingsInput | null
 
 export type MuxSettingsInputClash = ClashMuxSettings | null
 
@@ -1354,11 +1367,6 @@ export interface GroupCreate {
   is_disabled?: boolean
 }
 
-export interface General {
-  default_flow?: XTLSFlows
-  default_method?: ShadowsocksMethods
-}
-
 export type GRPCSettingsInitialWindowsSize = number | null
 
 export type GRPCSettingsPermitWithoutStream = number | null
@@ -1377,10 +1385,13 @@ export interface GRPCSettings {
   initial_windows_size?: GRPCSettingsInitialWindowsSize
 }
 
+export type FragmentSettingsSingBox = SingBoxFragmentSettings | null
+
 export type FragmentSettingsXray = XrayFragmentSettings | null
 
 export interface FragmentSettings {
   xray?: FragmentSettingsXray
+  sing_box?: FragmentSettingsSingBox
 }
 
 export interface Forbidden {
