@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError, TelegramRetryAfter, TelegramUnauthorizedError
 from python_socks._errors import ProxyConnectionError
 
 from app import on_shutdown, on_startup
@@ -43,11 +43,7 @@ async def startup_telegram_bot():
         settings: Telegram = await telegram_settings()
         if settings.enable:
             session = AiohttpSession(proxy=settings.proxy_url)
-            _bot = Bot(
-                token=settings.token,
-                session=session,
-                default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-            )
+            _bot = Bot(token=settings.token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
             _dp = Dispatcher()
 
             try:
@@ -68,7 +64,7 @@ async def startup_telegram_bot():
                     allowed_updates=["message", "callback_query", "inline_query"],
                 )
                 logger.info("telegram bot started successfully.")
-            except (TelegramNetworkError, ProxyConnectionError, TelegramBadRequest) as err:
+            except (TelegramNetworkError, ProxyConnectionError, TelegramBadRequest,TelegramUnauthorizedError, Exception)as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
                 else:
@@ -96,7 +92,7 @@ async def shutdown_telegram_bot():
 
             try:
                 await _bot.close()
-            except (TelegramNetworkError, TelegramRetryAfter, ProxyConnectionError) as err:
+            except (TelegramNetworkError, TelegramRetryAfter, ProxyConnectionError, TelegramUnauthorizedError) as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
                 else:
