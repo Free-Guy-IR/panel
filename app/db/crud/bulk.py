@@ -174,7 +174,7 @@ async def add_groups_to_users(db: AsyncSession, bulk_model: BulkGroup) -> tuple[
     users = result.scalars().all()
     for user in users:
         await load_user_attrs(user)
-    count_effctive_users = len(user)
+    count_effctive_users = len(users)
     return users, count_effctive_users
 
 
