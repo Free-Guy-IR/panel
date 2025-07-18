@@ -536,8 +536,6 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -620,6 +618,8 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -717,6 +717,8 @@ export interface Token {
   token_type?: string
 }
 
+export type TelegramMiniAppWebUrl = string | null
+
 export type TelegramProxyUrl = string | null
 
 export type TelegramWebhookSecret = string | null
@@ -732,6 +734,7 @@ export interface Telegram {
   webhook_secret?: TelegramWebhookSecret
   proxy_url?: TelegramProxyUrl
   mini_app_login?: boolean
+  mini_app_web_url?: TelegramMiniAppWebUrl
 }
 
 export type TcpSettingsResponse = HTTPResponse | null
