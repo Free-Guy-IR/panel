@@ -1,6 +1,7 @@
 import base64
 import json
 import urllib.parse as urlparse
+from enum import Enum
 from random import choice
 from typing import Union
 from urllib.parse import quote
@@ -153,7 +154,7 @@ class StandardLinks(BaseSubscription):
             if protocol == "vmess":
                 payload["type"] = mode
             else:
-                payload["mode"] = mode
+                payload["mode"] = mode.value if isinstance(mode, Enum) else mode
             extra = {
                 "scMaxEachPostBytes": sc_max_each_post_bytes,
                 "scMaxConcurrentPosts": sc_max_concurrent_posts,
