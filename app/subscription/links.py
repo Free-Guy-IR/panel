@@ -151,10 +151,11 @@ class StandardLinks(BaseSubscription):
         elif net in ("splithttp", "xhttp"):
             payload["path"] = path
             payload["host"] = host
+            mode = mode.value if isinstance(mode, Enum) else mode
             if protocol == "vmess":
                 payload["type"] = mode
             else:
-                payload["mode"] = mode.value if isinstance(mode, Enum) else mode
+                payload["mode"] = mode
             extra = {
                 "scMaxEachPostBytes": sc_max_each_post_bytes,
                 "scMaxConcurrentPosts": sc_max_concurrent_posts,
