@@ -56,7 +56,7 @@ export interface HostFormValues {
   id?: number
   remark: string
   address: string
-  port: number
+  port?: number
   inbound_tag: string
   status: ('active' | 'disabled' | 'limited' | 'expired' | 'on_hold')[]
   host?: string
@@ -385,7 +385,7 @@ export const HostFormSchema = z.object({
 const initialDefaultValues: HostFormValues = {
   remark: '',
   address: '',
-  port: 443,
+  port: undefined,
   inbound_tag: '',
   status: [],
   host: '',
@@ -443,7 +443,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
     const formData: HostFormValues = {
       remark: host.remark || '',
       address: host.address || '',
-      port: host.port ? Number(host.port) : 443,
+      port: host.port ? Number(host.port) : undefined,
       inbound_tag: host.inbound_tag || '',
       status: host.status || [],
       host: host.host || '',
@@ -474,8 +474,8 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
               ? {
                   enable: host.mux_settings.xray.enable ?? false,
                   concurrency: host.mux_settings.xray.concurrency ?? null,
-                  xudp_concurrency: host.mux_settings.xray.xudp_concurrency ?? null,
-                  xudp_proxy_443: host.mux_settings.xray.xudp_proxy_443 ?? 'reject',
+                  xudp_concurrency: host.mux_settings.xray.xudpConcurrency ?? null,
+                  xudp_proxy_443: host.mux_settings.xray.xudpProxyUDP443 ?? 'reject',
                 }
               : undefined,
             sing_box: host.mux_settings.sing_box
@@ -729,15 +729,15 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
   // Debounce the host updates to prevent too many API calls
   useEffect(() => {
     if (skipNextDebounce) {
-        setSkipNextDebounce(false)
-        return
+      setSkipNextDebounce(false)
+      return
     }
     const handler = setTimeout(() => {
-        setDebouncedHosts(hosts)
+      setDebouncedHosts(hosts)
     }, 1500)
 
     return () => {
-        clearTimeout(handler)
+      clearTimeout(handler)
     }
   }, [hosts])
 
@@ -775,7 +775,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sortableHosts} strategy={rectSortingStrategy}>
             <div className="max-w-screen-[2000px] min-h-screen overflow-hidden">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {sortedHosts.map(host => (
                   <SortableHost key={host.id ?? 'new'} host={host} onEdit={handleEdit} onDuplicate={handleDuplicate} onDataChanged={refreshHostsData} />
                 ))}

@@ -773,7 +773,6 @@
       "expire_date": "Expiry date of the user",
       "jalali_expire_date": "Expiry date of the user in solar calendar",
       "time_left": "Remaining time of the user",
-      "status_text": "User status",
       "status_emoji": "User status as an emoji (✅,⌛️,🪫,❌,🔌)",
       "protocol": "Proxy protocol (e.g. VMess)",
       "transport": "Proxy transport method (e.g. ws)",
