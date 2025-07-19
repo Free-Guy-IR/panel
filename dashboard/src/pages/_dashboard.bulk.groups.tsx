@@ -113,7 +113,7 @@ export default function BulkGroupsPage() {
             {t("bulk.operationType", { defaultValue: "Operation Type" })}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            {t("bulk.groupsOperationDesc", { defaultValue: "Select whether to add or remove groups from users." })}
+            {t("bulk.groupsOperationDesc")}
           </p>
         </CardHeader>
         <CardContent>
@@ -125,7 +125,7 @@ export default function BulkGroupsPage() {
               className="flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
-              {t("bulk.addGroups", { defaultValue: "Add Groups" })}
+              {t("bulk.addGroups")}
             </Button>
             <Button
               variant={operation === "remove" ? "destructive" : "outline"}
@@ -134,7 +134,7 @@ export default function BulkGroupsPage() {
               className="flex items-center gap-2"
             >
               <Minus className="h-4 w-4" />
-              {t("bulk.removeGroups", { defaultValue: "Remove Groups" })}
+              {t("bulk.removeGroups")}
             </Button>
           </div>
         </CardContent>
@@ -274,8 +274,8 @@ export default function BulkGroupsPage() {
             {addMutation.isPending || removeMutation.isPending
               ? t("applying", { defaultValue: "Applying..." })
               : operation === "add"
-              ? t("bulk.addGroups", { defaultValue: "Add Groups" })
-              : t("bulk.removeGroups", { defaultValue: "Remove Groups" })}
+              ? t("bulk.addGroups")
+              : t("bulk.removeGroups")}
           </Button>
         </CardContent>
       </Card>
@@ -321,8 +321,8 @@ export default function BulkGroupsPage() {
               {addMutation.isPending || removeMutation.isPending
                 ? t("applying", { defaultValue: "Applying..." })
                 : operation === "add"
-                ? t("bulk.addGroups", { defaultValue: "Add Groups" })
-                : t("bulk.removeGroups", { defaultValue: "Remove Groups" })}
+                ? t("bulk.addGroups")
+                : t("bulk.removeGroups")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

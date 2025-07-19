@@ -152,7 +152,7 @@ export default function BulkExpirePage() {
                   className="flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" />
-                  {t("bulk.addExpiry", { defaultValue: "Add to Expiry" })}
+                  {t("bulk.addExpiry")}
                 </Button>
                 <Button
                   variant={operation === "subtract" ? "default" : "outline"}
@@ -161,7 +161,7 @@ export default function BulkExpirePage() {
                   className="flex items-center gap-2"
                 >
                   <Minus className="h-4 w-4" />
-                  {t("bulk.subtractExpiry", { defaultValue: "Subtract from Expiry" })}
+                  {t("bulk.subtractExpiry")}
                 </Button>
               </div>
             </div>
@@ -182,10 +182,11 @@ export default function BulkExpirePage() {
                     }
                   }}
                   step="1"
+                  className="pr-24"
                 />
-                <div className="absolute right-0 top-0 h-full">
+                <div className="absolute right-0 top-0 h-full w-20">
                   <Select value={unit} onValueChange={(v) => setUnit(v as ExpiryUnit)}>
-                    <SelectTrigger className="h-full rounded-l-none border-l-0">
+                    <SelectTrigger className="h-full rounded-l-none border-l-0 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
