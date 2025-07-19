@@ -1428,7 +1428,8 @@
     "confirmApplyDataLimitDescriptionAll": "您确定要将数据限额 {{dataLimit}} GB 应用于所有用户、管理员和群组吗？这将更新所有人的数据限额。",
     "confirmApplyProxyDescriptionAll": "您确定要将代理设置应用于所有用户、管理员和群组吗？这将更新所有人的代理设置。",
     "confirmApplyGroupsDescriptionAll": "您确定要将分组更改应用于所有用户、管理员和群组吗？这将更新所有人的分组。",
-    "confirmApplyGroupsDescription": "您确定要将分组更改应用于 {{totalTargets}} 个目标吗？这将更新所有选定用户和管理员的分组。"
+    "confirmApplyGroupsDescription": "您确定要将分组更改应用于 {{totalTargets}} 个目标吗？这将更新所有选定用户和管理员的分组。",
+    "expire.placeholder": "输入到期日期"
   },
   "operationSuccess": "操作成功！",
   "operationFailed": "操作失败！",
