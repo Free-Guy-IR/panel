@@ -8,7 +8,7 @@ from app.db import AsyncSession
 from app.db.crud.user import get_user_usages, update_user_sub
 from app.db.models import User
 from app.models.stats import Period, UserUsageStatsList
-from app.models.user import UserResponse
+from app.models.user import SubscriptionUserResponse
 from app.models.settings import ConfigFormat, SubRule, Subscription as SubSettings
 from app.settings import subscription_settings
 from app.subscription.share import encode_title, generate_subscription
@@ -40,12 +40,12 @@ class SubscriptionOperation(BaseOperation):
     def create_response_headers(user: User, request_url: str, sub_settings: SubSettings) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
-        user_info = {
-            "upload": 0,
-            "download": user.used_traffic,
-            "total": user.data_limit if user.data_limit is not None else 0,
-            "expire": user.expire if user.expire is not None else 0,
-        }
+        user_info = {"upload": 0, "download": user.used_traffic}
+
+        if user.data_limit:
+            user_info["total"] = user.data_limit
+        if user.expire:
+            user_info["expire"] = user.expire
 
         # Create and return headers
         return {
@@ -61,9 +61,7 @@ class SubscriptionOperation(BaseOperation):
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
         }
 
-    async def fetch_config(self, db: AsyncSession, token: str, client_type: ConfigFormat) -> tuple[str, str, User]:
-        db_user = await self.get_validated_sub(db, token=token)
-
+    async def fetch_config(self, db_user: User, client_type: ConfigFormat) -> tuple[str, str]:
         # Get client configuration
         config = client_config.get(client_type)
 
@@ -89,9 +87,10 @@ class SubscriptionOperation(BaseOperation):
         """Provides a subscription link based on the user agent (Clash, V2Ray, etc.)."""
         # Handle HTML request (subscription page)
         sub_settings: SubSettings = await subscription_settings()
+        db_user = await self.get_validated_sub(db, token)
 
         if "text/html" in accept_header:
-            conf, media_type, db_user = await self.fetch_config(db, token=token, client_type=ConfigFormat.links)
+            conf, media_type = await self.fetch_config(db_user, ConfigFormat.links)
             template = (
                 db_user.admin.sub_template
                 if db_user.admin and db_user.admin.sub_template
@@ -103,10 +102,10 @@ class SubscriptionOperation(BaseOperation):
             if client_type == ConfigFormat.block or not client_type:
                 await self.raise_error(message="Client not supported", code=406)
 
-            conf, media_type, db_user = await self.fetch_config(db, token=token, client_type=client_type)
+            # Update user subscription info
+            db_user = await update_user_sub(db, db_user, user_agent)
+            conf, media_type = await self.fetch_config(db_user, client_type)
 
-        # Update user subscription info
-        db_user = await update_user_sub(db, db_user, user_agent)
         # Create response with appropriate headers
         response_headers = self.create_response_headers(db_user, request_url, sub_settings)
         return Response(content=conf, media_type=media_type, headers=response_headers)
@@ -119,15 +118,16 @@ class SubscriptionOperation(BaseOperation):
 
         if client_type == ConfigFormat.block or not getattr(sub_settings.manual_sub_request, client_type):
             await self.raise_error(message="Client not supported", code=406)
+        db_user = await self.get_validated_sub(db, token=token)
 
-        conf, media_type, db_user = await self.fetch_config(db, token=token, client_type=client_type)
+        conf, media_type = await self.fetch_config(db_user, client_type)
 
         # Create response headers
         response_headers = self.create_response_headers(db_user, request_url, sub_settings)
 
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
-    async def user_subscription_info(self, db: AsyncSession, token: str) -> UserResponse:
+    async def user_subscription_info(self, db: AsyncSession, token: str) -> SubscriptionUserResponse:
         """Retrieves detailed information about the user's subscription."""
         return await self.get_validated_sub(db, token=token)
 
