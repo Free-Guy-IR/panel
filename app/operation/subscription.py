@@ -73,7 +73,6 @@ class SubscriptionOperation(BaseOperation):
                 as_base64=config["as_base64"],
             ),
             config["media_type"],
-            db_user,
         )
 
     async def user_subscription(
