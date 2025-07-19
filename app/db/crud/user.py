@@ -612,6 +612,7 @@ async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
         update(User)
         .where(User.id == db_user.id)
         .values(sub_revoked_at=datetime.now(timezone.utc), proxy_settings=ProxyTable().dict())
+        .execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
     await db.commit()
@@ -620,28 +621,24 @@ async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
     return db_user
 
 
-async def update_user_sub(db: AsyncSession, db_user: User, user_agent: str) -> User:
+async def update_user_sub(db: AsyncSession, user_id: int, user_agent: str):
     """
     Updates the user's subscription details.
 
     Args:
         db (AsyncSession): Database session.
-        db_user (User): The user object whose subscription is to be updated.
+        user_id (int): The user id whose subscription is to be updated.
         user_agent (str): The user agent string to update.
 
-    Returns:
-        User: The updated user object.
     """
     stmt = (
         update(User)
-        .where(User.id == db_user.id)
+        .where(User.id == user_id)
         .values(sub_updated_at=datetime.now(timezone.utc), sub_last_user_agent=user_agent)
+        .execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
     await db.commit()
-    await db.refresh(db_user)
-    await load_user_attrs(db_user)
-    return db_user
 
 
 async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
@@ -749,7 +746,10 @@ async def update_users_status(db: AsyncSession, users: list[User], status: UserS
     """
     user_ids = [user.id for user in users]
     stmt = (
-        update(User).where(User.id.in_(user_ids)).values(status=status, last_status_change=datetime.now(timezone.utc))
+        update(User)
+        .where(User.id.in_(user_ids))
+        .values(status=status, last_status_change=datetime.now(timezone.utc))
+        .execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
     await db.commit()
@@ -771,7 +771,9 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     Returns:
         User: The updated user object.
     """
-    stmt = update(User).where(User.id == db_user.id).values(admin_id=admin.id)
+    stmt = (
+        update(User).where(User.id == db_user.id).values(admin_id=admin.id).execution_options(synchronize_session=False)
+    )
     await db.execute(stmt)
     await db.commit()
     await db.refresh(db_user)
@@ -795,6 +797,7 @@ async def start_user_expire(db: AsyncSession, db_user: User) -> User:
         update(User)
         .where(User.id == db_user.id)
         .values(expire=expire_time, on_hold_expire_duration=None, on_hold_timeout=None, status=UserStatus.active)
+        .execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
 
@@ -827,6 +830,7 @@ async def start_users_expire(db: AsyncSession, users: list[User]) -> list[User]:
                 on_hold_timeout=None,
                 status=UserStatus.active,
             )
+            .execution_options(synchronize_session=False)
         )
         await db.execute(stmt)
 

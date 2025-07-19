@@ -102,7 +102,7 @@ class SubscriptionOperation(BaseOperation):
                 await self.raise_error(message="Client not supported", code=406)
 
             # Update user subscription info
-            db_user = await update_user_sub(db, db_user, user_agent)
+            await update_user_sub(db, db_user.id, user_agent)
             conf, media_type = await self.fetch_config(db_user, client_type)
 
         # Create response with appropriate headers
