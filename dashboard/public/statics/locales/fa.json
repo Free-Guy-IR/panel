@@ -610,7 +610,10 @@
       "allFieldsRequired": "اگر یک فیلد پر شود، همه فیلدها باید پر شوند",
       "info": "طول،فاصله،بسته (مثال: 10-100,100-200,tlshello)",
       "info.attention": "توجه: در حال حاضر، این ویژگی فقط در streisand >= 1.6.12 و v2rayNG >= 1.8.16 (پیکربندی سفارشی) پشتیبانی می‌شود",
-      "info.examples": "مثال‌ها:"
+      "info.examples": "مثال‌ها:",
+      "fragment": "قطعه‌بندی",
+      "fallbackDelay": "تأخیر بازگشت",
+      "recordFragment": "ضبط قطعه"
     },
     "noise": {
       "title": "نویز",

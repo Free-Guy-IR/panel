@@ -601,6 +601,9 @@
   "hostsDialog.fragment.info": "length,interval,packet (e.g. 10-100,100-200,tlshello)",
   "hostsDialog.fragment.info.attention": "请注意： 当前特性仅支持 streisand >= 1.6.12 and v2rayNG >= 1.8.16 (自定义配置)",
   "hostsDialog.fragment.info.examples": "示例：",
+  "hostsDialog.fragment.fragment": "分片",
+  "hostsDialog.fragment.fallbackDelay": "回退延迟",
+  "hostsDialog.fragment.recordFragment": "记录分片",
   "hostsDialog.noise": {
     "title": "噪声",
     "addNoise": "添加噪声",

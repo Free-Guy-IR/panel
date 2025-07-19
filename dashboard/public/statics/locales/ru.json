@@ -572,6 +572,9 @@
   "hostsDialog.fragment.info": "length,interval,packet (e.g. 10-100,100-200,tlshello)",
   "hostsDialog.fragment.info.attention": "Attention: currently, this feature only supported in streisand >= 1.6.12 and v2rayNG >= 1.8.16 (custom config)",
   "hostsDialog.fragment.info.examples": "Examples:",
+  "hostsDialog.fragment.fragment": "Фрагментация",
+  "hostsDialog.fragment.fallbackDelay": "Задержка отката",
+  "hostsDialog.fragment.recordFragment": "Запись фрагмента",
   "hostsDialog.noise": {
     "title": "Шум",
     "addNoise": "Добавить шум",

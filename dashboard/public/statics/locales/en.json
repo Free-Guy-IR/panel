@@ -718,7 +718,10 @@
       "allFieldsRequired": "If one field is entered, all fields must be filled",
       "info": "length,interval,packet (e.g. 10-100,100-200,tlshello)",
       "info.attention": "Attention: currently, this feature only supported in streisand >= 1.6.12 and v2rayNG >= 1.8.16 (custom config)",
-      "info.examples": "Examples:"
+      "info.examples": "Examples:",
+      "fragment": "Fragment",
+      "fallbackDelay": "Fallback Delay",
+      "recordFragment": "Record Fragment"
     },
     "noise": {
       "title": "Noise",
