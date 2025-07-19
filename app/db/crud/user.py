@@ -621,24 +621,27 @@ async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
     return db_user
 
 
-async def update_user_sub(db: AsyncSession, user_id: int, user_agent: str):
+async def update_user_sub(db: AsyncSession, db_user: User, user_agent: str) -> User:
     """
     Updates the user's subscription details.
 
     Args:
         db (AsyncSession): Database session.
-        user_id (int): The user id whose subscription is to be updated.
+        db_user (User): The user whose subscription is to be updated.
         user_agent (str): The user agent string to update.
 
     """
     stmt = (
         update(User)
-        .where(User.id == user_id)
+        .where(User.id == db_user.id)
         .values(sub_updated_at=datetime.now(timezone.utc), sub_last_user_agent=user_agent)
         .execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
     await db.commit()
+    await db.refresh(db_user)
+    await load_user_attrs(db_user)
+    return db_user
 
 
 async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
