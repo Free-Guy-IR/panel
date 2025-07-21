@@ -263,7 +263,7 @@ async def process_inbounds_and_tags(
     | OutlineConfiguration,
     reverse=False,
 ) -> list | str:
-    proxy_settings = user.proxy_settings.model_dump()
+    proxy_settings = user.proxy_settings.dict()
     for host in await filter_hosts(hosts_storage.values(), user.status):
         host_data = await process_host(host, format_variables, user.inbounds, proxy_settings, conf)
         if not host_data:
