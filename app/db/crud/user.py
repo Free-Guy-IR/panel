@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Union
 
-from sqlalchemy import and_, delete, func, not_, or_, select, update
+from sqlalchemy import and_, delete, desc, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.functions import coalesce
@@ -19,11 +19,12 @@ from app.db.models import (
     User,
     UserDataLimitResetStrategy,
     UserStatus,
+    UserSubscriptionUpdate,
     UserUsageResetLogs,
 )
 from app.models.proxy import ProxyTable
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList
-from app.models.user import UserCreate, UserModify
+from app.models.user import UserCreate, UserModify, UserSubscriptionUpdateList, UserSubscriptionUpdateSchema
 from config import USERS_AUTODELETE_DAYS
 
 from .general import _build_trunc_expression, build_json_proxy_settings_search_condition
@@ -612,7 +613,6 @@ async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
         update(User)
         .where(User.id == db_user.id)
         .values(sub_revoked_at=datetime.now(timezone.utc), proxy_settings=ProxyTable().dict())
-        .execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
     await db.commit()
@@ -621,27 +621,45 @@ async def revoke_user_sub(db: AsyncSession, db_user: User) -> User:
     return db_user
 
 
-async def update_user_sub(db: AsyncSession, db_user: User, user_agent: str) -> User:
+async def user_sub_update(db: AsyncSession, user_id: User, user_agent: str) -> User:
     """
     Updates the user's subscription details.
 
     Args:
         db (AsyncSession): Database session.
-        db_user (User): The user whose subscription is to be updated.
-        user_agent (str): The user agent string to update.
+        user_id (User): The user id whose subscription is to be updated.
+        user_agent (str): The user agent string.
 
     """
-    stmt = (
-        update(User)
-        .where(User.id == db_user.id)
-        .values(sub_updated_at=datetime.now(timezone.utc), sub_last_user_agent=user_agent)
-        .execution_options(synchronize_session=False)
-    )
-    await db.execute(stmt)
+    agent = UserSubscriptionUpdate(user_id=user_id, user_agent=user_agent)
+    db.add(agent)
     await db.commit()
-    await db.refresh(db_user)
-    await load_user_attrs(db_user)
-    return db_user
+
+
+async def get_user_sub_update_list(
+    db: AsyncSession, user_id: int, offset: int = 0, limit: int = 10
+) -> UserSubscriptionUpdateList:
+    stmt = (
+        select(UserSubscriptionUpdate)
+        .where(UserSubscriptionUpdate.user_id == user_id)
+        .order_by(desc(UserSubscriptionUpdate.created_at))
+    )
+
+    result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    count = result.scalar()
+
+    if offset:
+        stmt = stmt.offset(offset)
+    if limit:
+        stmt = stmt.limit(limit)
+
+    result = (await db.execute(stmt)).unique().scalars().all()
+    subscriptions = UserSubscriptionUpdateList(
+        updates=[UserSubscriptionUpdateSchema(created_at=row.created_at, user_agent=row.user_agent) for row in result],
+        count=count,
+    )
+
+    return subscriptions
 
 
 async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
@@ -778,32 +796,6 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
         update(User).where(User.id == db_user.id).values(admin_id=admin.id).execution_options(synchronize_session=False)
     )
     await db.execute(stmt)
-    await db.commit()
-    await db.refresh(db_user)
-    await load_user_attrs(db_user)
-    return db_user
-
-
-async def start_user_expire(db: AsyncSession, db_user: User) -> User:
-    """
-    Starts the expiration timer for a user.
-
-    Args:
-        db (AsyncSession): Database session.
-        db_user (User): The user object whose expiration timer is to be started.
-
-    Returns:
-        User: The updated user object.
-    """
-    expire_time = datetime.now(timezone.utc) + timedelta(seconds=db_user.on_hold_expire_duration)
-    stmt = (
-        update(User)
-        .where(User.id == db_user.id)
-        .values(expire=expire_time, on_hold_expire_duration=None, on_hold_timeout=None, status=UserStatus.active)
-        .execution_options(synchronize_session=False)
-    )
-    await db.execute(stmt)
-
     await db.commit()
     await db.refresh(db_user)
     await load_user_attrs(db_user)
