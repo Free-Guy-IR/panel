@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Union
 
-from sqlalchemy import and_, delete, desc, func, not_, or_, select, update
+from sqlalchemy import and_, delete, desc, func, not_, or_, select, update, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.functions import coalesce
@@ -22,6 +22,7 @@ from app.db.models import (
     UserSubscriptionUpdate,
     UserUsageResetLogs,
 )
+from app.db.compiles_types import DateDiff
 from app.models.proxy import ProxyTable
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList
 from app.models.user import UserCreate, UserModify, UserSubscriptionUpdateList, UserSubscriptionUpdateSchema
@@ -207,8 +208,6 @@ async def get_active_to_expire_users(db: AsyncSession) -> list[User]:
     stmt = select(User).where(User.status == UserStatus.active).where(User.is_expired)
 
     users = list((await db.execute(stmt)).unique().scalars().all())
-    for user in users:
-        await load_user_attrs(user)
     return users
 
 
@@ -216,8 +215,6 @@ async def get_active_to_limited_users(db: AsyncSession) -> list[User]:
     stmt = select(User).where(User.status == UserStatus.active).where(User.is_limited)
 
     users = list((await db.execute(stmt)).unique().scalars().all())
-    for user in users:
-        await load_user_attrs(user)
     return users
 
 
@@ -225,8 +222,50 @@ async def get_on_hold_to_active_users(db: AsyncSession) -> list[User]:
     stmt = select(User).where(User.status == UserStatus.on_hold).where(User.become_online)
 
     users = list((await db.execute(stmt)).unique().scalars().all())
-    for user in users:
-        await load_user_attrs(user)
+    return users
+
+
+async def get_users_to_reset_data_usage(db: AsyncSession) -> list[User]:
+    """
+    Retrieves users whose data usage needs to be reset based on their reset strategy.
+    """
+    last_reset_subq = (
+        select(
+            UserUsageResetLogs.user_id,
+            func.max(UserUsageResetLogs.reset_at).label("last_reset_at"),
+        )
+        .group_by(UserUsageResetLogs.user_id)
+        .subquery()
+    )
+
+    last_reset_time = coalesce(last_reset_subq.c.last_reset_at, User.created_at)
+
+    reset_strategy_to_days = {
+        UserDataLimitResetStrategy.day: 1,
+        UserDataLimitResetStrategy.week: 7,
+        UserDataLimitResetStrategy.month: 30,
+        UserDataLimitResetStrategy.year: 365,
+    }
+
+    num_days_to_reset_case = case(
+        *(
+            (User.data_limit_reset_strategy == strategy, days)
+            for strategy, days in reset_strategy_to_days.items()
+        ),
+        else_=None,
+    )
+
+    stmt = (
+        select(User)
+        .outerjoin(last_reset_subq, User.id == last_reset_subq.c.user_id)
+        .where(
+            User.status.in_([UserStatus.active, UserStatus.limited]),
+            User.data_limit_reset_strategy != UserDataLimitResetStrategy.no_reset,
+            DateDiff(func.now(), last_reset_time) >= num_days_to_reset_case,
+        )
+    )
+
+    users = list((await db.execute(stmt)).unique().scalars().all())
     return users
 
 
@@ -514,6 +553,7 @@ async def reset_user_data_usage(db: AsyncSession, db_user: User) -> User:
         User: The updated user object.
     """
     await db_user.awaitable_attrs.node_usages
+    await db_user.awaitable_attrs.next_plan
     usage_log = UserUsageResetLogs(
         user_id=db_user.id,
         used_traffic_at_reset=db_user.used_traffic,
