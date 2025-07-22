@@ -396,7 +396,25 @@
       "radiusSmall": "小",
       "radiusMedium": "中",
       "radiusLarge": "大"
-    }
+    },
+    "general": {
+      "title": "常规设置",
+      "description": "配置系统的基本设置",
+      "loadError": "加载常规设置失败，请重试。",
+      "saveSuccess": "常规设置保存成功",
+      "saveFailed": "常规设置保存失败",
+      "cancelSuccess": "更改已取消，原始设置已恢复",
+      "defaultFlow": {
+        "title": "默认 VLESS 流",
+        "description": "为新 VLESS 用户自动填写流字段"
+      },
+      "defaultMethod": {
+        "title": "默认 Shadowsocks 加密方式",
+        "description": "为新 Shadowsocks 用户自动填写加密方式"
+      },
+      "errorLoadingSettings": "加载设置时出错"
+    },
+    "errorLoadingSettings": "加载设置时出错"
   },
   "saving": "保存中...",
   "general": "常规",
