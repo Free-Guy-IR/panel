@@ -121,9 +121,28 @@ export const Login: FC = () => {
       // Try to expand for all platforms
       try {
         const win = window as any;
+        // Always try to expand the Telegram WebApp if possible
         if (win.Telegram && win.Telegram.WebApp && typeof win.Telegram.WebApp.expand === 'function') {
           win.Telegram.WebApp.expand();
         }
+        // Send web_app_expand event for all platforms
+        const expandEventData = JSON.stringify({
+          eventType: 'web_app_expand',
+          eventData: {},
+        });
+        // Web (iframe)
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(expandEventData, 'https://web.telegram.org');
+        }
+        // Windows Phone
+        if (typeof (window as any).external !== 'undefined' && typeof (window as any).external.notify === 'function') {
+          (window as any).external.notify(expandEventData);
+        }
+        // Mobile/Desktop
+        if (win.TelegramWebviewProxy && typeof win.TelegramWebviewProxy.postEvent === 'function') {
+          win.TelegramWebviewProxy.postEvent('web_app_expand', '{}');
+        }
+
         // Show the Telegram back button (for all platforms)
         const backButtonData = JSON.stringify({
           eventType: 'web_app_setup_back_button',
@@ -142,7 +161,8 @@ export const Login: FC = () => {
           const mobileData = JSON.stringify({ is_visible: true });
           win.TelegramWebviewProxy.postEvent('web_app_setup_back_button', mobileData);
         }
-      } catch (e) {
+      }
+      catch (e) {
         // Ignore errors if not available
       }
 
