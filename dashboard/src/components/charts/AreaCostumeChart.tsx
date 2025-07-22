@@ -10,6 +10,7 @@ import { TimeRangeSelector } from '@/components/common/TimeRangeSelector'
 import { EmptyState } from './EmptyState'
 import { Button } from '@/components/ui/button'
 import { Clock, History } from 'lucide-react'
+import { dateUtils } from '@/utils/dateFormatter'
 
 type DataPoint = {
   time: string
@@ -211,12 +212,12 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
 
         if (Array.isArray(statsArray)) {
           const formattedData = statsArray.map((point: NodeStats) => {
-            const date = new Date(point.period_start)
+            const d = dateUtils.toDayjs(point.period_start)
             let timeFormat
             if (period === Period.hour) {
-              timeFormat = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+              timeFormat = d.format('HH:mm')
             } else {
-              timeFormat = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`
+              timeFormat = d.format('MM/DD')
             }
             return {
               time: timeFormat,

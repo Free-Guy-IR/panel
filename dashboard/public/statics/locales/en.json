@@ -1329,6 +1329,10 @@
   "statistics.noDataInRangeDescription": "No traffic data found for the selected time period. Try selecting a different date range.",
   "statistics.selectNodeToView": "Select a node to view detailed statistics",
   "statistics.userStatisticsDescription": "Overview of user account status and activity",
+  "statistics.date": "Date",
+  "statistics.totalUsage": "Total Usage",
+  "statistics.uplink": "Uplink",
+  "statistics.downlink": "Downlink",
   "errors.connectionFailed": "Connection failed. Please check your network and try again.",
   "errors.statisticsLoadFailed": "Failed to Load Statistics",
   "usersTable.resetUsageTitle": "Reset User Usage",
@@ -1438,5 +1442,6 @@
   "operationSuccess": "Operation successful!",
   "operationFailed": "Operation failed!",
   "settingsApplied": "Settings applied successfully!",
-  "applying": "Applying..."
+  "applying": "Applying...",
+  "timeSelector.pickDate": "Pick a date"
 }

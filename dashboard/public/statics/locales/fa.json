@@ -1415,5 +1415,10 @@
   "inboundTags": "تگ‌های ورودی",
   "searchInbounds": "جستجوی ورودی‌ها...",
   "noInboundsFound": "هیچ ورودی‌ای یافت نشد",
-  "selectedCount": "{{count}} انتخاب شده"
+  "selectedCount": "{{count}} انتخاب شده",
+  "statistics.date": "تاریخ",
+  "statistics.totalUsage": "مصرف کل",
+  "statistics.uplink": "ارسال",
+  "statistics.downlink": "دریافت",
+  "timeSelector.pickDate": "انتخاب تاریخ"
 }

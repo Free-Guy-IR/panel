@@ -1467,5 +1467,10 @@
   "inboundTags": "入站标签",
   "searchInbounds": "搜索入站...",
   "noInboundsFound": "未找到入站",
-  "selectedCount": "已选择 {{count}} 项"
+  "selectedCount": "已选择 {{count}} 项",
+  "statistics.date": "日期",
+  "statistics.totalUsage": "总用量",
+  "statistics.uplink": "上行",
+  "statistics.downlink": "下行",
+  "timeSelector.pickDate": "选择日期"
 }
