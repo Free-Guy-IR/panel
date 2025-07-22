@@ -106,7 +106,8 @@
       "defaultMethod": {
         "title": "Default Shadowsocks Method",
         "description": "Autofill the encryption method for new Shadowsocks users"
-      }
+      },
+      "errorLoadingSettings": "Error loading settings"
     },
     "notifications": {
       "title": "Notifications",
