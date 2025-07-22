@@ -5,10 +5,10 @@ from fastapi import Response
 from fastapi.responses import HTMLResponse
 
 from app.db import AsyncSession
-from app.db.crud.user import get_user_usages, update_user_sub
 from app.db.models import User
+from app.db.crud.user import get_user_usages, user_sub_update
 from app.models.stats import Period, UserUsageStatsList
-from app.models.user import SubscriptionUserResponse
+from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
 from app.models.settings import ConfigFormat, SubRule, Subscription as SubSettings
 from app.settings import subscription_settings
 from app.subscription.share import encode_title, generate_subscription
@@ -30,6 +30,14 @@ client_config = {
 
 class SubscriptionOperation(BaseOperation):
     @staticmethod
+    async def validated_user(db_user: User) -> UsersResponseWithInbounds:
+        user = UsersResponseWithInbounds.model_validate(db_user.__dict__)
+        user.inbounds = await db_user.inbounds()
+        user.expire = db_user.expire
+
+        return user
+
+    @staticmethod
     async def detect_client_type(user_agent: str, rules: list[SubRule]) -> ConfigFormat | None:
         """Detect the appropriate client configuration based on the user agent."""
         for rule in rules:
@@ -37,7 +45,7 @@ class SubscriptionOperation(BaseOperation):
                 return rule.target
 
     @staticmethod
-    def create_response_headers(user: User, request_url: str, sub_settings: SubSettings) -> dict:
+    def create_response_headers(user: UsersResponseWithInbounds, request_url: str, sub_settings: SubSettings) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
         user_info = {"upload": 0, "download": user.used_traffic}
@@ -61,14 +69,14 @@ class SubscriptionOperation(BaseOperation):
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
         }
 
-    async def fetch_config(self, db_user: User, client_type: ConfigFormat) -> tuple[str, str]:
+    async def fetch_config(self, user: UsersResponseWithInbounds, client_type: ConfigFormat) -> tuple[str, str]:
         # Get client configuration
         config = client_config.get(client_type)
 
         # Generate subscription content
         return (
             await generate_subscription(
-                user=db_user,
+                user=user,
                 config_format=config["config_format"],
                 as_base64=config["as_base64"],
             ),
@@ -87,26 +95,29 @@ class SubscriptionOperation(BaseOperation):
         # Handle HTML request (subscription page)
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token)
+        response_headers = self.create_response_headers(db_user, request_url, sub_settings)
+
+        user = await self.validated_user(db_user)
 
         if "text/html" in accept_header:
-            conf, media_type = await self.fetch_config(db_user, ConfigFormat.links)
             template = (
                 db_user.admin.sub_template
                 if db_user.admin and db_user.admin.sub_template
                 else SUBSCRIPTION_PAGE_TEMPLATE
-            )
-            return HTMLResponse(render_template(template, {"user": db_user, "links": conf.split("\n")}))
+            )            
+            conf, media_type = await self.fetch_config(user, ConfigFormat.links)
+
+            return HTMLResponse(render_template(template, {"user": user, "links": conf.split("\n")}))
         else:
             client_type = await self.detect_client_type(user_agent, sub_settings.rules)
             if client_type == ConfigFormat.block or not client_type:
                 await self.raise_error(message="Client not supported", code=406)
 
             # Update user subscription info
-            db_user = await update_user_sub(db, db_user, user_agent)
-            conf, media_type = await self.fetch_config(db_user, client_type)
+            await user_sub_update(db, db_user.id, user_agent)
+            conf, media_type = await self.fetch_config(user, client_type)
 
         # Create response with appropriate headers
-        response_headers = self.create_response_headers(db_user, request_url, sub_settings)
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
     async def user_subscription_with_client_type(
@@ -118,12 +129,12 @@ class SubscriptionOperation(BaseOperation):
         if client_type == ConfigFormat.block or not getattr(sub_settings.manual_sub_request, client_type):
             await self.raise_error(message="Client not supported", code=406)
         db_user = await self.get_validated_sub(db, token=token)
-
-        conf, media_type = await self.fetch_config(db_user, client_type)
-
-        # Create response headers
         response_headers = self.create_response_headers(db_user, request_url, sub_settings)
 
+        user = await self.validated_user(db_user)
+        conf, media_type = await self.fetch_config(user, client_type)
+
+        # Create response headers
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
     async def user_subscription_info(self, db: AsyncSession, token: str) -> SubscriptionUserResponse:
