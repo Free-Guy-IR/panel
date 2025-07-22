@@ -51,7 +51,7 @@ from app.operation import BaseOperation, OperatorType
 from app.settings import subscription_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
-from config import XRAY_SUBSCRIPTION_PATH
+from config import SUBSCRIPTION_PATH
 
 logger = get_logger("user-operation")
 
@@ -67,7 +67,7 @@ class UserOperation(BaseOperation):
             else (settings.url_prefix).replace("*", salt)
         )
         token = await create_subscription_token(user.username)
-        return f"{url_prefix}/{XRAY_SUBSCRIPTION_PATH}/{token}"
+        return f"{url_prefix}/{SUBSCRIPTION_PATH}/{token}"
 
     async def validate_user(self, user: User) -> UserNotificationResponse:
         user = UserNotificationResponse.model_validate(user)
@@ -239,9 +239,7 @@ class UserOperation(BaseOperation):
             node_id = None
             group_by_node = False
 
-        return await get_user_usages(
-            db, db_user.id, start, end, period, node_id=node_id, group_by_node=group_by_node
-        )
+        return await get_user_usages(db, db_user.id, start, end, period, node_id=node_id, group_by_node=group_by_node)
 
     async def get_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserNotificationResponse:
         db_user = await self.get_validated_user(db, username, admin)
