@@ -19,7 +19,8 @@ import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } fr
 import { useCreateUser, useCreateUserFromTemplate, useGetUsers, useGetUserTemplates, useModifyUser, useModifyUserWithTemplate } from '@/service/api'
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getGetGeneralSettingsQueryKey, getGeneralSettings } from '@/service/api'
 import { CalendarIcon, Layers, ListStart, Lock, RefreshCcw, Users, X } from 'lucide-react'
 import React, { useEffect, useState, useTransition } from 'react'
 import { UseFormReturn } from 'react-hook-form'
@@ -487,6 +488,15 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       refetchOnMount: true,
       refetchOnReconnect: true,
     },
+  })
+
+  // Fetch general settings each time the modal is opened
+  const { data: generalSettings } = useQuery({
+    queryKey: getGetGeneralSettingsQueryKey(),
+    queryFn: () => getGeneralSettings(),
+    enabled: isDialogOpen,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   })
 
   // Function to refresh all user-related data
@@ -1039,9 +1049,23 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     if (isDialogOpen && !editingUser) {
       // Remove auto-fill of proxy settings
       form.setValue('proxy_settings', undefined)
+      // Set default flow and method from generalSettings if available
+      if (generalSettings) {
+        form.setValue('proxy_settings.vless.flow', generalSettings.default_flow || '')
+        const validMethods = [
+          'aes-128-gcm',
+          'aes-256-gcm',
+          'chacha20-ietf-poly1305',
+          'xchacha20-poly1305',
+        ] as const;
+        const method = validMethods.find(m => m === generalSettings.default_method)
+        if (method) {
+          form.setValue('proxy_settings.shadowsocks.method', method)
+        }
+      }
     }
     // eslint-disable-next-line
-  }, [isDialogOpen, editingUser])
+  }, [isDialogOpen, editingUser, generalSettings])
 
   // Add effect to handle locale changes
   useEffect(() => {

@@ -93,7 +93,7 @@
   "settings": {
     "title": "Settings",
     "general": {
-      "title": "General Settings",
+      "title": "General",
       "description": "Configure basic settings for your system",
       "loadError": "Failed to load general settings. Please try again.",
       "saveSuccess": "General settings saved successfully",
@@ -244,7 +244,10 @@
         "title": "Advanced Settings",
         "description": "Advanced Telegram bot features and configurations",
         "miniAppLogin": "Enable Mini App Login",
-        "miniAppLoginDescription": "Allow users to log in through Telegram mini apps"
+        "miniAppLoginDescription": "Allow users to log in through Telegram mini apps",
+        "miniAppUrl": "Mini App URL",
+        "miniAppUrlPlaceholder": "Enter the Mini App URL (optional)",
+        "miniAppUrlDescription": "The URL for your Telegram Mini App. Leave empty if not used."
       }
     },
     "discord": {

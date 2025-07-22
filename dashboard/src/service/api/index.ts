@@ -72,6 +72,11 @@ export type GetUsersParams = {
   load_sub?: boolean
 }
 
+export type GetUserSubUpdateListParams = {
+  offset?: number
+  limit?: number
+}
+
 export type SetOwnerParams = {
   admin_username: string
 }
@@ -488,6 +493,20 @@ export interface UserTemplateCreate {
   is_disabled?: UserTemplateCreateIsDisabled
 }
 
+export type UserSubscriptionUpdateSchemaUserAgent = string | null
+
+export type UserSubscriptionUpdateSchemaCreatedAt = string | null
+
+export interface UserSubscriptionUpdateSchema {
+  created_at?: UserSubscriptionUpdateSchemaCreatedAt
+  user_agent?: UserSubscriptionUpdateSchemaUserAgent
+}
+
+export interface UserSubscriptionUpdateList {
+  updates?: UserSubscriptionUpdateSchema[]
+  count: number
+}
+
 export type UserStatusModify = (typeof UserStatusModify)[keyof typeof UserStatusModify]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -520,10 +539,6 @@ export type UserResponseAdmin = AdminBase | null
 
 export type UserResponseOnlineAt = string | null
 
-export type UserResponseSubLastUserAgent = string | null
-
-export type UserResponseSubUpdatedAt = string | null
-
 export type UserResponseNextPlan = NextPlanModel | null
 
 export type UserResponseAutoDeleteInDays = number | null
@@ -535,6 +550,8 @@ export type UserResponseOnHoldTimeout = string | number | null
 export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 /**
  * data_limit can be 0 or greater
@@ -561,8 +578,6 @@ export interface UserResponse {
   used_traffic: number
   lifetime_used_traffic?: number
   created_at: string
-  sub_updated_at?: UserResponseSubUpdatedAt
-  sub_last_user_agent?: UserResponseSubLastUserAgent
   online_at?: UserResponseOnlineAt
   subscription_url?: string
   admin?: UserResponseAdmin
@@ -582,8 +597,6 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -592,6 +605,19 @@ export type UserModifyDataLimit = number | null
 export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
@@ -607,19 +633,6 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -775,10 +788,6 @@ export interface SystemStats {
 
 export type SubscriptionUserResponseOnlineAt = string | null
 
-export type SubscriptionUserResponseSubLastUserAgent = string | null
-
-export type SubscriptionUserResponseSubUpdatedAt = string | null
-
 export type SubscriptionUserResponseNextPlan = NextPlanModel | null
 
 export type SubscriptionUserResponseGroupIds = number[] | null
@@ -812,8 +821,6 @@ export interface SubscriptionUserResponse {
   used_traffic: number
   lifetime_used_traffic?: number
   created_at: string
-  sub_updated_at?: SubscriptionUserResponseSubUpdatedAt
-  sub_last_user_agent?: SubscriptionUserResponseSubLastUserAgent
   online_at?: SubscriptionUserResponseOnlineAt
 }
 
@@ -872,7 +879,7 @@ export interface SingBoxMuxSettings {
 
 export interface SingBoxFragmentSettings {
   fragment?: boolean
-  /** @pattern \d+ms */
+  /** @pattern ^$|^\d+ms$ */
   fragment_fallback_delay?: string
   record_fragment?: boolean
 }
@@ -4878,6 +4885,76 @@ export const useActiveNextPlan = <TData = Awaited<ReturnType<typeof activeNextPl
   const mutationOptions = getActiveNextPlanMutationOptions(options)
 
   return useMutation(mutationOptions)
+}
+
+/**
+ * Get user subscription agent list
+ * @summary Get User Sub Update List
+ */
+export const getUserSubUpdateList = (username: string, params?: GetUserSubUpdateListParams, signal?: AbortSignal) => {
+  return orvalFetcher<UserSubscriptionUpdateList>({ url: `/api/user/${username}/sub_update`, method: 'GET', params, signal })
+}
+
+export const getGetUserSubUpdateListQueryKey = (username: string, params?: GetUserSubUpdateListParams) => {
+  return [`/api/user/${username}/sub_update`, ...(params ? [params] : [])] as const
+}
+
+export const getGetUserSubUpdateListQueryOptions = <TData = Awaited<ReturnType<typeof getUserSubUpdateList>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  username: string,
+  params?: GetUserSubUpdateListParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserSubUpdateListQueryKey(username, params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserSubUpdateList>>> = ({ signal }) => getUserSubUpdateList(username, params, signal)
+
+  return { queryKey, queryFn, enabled: !!username, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+}
+
+export type GetUserSubUpdateListQueryResult = NonNullable<Awaited<ReturnType<typeof getUserSubUpdateList>>>
+export type GetUserSubUpdateListQueryError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+export function useGetUserSubUpdateList<TData = Awaited<ReturnType<typeof getUserSubUpdateList>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  username: string,
+  params: undefined | GetUserSubUpdateListParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUserSubUpdateList<TData = Awaited<ReturnType<typeof getUserSubUpdateList>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  username: string,
+  params?: GetUserSubUpdateListParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUserSubUpdateList<TData = Awaited<ReturnType<typeof getUserSubUpdateList>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  username: string,
+  params?: GetUserSubUpdateListParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get User Sub Update List
+ */
+
+export function useGetUserSubUpdateList<TData = Awaited<ReturnType<typeof getUserSubUpdateList>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  username: string,
+  params?: GetUserSubUpdateListParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubUpdateList>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetUserSubUpdateListQueryOptions(username, params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**

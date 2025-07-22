@@ -216,7 +216,10 @@
         "webhookSecretDescription": "用于 webhook 安全的秘密令牌",
         "proxyUrl": "代理 URL",
         "proxyUrlPlaceholder": "socks5://proxy.example.com:1080",
-        "proxyUrlDescription": "Telegram API 连接的代理 URL（可选）"
+        "proxyUrlDescription": "Telegram API 连接的代理 URL（可选）",
+        "miniAppUrl": "Mini App 链接",
+        "miniAppUrlPlaceholder": "输入 Mini App 链接（可选）",
+        "miniAppUrlDescription": "您的 Telegram Mini App 链接。如果未使用请留空。"
       },
       "advanced": {
         "title": "高级设置",

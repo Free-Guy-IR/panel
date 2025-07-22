@@ -142,25 +142,6 @@ export const Login: FC = () => {
         if (win.TelegramWebviewProxy && typeof win.TelegramWebviewProxy.postEvent === 'function') {
           win.TelegramWebviewProxy.postEvent('web_app_expand', '{}');
         }
-
-        // Show the Telegram back button (for all platforms)
-        const backButtonData = JSON.stringify({
-          eventType: 'web_app_setup_back_button',
-          eventData: { is_visible: true },
-        });
-        // Web (iframe)
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(backButtonData, 'https://web.telegram.org');
-        }
-        // Windows Phone
-        if (typeof (window as any).external !== 'undefined' && typeof (window as any).external.notify === 'function') {
-          (window as any).external.notify(backButtonData);
-        }
-        // Mobile/Desktop
-        if (win.TelegramWebviewProxy && typeof win.TelegramWebviewProxy.postEvent === 'function') {
-          const mobileData = JSON.stringify({ is_visible: true });
-          win.TelegramWebviewProxy.postEvent('web_app_setup_back_button', mobileData);
-        }
       }
       catch (e) {
         // Ignore errors if not available
