@@ -8,13 +8,15 @@ import { useAdminToken, useAdminMiniAppToken } from '@/service/api'
 import { removeAuthToken, setAuthToken } from '@/utils/authStorage'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CircleAlertIcon, LogInIcon } from 'lucide-react'
-import { FC, useEffect } from 'react'
+import { FC, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router'
 import { z } from 'zod'
 import { PasswordInput } from '@/components/ui/password-input'
 import { LoaderButton } from '@/components/ui/loader-button'
+import { $fetch } from '@/service/http'
+import { retrieveRawInitData } from '@telegram-apps/sdk'
 
 const schema = z.object({
   username: z.string().min(1, 'login.fieldRequired'),
@@ -44,20 +46,15 @@ export const Login: FC = () => {
       navigate('/login', { replace: true })
     }
   }, [])
-  const isTelegram = (() => {
-    if (typeof window !== 'undefined') {
-      const win = window as any;
-      if (win.Telegram && win.Telegram.WebApp) return true;
-      if (win.TelegramLogin) return true;
-      if (win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.initData) return true;
-      if (win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.platform) return true;
-      if (win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.initDataUnsafe) return true;
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('telegram') === '1') return true;
-      if (navigator.userAgent && navigator.userAgent.toLowerCase().includes('telegram')) return true;
-    }
-    return false;
-  })();
+  let isTelegram = false;
+  let initDataRaw = '';
+  try {
+    initDataRaw = retrieveRawInitData() || '';
+    isTelegram = !!initDataRaw;
+  } catch (e) {
+    isTelegram = false;
+    initDataRaw = '';
+  }
 
   const {
     mutate: login,
@@ -74,7 +71,6 @@ export const Login: FC = () => {
 
   // MiniApp login mutation
   const {
-    mutate: miniAppLogin,
     isPending: miniAppLoading,
     error: miniAppError,
   } = useAdminMiniAppToken({
@@ -89,9 +85,24 @@ export const Login: FC = () => {
     },
   })
 
-  const handleLogin = (values: LoginSchema) => {
+  const handleLogin = async (values: LoginSchema) => {
     if (isTelegram) {
-      miniAppLogin()
+      try {
+        const data = await $fetch('/api/admin/miniapp/token', {
+          method: 'POST',
+          headers: {
+            'x-telegram-authorization': initDataRaw,
+          },
+        });
+        if (data && data.access_token) {
+          setAuthToken(data.access_token);
+          navigate('/', { replace: true });
+        } else {
+          throw new Error(data?.detail || 'Telegram login failed');
+        }
+      } catch (err: any) {
+        alert(err.message || 'Telegram login failed');
+      }
     } else {
       login({
         data: {
@@ -101,6 +112,37 @@ export const Login: FC = () => {
       })
     }
   }
+
+  const [telegramLoading, setTelegramLoading] = useState(false);
+
+  // Auto-login for Telegram MiniApp
+  useEffect(() => {
+    if (isTelegram) {
+      setTelegramLoading(true);
+      console.log('[Telegram MiniApp] x-telegram-authorization payload:', initDataRaw);
+      $fetch('/api/admin/miniapp/token', {
+        method: 'POST',
+        headers: {
+          'x-telegram-authorization': initDataRaw,
+        },
+      })
+        .then((data: any) => {
+          console.log('[Telegram MiniApp] response data:', data);
+          if (data && data.access_token) {
+            setAuthToken(data.access_token);
+            navigate('/', { replace: true });
+          } else {
+            throw new Error(data?.detail || 'Telegram login failed');
+          }
+        })
+        .catch((err: any) => {
+          alert(err.message || 'Telegram login failed');
+        })
+        .finally(() => {
+          setTelegramLoading(false);
+        });
+    }
+  }, []);
 
   return (
     <div className="flex flex-col justify-between min-h-screen p-6 w-full">
@@ -128,13 +170,15 @@ export const Login: FC = () => {
                     </Alert>
                   )}
                   <div className='mt-2'>
-                  <LoaderButton  isLoading={loading || miniAppLoading} type="submit" className="w-full flex items-center gap-2">
-                    <span>{t('login')}</span>
-                    <LogInIcon size="18px" />
-                  </LoaderButton>
+                    <LoaderButton  isLoading={loading || miniAppLoading || telegramLoading} type="submit" className="w-full flex items-center gap-2">
+                      <span>{t('login')}</span>
+                      <LogInIcon size="18px" />
+                    </LoaderButton>
                   </div>
                 </div>
               </form>
+              {/* Telegram MiniApp: auto-login on page load
+              // (Button removed; see useEffect above) */}
             </div>
           </div>
         </div>
