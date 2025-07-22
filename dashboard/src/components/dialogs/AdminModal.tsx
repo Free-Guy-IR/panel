@@ -13,6 +13,7 @@ import { PasswordInput } from '@/components/ui/password-input'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
 import { LoaderButton } from '@/components/ui/loader-button'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { useEffect } from 'react'
 
 interface AdminModalProps {
     isDialogOpen: boolean
@@ -127,6 +128,26 @@ export default function AdminModal({
     const handleError = useDynamicErrorHandler();
     const addAdminMutation = useCreateAdmin()
     const modifyAdminMutation = useModifyAdmin()
+
+    useEffect(() => {
+        // If switching from edit to create, reset the form
+        if (!editingAdmin) {
+            form.reset({
+                username: '',
+                password: '',
+                passwordConfirm: '',
+                is_sudo: false,
+                is_disabled: false,
+                discord_webhook: '',
+                sub_domain: '',
+                sub_template: '',
+                support_url: '',
+                telegram_id: undefined,
+                profile_title: '',
+                discord_id: undefined,
+            })
+        }
+    }, [editingAdmin, editingAdminUserName])
 
     const onSubmit = async (values: AdminFormValues) => {
         try {

@@ -4,7 +4,7 @@ import { Language } from '@/components/Language'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
-import { useAdminToken } from '@/service/api'
+import { useAdminToken, useAdminMiniAppToken } from '@/service/api'
 import { removeAuthToken, setAuthToken } from '@/utils/authStorage'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CircleAlertIcon, LogInIcon } from 'lucide-react'
@@ -44,6 +44,21 @@ export const Login: FC = () => {
       navigate('/login', { replace: true })
     }
   }, [])
+  const isTelegram = (() => {
+    if (typeof window !== 'undefined') {
+      const win = window as any;
+      if (win.Telegram && win.Telegram.WebApp) return true;
+      if (win.TelegramLogin) return true;
+      if (win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.initData) return true;
+      if (win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.platform) return true;
+      if (win.Telegram && win.Telegram.WebApp && win.Telegram.WebApp.initDataUnsafe) return true;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('telegram') === '1') return true;
+      if (navigator.userAgent && navigator.userAgent.toLowerCase().includes('telegram')) return true;
+    }
+    return false;
+  })();
+
   const {
     mutate: login,
     isPending: loading,
@@ -56,13 +71,35 @@ export const Login: FC = () => {
       },
     },
   })
-  const handleLogin = (values: LoginSchema) => {
-    login({
-      data: {
-        ...values,
-        grant_type: 'password',
+
+  // MiniApp login mutation
+  const {
+    mutate: miniAppLogin,
+    isPending: miniAppLoading,
+    error: miniAppError,
+  } = useAdminMiniAppToken({
+    mutation: {
+      onSuccess(data: any) {
+        // Assume data contains access_token
+        if (data && data.access_token) {
+          setAuthToken(data.access_token)
+          navigate('/', { replace: true })
+        }
       },
-    })
+    },
+  })
+
+  const handleLogin = (values: LoginSchema) => {
+    if (isTelegram) {
+      miniAppLogin()
+    } else {
+      login({
+        data: {
+          ...values,
+          grant_type: 'password',
+        },
+      })
+    }
   }
 
   return (
@@ -84,14 +121,14 @@ export const Login: FC = () => {
                 <div className="flex flex-col mt-4 gap-y-2">
                   <Input className="py-5" placeholder={t('username')} {...register('username')} error={t(errors?.username?.message as string)} />
                   <PasswordInput className="py-5" placeholder={t('password')} {...register('password')} error={t(errors?.password?.message as string)} />
-                  {error && error.data && (
+                  {((error && error.data) || (miniAppError && miniAppError.data)) && (
                     <Alert className='mt-2' variant="destructive">
                       <CircleAlertIcon size="18px" />
-                      <AlertDescription>{String(error.data.detail)}</AlertDescription>
+                      <AlertDescription>{String(error?.data?.detail || miniAppError?.data?.detail)}</AlertDescription>
                     </Alert>
                   )}
                   <div className='mt-2'>
-                  <LoaderButton  isLoading={loading} type="submit" className="w-full flex items-center gap-2">
+                  <LoaderButton  isLoading={loading || miniAppLoading} type="submit" className="w-full flex items-center gap-2">
                     <span>{t('login')}</span>
                     <LogInIcon size="18px" />
                   </LoaderButton>
