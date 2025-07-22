@@ -13,7 +13,6 @@ import { PasswordInput } from '@/components/ui/password-input'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
 import { LoaderButton } from '@/components/ui/loader-button'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { useEffect } from 'react'
 
 interface AdminModalProps {
     isDialogOpen: boolean
@@ -129,25 +128,13 @@ export default function AdminModal({
     const addAdminMutation = useCreateAdmin()
     const modifyAdminMutation = useModifyAdmin()
 
-    useEffect(() => {
-        // If switching from edit to create, reset the form
-        if (!editingAdmin) {
-            form.reset({
-                username: '',
-                password: '',
-                passwordConfirm: '',
-                is_sudo: false,
-                is_disabled: false,
-                discord_webhook: '',
-                sub_domain: '',
-                sub_template: '',
-                support_url: '',
-                telegram_id: undefined,
-                profile_title: '',
-                discord_id: undefined,
-            })
+    // Ensure form is cleared when modal is closed
+    const handleClose = (open: boolean) => {
+        if (!open) {
+            form.reset();
         }
-    }, [editingAdmin, editingAdminUserName])
+        onOpenChange(open);
+    }
 
     const onSubmit = async (values: AdminFormValues) => {
         try {
@@ -196,7 +183,7 @@ export default function AdminModal({
     }
 
     return (
-        <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
+        <Dialog open={isDialogOpen} onOpenChange={handleClose}>
             <DialogContent className="max-w-[750px] h-full sm:h-auto " onOpenAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle className={`${dir === 'rtl' ? 'text-right' : 'text-left'}`} dir={dir}>{editingAdmin ? t('admins.editAdmin') : t('admins.createAdmin')}</DialogTitle>

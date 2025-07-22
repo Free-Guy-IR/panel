@@ -118,6 +118,34 @@ export const Login: FC = () => {
   // Auto-login for Telegram MiniApp
   useEffect(() => {
     if (isTelegram) {
+      // Try to expand for all platforms
+      try {
+        const win = window as any;
+        if (win.Telegram && win.Telegram.WebApp && typeof win.Telegram.WebApp.expand === 'function') {
+          win.Telegram.WebApp.expand();
+        }
+        // Show the Telegram back button (for all platforms)
+        const backButtonData = JSON.stringify({
+          eventType: 'web_app_setup_back_button',
+          eventData: { is_visible: true },
+        });
+        // Web (iframe)
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(backButtonData, 'https://web.telegram.org');
+        }
+        // Windows Phone
+        if (typeof (window as any).external !== 'undefined' && typeof (window as any).external.notify === 'function') {
+          (window as any).external.notify(backButtonData);
+        }
+        // Mobile/Desktop
+        if (win.TelegramWebviewProxy && typeof win.TelegramWebviewProxy.postEvent === 'function') {
+          const mobileData = JSON.stringify({ is_visible: true });
+          win.TelegramWebviewProxy.postEvent('web_app_setup_back_button', mobileData);
+        }
+      } catch (e) {
+        // Ignore errors if not available
+      }
+
       setTelegramLoading(true);
       console.log('[Telegram MiniApp] x-telegram-authorization payload:', initDataRaw);
       $fetch('/api/admin/miniapp/token', {
