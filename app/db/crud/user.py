@@ -207,22 +207,19 @@ async def get_expired_users(
 async def get_active_to_expire_users(db: AsyncSession) -> list[User]:
     stmt = select(User).where(User.status == UserStatus.active).where(User.is_expired)
 
-    users = list((await db.execute(stmt)).unique().scalars().all())
-    return users
+    return list((await db.execute(stmt)).unique().scalars().all())
 
 
 async def get_active_to_limited_users(db: AsyncSession) -> list[User]:
     stmt = select(User).where(User.status == UserStatus.active).where(User.is_limited)
 
-    users = list((await db.execute(stmt)).unique().scalars().all())
-    return users
+    return list((await db.execute(stmt)).unique().scalars().all())
 
 
 async def get_on_hold_to_active_users(db: AsyncSession) -> list[User]:
     stmt = select(User).where(User.status == UserStatus.on_hold).where(User.become_online)
 
-    users = list((await db.execute(stmt)).unique().scalars().all())
-    return users
+    return list((await db.execute(stmt)).unique().scalars().all())
 
 
 async def get_users_to_reset_data_usage(db: AsyncSession) -> list[User]:
@@ -248,10 +245,7 @@ async def get_users_to_reset_data_usage(db: AsyncSession) -> list[User]:
     }
 
     num_days_to_reset_case = case(
-        *(
-            (User.data_limit_reset_strategy == strategy, days)
-            for strategy, days in reset_strategy_to_days.items()
-        ),
+        *((User.data_limit_reset_strategy == strategy, days) for strategy, days in reset_strategy_to_days.items()),
         else_=None,
     )
 
@@ -265,8 +259,7 @@ async def get_users_to_reset_data_usage(db: AsyncSession) -> list[User]:
         )
     )
 
-    users = list((await db.execute(stmt)).unique().scalars().all())
-    return users
+    return list((await db.execute(stmt)).unique().scalars().all())
 
 
 async def get_usage_percentage_reached_users(db: AsyncSession, percentage: int) -> list[User]:

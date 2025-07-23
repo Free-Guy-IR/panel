@@ -64,7 +64,13 @@ async def startup_telegram_bot():
                     allowed_updates=["message", "callback_query", "inline_query"],
                 )
                 logger.info("telegram bot started successfully.")
-            except (TelegramNetworkError, ProxyConnectionError, TelegramBadRequest,TelegramUnauthorizedError, Exception)as err:
+            except (
+                TelegramNetworkError,
+                ProxyConnectionError,
+                TelegramBadRequest,
+                TelegramUnauthorizedError,
+                Exception,
+            ) as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
                 else:

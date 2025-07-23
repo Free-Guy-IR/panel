@@ -32,7 +32,7 @@ VITE_BASE_API = (
     else config("VITE_BASE_API", default="/")
 )
 
-# For backward compatibility 
+# For backward compatibility
 SUBSCRIPTION_PATH = config("XRAY_SUBSCRIPTION_PATH", default="").strip("/")
 if not SUBSCRIPTION_PATH:
     SUBSCRIPTION_PATH = config("SUBSCRIPTION_PATH", default="sub").strip("/")

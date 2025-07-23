@@ -163,9 +163,7 @@ async def get_user_sub_update_list(
     admin: AdminDetails = Depends(get_current),
 ):
     """Get user subscription agent list"""
-    return await user_operator.get_user_sub_update_list(
-        db, username=username, admin=admin, offset=offset, limit=limit
-    )
+    return await user_operator.get_user_sub_update_list(db, username=username, admin=admin, offset=offset, limit=limit)
 
 
 @router.get(
