@@ -95,10 +95,17 @@
             user.data_limit_reset_strategy.value }}){% endif %}
         </p>
         <p>
-            Expiration Date: {% if not user.expire %} ∞ {% else %} {% set
-            current_datetime = now() %} {% set remaining_days = ((user.expire -
-            current_datetime).days) %} {{ user.expire | datetime }} ({{
-            remaining_days | int }} days remaining) {% endif %}
+            {% if user.status.value == 'on_hold' %}
+                On Hold For: {% if not user.on_hold_expire_duration %}∞{% else %}{{ (user.on_hold_expire_duration / 86400) | int }} days{% endif %}
+                <p>
+                    On Hold Until: {% if user.on_hold_timeout %}{{ user.on_hold_timeout | datetime }}{% else %}∞{% endif %}
+                </p>
+            {% else %}
+                Expiration Date: {% if not user.expire %} ∞ {% else %} {% set
+                current_datetime = now() %} {% set remaining_days = ((user.expire -
+                current_datetime).days) %} {{ user.expire | datetime }} ({{
+                remaining_days | int }} days remaining) {% endif %}
+            {% endif %}
         </p>
 
         {% if user.status in ('active','on_hold') %}
@@ -119,6 +126,13 @@
             </li>
             {% endfor %}
         </ul>
+        <button
+            class="copy-all-button"
+            onclick="copyAllLinks(this)"
+            style="margin-top: 10px"
+        >
+            Copy All
+        </button>
         <div class="qr-popup" id="qrPopup">
             <div class="qr-close-button">
                 <button onclick="closeQrPopup()">X</button>
@@ -139,6 +153,27 @@
                 button.textContent = "Copied!";
                 setTimeout(function () {
                     button.textContent = "Copy";
+                }, 1500);
+            }
+
+            function copyAllLinks(button) {
+                const links = Array.from(
+                    document.querySelectorAll("ul li input[type='text']")
+                ).map((input) => input.value);
+                const allLinks = links.join("\n");
+
+                if (!allLinks) return;
+
+                const tempInput = document.createElement("textarea");
+                tempInput.value = allLinks;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand("copy");
+                document.body.removeChild(tempInput);
+
+                button.textContent = "Copied All!";
+                setTimeout(function () {
+                    button.textContent = "Copy All";
                 }, 1500);
             }
 
