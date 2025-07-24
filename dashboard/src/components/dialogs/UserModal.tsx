@@ -16,7 +16,17 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { cn } from '@/lib/utils'
 import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard.users'
-import { getGeneralSettings, getGetGeneralSettingsQueryKey, useCreateUser, useCreateUserFromTemplate, useGetUsers, useGetUserTemplates, useModifyUser, useModifyUserWithTemplate } from '@/service/api'
+import {
+  getGeneralSettings,
+  getGetGeneralSettingsQueryKey,
+  useCreateUser,
+  useCreateUserFromTemplate,
+  useGetUsers,
+  useGetUserTemplates,
+  useModifyUser,
+  useModifyUserWithTemplate,
+  type UserResponse,
+} from '@/service/api'
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -35,7 +45,7 @@ interface UserModalProps {
   editingUser: boolean
   editingUserId?: number
   editingUserData?: any // The user data object when editing
-  onSuccessCallback?: () => void
+  onSuccessCallback?: (user: UserResponse) => void
 }
 
 const isDate = (v: unknown): v is Date => typeof v === 'object' && v !== null && v instanceof Date
@@ -499,7 +509,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   })
 
   // Function to refresh all user-related data
-  const refreshUserData = () => {
+  const refreshUserData = (user: UserResponse) => {
     // Invalidate relevant queries to trigger fresh fetches
     queryClient.invalidateQueries({ queryKey: ['/api/users'] })
     queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
@@ -512,30 +522,30 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
     // Call the success callback if provided
     if (onSuccessCallback) {
-      onSuccessCallback()
+      onSuccessCallback(user)
     }
   }
 
   const createUserMutation = useCreateUser({
     mutation: {
-      onSuccess: () => refreshUserData(),
+      onSuccess: data => refreshUserData(data),
     },
   })
   const modifyUserMutation = useModifyUser({
     mutation: {
-      onSuccess: () => refreshUserData(),
+      onSuccess: data => refreshUserData(data),
     },
   })
   const createUserFromTemplateMutation = useCreateUserFromTemplate({
     mutation: {
-      onSuccess: () => refreshUserData(),
+      onSuccess: data => refreshUserData(data),
     },
   })
 
   // Add the mutation hook at the top with other mutations
   const modifyUserWithTemplateMutation = useModifyUserWithTemplate({
     mutation: {
-      onSuccess: () => refreshUserData(),
+      onSuccess: data => refreshUserData(data),
     },
   })
 

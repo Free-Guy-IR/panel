@@ -1286,6 +1286,9 @@
     "selectStatus": "选择状态",
     "selectedTemplates": "已选择 {{count}} 个模板"
   },
+  "userSettings": {
+    "subscriptionUrlCopied": "订阅链接已复制到剪贴板"
+  },
   "sidebar.expand": "展开侧边栏",
   "sidebar.collapse": "折叠侧边栏",
   "usersTable.deleteUserTitle": "删除用户",

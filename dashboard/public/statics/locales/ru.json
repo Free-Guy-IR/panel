@@ -1245,6 +1245,9 @@
     "selectStatus": "Выберите статус",
     "selectedTemplates": "Выбрано шаблонов: {{count}}"
   },
+  "userSettings": {
+    "subscriptionUrlCopied": "URL подписки скопирован в буфер обмена"
+  },
   "sidebar.expand": "Развернуть меню",
   "sidebar.collapse": "Свернуть меню",
   "usersTable.deleteUserTitle": "Удалить пользователя",

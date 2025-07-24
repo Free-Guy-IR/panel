@@ -174,7 +174,7 @@ const Users = () => {
         </div>
       </div>
 
-      <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={refreshAllUserData} />
+      <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={() => refreshAllUserData()} />
     </div>
   )
 }

@@ -1245,6 +1245,9 @@
     "selectStatus": "انتخاب وضعیت",
     "selectedTemplates": "{{count}} قالب انتخاب شده"
   },
+  "userSettings": {
+    "subscriptionUrlCopied": "لینک اشتراک در کلیپ‌بورد کپی شد"
+  },
   "sidebar.expand": "باز کردن منو",
   "sidebar.collapse": "بستن منو",
   "usersTable.deleteUserTitle": "حذف کاربر",

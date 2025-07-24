@@ -1044,6 +1044,9 @@
     "selectStatus": "Select status",
     "selectedTemplates": "{{count}} Template(s) selected"
   },
+  "userSettings": {
+    "subscriptionUrlCopied": "Subscription URL copied to clipboard"
+  },
   "users": "Users",
   "usersTable.copied": "Copied",
   "usersTable.copyConfigs": "Copy Configs",

@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
-import type { AdminDetails } from '@/service/api'
+import type { AdminDetails, UserResponse } from '@/service/api'
 import { useGetAdmins, useGetCurrentAdmin, useGetSystemStats } from '@/service/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
@@ -27,7 +27,6 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getDefaultUserForm, UseEditFormValues, UseFormValues } from './_dashboard.users'
-
 // Lazy load CoreConfigModal to prevent Monaco Editor from loading until needed
 const CoreConfigModal = lazy(() => import('@/components/dialogs/CoreConfigModal'))
 
@@ -225,6 +224,14 @@ const Dashboard = () => {
     queryClient.invalidateQueries({ queryKey: ['getUsers'] })
     queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
     queryClient.invalidateQueries({ queryKey: ['/api/users/'] })
+  }
+
+  const handleCreateUserSuccess = (user: UserResponse) => {
+    if (user.subscription_url) {
+      navigator.clipboard.writeText(user.subscription_url)
+      toast.success(t('userSettings.subscriptionUrlCopied'))
+    }
+    refreshAllUserData()
   }
 
   const handleCreateUser = () => {
@@ -456,7 +463,7 @@ const Dashboard = () => {
       </div>
 
       {/* Modals */}
-      <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={refreshAllUserData} />
+      <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={handleCreateUserSuccess} />
       <GroupModal isDialogOpen={isGroupModalOpen} onOpenChange={setGroupModalOpen} form={groupForm} editingGroup={false} />
       <HostModal isDialogOpen={isHostModalOpen} onOpenChange={setHostModalOpen} onSubmit={handleHostSubmit} form={hostForm} />
       {/* Only render NodeModal for sudo admins */}
