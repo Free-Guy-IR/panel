@@ -554,7 +554,8 @@
     "enableSuccess": "Template «{{name}}» has been enabled successfully",
     "disableSuccess": "Template «{{name}}» has been disabled successfully",
     "enableFailed": "Failed to enable admin «{{name}}»",
-    "disableFailed": "Failed to disable admin «{{name}}»"
+    "disableFailed": "Failed to disable admin «{{name}}»",
+    "resetUsages": "Reset Usages"
   },
   "core.configuration": "Configuration",
   "core.generalErrorMessage": "Something went wrong, please check the configuration",

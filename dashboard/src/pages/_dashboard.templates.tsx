@@ -24,6 +24,7 @@ const initialDefaultValues: Partial<UserTemplatesFromValue> = {
   flow: '',
   on_hold_timeout: 0,
   groups: [],
+  reset_usages: false,
 }
 
 export default function UserTemplates() {
@@ -49,6 +50,7 @@ export default function UserTemplates() {
       username_suffix: userTemplate.username_suffix || undefined,
       on_hold_timeout: typeof userTemplate.on_hold_timeout === 'number' ? userTemplate.on_hold_timeout : undefined,
       data_limit_reset_strategy: userTemplate.data_limit_reset_strategy || undefined,
+      reset_usages: userTemplate.reset_usages || false,
     })
 
     setIsDialogOpen(true)

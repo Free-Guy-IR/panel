@@ -454,7 +454,8 @@
     "enableSuccess": "قالب «{{name}}» با موفقیت فعال شد",
     "disableSuccess": "قالب «{{name}}» با موفقیت غیرفعال شد",
     "enableFailed": "فعال‌سازی مدیر «{{name}}» ناموفق بود",
-    "disableFailed": "غیرفعال‌سازی مدیر «{{name}}» ناموفق بود"
+    "disableFailed": "غیرفعال‌سازی مدیر «{{name}}» ناموفق بود",
+    "resetUsages": "ریست مصرف"
   },
   "core.configuration": "پیکربندی",
   "core.generalErrorMessage": "مشکلی پیش آمده، لطفا پیکربندی را بررسی کنید",
