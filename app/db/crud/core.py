@@ -61,7 +61,7 @@ async def modify_core_config(
     for key, value in core_data.items():
         if key == "config":
             query = update(CoreConfig).where(CoreConfig.id == db_core_config.id)
-            await db.execute(query.values({CoreConfig.config: {}}))
+            await db.execute(query.values({CoreConfig.config: "{}"}))
             await db.execute(query.values({CoreConfig.config: value}))
         else:
             setattr(db_core_config, key, value)
