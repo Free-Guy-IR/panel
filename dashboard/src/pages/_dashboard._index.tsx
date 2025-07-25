@@ -15,6 +15,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { useClipboard } from '@/hooks/use-clipboard'
 import { cn } from '@/lib/utils'
 import type { AdminDetails, UserResponse } from '@/service/api'
 import { useGetAdmins, useGetCurrentAdmin, useGetSystemStats } from '@/service/api'
@@ -219,6 +220,7 @@ const Dashboard = () => {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const dir = useDirDetection()
+  const { copy } = useClipboard()
 
   const refreshAllUserData = () => {
     queryClient.invalidateQueries({ queryKey: ['getUsers'] })
@@ -228,7 +230,7 @@ const Dashboard = () => {
 
   const handleCreateUserSuccess = (user: UserResponse) => {
     if (user.subscription_url) {
-      navigator.clipboard.writeText(user.subscription_url)
+      copy(user.subscription_url)
       toast.success(t('userSettings.subscriptionUrlCopied'))
     }
     refreshAllUserData()
