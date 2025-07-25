@@ -601,6 +601,28 @@ async def reset_user_data_usage(db: AsyncSession, db_user: User) -> User:
     return db_user
 
 
+async def bulk_reset_user_data_usage(db: AsyncSession, users: list[User]) -> list[User]:
+    """
+    Resets the data usage for a list of users and logs the reset.
+
+    Args:
+        db (AsyncSession): Database session.
+        users (list[User]): The list of user objects whose data usage is to be reset.
+
+    Returns:
+        list[User]: The updated list of user objects.
+    """
+    for db_user in users:
+        await _reset_user_traffic_and_log(db, db_user)
+        if db_user.status not in [UserStatus.expired, UserStatus.disabled]:
+            db_user.status = UserStatus.active.value
+    await db.commit()
+    for user in users:
+        await db.refresh(user)
+        await load_user_attrs(user)
+    return users
+
+
 async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
     """
     Resets the data usage of a user based on next user.
