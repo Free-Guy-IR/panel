@@ -12,7 +12,6 @@ export default defineConfig({
   clearScreen: false,
   server: {
     host: true,
-    allowedHosts: ['4f52b34244ff.ngrok-free.app'],
   },
   css: {
     postcss: {
