@@ -20,6 +20,7 @@ interface AdvanceSearchModalProps {
     onOpenChange: (open: boolean) => void
     form: UseFormReturn<AdvanceSearchFormValue>
     onSubmit: (values: AdvanceSearchFormValue) => void
+    isSudo?: boolean
 }
 
 export const advanceSearchFormSchema = z.object({
@@ -31,7 +32,7 @@ export const advanceSearchFormSchema = z.object({
 })
 
 export type AdvanceSearchFormValue = z.infer<typeof advanceSearchFormSchema>
-export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, onSubmit }: AdvanceSearchModalProps) {
+export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, onSubmit, isSudo }: AdvanceSearchModalProps) {
     const dir = useDirDetection()
     const { t } = useTranslation()
 
@@ -152,6 +153,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                         )
                                     }}
                                 />
+                                {isSudo && (
                                 <FormField
                                     control={form.control}
                                     name="admin"
@@ -196,6 +198,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                         )
                                     }}
                                 />
+                                )}
                                 <FormField
                                     control={form.control}
                                     name="status"

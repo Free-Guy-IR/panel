@@ -4,6 +4,7 @@ import { Filters } from '@/components/users/filters'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { UseEditFormValues } from '@/pages/_dashboard.users'
 import { useGetUsers, UserResponse } from '@/service/api'
+import { useAdmin } from '@/hooks/use-admin'
 import { getUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
@@ -23,6 +24,8 @@ const UsersTable = () => {
   const [isEditModalOpen, setEditModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null)
   const [isAdvanceSearchOpen, setIsAdvanceSearchOpen] = useState(false)
+  const { admin } = useAdmin();
+  const isSudo = admin?.is_sudo || false;
 
   const [filters, setFilters] = useState({
     limit: itemsPerPage,
@@ -316,6 +319,7 @@ const UsersTable = () => {
               }}
               form={advanceSearchForm}
               onSubmit={handleAdvanceSearchSubmit}
+              isSudo={isSudo}
           />
       )}
     </div>
