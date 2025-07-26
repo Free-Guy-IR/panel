@@ -212,7 +212,7 @@ export const Login: FC = () => {
           </div>
         </div>
       </div>
-      <Footer />
+      <Footer showVersion={false} />
     </div>
   )
 }
