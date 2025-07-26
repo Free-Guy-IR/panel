@@ -50,9 +50,39 @@ const gradientDefs = {
 // Custom tooltip component
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
+    // Parse the label as a date if possible
+    let formattedDate = label
+    try {
+      const today = new Date()
+      // Try to parse label as MM/DD or HH:mm
+      if (/\d{2}\/\d{2}/.test(label)) {
+        // MM/DD format, treat as past day
+        const [month, day] = label.split('/')
+        const localDate = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day), 0, 0, 0)
+        formattedDate = localDate.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).replace(',', '')
+      } else if (/\d{2}:\d{2}/.test(label)) {
+        // HH:mm format, treat as today
+        const now = new Date()
+        formattedDate = now.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).replace(',', '')
+      }
+    } catch {}
     return (
       <div dir="ltr" className="bg-background/95 backdrop-blur-sm p-3 rounded-lg border shadow-lg">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium text-muted-foreground"><span dir="ltr">{formattedDate}</span></p>
         <div className="mt-1 space-y-1">
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center gap-2">
@@ -422,14 +452,14 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
                     tickLine={false}
                     tickFormatter={value => `${value.toFixed(0)}%`}
                     axisLine={false}
-                    tickMargin={12}
+                    tickMargin={2}
                     domain={[0, 100]}
                     tick={{
                       fill: 'hsl(var(--muted-foreground))',
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: 500,
                     }}
-                    width={40}
+                    width={32}
                   />
 
                   <Tooltip

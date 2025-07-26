@@ -6,6 +6,7 @@ import { CostumeBarChart } from '../charts/CostumeBarChart'
 import { EmptyState } from '../charts/EmptyState'
 import SystemStatisticsSection from './SystemStatisticsSection'
 import { AreaCostumeChart } from '../charts/AreaCostumeChart'
+import { AllNodesStackedBarChart } from '../charts/AllNodesStackedBarChart'
 
 interface StatisticsProps {
   data?: SystemStats
@@ -90,7 +91,11 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
       <div className="space-y-8">
         {is_sudo && (
           <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '200ms', animationFillMode: 'both' }}>
-            <CostumeBarChart nodeId={selectedNodeId} />
+            {actualSelectedServer === 'master' ? (
+              <AllNodesStackedBarChart />
+            ) : (
+              <CostumeBarChart nodeId={selectedNodeId} />
+            )}
           </div>
         )}
         <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '300ms', animationFillMode: 'both' }}>

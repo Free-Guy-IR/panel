@@ -10,9 +10,10 @@ import { formatBytes } from '@/utils/formatByte'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TimeRangeSelector } from '@/components/common/TimeRangeSelector'
 import { EmptyState } from './EmptyState'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Upload, Download, Calendar } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import { TooltipProps } from 'recharts'
+import TimeSelector from './TimeSelector'
 
 type DataPoint = {
   time: string
@@ -46,40 +47,73 @@ const getPeriodFromDateRange = (range?: DateRange): Period => {
   return Period.day // More than 2 days, use daily data
 }
 
-function CustomBarTooltip({ active, payload }: TooltipProps<any, any>) {
+function CustomBarTooltip({ active, payload, period }: TooltipProps<any, any> & { period?: string }) {
   const { t, i18n } = useTranslation()
   if (!active || !payload || !payload.length) return null
   const data = payload[0].payload
   const d = dateUtils.toDayjs(data._period_start)
-  let formattedDate = d.format('YYYY-MM-DD HH:mm')
-  // For fa locale, show only Persian time (Jalali) without (شمسی)
-  if (i18n.language === 'fa' && typeof window !== 'undefined' && (window as any).Intl && (window as any).Intl.DateTimeFormat) {
+  const today = dateUtils.toDayjs(new Date())
+  const isToday = d.isSame(today, 'day')
+
+  let formattedDate
+  if (i18n.language === 'fa') {
     try {
-      formattedDate = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+      if (period === 'day' && isToday) {
+        formattedDate = new Date().toLocaleString('fa-IR', {
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(',', '')
+      } else if (period === 'day') {
+        const localDate = new Date(d.year(), d.month(), d.date(), 0, 0, 0)
+        formattedDate = localDate.toLocaleString('fa-IR', {
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(',', '')
+      } else {
+        formattedDate = d.toDate().toLocaleString('fa-IR', {
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(',', '')
+      }
+    } catch {
+      formattedDate = d.format('YYYY/MM/DD HH:mm')
+    }
+  } else {
+    if (period === 'day' && isToday) {
+      const now = new Date()
+      formattedDate = now.toLocaleString('en-US', {
         year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
-      }).format(new Date(data._period_start))
-    } catch {}
+      }).replace(',', '')
+    } else if (period === 'day') {
+      const localDate = new Date(d.year(), d.month(), d.date(), 0, 0, 0)
+      formattedDate = localDate.toLocaleString('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+      }).replace(',', '')
+    } else {
+      formattedDate = d.toDate().toLocaleString('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+      }).replace(',', '')
+    }
   }
+
+  const isRTL = i18n.language === 'fa'
+
   return (
     <div
-      className={`rounded border border-border bg-gradient-to-br from-background to-muted/80 shadow min-w-[160px] text-xs p-2 ${i18n.language === 'fa' ? 'text-right' : 'text-left'}`}
-      dir={i18n.language === 'fa' ? 'rtl' : 'ltr'}
+      className={`rounded border border-border bg-background shadow min-w-[140px] text-[11px] p-2 ${isRTL ? 'text-right' : 'text-left'}`}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
-      <div className={`mb-1 font-semibold text-xs ${i18n.language === 'fa' ? 'text-right' : 'text-center'}`}>
-        {t('statistics.date', { defaultValue: 'Date' })}: {formattedDate}
+      <div className={`mb-1.5 font-semibold text-[11px] opacity-70 ${isRTL ? 'text-right' : 'text-center'}`}>
+        <span dir="ltr" className="inline-block">{formattedDate}</span>
       </div>
-      <div className="flex flex-col gap-0.5 text-xs">
-        <div>
-          <span className="font-medium text-foreground">{t('statistics.totalUsage', { defaultValue: 'Total Usage' })}:</span>
-          <span className={i18n.language === 'fa' ? 'mr-1' : 'ml-1'}>{data.usage} GB</span>
-        </div>
-        <div>
-          <span className="font-medium text-foreground">{t('statistics.uplink', { defaultValue: 'Uplink' })}:</span>
-          <span className={i18n.language === 'fa' ? 'mr-1' : 'ml-1'}>{formatBytes(data._uplink)}</span>
-        </div>
-        <div>
-          <span className="font-medium text-foreground">{t('statistics.downlink', { defaultValue: 'Downlink' })}:</span>
-          <span className={i18n.language === 'fa' ? 'mr-1' : 'ml-1'}>{formatBytes(data._downlink)}</span>
+      <div className={`mb-1.5 text-muted-foreground text-[11px] ${isRTL ? 'text-right' : 'text-center'}`}>
+        <span>{t('statistics.totalUsage', { defaultValue: 'Total' })}: </span>
+        <span dir="ltr" className="inline-block font-mono">{data.usage} GB</span>
+      </div>
+      <div className={`flex flex-col gap-1`}>
+        <div className={`flex items-center gap-1 text-muted-foreground text-[10px] ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+          <Upload className="h-3 w-3 flex-shrink-0" />
+          <span dir="ltr" className="inline-block font-mono">{formatBytes(data._uplink)}</span>
+          <span className={`opacity-60 ${isRTL ? 'mx-1' : 'mx-1'}`}>|</span>
+          <Download className="h-3 w-3 flex-shrink-0" />
+          <span dir="ltr" className="inline-block font-mono">{formatBytes(data._downlink)}</span>
         </div>
       </div>
     </div>
@@ -88,6 +122,8 @@ function CustomBarTooltip({ active, payload }: TooltipProps<any, any>) {
 
 export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [selectedTime, setSelectedTime] = useState<string>('1w')
+  const [showCustomRange, setShowCustomRange] = useState(false)
   const [chartData, setChartData] = useState<DataPoint[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -186,6 +222,24 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
     fetchUsageData()
   }, [dateRange, nodeId])
 
+  // Add effect to update dateRange when selectedTime changes
+  useEffect(() => {
+    if (!showCustomRange) {
+      const now = new Date()
+      let from: Date | undefined
+      if (selectedTime === '12h') {
+        from = new Date(now.getTime() - 12 * 60 * 60 * 1000)
+      } else if (selectedTime === '24h') {
+        from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      } else if (selectedTime === '3d') {
+        from = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+      } else if (selectedTime === '1w') {
+        from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      }
+      if (from) setDateRange({ from, to: now })
+    }
+  }, [selectedTime, showCustomRange])
+
   return (
     <Card>
       <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
@@ -194,8 +248,17 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
             <CardTitle>{t('statistics.trafficUsage')}</CardTitle>
             <CardDescription>{t('statistics.trafficUsageDescription')}</CardDescription>
           </div>
-          <div className="px-1 py-1 flex justify-center align-middle flex-col">
-            <TimeRangeSelector onRangeChange={setDateRange} />
+          <div className="px-1 py-1 flex justify-center align-middle flex-col gap-2">
+            <div className="flex gap-2 items-center">
+              {showCustomRange ? (
+                <TimeRangeSelector onRangeChange={range => { setDateRange(range); setShowCustomRange(true); }} initialRange={dateRange} />
+              ) : (
+                <TimeSelector selectedTime={selectedTime} setSelectedTime={v => { setSelectedTime(v); setShowCustomRange(false); }} />
+              )}
+              <button type="button" aria-label="Custom Range" className={`rounded p-1 border ${showCustomRange ? 'bg-muted' : ''}`} onClick={() => setShowCustomRange(v => !v)}>
+                <Calendar className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
         <div className="sm:border-l p-6 m-0 flex flex-col justify-center px-4 ">
@@ -224,8 +287,16 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
               <BarChart accessibilityLayer data={chartData}>
                 <CartesianGrid direction={'ltr'} vertical={false} />
                 <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} />
-                <YAxis direction={'ltr'} tickLine={false} axisLine={false} tickFormatter={value => `${value.toFixed(2)} GB`} />
-                <ChartTooltip cursor={false} content={<CustomBarTooltip />} />
+                <YAxis direction={'ltr'} tickLine={false} axisLine={false} tickFormatter={value => `${value.toFixed(2)} GB`} 
+                  tick={{
+                    fill: 'hsl(var(--muted-foreground))',
+                    fontSize: 9,
+                    fontWeight: 500,
+                  }}
+                  width={32}
+                  tickMargin={2}
+                />
+                <ChartTooltip cursor={false} content={<CustomBarTooltip period={getPeriodFromDateRange(dateRange)} />} />
                 <Bar dataKey="usage" fill="var(--color-usage)" radius={8} />
               </BarChart>
             ) : (
