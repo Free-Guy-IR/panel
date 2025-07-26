@@ -465,32 +465,50 @@ const Dashboard = () => {
       </div>
 
       {/* Modals */}
-      <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={handleCreateUserSuccess} />
-      <GroupModal isDialogOpen={isGroupModalOpen} onOpenChange={setGroupModalOpen} form={groupForm} editingGroup={false} />
-      <HostModal isDialogOpen={isHostModalOpen} onOpenChange={setHostModalOpen} onSubmit={handleHostSubmit} form={hostForm} />
+      <Suspense fallback={<div />}>
+        <UserModal isDialogOpen={isUserModalOpen} onOpenChange={setUserModalOpen} form={userForm} editingUser={false} onSuccessCallback={handleCreateUserSuccess} />
+      </Suspense>
+      <Suspense fallback={<div />}>
+        <GroupModal isDialogOpen={isGroupModalOpen} onOpenChange={setGroupModalOpen} form={groupForm} editingGroup={false} />
+      </Suspense>
+      <Suspense fallback={<div />}>
+        <HostModal isDialogOpen={isHostModalOpen} onOpenChange={setHostModalOpen} onSubmit={handleHostSubmit} form={hostForm} />
+      </Suspense>
       {/* Only render NodeModal for sudo admins */}
-      {is_sudo && <NodeModal isDialogOpen={isNodeModalOpen} onOpenChange={setNodeModalOpen} form={nodeForm} editingNode={false} />}
+      {is_sudo && (
+        <Suspense fallback={<div />}>
+          <NodeModal isDialogOpen={isNodeModalOpen} onOpenChange={setNodeModalOpen} form={nodeForm} editingNode={false} />
+        </Suspense>
+      )}
       {/* Only render AdminModal for sudo admins */}
-      {is_sudo && <AdminModal isDialogOpen={isAdminModalOpen} onOpenChange={setAdminModalOpen} form={adminForm} editingAdmin={false} editingAdminUserName="" />}
-      <UserTemplateModal isDialogOpen={isTemplateModalOpen} onOpenChange={setTemplateModalOpen} form={templateForm} editingUserTemplate={false} />
+      {is_sudo && (
+        <Suspense fallback={<div />}>
+          <AdminModal isDialogOpen={isAdminModalOpen} onOpenChange={setAdminModalOpen} form={adminForm} editingAdmin={false} editingAdminUserName="" />
+        </Suspense>
+      )}
+      <Suspense fallback={<div />}>
+        <UserTemplateModal isDialogOpen={isTemplateModalOpen} onOpenChange={setTemplateModalOpen} form={templateForm} editingUserTemplate={false} />
+      </Suspense>
       {/* Only render CoreConfigModal for sudo admins */}
       {is_sudo && (
         <Suspense fallback={<div />}>
           <CoreConfigModal isDialogOpen={isCoreModalOpen} onOpenChange={setCoreModalOpen} form={coreForm} editingCore={false} />
         </Suspense>
       )}
-      <QuickActionsModal
-        open={isQuickActionsModalOpen}
-        onClose={() => setQuickActionsModalOpen(false)}
-        onCreateUser={handleCreateUser}
-        onCreateGroup={handleCreateGroup}
-        onCreateHost={handleCreateHost}
-        onCreateNode={handleCreateNode}
-        onCreateAdmin={handleCreateAdmin}
-        onCreateTemplate={handleCreateTemplate}
-        onCreateCore={handleCreateCore}
-        isSudo={is_sudo}
-      />
+      <Suspense fallback={<div />}>
+        <QuickActionsModal
+          open={isQuickActionsModalOpen}
+          onClose={() => setQuickActionsModalOpen(false)}
+          onCreateUser={handleCreateUser}
+          onCreateGroup={handleCreateGroup}
+          onCreateHost={handleCreateHost}
+          onCreateNode={handleCreateNode}
+          onCreateAdmin={handleCreateAdmin}
+          onCreateTemplate={handleCreateTemplate}
+          onCreateCore={handleCreateCore}
+          isSudo={is_sudo}
+        />
+      </Suspense>
     </div>
   )
 }
