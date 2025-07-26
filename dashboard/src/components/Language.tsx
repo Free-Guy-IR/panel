@@ -9,7 +9,7 @@ export const Language: React.FC = () => {
 
   const changeLanguage = async (lang: string) => {
     if (lang === 'system') {
-      // ect browser language and change without reload
+      // detect browser language and change without reload
       const detectedLang = navigator.language.split('-')[0] // e.g., 'en-US' -> 'en'
       const langToSet = supportedLangs.includes(detectedLang) ? detectedLang : 'en'
       await i18n.changeLanguage(langToSet)
