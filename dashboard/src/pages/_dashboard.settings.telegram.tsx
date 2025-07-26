@@ -29,6 +29,12 @@ const telegramSettingsSchema = z.object({
     }
   }, {
     message: 'Telegram webhook URL must use ports 443, 80, 88, or 8443'
+  })
+  .refine((url) => {
+    if (!url || url === '') return true;
+    return !url.endsWith('/');
+  }, {
+    message: 'Telegram webhook URL must not end with a slash (/).'
   }),
   webhook_secret: z.string().optional(),
   proxy_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
