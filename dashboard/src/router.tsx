@@ -1,33 +1,35 @@
+import { Suspense, lazy } from 'react'
 import { useAdmin } from '@/hooks/use-admin'
-import CoreSettings from '@/pages/_dashboard.nodes.cores'
-import ThemePage from '@/pages/_dashboard.settings.theme'
 import { getCurrentAdmin } from '@/service/api'
 import { createHashRouter, Navigate, RouteObject } from 'react-router'
-import DashboardLayout from './pages/_dashboard'
-import Dashboard from './pages/_dashboard._index'
-import AdminsPage from './pages/_dashboard.admins'
-import BulkPage from './pages/_dashboard.bulk'
-import BulkDataPage from './pages/_dashboard.bulk.data'
-import BulkExpirePage from './pages/_dashboard.bulk.expire'
-import BulkGroupsPage from './pages/_dashboard.bulk.groups'
-import BulkProxyPage from './pages/_dashboard.bulk.proxy'
-import Groups from './pages/_dashboard.groups'
-import Hosts from './pages/_dashboard.hosts'
-import Nodes from './pages/_dashboard.nodes'
-import NodesPage from './pages/_dashboard.nodes._index'
-import NodeLogs from './pages/_dashboard.nodes.logs'
-import Settings from './pages/_dashboard.settings'
-import CleanupSettings from './pages/_dashboard.settings.cleanup'
-import DiscordSettings from './pages/_dashboard.settings.discord'
-import GeneralSettings from './pages/_dashboard.settings.general'
-import NotificationSettings from './pages/_dashboard.settings.notifications'
-import SubscriptionSettings from './pages/_dashboard.settings.subscriptions'
-import TelegramSettings from './pages/_dashboard.settings.telegram'
-import WebhookSettings from './pages/_dashboard.settings.webhook'
-import Statistics from './pages/_dashboard.statistics'
-import UserTemplates from './pages/_dashboard.templates'
-import Users from './pages/_dashboard.users'
-import Login from './pages/login'
+// Replace direct imports with lazy imports for route-level components
+const CoreSettings = lazy(() => import('@/pages/_dashboard.nodes.cores'))
+const ThemePage = lazy(() => import('@/pages/_dashboard.settings.theme'))
+const DashboardLayout = lazy(() => import('./pages/_dashboard'))
+const Dashboard = lazy(() => import('./pages/_dashboard._index'))
+const AdminsPage = lazy(() => import('./pages/_dashboard.admins'))
+const BulkPage = lazy(() => import('./pages/_dashboard.bulk'))
+const BulkDataPage = lazy(() => import('./pages/_dashboard.bulk.data'))
+const BulkExpirePage = lazy(() => import('./pages/_dashboard.bulk.expire'))
+const BulkGroupsPage = lazy(() => import('./pages/_dashboard.bulk.groups'))
+const BulkProxyPage = lazy(() => import('./pages/_dashboard.bulk.proxy'))
+const Groups = lazy(() => import('./pages/_dashboard.groups'))
+const Hosts = lazy(() => import('./pages/_dashboard.hosts'))
+const Nodes = lazy(() => import('./pages/_dashboard.nodes'))
+const NodesPage = lazy(() => import('./pages/_dashboard.nodes._index'))
+const NodeLogs = lazy(() => import('./pages/_dashboard.nodes.logs'))
+const Settings = lazy(() => import('./pages/_dashboard.settings'))
+const CleanupSettings = lazy(() => import('./pages/_dashboard.settings.cleanup'))
+const DiscordSettings = lazy(() => import('./pages/_dashboard.settings.discord'))
+const GeneralSettings = lazy(() => import('./pages/_dashboard.settings.general'))
+const NotificationSettings = lazy(() => import('./pages/_dashboard.settings.notifications'))
+const SubscriptionSettings = lazy(() => import('./pages/_dashboard.settings.subscriptions'))
+const TelegramSettings = lazy(() => import('./pages/_dashboard.settings.telegram'))
+const WebhookSettings = lazy(() => import('./pages/_dashboard.settings.webhook'))
+const Statistics = lazy(() => import('./pages/_dashboard.statistics'))
+const UserTemplates = lazy(() => import('./pages/_dashboard.templates'))
+const Users = lazy(() => import('./pages/_dashboard.users'))
+const Login = lazy(() => import('./pages/login'))
 
 // Component to handle default settings routing based on user permissions
 function SettingsIndex() {
@@ -49,132 +51,133 @@ const fetchAdminLoader = async (): Promise<any> => {
   }
 }
 
+// Wrap all route elements in <Suspense fallback={<div>Loading...</div>}>
 export const router = createHashRouter([
   {
-    element: <DashboardLayout />,
-    errorElement: <Login />,
+    element: <Suspense fallback={<div>Loading...</div>}><DashboardLayout /></Suspense>,
+    errorElement: <Suspense fallback={<div>Loading...</div>}><Login /></Suspense>,
     loader: fetchAdminLoader,
     children: [
       {
         path: '/',
         index: true,
-        element: <Dashboard />,
+        element: <Suspense fallback={<div>Loading...</div>}><Dashboard /></Suspense>,
       },
       {
         path: '/users',
-        element: <Users />,
+        element: <Suspense fallback={<div>Loading...</div>}><Users /></Suspense>,
       },
       {
         path: '/statistics',
-        element: <Statistics />,
+        element: <Suspense fallback={<div>Loading...</div>}><Statistics /></Suspense>,
       },
       {
         path: '/hosts',
-        element: <Hosts />,
+        element: <Suspense fallback={<div>Loading...</div>}><Hosts /></Suspense>,
       },
       {
         path: '/nodes',
-        element: <Nodes />,
+        element: <Suspense fallback={<div>Loading...</div>}><Nodes /></Suspense>,
         children: [
           {
             path: '/nodes',
-            element: <NodesPage />,
+            element: <Suspense fallback={<div>Loading...</div>}><NodesPage /></Suspense>,
           },
           {
             path: '/nodes/cores',
-            element: <CoreSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><CoreSettings /></Suspense>,
           },
           {
             path: '/nodes/logs',
-            element: <NodeLogs />,
+            element: <Suspense fallback={<div>Loading...</div>}><NodeLogs /></Suspense>,
           },
         ],
       },
       {
         path: '/groups',
-        element: <Groups />,
+        element: <Suspense fallback={<div>Loading...</div>}><Groups /></Suspense>,
       },
       {
         path: '/templates',
-        element: <UserTemplates />,
+        element: <Suspense fallback={<div>Loading...</div>}><UserTemplates /></Suspense>,
       },
       {
         path: '/admins',
-        element: <AdminsPage />,
+        element: <Suspense fallback={<div>Loading...</div>}><AdminsPage /></Suspense>,
       },
       {
         path: '/settings',
-        element: <Settings />,
+        element: <Suspense fallback={<div>Loading...</div>}><Settings /></Suspense>,
         children: [
           {
             path: '/settings',
             index: true,
-            element: <SettingsIndex />,
+            element: <Suspense fallback={<div>Loading...</div>}><SettingsIndex /></Suspense>,
           },
           {
             path: '/settings/general',
-            element: <GeneralSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><GeneralSettings /></Suspense>,
           },
           {
             path: '/settings/notifications',
-            element: <NotificationSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><NotificationSettings /></Suspense>,
           },
           {
             path: '/settings/subscriptions',
-            element: <SubscriptionSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><SubscriptionSettings /></Suspense>,
           },
           {
             path: '/settings/telegram',
-            element: <TelegramSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><TelegramSettings /></Suspense>,
           },
           {
             path: '/settings/discord',
-            element: <DiscordSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><DiscordSettings /></Suspense>,
           },
           {
             path: '/settings/webhook',
-            element: <WebhookSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><WebhookSettings /></Suspense>,
           },
           {
             path: '/settings/cleanup',
-            element: <CleanupSettings />,
+            element: <Suspense fallback={<div>Loading...</div>}><CleanupSettings /></Suspense>,
           },
           {
             path: '/settings/theme',
-            element: <ThemePage />,
+            element: <Suspense fallback={<div>Loading...</div>}><ThemePage /></Suspense>,
           },
         ],
       },
       {
         path: '/bulk',
-        element: <BulkPage />, // Main bulk page with tabs
+        element: <Suspense fallback={<div>Loading...</div>}><BulkPage /></Suspense>,
         children: [
           {
             path: '/bulk',
-            element: <BulkGroupsPage />,
+            element: <Suspense fallback={<div>Loading...</div>}><BulkGroupsPage /></Suspense>,
           },
           {
             path: '/bulk/proxy',
-            element: <BulkProxyPage />,
+            element: <Suspense fallback={<div>Loading...</div>}><BulkProxyPage /></Suspense>,
           },
           {
             path: '/bulk/expire',
-            element: <BulkExpirePage />,
+            element: <Suspense fallback={<div>Loading...</div>}><BulkExpirePage /></Suspense>,
           },
           {
             path: '/bulk/data',
-            element: <BulkDataPage />,
+            element: <Suspense fallback={<div>Loading...</div>}><BulkDataPage /></Suspense>,
           },
         ],
       },
       {
         path: 'theme',
-        element: <ThemePage />,
+        element: <Suspense fallback={<div>Loading...</div>}><ThemePage /></Suspense>,
       },
     ],
   },
   {
     path: '/login',
-    element: <Login />,
+    element: <Suspense fallback={<div>Loading...</div>}><Login /></Suspense>,
   },
 ] as RouteObject[])
