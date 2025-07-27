@@ -626,8 +626,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }
 
   // Helper to convert expire field to needed schema using the same logic as other components
-  function normalizeExpire(expire: Date | string | number | null | undefined): string | undefined {
-    if (expire === undefined || expire === null || expire === '') return undefined
+  function normalizeExpire(expire: Date | string | number | null | undefined): string | number | undefined {
+    if (expire === '') return 0
+    if (expire === undefined || expire === null) return undefined
 
     // For Date objects, convert to ISO string with timezone
     if (expire instanceof Date) {
@@ -828,6 +829,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               : values.on_hold_expire_duration
             : undefined,
           expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
+          on_hold_timeout: status === 'on_hold' ? normalizeExpire(values.on_hold_timeout) : undefined,
           group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
           status: values.status,
         }
@@ -866,7 +868,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         const sendValues = {
           ...preparedValues,
           data_limit: gbToBytes(preparedValues.data_limit as any),
-          expire: normalizeExpire(preparedValues.expire),
+          expire: preparedValues.expire,
           // Only include proxy_settings if they are filled
           ...(hasProxySettings ? { proxy_settings: cleanedProxySettings } : {}),
         }
