@@ -163,13 +163,6 @@ export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
 
-export interface XrayMuxSettingsOutput {
-  enable?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
-
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
 export type XrayMuxSettingsInputConcurrency = number | null
@@ -198,6 +191,13 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
+
+export interface XrayMuxSettingsOutput {
+  enable?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
 
 export type XTLSFlows = (typeof XTLSFlows)[keyof typeof XTLSFlows]
 
@@ -261,6 +261,16 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
+
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -282,16 +292,6 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
-
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -461,6 +461,8 @@ export type UserTemplateCreateOnHoldTimeout = number | null
 
 export type UserTemplateCreateResetUsages = boolean | null
 
+export type UserTemplateCreateStatus = UserStatusCreate | null
+
 export type UserTemplateCreateExtraSettings = ExtraSettings | null
 
 export type UserTemplateCreateUsernameSuffix = string | null
@@ -496,13 +498,9 @@ export interface UserTemplateCreate {
   is_disabled?: UserTemplateCreateIsDisabled
 }
 
-export type UserSubscriptionUpdateSchemaUserAgent = string | null
-
-export type UserSubscriptionUpdateSchemaCreatedAt = string | null
-
 export interface UserSubscriptionUpdateSchema {
-  created_at?: UserSubscriptionUpdateSchemaCreatedAt
-  user_agent?: UserSubscriptionUpdateSchemaUserAgent
+  created_at: string
+  user_agent: string
 }
 
 export interface UserSubscriptionUpdateList {
@@ -526,8 +524,6 @@ export const UserStatusCreate = {
   active: 'active',
   on_hold: 'on_hold',
 } as const
-
-export type UserTemplateCreateStatus = UserStatusCreate | null
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus]
 
@@ -905,6 +901,21 @@ export interface ShadowsocksSettings {
   method?: ShadowsocksMethods
 }
 
+export interface SettingsSchemaOutput {
+  telegram?: SettingsSchemaOutputTelegram
+  discord?: SettingsSchemaOutputDiscord
+  webhook?: SettingsSchemaOutputWebhook
+  notification_settings?: SettingsSchemaOutputNotificationSettings
+  notification_enable?: SettingsSchemaOutputNotificationEnable
+  subscription?: SettingsSchemaOutputSubscription
+  general?: SettingsSchemaOutputGeneral
+}
+
+export interface General {
+  default_flow?: XTLSFlows
+  default_method?: ShadowsocksMethods
+}
+
 export type SettingsSchemaOutputGeneral = General | null
 
 export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
@@ -919,19 +930,11 @@ export type SettingsSchemaOutputDiscord = Discord | null
 
 export type SettingsSchemaOutputTelegram = Telegram | null
 
-export interface SettingsSchemaOutput {
-  telegram?: SettingsSchemaOutputTelegram
-  discord?: SettingsSchemaOutputDiscord
-  webhook?: SettingsSchemaOutputWebhook
-  notification_settings?: SettingsSchemaOutputNotificationSettings
-  notification_enable?: SettingsSchemaOutputNotificationEnable
-  subscription?: SettingsSchemaOutputSubscription
-  general?: SettingsSchemaOutputGeneral
-}
-
 export type SettingsSchemaInputGeneral = General | null
 
 export type SettingsSchemaInputSubscription = SubscriptionInput | null
+
+export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
 
 export type SettingsSchemaInputNotificationSettings = NotificationSettings | null
 
@@ -1059,8 +1062,6 @@ export interface NotificationEnable {
   percentage_reached?: boolean
 }
 
-export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
-
 export interface NotFound {
   detail?: string
 }
@@ -1073,13 +1074,6 @@ export interface NoiseSettings {
 
 export type NodeUsageStatsListPeriod = Period | null
 
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
-
 export interface NodeUsageStat {
   uplink: number
   downlink: number
@@ -1087,6 +1081,13 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
+
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -1377,11 +1378,6 @@ export interface GroupCreate {
   name: string
   inbound_tags: string[]
   is_disabled?: boolean
-}
-
-export interface General {
-  default_flow?: XTLSFlows
-  default_method?: ShadowsocksMethods
 }
 
 export type GRPCSettingsInitialWindowsSize = number | null
