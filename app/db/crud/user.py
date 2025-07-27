@@ -2,13 +2,14 @@ import asyncio
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Sequence, Union
 
-from sqlalchemy import and_, delete, desc, func, not_, or_, select, update, case
+from sqlalchemy import and_, case, delete, desc, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.functions import coalesce
 
+from app.db.compiles_types import DateDiff
 from app.db.models import (
     Admin,
     Group,
@@ -22,10 +23,9 @@ from app.db.models import (
     UserSubscriptionUpdate,
     UserUsageResetLogs,
 )
-from app.db.compiles_types import DateDiff
 from app.models.proxy import ProxyTable
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList
-from app.models.user import UserCreate, UserModify, UserSubscriptionUpdateList, UserSubscriptionUpdateSchema
+from app.models.user import UserCreate, UserModify
 from config import USERS_AUTODELETE_DAYS
 
 from .general import _build_trunc_expression, build_json_proxy_settings_search_condition
@@ -716,7 +716,7 @@ async def user_sub_update(db: AsyncSession, user_id: User, user_agent: str) -> U
 
 async def get_user_sub_update_list(
     db: AsyncSession, user_id: int, offset: int = 0, limit: int = 10
-) -> UserSubscriptionUpdateList:
+) -> tuple[Sequence[UserSubscriptionUpdate], int]:
     stmt = (
         select(UserSubscriptionUpdate)
         .where(UserSubscriptionUpdate.user_id == user_id)
@@ -724,7 +724,7 @@ async def get_user_sub_update_list(
     )
 
     result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    count = result.scalar()
+    count = result.scalar() or 0
 
     if offset:
         stmt = stmt.offset(offset)
@@ -732,12 +732,8 @@ async def get_user_sub_update_list(
         stmt = stmt.limit(limit)
 
     result = (await db.execute(stmt)).unique().scalars().all()
-    subscriptions = UserSubscriptionUpdateList(
-        updates=[UserSubscriptionUpdateSchema(created_at=row.created_at, user_agent=row.user_agent) for row in result],
-        count=count,
-    )
 
-    return subscriptions
+    return result, count
 
 
 async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
