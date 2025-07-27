@@ -32,7 +32,7 @@ class GroupOperation(BaseOperation):
         self, db: AsyncSession, offset: int | None = None, limit: int | None = None
     ) -> GroupsResponse:
         db_groups, count = await get_group(db, offset, limit)
-        return GroupsResponse.model_validate({"groups": db_groups, "total": count})
+        return GroupsResponse(groups=db_groups, total=count)
 
     async def modify_group(self, db: AsyncSession, group_id: int, modified_group: GroupModify, admin: Admin) -> Group:
         db_group = await self.get_validated_group(db, group_id)
@@ -41,9 +41,9 @@ class GroupOperation(BaseOperation):
         db_group = await modify_group(db, db_group, modified_group)
 
         users = await get_users(db, group_ids=[db_group.id])
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await asyncio.gather(*[
+            node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users
+        ])
 
         group = GroupResponse.model_validate(db_group)
 
@@ -61,9 +61,9 @@ class GroupOperation(BaseOperation):
         await remove_group(db, db_group)
         users = await get_users(db, usernames=username_list)
 
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await asyncio.gather(*[
+            node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users
+        ])
 
         logger.info(f'Group "{db_group.name}" deleted by admin "{admin.username}"')
 
@@ -74,9 +74,9 @@ class GroupOperation(BaseOperation):
 
         users, users_count = await add_groups_to_users(db, bulk_model)
 
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await asyncio.gather(*[
+            node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users
+        ])
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
@@ -86,9 +86,9 @@ class GroupOperation(BaseOperation):
 
         users, users_count = await remove_groups_from_users(db, bulk_model)
 
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await asyncio.gather(*[
+            node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users
+        ])
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
