@@ -62,7 +62,7 @@ async def startup_telegram_bot():
                     secret_token=settings.webhook_secret,
                     allowed_updates=["message", "callback_query", "inline_query"],
                 )
-                logger.info("telegram bot started successfully.")
+                logger.info("Telegram bot started successfully.")
             except (TelegramNetworkError, ProxyConnectionError, TelegramBadRequest, TelegramUnauthorizedError) as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
@@ -76,6 +76,7 @@ async def shutdown_telegram_bot():
 
     async with _lock:
         if isinstance(_bot, Bot):
+            logger.info("Shutting down telegram bot")
             try:
                 await _bot.delete_webhook(drop_pending_updates=True)
             except (TelegramNetworkError, TelegramRetryAfter, ProxyConnectionError) as err:
@@ -88,6 +89,7 @@ async def shutdown_telegram_bot():
                 await _bot.session.close()
 
             _bot = None
+            logger.info("Telegram bot shut down successfully.")
 
 
 on_startup(startup_telegram_bot)
