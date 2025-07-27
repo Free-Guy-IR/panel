@@ -32,7 +32,6 @@ def get_dispatcher():
 
 
 async def startup_telegram_bot():
-    logger.info("Telegram bot starting")
     restart = False
     global _bot
     global _dp
@@ -44,17 +43,15 @@ async def startup_telegram_bot():
     async with _lock:
         settings: Telegram = await telegram_settings()
         if settings.enable:
+            logger.info("Telegram bot starting")
             session = AiohttpSession(proxy=settings.proxy_url)
             _bot = Bot(token=settings.token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-            try:
+            if not restart:
                 # register handlers
-                if not restart:
-                    include_routers(_dp)
+                include_routers(_dp)
                 # register middlewares
                 setup_middlewares(_dp)
-            except RuntimeError as err:
-                logger.error(err)
 
             # register webhook
             webhook_address = f"{settings.webhook_url}/api/tghook"
@@ -66,13 +63,7 @@ async def startup_telegram_bot():
                     allowed_updates=["message", "callback_query", "inline_query"],
                 )
                 logger.info("telegram bot started successfully.")
-            except (
-                TelegramNetworkError,
-                ProxyConnectionError,
-                TelegramBadRequest,
-                TelegramUnauthorizedError,
-                Exception,
-            ) as err:
+            except (TelegramNetworkError, ProxyConnectionError, TelegramBadRequest, TelegramUnauthorizedError) as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
                 else:
