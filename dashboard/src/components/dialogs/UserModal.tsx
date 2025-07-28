@@ -95,6 +95,8 @@ const ExpiryDateField = ({
   setCalendarOpen,
   handleFieldChange,
   label,
+  useUtcTimestamp = false,
+  fieldName = 'expire',
 }: {
   field: any
   displayDate: Date | null
@@ -103,6 +105,8 @@ const ExpiryDateField = ({
   setCalendarOpen: (open: boolean) => void
   handleFieldChange: (field: string, value: any) => void
   label: string
+  useUtcTimestamp?: boolean
+  fieldName?: string
 }) => {
   const { t } = useTranslation()
   const expireInfo = useRelativeExpiryDate(displayDate ? Math.floor(displayDate.getTime() / 1000) : null)
@@ -127,20 +131,20 @@ const ExpiryDateField = ({
           date.setHours(now.getHours(), now.getMinutes())
         }
 
-        const isoString = getLocalISOTime(date)
+        const value = useUtcTimestamp ? Math.floor(date.getTime() / 1000) : getLocalISOTime(date)
         startTransition(() => {
-          field.onChange(isoString)
-          handleFieldChange('expire', isoString)
+          field.onChange(value)
+          handleFieldChange(fieldName, value)
         })
       } else {
         startTransition(() => {
           field.onChange('')
-          handleFieldChange('expire', undefined)
+          handleFieldChange(fieldName, undefined)
         })
       }
       setCalendarOpen(false)
     },
-    [field, handleFieldChange, setCalendarOpen, startTransition],
+    [field, handleFieldChange, setCalendarOpen, startTransition, useUtcTimestamp, fieldName],
   )
 
   // Update time input handling to work with local time
@@ -158,14 +162,14 @@ const ExpiryDateField = ({
           newDate.setTime(now.getTime())
         }
 
-        const isoString = getLocalISOTime(newDate)
+        const value = useUtcTimestamp ? Math.floor(newDate.getTime() / 1000) : getLocalISOTime(newDate)
         startTransition(() => {
-          field.onChange(isoString)
-          handleFieldChange('expire', isoString)
+          field.onChange(value)
+          handleFieldChange(fieldName, value)
         })
       }
     },
-    [displayDate, field, handleFieldChange, startTransition],
+    [displayDate, field, handleFieldChange, startTransition, useUtcTimestamp, fieldName],
   )
 
   // Get current date for comparison
@@ -344,7 +348,7 @@ const ExpiryDateField = ({
                   e.preventDefault()
                   e.stopPropagation()
                   field.onChange('')
-                  handleFieldChange('expire', undefined)
+                  handleFieldChange(fieldName, undefined)
                   setCalendarOpen(false)
                 }}
               >
@@ -627,20 +631,20 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }
 
   // Helper to convert expire field to needed schema using the same logic as other components
-  function normalizeExpire(expire: Date | string | number | null | undefined): string | number | undefined {
+  function normalizeExpire(expire: Date | string | number | null | undefined, useUtcTimestamp: boolean = false): string | number | undefined {
     if (expire === '') return 0
     if (expire === undefined || expire === null) return undefined
 
-    // For Date objects, convert to ISO string with timezone
+    // For Date objects, convert to appropriate format
     if (expire instanceof Date) {
-      return getLocalISOTime(expire)
+      return useUtcTimestamp ? Math.floor(expire.getTime() / 1000) : getLocalISOTime(expire)
     }
 
     // For strings and numbers, use the same dateUtils logic as other components
     try {
       const dayjsDate = dateUtils.toDayjs(expire)
       if (dayjsDate.isValid()) {
-        return getLocalISOTime(dayjsDate.toDate())
+        return useUtcTimestamp ? Math.floor(dayjsDate.toDate().getTime() / 1000) : getLocalISOTime(dayjsDate.toDate())
       }
     } catch (error) {
       // If dayjs parsing fails, return undefined
@@ -1387,6 +1391,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                 setCalendarOpen={setExpireCalendarOpen}
                                 handleFieldChange={handleFieldChange}
                                 label={t('userDialog.expiryDate', { defaultValue: 'Expire date' })}
+                                fieldName="expire"
                               />
                             )}
                           />
@@ -1407,6 +1412,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           setCalendarOpen={setOnHoldCalendarOpen}
                           handleFieldChange={handleFieldChange}
                           label={t('userDialog.timeOutDate', { defaultValue: 'Expire date' })}
+                          fieldName="on_hold_timeout"
                         />
                       )}
                     />
