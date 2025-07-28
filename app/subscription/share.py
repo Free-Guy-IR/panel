@@ -179,7 +179,7 @@ async def process_host(
     if tag not in inbounds:
         return
 
-    host_inbound: dict = await core_manager.get_inbounds_by_tag()[tag]
+    host_inbound: dict = (await core_manager.get_inbounds_by_tag())[tag]
     protocol = host_inbound["protocol"]
 
     settings = proxies.get(protocol)
