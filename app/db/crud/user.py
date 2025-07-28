@@ -862,10 +862,7 @@ async def update_users_status(db: AsyncSession, users: list[User], status: UserS
     """
     user_ids = [user.id for user in users]
     stmt = (
-        update(User)
-        .where(User.id.in_(user_ids))
-        .values(status=status, last_status_change=datetime.now(timezone.utc))
-        .execution_options(synchronize_session=False)
+        update(User).where(User.id.in_(user_ids)).values(status=status, last_status_change=datetime.now(timezone.utc))
     )
     await db.execute(stmt)
     await db.commit()
@@ -887,9 +884,7 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     Returns:
         User: The updated user object.
     """
-    stmt = (
-        update(User).where(User.id == db_user.id).values(admin_id=admin.id).execution_options(synchronize_session=False)
-    )
+    stmt = update(User).where(User.id == db_user.id).values(admin_id=admin.id)
     await db.execute(stmt)
     await db.commit()
     await db.refresh(db_user)
@@ -914,13 +909,7 @@ async def start_users_expire(db: AsyncSession, users: list[User]) -> list[User]:
         stmt = (
             update(User)
             .where(User.id == user.id)
-            .values(
-                expire=expire_time,
-                on_hold_expire_duration=None,
-                on_hold_timeout=None,
-                status=UserStatus.active,
-            )
-            .execution_options(synchronize_session=False)
+            .values(expire=expire_time, on_hold_expire_duration=None, on_hold_timeout=None, status=UserStatus.active)
         )
         await db.execute(stmt)
 
@@ -939,7 +928,7 @@ async def create_notification_reminder(
 
     Args:
         db (AsyncSession): The database session.
-        reminder_type (app.db.models.ReminderType): The type of reminder.
+        reminder_type (ReminderType): The type of reminder.
         expires_at (datetime): The expiration time of the reminder.
         user_id (int): The ID of the user associated with the reminder.
         threshold (Optional[int]): The threshold value to check for (e.g., days left or usage percent).
@@ -954,67 +943,6 @@ async def create_notification_reminder(
     await db.commit()
     await db.refresh(reminder)
     return reminder
-
-
-async def get_notification_reminder(
-    db: AsyncSession, user_id: int, reminder_type: ReminderType, threshold: Optional[int] = None
-) -> Union[NotificationReminder, None]:
-    """
-    Retrieves a notification reminder for a user.
-
-    Args:
-        db (AsyncSession): The database session.
-        user_id (int): The ID of the user.
-        reminder_type (app.db.models.ReminderType): The type of reminder to retrieve.
-        threshold (Optional[int]): The threshold value to check for (e.g., days left or usage percent).
-
-    Returns:
-        Union[NotificationReminder, None]: The NotificationReminder object if found and not expired, None otherwise.
-    """
-    query = select(NotificationReminder).where(
-        NotificationReminder.user_id == user_id, NotificationReminder.type == reminder_type
-    )
-
-    # If a threshold is provided, filter for reminders with this threshold
-    if threshold is not None:
-        query = query.where(NotificationReminder.threshold == threshold)
-
-    reminder = (await db.execute(query)).scalar_one_or_none()
-
-    if reminder is None:
-        return None
-
-    # Check if the reminder has expired
-    if reminder.expires_at and reminder.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-        await db.delete(reminder)
-        await db.commit()
-        return None
-
-    return reminder
-
-
-async def delete_notification_reminder_by_type(
-    db: AsyncSession, user_id: int, reminder_type: ReminderType, threshold: Optional[int] = None
-) -> None:
-    """
-    Deletes a notification reminder for a user based on the reminder type and optional threshold.
-
-    Args:
-        db (AsyncSession): The database session.
-        user_id (int): The ID of the user.
-        reminder_type (app.db.models.ReminderType): The type of reminder to delete.
-        threshold (Optional[int]): The threshold to delete (e.g., days left or usage percent). If not provided, deletes all reminders of that type.
-    """
-    stmt = delete(NotificationReminder).where(
-        NotificationReminder.user_id == user_id, NotificationReminder.type == reminder_type
-    )
-
-    # If a threshold is provided, include it in the filter
-    if threshold is not None:
-        stmt = stmt.where(NotificationReminder.threshold == threshold)
-
-    await db.execute(stmt)
-    await db.commit()
 
 
 async def delete_user_passed_notification_reminders(
@@ -1038,19 +966,6 @@ async def delete_user_passed_notification_reminders(
 
     stmt = delete(NotificationReminder).where(and_(*conditions))
     await db.execute(stmt)
-    await db.commit()
-
-
-async def delete_notification_reminder(db: AsyncSession, db_reminder: NotificationReminder) -> None:
-    """
-    Deletes a specific notification reminder.
-
-    Args:
-        db (AsyncSession): The database session.
-        db_reminder (NotificationReminder): The NotificationReminder object to delete.
-    """
-    await db.delete(db_reminder)
-    await db.commit()
 
 
 async def count_online_users(db: AsyncSession, time_delta: timedelta, admin_id: int | None = None):
