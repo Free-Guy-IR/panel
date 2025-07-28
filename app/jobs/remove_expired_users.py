@@ -14,6 +14,7 @@ logger = get_logger("jobs")
 
 
 async def remove_expired_users():
+    logger.info("Job `remove_expired_users` started")
     async with GetDB() as db:
         deleted_users = await autodelete_expired_users(db, USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS)
 
@@ -21,7 +22,8 @@ async def remove_expired_users():
             asyncio.create_task(
                 notification.remove_user(user=UserNotificationResponse.model_validate(user), by=SYSTEM_ADMIN)
             )
-            logger.info("Expired user %s deleted.", user.username)
+            logger.info("Expired user %s deleted.")
+    logger.info("Job `remove_expired_users` finished")
 
 
 scheduler.add_job(

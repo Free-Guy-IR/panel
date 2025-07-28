@@ -6,7 +6,11 @@ from app import scheduler
 from app.db import GetDB
 from app.db.models import NodeStat
 from app.node import node_manager
+from app.utils.logger import get_logger
 from config import ENABLE_RECORDING_NODES_STATS, JOB_GHATER_NODES_STATS_INTERVAL
+
+
+logger = get_logger("jobs")
 
 
 async def get_stat(id: int, node: GozargahNode) -> NodeStat:
@@ -30,6 +34,7 @@ async def get_stat(id: int, node: GozargahNode) -> NodeStat:
 
 
 async def gather_nodes_stats():
+    logger.info("Job `gather_nodes_stats` started")
     nodes = await node_manager.get_healthy_nodes()
 
     stats_list = await asyncio.gather(*[get_stat(id, node) for id, node in nodes])
@@ -40,6 +45,7 @@ async def gather_nodes_stats():
         async with GetDB() as db:
             db.add_all(valid_stats)
             await db.commit()
+    logger.info("Job `gather_nodes_stats` finished")
 
 
 if ENABLE_RECORDING_NODES_STATS:

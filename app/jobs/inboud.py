@@ -10,6 +10,7 @@ logger = get_logger("jobs")
 
 
 async def remove_old_inbounds():
+    logger.info("Job `remove_old_inbounds` started")
     in_use_inbounds = await core_manager.get_inbounds()
 
     async with GetDB() as db:
@@ -19,6 +20,7 @@ async def remove_old_inbounds():
 
         for inbound in old_inbounds:
             logger.info(f"inbound {inbound.tag} removed.")
+    logger.info("Job `remove_old_inbounds` finished")
 
 
 scheduler.add_job(

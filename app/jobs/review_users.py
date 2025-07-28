@@ -50,30 +50,37 @@ async def change_status(db: AsyncSession, db_user: User, status: UserStatus):
 
 
 async def expire_users_job():
+    logger.info("Job `expire_users_job` started")
     async with GetDB() as db:
         if expired_users := await get_active_to_expire_users(db):
             updated_users = await update_users_status(db, expired_users, UserStatus.expired)
             for user in updated_users:
                 await change_status(db, user, UserStatus.expired)
+    logger.info("Job `expire_users_job` finished")
 
 
 async def limit_users_job():
+    logger.info("Job `limit_users_job` started")
     async with GetDB() as db:
         if limited_users := await get_active_to_limited_users(db):
             updated_users = await update_users_status(db, limited_users, UserStatus.limited)
             for user in updated_users:
                 await change_status(db, user, UserStatus.limited)
+    logger.info("Job `limit_users_job` finished")
 
 
 async def on_hold_to_active_users_job():
+    logger.info("Job `on_hold_to_active_users_job` started")
     async with GetDB() as db:
         if on_hold_users := await get_on_hold_to_active_users(db):
             updated_users = await start_users_expire(db, on_hold_users)
             for user in updated_users:
                 await change_status(db, user, UserStatus.active)
+    logger.info("Job `on_hold_to_active_users_job` finished")
 
 
 async def usage_percent_notification_job():
+    logger.info("Job `usage_percent_notification_job` started")
     settings: Webhook = await webhook_settings()
     if not settings.enable:
         return
@@ -84,9 +91,11 @@ async def usage_percent_notification_job():
                 await notification.data_usage_percent_reached(
                     db, user.usage_percentage, UserNotificationResponse.model_validate(user), percent
                 )
+    logger.info("Job `usage_percent_notification_job` finished")
 
 
 async def days_left_notification_job():
+    logger.info("Job `days_left_notification_job` started")
     settings: Webhook = await webhook_settings()
     if not settings.enable:
         return
@@ -97,6 +106,7 @@ async def days_left_notification_job():
                 await notification.expire_days_reached(
                     db, user.days_left, UserNotificationResponse.model_validate(user), days
                 )
+    logger.info("Job `days_left_notification_job` finished")
 
 
 now = dt.now(tz.utc) + td(seconds=2)

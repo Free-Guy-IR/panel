@@ -19,6 +19,8 @@ logger = get_logger("node-checker")
 
 
 async def node_health_check():
+    logger.info("Job `node_health_check` started")
+
     async def check_node(id: int, node: GozargahNode):
         try:
             await node.get_backend_stats(timeout=10)
@@ -40,10 +42,12 @@ async def node_health_check():
     connect_tasks = [asyncio.create_task(node_operator.connect_node(id)) for id, _ in not_connected_nodes]
 
     await asyncio.gather(*check_tasks + connect_tasks)
+    logger.info("Job `node_health_check` finished")
 
 
 @on_startup
 async def initialize_nodes():
+    logger.info("Job `initialize_nodes` started")
     logger.info("Starting main and nodes' cores...")
 
     async with GetDB() as db:
@@ -67,10 +71,12 @@ async def initialize_nodes():
     scheduler.add_job(
         node_health_check, "interval", seconds=JOB_CORE_HEALTH_CHECK_INTERVAL, coalesce=True, max_instances=1
     )
+    logger.info("Job `initialize_nodes` finished")
 
 
 @on_shutdown
 async def shutdown_nodes():
+    logger.info("Job `shutdown_nodes` started")
     logger.info("Stopping nodes' cores...")
 
     nodes: dict[int, GozargahNode] = await node_manager.get_nodes()
@@ -81,3 +87,4 @@ async def shutdown_nodes():
     await asyncio.gather(*stop_tasks, return_exceptions=True)
 
     logger.info("All nodes' cores have been stopped.")
+    logger.info("Job `shutdown_nodes` finished")
