@@ -35,6 +35,7 @@ class CoreManager:
             self._inbounds = list(self._inbounds_by_tag.keys())
 
             await self.get_inbounds.cache.clear()
+            await self.get_inbounds_by_tag.cache.clear()
 
     async def update_core(self, db_core_config: CoreConfig):
         backend_config = self.validate_core(
@@ -70,6 +71,7 @@ class CoreManager:
         async with self._lock.reader_lock:
             return deepcopy(self._inbounds)
 
+    @cached()
     async def get_inbounds_by_tag(self) -> dict:
         async with self._lock.reader_lock:
             return deepcopy(self._inbounds_by_tag)
