@@ -286,7 +286,7 @@ class StandardLinks(BaseSubscription):
             downloadSettings=downloadSettings,
         )
         if tls in ("tls", "reality"):
-            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs,ais)
+            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais)
         return "vmess://" + base64.b64encode(json.dumps(payload, sort_keys=True).encode("utf-8")).decode()
 
     def vless(
@@ -348,7 +348,7 @@ class StandardLinks(BaseSubscription):
             downloadSettings=downloadSettings,
         )
         if tls in ("tls", "reality"):
-            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs,ais)
+            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais)
         return "vless://" + f"{id}@{address}:{port}?" + urlparse.urlencode(payload) + f"#{(urlparse.quote(remark))}"
 
     def trojan(
@@ -410,7 +410,7 @@ class StandardLinks(BaseSubscription):
             downloadSettings=downloadSettings,
         )
         if tls in ("tls", "reality"):
-            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs,ais)
+            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais)
         return (
             "trojan://"
             + f"{urlparse.quote(password, safe=':')}@{address}:{port}?"

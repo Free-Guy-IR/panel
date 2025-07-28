@@ -2,7 +2,7 @@ import asyncio
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence
 
 from sqlalchemy import and_, case, delete, desc, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
