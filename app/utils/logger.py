@@ -1,6 +1,7 @@
 import logging
 from copy import copy
 from urllib.parse import unquote
+
 import click
 from uvicorn.config import LOGGING_CONFIG
 from uvicorn.logging import DefaultFormatter
@@ -15,7 +16,7 @@ class CustomLoggingFormatter(DefaultFormatter):
 
 LOGGING_CONFIG["formatters"]["custom"] = {
     "()": CustomLoggingFormatter,
-    "fmt": "%(levelprefix)s %(nameprefix)s - %(message)s",
+    "fmt": "%(levelprefix)s %(asctime)s - %(nameprefix)s - %(message)s",
     "use_colors": None,
 }
 LOGGING_CONFIG["handlers"]["custom"] = {
@@ -23,6 +24,9 @@ LOGGING_CONFIG["handlers"]["custom"] = {
     "formatter": "custom",
     "stream": LOGGING_CONFIG["handlers"]["default"]["stream"],
 }
+
+LOGGING_CONFIG["formatters"]["default"]["fmt"] = "%(levelprefix)s %(asctime)s - %(message)s"
+LOGGING_CONFIG["formatters"]["access"]["fmt"] = '%(levelprefix)s %(asctime)s - %(client_addr)s - "%(request_line)s" %(status_code)s'
 
 
 def get_logger(name: str = "uvicorn.error") -> logging.Logger:
