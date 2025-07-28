@@ -834,7 +834,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               : values.on_hold_expire_duration
             : undefined,
           expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
-          on_hold_timeout: status === 'on_hold' ? normalizeExpire(values.on_hold_timeout, true) : undefined,
+          on_hold_timeout: status === 'on_hold' ? normalizeExpire(values.on_hold_timeout) : undefined,
           group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
           status: values.status,
         }
@@ -1412,7 +1412,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           setCalendarOpen={setOnHoldCalendarOpen}
                           handleFieldChange={handleFieldChange}
                           label={t('userDialog.timeOutDate', { defaultValue: 'Expire date' })}
-                          useUtcTimestamp={true}
                           fieldName="on_hold_timeout"
                         />
                       )}
