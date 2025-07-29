@@ -22,11 +22,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql.expression import delete, select, text
+from sqlalchemy.sql.expression import select, text
 
 from app.db.base import Base
 from app.db.compiles_types import CaseSensitiveString, DaysDiff, EnumArray
-from config import USER_SUBSCRIPTION_CLIENTS_LIMIT
 
 inbounds_groups_association = Table(
     "inbounds_groups_association",
@@ -286,24 +285,6 @@ class UserSubscriptionUpdate(Base):
     user: Mapped["User"] = relationship(back_populates="subscription_updates", init=False)
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
     user_agent: Mapped[str] = mapped_column(String(512))
-
-
-@event.listens_for(UserSubscriptionUpdate, "after_insert")
-def after_insert_user_subscription_update(mapper, connection, target):
-    if not USER_SUBSCRIPTION_CLIENTS_LIMIT:
-        return
-
-    count = connection.scalar(
-        select(func.count()).select_from(UserSubscriptionUpdate).where(UserSubscriptionUpdate.user_id == target.user_id)
-    )
-    if count > USER_SUBSCRIPTION_CLIENTS_LIMIT:
-        oldest_sub_id = connection.scalar(
-            select(UserSubscriptionUpdate.id)
-            .where(UserSubscriptionUpdate.user_id == target.user_id)
-            .order_by(UserSubscriptionUpdate.created_at)
-            .limit(1)
-        )
-        connection.execute(delete(UserSubscriptionUpdate).where(UserSubscriptionUpdate.id == oldest_sub_id))
 
 
 template_group_association = Table(
