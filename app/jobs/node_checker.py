@@ -23,25 +23,49 @@ async def node_health_check():
 
     async def check_node(id: int, node: GozargahNode):
         try:
-            await node.get_backend_stats(timeout=10)
-            await node_operator.update_node_status(
-                id, NodeStatus.connected, await node.core_version(), await node.node_version()
-            )
+            stats_task = node.get_backend_stats(timeout=8)
+            core_ver_task = node.core_version()
+            node_ver_task = node.node_version()
+
+            # Execute all calls concurrently
+            results = await asyncio.gather(stats_task, core_ver_task, node_ver_task, return_exceptions=True)
+
+            # Check if any call failed
+            if any(isinstance(result, Exception) for result in results):
+                # If any call failed, treat as connection error
+                raise NodeAPIError(-1, "Failed to get node information")
+
+            _, core_version, node_version = results
+            await node_operator.update_node_status(id, NodeStatus.connected, core_version, node_version)
         except NodeAPIError as e:
             if e.code > -3:
                 await node_operator.update_node_status(id, NodeStatus.error, err=e.detail)
             if e.code > 0:
                 await node_operator.connect_node(node_id=id)
 
-    broken_nodes, not_connected_nodes = await asyncio.gather(
-        node_manager.get_broken_nodes(), node_manager.get_not_connected_nodes()
-    )
+    broken_nodes, not_connected_nodes = await node_manager.get_nodes_by_health_status()
 
-    check_tasks = [asyncio.create_task(check_node(id, node)) for id, node in broken_nodes]
+    # Limit concurrent operations to prevent CPU spikes on low-resource servers
+    total_tasks = len(broken_nodes) + len(not_connected_nodes)
+    max_concurrent = min(4, max(1, total_tasks))
 
-    connect_tasks = [asyncio.create_task(node_operator.connect_node(id)) for id, _ in not_connected_nodes]
+    if total_tasks > 0:
+        semaphore = asyncio.Semaphore(max_concurrent)
 
-    await asyncio.gather(*check_tasks + connect_tasks)
+        async def limited_check_node(id: int, node: GozargahNode):
+            async with semaphore:
+                await check_node(id, node)
+
+        async def limited_connect_node(id: int):
+            async with semaphore:
+                await node_operator.connect_node(node_id=id)
+
+        check_tasks = [limited_check_node(id, node) for id, node in broken_nodes]
+        connect_tasks = [limited_connect_node(id) for id, _ in not_connected_nodes]
+
+        # Use return_exceptions=True to prevent one failed node from stopping others
+        await asyncio.gather(*check_tasks + connect_tasks, return_exceptions=True)
+
     logger.info("Job `node_health_check` finished")
 
 
