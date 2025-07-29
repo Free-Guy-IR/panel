@@ -151,6 +151,10 @@ export type GetAdminsParams = {
   limit?: number | null
 }
 
+export type GetManifestParams = {
+  start_url?: string | null
+}
+
 export interface XrayNoiseSettings {
   /** @pattern ^(:?rand|str|base64|hex)$ */
   type: string
@@ -162,6 +166,13 @@ export interface XrayNoiseSettings {
 export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
+
+export interface XrayMuxSettingsOutput {
+  enable?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
 
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
@@ -191,13 +202,6 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
-
-export interface XrayMuxSettingsOutput {
-  enable?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
 
 export type XTLSFlows = (typeof XTLSFlows)[keyof typeof XTLSFlows]
 
@@ -261,16 +265,6 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
-
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -292,6 +286,16 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
+
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -598,8 +602,6 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -634,6 +636,8 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -901,16 +905,6 @@ export interface ShadowsocksSettings {
   method?: ShadowsocksMethods
 }
 
-export interface SettingsSchemaOutput {
-  telegram?: SettingsSchemaOutputTelegram
-  discord?: SettingsSchemaOutputDiscord
-  webhook?: SettingsSchemaOutputWebhook
-  notification_settings?: SettingsSchemaOutputNotificationSettings
-  notification_enable?: SettingsSchemaOutputNotificationEnable
-  subscription?: SettingsSchemaOutputSubscription
-  general?: SettingsSchemaOutputGeneral
-}
-
 export interface General {
   default_flow?: XTLSFlows
   default_method?: ShadowsocksMethods
@@ -929,6 +923,16 @@ export type SettingsSchemaOutputWebhook = Webhook | null
 export type SettingsSchemaOutputDiscord = Discord | null
 
 export type SettingsSchemaOutputTelegram = Telegram | null
+
+export interface SettingsSchemaOutput {
+  telegram?: SettingsSchemaOutputTelegram
+  discord?: SettingsSchemaOutputDiscord
+  webhook?: SettingsSchemaOutputWebhook
+  notification_settings?: SettingsSchemaOutputNotificationSettings
+  notification_enable?: SettingsSchemaOutputNotificationEnable
+  subscription?: SettingsSchemaOutputSubscription
+  general?: SettingsSchemaOutputGeneral
+}
 
 export type SettingsSchemaInputGeneral = General | null
 
@@ -1438,6 +1442,8 @@ export interface CreateUserFromTemplate {
   username: string
 }
 
+export type CreateHostEchConfigList = string | null
+
 export type CreateHostNoiseSettings = NoiseSettings | null
 
 export type CreateHostFragmentSettings = FragmentSettings | null
@@ -1487,6 +1493,7 @@ export interface CreateHost {
   use_sni_as_host?: boolean
   priority: number
   status?: UserStatus[]
+  ech_config_list?: CreateHostEchConfigList
 }
 
 export type CoreResponseConfig = { [key: string]: unknown }
@@ -1608,6 +1615,8 @@ export interface BodyAdminTokenApiAdminTokenPost {
   client_secret?: BodyAdminTokenApiAdminTokenPostClientSecret
 }
 
+export type BaseHostEchConfigList = string | null
+
 export type BaseHostNoiseSettings = NoiseSettings | null
 
 export type BaseHostFragmentSettings = FragmentSettings | null
@@ -1657,6 +1666,7 @@ export interface BaseHost {
   use_sni_as_host?: boolean
   priority: number
   status?: UserStatus[]
+  ech_config_list?: BaseHostEchConfigList
 }
 
 export type AdminModifySupportUrl = string | null
@@ -1811,6 +1821,67 @@ export function useBase<TData = Awaited<ReturnType<typeof base>>, TError = Error
   query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof base>>, TError, TData>>
 }): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getBaseQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Dynamic PWA manifest generator
+ * @summary Get Manifest
+ */
+export const getManifest = (params?: GetManifestParams, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/manifest.json`, method: 'GET', params, signal })
+}
+
+export const getGetManifestQueryKey = (params?: GetManifestParams) => {
+  return [`/manifest.json`, ...(params ? [params] : [])] as const
+}
+
+export const getGetManifestQueryOptions = <TData = Awaited<ReturnType<typeof getManifest>>, TError = ErrorType<HTTPValidationError>>(
+  params?: GetManifestParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetManifestQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getManifest>>> = ({ signal }) => getManifest(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetManifestQueryResult = NonNullable<Awaited<ReturnType<typeof getManifest>>>
+export type GetManifestQueryError = ErrorType<HTTPValidationError>
+
+export function useGetManifest<TData = Awaited<ReturnType<typeof getManifest>>, TError = ErrorType<HTTPValidationError>>(
+  params: undefined | GetManifestParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetManifest<TData = Awaited<ReturnType<typeof getManifest>>, TError = ErrorType<HTTPValidationError>>(
+  params?: GetManifestParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>> & Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetManifest<TData = Awaited<ReturnType<typeof getManifest>>, TError = ErrorType<HTTPValidationError>>(
+  params?: GetManifestParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Manifest
+ */
+
+export function useGetManifest<TData = Awaited<ReturnType<typeof getManifest>>, TError = ErrorType<HTTPValidationError>>(
+  params?: GetManifestParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetManifestQueryOptions(params, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 

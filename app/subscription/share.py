@@ -232,6 +232,7 @@ async def process_host(
             "random_user_agent": host["random_user_agent"],
             "http_headers": host["http_headers"],
             "mux_settings": host["mux_settings"],
+            "ech_config_list": host["ech_config_list"],
         },
     )
     if ts := host["transport_settings"]:

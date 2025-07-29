@@ -818,6 +818,9 @@
     "host.wildcard": "Use <badge>*</badge> to generate a random string (works for wildcard domains)",
     "sni.info": "SNI (Server Name Indication) is used to specify which hostname the client is trying to connect to. This is particularly useful when you have multiple domains pointing to the same IP address.",
     "useSniAsHost": "Use SNI as Host",
+    "echConfigList": "ECH Config List",
+    "echConfigList.info": "Encrypted Client Hello (ECH) configuration list. This is a base64 encoded string.",
+    "echConfigListPlaceholder": "Enter ECH Config List",
     "httpVersions": {
       "1.0": "HTTP/1.0",
       "1.1": "HTTP/1.1",

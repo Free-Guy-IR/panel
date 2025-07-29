@@ -702,6 +702,9 @@
     "proxyOutbound.info": "ترافیک خروجی اضافی (فقط در پیکربندی سفارشی v2ray)",
     "security.info": "اگر سرور واسط این هاست از لایه امنیتی متفاوتی نسبت به پیش‌فرض ورودی شما استفاده می‌کند، می‌توانید لایه امنیتی سفارشی را اینجا تنظیم کنید.",
     "useSniAsHost": "استفاده از SNI به عنوان هاست",
+    "echConfigList": "لیست پیکربندی ECH",
+    "echConfigList.info": "لیست پیکربندی Encrypted Client Hello (ECH). این یک رشته کدگذاری شده با base64 است.",
+    "echConfigListPlaceholder": "لیست پیکربندی ECH را وارد کنید",
     "httpVersions": {
       "1.0": "HTTP/1.0",
       "1.1": "HTTP/1.1",

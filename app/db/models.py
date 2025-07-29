@@ -452,6 +452,7 @@ class ProxyHost(Base):
     status: Mapped[Optional[list[UserStatus]]] = mapped_column(
         EnumArray(UserStatus, 60), default=list, server_default=""
     )
+    ech_config_list: Mapped[Optional[str]] = mapped_column(String(512), default=None)
 
 
 class System(Base):
