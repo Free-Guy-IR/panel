@@ -408,6 +408,37 @@ async def get_users_count(db: AsyncSession, status: UserStatus = None, admin_id:
     return result.scalar()
 
 
+async def get_users_count_by_status(db: AsyncSession, statuses: list[UserStatus], admin_id: int = None) -> dict[str, int]:
+    """
+    Gets count of users grouped by status in a single query.
+
+    Args:
+        db (AsyncSession): Database session.
+        statuses (list[UserStatus]): List of statuses to count.
+        admin_id (int, optional): Filter by admin.
+    Returns:
+        dict[str, int]: Dictionary with status counts and total.
+    """
+    stmt = select(User.status, func.count(User.id).label('count'))
+    
+    filters = [User.status.in_(statuses)]
+    if admin_id:
+        filters.append(User.admin_id == admin_id)
+    
+    stmt = stmt.where(and_(*filters)).group_by(User.status)
+    
+    result = await db.execute(stmt)
+    status_counts = {row.status.value: row.count for row in result}
+    
+    # Ensure all requested statuses are present with 0 count if missing
+    all_statuses = {status.value: status_counts.get(status.value, 0) for status in statuses}
+    
+    # Add total count
+    all_statuses['total'] = sum(all_statuses.values())
+    
+    return all_statuses
+
+
 async def create_user(db: AsyncSession, new_user: UserCreate, groups: list[Group], admin: Admin) -> User:
     """
     Creates a new user.
