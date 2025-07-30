@@ -1,6 +1,5 @@
 import logging
 from copy import copy
-from pprint import pprint
 from urllib.parse import unquote
 
 import click
@@ -93,6 +92,3 @@ class EndpointFilter(logging.Filter):
             path = unquote(record.args[2])
             return path not in self.excluded_endpoints
         return True
-
-
-pprint(LOGGING_CONFIG)
