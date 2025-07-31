@@ -358,7 +358,7 @@ async def get_user_usages(
                 func.sum(NodeUserUsage.used_traffic).label("total_traffic"),
             )
             .where(and_(*conditions))
-            .group_by(trunc_expr, "node_id")
+            .group_by(trunc_expr, NodeUserUsage.node_id)
             .order_by(trunc_expr)
         )
 
@@ -858,7 +858,7 @@ async def get_all_users_usages(
                 func.sum(NodeUserUsage.used_traffic).label("total_traffic"),
             )
             .where(and_(*conditions))
-            .group_by(trunc_expr, "node_id")
+            .group_by(trunc_expr, NodeUserUsage.node_id)
             .order_by(trunc_expr)
         )
     else:
