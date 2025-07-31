@@ -45,6 +45,7 @@ dependencies = [
     "uvloop>=0.21.0",
     "aiorwlock>=1.5.0",
     "gozargah-node-bridge>=0.0.43",
+    "aiomonitor>=0.7.1",
 ]
 
 [tool.ruff]
