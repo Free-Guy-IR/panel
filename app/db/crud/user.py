@@ -978,6 +978,28 @@ async def create_notification_reminder(
     return reminder
 
 
+async def bulk_create_notification_reminders(db: AsyncSession, reminder_data: List[dict]) -> None:
+    """
+    Bulk creates notification reminders.
+
+    Args:
+        db (AsyncSession): The database session.
+        reminder_data (List[dict]): List of reminder data dicts with keys: user_id, type, threshold, expires_at
+    """
+    if not reminder_data:
+        return
+
+    reminders = []
+    for data in reminder_data:
+        reminder = NotificationReminder(
+            type=data["type"], expires_at=data["expires_at"], user_id=data["user_id"], threshold=data.get("threshold")
+        )
+        reminders.append(reminder)
+
+    db.add_all(reminders)
+    await db.commit()
+
+
 async def delete_user_passed_notification_reminders(
     db: AsyncSession, user_id: int, type: ReminderType, threshold: int
 ) -> None:

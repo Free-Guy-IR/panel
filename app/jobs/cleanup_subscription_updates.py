@@ -39,22 +39,21 @@ async def cleanup_user_subscription_updates():
                     .limit(USER_SUBSCRIPTION_CLIENTS_LIMIT)
                 )
                 keep_ids = [row.id for row in keep_ids_result]
-                
+
                 if keep_ids:
                     # Delete records not in keep list
                     result = await db.execute(
                         delete(UserSubscriptionUpdate).where(
-                            UserSubscriptionUpdate.user_id == user_id,
-                            UserSubscriptionUpdate.id.not_in(keep_ids)
+                            UserSubscriptionUpdate.user_id == user_id, UserSubscriptionUpdate.id.not_in(keep_ids)
                         )
                     )
                     total_deleted += result.rowcount
-            
+
             logger.info(f"Cleaned up {total_deleted} old subscription updates")
         else:
             # SQLite and PostgreSQL: Use original approach with LIMIT in subquery
             sub = UserSubscriptionUpdate.__table__.alias("sub")
-            
+
             keep_subquery = (
                 select(sub.c.id)
                 .where(sub.c.user_id == UserSubscriptionUpdate.user_id)
@@ -64,8 +63,7 @@ async def cleanup_user_subscription_updates():
 
             result = await db.execute(
                 delete(UserSubscriptionUpdate).where(
-                    UserSubscriptionUpdate.user_id.in_(user_ids), 
-                    UserSubscriptionUpdate.id.not_in(keep_subquery)
+                    UserSubscriptionUpdate.user_id.in_(user_ids), UserSubscriptionUpdate.id.not_in(keep_subquery)
                 )
             )
             logger.info(f"Cleaned up {result.rowcount} old subscription updates")

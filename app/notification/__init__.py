@@ -10,9 +10,6 @@ from app.models.group import GroupResponse
 from app.models.core import CoreResponse
 from app.models.admin import AdminDetails
 from app.models.user import UserNotificationResponse
-from app.db import AsyncSession
-from app.db.models import ReminderType
-from app.db.crud.user import create_notification_reminder
 from app.settings import notification_enable
 
 
@@ -177,32 +174,6 @@ async def user_subscription_revoked(user: UserNotificationResponse, by: AdminDet
             ds.user_subscription_revoked(user, by.username),
             tg.user_subscription_revoked(user, by.username),
             wh.notify(wh.UserSubscriptionRevoked(username=user.username, user=user, by=by)),
-        )
-
-
-async def data_usage_percent_reached(
-    db: AsyncSession, percent: float, user: UserNotificationResponse, threshold: int
-) -> None:
-    if (await notification_enable()).percentage_reached:
-        await asyncio.gather(
-            wh.notify(wh.ReachedUsagePercent(username=user.username, user=user, used_percent=percent)),
-            create_notification_reminder(
-                db,
-                ReminderType.data_usage,
-                expires_at=user.expire if user.expire else None,
-                user_id=user.id,
-                threshold=threshold,
-            ),
-        )
-
-
-async def expire_days_reached(db: AsyncSession, days: int, user: UserNotificationResponse, threshold: int) -> None:
-    if (await notification_enable()).days_left:
-        await asyncio.gather(
-            wh.notify(wh.ReachedDaysLeft(username=user.username, user=user, days_left=days)),
-            create_notification_reminder(
-                db, ReminderType.expiration_date, expires_at=user.expire, user_id=user.id, threshold=threshold
-            ),
         )
 
 

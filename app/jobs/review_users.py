@@ -14,6 +14,7 @@ from app.db.crud.user import (
     reset_user_by_next,
     start_users_expire,
     update_users_status,
+    bulk_create_notification_reminders,
 )
 from app.db.models import User, UserStatus
 from app.jobs.dependencies import SYSTEM_ADMIN
@@ -81,10 +82,41 @@ async def usage_percent_notification_job():
     async with GetDB() as db:
         for percent in settings.usage_percent:
             users = await get_usage_percentage_reached_users(db, percent)
+
+            # Prepare webhook notifications first
+            webhook_tasks = []
+            reminder_data = []
+
             for user in users:
-                await notification.data_usage_percent_reached(
-                    db, user.usage_percentage, UserNotificationResponse.model_validate(user), percent
+                usage_percentage = user.usage_percentage
+                user_model = UserNotificationResponse.model_validate(user)
+
+                # Queue webhook notification
+                webhook_tasks.append(
+                    notification.wh.notify(
+                        notification.wh.ReachedUsagePercent(
+                            username=user_model.username, user=user_model, used_percent=usage_percentage
+                        )
+                    )
                 )
+
+                # Prepare reminder data for bulk insert
+                reminder_data.append(
+                    {
+                        "user_id": user.id,
+                        "type": notification.ReminderType.data_usage,
+                        "threshold": percent,
+                        "expires_at": user.expire if user.expire else None,
+                    }
+                )
+
+            # Send webhooks first
+            if webhook_tasks:
+                await asyncio.gather(*webhook_tasks, return_exceptions=True)
+
+            # Bulk create notification reminders
+            if reminder_data:
+                await bulk_create_notification_reminders(db, reminder_data)
 
 
 async def days_left_notification_job():
@@ -94,10 +126,40 @@ async def days_left_notification_job():
     async with GetDB() as db:
         for days in settings.days_left:
             users = await get_days_left_reached_users(db, days)
+
+            # Prepare webhook notifications first
+            webhook_tasks = []
+            reminder_data = []
+
             for user in users:
-                await notification.expire_days_reached(
-                    db, user.days_left, UserNotificationResponse.model_validate(user), days
+                days_left = user.days_left
+                user_model = UserNotificationResponse.model_validate(user)
+
+                # Queue webhook notification
+                webhook_tasks.append(
+                    notification.wh.notify(
+                        notification.wh.ReachedDaysLeft(
+                            username=user_model.username, user=user_model, days_left=days_left
+                        )
+                    )
                 )
+
+                # Prepare reminder data for bulk insert
+                reminder_data.append(
+                    {
+                        "user_id": user.id,
+                        "type": notification.ReminderType.expiration_date,
+                        "threshold": days,
+                        "expires_at": user.expire,
+                    }
+                )
+            # Bulk create notification reminders
+            if reminder_data:
+                await bulk_create_notification_reminders(db, reminder_data)
+
+            # Send webhooks first
+            if webhook_tasks:
+                await asyncio.gather(*webhook_tasks, return_exceptions=True)
 
 
 now = dt.now(tz.utc)
