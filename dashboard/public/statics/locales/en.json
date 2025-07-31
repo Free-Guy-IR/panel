@@ -949,7 +949,7 @@
   "revokeUserSub.title": "Revoke User Subscription",
   "subscriptionClients": {
     "title": "Subscription Clients",
-    "viewAllClients": "View All Clients",
+    "viewAllClients": "View Clients",
     "total": "Total: {{count}} clients",
     "showing": "Showing last {{count}} accesses",
     "noClients": "No subscription clients found",

@@ -71,12 +71,8 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
     let cpuUsage = Number(currentStats.cpu_usage) || 0
     const cpuCores = Number(currentStats.cpu_cores) || 0
     
-    // Fix potential decimal issue - if usage is between 0-1, it's likely a decimal representation
-    if (cpuUsage > 0 && cpuUsage <= 1) {
-      cpuUsage = cpuUsage * 100
-    }
-    
-    // Ensure CPU usage doesn't exceed 100% and is reasonable
+    // CPU usage is already in percentage (0-100), no need to multiply
+    // Just ensure it's within reasonable bounds
     cpuUsage = Math.min(Math.max(cpuUsage, 0), 100)
     
     return { usage: Math.round(cpuUsage * 10) / 10, cores: cpuCores } // Round to 1 decimal place
@@ -205,11 +201,11 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
               <div className="flex items-center gap-2 text-xs shrink-0">
                 <div className="flex items-center gap-1 text-green-600 dark:text-green-400 bg-muted/50 px-1.5 py-1 rounded-md">
                   <Download className="h-3 w-3" />
-                  <span className="font-medium">{formatBytes(getIncomingBandwidth() || 0, 1)}</span>
+                  <span dir="ltr" className="font-medium">{formatBytes(getIncomingBandwidth() || 0, 1)}</span>
                 </div>
                 <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 bg-muted/50 px-1.5 py-1 rounded-md">
                   <Upload className="h-3 w-3" />
-                  <span className="font-medium">{formatBytes(getOutgoingBandwidth() || 0, 1)}</span>
+                  <span dir="ltr" className="font-medium">{formatBytes(getOutgoingBandwidth() || 0, 1)}</span>
                 </div>
               </div>
             </div>

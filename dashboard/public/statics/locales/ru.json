@@ -699,7 +699,7 @@
   "revokeUserSub.title": "Отозвать подписку пользователя",
   "subscriptionClients": {
     "title": "Клиенты подписки",
-    "viewAllClients": "Показать всех клиентов",
+    "viewAllClients": "Показать клиентов",
     "total": "Всего: {{count}} клиентов",
     "showing": "Показано последних {{count}} обращений",
     "noClients": "Клиенты подписки не найдены",

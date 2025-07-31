@@ -1,5 +1,5 @@
 import GroupsSelector from '@/components/common/GroupsSelector'
-import { SubscriptionInfo } from '@/components/SubscriptionInfo'
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -37,7 +37,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { v4 as uuidv4, v5 as uuidv5, v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
-import { UserSubscriptionClientsModal } from './UserSubscriptionClientsModal'
+
 
 interface UserModalProps {
   isDialogOpen: boolean
@@ -373,7 +373,7 @@ const ExpiryDateField = ({
 
 export { ExpiryDateField }
 
-export default function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserId, editingUserData, onSuccessCallback }: UserModalProps) {
+export default function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserId, onSuccessCallback }: UserModalProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const handleError = useDynamicErrorHandler()
@@ -391,7 +391,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const { i18n } = useTranslation()
   const isPersianLocale = i18n.language === 'fa'
   const [usePersianCalendar, setUsePersianCalendar] = useState(isPersianLocale)
-  const [subscriptionClientsModalOpen, setSubscriptionClientsModalOpen] = useState(false)
+
 
   // Reset calendar state when modal opens/closes
   useEffect(() => {
@@ -1098,7 +1098,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
       <DialogContent className={`lg:min-w-[900px] ${editingUser ? 'h-full sm:h-auto' : 'h-auto'}`}>
         <DialogHeader>
-          <DialogTitle className={`${dir === 'rtl' ? 'text-right' : ''}`}>
+          <DialogTitle className={`${dir === 'rtl' ? 'text-right' : 'text-left'}`}>
             {editingUser ? t('userDialog.editUser', { defaultValue: 'Edit User' }) : t('createUser', { defaultValue: 'Create User' })}
           </DialogTitle>
         </DialogHeader>
@@ -1441,19 +1441,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                     )}
                   />
 
-                  {/* Subscription Information - only show when editing and data exists */}
-                  {activeTab === 'groups' && editingUser && editingUserData && (
-                    <SubscriptionInfo
-                      subUpdatedAt={editingUserData.sub_updated_at}
-                      subLastUserAgent={editingUserData.sub_last_user_agent}
-                      headerButton={
-                        <Button type="button" variant="outline" size="sm" onClick={() => setSubscriptionClientsModalOpen(true)} className="h-7 flex-shrink-0 px-2 text-xs">
-                          <Users className="!h-3 !w-3 sm:mr-1" />
-                          <span className="inline">{t('subscriptionClients.viewAllClients', { defaultValue: 'View All Clients' })}</span>
-                        </Button>
-                      }
-                    />
-                  )}
+
                   {/* Proxy Settings Accordion */}
                   {activeTab === 'groups' && (
                     <Accordion type="single" collapsible className="my-4 w-full">
@@ -1481,7 +1469,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     {t('userDialog.proxySettings.vmess')} {t('userDialog.proxySettings.id')}
                                   </FormLabel>
                                   <FormControl>
-                                    <div dir="ltr" className="flex items-center gap-2">
+                                    <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
                                       <Input
                                         {...field}
                                         placeholder={t('userDialog.proxySettings.id')}
@@ -1536,7 +1524,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     {t('userDialog.proxySettings.vless')} {t('userDialog.proxySettings.id')}
                                   </FormLabel>
                                   <FormControl>
-                                    <div dir="ltr" className="flex items-center gap-2">
+                                    <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
                                       <Input
                                         {...field}
                                         placeholder={t('userDialog.proxySettings.id')}
@@ -1619,7 +1607,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                   {t('userDialog.proxySettings.trojan')} {t('userDialog.proxySettings.password')}
                                 </FormLabel>
                                 <FormControl>
-                                  <div dir="ltr" className="flex items-center gap-2">
+                                  <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
                                     <Input
                                       {...field}
                                       placeholder={t('userDialog.proxySettings.password')}
@@ -1661,7 +1649,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                   {t('userDialog.proxySettings.shadowsocks')} {t('userDialog.proxySettings.password')}
                                 </FormLabel>
                                 <FormControl>
-                                  <div dir="ltr" className="flex items-center gap-2">
+                                  <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
                                     <Input
                                       {...field}
                                       placeholder={t('userDialog.proxySettings.password')}
@@ -1949,7 +1937,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         </Form>
       </DialogContent>
       {/* Subscription Clients Modal */}
-      {editingUser && <UserSubscriptionClientsModal isOpen={subscriptionClientsModalOpen} onOpenChange={setSubscriptionClientsModalOpen} username={form.watch('username') || ''} />}
+      
     </Dialog>
   )
 }
