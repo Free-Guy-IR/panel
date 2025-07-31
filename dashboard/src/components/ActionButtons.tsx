@@ -497,7 +497,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
             </div>
 
             {/* QR Code Modal */}
-            {showQRModal && subscribeUrl && <QRCodeModal subscribeLinks={subscribeLinks} subscribeUrl={subscribeUrl}
+            {showQRModal && subscribeUrl && <QRCodeModal subscribeUrl={subscribeUrl}
                 onCloseModal={onCloseQRModal} />}
 
             {/* Active Next Plan Confirm Dialog */}
