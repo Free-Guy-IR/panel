@@ -12,8 +12,6 @@ import {
     useGetAllCores,
     CoreResponse,
     getNode,
-    reconnectNode,
-    useSyncNode
 } from '@/service/api'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -23,12 +21,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { queryClient } from '@/utils/query-client'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useState, useEffect } from 'react'
-import { Loader2, Settings, RefreshCw, Activity, RotateCcw, Wifi } from 'lucide-react'
+import { Loader2, Settings, RefreshCw } from 'lucide-react'
 import { v4 as uuidv4, v5 as uuidv5, v6 as uuidv6, v7 as uuidv7 } from 'uuid'
 import { LoaderButton } from '../ui/loader-button'
 import useDynamicErrorHandler from "@/hooks/use-dynamic-errors.ts";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import UserOnlineStatsDialog from './UserOnlineStatsModal'
 
 export const nodeFormSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -37,7 +34,7 @@ export const nodeFormSchema = z.object({
     usage_coefficient: z.number().optional(),
     connection_type: z.enum([NodeConnectionType.grpc, NodeConnectionType.rest]),
     server_ca: z.string().min(1, 'Server CA is required'),
-    keep_alive: z.number().min(1, 'Keep alive is required'),
+    keep_alive: z.number().min(0, 'Keep alive must be 0 or greater'),
     keep_alive_unit: z.enum(['seconds', 'minutes', 'hours']).default('seconds'),
     max_logs: z.number().min(1, 'Max logs is required'),
     api_key: z.string().min(1, 'API key is required'),
@@ -62,7 +59,6 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
     const dir = useDirDetection()
     const addNodeMutation = useCreateNode()
     const modifyNodeMutation = useModifyNode()
-    const syncNodeMutation = useSyncNode()
     const handleError = useDynamicErrorHandler();
     const { data: cores } = useGetAllCores()
     const [statusChecking, setStatusChecking] = useState(false)
@@ -71,9 +67,6 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
     const [autoCheck, setAutoCheck] = useState(false)
     const [showErrorDetails, setShowErrorDetails] = useState(false)
     const [debouncedValues, setDebouncedValues] = useState<NodeFormValues | null>(null)
-    const [reconnecting, setReconnecting] = useState(false)
-    const [syncing, setSyncing] = useState(false)
-    const [showOnlineStats, setShowOnlineStats] = useState(false)
 
     // Reset status when modal opens/closes
     useEffect(() => {
@@ -279,37 +272,35 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
     return (
         <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-full sm:max-w-[90vw] lg:max-w-[1000px] h-full lg:h-auto" onOpenAutoFocus={(e) => e.preventDefault()}>
-                <DialogHeader>
+                <DialogHeader className="pb-2">
                     <DialogTitle
-                        className={cn('text-xl text-start font-semibold', dir === 'rtl' && 'sm:text-right')}>{editingNode ? t('editNode.title') : t('nodeModal.title')}</DialogTitle>
-                    <p className={cn('text-sm text-muted-foreground text-start', dir === 'rtl' && 'sm:text-right')}>{editingNode ? t('nodes.prompt') : t('nodeModal.description')}</p>
+                        className={cn('text-base sm:text-lg text-start font-semibold', dir === 'rtl' && 'sm:text-right')}>{editingNode ? t('editNode.title') : t('nodeModal.title')}</DialogTitle>
+                    <p className={cn('text-xs text-muted-foreground text-start', dir === 'rtl' && 'sm:text-right')}>{editingNode ? t('nodes.prompt') : t('nodeModal.description')}</p>
                 </DialogHeader>
 
                 {/* Status Check Results - Positioned at the top of the modal */}
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-2">
-                                <div
-                                    className={`w-2 h-2 rounded-full ${connectionStatus === 'success'
-                                        ? 'bg-green-500 dark:bg-green-400'
-                                        : connectionStatus === 'error'
-                                            ? 'bg-red-500 dark:bg-red-400'
-                                            : connectionStatus === 'checking'
-                                                ? 'bg-yellow-500 dark:bg-yellow-400'
-                                                : 'bg-gray-500 dark:bg-gray-400'
-                                        }`}
-                                />
-                                <span className="text-sm font-medium text-foreground">
-                                    {connectionStatus === 'success'
-                                        ? t('nodeModal.status.connected')
-                                        : connectionStatus === 'error'
-                                            ? t('nodeModal.status.error')
-                                            : connectionStatus === 'checking'
-                                                ? t('nodeModal.status.connecting')
-                                                : t('nodeModal.status.disabled')}
-                                </span>
-                            </div>
+                            <div
+                                className={`w-2 h-2 rounded-full ${connectionStatus === 'success'
+                                    ? 'bg-green-500 dark:bg-green-400'
+                                    : connectionStatus === 'error'
+                                        ? 'bg-red-500 dark:bg-red-400'
+                                        : connectionStatus === 'checking'
+                                            ? 'bg-yellow-500 dark:bg-yellow-400'
+                                            : 'bg-gray-500 dark:bg-gray-400'
+                                    }`}
+                            />
+                            <span className="text-sm font-medium text-foreground">
+                                {connectionStatus === 'success'
+                                    ? t('nodeModal.status.connected')
+                                    : connectionStatus === 'error'
+                                        ? t('nodeModal.status.error')
+                                        : connectionStatus === 'checking'
+                                            ? t('nodeModal.status.connecting')
+                                            : t('nodeModal.status.disabled')}
+                            </span>
                             {connectionStatus === 'error' && (
                                 <Button variant="ghost" size="sm" onClick={() => setShowErrorDetails(!showErrorDetails)}
                                     className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground">
@@ -317,116 +308,25 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                 </Button>
                             )}
                         </div>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            {editingNode && (
-                                <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setShowOnlineStats(true)}
-                                        disabled={syncing || reconnecting}
-                                        className="h-7 px-2 text-xs flex-shrink-0"
-                                    >
-                                        <Activity className="!h-3 !w-3 sm:mr-1" />
-                                        <span className="hidden sm:inline">{t('nodeModal.onlineStats.button')}</span>
-                                        <span className="sm:hidden">{t('nodeModal.onlineStats.button')}</span>
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={async () => {
-                                            if (!editingNodeId) return
-                                            setSyncing(true)
-                                            try {
-                                                await syncNodeMutation.mutateAsync({
-                                                    nodeId: editingNodeId,
-                                                    params: { flush_users: false }
-                                                })
-                                                toast.success(t('nodeModal.syncSuccess'))
-                                                // Refresh node status after sync
-                                                await checkNodeStatus()
-                                                // Invalidate queries to refresh data
-                                                queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
-                                            } catch (error: any) {
-                                                toast.error(t('nodeModal.syncFailed', { 
-                                                    message: error?.message || 'Unknown error'
-                                                }))
-                                            } finally {
-                                                setSyncing(false)
-                                            }
-                                        }}
-                                        disabled={syncing || reconnecting}
-                                        className="h-7 px-2 text-xs flex-shrink-0"
-                                    >
-                                        {syncing ? (
-                                            <div className="flex items-center gap-1">
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                <span className="hidden sm:inline">{t('nodeModal.syncing')}</span>
-                                                <span className="sm:hidden">{t('nodeModal.syncing')}</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1">
-                                                <RotateCcw className="h-3 w-3" />
-                                                <span className="hidden sm:inline">{t('nodeModal.sync')}</span>
-                                                <span className="sm:hidden">{t('nodeModal.sync')}</span>
-                                            </div>
-                                        )}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={async () => {
-                                            if (!editingNodeId) return
-                                            setReconnecting(true)
-                                            try {
-                                                await reconnectNode(editingNodeId)
-                                                await checkNodeStatus()
-                                            } catch (error) {
-                                            } finally {
-                                                setReconnecting(false)
-                                            }
-                                        }}
-                                        disabled={reconnecting || syncing}
-                                        className="h-7 px-2 text-xs flex-shrink-0"
-                                    >
-                                        {reconnecting ? (
-                                            <div className="flex items-center gap-1">
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                <span className="hidden sm:inline">{t('nodeModal.reconnecting')}</span>
-                                                <span className="sm:hidden">{t('nodeModal.reconnecting')}</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1">
-                                                <Wifi className="h-3 w-3" />
-                                                <span className="hidden sm:inline">{t('nodeModal.reconnect')}</span>
-                                                <span className="sm:hidden">{t('nodeModal.reconnect')}</span>
-                                            </div>
-                                        )}
-                                    </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={checkNodeStatus}
+                            disabled={statusChecking || !form.formState.isValid} 
+                            className="px-2 text-xs flex-shrink-0"
+                        >
+                            {statusChecking ? (
+                                <div className="flex items-center gap-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span className="text-xs">{t('nodeModal.statusChecking')}</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-1">
+                                    <RefreshCw className="h-3 w-3" />
+                                    <span className="text-xs">{t('nodeModal.statusCheck')}</span>
                                 </div>
                             )}
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={checkNodeStatus}
-                                disabled={statusChecking || !form.formState.isValid || syncing || reconnecting} 
-                                className="h-7 px-2 text-xs flex-shrink-0 w-full sm:w-auto"
-                            >
-                                {statusChecking ? (
-                                    <div className="flex items-center gap-1">
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                        <span className="hidden sm:inline">{t('nodeModal.statusChecking')}</span>
-                                        <span className="sm:hidden">{t('nodeModal.statusChecking')}</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-1">
-                                        <RefreshCw className="h-3 w-3" />
-                                        <span className="hidden sm:inline">{t('nodeModal.statusCheck')}</span>
-                                        <span className="sm:hidden">{t('nodeModal.statusCheck')}</span>
-                                    </div>
-                                )}
-                            </Button>
-                        </div>
+                        </Button>
                     </div>
                     {showErrorDetails && connectionStatus === 'error' && (
                         <div
@@ -440,7 +340,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
-                        <div className="max-h-[49dvh] overflow-y-auto pr-2 -mr-2 sm:pr-4 sm:-mr-4 sm:max-h-[65dvh] px-1 sm:px-2">
+                        <div className="max-h-[65dvh] overflow-y-auto pr-2 -mr-2 sm:pr-4 sm:-mr-4 sm:max-h-[65dvh] px-1 sm:px-2">
                             <div className="flex h-full flex-col lg:flex-row items-start gap-4">
                                 <div className="flex-1 space-y-4 w-full">
                                     <FormField
@@ -791,12 +691,12 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                 />
                             </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
+                        <div className="flex justify-end gap-2 pt-3">
                             <Button 
                                 variant="outline" 
                                 onClick={() => onOpenChange(false)}
                                 disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}
-                                className="w-full sm:w-auto"
+                                size="sm"
                             >
                                 {t('cancel')}
                             </Button>
@@ -805,7 +705,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                 disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}
                                 isLoading={addNodeMutation.isPending || modifyNodeMutation.isPending}
                                 loadingText={editingNode ? t('modifying') : t('creating')}
-                                className="w-full sm:w-auto"
+                                size="sm"
                             >
                                 {editingNode ? t('modify') : t('create')}
                             </LoaderButton>
@@ -814,13 +714,6 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                 </Form>
             </DialogContent>
 
-            {/* User Online Stats Dialog */}
-            <UserOnlineStatsDialog
-                isOpen={showOnlineStats}
-                onOpenChange={setShowOnlineStats}
-                nodeId={editingNodeId || null}
-                nodeName={form.getValues('name')}
-            />
         </Dialog>
     )
 }

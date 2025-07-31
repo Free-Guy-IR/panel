@@ -3,14 +3,15 @@ import { Card, CardTitle } from '../ui/card'
 import FlagFromIP from '@/utils/flagFromIP'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu'
 import { Button } from '../ui/button'
-import { MoreVertical, Pencil, Trash2, Power } from 'lucide-react'
+import { MoreVertical, Pencil, Trash2, Power, Activity, RotateCcw, Wifi, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { queryClient } from '@/utils/query-client'
-import { NodeResponse, useRemoveNode } from '@/service/api'
+import { NodeResponse, useRemoveNode, useSyncNode, reconnectNode } from '@/service/api'
+import UserOnlineStatsDialog from '../dialogs/UserOnlineStatsModal'
 
 interface NodeProps {
   node: NodeResponse
@@ -45,7 +46,11 @@ const DeleteAlertDialog = ({ node, isOpen, onClose, onConfirm }: { node: NodeRes
 export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
   const { t } = useTranslation()
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [showOnlineStats, setShowOnlineStats] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
   const removeNodeMutation = useRemoveNode()
+  const syncNodeMutation = useSyncNode()
 
   const handleDeleteClick = (event: Event) => {
     event.stopPropagation()
@@ -73,6 +78,40 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
           defaultValue: 'Failed to delete node «{name}»',
         }),
       })
+    }
+  }
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      await syncNodeMutation.mutateAsync({
+        nodeId: node.id,
+        params: { flush_users: false }
+      })
+      toast.success(t('nodeModal.syncSuccess'))
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
+    } catch (error: any) {
+      toast.error(t('nodeModal.syncFailed', { 
+        message: error?.message || 'Unknown error'
+      }))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const handleReconnect = async () => {
+    setReconnecting(true)
+    try {
+      await reconnectNode(node.id)
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
+    } catch (error: any) {
+      toast.error(t('nodeModal.reconnectFailed', { 
+        message: error?.message || 'Unknown error'
+      }))
+    } finally {
+      setReconnecting(false)
     }
   }
 
@@ -131,6 +170,45 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
               <DropdownMenuItem
                 onSelect={e => {
                   e.stopPropagation()
+                  setShowOnlineStats(true)
+                }}
+                disabled={syncing || reconnecting}
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                {t('nodeModal.onlineStats.button')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={e => {
+                  e.stopPropagation()
+                  handleSync()
+                }}
+                disabled={syncing || reconnecting}
+              >
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                )}
+                {syncing ? t('nodeModal.syncing') : t('nodeModal.sync')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={e => {
+                  e.stopPropagation()
+                  handleReconnect()
+                }}
+                disabled={reconnecting || syncing}
+              >
+                {reconnecting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Wifi className="h-4 w-4 mr-2" />
+                )}
+                {reconnecting ? t('nodeModal.reconnecting') : t('nodeModal.reconnect')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={e => {
+                  e.stopPropagation()
                   onEdit(node)
                 }}
               >
@@ -147,6 +225,14 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
       </Card>
 
       <DeleteAlertDialog node={node} isOpen={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={handleConfirmDelete} />
+      
+      {/* User Online Stats Dialog */}
+      <UserOnlineStatsDialog
+        isOpen={showOnlineStats}
+        onOpenChange={setShowOnlineStats}
+        nodeId={node.id}
+        nodeName={node.name}
+      />
     </>
   )
 }

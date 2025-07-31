@@ -243,10 +243,10 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
   return (
     <Card>
       <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
-        <div className="flex flex-1 flex-col sm:flex-row gap-1 px-6 py-6 sm:py-6 border-b">
+        <div className="flex flex-1 flex-col sm:flex-row gap-1 px-4 sm:px-6 py-4 sm:py-6 border-b">
           <div className="flex flex-1 flex-col justify-center align-middle gap-1 px-1 py-1">
-            <CardTitle>{t('statistics.trafficUsage')}</CardTitle>
-            <CardDescription>{t('statistics.trafficUsageDescription')}</CardDescription>
+            <CardTitle className="text-sm sm:text-base">{t('statistics.trafficUsage')}</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">{t('statistics.trafficUsageDescription')}</CardDescription>
           </div>
           <div className="px-1 py-1 flex justify-center align-middle flex-col gap-2">
             <div className="flex gap-2 items-center">
@@ -261,50 +261,65 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
             </div>
           </div>
         </div>
-        <div className="sm:border-l p-6 m-0 flex flex-col justify-center px-4 ">
-          <span className="text-muted-foreground text-xs sm:text-sm">{t('statistics.usageDuringPeriod')}</span>
-          <span dir='ltr' className="text-foreground text-lg flex justify-center">{isLoading ? <Skeleton className="h-5 w-20" /> : totalUsage}</span>
+        <div className="sm:border-l p-4 sm:p-6 m-0 flex flex-col justify-center px-2 sm:px-4">
+          <span className="text-muted-foreground text-xs">{t('statistics.usageDuringPeriod')}</span>
+          <span dir='ltr' className="text-foreground text-base sm:text-lg flex justify-center">{isLoading ? <Skeleton className="h-5 w-20" /> : totalUsage}</span>
         </div>
       </CardHeader>
-      <CardContent dir={dir} className="pt-8">
+      <CardContent dir={dir} className="pt-4 sm:pt-8 px-4 sm:px-6">
         {isLoading ? (
-          <div className="max-h-[400px] min-h-[200px] w-full flex items-center justify-center">
-            <Skeleton className="h-[300px] w-full" />
+          <div className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px] w-full flex items-center justify-center">
+            <Skeleton className="h-[250px] sm:h-[300px] w-full" />
           </div>
         ) : error ? (
-          <EmptyState type="error" className="max-h-[400px] min-h-[200px]" />
+          <EmptyState type="error" className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px]" />
         ) : !dateRange ? (
           <EmptyState 
             type="no-data" 
             title={t('statistics.selectTimeRange')}
             description={t('statistics.selectTimeRangeDescription')}
-            icon={<TrendingUp className="h-12 w-12 text-muted-foreground/50" />}
-            className="max-h-[400px] min-h-[200px]" 
+            icon={<TrendingUp className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground/50" />}
+            className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px]" 
           />
         ) : (
-          <ChartContainer dir={'ltr'} config={chartConfig} className="max-h-[400px] min-h-[200px] w-full">
+          <ChartContainer dir={'ltr'} config={chartConfig} className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px] w-full">
             {chartData && chartData.length > 0 ? (
               <BarChart accessibilityLayer data={chartData}>
                 <CartesianGrid direction={'ltr'} vertical={false} />
-                <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} />
-                <YAxis direction={'ltr'} tickLine={false} axisLine={false} tickFormatter={value => `${value.toFixed(2)} GB`} 
+                <XAxis 
+                  direction={'ltr'} 
+                  dataKey="time" 
+                  tickLine={false} 
+                  tickMargin={8} 
+                  axisLine={false}
                   tick={{
                     fill: 'hsl(var(--muted-foreground))',
-                    fontSize: 9,
+                    fontSize: 8,
                     fontWeight: 500,
                   }}
-                  width={32}
+                />
+                <YAxis 
+                  direction={'ltr'} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tickFormatter={value => `${value.toFixed(2)} GB`} 
+                  tick={{
+                    fill: 'hsl(var(--muted-foreground))',
+                    fontSize: 8,
+                    fontWeight: 500,
+                  }}
+                  width={28}
                   tickMargin={2}
                 />
                 <ChartTooltip cursor={false} content={<CustomBarTooltip period={getPeriodFromDateRange(dateRange)} />} />
-                <Bar dataKey="usage" fill="var(--color-usage)" radius={8} />
+                <Bar dataKey="usage" fill="var(--color-usage)" radius={6} />
               </BarChart>
             ) : (
               <EmptyState 
                 type="no-data" 
                 title={t('statistics.noDataInRange')}
                 description={t('statistics.noDataInRangeDescription')}
-                className="max-h-[400px] min-h-[200px]" 
+                className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px]" 
               />
             )}
           </ChartContainer>
