@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime as dt, timezone as tz, timedelta as td
+from datetime import datetime as dt, timedelta as td, timezone as tz
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,9 +29,10 @@ logger = get_logger("review-users")
 
 async def reset_user_by_next_report(db: AsyncSession, db_user: User):
     db_user = await reset_user_by_next(db, db_user)
+    inbounds = await db_user.inbounds()
     user = UserNotificationResponse.model_validate(db_user)
 
-    asyncio.create_task(node_manager.update_user(user))
+    asyncio.create_task(node_manager.update_user(user, inbounds))
     asyncio.create_task(notification.user_data_reset_by_next(user, SYSTEM_ADMIN))
 
     logger.info(f'User "{db_user.username}" next plan activated')
