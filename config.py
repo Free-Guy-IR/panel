@@ -1,4 +1,5 @@
 import os
+from email.policy import default
 
 from decouple import config
 from dotenv import load_dotenv
@@ -21,6 +22,7 @@ UVICORN_SSL_CERTFILE = config("UVICORN_SSL_CERTFILE", default=None)
 UVICORN_SSL_KEYFILE = config("UVICORN_SSL_KEYFILE", default=None)
 UVICORN_SSL_CA_TYPE = config("UVICORN_SSL_CA_TYPE", default="public").lower()
 DASHBOARD_PATH = config("DASHBOARD_PATH", default="/dashboard/")
+UVICORN_LOOP = config("UVICORN_LOOP", default="auto", cast=str)
 
 DEBUG = config("DEBUG", default=False, cast=bool)
 DOCS = config("DOCS", default=False, cast=bool)
