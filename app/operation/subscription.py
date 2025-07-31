@@ -5,11 +5,11 @@ from fastapi import Response
 from fastapi.responses import HTMLResponse
 
 from app.db import AsyncSession
-from app.db.models import User
 from app.db.crud.user import get_user_usages, user_sub_update
+from app.db.models import User
+from app.models.settings import ConfigFormat, SubRule, Subscription as SubSettings
 from app.models.stats import Period, UserUsageStatsList
 from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
-from app.models.settings import ConfigFormat, SubRule, Subscription as SubSettings
 from app.settings import subscription_settings
 from app.subscription.share import encode_title, generate_subscription
 from app.templates import render_template
@@ -48,12 +48,12 @@ class SubscriptionOperation(BaseOperation):
     def create_response_headers(user: UsersResponseWithInbounds, request_url: str, sub_settings: SubSettings) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
-        user_info = {"upload": 0, "download": user.used_traffic}
+        user_info = {"upload": 0, "download": user.used_traffic, "total": 0, "expire": 0}
 
         if user.data_limit:
             user_info["total"] = user.data_limit
         if user.expire:
-            user_info["expire"] = user.expire.timestamp()
+            user_info["expire"] = int(user.expire.timestamp())
 
         # Create and return headers
         return {
