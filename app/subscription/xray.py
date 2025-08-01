@@ -171,10 +171,13 @@ class XrayConfiguration(BaseSubscription):
                     else {
                         "version": "1.1",
                         "method": "GET",
+                        "path": ["/"],
                         "headers": {
-                            "Accept-Encoding": ["gzip", "deflate"],
+                            "Host": [],
+                            "User-Agent": [],
+                            "Accept-Encoding": ["gzip, deflate"],
                             "Connection": ["keep-alive"],
-                            "Pragma": ["no-cache"],
+                            "Pragma": "no-cache",
                         },
                     },
                     "response": response
@@ -187,7 +190,7 @@ class XrayConfiguration(BaseSubscription):
                             "Content-Type": ["application/octet-stream", "video/mpeg"],
                             "Transfer-Encoding": ["chunked"],
                             "Connection": ["keep-alive"],
-                            "Pragma": ["no-cache"],
+                            "Pragma": "no-cache",
                         },
                     },
                 }
