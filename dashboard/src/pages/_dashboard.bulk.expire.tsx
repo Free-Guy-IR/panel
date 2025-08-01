@@ -221,7 +221,7 @@ export default function BulkExpirePage() {
           <p className="text-sm text-muted-foreground">{t("bulk.applyToExpireDesc", { defaultValue: "Select the groups, users, or admins you want to apply expiration date to" })}</p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6">
             <SelectorPanel
               icon={Users2}
               title={t("bulk.selectGroups", { defaultValue: "Select Groups" })}

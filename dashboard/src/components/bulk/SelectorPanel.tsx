@@ -82,44 +82,46 @@ export function SelectorPanel({
   }
 
   return (
-    <Card className="flex-1 bg-card min-w-[280px]">
+    <Card className="flex-1 bg-card min-w-0">
       {/* Header */}
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between mb-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            <Icon className="h-4 w-4 text-muted-foreground" />
+      <CardHeader className="pb-3 sm:pb-4">
+        <div className="flex items-center justify-between mb-2 sm:mb-3">
+          <CardTitle className="flex items-center gap-2 text-xs sm:text-sm font-medium">
+            <Icon className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             {title}
           </CardTitle>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
           <Badge variant="secondary" className="text-xs w-fit">
             {t("selectedCount", { count: selected.length, defaultValue: "{{count}} selected" })}
           </Badge>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-6 px-2 text-xs bg-transparent" onClick={handleSelectAll}>
-              {selectAllLabel}
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button size="sm" variant="outline" className="h-6 px-1 sm:px-2 text-xs bg-transparent" onClick={handleSelectAll}>
+              <span className="hidden sm:inline">{selectAllLabel}</span>
+              <span className="sm:hidden">{t("selectAll", { defaultValue: "All" })}</span>
             </Button>
-            <Button size="sm" variant="outline" className="h-6 px-2 text-xs bg-transparent" onClick={handleDeselectAll}>
-              {deselectAllLabel}
+            <Button size="sm" variant="outline" className="h-6 px-1 sm:px-2 text-xs bg-transparent" onClick={handleDeselectAll}>
+              <span className="hidden sm:inline">{deselectAllLabel}</span>
+              <span className="sm:hidden">{t("deselectAll", { defaultValue: "None" })}</span>
             </Button>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 sm:space-y-4">
         {/* Search */}
         <div className="relative" dir="ltr">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           <Input
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 bg-background"
+            className="pl-8 sm:pl-9 h-8 sm:h-9 bg-background text-xs sm:text-sm"
           />
         </div>
 
         {/* Items List */}
-        <div className="space-y-1 max-h-[200px] overflow-y-auto" dir="ltr">
+        <div className="space-y-1 max-h-[150px] sm:max-h-[200px] overflow-y-auto" dir="ltr">
           {filteredItems.map((item) => {
             const id = typeof item[itemValueKey] === "number" ? (item[itemValueKey] as number) : undefined
             let label = ""
@@ -135,28 +137,28 @@ export function SelectorPanel({
                 key={id}
                 onClick={() => handleItemToggle(id)}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors hover:bg-accent",
+                  "flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md cursor-pointer transition-colors hover:bg-accent",
                   isSelected && "bg-accent border border-primary",
                 )}
               >
                 <div className="relative">
                   <div
                     className={cn(
-                      "w-4 h-4 rounded-full border-2 transition-colors",
+                      "w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2 transition-colors",
                       isSelected ? "border-primary bg-primary" : "border-muted-foreground/30 bg-background",
                     )}
                   >
                     {isSelected && (
-                      <div className="w-2 h-2 rounded-full bg-primary-foreground absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-primary-foreground absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                     )}
                   </div>
                 </div>
-                <span className="text-sm truncate flex-1">{label}</span>
+                <span className="text-xs sm:text-sm truncate flex-1">{label}</span>
               </div>
             )
           })}
           {filteredItems.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground text-sm">
+            <div className="text-center py-4 sm:py-8 text-muted-foreground text-xs sm:text-sm">
               {t("noResults", { defaultValue: "No results found." })}
             </div>
           )}

@@ -188,7 +188,7 @@ export default function BulkGroupsPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6">
             <SelectorPanel
               icon={Users2}
               title={t("bulk.selectHasGroups", { defaultValue: "Select Has Groups" })}
