@@ -48,7 +48,7 @@ class SubscriptionOperation(BaseOperation):
     def create_response_headers(user: UsersResponseWithInbounds, request_url: str, sub_settings: SubSettings) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
-        user_info = {"upload": 0, "download": user.used_traffic, "total": 0, "expire": 0}
+        user_info = {"upload": 0, "download": user.used_traffic}
 
         if user.data_limit:
             user_info["total"] = user.data_limit
