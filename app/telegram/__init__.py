@@ -47,12 +47,14 @@ async def startup_telegram_bot():
             session = AiohttpSession(proxy=settings.proxy_url)
             _bot = Bot(token=settings.token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-            if not restart:
-                # register handlers
-                include_routers(_dp)
-                # register middlewares
-                setup_middlewares(_dp)
-
+            try:
+                if not restart:
+                    # register handlers
+                    include_routers(_dp)
+                    # register middlewares
+                    setup_middlewares(_dp)
+            except RuntimeError:
+                pass
             # register webhook
             webhook_address = f"{settings.webhook_url}/api/tghook"
             logger.info(webhook_address)
