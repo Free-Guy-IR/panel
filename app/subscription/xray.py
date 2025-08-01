@@ -172,7 +172,7 @@ class XrayConfiguration(BaseSubscription):
                         "version": "1.1",
                         "method": "GET",
                         "headers": {
-                            "Accept-Encoding": ["gzip, deflate"],
+                            "Accept-Encoding": ["gzip", "deflate"],
                             "Connection": ["keep-alive"],
                             "Pragma": ["no-cache"],
                         },
