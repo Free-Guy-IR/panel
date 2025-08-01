@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import notification, scheduler
 from app.db import GetDB
+from app.db.models import User, UserStatus, ReminderType
 from app.db.crud.user import (
     get_active_to_expire_users,
     get_active_to_limited_users,
@@ -16,7 +17,6 @@ from app.db.crud.user import (
     update_users_status,
     bulk_create_notification_reminders,
 )
-from app.db.models import User, UserStatus
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import Webhook
 from app.models.user import UserNotificationResponse
@@ -104,7 +104,7 @@ async def usage_percent_notification_job():
                 reminder_data.append(
                     {
                         "user_id": user.id,
-                        "type": notification.ReminderType.data_usage,
+                        "type": ReminderType.data_usage,
                         "threshold": percent,
                         "expires_at": user.expire if user.expire else None,
                     }
@@ -148,7 +148,7 @@ async def days_left_notification_job():
                 reminder_data.append(
                     {
                         "user_id": user.id,
-                        "type": notification.ReminderType.expiration_date,
+                        "type": ReminderType.expiration_date,
                         "threshold": days,
                         "expires_at": user.expire,
                     }
