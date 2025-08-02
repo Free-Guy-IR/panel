@@ -3,7 +3,7 @@
  * Do not edit manually.
  * MarzbanAPI
  * Unified GUI Censorship Resistant Solution Powered by Xray
- * OpenAPI spec version: 1.0.0-beta-2
+ * OpenAPI spec version: 1.0.0-beta-3
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
