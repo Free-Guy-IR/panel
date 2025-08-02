@@ -21,15 +21,11 @@ logger = get_logger("node-checker")
 async def node_health_check():
     async def check_node(id: int, node: GozargahNode):
         try:
-            stats_task = node.get_backend_stats(timeout=8)
-            core_ver_task = node.core_version()
-            node_ver_task = node.node_version()
+            await node.get_backend_stats(timeout=8)
 
-            # Execute all calls concurrently
-            results = await asyncio.gather(stats_task, core_ver_task, node_ver_task, return_exceptions=True)
-
-            _, core_version, node_version = results
-            await node_operator.update_node_status(id, NodeStatus.connected, core_version, node_version)
+            await node_operator.update_node_status(
+                id, NodeStatus.connected, await node.core_version(), await node.node_version()
+            )
         except NodeAPIError as e:
             if e.code > -3:
                 await node_operator.update_node_status(id, NodeStatus.error, err=e.detail)
