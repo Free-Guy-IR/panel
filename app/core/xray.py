@@ -298,6 +298,7 @@ class XRayConfig(dict):
                 raise ValueError("Shadowsocks password must be a valid base64 string")
         else:
             settings["is_2022"] = False
+        settings["header_type"] = "none"
 
     def _resolve_inbounds(self):
         """Resolve all inbounds and their settings."""
