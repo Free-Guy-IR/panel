@@ -201,7 +201,7 @@ class XRayConfig(dict):
         path = request.get("path")
         host = request.get("headers", {}).get("Host")
 
-        settings["header_type"] = header.get("type", "")
+        settings["header_type"] = header.get("type", "none")
 
         if isinstance(path, str) or isinstance(host, str):
             raise ValueError(
