@@ -28,10 +28,6 @@ async def node_health_check():
             # Execute all calls concurrently
             results = await asyncio.gather(stats_task, core_ver_task, node_ver_task, return_exceptions=True)
 
-            if any(isinstance(result, Exception) for result in results):
-                # If any call failed, treat as connection error
-                raise NodeAPIError(-1, "Failed to get node information")
-
             _, core_version, node_version = results
             await node_operator.update_node_status(id, NodeStatus.connected, core_version, node_version)
         except NodeAPIError as e:
