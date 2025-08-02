@@ -107,8 +107,6 @@ class Message:
         on_hold_timeout = user.on_hold_timeout.strftime("%Y-%m-%d %H:%M") if user.on_hold_timeout else "-"
         on_hold_expire_duration = td(seconds=user.on_hold_expire_duration).days if user.on_hold_expire_duration else "0"
         online_at = bl(user.online_at.strftime("%Y-%m-%d %H:%M:%S")) if user.online_at else "-"
-        sub_update_at = c(user.sub_updated_at.strftime("%Y-%m-%d %H:%M:%S")) if user.sub_updated_at else "-"
-        user_agent = bl(escape(user.sub_last_user_agent)) if user.sub_last_user_agent else "-"
         admin = ln(user.admin.username, f"tg://user?id={user.admin.telegram_id}")
         note = bl(escape(user.note)) if user.note else "-"
         emojy_status = Message.status_emoji(user.status)
@@ -132,8 +130,6 @@ class Message:
 {b("Data Limit Strategy:")} {user.data_limit_reset_strategy.value.replace("_", " ").title()}
 {expire_text}
 {b("Online At:")} {online_at}
-{b("Subscription Updated At:")} {sub_update_at}
-{b("Last Update User Agent:")} {user_agent}
 {b("Groups:")} {c(groups)}
 {b("Admin:")} {admin}
 {b("Note:")} {note}
