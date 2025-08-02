@@ -238,6 +238,8 @@ async def process_host(
     if ts := host["transport_settings"]:
         for v in ts.values():
             if v:
+                if "type" in v:
+                    v["header_type"] = v["type"]
                 host_inbound.update(v)
 
     if host.get("downloadSettings"):
