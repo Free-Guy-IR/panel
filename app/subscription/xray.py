@@ -41,7 +41,7 @@ class XrayConfiguration(BaseSubscription):
 
         return self._remove_none_values(tls_settings)
 
-    def reality_config(self, sni=None, fp=None, pbk=None, sid=None, spx=None) -> dict:
+    def reality_config(self, sni=None, fp=None, pbk=None, sid=None, spx=None, mldsa65_verify=None) -> dict:
         reality_settings = {
             "serverName": sni,
             "fingerprint": fp,
@@ -49,6 +49,7 @@ class XrayConfiguration(BaseSubscription):
             "publicKey": pbk,
             "shortId": sid,
             "spiderX": spx,
+            "mldsa65Verify": mldsa65_verify,
         }
 
         return self._remove_none_values(reality_settings)
@@ -219,7 +220,7 @@ class XrayConfiguration(BaseSubscription):
         if random_user_agent:
             tcp_settings["header"]["request"]["headers"]["User-Agent"] = [choice(self.user_agent_list)]
 
-        return tcp_settings
+        return self._remove_none_values(tcp_settings)
 
     def http_config(
         self, path: str = "", host: str = "", random_user_agent: bool = False, http_headers: dict | None = None
@@ -346,6 +347,7 @@ class XrayConfiguration(BaseSubscription):
             permit_without_stream=inbound.get("permit_without_stream", False),
             initial_windows_size=inbound.get("initial_windows_size"),
             dialer_proxy=dialer_proxy,
+            ech_config_list=inbound.get("ech_config_list"),
         )
 
         return {
@@ -468,6 +470,7 @@ class XrayConfiguration(BaseSubscription):
         read_buffer_size=None,
         write_buffer_size=None,
         ech_config_list=None,
+        mldsa65_verify=None,
     ) -> dict:
         if net == "ws":
             network_setting = self.ws_config(
@@ -542,7 +545,7 @@ class XrayConfiguration(BaseSubscription):
         if tls == "tls":
             tls_settings = self.tls_config(sni=sni, fp=fp, alpn=alpn, ais=ais, ech_config_list=ech_config_list)
         elif tls == "reality":
-            tls_settings = self.reality_config(sni=sni, fp=fp, pbk=pbk, sid=sid, spx=spx)
+            tls_settings = self.reality_config(sni=sni, fp=fp, pbk=pbk, sid=sid, spx=spx, mldsa65_verify=mldsa65_verify)
         else:
             tls_settings = None
 
@@ -655,6 +658,7 @@ class XrayConfiguration(BaseSubscription):
             permit_without_stream=inbound.get("permit_without_stream", False),
             initial_windows_size=inbound.get("initial_windows_size"),
             ech_config_list=inbound.get("ech_config_list"),
+            mldsa65_verify=inbound.get("mldsa65Verify"),
         )
 
         mux_settings: dict = inbound.get("mux_settings", {})

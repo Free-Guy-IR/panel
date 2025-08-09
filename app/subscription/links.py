@@ -73,6 +73,7 @@ class StandardLinks(BaseSubscription):
             downloadSettings=inbound.get("downloadSettings"),
             http_headers=inbound.get("http_headers"),
             ech_config_list=inbound.get("ech_config_list"),
+            mldsa65_verify=inbound.get("mldsa65Verify"),
         )
         if inbound["protocol"] == "vmess":
             link = self.vmess(
@@ -209,6 +210,7 @@ class StandardLinks(BaseSubscription):
         fs: str,
         ais: bool,
         ech_config_list: str,
+        mldsa65_verify: str,
     ):
         payload["sni"] = sni
         payload["fp"] = fp
@@ -230,6 +232,8 @@ class StandardLinks(BaseSubscription):
             payload["sid"] = sid
             if spx:
                 payload["spx"] = spx
+            if mldsa65_verify:
+                payload["mldsa65Verify"] = mldsa65_verify
 
         if ais:
             payload["allowInsecure"] = 1
@@ -267,6 +271,7 @@ class StandardLinks(BaseSubscription):
         random_user_agent: bool = False,
         http_headers: dict | None = None,
         ech_config_list: str | None = None,
+        mldsa65_verify: str | None = None,
     ):
         payload = {
             "add": address,
@@ -303,7 +308,9 @@ class StandardLinks(BaseSubscription):
             downloadSettings=downloadSettings,
         )
         if tls in ("tls", "reality"):
-            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list)
+            self._make_tls_settings(
+                payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list, mldsa65_verify
+            )
         return "vmess://" + base64.b64encode(json.dumps(payload, sort_keys=True).encode("utf-8")).decode()
 
     def vless(
@@ -340,6 +347,7 @@ class StandardLinks(BaseSubscription):
         random_user_agent: bool = False,
         downloadSettings: dict | None = None,
         ech_config_list: str | None = None,
+        mldsa65_verify: str | None = None,
     ):
         payload = {"security": tls, "type": net, "headerType": type}
         if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
@@ -366,7 +374,9 @@ class StandardLinks(BaseSubscription):
             downloadSettings=downloadSettings,
         )
         if tls in ("tls", "reality"):
-            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list)
+            self._make_tls_settings(
+                payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list, mldsa65_verify
+            )
         return "vless://" + f"{id}@{address}:{port}?" + urlparse.urlencode(payload) + f"#{(urlparse.quote(remark))}"
 
     def trojan(
@@ -403,6 +413,7 @@ class StandardLinks(BaseSubscription):
         random_user_agent: bool = False,
         downloadSettings: dict | None = None,
         ech_config_list: str | None = None,
+        mldsa65_verify: str | None = None,
     ):
         payload = {"security": tls, "type": net, "headerType": type}
         if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
@@ -429,7 +440,9 @@ class StandardLinks(BaseSubscription):
             downloadSettings=downloadSettings,
         )
         if tls in ("tls", "reality"):
-            self._make_tls_settings(payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list)
+            self._make_tls_settings(
+                payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list, mldsa65_verify
+            )
         return (
             "trojan://"
             + f"{urlparse.quote(password, safe=':')}@{address}:{port}?"

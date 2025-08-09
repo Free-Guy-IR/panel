@@ -172,6 +172,8 @@ class XRayConfig(dict):
             settings["spx"] = tls_settings.get("SpiderX")
         except Exception:
             settings["spx"] = ""
+        
+        settings["mldsa65Verify"] = tls_settings.get("mldsa65Verify")
 
     def _handle_network_settings(self, net: str, net_settings: dict, settings: dict, inbound_tag: str):
         """Handle network-specific settings."""
