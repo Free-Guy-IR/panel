@@ -694,10 +694,15 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
                 else None
             )
 
-        proxy_settings = deepcopy(db_user.proxy_settings)
-        proxy_settings["vless"]["flow"] = db_user.next_plan.user_template.extra_settings["flow"]
-        proxy_settings["shadowsocks"]["method"] = db_user.next_plan.user_template.extra_settings["method"]
-        db_user.proxy_settings = proxy_settings
+        if db_user.next_plan.user_template.extra_settings:
+            proxy_settings = deepcopy(db_user.proxy_settings)
+            proxy_settings["vless"]["flow"] = (
+                db_user.next_plan.user_template.extra_settings["flow"]
+                if db_user.next_plan.user_template.extra_settings["flow"]
+                else ""
+            )
+            proxy_settings["shadowsocks"]["method"] = db_user.next_plan.user_template.extra_settings["method"]
+            db_user.proxy_settings = proxy_settings
         db_user.data_limit_reset_strategy = db_user.next_plan.user_template.data_limit_reset_strategy
 
     await _reset_user_traffic_and_log(db, db_user)
