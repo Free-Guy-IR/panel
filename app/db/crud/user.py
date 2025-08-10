@@ -701,7 +701,11 @@ async def reset_user_by_next(db: AsyncSession, db_user: User) -> User:
                 if db_user.next_plan.user_template.extra_settings["flow"]
                 else ""
             )
-            proxy_settings["shadowsocks"]["method"] = db_user.next_plan.user_template.extra_settings["method"]
+            proxy_settings["shadowsocks"]["method"] = (
+                db_user.next_plan.user_template.extra_settings["method"]
+                if db_user.next_plan.user_template.extra_settings["method"]
+                else "chacha20-ietf-poly1305"
+            )
             db_user.proxy_settings = proxy_settings
         db_user.data_limit_reset_strategy = db_user.next_plan.user_template.data_limit_reset_strategy
 
