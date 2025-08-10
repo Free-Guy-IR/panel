@@ -25,8 +25,10 @@ export const userTemplateFormSchema = z.object({
   data_limit: z.number().min(0).optional(),
   expire_duration: z.number().min(0).optional(),
   on_hold_timeout: z.number().optional(),
-  method: z.enum([ShadowsocksMethods['aes-128-gcm'], ShadowsocksMethods['aes-256-gcm'], ShadowsocksMethods['chacha20-ietf-poly1305'], ShadowsocksMethods['xchacha20-poly1305']]).optional(),
-  flow: z.enum([XTLSFlows[''], XTLSFlows['xtls-rprx-vision']]).optional(),
+  method: z
+    .enum([ShadowsocksMethods['aes-128-gcm'], ShadowsocksMethods['aes-256-gcm'], ShadowsocksMethods['chacha20-ietf-poly1305'], ShadowsocksMethods['xchacha20-poly1305']])
+    .default(ShadowsocksMethods['chacha20-ietf-poly1305']),
+  flow: z.enum([XTLSFlows[''], XTLSFlows['xtls-rprx-vision']]).default(XTLSFlows['']),
   groups: z.array(z.number()).min(1, 'Groups is required'),
   data_limit_reset_strategy: z
     .enum([
@@ -378,14 +380,13 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('templates.method')}</FormLabel>
-                      <Select onValueChange={value => field.onChange(value === 'null' ? undefined : value)} value={field.value ?? 'null'}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder={t('userDialog.proxySettings.method', { defaultValue: 'Select Method' })} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="null">{t('userDialog.proxySettings.flow.none', { defaultValue: 'None' })}</SelectItem>
                           <SelectItem value={ShadowsocksMethods['aes-128-gcm']}>aes-128-gcm</SelectItem>
                           <SelectItem value={ShadowsocksMethods['aes-256-gcm']}>aes-256-gcm</SelectItem>
                           <SelectItem value={ShadowsocksMethods['chacha20-ietf-poly1305']}>chacha20-ietf-poly1305</SelectItem>

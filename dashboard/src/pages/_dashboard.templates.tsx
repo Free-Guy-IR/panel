@@ -1,5 +1,5 @@
 import UserTemplate from '../components/templates/UserTemplate'
-import { useGetUserTemplates, useModifyUserTemplate, UserTemplateResponse } from '@/service/api'
+import { useGetUserTemplates, useModifyUserTemplate, UserTemplateResponse, ShadowsocksMethods, XTLSFlows } from '@/service/api'
 import PageHeader from '@/components/page-header.tsx'
 import { Plus } from 'lucide-react'
 import { Separator } from '@/components/ui/separator.tsx'
@@ -11,7 +11,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { queryClient } from '@/utils/query-client.ts'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_SHADOWSOCKS_METHOD } from '@/constants/Proxies'
 
 const initialDefaultValues: Partial<UserTemplatesFromValue> = {
   name: '',
@@ -20,8 +19,8 @@ const initialDefaultValues: Partial<UserTemplatesFromValue> = {
   username_suffix: '',
   data_limit: 0,
   expire_duration: 0,
-  method:DEFAULT_SHADOWSOCKS_METHOD,
-  flow: '',
+  method: ShadowsocksMethods['chacha20-ietf-poly1305'],
+  flow: XTLSFlows[''],
   on_hold_timeout: 0,
   groups: [],
   reset_usages: false,

@@ -9,8 +9,8 @@ from .validators import ListValidator, UserValidator
 
 
 class ExtraSettings(BaseModel):
-    flow: XTLSFlows | None = None
-    method: ShadowsocksMethods | None = None
+    flow: XTLSFlows | None = Field(XTLSFlows.NONE)
+    method: ShadowsocksMethods | None = Field(ShadowsocksMethods.CHACHA20_POLY1305)
 
     def dict(self, *, no_obj=True, **kwargs):
         if no_obj:
