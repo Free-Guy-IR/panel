@@ -24,6 +24,7 @@ ebl = html_decoration.expandable_blockquote
 
 
 class Button:
+    random_username = "🎲 Random Username"
     modify_data_limit = "📶 Modify Data Limit"
     modify_expiry = "📅 Modify Expiry"
     delete_expired = "⌛ Delete Expired"
@@ -146,6 +147,30 @@ class Message:
             expiry = (user.expire - dt.now(tz.utc)).days if user.expire else "∞"
         return f"{used_traffic} / {data_limit} | {expiry} days\n{user.note or ''}"
 
+    @classmethod
+    def client_user_details(cls, user: UserResponse) -> str:
+        data_limit = c(readable_size(user.data_limit)) if user.data_limit else "∞"
+        used_traffic = c(readable_size(user.used_traffic))
+        expire = user.expire.strftime("%Y-%m-%d %H:%M") if user.expire else "∞"
+        days_left = (user.expire - dt.now(tz.utc)).days if user.expire else "∞"
+        online_at = bl(user.online_at.strftime("%Y-%m-%d %H:%M:%S")) if user.online_at else "-"
+        emojy_status = cls.status_emoji(user.status)
+
+        return f"""\
+👤 {b("User Information")}
+
+{b("Status:")} {emojy_status} {user.status.value.replace("_", " ").title()}
+{b("Username:")} {c(user.username)}
+{b("Data Limit:")} {data_limit}
+{b("Used Traffic:")} {used_traffic}
+{b("Data Limit Strategy:")} {user.data_limit_reset_strategy.value.replace("_", " ").title()}
+{b("Expire:")} {c(expire)}
+{b("Days left:")} {c(days_left)}
+{b("Online At:")} {online_at}
+{b("Subscription URL:")}
+{p(user.subscription_url)}
+"""
+
     @staticmethod
     def confirm_disable_user(username: str) -> str:
         return f"⚠ Are you sure you want to {b('Disable')} {c(username)}?"
@@ -173,6 +198,30 @@ class Message:
     @classmethod
     def confirm_delete_expired(cls, expired_before_days: int | str) -> str:
         return f"⚠ Are you sure you want to delete all users expired before {expired_before_days} days ago?"
+    
+    @staticmethod
+    def user_disabled(username: str) -> str:
+        return f"✅ {username} has been successfully disabled."
+    
+    @staticmethod
+    def user_enabled(username: str) -> str:
+        return f"✅ {username} has been successfully enabled."
+    
+    @staticmethod
+    def user_deleted(username: str) -> str:
+        return f"✅ {username} has been successfully deleted."
+    
+    @staticmethod
+    def user_sub_revoked(username: str) -> str:
+        return f"✅ {username}'s subscription has been successfully revoked."
+    
+    @staticmethod
+    def user_reset_usage(username: str) -> str:
+        return f"✅ {username}'s usage has been successfully reset."
+    
+    @staticmethod
+    def user_next_plan_activated(username: str) -> str:
+        return f"✅ {username}'s next plan has been successfully activated."
 
     @classmethod
     def users_deleted(cls, count):

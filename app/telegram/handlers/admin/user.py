@@ -1,3 +1,4 @@
+import random
 from datetime import datetime as dt, timedelta as td
 
 from aiogram import Router, F
@@ -20,7 +21,7 @@ from app.models.admin import AdminDetails
 from app.telegram.keyboards.admin import AdminPanel, AdminPanelAction, InlineQuerySearch
 from app.telegram.keyboards.base import CancelKeyboard
 from app.telegram.utils.texts import Message as Texts
-from app.telegram.keyboards.user import UserPanel, UserPanelAction, ChooseStatus, ChooseTemplate
+from app.telegram.keyboards.user import UserPanel, UserPanelAction, ChooseStatus, ChooseTemplate, RandomUsername
 from app.telegram.utils.shared import add_to_messages_to_delete, delete_messages
 
 user_operations = UserOperation(OperatorType.TELEGRAM)
@@ -39,27 +40,34 @@ async def create_user(event: CallbackQuery, state: FSMContext):
     except TelegramBadRequest:
         pass
     await state.set_state(forms.CreateUser.username)
-    msg = await event.message.answer(Texts.enter_username, reply_markup=CancelKeyboard().as_markup())
+    msg = await event.message.answer(Texts.enter_username, reply_markup=RandomUsername().as_markup())
     await state.update_data(messages_to_delete=[msg.message_id])
 
 
 @router.message(forms.CreateUser.username)
-async def process_username(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+@router.callback_query(RandomUsername.Callback.filter(~F.with_template))
+async def process_username(event: Message | CallbackQuery, state: FSMContext, db: AsyncSession, admin: AdminDetails):
     await delete_messages(event, state)
-    await add_to_messages_to_delete(state, event)
-
-    username = event.text
-    try:
-        UserValidator.validate_username(username)
-    except ValueError as e:
-        msg = await event.reply(f"❌ {e}", reply_markup=CancelKeyboard().as_markup())
-        await add_to_messages_to_delete(state, msg)
-        return
+    if isinstance(event, Message):
+        await add_to_messages_to_delete(state, event)
+        username = event.text
+        try:
+            UserValidator.validate_username(username)
+        except ValueError as e:
+            msg = await event.reply(f"❌ {e}", reply_markup=RandomUsername().as_markup())
+            await add_to_messages_to_delete(state, msg)
+            return
+    else:
+        await add_to_messages_to_delete(state, event.message)
+        username = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=5))
 
     try:
         await user_operations.get_validated_user(db, username, admin)
-        msg = await event.reply(Texts.username_already_exist, reply_markup=CancelKeyboard().as_markup())
-        await add_to_messages_to_delete(state, msg)
+        if isinstance(event, Message):
+            msg = await event.reply(Texts.username_already_exist, reply_markup=RandomUsername().as_markup())
+            await add_to_messages_to_delete(state, msg)
+        else:
+            await event.answer(Texts.username_already_exist)
         return
     except ValueError:
         pass
@@ -67,7 +75,10 @@ async def process_username(event: Message, state: FSMContext, db: AsyncSession, 
     await delete_messages(event, state)
     await state.update_data(username=username)
     await state.set_state(forms.CreateUser.data_limit)
-    msg = await event.answer(Texts.enter_data_limit, reply_markup=CancelKeyboard().as_markup())
+    if isinstance(event, Message):
+        msg = await event.answer(Texts.enter_data_limit, reply_markup=CancelKeyboard().as_markup())
+    else:
+        msg = await event.message.answer(Texts.enter_data_limit, reply_markup=CancelKeyboard().as_markup())
     await add_to_messages_to_delete(state, msg)
 
 
@@ -228,38 +239,48 @@ async def process_cancel(event: CallbackQuery, state: FSMContext):
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.disable == F.action))
 async def disable_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
-    user = await user_operations.get_user(db, callback_data.username, admin)
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
     modified_user = UserModify(**user.model_dump())
     modified_user.status = UserStatusModify.disabled
-    user = await user_operations.modify_user(db, callback_data.username, modified_user, admin)
-    await event.answer(f"User {callback_data.username} has been disabled.")
+    user = await user_operations.modify_user(db, user.username, modified_user, admin)
+    await event.answer(f"User {user.username} has been disabled.")
     groups = await user_operations.validate_all_groups(db, user)
     await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
+@router.callback_query(UserPanel.Callback.filter(UserPanelAction.delete == F.action))
+async def delete_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
+    await user_operations.remove_user(db, user.username, admin)
+    await event.answer(Texts.user_deleted(user.username))
+    await event.message.edit_text(Texts.user_deleted(user.username), reply_markup=AdminPanel(admin.is_sudo).as_markup())
+
+
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.enable == F.action))
 async def enable_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
-    user = await user_operations.get_user(db, callback_data.username, admin)
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
     modified_user = UserModify(**user.model_dump())
     modified_user.status = UserStatusModify.active
-    user = await user_operations.modify_user(db, callback_data.username, modified_user, admin)
-    await event.answer(f"User {callback_data.username} has been enabled.")
+    user = await user_operations.modify_user(db, user.username, modified_user, admin)
+    await event.answer(Texts.user_enabled(user.username))
     groups = await user_operations.validate_all_groups(db, user)
     await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.revoke_sub == F.action))
 async def revoke_sub(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
-    user = await user_operations.revoke_user_sub(db, callback_data.username, admin)
-    await event.answer(f"User {callback_data.username} Subscription has been revoked.")
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
+    user = await user_operations.revoke_user_sub(db, user.username, admin)
+    await event.answer(Texts.user_sub_revoked(user.username))
     groups = await user_operations.validate_all_groups(db, user)
     await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.reset_usage == F.action))
 async def reset_usage(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
-    user = await user_operations.reset_user_data_usage(db, callback_data.username, admin)
-    await event.answer(f"User {callback_data.username} Usage has been reset.")
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
+    user = await user_operations.reset_user_data_usage(db, user.username, admin)
+    await event.answer(Texts.user_reset_usage(user.username))
     groups = await user_operations.validate_all_groups(db, user)
     await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
@@ -268,8 +289,9 @@ async def reset_usage(event: CallbackQuery, admin: AdminDetails, db: AsyncSessio
 async def activate_next_plan(
     event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback
 ):
-    user = await user_operations.active_next_plan(db, callback_data.username, admin)
-    await event.answer(f"User {callback_data.username} Next plan has been activated.")
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
+    user = await user_operations.active_next_plan(db, user.username, admin)
+    await event.answer(Texts.user_next_plan_activated(user.username))
     groups = await user_operations.validate_all_groups(db, user)
     await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
@@ -278,10 +300,10 @@ async def activate_next_plan(
 async def modify_with_template(event: CallbackQuery, db: AsyncSession, callback_data: UserPanel.Callback):
     templates = await user_templates.get_user_templates(db)
     if not templates:
-        return event.answer(Texts.there_is_no_template)
+        return await event.answer(Texts.there_is_no_template)
 
     await event.message.edit_text(
-        Texts.choose_a_template, reply_markup=ChooseTemplate(templates, username=callback_data.username).as_markup()
+        Texts.choose_a_template, reply_markup=ChooseTemplate(templates, user_id=callback_data.user_id).as_markup()
     )
 
 
@@ -289,9 +311,10 @@ async def modify_with_template(event: CallbackQuery, db: AsyncSession, callback_
 async def modify_with_template_done(
     event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: ChooseTemplate.Callback
 ):
+    user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
     user = await user_operations.modify_user_with_template(
         db,
-        callback_data.username,
+        user.username,
         ModifyUserByTemplate(user_template_id=callback_data.template_id),
         admin,
     )
@@ -303,8 +326,7 @@ async def modify_with_template_done(
 async def create_user_from_template(event: CallbackQuery, db: AsyncSession):
     templates = await user_templates.get_user_templates(db)
     if not templates:
-        return event.answer(Texts.there_is_no_template)
-
+        return await event.answer(Texts.there_is_no_template)
     await event.message.edit_text(Texts.choose_a_template, reply_markup=ChooseTemplate(templates).as_markup())
 
 
@@ -318,31 +340,56 @@ async def create_user_from_template_username(
         pass
 
     await state.set_state(forms.CreateUserFromTemplate.username)
-    msg = await event.message.answer(Texts.enter_username, reply_markup=CancelKeyboard().as_markup())
+    msg = await event.message.answer(
+        Texts.enter_username,
+        reply_markup=RandomUsername(with_template=True).as_markup()
+    )
     await state.update_data(template_id=callback_data.template_id, messages_to_delete=[msg.message_id])
 
 
 @router.message(forms.CreateUserFromTemplate.username)
-async def create_user_from_template_choose(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+@router.callback_query(RandomUsername.Callback.filter(F.with_template))
+async def create_user_from_template_choose(
+        event: Message | CallbackQuery,
+        state: FSMContext,
+        db: AsyncSession,
+        admin: AdminDetails
+):
     await delete_messages(event, state)
-    await add_to_messages_to_delete(state, event)
 
-    username = event.text
-    try:
-        UserValidator.validate_username(username)
-    except ValueError as e:
-        msg = await event.reply(f"❌ {e}", reply_markup=CancelKeyboard().as_markup())
-        await add_to_messages_to_delete(state, msg)
-        return
+    if isinstance(event, Message):
+        await add_to_messages_to_delete(state, event)
+
+        username = event.text
+        try:
+            UserValidator.validate_username(username)
+        except ValueError as e:
+            msg = await event.reply(f"❌ {e}", reply_markup=RandomUsername(with_template=True).as_markup())
+            await add_to_messages_to_delete(state, msg)
+            return
+    else:
+        await add_to_messages_to_delete(state, event.message)
+        username = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=5))
 
     template_id = await state.get_value("template_id")
     template = await user_templates.get_validated_user_template(db, template_id)
 
     try:
-        actual_username = template.username_prefix + username + template.username_suffix
+        actual_username = username
+        if template.username_prefix:
+            actual_username = template.username_prefix + username
+        if template.username_suffix:
+            actual_username = username + template.username_suffix
+
         await user_operations.get_validated_user(db, actual_username, admin)
-        msg = await event.reply(Texts.username_already_exist, reply_markup=CancelKeyboard().as_markup())
-        await add_to_messages_to_delete(state, msg)
+        if isinstance(event, Message):
+            msg = await event.reply(
+                Texts.username_already_exist,
+                reply_markup=RandomUsername(with_template=True).as_markup()
+            )
+            await add_to_messages_to_delete(state, msg)
+        else:
+            await event.answer(Texts.username_already_exist)
         return
     except ValueError:
         pass
@@ -354,18 +401,42 @@ async def create_user_from_template_choose(event: Message, state: FSMContext, db
         db, CreateUserFromTemplate(username=username, user_template_id=template_id), admin
     )
     groups = await user_operations.validate_all_groups(db, user)
-    return await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+    if isinstance(event, Message):
+        return await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+    else:
+        return await event.message.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+
+
+@router.message(F.text.contains("/sub/"))
+async def get_user_by_sub(event: Message, db: AsyncSession, admin: AdminDetails):
+    """get exact user by subscription token, otherwise not found"""
+    token = event.text.strip("/").split("/")[-1]
+    try:
+        db_user = await user_operations.get_validated_sub(db, token)
+        user = await user_operations.validate_user(db_user)
+        if user.admin and user.admin.username != admin.username and not admin.is_sudo:
+            return await event.reply(Texts.user_not_found)
+    except ValueError:
+        return await event.reply(Texts.user_not_found)
+
+    groups = await user_operations.validate_all_groups(db, user)
+    await event.reply(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
 @router.message(F.text)
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.show == F.action))
 async def get_user(event: Message | CallbackQuery, admin: AdminDetails, db: AsyncSession, **kwargs):
     """get exact user, otherwise not found"""
-    username = event.text if isinstance(event, Message) else kwargs["callback_data"].username
     try:
-        user = await user_operations.get_user(db, username, admin)
+        if isinstance(event, Message):
+            user = await user_operations.get_user(db, event.text, admin)
+        else:
+            user = await user_operations.get_user_by_id(db, kwargs["callback_data"].user_id, admin)
     except ValueError:
-        return await event.reply(Texts.user_not_found, reply_markup=InlineQuerySearch(username).as_markup())
+        if isinstance(event, Message):
+            return await event.reply(Texts.user_not_found, reply_markup=InlineQuerySearch(event.text).as_markup())
+        else:
+            return await event.answer(Texts.user_not_found)
 
     groups = await user_operations.validate_all_groups(db, user)
     if isinstance(event, Message):
@@ -395,7 +466,10 @@ async def search_user(event: InlineQuery, admin: AdminDetails, db: AsyncSession)
                 input_message_content=InputTextMessageContent(message_text="/start"),
             )
         ]
-    await event.answer(result, cache_time=5)
+    try:
+        await event.answer(result, cache_time=5)
+    except TelegramBadRequest:  # in case of query too old
+        pass
 
 
 @router.callback_query()
