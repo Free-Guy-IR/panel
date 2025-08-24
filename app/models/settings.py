@@ -89,11 +89,6 @@ class Webhook(BaseModel):
     def validate_proxy_url(cls, v):
         return ProxyValidator.validate_proxy_url(v)
 
-    @field_validator("days_left", "usage_percent", mode="before")
-    @classmethod
-    def validate_lists(cls, v):
-        return ListValidator.not_null_list(v, "list")
-
     @model_validator(mode="after")
     def check_enable_requires_webhookinfo(self):
         if self.enable and (not self.webhooks or len(self.webhooks) == 0):
