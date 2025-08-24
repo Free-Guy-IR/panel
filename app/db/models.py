@@ -46,7 +46,7 @@ class Admin(Base):
     __tablename__ = "admins"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     username: Mapped[str] = mapped_column(String(34), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(128))
     users: Mapped[List["User"]] = relationship(back_populates="admin", init=False, default_factory=list)
@@ -119,7 +119,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     username: Mapped[str] = mapped_column(CaseSensitiveString(128), unique=True, index=True)
     node_usages: Mapped[List["NodeUserUsage"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", init=False
@@ -283,7 +283,7 @@ class UserSubscriptionUpdate(Base):
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     user: Mapped["User"] = relationship(back_populates="subscription_updates", init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     user_agent: Mapped[str] = mapped_column(String(512))
 
 
@@ -486,7 +486,7 @@ class Node(Base):
     __tablename__ = "nodes"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     name: Mapped[str] = mapped_column(CaseSensitiveString(256), unique=True)
     address: Mapped[str] = mapped_column(String(256), unique=False, nullable=False)
     port: Mapped[int] = mapped_column(unique=False, nullable=False)
@@ -549,7 +549,7 @@ class NotificationReminder(Base):
     __tablename__ = "notification_reminders"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     user: Mapped["User"] = relationship(back_populates="notification_reminders", init=False)
     type: Mapped[ReminderType] = mapped_column(SQLEnum(ReminderType))
@@ -588,7 +588,7 @@ class CoreConfig(Base):
     __tablename__ = "core_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     name: Mapped[str] = mapped_column(String(256))
     config: Mapped[Dict[str, Any]] = mapped_column(JSON(False))
     exclude_inbound_tags: Mapped[Optional[str]] = mapped_column(String(2048))
@@ -599,7 +599,7 @@ class NodeStat(Base):
     __tablename__ = "node_stats"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=lambda: dt.now(tz.utc), init=False)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(tz.utc), init=False)
     node_id: Mapped[int] = mapped_column(ForeignKey("nodes.id"))
     node: Mapped["Node"] = relationship(back_populates="stats", init=False)
     mem_total: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
