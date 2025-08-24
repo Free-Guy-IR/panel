@@ -12,6 +12,11 @@ from app.models.user import UserNotificationResponse, UserStatus
 queue = asyncio.Queue()
 
 
+def get_current_timestamp() -> float:
+    """Factory function to get current timestamp"""
+    return dt.now(tz.utc).timestamp()
+
+
 class Notification(BaseModel):
     class Type(str, Enum):
         user_created = "user_created"
@@ -28,8 +33,8 @@ class Notification(BaseModel):
         reached_usage_percent = "reached_usage_percent"
         reached_days_left = "reached_days_left"
 
-    enqueued_at: float = Field(default_factory=dt.now(tz.utc).timestamp())
-    send_at: float = Field(default_factory=dt.now(tz.utc).timestamp())
+    enqueued_at: float = Field(default_factory=get_current_timestamp)
+    send_at: float = Field(default_factory=get_current_timestamp)
     tries: int = Field(default=0)
 
 
