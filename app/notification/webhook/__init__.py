@@ -3,13 +3,18 @@ from enum import Enum
 from typing import Type
 import asyncio
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.settings import webhook_settings
 from app.models.admin import AdminDetails
 from app.models.user import UserNotificationResponse, UserStatus
 
 queue = asyncio.Queue()
+
+
+def get_current_timestamp() -> float:
+    """Factory function to get current timestamp"""
+    return dt.now(tz.utc).timestamp()
 
 
 class Notification(BaseModel):
@@ -28,9 +33,9 @@ class Notification(BaseModel):
         reached_usage_percent = "reached_usage_percent"
         reached_days_left = "reached_days_left"
 
-    enqueued_at: float = dt.now(tz.utc).timestamp()
-    send_at: float = dt.now(tz.utc).timestamp()
-    tries: int = 0
+    enqueued_at: float = Field(default_factory=get_current_timestamp)
+    send_at: float = Field(default_factory=get_current_timestamp)
+    tries: int = Field(default=0)
 
 
 class UserNotification(Notification):

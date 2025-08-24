@@ -79,9 +79,9 @@ class UserOperation(BaseOperation):
 
         if db_user.status in (UserStatus.active, UserStatus.on_hold):
             user_inbounds = await db_user.inbounds()
-            asyncio.create_task(node_manager.update_user(user, inbounds=user_inbounds))
+            await node_manager.update_user(user, inbounds=user_inbounds)
         else:
-            asyncio.create_task(node_manager.remove_user(user))
+            await node_manager.remove_user(user)
 
         return user
 
