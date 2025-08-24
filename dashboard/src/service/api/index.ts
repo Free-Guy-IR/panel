@@ -756,6 +756,7 @@ export interface Telegram {
   proxy_url?: TelegramProxyUrl
   mini_app_login?: boolean
   mini_app_web_url?: TelegramMiniAppWebUrl
+  for_admins_only?: boolean
 }
 
 export type TcpSettingsResponse = HTTPResponse | null
