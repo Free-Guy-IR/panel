@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/docs/raw/master/screenshots/logo-dark.png">
-      <img width="160" height="160" src="https://github.com/PasarGuard/docs/raw/main/logos/PasarGuard-white-logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/docs/raw/main/logos/PasarGuard-white-logo.png">
+      <img width="160" height="160" src="https://github.com/PasarGuard/docs/raw/main/logos/PasarGuard-black-logo.png">
     </picture>
   </a>
 </p>
@@ -10,7 +10,7 @@
 <h1 align="center"/>PasarGuard</h1>
 
 <p align="center">
-    Unified GUI Censorship Resistant Solution Powered by <a href="https://github.com/XTLS/Xray-core">Xray</a>
+    Unified GUI Censorship Resistant Solution
 </p>
 
 <br/>
