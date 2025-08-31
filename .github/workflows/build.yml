@@ -5,10 +5,10 @@ on:
     types: [created]
 
 env:
-  IMAGE: gozargah/marzban:${{ github.ref_name }}
-  GHCR_IMAGE: ghcr.io/gozargah/marzban:${{ github.ref_name }}
-  IMAGE_LATEST: gozargah/marzban:latest
-  GHCR_IMAGE_LATEST: ghcr.io/gozargah/marzban:latest
+  IMAGE: ${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}
+  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}
+  IMAGE_LATEST: ${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+  GHCR_IMAGE_LATEST: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
 
 jobs:
   build-dashboard:

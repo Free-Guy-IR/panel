@@ -59,8 +59,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="MarzbanAPI",
-    description="Unified GUI Censorship Resistant Solution Powered by Xray",
+    title="PasarGuardAPI",
+    description="Unified GUI Censorship Resistant Solution",
     version=__version__,
     lifespan=lifespan,
     openapi_url="/openapi.json" if DOCS else None,
@@ -102,7 +102,7 @@ def validate_paths():
 
 on_startup(scheduler.start)
 on_shutdown(scheduler.shutdown)
-on_startup(lambda: logger.info(f"Marzban v{__version__}"))
+on_startup(lambda: logger.info(f"PasarGuard v{__version__}"))
 
 
 @app.exception_handler(RequestValidationError)

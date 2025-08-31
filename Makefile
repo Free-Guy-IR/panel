@@ -84,27 +84,27 @@ install-front: check-bun
 run-migration:
 	@uv run alembic upgrade head 
 
-# run marzban
+# run PasarGuard
 .PHONY: run
 run:
 	@uv run main.py
-	
-# run marzban-cli
+
+# run pasarguard-cli
 .PHONY: run-cli
 run-cli:
-	@uv run marzban-cli.py
+	@uv run pasarguard-cli.py
 
 # Run tests
 .PHONY: test
 test:
 	@uv run pytest tests/
+
 # Run tests-watch
 .PHONY: test-whatch
 test-whatch:
 	@uv run ptw
 
-
-# Run marzban with watchfiles
+# Run PasarGuard with watchfiles
 .PHONY: run-watch
 run-watch:
 	@echo "Running application with watchfiles..."

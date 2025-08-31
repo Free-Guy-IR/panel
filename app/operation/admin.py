@@ -45,7 +45,7 @@ class AdminOperation(BaseOperation):
         db_admin = await self.get_validated_admin(db, username=username)
         if self.operator_type != OperatorType.CLI and db_admin.username == current_admin.username and db_admin.is_sudo:
             await self.raise_error(
-                message="You're not allowed to edit another sudoer's account. Use marzban-cli instead.", code=403
+                message="You're not allowed to edit another sudoer's account. Use pasarguard-cli instead.", code=403
             )
 
         db_admin = await update_admin(db, db_admin, modified_admin)
@@ -68,7 +68,7 @@ class AdminOperation(BaseOperation):
             and db_admin.is_sudo
         ):
             await self.raise_error(
-                message="You're not allowed to delete sudoer's account. Use marzban-cli instead.", code=403
+                message="You're not allowed to delete sudoer's account. Use pasarguard-cli instead.", code=403
             )
 
         await remove_admin(db, db_admin)

@@ -1,2 +1,2 @@
 #!/bin/bash
-python /code/marzban-cli.py
+python /code/pasarguard-cli.py

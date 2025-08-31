@@ -1,7 +1,7 @@
 [project]
-name = "marzban"
+name = "pasarguard"
 version = "1.0.0-beta-3"
-description = "Unified GUI Censorship Resistant Solution Powered by Xray"
+description = "Unified GUI Censorship Resistant Solution"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -50,7 +50,7 @@ dependencies = [
 
 [tool.ruff]
 line-length = 120
-exclude = ["xray_api", "app/db/migrations"]
+exclude = ["app/db/migrations"]
 fix = true
 
 [tool.ruff.lint]

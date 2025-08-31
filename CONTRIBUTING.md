@@ -1,15 +1,15 @@
 
 
-# Contribute to Marzban
+# Contribute to PasarGuard
 
-Thanks for considering contributing to **Marzban**!
+Thanks for considering contributing to **PasarGuard**!
 
 ## 🙋 Questions
 
 Please **don’t use GitHub Issues** to ask questions. Instead, use one of the following platforms:
 
-* 💬 Telegram: [@Gozargah\_Marzban](https://t.me/gozargah_marzban)
-* 🗣️ GitHub Discussions: [Marzban Discussions](https://github.com/gozargah/marzban/discussions)
+* 💬 Telegram: [@Pasar_Guard](https://t.me/pasar_guard)
+* 🗣️ GitHub Discussions: [PasarGuard Discussions](https://github.com/pasarguard/panel/discussions)
 
 ## 🐞 Reporting Issues
 
@@ -18,7 +18,7 @@ When reporting a bug or issue, please include:
 * ✅ What you expected to happen
 * ❌ What actually happened (include server logs or browser errors)
 * ⚙️ Your `xray` JSON config and `.env` settings (censor sensitive info)
-* 🔢 Your Marzban version and Docker version (if applicable)
+* 🔢 Your PasarGuard version and Docker version (if applicable)
 
 ---
 
@@ -114,9 +114,9 @@ Remove the `dashboard/build` directory and restart the Python backend — the fr
 
 ---
 
-## 🛠️ Marzban CLI
+## 🛠️ PasarGuard CLI
 
-Marzban’s CLI is built using [Textual](https://textual.textualize.io/).
+PasarGuard’s CLI is built using [Textual](https://textual.textualize.io/).
 
 * CLI codebase: `cli/`
 
@@ -140,4 +140,4 @@ Run the backend (`main.py`)
 
 ---
 
-Feel free to reach out via [Telegram](https://t.me/gozargah_marzban) or GitHub Discussions if you have any questions. Happy contributing! 🚀
+Feel free to reach out via [Telegram](https://t.me/pasar_guard) or GitHub Discussions if you have any questions. Happy contributing! 🚀

@@ -6,8 +6,8 @@ from cli.help import HelpModal
 from config import DEBUG
 
 
-class MarzbanCLI(App):
-    """A Textual app to manage marzban"""
+class PasarGuardCLI(App):
+    """A Textual app to manage pasarguard"""
 
     CSS_PATH = "cli/style.tcss"
     ENABLE_COMMAND_PALETTE = DEBUG
@@ -49,5 +49,5 @@ class MarzbanCLI(App):
 
 
 if __name__ == "__main__":
-    app = MarzbanCLI()
+    app = PasarGuardCLI()
     app.run()

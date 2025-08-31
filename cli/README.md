@@ -1,6 +1,6 @@
-# Marzban CLI
+# PasarGuard CLI
 
-A modern, interactive command-line interface for managing Marzban, built with Textual.
+A modern, interactive command-line interface for managing PasarGuard, built with Textual.
 
 ## Features
 
@@ -16,7 +16,7 @@ A modern, interactive command-line interface for managing Marzban, built with Te
 ### Starting the CLI
 
 ```bash
-marzban cli
+pasarguard cli
 ```
 
 ### Keyboard Shortcuts

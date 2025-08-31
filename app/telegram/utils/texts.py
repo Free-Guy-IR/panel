@@ -79,7 +79,7 @@ class Message:
     def start(stats: SystemStats):
         memory_percentage = int(stats.mem_used / stats.mem_total * 100)
         return f"""\
-⚙ {b("Marzban Version")}: {c(stats.version)}
+⚙ {b("PasarGuard Version")}: {c(stats.version)}
 
 📊 {b("CPU Usage")}: {c(stats.cpu_usage)} %
 🎛 {b("CPU Cores")}: {c(stats.cpu_cores)}

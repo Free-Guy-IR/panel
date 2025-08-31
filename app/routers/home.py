@@ -34,9 +34,9 @@ async def get_manifest(request: Request, start_url: Optional[str] = None):
         resolved_start_url = DASHBOARD_ROUTE or "/"
 
     manifest = {
-        "name": "Marzban",
-        "short_name": "Marzban",
-        "description": "Marzban: Modern dashboard for managing proxies and users.",
+        "name": "PasarGuard",
+        "short_name": "PasarGuard",
+        "description": "PasarGuard: Modern dashboard for managing proxies and users.",
         "theme_color": "#1b1b1d",
         "background_color": "#1b1b1d",
         "display": "standalone",

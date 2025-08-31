@@ -65,7 +65,7 @@ USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS = config("USER_AUTODELETE_INCLUDE_LIMIT
 DO_NOT_LOG_TELEGRAM_BOT = config("DO_NOT_LOG_TELEGRAM_BOT", default=True, cast=bool)
 
 SAVE_LOGS_TO_FILE = config("SAVE_LOGS_TO_FILE", default=False, cast=bool)
-LOG_FILE_PATH = config("LOG_FILE_PATH", default="marzban.log")
+LOG_FILE_PATH = config("LOG_FILE_PATH", default="pasarguard.log")
 LOG_BACKUP_COUNT = config("LOG_BACKUP_COUNT", cast=int, default=72)
 LOG_ROTATION_ENABLED = config("LOG_ROTATION_ENABLED", default=False, cast=bool)
 LOG_ROTATION_INTERVAL = config("LOG_ROTATION_INTERVAL", cast=int, default=1)
