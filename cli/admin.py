@@ -267,6 +267,9 @@ class AdminContent(Static):
         self.admin_operator = AdminOperation(OperatorType.CLI)
         self.table: DataTable = None
         self.no_admins: Static = None
+        self.current_page = 1
+        self.page_size = 10
+        self.total_admins = 0
 
     BINDINGS = [
         ("c", "create_admin", "Create admin"),
@@ -274,6 +277,8 @@ class AdminContent(Static):
         ("r", "reset_admin_usage", "Reset admin usage"),
         ("d", "delete_admin", "Delete admin"),
         ("i", "import_from_env", "Import from env"),
+        ("p", "previous_page", "Previous page"),
+        ("n", "next_page", "Next page"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -283,11 +288,13 @@ class AdminContent(Static):
             classes="title box",
             id="no-admins",
         )
+        yield Static("", id="pagination-info", classes="pagination-info")
 
     async def on_mount(self) -> None:
         self.db = await anext(get_db())
         self.table = self.query_one("#admin-list")
         self.no_admins = self.query_one("#no-admins")
+        self.pagination_info = self.query_one("#pagination-info")
         self.no_admins.styles.display = "none"
         self.table.styles.display = "none"
         self.table.cursor_type = "row"
@@ -304,7 +311,6 @@ class AdminContent(Static):
         self.table.clear()
         self.table.columns.clear()
         columns = (
-            # "Id",
             "Username",
             "Used Traffic",
             "Lifetime Used Traffic",
@@ -316,9 +322,13 @@ class AdminContent(Static):
             "Discord ID",
             "Discord Webhook",
         )
-        admins = await self.admin_operator.get_admins(self.db, offset=0, limit=10)
+        self.total_admins = await self.admin_operator.get_admins_count(self.db)
+        offset = (self.current_page - 1) * self.page_size
+        limit = self.page_size
+        admins = await self.admin_operator.get_admins(self.db, offset=offset, limit=limit)
         if not admins:
             self.no_admins.styles.display = "block"
+            self.pagination_info.update("")
             return
         else:
             self.no_admins.styles.display = "none"
@@ -327,7 +337,6 @@ class AdminContent(Static):
 
         admins_data = [
             (
-                # i + 1,
                 admin.username,
                 readable_size(admin.used_traffic),
                 readable_size(admin.lifetime_used_traffic),
@@ -350,9 +359,12 @@ class AdminContent(Static):
         i = 1
         for row, adnin in zip(admins_data, admins):
             centered_row = [self._center_text(str(cell), column_widths[i]) for i, cell in enumerate(row)]
-            label = Text(f"{i}")
+            label = Text(f"{i + offset}")
             i += 1
             self.table.add_row(*centered_row, key=adnin.username, label=label)
+        
+        total_pages = (self.total_admins + self.page_size - 1) // self.page_size
+        self.pagination_info.update(f"Page {self.current_page}/{total_pages} (Total admins: {self.total_admins})\nPress `n` for go to the next page and `p` to back to previose page")
 
     @property
     def selected_admin(self):
@@ -410,6 +422,17 @@ class AdminContent(Static):
         if not self.table.columns:
             return
         self.app.push_screen(AdminResetUsage(self.db, self.admin_operator, self.selected_admin, self._refresh_table))
+
+    async def action_previous_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            await self.admins_list()
+
+    async def action_next_page(self):
+        total_pages = (self.total_admins + self.page_size - 1) // self.page_size
+        if self.current_page < total_pages:
+            self.current_page += 1
+            await self.admins_list()
 
     async def calculate_admin_usage(self, admin_id: int) -> str:
         usage = await self.db.execute(select(func.sum(User.used_traffic)).filter_by(admin_id=admin_id))

@@ -7,6 +7,7 @@ from app.db import AsyncSession
 from app.db.crud.admin import (
     create_admin,
     get_admins,
+    get_admins_count,
     remove_admin,
     reset_admin_usage,
     update_admin,
@@ -82,6 +83,9 @@ class AdminOperation(BaseOperation):
         self, db: AsyncSession, username: str | None = None, offset: int | None = None, limit: int | None = None
     ) -> list[DBAdmin]:
         return await get_admins(db, offset, limit, username)
+
+    async def get_admins_count(self, db: AsyncSession) -> int:
+        return await get_admins_count(db)
 
     async def disable_all_active_users(self, db: AsyncSession, username: str, admin: AdminDetails):
         """Disable all active users under a specific admin"""

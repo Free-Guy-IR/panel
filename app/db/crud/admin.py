@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Admin, AdminUsageLogs
@@ -201,3 +201,17 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> Admin:
     await db.refresh(db_admin)
     await load_admin_attrs(db_admin)
     return db_admin
+
+
+async def get_admins_count(db: AsyncSession) -> int:
+    """
+    Retrieves the total count of admins.
+
+    Args:
+        db (AsyncSession): Database session.
+
+    Returns:
+        int: The total number of admins.
+    """
+    count = (await db.execute(select(func.count(Admin.id)))).scalar_one()
+    return count
