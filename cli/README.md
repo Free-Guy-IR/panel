@@ -1,42 +1,60 @@
 # PasarGuard CLI
 
-A modern, interactive command-line interface for managing PasarGuard, built with Textual.
+A modern, type-safe command-line interface for managing PasarGuard, built with Typer.
 
 ## Features
 
-- 🎯 Interactive TUI (Text User Interface)
-- 📱 Responsive design with dark mode support
-- ⌨️ Keyboard shortcuts for quick navigation
-- 🔄 Real-time updates
-- 📊 Rich data visualization
-- 🔒 Secure admin management
+-   🎯 Type-safe CLI with rich output
+-   📊 Beautiful tables and panels
+-   🔒 Secure admin management
+-   📈 System status monitoring
+-   ⌨️ Interactive prompts and confirmations
+
+## Installation
+
+The CLI is included with PasarGuard and can be used directly:
+
+```bash
+PasarGuard cli --help
+
+# Or from the project root
+uv run PasarGuard-cli.py --help
+```
 
 ## Usage
 
-### Starting the CLI
+### General Commands
 
 ```bash
-pasarguard cli
+# Show version
+pasarguard cli version
+
+# Show help
+pasarguard cli --help
 ```
-
-### Keyboard Shortcuts
-
-#### Global Commands
-
-- `q` - Quit the application
-- `?` - Show help
-
-#### Admin Section
-
-- `c` - Create new admin
-- `m` - Modify admin
-- `r` - Reset admin usage
-- `d` - Delete admin
-- `i` - Import admins from environment
 
 ### Admin Management
 
-- Create, modify, and delete admin accounts
-- Reset admin usage statistics
-- Import admins from environment variables
-- View admin details and status
+```bash
+# List all admins
+pasarguard cli admins --list
+
+# Create new admin
+pasarguard cli admins --create username
+
+# Delete admin
+pasarguard cli admins --delete username
+
+# Modify admin (password and sudo status)
+PasarGuard cli admins --modify username
+
+# Reset admin usage
+pasarguard cli admins --reset-usage username
+```
+
+### System Information
+
+```bash
+# Show system status
+PasarGuard cli system
+```

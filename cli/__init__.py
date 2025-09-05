@@ -1,29 +1,49 @@
-from textual.screen import ModalScreen
-from textual.widgets import Input
+"""
+PasarGuard CLI Package
+
+A modern, type-safe CLI built with Typer for managing PasarGuard instances.
+"""
+
+from pydantic import ValidationError
+from rich.console import Console
+from rich.table import Table
+
+from app.models.admin import AdminDetails
+from app.operation import OperatorType
+from app.operation.admin import AdminOperation
+from app.operation.system import SystemOperation
+
+# Initialize console for rich output
+console = Console()
+
+# system admin for CLI operations
+SYSTEM_ADMIN = AdminDetails(username="cli", is_sudo=True, telegram_id=None, discord_webhook=None)
 
 
-class BaseModal(ModalScreen):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+def get_admin_operation() -> AdminOperation:
+    """Get admin operation instance."""
+    return AdminOperation(OperatorType.CLI)
 
-    async def key_left(self) -> None:
-        """Move focus left on arrow key press."""
-        if not self.query_one(Input).has_focus:
-            self.app.action_focus_previous()
 
-    async def key_right(self) -> None:
-        """Move focus right on arrow key press."""
-        if not self.query_one(Input).has_focus:
-            self.app.action_focus_next()
+def get_system_operation() -> SystemOperation:
+    """Get node operation instance."""
+    return SystemOperation(OperatorType.CLI)
 
-    async def key_down(self) -> None:
-        """Move focus down on arrow key press."""
-        self.app.action_focus_next()
 
-    async def key_up(self) -> None:
-        """Move focus up on arrow key press."""
-        self.app.action_focus_previous()
+class BaseCLI:
+    """Base class for CLI operations."""
 
-    async def key_escape(self) -> None:
-        """Close modal when ESC is pressed."""
-        self.dismiss()
+    def __init__(self):
+        self.console = console
+
+    def create_table(self, title: str, columns: list) -> Table:
+        """Create a rich table with given columns."""
+        table = Table(title=title)
+        for column in columns:
+            table.add_column(column["name"], style=column.get("style", "white"))
+        return table
+
+    def format_cli_validation_error(self, errors: ValidationError):
+        for error in errors.errors():
+            for err in error["msg"].split(";"):
+                self.console.print(f"[red]Error: {err}[/red]")
