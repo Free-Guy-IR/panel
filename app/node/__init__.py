@@ -1,10 +1,10 @@
 import asyncio
 
-from GozargahNodeBridge import GozargahNode, create_node, Health, NodeType
+from PasarGuardNodeBridge import PasarGuardNode, create_node, Health, NodeType
 from aiorwlock import RWLock
 
-from app.db.models import Node, NodeConnectionType
-from app.node.user import serialize_user_for_node, core_users
+from app.db.models import Node, NodeConnectionType, User
+from app.node.user import serialize_user_for_node, core_users, serialize_users_for_node
 from app.models.user import UserResponse
 
 
@@ -16,12 +16,12 @@ type_map = {
 
 class NodeManager:
     def __init__(self):
-        self._nodes: dict[int, GozargahNode] = {}
+        self._nodes: dict[int, PasarGuardNode] = {}
         self._lock = RWLock(fast=True)
 
-    async def update_node(self, node: Node) -> GozargahNode:
+    async def update_node(self, node: Node) -> PasarGuardNode:
         async with self._lock.writer_lock:
-            old_node: GozargahNode | None = self._nodes.get(node.id, None)
+            old_node: PasarGuardNode | None = self._nodes.get(node.id, None)
             if old_node is not None:
                 try:
                     await old_node.set_health(Health.INVALID)
@@ -47,7 +47,7 @@ class NodeManager:
 
     async def remove_node(self, id: int) -> None:
         async with self._lock.writer_lock:
-            old_node: GozargahNode | None = self._nodes.get(id, None)
+            old_node: PasarGuardNode | None = self._nodes.get(id, None)
             if old_node is not None:
                 try:
                     await old_node.set_health(Health.INVALID)
@@ -57,36 +57,36 @@ class NodeManager:
                 finally:
                     del self._nodes[id]
 
-    async def get_node(self, id: int) -> GozargahNode | None:
+    async def get_node(self, id: int) -> PasarGuardNode | None:
         async with self._lock.reader_lock:
             return self._nodes.get(id, None)
 
-    async def get_nodes(self) -> dict[int, GozargahNode]:
+    async def get_nodes(self) -> dict[int, PasarGuardNode]:
         async with self._lock.reader_lock:
             return self._nodes
 
-    async def get_healthy_nodes(self) -> list[tuple[int, GozargahNode]]:
+    async def get_healthy_nodes(self) -> list[tuple[int, PasarGuardNode]]:
         async with self._lock.reader_lock:
-            nodes: list[tuple[int, GozargahNode]] = [
+            nodes: list[tuple[int, PasarGuardNode]] = [
                 (id, node) for id, node in self._nodes.items() if (await node.get_health() == Health.HEALTHY)
             ]
             return nodes
 
-    async def get_broken_nodes(self) -> list[tuple[int, GozargahNode]]:
+    async def get_broken_nodes(self) -> list[tuple[int, PasarGuardNode]]:
         async with self._lock.reader_lock:
-            nodes: list[tuple[int, GozargahNode]] = [
+            nodes: list[tuple[int, PasarGuardNode]] = [
                 (id, node) for id, node in self._nodes.items() if (await node.get_health() == Health.BROKEN)
             ]
             return nodes
 
-    async def get_not_connected_nodes(self) -> list[tuple[int, GozargahNode]]:
+    async def get_not_connected_nodes(self) -> list[tuple[int, PasarGuardNode]]:
         async with self._lock.reader_lock:
-            nodes: list[tuple[int, GozargahNode]] = [
+            nodes: list[tuple[int, PasarGuardNode]] = [
                 (id, node) for id, node in self._nodes.items() if (await node.get_health() == Health.NOT_CONNECTED)
             ]
             return nodes
 
-    async def get_nodes_by_health_status(self) -> tuple[list[tuple[int, GozargahNode]], list[tuple[int, GozargahNode]]]:
+    async def get_nodes_by_health_status(self) -> tuple[list[tuple[int, PasarGuardNode]], list[tuple[int, PasarGuardNode]]]:
         """Optimized method to get both broken and not_connected nodes in single lock acquisition"""
         async with self._lock.reader_lock:
             if not self._nodes:
@@ -115,6 +115,12 @@ class NodeManager:
 
         async with self._lock.reader_lock:
             add_tasks = [node.update_user(proto_user) for node in self._nodes.values()]
+            await asyncio.gather(*add_tasks, return_exceptions=True)
+
+    async def update_users(self, users: list[User]):
+        proto_users = await serialize_users_for_node(users)
+        async with self._lock.reader_lock:
+            add_tasks = [node.update_users(proto_users) for node in self._nodes.values()]
             await asyncio.gather(*add_tasks, return_exceptions=True)
 
     async def remove_user(self, user: UserResponse):

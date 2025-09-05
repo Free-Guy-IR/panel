@@ -97,7 +97,7 @@ class AdminOperation(BaseOperation):
         await disable_all_active_users(db=db, admin=db_admin)
 
         users = await get_users(db, admin=db_admin)
-        await asyncio.gather(*[node_manager.remove_user(UserResponse.model_validate(user)) for user in users])
+        await node_manager.update_users(users)
 
         logger.info(f'Admin "{username}" users has been disabled by admin "{admin.username}"')
 
@@ -111,9 +111,7 @@ class AdminOperation(BaseOperation):
         await activate_all_disabled_users(db=db, admin=db_admin)
 
         users = await get_users(db, admin=db_admin)
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await node_manager.update_users(users)
 
         logger.info(f'Admin "{username}" users has been activated by admin "{admin.username}"')
 

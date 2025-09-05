@@ -7,7 +7,6 @@ from app.db.crud.group import create_group, get_group, modify_group, remove_grou
 from app.db.crud.user import get_users
 from app.db.models import Admin
 from app.models.group import BulkGroup, Group, GroupCreate, GroupModify, GroupResponse, GroupsResponse
-from app.models.user import UserResponse
 from app.node import node_manager
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
@@ -41,9 +40,7 @@ class GroupOperation(BaseOperation):
         db_group = await modify_group(db, db_group, modified_group)
 
         users = await get_users(db, group_ids=[db_group.id])
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await node_manager.update_users(users)
 
         group = GroupResponse.model_validate(db_group)
 
@@ -61,9 +58,7 @@ class GroupOperation(BaseOperation):
         await remove_group(db, db_group)
         users = await get_users(db, usernames=username_list)
 
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await node_manager.update_users(users)
 
         logger.info(f'Group "{db_group.name}" deleted by admin "{admin.username}"')
 
@@ -74,9 +69,8 @@ class GroupOperation(BaseOperation):
 
         users, users_count = await add_groups_to_users(db, bulk_model)
 
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await node_manager.update_users(users)
+
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
@@ -86,9 +80,8 @@ class GroupOperation(BaseOperation):
 
         users, users_count = await remove_groups_from_users(db, bulk_model)
 
-        await asyncio.gather(
-            *[node_manager.update_user(UserResponse.model_validate(user), await user.inbounds()) for user in users]
-        )
+        await node_manager.update_users(users)
+
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count

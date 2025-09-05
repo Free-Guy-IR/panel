@@ -1,6 +1,6 @@
 from sqlalchemy.orm import load_only, selectinload
 from sqlalchemy import select
-from GozargahNodeBridge import create_user, create_proxy
+from PasarGuardNodeBridge import create_user, create_proxy
 
 from app.db import AsyncSession
 from app.db.models import ProxyInbound, Group, User, UserStatus
@@ -43,5 +43,18 @@ async def core_users(db: AsyncSession):
         inbounds_list = await user.inbounds()
         if len(inbounds_list) > 0:
             bridge_users.append(serialize_user_for_node(user.id, user.username, user.proxy_settings, inbounds_list))
+
+    return bridge_users
+
+
+async def serialize_users_for_node(users: list[User]):
+    bridge_users: list = []
+
+    for user in users:
+        inbounds_list = []
+        if user.status in [UserStatus.active, UserStatus.on_hold]:
+            inbounds_list = await user.inbounds()
+
+        bridge_users.append(serialize_user_for_node(user.id, user.username, user.proxy_settings, inbounds_list))
 
     return bridge_users
