@@ -1,6 +1,6 @@
 import asyncio
 
-from GozargahNodeBridge import GozargahNode
+from PasarGuardNodeBridge import PasarGuardNode
 
 from app import scheduler
 from app.db import GetDB
@@ -13,7 +13,7 @@ from config import ENABLE_RECORDING_NODES_STATS, JOB_GHATER_NODES_STATS_INTERVAL
 logger = get_logger("jobs")
 
 
-async def get_stat(id: int, node: GozargahNode) -> NodeStat:
+async def get_stat(id: int, node: PasarGuardNode) -> NodeStat:
     try:
         stats = await node.get_system_stats()
     except Exception:

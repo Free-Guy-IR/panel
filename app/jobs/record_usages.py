@@ -3,8 +3,8 @@ from collections import defaultdict
 from datetime import datetime as dt, timezone as tz
 from operator import attrgetter
 
-from GozargahNodeBridge import GozargahNode, NodeAPIError
-from GozargahNodeBridge.common.service_pb2 import StatType
+from PasarGuardNodeBridge import PasarGuardNode, NodeAPIError
+from PasarGuardNodeBridge.common.service_pb2 import StatType
 from sqlalchemy import and_, bindparam, insert, select, update
 from sqlalchemy.exc import DatabaseError, OperationalError
 from sqlalchemy.sql.expression import Insert
@@ -149,7 +149,7 @@ async def record_node_stats(params: dict, node_id: int):
         await safe_execute(db, update_stmt, params)
 
 
-async def get_users_stats(node: GozargahNode):
+async def get_users_stats(node: PasarGuardNode):
     try:
         stats_respons = await node.get_stats(stat_type=StatType.UsersStat, reset=True, timeout=30)
         params = defaultdict(int)
@@ -165,7 +165,7 @@ async def get_users_stats(node: GozargahNode):
         return []
 
 
-async def get_outbounds_stats(node: GozargahNode):
+async def get_outbounds_stats(node: PasarGuardNode):
     try:
         stats_respons = await node.get_stats(stat_type=StatType.Outbounds, reset=True, timeout=10)
         params = [
@@ -221,7 +221,7 @@ async def calculate_users_usage(api_params: dict, usage_coefficient: dict) -> li
 
 
 async def record_user_usages():
-    nodes: tuple[int, GozargahNode] = await node_manager.get_healthy_nodes()
+    nodes: tuple[int, PasarGuardNode] = await node_manager.get_healthy_nodes()
 
     node_data = await asyncio.gather(*[asyncio.create_task(node.get_extra()) for _, node in nodes])
     usage_coefficient = {node_id: data.get("usage_coefficient", 1) for (node_id, _), data in zip(nodes, node_data)}

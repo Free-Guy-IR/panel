@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime as dt
 
-from GozargahNodeBridge import GozargahNode, NodeAPIError
+from PasarGuardNodeBridge import PasarGuardNode, NodeAPIError
 from sqlalchemy.exc import IntegrityError
 
 from app import notification
@@ -78,7 +78,7 @@ class NodeOperation(BaseOperation):
 
     @staticmethod
     async def connect_node(node_id: int) -> None:
-        gozargah_node: GozargahNode | None = await node_manager.get_node(node_id)
+        gozargah_node: PasarGuardNode | None = await node_manager.get_node(node_id)
         if gozargah_node is None:
             return
 

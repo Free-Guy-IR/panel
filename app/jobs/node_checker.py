@@ -1,6 +1,6 @@
 import asyncio
 
-from GozargahNodeBridge import NodeAPIError, GozargahNode
+from PasarGuardNodeBridge import NodeAPIError, GozargahNode
 
 from app import on_shutdown, on_startup, scheduler
 from app.db import GetDB
