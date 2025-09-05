@@ -1,6 +1,6 @@
 import asyncio
 
-from PasarGuardNodeBridge import NodeAPIError, GozargahNode
+from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 
 from app import on_shutdown, on_startup, scheduler
 from app.db import GetDB
@@ -19,7 +19,7 @@ logger = get_logger("node-checker")
 
 
 async def node_health_check():
-    async def check_node(id: int, node: GozargahNode):
+    async def check_node(id: int, node: PasarGuardNode):
         try:
             await node.get_backend_stats(timeout=8)
 
@@ -72,7 +72,7 @@ async def initialize_nodes():
 async def shutdown_nodes():
     logger.info("Stopping nodes' cores...")
 
-    nodes: dict[int, GozargahNode] = await node_manager.get_nodes()
+    nodes: dict[int, PasarGuardNode] = await node_manager.get_nodes()
 
     stop_tasks = [node.stop() for node in nodes.values()]
 
