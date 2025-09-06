@@ -61,25 +61,25 @@
 
 ## 目录
 
-- [概览](#概览)
-  - [为什么要使用 PasarGuard?](#为什么要使用-PasarGuard)
-    - [特性](#特性)
-- [安装指南](#安装指南)
-- [配置](#配置)
-- [文档](#文档)
-- [如何使用 API](#如何使用-api)
-- [如何备份 PasarGuard](#如何备份-PasarGuard)
-- [Telegram bot](#telegram-bot)
-- [PasarGuard CLI](#PasarGuard-cli)
-- [PasarGuard Node](#PasarGuard-node)
-- [Webhook 通知](#webhook-通知)
-- [捐赠](#捐赠)
-- [许可](#许可)
-- [贡献者](#贡献者)
+-   [概览](#概览)
+    -   [为什么要使用 PasarGuard?](#为什么要使用-PasarGuard)
+        -   [特性](#特性)
+-   [安装指南](#安装指南)
+-   [配置](#配置)
+-   [文档](#文档)
+-   [如何使用 API](#如何使用-api)
+-   [如何备份 PasarGuard](#如何备份-PasarGuard)
+-   [Telegram bot](#telegram-bot)
+-   [PasarGuard CLI](#PasarGuard-cli)
+-   [PasarGuard Node](#PasarGuard-node)
+-   [Webhook 通知](#webhook-通知)
+-   [捐赠](#捐赠)
+-   [许可](#许可)
+-   [贡献者](#贡献者)
 
 # 概览
 
-PasarGuard（PasarGuard 一词源自波斯语，意为“边境警卫”，发音为 /mærz'ban/）是一个代理管理工具，提供简单易用的用户界面，可管理数百个代理账户，由 [Xray-core](https://github.com/XTLS/Xray-core) 提供支持，使用 Python 和 Reactjs 构建。
+PasarGuard 是一个代理管理工具，提供简单易用的用户界面，可管理数百个代理账户，由 [Xray-core](https://github.com/XTLS/Xray-core) 提供支持，使用 Python 和 Reactjs 构建。
 
 ## 为什么要使用 PasarGuard?
 
@@ -87,21 +87,21 @@ PasarGuard 是一个用户友好、功能丰富且可靠的工具。它让您可
 
 ### 特性
 
-- 内置 **Web 界面**
-- 完全支持 **REST API** 的后端
-- 支持 **Vmess**、**VLESS**、**Trojan** 和 **Shadowsocks** 协议
-- 单用户的**多协议**支持
-- 单入站的**多用户**支持
-- 单端口的**多入站**支持（使用 fallbacks）
-- **流量**和**过期日期**限制
-- 周期性的流量限制（例如每天、每周等）
-- 兼容 **V2ray** 的**订阅链接**（例如 V2RayNG、SingBox、Nekoray 等）和 **Clash**
-- 自动化的**分享链接**和**二维码**生成器
-- 系统监控和**流量统计**
-- 可自定义的 xray 配置
-- **TLS** 支持
-- 集成的 **Telegram Bot**
-- **多管理员**支持（WIP）
+-   内置 **Web 界面**
+-   完全支持 **REST API** 的后端
+-   支持 **Vmess**、**VLESS**、**Trojan** 和 **Shadowsocks** 协议
+-   单用户的**多协议**支持
+-   单入站的**多用户**支持
+-   单端口的**多入站**支持（使用 fallbacks）
+-   **流量**和**过期日期**限制
+-   周期性的流量限制（例如每天、每周等）
+-   兼容 **V2ray** 的**订阅链接**（例如 V2RayNG、SingBox、Nekoray 等）和 **Clash**
+-   自动化的**分享链接**和**二维码**生成器
+-   系统监控和**流量统计**
+-   可自定义的 xray 配置
+-   **TLS** 支持
+-   集成的 **Telegram Bot**
+-   **多管理员**支持（WIP）
 
 # 安装指南
 
@@ -133,12 +133,12 @@ sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarG
 
 安装完成后：
 
-- 您将看到日志，可以通过关闭终端或按`Ctrl+C`停止查看
-- PasarGuard文件将位于`/opt/pasarguard`
-- 配置文件位于`/opt/pasarguard/.env`（请参阅[配置](#配置)部分查看变量）
-- 数据文件将位于`/var/lib/pasarguard`
-- 为安全起见，PasarGuard仪表板无法通过IP地址访问。因此，您必须[获取SSL证书](https://pasarguard.github.io/PasarGuard/en/examples/issue-ssl-certificate)并通过打开Web浏览器并导航到`https://YOUR_DOMAIN:8000/dashboard/`来访问您的PasarGuard仪表板（将YOUR_DOMAIN替换为您的实际域）
-- 您还可以使用SSH端口转发在本地访问PasarGuard仪表板而无需域。将`user@serverip`替换为您的实际SSH用户名和服务器IP，然后运行以下命令：
+-   您将看到日志，可以通过关闭终端或按`Ctrl+C`停止查看
+-   PasarGuard 文件将位于`/opt/pasarguard`
+-   配置文件位于`/opt/pasarguard/.env`（请参阅[配置](#配置)部分查看变量）
+-   数据文件将位于`/var/lib/pasarguard`
+-   为安全起见，PasarGuard 仪表板无法通过 IP 地址访问。因此，您必须[获取 SSL 证书](https://pasarguard.github.io/PasarGuard/en/examples/issue-ssl-certificate)并通过打开 Web 浏览器并导航到`https://YOUR_DOMAIN:8000/dashboard/`来访问您的 PasarGuard 仪表板（将 YOUR_DOMAIN 替换为您的实际域）
+-   您还可以使用 SSH 端口转发在本地访问 PasarGuard 仪表板而无需域。将`user@serverip`替换为您的实际 SSH 用户名和服务器 IP，然后运行以下命令：
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
@@ -150,7 +150,7 @@ http://localhost:8000/dashboard/
 
 You will lose access to the dashboard as soon as you close the SSH terminal. Therefore, this method is recommended only for testing purposes.
 
-接下来，您需要通过以下命令创建一个sudo管理员以登录到PasarGuard仪表板
+接下来，您需要通过以下命令创建一个 sudo 管理员以登录到 PasarGuard 仪表板
 
 ```bash
 pasarguard cli admin create --sudo
@@ -158,7 +158,7 @@ pasarguard cli admin create --sudo
 
 就是这样！您可以使用这些凭据登录到您的仪表板
 
-要查看PasarGuard脚本的帮助消息，请运行以下命令
+要查看 PasarGuard 脚本的帮助消息，请运行以下命令
 
 ```bash
 pasarguard --help
@@ -298,40 +298,40 @@ server {
 
 > 您可以使用环境变量或将其放置在 `env` 或 `.env` 文件中来设置以下设置。
 
-| 变量                                     | 描述                                                                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| SUDO_USERNAME                            | 管理员用户名（默认: admin）                                                                                              |
-| SUDO_PASSWORD                            | 管理员密码（默认: admin）                                                                                                |
-| SQLALCHEMY_DATABASE_URL                  | 数据库文档（[SQLAlchemy's docs](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls)）                     |
-| UVICORN_HOST                             | 绑定应用程序到此主机（默认为 `0.0.0.0`）                                                                                 |
-| UVICORN_PORT                             | 绑定应用程序到此端口（默认为 `8000`）                                                                                    |
-| UVICORN_UDS                              | 将应用程序绑定到一个 UNIX 域套接字                                                                                       |
-| UVICORN_SSL_CERTFILE                     | SSL 证书文件路径                                                                                                         |
-| UVICORN_SSL_KEYFILE                      | SSL 密钥文件路径                                                                                                         |
-| UVICORN_SSL_CA_TYPE                      | 授权 SSL 证书的类型。使用“private”来测试自签名 CA（默认值：`public`）                                                    |
-| XRAY_JSON                                | Xray 的 json 配置文件路径（默认: `xray_config.json`）                                                                    |
-| XRAY_EXECUTABLE_PATH                     | Xray 的执行程序路径: `/usr/local/bin/xray`）                                                                             |
-| XRAY_ASSETS_PATH                         | Xray 的资源目录: `/usr/local/share/xray`）                                                                               |
-| XRAY_SUBSCRIPTION_URL_PREFIX             | 订阅 URL 的前缀                                                                                                          |
-| XRAY_FALLBACKS_INBOUND_TAG               | 包含 fallbacks 的入站标记, 在您需要使用 fallbacks 配置此项                                                               |
-| XRAY_EXCLUDE_INBOUND_TAGS                | 不需要此应用程序管理或在链接中包含的入站标记                                                                             |
-| CLASH_SUBSCRIPTION_TEMPLATE              | 将用于生成冲突配置的模板（默认值：`clash/default.yml`）                                                                  |
-| SUBSCRIPTION_PAGE_TEMPLATE               | 用于生成订阅信息页面的模板（默认：`subscription/index.html`）                                                            |
-| HOME_PAGE_TEMPLATE                       | 诱饵页面模板（默认：`home/index.html`）                                                                                  |
-| TELEGRAM_API_TOKEN                       | Telegram bot API 令牌（可以从 [@botfather](https://t.me/botfather) 获取）                                                |
-| TELEGRAM_ADMIN_ID                        | 管理员的 Telegram ID（可以使用 [@userinfobot](https://t.me/userinfobot) 查找您的 ID）                                    |
-| TELEGRAM_PROXY_URL                       | 在代理下运行 Telegram bot。                                                                                              |
-| JWT_ACCESS_TOKEN_EXPIRE_MINUTES          | Access Tokens 的过期时间，以分钟为单位，`0` 表示无限期（默认为 `1440` 分钟）                                             |
-| DOCS                                     | API 文档是否应该在 `/docs` 和 `/redoc` 上提供（默认为 `False`                                                            |
-| SQLALCHEMY_POOL_SIZE                     | (默认: `10`)                                                                                                          |
-| SQLALCHEMY_MAX_OVERFLOW                  | (默认: `30`)                                                                                                          |
-| XRAY_SUBSCRIPTION_TEMPLATE               | 将用于生成xray配置的模板 (默认: `xray/default.yml`)                                 |
-| SINGBOX_SUBSCRIPTION_TEMPLATE            | 将用于生成singbox配置的模板 (默认: `singbox/default.yml`)                                 |
-| DEBUG                                    | 开发调试模式 (默认: `False`)                                                                            |
-| USERS_AUTODELETE_DAYS                    | 多少天后删除过期（以及可选的受限用户） (负值禁用此功能, 默认: `-1`) |
-| USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS | 是否在自动删除功能中包括受限帐户 (默认: `False`)                                        |
-| XRAY_SUBSCRIPTION_PATH                   | 您可以更改订阅的api路径 (默认: `sub`)                                                          |
-| ENABLE_RECORDING_NODES_STATS             | 由于数据量大，此作业仅适用于postgresql和timescaledb                                    |
+| 变量                                     | 描述                                                                                                 |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| SUDO_USERNAME                            | 管理员用户名（默认: admin）                                                                          |
+| SUDO_PASSWORD                            | 管理员密码（默认: admin）                                                                            |
+| SQLALCHEMY_DATABASE_URL                  | 数据库文档（[SQLAlchemy's docs](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls)） |
+| UVICORN_HOST                             | 绑定应用程序到此主机（默认为 `0.0.0.0`）                                                             |
+| UVICORN_PORT                             | 绑定应用程序到此端口（默认为 `8000`）                                                                |
+| UVICORN_UDS                              | 将应用程序绑定到一个 UNIX 域套接字                                                                   |
+| UVICORN_SSL_CERTFILE                     | SSL 证书文件路径                                                                                     |
+| UVICORN_SSL_KEYFILE                      | SSL 密钥文件路径                                                                                     |
+| UVICORN_SSL_CA_TYPE                      | 授权 SSL 证书的类型。使用“private”来测试自签名 CA（默认值：`public`）                                |
+| XRAY_JSON                                | Xray 的 json 配置文件路径（默认: `xray_config.json`）                                                |
+| XRAY_EXECUTABLE_PATH                     | Xray 的执行程序路径: `/usr/local/bin/xray`）                                                         |
+| XRAY_ASSETS_PATH                         | Xray 的资源目录: `/usr/local/share/xray`）                                                           |
+| XRAY_SUBSCRIPTION_URL_PREFIX             | 订阅 URL 的前缀                                                                                      |
+| XRAY_FALLBACKS_INBOUND_TAG               | 包含 fallbacks 的入站标记, 在您需要使用 fallbacks 配置此项                                           |
+| XRAY_EXCLUDE_INBOUND_TAGS                | 不需要此应用程序管理或在链接中包含的入站标记                                                         |
+| CLASH_SUBSCRIPTION_TEMPLATE              | 将用于生成冲突配置的模板（默认值：`clash/default.yml`）                                              |
+| SUBSCRIPTION_PAGE_TEMPLATE               | 用于生成订阅信息页面的模板（默认：`subscription/index.html`）                                        |
+| HOME_PAGE_TEMPLATE                       | 诱饵页面模板（默认：`home/index.html`）                                                              |
+| TELEGRAM_API_TOKEN                       | Telegram bot API 令牌（可以从 [@botfather](https://t.me/botfather) 获取）                            |
+| TELEGRAM_ADMIN_ID                        | 管理员的 Telegram ID（可以使用 [@userinfobot](https://t.me/userinfobot) 查找您的 ID）                |
+| TELEGRAM_PROXY_URL                       | 在代理下运行 Telegram bot。                                                                          |
+| JWT_ACCESS_TOKEN_EXPIRE_MINUTES          | Access Tokens 的过期时间，以分钟为单位，`0` 表示无限期（默认为 `1440` 分钟）                         |
+| DOCS                                     | API 文档是否应该在 `/docs` 和 `/redoc` 上提供（默认为 `False`                                        |
+| SQLALCHEMY_POOL_SIZE                     | (默认: `10`)                                                                                         |
+| SQLALCHEMY_MAX_OVERFLOW                  | (默认: `30`)                                                                                         |
+| XRAY_SUBSCRIPTION_TEMPLATE               | 将用于生成 xray 配置的模板 (默认: `xray/default.yml`)                                                |
+| SINGBOX_SUBSCRIPTION_TEMPLATE            | 将用于生成 singbox 配置的模板 (默认: `singbox/default.yml`)                                          |
+| DEBUG                                    | 开发调试模式 (默认: `False`)                                                                         |
+| USERS_AUTODELETE_DAYS                    | 多少天后删除过期（以及可选的受限用户） (负值禁用此功能, 默认: `-1`)                                  |
+| USER_AUTODELETE_INCLUDE_LIMITED_ACCOUNTS | 是否在自动删除功能中包括受限帐户 (默认: `False`)                                                     |
+| XRAY_SUBSCRIPTION_PATH                   | 您可以更改订阅的 api 路径 (默认: `sub`)                                                              |
+| ENABLE_RECORDING_NODES_STATS             | 由于数据量大，此作业仅适用于 postgresql 和 timescaledb                                               |
 
 # 文档
 
@@ -350,7 +350,7 @@ PasarGuard 提供了 REST API，使开发人员能够以编程方式与 PasarGua
 
 PasarGuard 的备份服务会高效地压缩所有必要文件并将它们发送到您指定的 Telegram 机器人。它支持 SQLite、MySQL 和 MariaDB 数据库。其一个主要功能是自动化，允许您每小时安排一次备份。对于 Telegram 机器人的上传限制没有限制；如果文件超过限制，它会被拆分并以多个部分发送。此外，您可以在任何时间启动即时备份。
 
-安装最新版PasarGuard命令：
+安装最新版 PasarGuard 命令：
 
 ```bash
 sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/pasarguard.sh)" @ install-script
@@ -381,15 +381,15 @@ PasarGuard 配备了一个集成的 Telegram bot，可以处理服务器管理�
 
 # PasarGuard CLI
 
-PasarGuard带有一个名为`PasarGuard-cli`的集成CLI，允许管理员直接与其交互。
+PasarGuard 带有一个名为`PasarGuard-cli`的集成 CLI，允许管理员直接与其交互。
 
-如果您使用简易安装脚本安装了PasarGuard，您可以通过运行以下命令来访问CLI命令
+如果您使用简易安装脚本安装了 PasarGuard，您可以通过运行以下命令来访问 CLI 命令
 
 ```bash
 pasarguard cli [OPTIONS] COMMAND [ARGS]...
 ```
 
-更多信息，您可以阅读[PasarGuard CLI的文档](./cli/README.md)。
+更多信息，您可以阅读[PasarGuard CLI 的文档](./cli/README.md)。
 
 # PasarGuard 终端用户界面 (TUI)
 
@@ -405,16 +405,16 @@ pasarguard tui
 
 # Node
 
-PasarGuard项目引入了[node](https://github.com/PasarGuard/node)，它彻底改变了基础设施的分布。通过node，您可以将您的基础设施分布到多个位置，从而获得冗余、高可用性、可伸缩性、灵活性等好处。node使用户能够连接到不同的服务器，为他们提供了选择和连接多个服务器的灵活性，而不是仅限于一个服务器。
-有关更详细的信息和安装说明，请参阅[PasarGuard-node官方文档](https://github.com/PasarGuard/node)
+PasarGuard 项目引入了[node](https://github.com/PasarGuard/node)，它彻底改变了基础设施的分布。通过 node，您可以将您的基础设施分布到多个位置，从而获得冗余、高可用性、可伸缩性、灵活性等好处。node 使用户能够连接到不同的服务器，为他们提供了选择和连接多个服务器的灵活性，而不是仅限于一个服务器。
+有关更详细的信息和安装说明，请参阅[PasarGuard-node 官方文档](https://github.com/PasarGuard/node)
 
 # Webhook 通知
 
-您可以设置一个webhook地址，PasarGuard会将通知发送到该地址。
+您可以设置一个 webhook 地址，PasarGuard 会将通知发送到该地址。
 
-请求将作为post请求发送到`WEBHOOK_ADDRESS`提供的地址，并在头文件中以`WEBHOOK_SECRET`作为`x-webhook-secret`。
+请求将作为 post 请求发送到`WEBHOOK_ADDRESS`提供的地址，并在头文件中以`WEBHOOK_SECRET`作为`x-webhook-secret`。
 
-PasarGuard发送的示例请求：
+PasarGuard 发送的示例请求：
 
 ```
 Headers:
@@ -437,7 +437,7 @@ Body:
 
 # 捐赠
 
-如果您觉得PasarGuard有用并希望支持其发展，您可以捐款，[点击这里](https://donate.gozargah.pro)
+如果您觉得 PasarGuard 有用并希望支持其发展，您可以捐款，[点击这里](https://donate.gozargah.pro)
 
 感谢您的支持！
 
