@@ -186,6 +186,10 @@ async def process_host(
     if not settings:
         return
 
+    if "flow" in host_inbound:
+        if settings["flow"] == "":
+            settings["flow"] = "" if host_inbound["flow"] == "none" else host_inbound["flow"]
+
     format_variables.update({"PROTOCOL": protocol})
     format_variables.update({"TRANSPORT": host_inbound["network"]})
     sni = ""

@@ -172,7 +172,7 @@ class XRayConfig(dict):
             settings["spx"] = tls_settings.get("SpiderX")
         except Exception:
             settings["spx"] = ""
-        
+
         settings["mldsa65Verify"] = tls_settings.get("mldsa65Verify")
 
     def _handle_network_settings(self, net: str, net_settings: dict, settings: dict, inbound_tag: str):
@@ -324,6 +324,9 @@ class XRayConfig(dict):
 
         settings = self._create_base_settings(inbound)
         self._handle_port_settings(inbound, settings)
+
+        if inbound["protocol"] == "vless":
+            settings["flow"] = inbound.get("settings").get("flow", "")
 
         if inbound["protocol"] == "shadowsocks":
             self._handle_shadowsocks_settings(inbound["settings"], settings)
