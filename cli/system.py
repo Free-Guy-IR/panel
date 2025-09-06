@@ -6,7 +6,7 @@ Handles system status and information through the command line interface.
 
 from rich.panel import Panel
 
-from app.db.base import get_db
+from app.db.base import GetDB
 from app.utils.system import readable_size
 from cli import SYSTEM_ADMIN, BaseCLI, console, get_system_operation
 
@@ -49,10 +49,10 @@ class SystemCLI(BaseCLI):
 async def show_status():
     """Show system status."""
     system_cli = SystemCLI()
-    async for db in get_db():
+    async with GetDB() as db:
         try:
             await system_cli.show_status(db)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
         finally:
-            break
+            return

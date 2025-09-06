@@ -7,7 +7,7 @@ Handles admin account management through the command line interface.
 import typer
 from pydantic import ValidationError
 
-from app.db.base import get_db
+from app.db.base import GetDB
 from app.models.admin import AdminCreate, AdminModify
 from app.utils.system import readable_size
 from cli import SYSTEM_ADMIN, BaseCLI, console, get_admin_operation
@@ -169,58 +169,58 @@ class AdminCLI(BaseCLI):
 async def list_admins():
     """List all admin accounts."""
     admin_cli = AdminCLI()
-    async for db in get_db():
+    async with GetDB() as db:
         try:
             await admin_cli.list_admins(db)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
         finally:
-            break
+            return
 
 
 async def create_admin(username: str):
     """Create a new admin account."""
     admin_cli = AdminCLI()
-    async for db in get_db():
+    async with GetDB() as db:
         try:
             await admin_cli.create_admin(db, username)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
         finally:
-            break
+            return
 
 
 async def delete_admin(username: str):
     """Delete an admin account."""
     admin_cli = AdminCLI()
-    async for db in get_db():
+    async with GetDB() as db:
         try:
             await admin_cli.delete_admin(db, username)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
         finally:
-            break
+            return
 
 
 async def modify_admin(username: str):
     """Modify an admin account."""
     admin_cli = AdminCLI()
-    async for db in get_db():
+    async with GetDB() as db:
         try:
             await admin_cli.modify_admin(db, username)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
         finally:
-            break
+            return
 
 
 async def reset_admin_usage(username: str):
     """Reset admin usage statistics."""
     admin_cli = AdminCLI()
-    async for db in get_db():
+    async with GetDB() as db:
         try:
             await admin_cli.reset_admin_usage(db, username)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
         finally:
-            break
+            return
