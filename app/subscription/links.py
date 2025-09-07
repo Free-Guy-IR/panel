@@ -85,7 +85,8 @@ class StandardLinks(BaseSubscription):
             link = self.vless(
                 id=settings["id"],
                 flow=settings.get("flow", ""),
-                encryption=inbound.get("encryption", "none") ** func_args,
+                encryption=inbound.get("encryption", "none"),
+                **func_args,
             )
 
         elif inbound["protocol"] == "trojan":
