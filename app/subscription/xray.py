@@ -369,7 +369,7 @@ class XrayConfiguration(BaseSubscription):
         }
 
     @staticmethod
-    def vless_config(address=None, port=None, id=None, flow="") -> dict:
+    def vless_config(address=None, port=None, id=None, flow="", encryption="none") -> dict:
         return {
             "vnext": [
                 {
@@ -379,7 +379,7 @@ class XrayConfiguration(BaseSubscription):
                         {
                             "id": id,
                             "security": "auto",
-                            "encryption": "none",
+                            "encryption": encryption,
                             "email": "t@t.com",
                             "alterId": 0,
                             "flow": flow,
@@ -589,8 +589,11 @@ class XrayConfiguration(BaseSubscription):
                 flow = settings.get("flow", "")
             else:
                 flow = None
+            encryption = inbound.get("encryption", "none")
 
-            outbound["settings"] = self.vless_config(address=address, port=port, id=settings["id"], flow=flow)
+            outbound["settings"] = self.vless_config(
+                address=address, port=port, id=settings["id"], flow=flow, encryption=encryption
+            )
 
         elif inbound["protocol"] == "trojan":
             outbound["settings"] = self.trojan_config(address=address, port=port, password=settings["password"])

@@ -85,7 +85,7 @@ class StandardLinks(BaseSubscription):
             link = self.vless(
                 id=settings["id"],
                 flow=settings.get("flow", ""),
-                **func_args,
+                encryption=inbound.get("encryption", "none") ** func_args,
             )
 
         elif inbound["protocol"] == "trojan":
@@ -319,6 +319,7 @@ class StandardLinks(BaseSubscription):
         address: str,
         port: int,
         id: Union[str, UUID],
+        encryption: str = "none",
         net="ws",
         path="",
         host="",
@@ -349,7 +350,7 @@ class StandardLinks(BaseSubscription):
         ech_config_list: str | None = None,
         mldsa65_verify: str | None = None,
     ):
-        payload = {"security": tls, "type": net, "headerType": type}
+        payload = {"encryption": encryption, "security": tls, "type": net, "headerType": type}
         if flow and (tls in ("tls", "reality") and net in ("tcp", "raw", "kcp") and type != "http"):
             payload["flow"] = flow
 

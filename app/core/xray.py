@@ -327,6 +327,11 @@ class XRayConfig(dict):
 
         if inbound["protocol"] == "vless":
             settings["flow"] = inbound.get("settings").get("flow", "")
+            vless_decryption = inbound.get("settings").get("decryption", "none")
+            vless_encryption = inbound.get("settings").get("encryption", "none")
+            if vless_decryption != "none" and vless_encryption == "none":
+                raise ValueError(f"'encryption' key must be provided in {inbound['tag']} inbound")
+            settings["encryption"] = vless_encryption
 
         if inbound["protocol"] == "shadowsocks":
             self._handle_shadowsocks_settings(inbound["settings"], settings)

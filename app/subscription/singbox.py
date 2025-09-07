@@ -265,7 +265,15 @@ class SingBoxConfiguration(BaseSubscription):
 
         if tls in ("tls", "reality"):
             config["tls"] = self.tls_config(
-                sni=sni, fragment=fragment, fp=fp, tls=tls, pbk=pbk, sid=sid, alpn=alpn, ais=ais
+                sni=sni,
+                fragment=fragment,
+                fp=fp,
+                tls=tls,
+                pbk=pbk,
+                sid=sid,
+                alpn=alpn,
+                ais=ais,
+                ech_config_list=ech_config_list,
             )
 
         if mux_settings and (singbox_mux := mux_settings.get("sing_box")):

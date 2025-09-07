@@ -362,6 +362,10 @@ class ClashMetaConfiguration(ClashConfiguration):
         elif inbound["protocol"] == "vless":
             node["uuid"] = settings["id"]
 
+            node["encryption"] = (
+                "" if (vless_encryption := inbound.get("encryption", "") == "none") else vless_encryption
+            )
+
             if (
                 inbound["network"] in ("tcp", "raw", "kcp")
                 and inbound["header_type"] != "http"
