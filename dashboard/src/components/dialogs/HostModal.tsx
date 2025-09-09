@@ -1210,7 +1210,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem className="col-span-2 md:col-span-1">
                                     <FormLabel>{t('hostsDialog.xhttp.hKeepAlivePeriod')}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} />
+                                      <Input
+                                        type="number"
+                                        {...field}
+                                        value={field.value ?? ''} // Ensure controlled component, handle null/undefined
+                                        onChange={e => {
+                                          const value = e.target.value;
+                                          field.onChange(value === '' ? null : parseInt(value, 10));
+                                        }}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>

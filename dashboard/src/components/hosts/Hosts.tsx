@@ -107,7 +107,7 @@ export interface HostFormValues {
         c_max_reuse_times?: string
         c_max_lifetime?: string
         h_max_request_times?: string
-        h_keep_alive_period?: string
+        h_keep_alive_period?: number
       }
     }
     grpc_settings?: {
@@ -167,7 +167,7 @@ const transportSettingsSchema = z
             c_max_reuse_times: z.string().nullish().optional(),
             c_max_lifetime: z.string().nullish().optional(),
             h_max_request_times: z.string().nullish().optional(),
-            h_keep_alive_period: z.string().nullish().optional(),
+            h_keep_alive_period: z.number().nullish().optional(),
           })
           .nullish()
           .optional(),
@@ -650,7 +650,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
       toast.error(t('host.duplicateFailed', { name: host.remark || '' }))
     }
   }
-const cleanEmptyValues = (obj: any) => {
+  const cleanEmptyValues = (obj: any) => {
     if (!obj) return undefined
     const cleaned: any = {}
     for (const [key, value] of Object.entries(obj)) {
@@ -668,7 +668,6 @@ const cleanEmptyValues = (obj: any) => {
     }
     return Object.keys(cleaned).length > 0 ? cleaned : undefined
   }
-
 
   const handleSubmit = async (data: HostFormValues) => {
     try {

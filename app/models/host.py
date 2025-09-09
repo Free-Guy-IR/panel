@@ -67,9 +67,7 @@ class XMuxSettings(BaseModel):
     h_max_request_times: str | int | None = Field(
         None, pattern=r"^\d{1,16}(-\d{1,16})?$", serialization_alias="hMaxRequestTimes"
     )
-    h_keep_alive_period: str | int | None = Field(
-        None, pattern=r"^\d{1,16}(-\d{1,16})?$", serialization_alias="hKeepAlivePeriod"
-    )
+    h_keep_alive_period: int | None = Field(None, serialization_alias="hKeepAlivePeriod")
 
 
 class XHttpSettings(BaseModel):

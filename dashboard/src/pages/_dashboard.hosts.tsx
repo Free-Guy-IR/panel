@@ -69,6 +69,22 @@ export default function HostsPage() {
                 alpn: formData.alpn as ProxyHostALPN | undefined,
                 fingerprint: formData.fingerprint as ProxyHostFingerprint | undefined,
                 ech_config_list: formData.ech_config_list || undefined,
+                transport_settings: formData.transport_settings
+                    ? {
+                        ...formData.transport_settings,
+                        xhttp_settings: formData.transport_settings.xhttp_settings
+                            ? {
+                                ...formData.transport_settings.xhttp_settings,
+                                xmux: formData.transport_settings.xhttp_settings.xmux
+                                    ? {
+                                        ...formData.transport_settings.xhttp_settings.xmux,
+                                        h_keep_alive_period: formData.transport_settings.xhttp_settings.xmux.h_keep_alive_period || undefined,
+                                    }
+                                    : undefined,
+                            }
+                            : undefined,
+                    }
+                    : undefined,
                 mux_settings: allProtocolsNone
                     ? undefined
                     : formData.mux_settings
