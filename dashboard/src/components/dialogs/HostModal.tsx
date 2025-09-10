@@ -2003,10 +2003,22 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 className="h-6 w-6"
                                 onClick={() => {
                                   const currentNoiseSettings = form.getValues('noise_settings.xray') || []
-                                  form.setValue('noise_settings.xray', [...currentNoiseSettings, { type: '', packet: '', delay: '' }], {
-                                    shouldDirty: true,
-                                    shouldTouch: true,
-                                  })
+                                  form.setValue(
+                                    'noise_settings.xray',
+                                    [
+                                      ...currentNoiseSettings,
+                                      {
+                                        type: 'rand',
+                                        packet: '',
+                                        delay: '',
+                                        apply_to: 'ip',
+                                      },
+                                    ],
+                                    {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                    },
+                                  )
                                 }}
                                 title={t('hostsDialog.noise.addNoise')}
                               >
@@ -2015,48 +2027,78 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             </div>
                             <div className="space-y-2">
                               {(form.watch('noise_settings.xray') || []).map((_, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <Select
-                                      value={form.watch(`noise_settings.xray.${index}.type`) || ''}
-                                      onValueChange={value => {
-                                        form.setValue(`noise_settings.xray.${index}.type`, value, {
-                                          shouldDirty: true,
-                                          shouldTouch: true,
-                                        })
-                                      }}
-                                    >
-                                      <SelectTrigger className="w-[120px]">
-                                        <SelectValue placeholder="Type" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="rand">rand</SelectItem>
-                                        <SelectItem value="str">str</SelectItem>
-                                        <SelectItem value="base64">base64</SelectItem>
-                                        <SelectItem value="hex">hex</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <Input
-                                      placeholder="Packet"
-                                      value={form.watch(`noise_settings.xray.${index}.packet`) || ''}
-                                      onChange={e =>
-                                        form.setValue(`noise_settings.xray.${index}.packet`, e.target.value, {
-                                          shouldDirty: true,
-                                          shouldTouch: true,
-                                        })
-                                      }
-                                    />
-                                    <Input
-                                      placeholder="Delay"
-                                      value={form.watch(`noise_settings.xray.${index}.delay`) || ''}
-                                      onChange={e =>
-                                        form.setValue(`noise_settings.xray.${index}.delay`, e.target.value, {
-                                          shouldDirty: true,
-                                          shouldTouch: true,
-                                        })
-                                      }
-                                    />
-                                  </div>
+                                <div key={index} className="grid grid-cols-[1fr,1fr,1fr,1fr,auto] gap-2">
+                                  <FormField
+                                    control={form.control}
+                                    name={`noise_settings.xray.${index}.type`}
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>{t('hostsDialog.noise.type')}</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="rand">rand</SelectItem>
+                                            <SelectItem value="str">str</SelectItem>
+                                            <SelectItem value="base64">base64</SelectItem>
+                                            <SelectItem value="hex">hex</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name={`noise_settings.xray.${index}.packet`}
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>{t('hostsDialog.noise.packet')}</FormLabel>
+                                        <FormControl>
+                                          <Input placeholder={t('hostsDialog.noise.packetPlaceholder')} {...field} value={field.value || ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name={`noise_settings.xray.${index}.delay`}
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>{t('hostsDialog.noise.delay')}</FormLabel>
+                                        <FormControl>
+                                          <Input placeholder={t('hostsDialog.noise.delayPlaceholder')} {...field} value={field.value || ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name={`noise_settings.xray.${index}.apply_to`}
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>{t('hostsDialog.noise.applyTo')}</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="ip">IP</SelectItem>
+                                            <SelectItem value="ipv4">IPv4</SelectItem>
+                                            <SelectItem value="ipv6">IPv6</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
                                   <Button
                                     type="button"
                                     variant="ghost"
@@ -2064,14 +2106,11 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                     className="h-8 w-8 border-red-500"
                                     onClick={() => {
                                       const currentNoiseSettings = form.getValues('noise_settings.xray') || []
-                                      form.setValue(
-                                        'noise_settings.xray',
-                                        currentNoiseSettings.filter((_, i) => i !== index),
-                                        {
-                                          shouldDirty: true,
-                                          shouldTouch: true,
-                                        },
-                                      )
+                                      const newNoiseSettings = currentNoiseSettings.filter((_, i) => i !== index)
+                                      form.setValue('noise_settings.xray', newNoiseSettings, {
+                                        shouldDirty: true,
+                                        shouldTouch: true,
+                                      })
                                     }}
                                     title={t('hostsDialog.noise.removeNoise')}
                                   >

@@ -161,6 +161,8 @@ export interface XrayNoiseSettings {
   packet: string
   /** @pattern ^\d{1,16}(-\d{1,16})?$ */
   delay: string
+  /** @pattern ip|ipv4|ipv6 */
+  apply_to?: string
 }
 
 export type XrayMuxSettingsOutputXudpConcurrency = number | null

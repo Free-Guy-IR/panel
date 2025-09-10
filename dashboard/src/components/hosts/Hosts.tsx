@@ -341,6 +341,7 @@ export const HostFormSchema = z.object({
               .string()
               .regex(/^\d{1,16}(-\d{1,16})?$/)
               .optional(),
+            apply_to: z.enum(['ip', 'ipv4', 'ipv6']).optional(),
           }),
         )
         .optional(),
@@ -480,7 +481,12 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         : undefined,
       noise_settings: host.noise_settings
         ? {
-            xray: host.noise_settings.xray ?? undefined,
+            xray: host.noise_settings.xray?.map(noise => ({
+              type: noise.type,
+              packet: noise.packet,
+              delay: noise.delay,
+              apply_to: noise.apply_to ?? undefined,
+            })) ?? undefined,
           }
         : undefined,
       mux_settings: host.mux_settings

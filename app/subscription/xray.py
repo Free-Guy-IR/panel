@@ -420,9 +420,19 @@ class XrayConfiguration(BaseSubscription):
     def make_dialer_outbound(
         self, fragment: dict | None = None, noises: dict | None = None, dialer_tag: str = "dialer"
     ) -> Union[dict, None]:
+        xray_noises = noises.get("xray", []) if noises else []
         dialer_settings = {
             "fragment": fragment.get("xray") if fragment else None,
-            "noises": noises.get("xray") if noises else None,
+            "noises": [
+                {
+                    "type": noise["type"],
+                    "packet": noise["packet"],
+                    "delay": noise["delay"],
+                    "applyTo": noise["apply_to"],
+                }
+                for noise in xray_noises
+            ]
+            or None,
         }
         dialer_settings = self._remove_none_values(dialer_settings)
 
