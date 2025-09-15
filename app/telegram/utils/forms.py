@@ -26,3 +26,4 @@ class BulkModify(StatesGroup):
 class ModifyUser(StatesGroup):
     new_data_limit = State()
     new_expiry = State()
+    new_note = State()

@@ -328,6 +328,39 @@ async def modify_data_limit_done(event: Message, state: FSMContext, db: AsyncSes
     await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
+@router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_note == F.action))
+async def modify_note(event: CallbackQuery, callback_data: UserPanel.Callback, state: FSMContext):
+    await state.set_state(forms.ModifyUser.new_note)
+    await state.update_data(user_id=callback_data.user_id)
+    try:
+        await event.message.delete()
+    except TelegramBadRequest:
+        pass
+    msg = await event.message.answer(
+        Texts.enter_modify_note,
+        reply_markup=CancelKeyboard(UserPanel.Callback(user_id=callback_data.user_id)).as_markup()
+    )
+    await add_to_messages_to_delete(state, msg)
+
+
+@router.message(forms.ModifyUser.new_note)
+async def modify_note_done(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    await delete_messages(event, state)
+    await add_to_messages_to_delete(state, event)
+    note = event.text
+    user_id = await state.get_value("user_id")
+    await state.clear()
+    await delete_messages(event, state)
+    try:
+        user = await user_operations.get_user_by_id(db, user_id, admin)
+    except ValueError:
+        return await event.answer(Texts.user_not_found)
+    modified_user = UserModify(note=note)
+    user = await user_operations.modify_user(db, user.username, modified_user, admin)
+    groups = await user_operations.validate_all_groups(db, user)
+    await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+
+
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.disable == F.action))
 async def disable_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
     user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)

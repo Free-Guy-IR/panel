@@ -24,6 +24,7 @@ ebl = html_decoration.expandable_blockquote
 
 
 class Button:
+    modify_note = "📝 Modify Note"
     random_username = "🎲 Random Username"
     modify_data_limit = "📶 Modify Data Limit"
     modify_expiry = "📅 Modify Expiry"
@@ -51,6 +52,7 @@ class Button:
 
 
 class Message:
+    enter_modify_note = "📝 Enter new Note:"
     enter_modify_data_limit = "📶 Enter new Data Limit (GB):\nSend 0 for unlimited."
     enter_modify_expiry = "📅 Enter new Expiry (days):\nSend 0 for unlimited."
     enter_bulk_data_limit = "📶 Enter data limit change (GB):\nPositive and Negative values are allowed."

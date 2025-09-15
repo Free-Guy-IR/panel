@@ -22,6 +22,7 @@ class UserPanelAction(str, Enum):
     modify_with_template = "modify_with_template"
     modify_data_limit = "modify_data_limit"
     modify_expiry = "modify_expiry"
+    modify_note = "modify_note"
 
 
 class UserPanel(InlineKeyboardBuilder):
@@ -68,6 +69,18 @@ class UserPanel(InlineKeyboardBuilder):
                 cancel=self.Callback(user_id=user.id).pack(),
             ),
         )
+        self.button(
+            text=Texts.modify_data_limit,
+            callback_data=self.Callback(action=UserPanelAction.modify_data_limit, user_id=user.id),
+        )
+        self.button(
+            text=Texts.modify_expiry,
+            callback_data=self.Callback(action=UserPanelAction.modify_expiry, user_id=user.id),
+        )
+        self.button(
+            text=Texts.modify_note,
+            callback_data=self.Callback(action=UserPanelAction.modify_note, user_id=user.id)
+        )
         if not user.next_plan:
             self.button(
                 text=Texts.activate_next_plan,
@@ -87,7 +100,7 @@ class UserPanel(InlineKeyboardBuilder):
             callback_data=CancelKeyboard.Callback(action=CancelAction.cancel),
         )
 
-        self.adjust(2, 2, 1, 1, 1)
+        self.adjust(2, 2, 2, 2, 1, 1)
 
 
 class ChooseStatus(InlineKeyboardBuilder):
