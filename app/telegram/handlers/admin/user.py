@@ -244,6 +244,51 @@ async def process_cancel(event: CallbackQuery, state: FSMContext, admin: AdminDe
     )
 
 
+@router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_expiry == F.action))
+async def modify_expiry(event: CallbackQuery, callback_data: UserPanel.Callback, state: FSMContext):
+    await state.set_state(forms.ModifyUser.new_expiry)
+    await state.update_data(user_id=callback_data.user_id)
+    try:
+        await event.message.delete()
+    except TelegramBadRequest:
+        pass
+    msg = await event.message.answer(
+        Texts.enter_modify_expiry,
+        reply_markup=CancelKeyboard(UserPanel.Callback(user_id=callback_data.user_id)).as_markup(),
+    )
+    await add_to_messages_to_delete(state, msg)
+
+@router.message(forms.ModifyUser.new_expiry)
+async def modify_expiry_done(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    await delete_messages(event, state)
+    await add_to_messages_to_delete(state, event)
+    try:
+        duration = int(event.text)
+        if duration < 0:
+            raise ValueError
+    except ValueError:
+        msg = await event.reply(text=Texts.duration_not_valid, reply_markup=CancelKeyboard().as_markup())
+        await add_to_messages_to_delete(state, msg)
+        return
+    user_id = await state.get_value("user_id")
+    await state.clear()
+    await delete_messages(event, state)
+    try:
+        user = await user_operations.get_user_by_id(db, user_id, admin)
+    except ValueError:
+        return await event.answer(Texts.user_not_found)
+    if user.status == UserStatus.on_hold:
+        if duration:
+            modified_user = UserModify(on_hold_expire_duration=int(td(days=duration).total_seconds()))
+        else:
+            modified_user = UserModify(status=UserStatusModify.active, expire=0)
+    else:
+        modified_user = UserModify(expire=(dt.now() + td(days=duration)) if duration else 0)
+    user = await user_operations.modify_user(db, user.username, modified_user, admin)
+    groups = await user_operations.validate_all_groups(db, user)
+    await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+
+
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.disable == F.action))
 async def disable_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):

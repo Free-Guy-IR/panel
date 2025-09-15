@@ -51,8 +51,9 @@ class Button:
 
 
 class Message:
-    enter_modify_data_limit = "📶 Enter data limit change (GB):\nPositive and Negative values are allowed."
-    enter_modify_expiry = "📅 Enter expiry change (days):\nPositive and Negative values are allowed."
+    enter_modify_expiry = "📅 Enter new Expiry (days):\nSend 0 for unlimited."
+    enter_bulk_data_limit = "📶 Enter data limit change (GB):\nPositive and Negative values are allowed."
+    enter_bulk_expiry = "📅 Enter Expiry change (days):\nPositive and Negative values are allowed."
     enter_expire_before = "📅 Delete Users expired before (days):\nSend 0 for all."
     choose_action = "🔧 Choose an Action:"
     there_is_no_template = "❌ There is no Template!"

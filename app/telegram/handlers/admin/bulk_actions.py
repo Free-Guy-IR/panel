@@ -84,7 +84,7 @@ async def modify_expiry(event: CallbackQuery, state: FSMContext):
     except TelegramBadRequest:
         pass
     await state.set_state(forms.BulkModify.expiry)
-    msg = await event.message.answer(Texts.enter_modify_expiry, reply_markup=CancelKeyboard().as_markup())
+    msg = await event.message.answer(Texts.enter_bulk_expiry, reply_markup=CancelKeyboard().as_markup())
     await state.update_data(messages_to_delete=[msg.message_id])
 
 
@@ -127,7 +127,7 @@ async def modify_data_limit(event: CallbackQuery, state: FSMContext):
     except TelegramBadRequest:
         pass
     await state.set_state(forms.BulkModify.data_limit)
-    msg = await event.message.answer(Texts.enter_modify_data_limit, reply_markup=CancelKeyboard().as_markup())
+    msg = await event.message.answer(Texts.enter_bulk_data_limit, reply_markup=CancelKeyboard().as_markup())
     await state.update_data(messages_to_delete=[msg.message_id])
 
 

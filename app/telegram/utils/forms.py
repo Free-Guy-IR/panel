@@ -21,3 +21,7 @@ class DeleteExpired(StatesGroup):
 class BulkModify(StatesGroup):
     expiry = State()
     data_limit = State()
+
+
+class ModifyUser(StatesGroup):
+    new_expiry = State()
