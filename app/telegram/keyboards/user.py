@@ -20,6 +20,7 @@ class UserPanelAction(str, Enum):
     reset_usage = "reset_usage"
     activate_next_plan = "activate_next_plan"
     modify_with_template = "modify_with_template"
+    modify_data_limit = "modify_data_limit"
     modify_expiry = "modify_expiry"
 
 

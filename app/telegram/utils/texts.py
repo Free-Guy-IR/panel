@@ -51,6 +51,7 @@ class Button:
 
 
 class Message:
+    enter_modify_data_limit = "📶 Enter new Data Limit (GB):\nSend 0 for unlimited."
     enter_modify_expiry = "📅 Enter new Expiry (days):\nSend 0 for unlimited."
     enter_bulk_data_limit = "📶 Enter data limit change (GB):\nPositive and Negative values are allowed."
     enter_bulk_expiry = "📅 Enter Expiry change (days):\nPositive and Negative values are allowed."

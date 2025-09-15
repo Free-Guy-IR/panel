@@ -289,6 +289,44 @@ async def modify_expiry_done(event: Message, state: FSMContext, db: AsyncSession
     await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
+@router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_data_limit == F.action))
+async def modify_data_limit(event: CallbackQuery, callback_data: UserPanel.Callback, state: FSMContext):
+    await state.set_state(forms.ModifyUser.new_data_limit)
+    await state.update_data(user_id=callback_data.user_id)
+    try:
+        await event.message.delete()
+    except TelegramBadRequest:
+        pass
+    msg = await event.message.answer(
+        Texts.enter_modify_data_limit,
+        reply_markup=CancelKeyboard(UserPanel.Callback(user_id=callback_data.user_id)).as_markup(),
+    )
+    await add_to_messages_to_delete(state, msg)
+
+@router.message(forms.ModifyUser.new_data_limit)
+async def modify_data_limit_done(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    await delete_messages(event, state)
+    await add_to_messages_to_delete(state, event)
+    try:
+        data_limit = float(event.text)
+        if data_limit < 0:
+            raise ValueError
+    except ValueError:
+        msg = await event.reply(text=Texts.data_limit_not_valid, reply_markup=CancelKeyboard().as_markup())
+        await add_to_messages_to_delete(state, msg)
+        return
+    user_id = await state.get_value("user_id")
+    await state.clear()
+    await delete_messages(event, state)
+    try:
+        user = await user_operations.get_user_by_id(db, user_id, admin)
+    except ValueError:
+        return await event.answer(Texts.user_not_found)
+    modified_user = UserModify(data_limit=data_limit * 1024**3)
+    user = await user_operations.modify_user(db, user.username, modified_user, admin)
+    groups = await user_operations.validate_all_groups(db, user)
+    await event.answer(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.disable == F.action))
 async def disable_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSession, callback_data: UserPanel.Callback):
