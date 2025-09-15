@@ -1,5 +1,7 @@
 from enum import Enum
 from typing import List
+
+from aiogram.types import CopyTextButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.callback_data import CallbackData
 
@@ -94,6 +96,8 @@ class UserPanel(InlineKeyboardBuilder):
             text=Texts.modify_with_template,
             callback_data=self.Callback(action=UserPanelAction.modify_with_template, user_id=user.id),
         )
+
+        self.button(text=Texts.subscription_url, copy_text=CopyTextButton(text=user.subscription_url))
 
         self.button(
             text=Texts.back,

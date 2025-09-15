@@ -24,6 +24,7 @@ ebl = html_decoration.expandable_blockquote
 
 
 class Button:
+    subscription_url = "🔗 Subscription URL"
     modify_note = "📝 Modify Note"
     random_username = "🎲 Random Username"
     modify_data_limit = "📶 Modify Data Limit"
@@ -137,9 +138,7 @@ class Message:
 {b("Online At:")} {online_at}
 {b("Groups:")} {c(groups)}
 {b("Admin:")} {admin}
-{b("Note:")} {note}
-{b("Subscription URL:")}
-{p(user.subscription_url)}"""
+{b("Note:")} {note}"""
 
     @staticmethod
     def user_short_detail(user: UserResponse) -> str:
