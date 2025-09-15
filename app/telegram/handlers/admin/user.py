@@ -4,7 +4,6 @@ from datetime import datetime as dt, timedelta as td
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.fsm.context import FSMContext
-from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.exceptions import TelegramBadRequest
 
@@ -15,6 +14,7 @@ from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.operation.group import GroupOperation
 from app.operation.user_template import UserTemplateOperation
+from app.settings import telegram_settings
 from app.telegram.keyboards.group import DoneAction, GroupsSelector
 from app.telegram.utils import forms
 from app.models.admin import AdminDetails
@@ -230,11 +230,19 @@ async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
 
 
 @router.callback_query(GroupsSelector.DoneCallback.filter(DoneAction.cancel == F.action))
-async def process_cancel(event: CallbackQuery, state: FSMContext):
+async def process_cancel(event: CallbackQuery, state: FSMContext, admin: AdminDetails):
     await delete_messages(event, state)
     await state.clear()
     await event.answer(Texts.canceled)
-    await event.message.edit_text(Texts.canceled, reply_markup=ReplyKeyboardRemove())
+    settings = await telegram_settings()
+    await event.message.edit_text(
+        Texts.canceled,
+        reply_markup=AdminPanel(
+            is_sudo=admin.is_sudo,
+            panel_url=settings.mini_app_web_url if settings.mini_app_login else None
+        ).as_markup()
+    )
+
 
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.disable == F.action))
