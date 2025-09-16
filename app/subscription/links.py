@@ -234,7 +234,7 @@ class StandardLinks(BaseSubscription):
             if spx:
                 payload["spx"] = spx
             if mldsa65_verify:
-                payload["mldsa65Verify"] = mldsa65_verify
+                payload["pqv"] = mldsa65_verify
 
         if ais:
             payload["allowInsecure"] = 1
