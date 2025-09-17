@@ -24,6 +24,7 @@ ebl = html_decoration.expandable_blockquote
 
 
 class Button:
+    modify_groups = "👥 Modify Groups"
     subscription_url = "🔗 Subscription URL"
     modify_note = "📝 Modify Note"
     random_username = "🎲 Random Username"

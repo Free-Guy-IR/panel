@@ -25,6 +25,7 @@ class UserPanelAction(str, Enum):
     modify_data_limit = "modify_data_limit"
     modify_expiry = "modify_expiry"
     modify_note = "modify_note"
+    modify_groups = "modify_groups"
 
 
 class UserPanel(InlineKeyboardBuilder):
@@ -82,6 +83,10 @@ class UserPanel(InlineKeyboardBuilder):
         self.button(
             text=Texts.modify_note,
             callback_data=self.Callback(action=UserPanelAction.modify_note, user_id=user.id)
+        )
+        self.button(
+            text=Texts.modify_groups,
+            callback_data=self.Callback(action=UserPanelAction.modify_groups, user_id=user.id)
         )
         if not user.next_plan:
             self.button(

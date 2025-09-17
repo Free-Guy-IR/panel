@@ -14,8 +14,7 @@ from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.operation.group import GroupOperation
 from app.operation.user_template import UserTemplateOperation
-from app.settings import telegram_settings
-from app.telegram.keyboards.group import DoneAction, GroupsSelector
+from app.telegram.keyboards.group import SelectGroupAction, GroupsSelector
 from app.telegram.utils import forms
 from app.models.admin import AdminDetails
 from app.telegram.keyboards.admin import AdminPanel, AdminPanelAction, InlineQuerySearch
@@ -168,7 +167,6 @@ async def process_on_hold_timeout(event: Message, state: FSMContext, db: AsyncSe
         return
 
     await state.update_data(on_hold_timeout=timeout)
-    await state.set_state(forms.CreateUser.group_ids)
     groups = await group_operations.get_all_groups(db)
 
     await add_to_messages_to_delete(state, event)
@@ -177,9 +175,9 @@ async def process_on_hold_timeout(event: Message, state: FSMContext, db: AsyncSe
     await event.answer(Texts.select_groups, reply_markup=GroupsSelector(groups).as_markup())
 
 
-@router.callback_query(GroupsSelector.SelectorCallback.filter(), forms.CreateUser.group_ids)
-async def process_groups(
-    event: CallbackQuery, db: AsyncSession, state: FSMContext, callback_data: GroupsSelector.SelectorCallback
+@router.callback_query(GroupsSelector.Callback.filter(SelectGroupAction.select == F.action))
+async def select_groups(
+    event: CallbackQuery, db: AsyncSession, state: FSMContext, callback_data: GroupsSelector.Callback
 ):
     group_ids = await state.get_value("group_ids")
     if isinstance(group_ids, list):
@@ -194,11 +192,15 @@ async def process_groups(
     all_groups = await group_operations.get_all_groups(db)
 
     await event.message.edit_reply_markup(
-        reply_markup=GroupsSelector(groups=all_groups, selected_groups=group_ids).as_markup()
+        reply_markup=GroupsSelector(
+            groups=all_groups,
+            selected_groups=group_ids,
+            user_id=callback_data.user_id
+        ).as_markup()
     )
 
 
-@router.callback_query(GroupsSelector.DoneCallback.filter(DoneAction.done == F.action))
+@router.callback_query(GroupsSelector.Callback.filter(SelectGroupAction.create == F.action))
 async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, state: FSMContext):
     data = await state.get_data()
     if not data.get("group_ids", []):
@@ -229,19 +231,44 @@ async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
     return await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
-@router.callback_query(GroupsSelector.DoneCallback.filter(DoneAction.cancel == F.action))
-async def process_cancel(event: CallbackQuery, state: FSMContext, admin: AdminDetails):
+@router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_groups == F.action))
+async def modify_groups(event: CallbackQuery, db: AsyncSession, state: FSMContext, callback_data: UserPanel.Callback, admin: AdminDetails):
+    try:
+        user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
+    except ValueError:
+        return await event.answer(Texts.user_not_found)
+
+    groups = await user_operations.validate_all_groups(db, user)
+    all_groups = await group_operations.get_all_groups(db)
+    await state.clear()
+    await state.update_data(user_id=user.id, group_ids=[group.id for group in groups])
+    await event.message.edit_text(
+        Texts.select_groups,
+        reply_markup=GroupsSelector(
+            all_groups,
+            selected_groups=[group.id for group in groups], user_id=user.id).as_markup()
+    )
+
+
+@router.callback_query(GroupsSelector.Callback.filter(SelectGroupAction.modify == F.action))
+async def modify_groups(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("group_ids", []):
+        return await event.answer(Texts.select_a_group, show_alert=True)
+
+    user_id = data.get("user_id")
+    try:
+        user = await user_operations.get_user_by_id(db, user_id, admin)
+    except ValueError:
+        return await event.answer(Texts.user_not_found)
+
+    modified_user = UserModify(group_ids=data["group_ids"])
+    user = await user_operations.modify_user(db, user.username, modified_user, admin)
+    groups = await user_operations.validate_all_groups(db, user)
     await delete_messages(event, state)
     await state.clear()
-    await event.answer(Texts.canceled)
-    settings = await telegram_settings()
-    await event.message.edit_text(
-        Texts.canceled,
-        reply_markup=AdminPanel(
-            is_sudo=admin.is_sudo,
-            panel_url=settings.mini_app_web_url if settings.mini_app_login else None
-        ).as_markup()
-    )
+    await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
+
 
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_expiry == F.action))
