@@ -63,6 +63,7 @@ async def startup_telegram_bot():
                     webhook_address,
                     secret_token=settings.webhook_secret,
                     allowed_updates=["message", "callback_query", "inline_query"],
+                    drop_pending_updates=True,
                 )
                 logger.info("Telegram bot started successfully.")
             except (TelegramNetworkError, ProxyConnectionError, TelegramBadRequest, TelegramUnauthorizedError) as err:
