@@ -251,7 +251,7 @@ async def modify_groups(
 
 
 @router.callback_query(GroupsSelector.Callback.filter(SelectGroupAction.modify == F.action))
-async def modify_groups(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, state: FSMContext):
+async def modify_groups_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, state: FSMContext):
     data = await state.get_data()
     if not data.get("group_ids", []):
         return await event.answer(Texts.select_a_group, show_alert=True)

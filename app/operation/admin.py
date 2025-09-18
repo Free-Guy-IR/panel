@@ -16,7 +16,6 @@ from app.db.crud.bulk import activate_all_disabled_users, disable_all_active_use
 from app.db.crud.user import get_users
 from app.db.models import Admin as DBAdmin
 from app.models.admin import AdminCreate, AdminDetails, AdminModify
-from app.models.user import UserResponse
 from app.node import node_manager
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
