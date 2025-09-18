@@ -267,6 +267,16 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
+
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -288,16 +298,6 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
-
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -560,6 +560,8 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -624,8 +626,6 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
-
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
@@ -756,6 +756,7 @@ export interface Telegram {
   webhook_url?: TelegramWebhookUrl
   webhook_secret?: TelegramWebhookSecret
   proxy_url?: TelegramProxyUrl
+  method?: RunMethod
   mini_app_login?: boolean
   mini_app_web_url?: TelegramMiniAppWebUrl
   for_admins_only?: boolean
@@ -966,6 +967,14 @@ export interface SettingsSchemaInput {
   subscription?: SettingsSchemaInputSubscription
   general?: SettingsSchemaInputGeneral
 }
+
+export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RunMethod = {
+  webhook: 'webhook',
+  'long-polling': 'long-polling',
+} as const
 
 export interface RemoveUsersResponse {
   users: string[]

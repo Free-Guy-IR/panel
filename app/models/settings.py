@@ -1,13 +1,18 @@
 import re
-from enum import Enum
+from enum import Enum, StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.proxy import ShadowsocksMethods, XTLSFlows
-from .validators import DiscordValidator, ListValidator, ProxyValidator, URLValidator
 
+from .validators import DiscordValidator, ProxyValidator, URLValidator
 
 TELEGRAM_TOKEN_PATTERN = r"^\d{8,12}:[A-Za-z0-9_-]{35}$"
+
+
+class RunMethod(StrEnum):
+    WEBHOOK = "webhook"
+    LONGPULLING = "long-polling"
 
 
 class Telegram(BaseModel):
@@ -16,6 +21,7 @@ class Telegram(BaseModel):
     webhook_url: str | None = Field(default=None)
     webhook_secret: str | None = Field(default=None)
     proxy_url: str | None = Field(default=None)
+    method: RunMethod = Field(default=RunMethod.WEBHOOK)
 
     mini_app_login: bool = Field(default=True)
     mini_app_web_url: str | None = Field(default="")
@@ -28,9 +34,10 @@ class Telegram(BaseModel):
         return URLValidator.validate_url(v)
 
     @field_validator("webhook_url")
-    @classmethod
-    def validate_webhook_url(cls, v):
-        return URLValidator.validate_url(v)
+    def validate_webhook_url(cls, v, values):
+        method = values.data.get("method", "webhook")
+        if method == "webhook":
+            return URLValidator.validate_url(v)
 
     @field_validator("proxy_url")
     @classmethod
