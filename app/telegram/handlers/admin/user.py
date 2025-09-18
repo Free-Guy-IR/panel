@@ -193,9 +193,7 @@ async def select_groups(
 
     await event.message.edit_reply_markup(
         reply_markup=GroupsSelector(
-            groups=all_groups,
-            selected_groups=group_ids,
-            user_id=callback_data.user_id
+            groups=all_groups, selected_groups=group_ids, user_id=callback_data.user_id
         ).as_markup()
     )
 
@@ -232,7 +230,9 @@ async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
 
 
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_groups == F.action))
-async def modify_groups(event: CallbackQuery, db: AsyncSession, state: FSMContext, callback_data: UserPanel.Callback, admin: AdminDetails):
+async def modify_groups(
+    event: CallbackQuery, db: AsyncSession, state: FSMContext, callback_data: UserPanel.Callback, admin: AdminDetails
+):
     try:
         user = await user_operations.get_user_by_id(db, callback_data.user_id, admin)
     except ValueError:
@@ -245,8 +245,8 @@ async def modify_groups(event: CallbackQuery, db: AsyncSession, state: FSMContex
     await event.message.edit_text(
         Texts.select_groups,
         reply_markup=GroupsSelector(
-            all_groups,
-            selected_groups=[group.id for group in groups], user_id=user.id).as_markup()
+            all_groups, selected_groups=[group.id for group in groups], user_id=user.id
+        ).as_markup(),
     )
 
 
@@ -270,7 +270,6 @@ async def modify_groups(event: CallbackQuery, db: AsyncSession, admin: AdminDeta
     await event.message.edit_text(Texts.user_details(user, groups), reply_markup=UserPanel(user).as_markup())
 
 
-
 @router.callback_query(UserPanel.Callback.filter(UserPanelAction.modify_expiry == F.action))
 async def modify_expiry(event: CallbackQuery, callback_data: UserPanel.Callback, state: FSMContext):
     await state.set_state(forms.ModifyUser.new_expiry)
@@ -284,6 +283,7 @@ async def modify_expiry(event: CallbackQuery, callback_data: UserPanel.Callback,
         reply_markup=CancelKeyboard(UserPanel.Callback(user_id=callback_data.user_id)).as_markup(),
     )
     await add_to_messages_to_delete(state, msg)
+
 
 @router.message(forms.ModifyUser.new_expiry)
 async def modify_expiry_done(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
@@ -330,6 +330,7 @@ async def modify_data_limit(event: CallbackQuery, callback_data: UserPanel.Callb
     )
     await add_to_messages_to_delete(state, msg)
 
+
 @router.message(forms.ModifyUser.new_data_limit)
 async def modify_data_limit_done(event: Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
     await delete_messages(event, state)
@@ -365,7 +366,7 @@ async def modify_note(event: CallbackQuery, callback_data: UserPanel.Callback, s
         pass
     msg = await event.message.answer(
         Texts.enter_modify_note,
-        reply_markup=CancelKeyboard(UserPanel.Callback(user_id=callback_data.user_id)).as_markup()
+        reply_markup=CancelKeyboard(UserPanel.Callback(user_id=callback_data.user_id)).as_markup(),
     )
     await add_to_messages_to_delete(state, msg)
 
@@ -491,20 +492,14 @@ async def create_user_from_template_username(
         pass
 
     await state.set_state(forms.CreateUserFromTemplate.username)
-    msg = await event.message.answer(
-        Texts.enter_username,
-        reply_markup=RandomUsername(with_template=True).as_markup()
-    )
+    msg = await event.message.answer(Texts.enter_username, reply_markup=RandomUsername(with_template=True).as_markup())
     await state.update_data(template_id=callback_data.template_id, messages_to_delete=[msg.message_id])
 
 
 @router.message(forms.CreateUserFromTemplate.username)
 @router.callback_query(RandomUsername.Callback.filter(F.with_template))
 async def create_user_from_template_choose(
-        event: Message | CallbackQuery,
-        state: FSMContext,
-        db: AsyncSession,
-        admin: AdminDetails
+    event: Message | CallbackQuery, state: FSMContext, db: AsyncSession, admin: AdminDetails
 ):
     await delete_messages(event, state)
 
@@ -535,8 +530,7 @@ async def create_user_from_template_choose(
         await user_operations.get_validated_user(db, actual_username, admin)
         if isinstance(event, Message):
             msg = await event.reply(
-                Texts.username_already_exist,
-                reply_markup=RandomUsername(with_template=True).as_markup()
+                Texts.username_already_exist, reply_markup=RandomUsername(with_template=True).as_markup()
             )
             await add_to_messages_to_delete(state, msg)
         else:

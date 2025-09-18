@@ -17,10 +17,7 @@ user_operations = UserOperation(OperatorType.TELEGRAM)
 
 @router.callback_query(ConfirmAction.Callback.filter())
 async def confirm_action(
-        event: CallbackQuery,
-        callback_data: ConfirmAction.Callback,
-        db: AsyncSession,
-        admin: AdminDetails
+    event: CallbackQuery, callback_data: ConfirmAction.Callback, db: AsyncSession, admin: AdminDetails
 ):
     text = Texts.confirm
     if callback_data.action.startswith(UserPanel.Callback.__prefix__):

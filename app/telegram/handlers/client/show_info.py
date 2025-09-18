@@ -34,10 +34,9 @@ async def get_user(event: Message, db: AsyncSession):
             await event.reply(Texts.client_user_details(user))
             await event.answer(f"<pre>{configs}</pre>")
         else:
-            file = BytesIO(configs.encode('utf-8'))
+            file = BytesIO(configs.encode("utf-8"))
             await event.answer_document(
-                BufferedInputFile(file.read(), f"{user.username}.txt"),
-                caption=Texts.client_user_details(user)
+                BufferedInputFile(file.read(), f"{user.username}.txt"), caption=Texts.client_user_details(user)
             )
     else:
         await event.reply(Texts.client_user_details(user))

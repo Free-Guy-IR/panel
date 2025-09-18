@@ -160,7 +160,7 @@ class BaseOperation:
         if not db_core_config:
             await self.raise_error(message="Core config not found", code=404)
         return db_core_config
-    
+
     @staticmethod
     async def generate_subscription_url(user: UserNotificationResponse):
         salt = secrets.token_hex(8)
@@ -172,7 +172,7 @@ class BaseOperation:
         )
         token = await create_subscription_token(user.username)
         return f"{url_prefix}/{SUBSCRIPTION_PATH}/{token}"
-    
+
     async def validate_user(self, user: User) -> UserNotificationResponse:
         user = UserNotificationResponse.model_validate(user)
         user.subscription_url = await self.generate_subscription_url(user)

@@ -15,27 +15,23 @@ class SelectGroupAction(StrEnum):
 
 
 class GroupsSelector(InlineKeyboardBuilder):
-    def __init__(
-            self,
-            groups: GroupsResponse,
-            selected_groups: list[int] = None,
-            user_id: int = 0,
-            *args, **kwargs
-    ):
+    def __init__(self, groups: GroupsResponse, selected_groups: list[int] = None, user_id: int = 0, *args, **kwargs):
         selected_groups = selected_groups or []
         super().__init__(*args, **kwargs)
         for group in groups.groups:
             self.button(
                 text=("✅" if group.id in selected_groups else "❌") + f" {group.name}",
-                callback_data=self.Callback(group_id=group.id, user_id=user_id)
+                callback_data=self.Callback(group_id=group.id, user_id=user_id),
             )
         self.button(
             text=Texts.cancel,
-            callback_data=UserPanel.Callback(user_id=user_id) if user_id
-            else CancelKeyboard.Callback(action=CancelAction.cancel))
+            callback_data=UserPanel.Callback(user_id=user_id)
+            if user_id
+            else CancelKeyboard.Callback(action=CancelAction.cancel),
+        )
         self.button(
             text=Texts.done,
-            callback_data=self.Callback(action=SelectGroupAction.modify if user_id else SelectGroupAction.create)
+            callback_data=self.Callback(action=SelectGroupAction.modify if user_id else SelectGroupAction.create),
         )
         self.adjust(*[1 for i in groups.groups], 2)
 

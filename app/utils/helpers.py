@@ -57,7 +57,6 @@ def format_validation_error(error: ValidationError) -> str:
     return "\n".join([e["loc"][0].replace("_", " ").capitalize() + ": " + e["msg"] for e in error.errors()])
 
 
-
 def escape_tg_html(list: tuple[str]) -> tuple[str]:
     """Escapes HTML special characters for the telegram HTML parser."""
     return tuple(html.escape(text) for text in list)

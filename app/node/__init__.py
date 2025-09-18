@@ -86,7 +86,9 @@ class NodeManager:
             ]
             return nodes
 
-    async def get_nodes_by_health_status(self) -> tuple[list[tuple[int, PasarGuardNode]], list[tuple[int, PasarGuardNode]]]:
+    async def get_nodes_by_health_status(
+        self,
+    ) -> tuple[list[tuple[int, PasarGuardNode]], list[tuple[int, PasarGuardNode]]]:
         """Optimized method to get both broken and not_connected nodes in single lock acquisition"""
         async with self._lock.reader_lock:
             if not self._nodes:

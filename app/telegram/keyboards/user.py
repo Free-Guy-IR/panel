@@ -81,12 +81,10 @@ class UserPanel(InlineKeyboardBuilder):
             callback_data=self.Callback(action=UserPanelAction.modify_expiry, user_id=user.id),
         )
         self.button(
-            text=Texts.modify_note,
-            callback_data=self.Callback(action=UserPanelAction.modify_note, user_id=user.id)
+            text=Texts.modify_note, callback_data=self.Callback(action=UserPanelAction.modify_note, user_id=user.id)
         )
         self.button(
-            text=Texts.modify_groups,
-            callback_data=self.Callback(action=UserPanelAction.modify_groups, user_id=user.id)
+            text=Texts.modify_groups, callback_data=self.Callback(action=UserPanelAction.modify_groups, user_id=user.id)
         )
         if not user.next_plan:
             self.button(
@@ -157,4 +155,3 @@ class RandomUsername(InlineKeyboardBuilder):
             callback_data=CancelKeyboard.Callback(action=CancelAction.cancel),
         )
         self.adjust(1, repeat=True)
-
