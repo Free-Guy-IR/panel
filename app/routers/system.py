@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram.types import Update
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -55,5 +57,5 @@ async def webhook_handler(request: Request, X_Telegram_Bot_Api_Secret_Token: str
 
     update_data = await request.json()
     update = Update.model_validate(update_data, context={"bot": bot})
-    await dp.feed_update(bot, update)
+    asyncio.create_task(dp.feed_update(bot, update))
     return JSONResponse(status_code=200, content={"status": "ok"})
