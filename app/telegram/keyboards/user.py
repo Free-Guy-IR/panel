@@ -137,7 +137,7 @@ class ChooseTemplate(InlineKeyboardBuilder):
 
         self.button(
             text=Texts.back,
-            callback_data=CancelKeyboard.Callback(action=CancelAction.cancel),
+            callback_data=UserPanel.Callback(user_id=user_id).pack(),
         )
         self.adjust(1, repeat=True)
 
