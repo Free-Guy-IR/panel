@@ -1,4 +1,3 @@
-import Logo from '@/assets/logo.svg?react'
 import { Footer } from '@/components/Footer'
 import { Language } from '@/components/Language'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -183,7 +182,6 @@ export const Login: FC = () => {
         <div className="w-full justify-center flex items-center">
           <div className="w-full max-w-[340px] mt-6">
             <div className="flex flex-col items-center gap-2">
-              <Logo className="w-12 h-12 stroke-[12px]" />
               <span className="text-2xl font-semibold">{t('login.loginYourAccount')}</span>
               <span className="text-gray-600 dark:text-gray-400">{t('login.welcomeBack')}</span>
             </div>
