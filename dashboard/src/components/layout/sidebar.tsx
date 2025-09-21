@@ -300,7 +300,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">{t('marzban')}</span>
+          <span className="text-sm font-bold">{t('pasargaurd')}</span>
         </div>
         <SidebarTrigger />
       </div>
@@ -311,7 +311,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <a href={REPO_URL} target="_blank" className="!gap-0">
-                  <span className="truncate text-sm font-semibold leading-tight ltr:ml-2 rtl:mr-2">{t('marzban')}</span>
+                  <span className="truncate text-sm font-semibold leading-tight ltr:ml-2 rtl:mr-2">{t('pasargaurd')}</span>
                   <span className="text-xs opacity-45 ltr:ml-1 rtl:mr-1">{version}</span>
                 </a>
               </SidebarMenuButton>

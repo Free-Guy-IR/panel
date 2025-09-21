@@ -1,5 +1,5 @@
 {
-  "marzban": "مـرزبان",
+  "PasarGuard": "پاسارگارد",
   "dashboard": "داشبورد",
   "master": "همه گره‌ها",
   "dashboardDescription": "داشبورد مدیریت مـرزبان",
@@ -798,7 +798,7 @@
   "manageServers": "کنترل جزئیات سرور شما",
   "nodes.prompt": "افزودن و پیکربندی جزئیات گره",
   "nodes.addHostForEveryInbound": "استفاده از این گره به عنوان میزبان تمام ورودی‌ها",
-  "nodes.addNewMarzbanNode": "افزودن گره مرزبان",
+  "nodes.addNewPasarGuardNode": "افزودن گره پاسارگارد",
   "nodes.addNode": "افزودن گره",
   "nodes.addNodeSuccess": "گره {{name}} با موفقیت افزوده شد",
   "nodes.apply": "ویرایش گره",

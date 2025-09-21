@@ -1,4 +1,4 @@
-# Dashboard UI for marzban
+# Dashboard UI for pasargaurd
 
 ## Requirements
 
@@ -12,8 +12,8 @@ related to the node version, install Node with version >= v20
 ## Install
 
     Install the latest LTS version of Node.js
-    git clone https://github.com/Gozargah/Marzban.git
-    `bash cd Marzban/app/dashboard`
+    git clone https://github.com/PasarGuard/panel.git
+    `bash cd panel/dashboard`
     `bash curl -fsSL https://bun.sh/install | bash`
     `bash bun install`
 
@@ -27,7 +27,7 @@ Copy `example.env` to `.env` then set the backend api address:
 
 | Name          | Description                                                                          |
 | ------------- | ------------------------------------------------------------------------------------ |
-| VITE_BASE_API | The api url of the deployed backend ([Marzban](https://github.com/gozargah/Marzban)) |
+| VITE_BASE_API | The api url of the deployed backend ([PasarGuard](https://github.com/PasarGuard/panel.git)) |
 
 ## Start development server
 

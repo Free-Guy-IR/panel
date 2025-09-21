@@ -21,7 +21,7 @@ const FooterContent = ({ showVersion = true }: { showVersion?: boolean }) => {
   return (
     <p className="inline-block flex-grow text-center text-gray-500 text-xs">
       <a className="text-blue-400" href={REPO_URL}>
-        Marzban
+          PasarGuard
       </a>
       {version}, Made with ❤️ in{' '}
       <a className="text-blue-400" href={ORGANIZATION_URL}>
