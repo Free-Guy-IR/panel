@@ -511,7 +511,7 @@ export function AllNodesStackedBarChart() {
                 />
                 {/* When using ChartTooltip, pass period as a prop */}
                 <ChartTooltip cursor={false} content={<CustomTooltip chartConfig={chartConfig} dir={dir} period={getPeriodFromDateRange(dateRange)} />} />
-                <ChartLegend content={<ChartLegendContent />} />
+                <ChartLegend className={"overflow-x-auto justify-evenly"} content={<ChartLegendContent />} />
                 {nodeList.map((node, idx) => (
                   <Bar 
                     key={node.id} 
