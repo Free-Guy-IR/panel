@@ -9,6 +9,7 @@ import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/const
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { getSystemStats } from '@/service/api'
+import { useTheme } from '@/components/theme-provider'
 import {
 	ArrowUpDown,
 	Bell,
@@ -47,6 +48,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [version, setVersion] = useState<string>('')
   const { admin } = useAdmin()
   const { setOpenMobile, openMobile } = useSidebar()
+  const { resolvedTheme } = useTheme()
   const touchStartX = useRef<number | null>(null)
   const touchEndX = useRef<number | null>(null)
   const minSwipeDistance = 50
@@ -298,23 +300,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <>
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">{t('pasargaurd')}</span>
-        </div>
-        <SidebarTrigger />
-      </div>
+       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
+         <div className="flex items-center gap-2">
+           <img 
+             src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
+             alt="PasarGuard Logo" 
+             className="w-8 h-8 object-contain"
+           />
+           <span className="text-sm font-bold">{t('pasargaurd')}</span>
+         </div>
+         <SidebarTrigger />
+       </div>
       <Sidebar variant="sidebar" {...props} className="border-sidebar-border p-0" side={isRTL ? 'right' : 'left'}>
         <SidebarRail />
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild>
-                <a href={REPO_URL} target="_blank" className="!gap-0">
-                  <span className="truncate text-sm font-semibold leading-tight ltr:ml-2 rtl:mr-2">{t('pasargaurd')}</span>
-                  <span className="text-xs opacity-45 ltr:ml-1 rtl:mr-1">{version}</span>
-                </a>
-              </SidebarMenuButton>
+               <SidebarMenuButton size="lg" asChild>
+                 <a href={REPO_URL} target="_blank" className="!gap-2">
+                   <img 
+                     src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
+                     alt="PasarGuard Logo" 
+                     className="w-8 h-8 object-contain flex-shrink-0"
+                   />
+                   <div className="flex flex-col">
+                     <span className="truncate text-sm font-semibold leading-tight">{t('pasargaurd')}</span>
+                     <span className="text-xs opacity-45">{version}</span>
+                   </div>
+                 </a>
+               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>

@@ -16,6 +16,7 @@ import { PasswordInput } from '@/components/ui/password-input'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { $fetch } from '@/service/http'
 import { retrieveRawInitData } from '@telegram-apps/sdk'
+import { useTheme } from '@/components/theme-provider'
 
 const schema = z.object({
   username: z.string().min(1, 'login.fieldRequired'),
@@ -28,6 +29,7 @@ export const Login: FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const location = useLocation()
+  const { resolvedTheme } = useTheme()
   const {
     register,
     formState: { errors },
@@ -182,6 +184,11 @@ export const Login: FC = () => {
         <div className="w-full justify-center flex items-center">
           <div className="w-full max-w-[340px] mt-6">
             <div className="flex flex-col items-center gap-2">
+              <img 
+                src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
+                alt="PasarGuard Logo" 
+                className="w-20 h-20 object-contain"
+              />
               <span className="text-2xl font-semibold">{t('login.loginYourAccount')}</span>
               <span className="text-gray-600 dark:text-gray-400">{t('login.welcomeBack')}</span>
             </div>

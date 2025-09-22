@@ -14,7 +14,7 @@ import { TrendingUp, Upload, Download, Calendar } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import { TooltipProps } from 'recharts'
 import { useGetNodes, NodeResponse } from '@/service/api'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/components/theme-provider'
 import TimeSelector from './TimeSelector'
 
 
@@ -170,7 +170,7 @@ export function AllNodesStackedBarChart() {
   }
 
   // Function to generate distinct colors based on theme
-  const generateDistinctColor = (index: number, totalNodes: number, isDark: boolean): string => {
+  const generateDistinctColor = (index: number, _totalNodes: number, isDark: boolean): string => {
     // Get current theme colors for reference
     const root = document.documentElement
     const computedStyle = getComputedStyle(root)
