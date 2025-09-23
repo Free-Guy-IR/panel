@@ -607,8 +607,10 @@
   "hostsDialog.fragment.recordFragment": "Запись фрагмента",
   "hostsDialog.noise": {
     "title": "Шум",
+    "type": "Тип",
     "addNoise": "Добавить шум",
     "removeNoise": "Удалить шум",
+    "noNoiseSettings": "Настройки шума не настроены",
     "packet": "Пакет",
     "packetPlaceholder": "Введите значение пакета (например: rand:10-20)",
     "delay": "Задержка",

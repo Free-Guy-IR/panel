@@ -15,11 +15,12 @@ import { getHosts, getInbounds, UserStatus } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
 import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo, useCallback, memo } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { HostFormValues } from '../hosts/Hosts'
+import { LoaderButton } from '../ui/loader-button'
 
 interface HostModalProps {
   isDialogOpen: boolean
@@ -38,13 +39,134 @@ const statusOptions = [
   { value: UserStatus.on_hold, label: 'hostsDialog.status.onHold' },
 ] as const
 
+// Memoized Noise Item Component for optimal performance
+interface NoiseItemProps {
+  index: number
+  form: UseFormReturn<HostFormValues>
+  onRemove: (index: number) => void
+  t: (key: string) => string
+}
+
+const NoiseItem = memo<NoiseItemProps>(({ index, form, onRemove, t }) => {
+  const handleRemove = useCallback(() => {
+    onRemove(index)
+  }, [index, onRemove])
+
+  return (
+    <div className="grid grid-cols-[minmax(100px,120px),1fr,1fr,auto] gap-2">
+      <FormField
+        control={form.control}
+        name={`noise_settings.xray.${index}.type`}
+        render={({ field }) => (
+          <FormItem>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder={t('hostsDialog.noise.type')} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="rand">rand</SelectItem>
+                <SelectItem value="str">str</SelectItem>
+                <SelectItem value="base64">base64</SelectItem>
+                <SelectItem value="hex">hex</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name={`noise_settings.xray.${index}.packet`}
+        render={({ field }) => (
+          <FormItem>
+            <FormControl>
+              <Input 
+                placeholder={t('hostsDialog.noise.packetPlaceholder')} 
+                {...field} 
+                value={field.value || ''} 
+                className="h-8"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name={`noise_settings.xray.${index}.delay`}
+        render={({ field }) => (
+          <FormItem>
+            <FormControl>
+              <Input
+                placeholder={t('hostsDialog.noise.delayPlaceholder')}
+                {...field}
+                value={field.value || ''}
+                className="h-8"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0 border-red-500/20 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+        onClick={handleRemove}
+        title={t('hostsDialog.noise.removeNoise')}
+      >
+        <Trash2 className="h-4 w-4 text-red-500" />
+      </Button>
+    </div>
+  )
+})
+
+NoiseItem.displayName = 'NoiseItem'
+
 const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSubmit, editingHost, form }) => {
   const [openSection, setOpenSection] = useState<string | undefined>(undefined)
   const [isTransportOpen, setIsTransportOpen] = useState(false)
   const { t } = useTranslation()
   const dir = useDirDetection()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [_isSubmitting, setIsSubmitting] = useState(false)
   const { copy } = useClipboard()
+
+  // Optimized noise settings handlers with useCallback for performance
+  const addNoiseSetting = useCallback(() => {
+    const currentNoiseSettings = form.getValues('noise_settings.xray') || []
+    form.setValue(
+      'noise_settings.xray',
+      [
+        ...currentNoiseSettings,
+        {
+          type: 'rand',
+          packet: '',
+          delay: '',
+        },
+      ],
+      {
+        shouldDirty: true,
+        shouldTouch: true,
+      }
+    )
+  }, [form])
+
+  const removeNoiseSetting = useCallback((index: number) => {
+    const currentNoiseSettings = form.getValues('noise_settings.xray') || []
+    const newNoiseSettings = currentNoiseSettings.filter((_, i) => i !== index)
+    form.setValue('noise_settings.xray', newNoiseSettings, {
+      shouldDirty: true,
+      shouldTouch: true,
+    })
+  }, [form])
+
+  // Memoized noise settings array to prevent unnecessary re-renders
+  const noiseSettings = useMemo(() => {
+    return form.getValues('noise_settings.xray') || []
+  }, [form.watch('noise_settings.xray')])
 
   const cleanPayload = (data: any): any => {
     // Helper function to check if an object has any non-empty values
@@ -123,8 +245,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
       // If SingBox fragment is disabled, clear related fields
       if (!payload.fragment_settings?.sing_box?.fragment && payload.fragment_settings?.sing_box) {
         const singBox = payload.fragment_settings.sing_box!
-        ;(singBox as any).fragment_fallback_delay = undefined
-        ;(singBox as any).record_fragment = undefined
+          ; (singBox as any).fragment_fallback_delay = undefined
+          ; (singBox as any).record_fragment = undefined
       }
 
       // Convert fragment_fallback_delay number to ms format
@@ -600,7 +722,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             </Popover>
                           </div>
                           <FormControl>
-                            <Input placeholder="example.com" isError={hasError} {...field} />
+                            <Input
+                              placeholder="example.com,example2.com"
+                              isError={hasError}
+                              value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                field.onChange(value ? value.split(',').map(s => s.trim()) : [])
+                              }}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -681,7 +811,14 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 </Popover>
                               </div>
                               <FormControl>
-                                <Input placeholder="Host (e.g. example.com)" {...field} />
+                                <Input
+                                  placeholder="Host (e.g. example.com,example2.com)"
+                                  value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    field.onChange(value ? value.split(',').map(s => s.trim()) : [])
+                                  }}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -741,7 +878,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             className="h-6 w-6"
                             onClick={() => {
                               const currentHeaders = form.getValues('http_headers') || {}
-                              const newKey = `header_${Object.keys(currentHeaders).length}`
+                              const newKey = `header_${Object.keys(currentHeaders).length + 1}`
                               form.setValue(
                                 'http_headers',
                                 {
@@ -761,7 +898,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                         </div>
                         <div className="space-y-2">
                           {Object.entries(form.watch('http_headers') || {}).map(([key, value]) => (
-                            <div key={key} className="grid grid-cols-[1fr,1fr,auto] gap-2">
+                            <div key={key} className="grid grid-cols-[minmax(120px,1fr),1fr,auto] gap-2">
                               <Input
                                 placeholder={t('hostsDialog.headersName')}
                                 defaultValue={key}
@@ -780,12 +917,11 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                               />
                               <Input
                                 placeholder={t('hostsDialog.headersValue')}
-                                value={Array.isArray(value) ? value.join(', ') : ''}
+                                value={value || ''}
                                 onChange={e => {
-                                  const tcpHeaderValues = e.target.value.split(',').map(v => v.trim())
-                                  const tcpHeaders = { ...form.getValues('transport_settings.tcp_settings.request.headers') }
-                                  tcpHeaders[key] = tcpHeaderValues
-                                  form.setValue('transport_settings.tcp_settings.request.headers', tcpHeaders, {
+                                  const currentHeaders = { ...form.getValues('http_headers') }
+                                  currentHeaders[key] = e.target.value
+                                  form.setValue('http_headers', currentHeaders, {
                                     shouldDirty: true,
                                     shouldTouch: true,
                                   })
@@ -795,7 +931,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 border-red-500"
+                                className="h-8 w-8 shrink-0 border-red-500/20 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
                                 onClick={() => {
                                   const currentHeaders = { ...form.getValues('http_headers') }
                                   delete currentHeaders[key]
@@ -880,7 +1016,14 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 </Popover>
                               </div>
                               <FormControl>
-                                <Input placeholder={t('hostsDialog.sniPlaceholder')} {...field} />
+                                <Input
+                                  placeholder={t('hostsDialog.sniPlaceholder')}
+                                  value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    field.onChange(value ? value.split(',').map(s => s.trim()) : [])
+                                  }}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -895,22 +1038,16 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>{t('hostsDialog.alpn')}</FormLabel>
-                              <Select onValueChange={value => field.onChange(value === 'default' ? '' : value)} value={field.value || 'default'}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={t('hostsDialog.alpn')} />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="default">{t('default')}</SelectItem>
-                                  <SelectItem value="h3">h3</SelectItem>
-                                  <SelectItem value="h2">h2</SelectItem>
-                                  <SelectItem value="http/1.1">http/1.1</SelectItem>
-                                  <SelectItem value="h3,h2,http/1.1">h3,h2,http/1.1</SelectItem>
-                                  <SelectItem value="h3,h2">h3,h2</SelectItem>
-                                  <SelectItem value="h2,http/1.1">h2,http/1.1</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <FormControl>
+                                <Input
+                                  placeholder="h2,http/1.1"
+                                  value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    field.onChange(value ? value.split(',').map(s => s.trim()) : [])
+                                  }}
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -1599,7 +1736,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
                                   {/* Render request headers */}
                                   {Object.entries(form.watch('transport_settings.tcp_settings.request.headers') || {}).map(([key, values]) => (
-                                    <div key={key} className="grid grid-cols-[1fr,2fr,auto] gap-2">
+                                    <div key={key} className="grid grid-cols-[minmax(120px,1fr),1fr,auto] gap-2">
                                       <Input
                                         placeholder={t('hostsDialog.tcp.headerName')}
                                         defaultValue={key}
@@ -1633,6 +1770,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                         type="button"
                                         variant="ghost"
                                         size="icon"
+                                        className="h-8 w-8 shrink-0 border-red-500/20 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
                                         onClick={() => {
                                           const currentHeaders = { ...form.getValues('transport_settings.tcp_settings.request.headers') }
                                           delete currentHeaders[key]
@@ -1818,7 +1956,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
                                   {/* Render response headers */}
                                   {Object.entries(form.watch('transport_settings.tcp_settings.response.headers') || {}).map(([key, values]) => (
-                                    <div key={key} className="grid grid-cols-[1fr,2fr,auto] gap-2">
+                                    <div key={key} className="grid grid-cols-[minmax(120px,1fr),1fr,auto] gap-2">
                                       <Input
                                         placeholder={t('hostsDialog.tcp.headerName')}
                                         defaultValue={key}
@@ -1851,6 +1989,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                         type="button"
                                         variant="ghost"
                                         size="icon"
+                                        className="h-8 w-8 shrink-0 border-red-500/20 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
                                         onClick={() => {
                                           const currentHeaders = { ...form.getValues('transport_settings.tcp_settings.response.headers') }
                                           delete currentHeaders[key]
@@ -1974,7 +2113,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                           </div>
 
                           {/* Noise Settings */}
-                          <div className="space-y-4">
+                          <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <h4 className="text-sm font-medium">{t('hostsDialog.noise.title')}</h4>
@@ -2001,123 +2140,27 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 variant="outline"
                                 size="icon"
                                 className="h-6 w-6"
-                                onClick={() => {
-                                  const currentNoiseSettings = form.getValues('noise_settings.xray') || []
-                                  form.setValue(
-                                    'noise_settings.xray',
-                                    [
-                                      ...currentNoiseSettings,
-                                      {
-                                        type: 'rand',
-                                        packet: '',
-                                        delay: '',
-                                        apply_to: 'ip',
-                                      },
-                                    ],
-                                    {
-                                      shouldDirty: true,
-                                      shouldTouch: true,
-                                    },
-                                  )
-                                }}
+                                onClick={addNoiseSetting}
                                 title={t('hostsDialog.noise.addNoise')}
                               >
                                 <Plus className="h-4 w-4" />
                               </Button>
                             </div>
                             <div className="space-y-2">
-                              {(form.watch('noise_settings.xray') || []).map((_, index) => (
-                                <div key={index} className="grid grid-cols-[1fr,1fr,1fr,1fr,auto] gap-2">
-                                  <FormField
-                                    control={form.control}
-                                    name={`noise_settings.xray.${index}.type`}
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>{t('hostsDialog.noise.type')}</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                          <FormControl>
-                                            <SelectTrigger>
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                          </FormControl>
-                                          <SelectContent>
-                                            <SelectItem value="rand">rand</SelectItem>
-                                            <SelectItem value="str">str</SelectItem>
-                                            <SelectItem value="base64">base64</SelectItem>
-                                            <SelectItem value="hex">hex</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                      </FormItem>
-                                    )}
-                                  />
-                                  <FormField
-                                    control={form.control}
-                                    name={`noise_settings.xray.${index}.packet`}
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>{t('hostsDialog.noise.packet')}</FormLabel>
-                                        <FormControl>
-                                          <Input placeholder={t('hostsDialog.noise.packetPlaceholder')} {...field} value={field.value || ''} />
-                                        </FormControl>
-                                        <FormMessage />
-                                      </FormItem>
-                                    )}
-                                  />
-                                  <FormField
-                                    control={form.control}
-                                    name={`noise_settings.xray.${index}.delay`}
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>{t('hostsDialog.noise.delay')}</FormLabel>
-                                        <FormControl>
-                                          <Input placeholder={t('hostsDialog.noise.delayPlaceholder')} {...field} value={field.value || ''} />
-                                        </FormControl>
-                                        <FormMessage />
-                                      </FormItem>
-                                    )}
-                                  />
-                                  <FormField
-                                    control={form.control}
-                                    name={`noise_settings.xray.${index}.apply_to`}
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>{t('hostsDialog.noise.applyTo')}</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                          <FormControl>
-                                            <SelectTrigger>
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                          </FormControl>
-                                          <SelectContent>
-                                            <SelectItem value="ip">IP</SelectItem>
-                                            <SelectItem value="ipv4">IPv4</SelectItem>
-                                            <SelectItem value="ipv6">IPv6</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                      </FormItem>
-                                    )}
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 border-red-500"
-                                    onClick={() => {
-                                      const currentNoiseSettings = form.getValues('noise_settings.xray') || []
-                                      const newNoiseSettings = currentNoiseSettings.filter((_, i) => i !== index)
-                                      form.setValue('noise_settings.xray', newNoiseSettings, {
-                                        shouldDirty: true,
-                                        shouldTouch: true,
-                                      })
-                                    }}
-                                    title={t('hostsDialog.noise.removeNoise')}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                </div>
+                              {noiseSettings.map((_, index) => (
+                                <NoiseItem
+                                  key={index}
+                                  index={index}
+                                  form={form}
+                                  onRemove={removeNoiseSetting}
+                                  t={t}
+                                />
                               ))}
+                              {noiseSettings.length === 0 && (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                  {t('hostsDialog.noise.noNoiseSettings')}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2154,10 +2197,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                       <FormItem>
                                         <FormLabel>{t('hostsDialog.fragment.fallbackDelay')}</FormLabel>
                                         <FormControl>
-                                          <Input 
-                                            placeholder="e.g. 100" 
-                                            {...field} 
-                                            value={field.value ? field.value.replace('ms', '') : ''} 
+                                          <Input
+                                            placeholder="e.g. 100"
+                                            {...field}
+                                            value={field.value ? field.value.replace('ms', '') : ''}
                                             onChange={(e) => {
                                               const value = e.target.value
                                               field.onChange(value)
@@ -2654,15 +2697,21 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
               <Button type="button" variant="outline" onClick={() => handleModalOpenChange(false)}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {editingHost ? t('edit') : t('create')}
-              </Button>
+               <LoaderButton
+                 type="submit"
+                 disabled={form.formState.isSubmitting}
+                 isLoading={form.formState.isSubmitting}
+                 loadingText={editingHost ? t('modifying') : t('creating')}
+                 size="sm"
+               >
+                {editingHost ? t('modify') : t('create')}
+              </LoaderButton>
             </div>
           </form>
         </Form>
       </DialogContent>
     </Dialog>
-                          )
+  )
 }
 
 export default HostModal

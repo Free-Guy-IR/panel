@@ -55,22 +55,23 @@ interface MuxSettings {
 export interface HostFormValues {
   id?: number
   remark: string
-  address: string
+  address: string[]
   port?: number
   inbound_tag: string
   status: ('active' | 'disabled' | 'limited' | 'expired' | 'on_hold')[]
-  host?: string
-  sni?: string
+  host?: string[]
+  sni?: string[]
   path?: string
   http_headers?: Record<string, string>
   security: 'none' | 'tls' | 'inbound_default'
-  alpn?: string
+  alpn?: string[]
   fingerprint?: string
   allowinsecure: boolean
   is_disabled: boolean
   random_user_agent: boolean
   use_sni_as_host: boolean
   priority: number
+  ech_config_list?: string
   fragment_settings?: {
     xray?: {
       packets?: string
@@ -78,9 +79,9 @@ export interface HostFormValues {
       interval?: string
     }
     sing_box?: {
-      fragment: boolean
-      fragment_fallback_delay: string
-      record_fragment: boolean
+      fragment?: boolean
+      fragment_fallback_delay?: string
+      record_fragment?: boolean
     }
   }
   noise_settings?: {
@@ -292,16 +293,16 @@ const transportSettingsSchema = z
 
 export const HostFormSchema = z.object({
   remark: z.string().min(1, 'Remark is required'),
-  address: z.string().min(1, 'Address is required'),
+  address: z.array(z.string()).min(1, 'At least one address is required'),
   port: z.number().min(1, 'Port must be at least 1').max(65535, 'Port must be at most 65535').optional().or(z.literal('')),
   inbound_tag: z.string().min(1, 'Inbound tag is required'),
   status: z.array(z.string()).default([]),
-  host: z.string().default(''),
-  sni: z.string().default(''),
+  host: z.array(z.string()).default([]),
+  sni: z.array(z.string()).default([]),
   path: z.string().default(''),
   http_headers: z.record(z.string()).default({}),
   security: z.enum(['inbound_default', 'tls', 'none']).default('inbound_default'),
-  alpn: z.string().default(''),
+  alpn: z.array(z.string()).default([]),
   fingerprint: z.string().default(''),
   allowinsecure: z.boolean().default(false),
   random_user_agent: z.boolean().default(false),
@@ -339,8 +340,10 @@ export const HostFormSchema = z.object({
             packet: z.string().optional(),
             delay: z
               .string()
-              .regex(/^\d{1,16}(-\d{1,16})?$/)
-              .optional(),
+              .optional()
+              .refine((val) => !val || /^\d{1,16}(-\d{1,16})?$/.test(val), {
+                message: "Delay must be in format like '10-20' or '10'"
+              }),
             apply_to: z.enum(['ip', 'ipv4', 'ipv6']).optional(),
           }),
         )
@@ -398,22 +401,23 @@ export const HostFormSchema = z.object({
 // Define initial default values separately
 const initialDefaultValues: HostFormValues = {
   remark: '',
-  address: '',
+  address: [],
   port: undefined,
   inbound_tag: '',
   status: [],
-  host: '',
-  sni: '',
+  host: [],
+  sni: [],
   path: '',
   http_headers: {},
   security: 'inbound_default',
-  alpn: '',
+  alpn: [],
   fingerprint: '',
   allowinsecure: false,
   is_disabled: false,
   random_user_agent: false,
   use_sni_as_host: false,
   priority: 0,
+  ech_config_list: undefined,
   fragment_settings: undefined,
 }
 
@@ -456,16 +460,16 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
   const handleEdit = (host: BaseHost) => {
     const formData: HostFormValues = {
       remark: host.remark || '',
-      address: host.address || '',
+      address: Array.isArray(host.address) ? host.address : host.address ? [host.address] : [],
       port: host.port ? Number(host.port) : undefined,
       inbound_tag: host.inbound_tag || '',
       status: host.status || [],
-      host: host.host || '',
-      sni: host.sni || '',
+      host: Array.isArray(host.host) ? host.host : host.host ? [host.host] : [],
+      sni: Array.isArray(host.sni) ? host.sni : host.sni ? [host.sni] : [],
       path: host.path || '',
       http_headers: host.http_headers || {},
       security: host.security || 'inbound_default',
-      alpn: host.alpn || '',
+      alpn: Array.isArray(host.alpn) ? host.alpn : host.alpn ? [host.alpn] : [],
       fingerprint: host.fingerprint || '',
       allowinsecure: host.allowinsecure || false,
       random_user_agent: host.random_user_agent || false,
@@ -485,7 +489,6 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
               type: noise.type,
               packet: noise.packet,
               delay: noise.delay,
-              apply_to: noise.apply_to ?? undefined,
             })) ?? undefined,
           }
         : undefined,
@@ -622,9 +625,11 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
 
           // Update all hosts after this one to have higher priorities
           const hostsToUpdate = sortedHosts.slice(hostIndex + 1).map(h => ({
-            ...h,
+            id: h.id,
+            remark: h.remark,
             priority: (h.priority ?? 0) + 1,
-          }))
+            inbound_tag: h.inbound_tag,
+          } as CreateHost))
 
           if (hostsToUpdate.length > 0) {
             // Update priorities in batch
@@ -635,13 +640,28 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
 
       // Create duplicate with new priority and slightly modified name
       const newHost: CreateHost = {
-        ...host,
-        id: undefined, // Remove ID so a new one is generated
         remark: `${host.remark || ''} (copy)`,
-        priority: newPriority,
-        // Special handling for enum values
-        alpn: host.alpn === '' ? undefined : host.alpn,
+        address: host.address || [],
+        port: host.port,
+        inbound_tag: host.inbound_tag || '',
+        status: host.status || [],
+        host: host.host || [],
+        sni: host.sni || [],
+        path: host.path || '',
+        security: host.security || 'inbound_default',
+        alpn: (!host.alpn || host.alpn.length === 0) ? undefined : host.alpn,
         fingerprint: host.fingerprint === '' ? undefined : host.fingerprint,
+        allowinsecure: host.allowinsecure || false,
+        is_disabled: host.is_disabled || false,
+        random_user_agent: host.random_user_agent || false,
+        use_sni_as_host: host.use_sni_as_host || false,
+        priority: newPriority,
+        ech_config_list: host.ech_config_list,
+        fragment_settings: host.fragment_settings,
+        noise_settings: host.noise_settings,
+        mux_settings: host.mux_settings,
+        transport_settings: host.transport_settings as any, // Type cast needed due to Output/Input mismatch
+        http_headers: host.http_headers || {},
       }
 
       await createHost(newHost)
@@ -782,7 +802,33 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
     const updateHosts = async () => {
       if (debouncedHosts && debouncedHosts.length > 0) {
         try {
-          await modifyHosts(debouncedHosts)
+          // Convert BaseHost to CreateHost with all fields for complete data preservation
+          const hostsToUpdate = debouncedHosts.map(host => ({
+            id: host.id,
+            remark: host.remark,
+            address: host.address,
+            inbound_tag: host.inbound_tag,
+            port: host.port,
+            sni: host.sni,
+            host: host.host,
+            path: host.path,
+            security: host.security,
+            alpn: host.alpn,
+            fingerprint: host.fingerprint,
+            allowinsecure: host.allowinsecure,
+            is_disabled: host.is_disabled,
+            http_headers: host.http_headers,
+            transport_settings: host.transport_settings,
+            mux_settings: host.mux_settings,
+            fragment_settings: host.fragment_settings,
+            noise_settings: host.noise_settings,
+            random_user_agent: host.random_user_agent,
+            use_sni_as_host: host.use_sni_as_host,
+            priority: host.priority,
+            ech_config_list: host.ech_config_list,
+            status: host.status,
+          } as CreateHost))
+          await modifyHosts(hostsToUpdate)
           // Refresh data after modifying hosts order
           refreshHostsData()
         } catch (error) {

@@ -161,8 +161,6 @@ export interface XrayNoiseSettings {
   packet: string
   /** @pattern ^\d{1,16}(-\d{1,16})?$ */
   delay: string
-  /** @pattern ip|ipv4|ipv6 */
-  apply_to?: string
 }
 
 export type XrayMuxSettingsOutputXudpConcurrency = number | null
@@ -213,7 +211,7 @@ export const XTLSFlows = {
   'xtls-rprx-vision': 'xtls-rprx-vision',
 } as const
 
-export type XMuxSettingsOutputHKeepAlivePeriod = number | null
+export type XMuxSettingsOutputHKeepAlivePeriod = string | null
 
 export type XMuxSettingsOutputHMaxRequestTimes = string | null
 
@@ -234,7 +232,7 @@ export interface XMuxSettingsOutput {
   hKeepAlivePeriod?: XMuxSettingsOutputHKeepAlivePeriod
 }
 
-export type XMuxSettingsInputHKeepAlivePeriod = number | null
+export type XMuxSettingsInputHKeepAlivePeriod = string | number | null
 
 export type XMuxSettingsInputHMaxRequestTimes = string | number | null
 
@@ -267,16 +265,6 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
-
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -298,6 +286,16 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
+
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -616,19 +614,6 @@ export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
 
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
   expire?: UserModifyExpire
@@ -643,6 +628,19 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -756,7 +754,6 @@ export interface Telegram {
   webhook_url?: TelegramWebhookUrl
   webhook_secret?: TelegramWebhookSecret
   proxy_url?: TelegramProxyUrl
-  method?: RunMethod
   mini_app_login?: boolean
   mini_app_web_url?: TelegramMiniAppWebUrl
   for_admins_only?: boolean
@@ -915,11 +912,6 @@ export interface ShadowsocksSettings {
   method?: ShadowsocksMethods
 }
 
-export interface General {
-  default_flow?: XTLSFlows
-  default_method?: ShadowsocksMethods
-}
-
 export type SettingsSchemaOutputGeneral = General | null
 
 export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
@@ -967,14 +959,6 @@ export interface SettingsSchemaInput {
   subscription?: SettingsSchemaInputSubscription
   general?: SettingsSchemaInputGeneral
 }
-
-export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const RunMethod = {
-  webhook: 'webhook',
-  'long-polling': 'long-polling',
-} as const
 
 export interface RemoveUsersResponse {
   users: string[]
@@ -1027,13 +1011,9 @@ export type ProxyHostALPN = (typeof ProxyHostALPN)[keyof typeof ProxyHostALPN]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ProxyHostALPN = {
-  '': '',
-  h3: 'h3',
-  h2: 'h2',
   'http/11': 'http/1.1',
-  'h3,h2,http/11': 'h3,h2,http/1.1',
-  'h3,h2': 'h3,h2',
-  'h2,http/11': 'h2,http/1.1',
+  h2: 'h2',
+  h3: 'h3',
 } as const
 
 export type Period = (typeof Period)[keyof typeof Period]
@@ -1402,6 +1382,11 @@ export interface GroupCreate {
   is_disabled?: boolean
 }
 
+export interface General {
+  default_flow?: XTLSFlows
+  default_method?: ShadowsocksMethods
+}
+
 export type GRPCSettingsInitialWindowsSize = number | null
 
 export type GRPCSettingsPermitWithoutStream = number | null
@@ -1462,6 +1447,8 @@ export interface CreateUserFromTemplate {
 
 export type CreateHostEchConfigList = string | null
 
+export type CreateHostStatus = UserStatus[] | null
+
 export type CreateHostNoiseSettings = NoiseSettings | null
 
 export type CreateHostFragmentSettings = FragmentSettings | null
@@ -1476,11 +1463,13 @@ export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
 
 export type CreateHostAllowinsecure = boolean | null
 
+export type CreateHostAlpn = ProxyHostALPN[] | null
+
 export type CreateHostPath = string | null
 
-export type CreateHostHost = string | null
+export type CreateHostHost = string[] | null
 
-export type CreateHostSni = string | null
+export type CreateHostSni = string[] | null
 
 export type CreateHostPort = number | null
 
@@ -1491,14 +1480,14 @@ export type CreateHostId = number | null
 export interface CreateHost {
   id?: CreateHostId
   remark: string
-  address: string
+  address?: string[]
   inbound_tag?: CreateHostInboundTag
   port?: CreateHostPort
   sni?: CreateHostSni
   host?: CreateHostHost
   path?: CreateHostPath
   security?: ProxyHostSecurity
-  alpn?: ProxyHostALPN
+  alpn?: CreateHostAlpn
   fingerprint?: ProxyHostFingerprint
   allowinsecure?: CreateHostAllowinsecure
   is_disabled?: boolean
@@ -1510,7 +1499,7 @@ export interface CreateHost {
   random_user_agent?: boolean
   use_sni_as_host?: boolean
   priority: number
-  status?: UserStatus[]
+  status?: CreateHostStatus
   ech_config_list?: CreateHostEchConfigList
 }
 
@@ -1519,10 +1508,8 @@ export type CoreResponseConfig = { [key: string]: unknown }
 export interface CoreResponse {
   name: string
   config: CoreResponseConfig
-  /** @maxLength 2048 */
-  exclude_inbound_tags: string
-  /** @maxLength 2048 */
-  fallbacks_inbound_tags: string
+  exclude_inbound_tags: string[]
+  fallbacks_inbound_tags: string[]
   id: number
   created_at: string
 }
@@ -1532,9 +1519,9 @@ export interface CoreResponseList {
   cores?: CoreResponse[]
 }
 
-export type CoreCreateFallbacksInboundTags = string | null
+export type CoreCreateFallbacksInboundTags = unknown[] | null
 
-export type CoreCreateExcludeInboundTags = string | null
+export type CoreCreateExcludeInboundTags = unknown[] | null
 
 export type CoreCreateConfig = { [key: string]: unknown }
 
@@ -1635,6 +1622,8 @@ export interface BodyAdminTokenApiAdminTokenPost {
 
 export type BaseHostEchConfigList = string | null
 
+export type BaseHostStatus = UserStatus[] | null
+
 export type BaseHostNoiseSettings = NoiseSettings | null
 
 export type BaseHostFragmentSettings = FragmentSettings | null
@@ -1649,11 +1638,13 @@ export type BaseHostHttpHeaders = BaseHostHttpHeadersAnyOf | null
 
 export type BaseHostAllowinsecure = boolean | null
 
+export type BaseHostAlpn = ProxyHostALPN[] | null
+
 export type BaseHostPath = string | null
 
-export type BaseHostHost = string | null
+export type BaseHostHost = string[] | null
 
-export type BaseHostSni = string | null
+export type BaseHostSni = string[] | null
 
 export type BaseHostPort = number | null
 
@@ -1664,14 +1655,14 @@ export type BaseHostId = number | null
 export interface BaseHost {
   id?: BaseHostId
   remark: string
-  address: string
+  address?: string[]
   inbound_tag?: BaseHostInboundTag
   port?: BaseHostPort
   sni?: BaseHostSni
   host?: BaseHostHost
   path?: BaseHostPath
   security?: ProxyHostSecurity
-  alpn?: ProxyHostALPN
+  alpn?: BaseHostAlpn
   fingerprint?: ProxyHostFingerprint
   allowinsecure?: BaseHostAllowinsecure
   is_disabled?: boolean
@@ -1683,7 +1674,7 @@ export interface BaseHost {
   random_user_agent?: boolean
   use_sni_as_host?: boolean
   priority: number
-  status?: UserStatus[]
+  status?: BaseHostStatus
   ech_config_list?: BaseHostEchConfigList
 }
 

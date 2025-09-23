@@ -643,8 +643,10 @@
     },
     "noise": {
       "title": "نویز",
+      "type": "نوع",
       "addNoise": "افزودن نویز",
       "removeNoise": "حذف نویز",
+      "noNoiseSettings": "هیچ تنظیمات نویزی پیکربندی نشده",
       "packet": "بسته",
       "packetPlaceholder": "مقدار پکت را وارد کنید (مثال: rand:10-20)",
       "delay": "تاخیر",

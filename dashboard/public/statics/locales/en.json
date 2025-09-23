@@ -748,8 +748,10 @@
     },
     "noise": {
       "title": "Noise",
+      "type": "Type",
       "addNoise": "Add Noise",
       "removeNoise": "Remove Noise",
+      "noNoiseSettings": "No noise settings configured",
       "packet": "Packet",
       "packetPlaceholder": "Enter packet value (e.g. rand:10-20)",
       "delay": "Delay",

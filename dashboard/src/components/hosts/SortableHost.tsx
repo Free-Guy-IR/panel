@@ -1,7 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { UniqueIdentifier } from '@dnd-kit/core'
-
 import { BaseHost, removeHost, modifyHost } from '@/service/api'
 import { Card } from '../ui/card'
 import { ChevronsLeftRightEllipsis, CloudCog, Copy, GripVertical, MoreVertical, Pencil, Power, Trash2, Settings } from 'lucide-react'
@@ -70,13 +69,12 @@ export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged 
     if (!host.id) return
 
     try {
-      // Create updated host data with toggled is_disabled status
-      const updatedHost = {
-        ...host,
+      // Include required fields for the modify operation
+      await modifyHost(host.id, {
+        remark: host.remark || '',
+        priority: host.priority || 0,
         is_disabled: !host.is_disabled,
-      }
-
-      await modifyHost(host.id, updatedHost)
+      })
 
       toast.success(
         t(host.is_disabled ? 'host.enableSuccess' : 'host.disableSuccess', {
@@ -149,7 +147,7 @@ export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged 
             <div className={cn('flex items-center gap-1', dir === 'rtl' && 'justify-start')}>
               <ChevronsLeftRightEllipsis className="h-4 w-4 text-muted-foreground" />
               <div dir="ltr" className="text-sm text-muted-foreground truncate">
-                {host.address ?? ''}:{host.port === null ? <Settings className="h-3 w-3 inline" /> : host.port}
+                {Array.isArray(host.address) ? host.address[0] || '' : host.address ?? ''}:{host.port === null ? <Settings className="h-3 w-3 inline" /> : host.port}
               </div>
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground truncate">
