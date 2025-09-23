@@ -16,8 +16,6 @@ const useDynamicErrorHandler = () => {
     return ({error, fields, form, contextKey}: DynamicErrorHandlerProps) => {
         console.error("Operation failed:", error);
         console.error("Error response:", error?.response);
-        console.log("Error data:", error?.response?._data?.detail);
-
         // Reset all previous errors
         form.clearErrors();
 

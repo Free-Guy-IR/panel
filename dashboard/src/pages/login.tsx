@@ -149,7 +149,6 @@ export const Login: FC = () => {
       }
 
       setTelegramLoading(true);
-      console.log('[Telegram MiniApp] x-telegram-authorization payload:', initDataRaw);
       $fetch('/api/admin/miniapp/token', {
         method: 'POST',
         headers: {
@@ -157,7 +156,6 @@ export const Login: FC = () => {
         },
       })
         .then((data: any) => {
-          console.log('[Telegram MiniApp] response data:', data);
           if (data && data.access_token) {
             setAuthToken(data.access_token);
             navigate('/', { replace: true });

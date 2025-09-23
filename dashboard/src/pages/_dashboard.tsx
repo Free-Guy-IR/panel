@@ -2,6 +2,7 @@ import { Footer } from '@/components/Footer'
 import { AppSidebar } from '@/components/layout/sidebar'
 import PageTransition from '@/components/PageTransition'
 import RouteGuard from '@/components/RouteGuard'
+import { TopLoadingBar } from '@/components/TopLoadingBar'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
 import { Outlet } from 'react-router'
@@ -19,6 +20,7 @@ export default function DashboardLayout() {
   return (
     <SidebarProvider>
       <RouteGuard>
+        <TopLoadingBar />
         <div className="w-full flex flex-col lg:flex-row">
           <AppSidebar />
           <div className="flex flex-col justify-between min-h-screen gap-y-4 w-full">

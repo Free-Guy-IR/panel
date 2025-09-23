@@ -269,7 +269,7 @@ export default function CoreConfigModal({
         } catch (error: any) {
             console.error('Core config operation failed:', error)
             console.error('Error response:', error?.response)
-            console.log('Error data:', error?.response?._data?.detail)
+            // Error data logging removed
 
             // Reset all previous errors first
             form.clearErrors()
