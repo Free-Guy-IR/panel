@@ -77,7 +77,7 @@ const UsersTable = () => {
     if (selectedUser) {
       const values: UseEditFormValues = {
         username: selectedUser.username,
-        status: selectedUser.status === 'active' || selectedUser.status === 'on_hold' ? selectedUser.status : 'active',
+        status: selectedUser.status === 'active' || selectedUser.status === 'on_hold' || selectedUser.status === 'disabled' ? selectedUser.status : 'active',
         data_limit: selectedUser.data_limit ? Math.round((Number(selectedUser.data_limit) / (1024 * 1024 * 1024)) * 100) / 100 : 0, // Convert bytes to GB
         expire: selectedUser.expire,
         note: selectedUser.note || '',
@@ -227,6 +227,7 @@ const UsersTable = () => {
   }
 
   const handleEdit = (user: UserResponse) => {
+    console.log(user);
     setSelectedUser(user)
     setEditModalOpen(true)
   }
