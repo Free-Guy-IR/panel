@@ -1,4 +1,4 @@
-import { ORGANIZATION_URL, REPO_URL } from '@/constants/Project'
+import { REPO_URL } from '@/constants/Project'
 import { useGetSystemStats } from '@/service/api'
 import { FC, HTMLAttributes } from 'react'
 
@@ -20,12 +20,9 @@ const FooterContent = ({ showVersion = true }: { showVersion?: boolean }) => {
 
   return (
     <p className="inline-block flex-grow text-center text-gray-500 text-xs">
+      Made with ❤️ in &nbsp;
       <a className="text-blue-400" href={REPO_URL}>
-          PasarGuard
-      </a>
-      {version}, Made with ❤️ in{' '}
-      <a className="text-blue-400" href={ORGANIZATION_URL}>
-        Gozargah
+          PasarGuard {version}
       </a>
     </p>
   )

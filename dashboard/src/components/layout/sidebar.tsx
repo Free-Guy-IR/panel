@@ -11,36 +11,37 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { getSystemStats } from '@/service/api'
 import { useTheme } from '@/components/theme-provider'
 import {
-	ArrowUpDown,
-	Bell,
-	BookOpen,
-	Calendar,
-	Cpu,
-	Database,
-	FileText,
-	GithubIcon,
-	Layers,
-	LayoutDashboardIcon,
-	LayoutTemplate,
-	LifeBuoy,
-	ListTodo,
-	Lock,
-	MessageCircle,
-	Palette,
-	PieChart,
-	RssIcon,
-	Send,
-	Settings2,
-	Share2Icon,
-	UserCog,
-	Users2,
-	Settings,
-	UsersIcon,
-	Webhook,
+  ArrowUpDown,
+  Bell,
+  BookOpen,
+  Calendar,
+  Cpu,
+  Database,
+  FileText,
+  GithubIcon,
+  Layers,
+  LayoutDashboardIcon,
+  LayoutTemplate,
+  LifeBuoy,
+  ListTodo,
+  Lock,
+  MessageCircle,
+  Palette,
+  PieChart,
+  RssIcon,
+  Send,
+  Settings2,
+  Share2Icon,
+  UserCog,
+  Users2,
+  Settings,
+  UsersIcon,
+  Webhook,
 } from 'lucide-react'
 import * as React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { cn } from '@/lib/utils'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const isRTL = useDirDetection() === 'rtl'
@@ -130,143 +131,143 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
       ...(admin?.is_sudo
         ? [
-            {
-              title: 'statistics',
-              url: '/statistics',
-              icon: PieChart,
-            },
-            {
-              title: 'hosts',
-              url: '/hosts',
-              icon: ListTodo,
-            },
-            {
-              title: 'groups',
-              url: '/groups',
-              icon: Users2,
-            },
-            {
-              title: 'admins.title',
-              url: '/admins',
-              icon: UserCog,
-            },
-            {
-              title: 'nodes.title',
-              url: '/nodes',
-              icon: Share2Icon,
-              items: [
-                {
-                  title: 'nodes.title',
-                  url: '/nodes',
-                  icon: Share2Icon,
-                },
-                {
-                  title: 'settings.cores.title',
-                  url: '/nodes/cores',
-                  icon: Cpu,
-                },
-                {
-                  title: 'nodes.logs.title',
-                  url: '/nodes/logs',
-                  icon: FileText,
-                },
-              ],
-            },
-            {
-              title: 'templates.title',
-              url: '/templates',
-              icon: LayoutTemplate,
-            },
-            {
-              title: 'bulk.title',
-              url: '/bulk',
-              icon: Layers,
-              items: [
-                {
-                  title: 'bulk.groups',
-                  url: '/bulk',
-                  icon: Users2,
-                },
-                {
-                  title: 'bulk.expireDate',
-                  url: '/bulk/expire',
-                  icon: Calendar,
-                },
-                {
-                  title: 'bulk.dataLimit',
-                  url: '/bulk/data',
-                  icon: ArrowUpDown,
-                },
-                {
-                  title: 'bulk.proxySettings',
-                  url: '/bulk/proxy',
-                  icon: Lock,
-                },
-              ],
-            },
-            {
-              title: 'settings.title',
-              url: '/settings',
-              icon: Settings2,
-              items: [
-                {
-                  title: 'settings.general.title',
-                  url: '/settings/general',
-                  icon: Settings,
-                },
-                {
-                  title: 'settings.notifications.title',
-                  url: '/settings/notifications',
-                  icon: Bell,
-                },
-                {
-                  title: 'settings.subscriptions.title',
-                  url: '/settings/subscriptions',
-                  icon: ListTodo,
-                },
-                {
-                  title: 'settings.telegram.title',
-                  url: '/settings/telegram',
-                  icon: Send,
-                },
-                {
-                  title: 'settings.discord.title',
-                  url: '/settings/discord',
-                  icon: MessageCircle,
-                },
-                {
-                  title: 'settings.webhook.title',
-                  url: '/settings/webhook',
-                  icon: Webhook,
-                },
-                {
-                  title: 'settings.cleanup.title',
-                  url: '/settings/cleanup',
-                  icon: Database,
-                },
-                {
-                  title: 'theme.title',
-                  url: '/settings/theme',
-                  icon: Palette,
-                },
-              ],
-            },
-          ]
+          {
+            title: 'statistics',
+            url: '/statistics',
+            icon: PieChart,
+          },
+          {
+            title: 'hosts',
+            url: '/hosts',
+            icon: ListTodo,
+          },
+          {
+            title: 'groups',
+            url: '/groups',
+            icon: Users2,
+          },
+          {
+            title: 'admins.title',
+            url: '/admins',
+            icon: UserCog,
+          },
+          {
+            title: 'nodes.title',
+            url: '/nodes',
+            icon: Share2Icon,
+            items: [
+              {
+                title: 'nodes.title',
+                url: '/nodes',
+                icon: Share2Icon,
+              },
+              {
+                title: 'settings.cores.title',
+                url: '/nodes/cores',
+                icon: Cpu,
+              },
+              {
+                title: 'nodes.logs.title',
+                url: '/nodes/logs',
+                icon: FileText,
+              },
+            ],
+          },
+          {
+            title: 'templates.title',
+            url: '/templates',
+            icon: LayoutTemplate,
+          },
+          {
+            title: 'bulk.title',
+            url: '/bulk',
+            icon: Layers,
+            items: [
+              {
+                title: 'bulk.groups',
+                url: '/bulk',
+                icon: Users2,
+              },
+              {
+                title: 'bulk.expireDate',
+                url: '/bulk/expire',
+                icon: Calendar,
+              },
+              {
+                title: 'bulk.dataLimit',
+                url: '/bulk/data',
+                icon: ArrowUpDown,
+              },
+              {
+                title: 'bulk.proxySettings',
+                url: '/bulk/proxy',
+                icon: Lock,
+              },
+            ],
+          },
+          {
+            title: 'settings.title',
+            url: '/settings',
+            icon: Settings2,
+            items: [
+              {
+                title: 'settings.general.title',
+                url: '/settings/general',
+                icon: Settings,
+              },
+              {
+                title: 'settings.notifications.title',
+                url: '/settings/notifications',
+                icon: Bell,
+              },
+              {
+                title: 'settings.subscriptions.title',
+                url: '/settings/subscriptions',
+                icon: ListTodo,
+              },
+              {
+                title: 'settings.telegram.title',
+                url: '/settings/telegram',
+                icon: Send,
+              },
+              {
+                title: 'settings.discord.title',
+                url: '/settings/discord',
+                icon: MessageCircle,
+              },
+              {
+                title: 'settings.webhook.title',
+                url: '/settings/webhook',
+                icon: Webhook,
+              },
+              {
+                title: 'settings.cleanup.title',
+                url: '/settings/cleanup',
+                icon: Database,
+              },
+              {
+                title: 'theme.title',
+                url: '/settings/theme',
+                icon: Palette,
+              },
+            ],
+          },
+        ]
         : [
-            // For non-sudo admins, show only theme settings
-            {
-              title: 'settings.title',
-              url: '/settings',
-              icon: Settings2,
-              items: [
-                {
-                  title: 'theme.title',
-                  url: '/settings/theme',
-                  icon: Palette,
-                },
-              ],
-            },
-          ]),
+          // For non-sudo admins, show only theme settings
+          {
+            title: 'settings.title',
+            url: '/settings',
+            icon: Settings2,
+            items: [
+              {
+                title: 'theme.title',
+                url: '/settings/theme',
+                icon: Palette,
+              },
+            ],
+          },
+        ]),
     ],
     navSecondary: [
       {
@@ -300,35 +301,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <>
-       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
-         <div className="flex items-center gap-2">
-           <img 
-             src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
-             alt="PasarGuard Logo" 
-             className="w-8 h-8 object-contain"
-           />
-           <span className="text-sm font-bold">{t('pasargaurd')}</span>
-         </div>
-         <SidebarTrigger />
-       </div>
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
+        <div className="flex items-center gap-2">
+          <img
+            src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"}
+            alt="PasarGuard Logo"
+            className="w-8 h-8 object-contain"
+          />
+          <span dir={isRTL ? 'rtl' : 'ltr'} className="text-sm font-bold">{t('pasargaurd')}</span>
+        </div>
+        <SidebarTrigger />
+      </div>
       <Sidebar variant="sidebar" {...props} className="border-sidebar-border p-0" side={isRTL ? 'right' : 'left'}>
         <SidebarRail />
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-               <SidebarMenuButton size="lg" asChild>
-                 <a href={REPO_URL} target="_blank" className="!gap-2">
-                   <img 
-                     src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
-                     alt="PasarGuard Logo" 
-                     className="w-8 h-8 object-contain flex-shrink-0"
-                   />
-                   <div className="flex flex-col">
-                     <span className="truncate text-sm font-semibold leading-tight">{t('pasargaurd')}</span>
-                     <span className="text-xs opacity-45">{version}</span>
-                   </div>
-                 </a>
-               </SidebarMenuButton>
+              <SidebarMenuButton size="lg" asChild>
+                <a href={REPO_URL} target="_blank" className="!gap-2">
+                  <img
+                    src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"}
+                    alt="PasarGuard Logo"
+                    className="w-8 h-8 object-contain flex-shrink-0"
+                  />
+                  <div className="flex flex-col">
+                    <span className={cn(isRTL ? 'text-right' : 'text-left', 'truncate text-sm font-semibold leading-tight')}>{t('pasargaurd')}</span>
+                    <span className="text-xs opacity-45">{version}</span>
+                  </div>
+                </a>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
