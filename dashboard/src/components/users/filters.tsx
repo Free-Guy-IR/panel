@@ -122,7 +122,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
           <Button 
             size="icon-md" 
             variant="ghost" 
-            className="flex items-center gap-2 border relative bg-input"
+            className="flex items-center gap-2 border relative"
             onClick={handleOpenAdvanceSearch}
           >
             <Filter className="h-4 w-4"/>
@@ -162,7 +162,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         </div>
         {/* Refresh Button */}
         <div className="flex items-center gap-2 h-full">
-          <Button size="icon-md" onClick={handleRefreshClick} variant="ghost" className="flex items-center gap-2 border bg-input"
+          <Button size="icon-md" onClick={handleRefreshClick} variant="ghost" className="flex items-center gap-2 border"
                   disabled={isRefreshing}>
             <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')}/>
           </Button>

@@ -354,6 +354,7 @@ export const HostFormSchema = z.object({
     .object({
       xray: z
         .object({
+          enable: z.boolean().optional(),
           concurrency: z.number().nullable().optional(),
           xudp_concurrency: z.number().nullable().optional(),
           xudp_proxy_443: z.enum(['reject', 'allow', 'skip']).nullable().optional(),
@@ -361,6 +362,7 @@ export const HostFormSchema = z.object({
         .optional(),
       sing_box: z
         .object({
+          enable: z.boolean().optional(),
           protocol: z.enum(['none', 'smux', 'yamux', 'h2mux']).optional(),
           max_connections: z.number().nullable().optional(),
           max_streams: z.number().nullable().optional(),
@@ -377,6 +379,7 @@ export const HostFormSchema = z.object({
         .optional(),
       clash: z
         .object({
+          enable: z.boolean().optional(),
           protocol: z.enum(['none', 'smux', 'yamux', 'h2mux']).optional(),
           max_connections: z.number().nullable().optional(),
           max_streams: z.number().nullable().optional(),
@@ -697,48 +700,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
 
   const handleSubmit = async (data: HostFormValues) => {
     try {
-      // Clean up the data before submission
-      const cleanedData = {
-        ...data,
-        fragment_settings: data.fragment_settings
-          ? {
-              xray:
-                data.fragment_settings.xray && (data.fragment_settings.xray.packets || data.fragment_settings.xray.length || data.fragment_settings.xray.interval)
-                  ? data.fragment_settings.xray
-                  : undefined,
-              sing_box:
-                data.fragment_settings.sing_box &&
-                (data.fragment_settings.sing_box.fragment || data.fragment_settings.sing_box.fragment_fallback_delay || data.fragment_settings.sing_box.record_fragment)
-                  ? data.fragment_settings.sing_box
-                  : undefined,
-            }
-          : undefined,
-        mux_settings: data.mux_settings
-          ? {
-              xray: data.mux_settings.xray
-                ? {
-                    concurrency: data.mux_settings.xray.concurrency ?? null,
-                    xudp_concurrency: data.mux_settings.xray.xudp_concurrency ?? null,
-                    xudp_proxy_443: data.mux_settings.xray.xudp_proxy_443 ?? 'reject',
-                  }
-                : undefined,
-              sing_box: data.mux_settings.sing_box && data.mux_settings.sing_box.protocol !== 'none' ? data.mux_settings.sing_box : undefined,
-              clash: data.mux_settings.clash && data.mux_settings.clash.protocol !== 'none' ? data.mux_settings.clash : undefined,
-            }
-          : undefined,
-      }
-
-      // Remove fragment_settings if it's empty
-      if (cleanedData.fragment_settings && !cleanedData.fragment_settings.xray && !cleanedData.fragment_settings.sing_box) {
-        delete cleanedData.fragment_settings
-      }
-
-      // Remove mux_settings if it's empty
-      if (cleanedData.mux_settings && !cleanedData.mux_settings.xray && !cleanedData.mux_settings.sing_box && !cleanedData.mux_settings.clash) {
-        delete cleanedData.mux_settings
-      }
-
-      const response = await onSubmit(cleanedData)
+      const response = await onSubmit(data)
       if (response.status === 200) {
         if (editingHost?.id) {
           toast.success(t('hostsDialog.editSuccess', { name: data.remark }))

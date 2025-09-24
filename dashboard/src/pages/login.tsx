@@ -46,7 +46,7 @@ export const Login: FC = () => {
     if (location.pathname !== '/login') {
       navigate('/login', { replace: true })
     }
-  }, [])
+  }, [location.pathname, navigate])
   let isTelegram = false;
   let initDataRaw = '';
   try {
@@ -215,7 +215,7 @@ export const Login: FC = () => {
           </div>
         </div>
       </div>
-      <Footer showVersion={false} />
+      <Footer />
     </div>
   )
 }

@@ -2391,7 +2391,17 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   </div>
                                   <FormControl>
                                     <div onClick={e => e.stopPropagation()}>
-                                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                                      <Switch
+                                        checked={field.value || false}
+                                        onCheckedChange={(checked) => {
+                                          field.onChange(checked)
+                                          if (checked) {
+                                            // Disable other mux settings when enabling this one
+                                            form.setValue('mux_settings.sing_box.enable', false)
+                                            form.setValue('mux_settings.clash.enable', false)
+                                          }
+                                        }}
+                                      />
                                     </div>
                                   </FormControl>
                                 </FormItem>
@@ -2470,7 +2480,17 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   </div>
                                   <FormControl>
                                     <div onClick={e => e.stopPropagation()}>
-                                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                                      <Switch
+                                        checked={field.value || false}
+                                        onCheckedChange={(checked) => {
+                                          field.onChange(checked)
+                                          if (checked) {
+                                            // Disable other mux settings when enabling this one
+                                            form.setValue('mux_settings.xray.enable', false)
+                                            form.setValue('mux_settings.clash.enable', false)
+                                          }
+                                        }}
+                                      />
                                     </div>
                                   </FormControl>
                                 </FormItem>
@@ -2631,7 +2651,17 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   </div>
                                   <FormControl>
                                     <div onClick={e => e.stopPropagation()}>
-                                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                                      <Switch
+                                        checked={field.value || false}
+                                        onCheckedChange={(checked) => {
+                                          field.onChange(checked)
+                                          if (checked) {
+                                            // Disable other mux settings when enabling this one
+                                            form.setValue('mux_settings.xray.enable', false)
+                                            form.setValue('mux_settings.sing_box.enable', false)
+                                          }
+                                        }}
+                                      />
                                     </div>
                                   </FormControl>
                                 </FormItem>
