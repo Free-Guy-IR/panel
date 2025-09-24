@@ -224,11 +224,8 @@ export default function CoreConfigModal({
                 return
             }
 
-            // Convert fallback_id array to comma-separated string
-            const fallbackTags = values.fallback_id && values.fallback_id.length > 0 ? values.fallback_id.join(',') : ''
-
-            // Convert excluded_inbound_ids array to comma-separated string
-            const excludeInboundTags = values.excluded_inbound_ids && values.excluded_inbound_ids.length > 0 ? values.excluded_inbound_ids.join(',') : ''
+            const fallbackTags = values.fallback_id || []
+            const excludeInboundTags = values.excluded_inbound_ids || []
 
             if (editingCore && editingCoreId) {
                 // Update existing core

@@ -122,7 +122,7 @@ class ClashConfiguration(BaseSubscription):
         path: str,
         headers: str = "",
         udp: bool = True,
-        alpn: str = "",
+        alpn: list | None = None,
         ais: bool = "",
         random_user_agent: bool = False,
         http_headers: dict | None = None,
@@ -164,7 +164,7 @@ class ClashConfiguration(BaseSubscription):
             else:
                 node["servername"] = sni
             if alpn:
-                node["alpn"] = alpn.split(",")
+                node["alpn"] = alpn
             if ais:
                 node["skip-cert-verify"] = ais
 
@@ -245,7 +245,7 @@ class ClashConfiguration(BaseSubscription):
             path=inbound["path"],
             headers=inbound["header_type"],
             udp=True,
-            alpn=inbound.get("alpn", ""),
+            alpn=inbound.get("alpn", None),
             ais=inbound.get("ais", False),
             random_user_agent=inbound.get("random_user_agent"),
             http_headers=inbound.get("http_headers"),
@@ -286,7 +286,7 @@ class ClashMetaConfiguration(ClashConfiguration):
         path: str,
         headers: str = "",
         udp: bool = True,
-        alpn: str = "",
+        alpn: list | None = None,
         fp: str = "",
         pbk: str = "",
         sid: str = "",
@@ -343,7 +343,7 @@ class ClashMetaConfiguration(ClashConfiguration):
             path=inbound["path"],
             headers=inbound["header_type"],
             udp=True,
-            alpn=inbound.get("alpn", ""),
+            alpn=inbound.get("alpn", None),
             fp=inbound.get("fp", ""),
             pbk=inbound.get("pbk", ""),
             sid=inbound.get("sid", ""),

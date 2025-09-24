@@ -17,7 +17,7 @@ logger = get_logger("core-operation")
 class CoreOperation(BaseOperation):
     async def create_core(self, db: AsyncSession, new_core: CoreCreate, admin: AdminDetails) -> CoreResponse:
         try:
-            core_manager.validate_core(new_core.config, new_core.fallbacks_inbound_tags, new_core.exclude_inbound_tags)
+            core_manager.validate_core(new_core.config, new_core.exclude_inbound_tags, new_core.fallbacks_inbound_tags)
             db_core = await create_core_config(db, new_core)
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
@@ -42,7 +42,7 @@ class CoreOperation(BaseOperation):
         db_core = await self.get_validated_core_config(db, core_id)
         try:
             core_manager.validate_core(
-                modified_core.config, modified_core.fallbacks_inbound_tags, modified_core.exclude_inbound_tags
+                modified_core.config, modified_core.exclude_inbound_tags, modified_core.fallbacks_inbound_tags
             )
             db_core = await modify_core_config(db, db_core, modified_core)
         except Exception as e:

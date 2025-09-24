@@ -67,6 +67,13 @@ class ListValidator:
             raise ValueError(f"you must select at least one {name}")
         return list
 
+    @staticmethod
+    def remove_duplicates_preserve_order(list_: list) -> list:
+        """
+        Remove duplicates from list while preserving order using dict.fromkeys()
+        """
+        return list(dict.fromkeys(list_))
+
 
 class PasswordValidator:
     @staticmethod
@@ -193,3 +200,23 @@ class URLValidator:
             raise ValueError(f"URL must be a valid address (e.g., https://example.com:8443/path): {value}")
 
         return value
+
+
+class StringArrayValidator:
+    @staticmethod
+    def len_check(array: dict | list | set, max: int) -> set[str] | None:
+        if array is None:
+            return None
+
+        # Ensure the input is a set for validation
+        if isinstance(array, set):
+            pass
+        elif isinstance(array, dict):
+            array = set(array.keys())
+        else:
+            array = set(array)
+
+        compiled_string = ",".join([str(v) for v in array])
+        if len(compiled_string) > max:
+            raise ValueError(f"String can't be bigger that {max} charachter")
+        return array

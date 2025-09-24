@@ -12,7 +12,7 @@ def escape_html_user(user: UserNotificationResponse, by: str) -> tuple[str, str,
 
 def escape_html_host(host: BaseHost, by: str) -> tuple[str, str, str, str]:
     """Escapes HTML special characters in host and by strings."""
-    return escape_tg_html((host.remark, host.address, host.inbound_tag, by))
+    return escape_tg_html((host.remark, host.address_str, host.inbound_tag, by))
 
 
 def escape_html_template(template: UserTemplateResponse, by: str) -> tuple[str, str, str, str]:
@@ -29,4 +29,4 @@ def escape_html_template(template: UserTemplateResponse, by: str) -> tuple[str, 
 
 def escape_html_core(core: CoreResponse, by: str) -> tuple[str, str, str, str]:
     """Escapes HTML special characters in core and by strings."""
-    return escape_tg_html((core.name, core.exclude_inbound_tags, core.fallbacks_inbound_tags, by))
+    return escape_tg_html((core.name, core.exclude_tags, core.fallback_tags, by))

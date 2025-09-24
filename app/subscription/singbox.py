@@ -43,7 +43,7 @@ class SingBoxConfiguration(BaseSubscription):
             "server_name": sni,
             "insecure": ais,
             "utls": {"enabled": bool(fp), "fingerprint": fp} if fp else None,
-            "alpn": ([alpn] if not isinstance(alpn, list) else alpn) if alpn else None,
+            "alpn": alpn if alpn else None,
             "ech": {
                 "enabled": True,
                 "config": [],
@@ -199,7 +199,7 @@ class SingBoxConfiguration(BaseSubscription):
         tls="",
         sni="",
         fp="",
-        alpn="",
+        alpn=None,
         pbk="",
         sid="",
         headers="",
@@ -231,10 +231,10 @@ class SingBoxConfiguration(BaseSubscription):
 
         if net == "h2":
             net = "http"
-            alpn = "h2"
+            alpn = ["h2"]
         elif net == "h3":
             net = "http"
-            alpn = "h3"
+            alpn = ["h3"]
         elif net in ("tcp", "raw") and headers == "http":
             net = "http"
 
@@ -293,8 +293,6 @@ class SingBoxConfiguration(BaseSubscription):
         if net in ("grpc", "gun"):
             path = get_grpc_gun(path)
 
-        alpn = inbound.get("alpn", None)
-
         remark = self._remark_validation(remark)
         self.proxy_remarks.append(remark)
 
@@ -309,7 +307,7 @@ class SingBoxConfiguration(BaseSubscription):
             sni=inbound["sni"],
             host=inbound["host"],
             path=path,
-            alpn=alpn.rsplit(sep=",") if alpn else None,
+            alpn=inbound.get("alpn", None),
             fp=inbound.get("fp", ""),
             pbk=inbound.get("pbk", ""),
             sid=inbound.get("sid", ""),

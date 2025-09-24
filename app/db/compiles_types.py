@@ -48,6 +48,29 @@ class EnumArray(TypeDecorator):
         return [self.enum_cls(v) for v in value]
 
 
+class StringArray(TypeDecorator):
+    """Custom SQLAlchemy type to handle String lists as a comma-separated string."""
+
+    impl = String
+
+    def __init__(self, length=255, **kwargs):
+        super(StringArray, self).__init__(length=length, **kwargs)
+
+    def process_bind_param(self, value, dialect):
+        """Convert list to a comma-separated string for storage."""
+        if not value:
+            return ""
+        return ",".join([str(v) for v in value])
+
+    def process_result_value(self, value, dialect):
+        """Convert stored comma-separated string back to a StringArraySet."""
+        if value is None:
+            return set()
+        if isinstance(value, str):
+            return set(v for v in value.split(",") if v)
+        return set(value)
+
+
 class DaysDiff(FunctionElement):
     type = Numeric()
     name = "days_diff"

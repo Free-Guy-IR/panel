@@ -68,19 +68,9 @@ export default function CoreSettings() {
       const coreToEdit = coresData?.cores?.find(core => core.id === numericCoreId)
 
       if (coreToEdit) {
-        const excludedInboundIds = coreToEdit.exclude_inbound_tags
-          ? coreToEdit.exclude_inbound_tags
-              .split(',')
-              .map(id => id.trim())
-              .filter(Boolean)
-          : []
+        const excludedInboundIds = coreToEdit.exclude_inbound_tags || []
 
-        const fallbackIds = coreToEdit.fallbacks_inbound_tags
-          ? coreToEdit.fallbacks_inbound_tags
-              .split(',')
-              .map(id => id.trim())
-              .filter(Boolean)
-          : []
+        const fallbackIds = coreToEdit.fallbacks_inbound_tags || []
 
         coreConfigForm.reset({
           name: coreToEdit.name,

@@ -19,11 +19,12 @@ class CoreManager:
         self._inbounds_by_tag = {}
 
     @staticmethod
-    def validate_core(config: dict, fallbacks_inbounds: str, exclude_inbounds: str):
-        fallbacks_inbound_tags = fallbacks_inbounds.split(",") if fallbacks_inbounds else []
-        exclude_inbound_tags = exclude_inbounds.split(",") if exclude_inbounds else []
-
-        return XRayConfig(config, exclude_inbound_tags, fallbacks_inbound_tags)
+    def validate_core(
+        config: dict, exclude_inbounds: set[str] | None = None, fallbacks_inbounds: set[str] | None = None
+    ):
+        exclude_inbounds = exclude_inbounds or set()
+        fallbacks_inbounds = fallbacks_inbounds or set()
+        return XRayConfig(config, exclude_inbounds.copy(), fallbacks_inbounds.copy())
 
     async def update_inbounds(self):
         async with self._lock.writer_lock:
@@ -39,7 +40,7 @@ class CoreManager:
 
     async def update_core(self, db_core_config: CoreConfig):
         backend_config = self.validate_core(
-            db_core_config.config, db_core_config.fallbacks_inbound_tags, db_core_config.exclude_inbound_tags
+            db_core_config.config, db_core_config.exclude_inbound_tags, db_core_config.fallbacks_inbound_tags
         )
 
         async with self._lock.writer_lock:

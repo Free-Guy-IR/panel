@@ -1,4 +1,5 @@
 import asyncio
+import secrets
 from datetime import datetime as dt, timedelta as td, timezone as tz
 
 from pydantic import ValidationError
@@ -45,14 +46,46 @@ from app.models.user import (
     UsersResponse,
     UserSubscriptionUpdateList,
 )
-from app.node import node_manager as node_manager
+from app.node import node_manager
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
+from app.utils.jwt import create_subscription_token
+from app.settings import subscription_settings
+from config import SUBSCRIPTION_PATH
+
 
 logger = get_logger("user-operation")
 
 
 class UserOperation(BaseOperation):
+    @staticmethod
+    async def generate_subscription_url(user: UserNotificationResponse):
+        salt = secrets.token_hex(8)
+        settings = await subscription_settings()
+        url_prefix = (
+            user.admin.sub_domain.replace("*", salt)
+            if user.admin and user.admin.sub_domain
+            else (settings.url_prefix).replace("*", salt)
+        )
+        token = await create_subscription_token(user.username)
+        return f"{url_prefix}/{SUBSCRIPTION_PATH}/{token}"
+
+    async def validate_user(self, db_user: User) -> UserNotificationResponse:
+        user = UserNotificationResponse.model_validate(db_user)
+        user.subscription_url = await self.generate_subscription_url(user)
+        return user
+
+    async def update_user(self, db_user: User) -> UserNotificationResponse:
+        user = await self.validate_user(db_user)
+
+        if db_user.status in (UserStatus.active, UserStatus.on_hold):
+            user_inbounds = await db_user.inbounds()
+            await node_manager.update_user(user, inbounds=user_inbounds)
+        else:
+            await node_manager.remove_user(user)
+
+        return user
+
     async def create_user(self, db: AsyncSession, new_user: UserCreate, admin: AdminDetails) -> UserResponse:
         if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
             await self.get_validated_user_template(db, new_user.next_plan.user_template_id)
