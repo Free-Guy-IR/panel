@@ -13,7 +13,7 @@ def _prepare_host_data(host: ProxyHost) -> dict:
     return {
         "remark": host.remark,
         "inbound_tag": host.inbound_tag,
-        "address":[v for v in host.address],
+        "address": [v for v in host.address],
         "port": host.port,
         "path": host.path or None,
         "sni": [v for v in host.sni] if host.sni else [],
