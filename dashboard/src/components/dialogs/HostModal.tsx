@@ -1,4 +1,5 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -14,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { getHosts, getInbounds, UserStatus } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
-import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2 } from 'lucide-react'
+import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2, X } from 'lucide-react'
 import { useState, useMemo, useCallback, memo } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -125,6 +126,105 @@ const NoiseItem = memo<NoiseItemProps>(({ index, form, onRemove, t }) => {
 })
 
 NoiseItem.displayName = 'NoiseItem'
+
+// Reusable ArrayInput component for type-and-enter functionality
+interface ArrayInputProps {
+  field: any
+  placeholder: string
+  label: string
+  infoContent?: React.ReactNode
+}
+
+const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoContent }) => {
+  const [inputValue, setInputValue] = useState('')
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && inputValue.trim()) {
+      e.preventDefault()
+      const currentValue = field.value || []
+      const newValue = [...currentValue, inputValue.trim()]
+      field.onChange(newValue)
+      setInputValue('')
+    }
+  }
+
+  const removeItem = (index: number) => {
+    const currentValue = field.value || []
+    const newValue = currentValue.filter((_: any, i: number) => i !== index)
+    field.onChange(newValue)
+  }
+
+  const displayValue = field.value && field.value.length > 0 
+    ? field.value.join(', ') 
+    : ''
+
+  return (
+    <FormItem>
+      <div className="flex items-center gap-2">
+        <FormLabel>{label}</FormLabel>
+        {infoContent && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
+                <Info className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
+              {infoContent}
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+      <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            className="w-full justify-between min-h-[40px] h-auto p-2 text-left"
+          >
+            <span className={displayValue ? 'text-foreground' : 'text-muted-foreground'}>
+              {displayValue || placeholder}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-1" align="start">
+          <div className="space-y-2">
+            {/* Input for adding new items */}
+            <Input
+              placeholder="Type and press Enter to add..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full"
+            />
+            
+            {/* Selected items list */}
+            {field.value && field.value.length > 0 && (
+              <div className="space-y-1">
+                {field.value.map((item: string, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 p-2 rounded-sm cursor-pointer hover:bg-accent"
+                    onClick={() => removeItem(index)}
+                  >
+                    <div className="flex items-center justify-center w-4 h-4 border rounded-sm bg-primary border-primary">
+                      <X className="h-3 w-3 text-primary-foreground" />
+                    </div>
+                    <span className="flex-1 text-sm">{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <FormMessage />
+    </FormItem>
+  )
+})
+
+ArrayInput.displayName = 'ArrayInput'
 
 const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSubmit, editingHost, form }) => {
   const [openSection, setOpenSection] = useState<string | undefined>(undefined)
@@ -561,179 +661,161 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     control={form.control}
                     name="address"
                     render={({ field }) => {
-                      const hasError = !!form.formState.errors.address
-                      return (
-                        <FormItem>
-                          <div className="flex items-center gap-2">
-                            <FormLabel>{t('hostsDialog.address')}</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
-                                  <Info className="h-4 w-4 text-muted-foreground" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
-                                <div className="space-y-1.5">
-                                  <h4 className="mb-2 text-[12px] font-medium">{t('hostsDialog.variables.title')}</h4>
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{SERVER_IP}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{SERVER_IP}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ip')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{SERVER_IPV6}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{SERVER_IPV6}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ipv6')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{USERNAME}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{USERNAME}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.username')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{DATA_USAGE}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{DATA_USAGE}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_usage')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{DATA_LEFT}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{DATA_LEFT}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_left')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{DATA_LIMIT}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{DATA_LIMIT}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_limit')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{DAYS_LEFT}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{DAYS_LEFT}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.days_left')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{EXPIRE_DATE}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{EXPIRE_DATE}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.expire_date')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{JALALI_EXPIRE_DATE}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{JALALI_EXPIRE_DATE}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.jalali_expire_date')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{TIME_LEFT}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{TIME_LEFT}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.time_left')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{STATUS_EMOJI}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{STATUS_EMOJI}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.status_emoji')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{PROTOCOL}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{PROTOCOL}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.protocol')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{TRANSPORT}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{TRANSPORT}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.transport')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <code
-                                        className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-                                        onClick={() => handleCopy('{ADMIN_USERNAME}')}
-                                        title={t('copy')}
-                                      >
-                                        {'{ADMIN_USERNAME}'}
-                                      </code>
-                                      <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.admin_username')}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
+                      const infoContent = (
+                        <div className="space-y-1.5">
+                          <h4 className="mb-2 text-[12px] font-medium">{t('hostsDialog.variables.title')}</h4>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{SERVER_IP}')}
+                                title={t('copy')}
+                              >
+                                {'{SERVER_IP}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ip')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{SERVER_IPV6}')}
+                                title={t('copy')}
+                              >
+                                {'{SERVER_IPV6}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.server_ipv6')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{USERNAME}')}
+                                title={t('copy')}
+                              >
+                                {'{USERNAME}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.username')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{DATA_USAGE}')}
+                                title={t('copy')}
+                              >
+                                {'{DATA_USAGE}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_usage')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{DATA_LEFT}')}
+                                title={t('copy')}
+                              >
+                                {'{DATA_LEFT}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_left')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{DATA_LIMIT}')}
+                                title={t('copy')}
+                              >
+                                {'{DATA_LIMIT}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.data_limit')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{DAYS_LEFT}')}
+                                title={t('copy')}
+                              >
+                                {'{DAYS_LEFT}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.days_left')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{EXPIRE_DATE}')}
+                                title={t('copy')}
+                              >
+                                {'{EXPIRE_DATE}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.expire_date')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{JALALI_EXPIRE_DATE}')}
+                                title={t('copy')}
+                              >
+                                {'{JALALI_EXPIRE_DATE}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.jalali_expire_date')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{TIME_LEFT}')}
+                                title={t('copy')}
+                              >
+                                {'{TIME_LEFT}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.time_left')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{STATUS_EMOJI}')}
+                                title={t('copy')}
+                              >
+                                {'{STATUS_EMOJI}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.status_emoji')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{PROTOCOL}')}
+                                title={t('copy')}
+                              >
+                                {'{PROTOCOL}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.protocol')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{TRANSPORT}')}
+                                title={t('copy')}
+                              >
+                                {'{TRANSPORT}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.transport')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <code
+                                className="cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
+                                onClick={() => handleCopy('{ADMIN_USERNAME}')}
+                                title={t('copy')}
+                              >
+                                {'{ADMIN_USERNAME}'}
+                              </code>
+                              <span className="text-[11px] text-muted-foreground">{t('hostsDialog.variables.admin_username')}</span>
+                            </div>
                           </div>
-                          <FormControl>
-                            <Input
-                              placeholder="example.com,example2.com"
-                              isError={hasError}
-                              value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
-                              onChange={(e) => {
-                                const value = e.target.value
-                                field.onChange(value ? value.split(',').map(s => s.trim()) : [])
-                              }}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                        </div>
+                      )
+                      
+                      return (
+                        <ArrayInput
+                          field={field}
+                          placeholder="example.com"
+                          label={t('hostsDialog.address')}
+                          infoContent={infoContent}
+                        />
                       )
                     }}
                   />
@@ -791,38 +873,24 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                         <FormField
                           control={form.control}
                           name="host"
-                          render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center gap-2">
-                                <FormLabel>{t('hostsDialog.host')}</FormLabel>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
-                                      <Info className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
-                                    <div className="space-y-1.5">
-                                      <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.info')}</p>
-                                      <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.multiHost')}</p>
-                                      <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.wildcard')}</p>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
+                          render={({ field }) => {
+                            const infoContent = (
+                              <div className="space-y-1.5">
+                                <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.info')}</p>
+                                <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.multiHost')}</p>
+                                <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.wildcard')}</p>
                               </div>
-                              <FormControl>
-                                <Input
-                                  placeholder="Host (e.g. example.com,example2.com)"
-                                  value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value
-                                    field.onChange(value ? value.split(',').map(s => s.trim()) : [])
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                            )
+                            
+                            return (
+                              <ArrayInput
+                                field={field}
+                                placeholder="example.com"
+                                label={t('hostsDialog.host')}
+                                infoContent={infoContent}
+                              />
+                            )
+                          }}
                         />
                         <FormField
                           control={form.control}
@@ -1038,16 +1106,65 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>{t('hostsDialog.alpn')}</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="h2,http/1.1"
-                                  value={Array.isArray(field.value) ? field.value.join(',') : field.value || ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value
-                                    field.onChange(value ? value.split(',').map(s => s.trim()) : [])
-                                  }}
-                                />
-                              </FormControl>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className="w-full justify-between min-h-[40px] h-auto p-2"
+                                  >
+                                    <div className="flex flex-wrap gap-2 flex-1">
+                                      {field.value && field.value.length > 0 ? (
+                                        field.value.map((protocol: string) => (
+                                          <Badge key={protocol} variant="secondary" className="flex items-center gap-1">
+                                            {protocol}
+                                            <X
+                                              className="h-3 w-3 cursor-pointer hover:text-destructive"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                const newValue = (field.value || []).filter((p: string) => p !== protocol)
+                                                field.onChange(newValue)
+                                              }}
+                                            />
+                                          </Badge>
+                                        ))
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground">{t('hostsDialog.selectAlpn', 'Select ALPN protocols')}</span>
+                                      )}
+                                    </div>
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-1" align="start">
+                                  <div className="space-y-1">
+                                    {['h3', 'h2', 'http/1.1'].map((protocol) => {
+                                      const isSelected = field.value?.includes(protocol)
+                                      return (
+                                        <div
+                                          key={protocol}
+                                          onClick={() => {
+                                            const currentValue = field.value || []
+                                            const newValue = isSelected
+                                              ? currentValue.filter((p: string) => p !== protocol)
+                                              : [...currentValue, protocol]
+                                            field.onChange(newValue)
+                                          }}
+                                          className="flex items-center gap-2 p-2 rounded-sm cursor-pointer hover:bg-accent"
+                                        >
+                                          <div
+                                            className={cn(
+                                              'mr-2 h-4 w-4 border rounded-sm flex items-center justify-center',
+                                              isSelected ? 'bg-primary border-primary' : 'border-muted'
+                                            )}
+                                          >
+                                            {isSelected && <X className="h-3 w-3 text-primary-foreground" />}
+                                          </div>
+                                          {protocol}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -1160,21 +1277,26 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                   <AccordionContent>
                     <div className="space-y-4">
                       <Tabs defaultValue="xhttp" className="w-full">
-                        <TabsList className="mb-4 grid min-w-full grid-cols-5 gap-4 overflow-x-auto px-1">
-                          <TabsTrigger className="px-2" value="xhttp">
-                            XHTTP
+                        <TabsList className="mb-4 flex h-auto w-full flex-wrap gap-1 overflow-x-auto px-1 sm:flex-nowrap sm:gap-4">
+                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="xhttp">
+                            <span className="hidden sm:inline">XHTTP</span>
+                            <span className="sm:hidden">XHTTP</span>
                           </TabsTrigger>
-                          <TabsTrigger className="px-2" value="grpc">
-                            gRPC
+                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="grpc">
+                            <span className="hidden sm:inline">gRPC</span>
+                            <span className="sm:hidden">gRPC</span>
                           </TabsTrigger>
-                          <TabsTrigger className="px-2" value="kcp">
-                            KCP
+                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="kcp">
+                            <span className="hidden sm:inline">KCP</span>
+                            <span className="sm:hidden">KCP</span>
                           </TabsTrigger>
-                          <TabsTrigger className="px-2" value="tcp">
-                            TCP
+                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="tcp">
+                            <span className="hidden sm:inline">TCP</span>
+                            <span className="sm:hidden">TCP</span>
                           </TabsTrigger>
-                          <TabsTrigger className="px-2" value="websocket">
-                            WebSocket
+                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="websocket">
+                            <span className="hidden sm:inline">WebSocket</span>
+                            <span className="sm:hidden">WS</span>
                           </TabsTrigger>
                         </TabsList>
 

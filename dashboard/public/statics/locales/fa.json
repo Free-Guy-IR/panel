@@ -515,6 +515,7 @@
     "sniPlaceholder": "SNI (مثال: example.com)",
     "host": "هاست",
     "path": "مسیر",
+    "selectAlpn": "انتخاب ALPN",
     "networkSettings": "تنظیمات شبکه",
     "transportSettings": "تنظیمات انتقال",
     "transportType": "نوع انتقال",

@@ -634,6 +634,7 @@
     "sniPlaceholder": "SNI (e.g. example.com)",
     "host": "Host",
     "path": "Path",
+    "selectAlpn": "Select ALPN",
     "networkSettings": "Network Settings",
     "transportSettings": "Transport Settings",
     "transportType": "Transport Type",

@@ -863,6 +863,7 @@
     "sni": "SNI",
     "host": "主机",
     "path": "路径",
+    "selectAlpn": "选择 ALPN",
     "networkSettings": "网络设置",
     "transportSettings": "传输设置",
     "transportType": "传输类型",
