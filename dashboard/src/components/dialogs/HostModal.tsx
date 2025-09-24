@@ -155,8 +155,10 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
     field.onChange(newValue)
   }
 
-  const displayValue = field.value && field.value.length > 0 
-    ? field.value.join(', ') 
+  const displayValue = field.value && field.value.length > 0
+    ? field.value.length <= 3
+      ? field.value.join(', ')
+      : `${field.value.slice(0, 3).join(', ')}... (+${field.value.length - 3} more)`
     : ''
 
   return (
@@ -182,14 +184,15 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
             variant="outline"
             role="combobox"
             className="w-full justify-between min-h-[40px] h-auto p-2 text-left"
+            title={displayValue}
           >
-            <span className={displayValue ? 'text-foreground' : 'text-muted-foreground'}>
+            <span className={`truncate ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>
               {displayValue || placeholder}
             </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-1" align="start">
-          <div className="space-y-2">
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
             {/* Input for adding new items */}
             <Input
               placeholder="Type and press Enter to add..."
