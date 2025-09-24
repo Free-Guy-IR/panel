@@ -43,7 +43,10 @@ async def node_health_check():
         if db_node.status in (NodeStatus.connecting, NodeStatus.error) and health is Health.HEALTHY:
             await node_operator.update_node_status(db_node.id, NodeStatus.connected)
 
-        elif db_node.status in (NodeStatus.connecting, NodeStatus.error) and health is Health.NOT_CONNECTED:
+        elif db_node.status in (NodeStatus.connecting, NodeStatus.error) and health in (
+            Health.NOT_CONNECTED,
+            Health.BROKEN,
+        ):
             await node_operator.connect_node(node_id=db_node.id)
 
         elif db_node.status == NodeStatus.connected and health is not Health.HEALTHY:
