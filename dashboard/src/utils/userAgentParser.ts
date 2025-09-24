@@ -43,6 +43,7 @@ export function parseUserAgent(userAgent: string | null | undefined): ClientInfo
     { pattern: /sagernet/, name: 'SagerNet', iconType: 'mobile' as const },
     { pattern: /nekobox/, name: 'NekoBox', iconType: 'mobile' as const },
     { pattern: /foxray/, name: 'FoxRay', iconType: 'mobile' as const },
+    { pattern: /xraypb/, name: 'XrayPB', iconType: 'mobile' as const },
   ]
 
   // Check for known clients
