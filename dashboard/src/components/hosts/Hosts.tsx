@@ -541,6 +541,16 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
                   sc_max_each_post_bytes: host.transport_settings.xhttp_settings.sc_max_each_post_bytes ?? undefined,
                   sc_min_posts_interval_ms: host.transport_settings.xhttp_settings.sc_min_posts_interval_ms ?? undefined,
                   download_settings: host.transport_settings.xhttp_settings.download_settings ?? undefined,
+                  xmux: host.transport_settings.xhttp_settings.xmux
+                    ? {
+                        max_concurrency: host.transport_settings.xhttp_settings.xmux.maxConcurrency ?? undefined,
+                        max_connections: host.transport_settings.xhttp_settings.xmux.maxConnections ?? undefined,
+                        c_max_reuse_times: host.transport_settings.xhttp_settings.xmux.cMaxReuseTimes ?? undefined,
+                        c_max_lifetime: host.transport_settings.xhttp_settings.xmux.cMaxLifetime ?? undefined,
+                        h_max_request_times: host.transport_settings.xhttp_settings.xmux.hMaxRequestTimes ?? undefined,
+                        h_keep_alive_period: host.transport_settings.xhttp_settings.xmux.hKeepAlivePeriod ? parseInt(host.transport_settings.xhttp_settings.xmux.hKeepAlivePeriod) : undefined,
+                      }
+                    : undefined,
                 }
               : undefined,
             grpc_settings: host.transport_settings.grpc_settings

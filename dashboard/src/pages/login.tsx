@@ -179,7 +179,7 @@ export const Login: FC = () => {
           <div className="mt-6 w-full max-w-[340px]">
             <div className="flex flex-col items-center gap-2">
               <img
-                src={resolvedTheme === 'dark' ? window.location.pathname + '/statics/favicon/logo.png' : window.location.pathname + '/statics/favicon/logo-dark.png'}
+                src={resolvedTheme === 'dark' ? '/statics/favicon/logo.png' : '/statics/favicon/logo-dark.png'}
                 alt="PasarGuard Logo"
                 className="h-20 w-20 object-contain"
               />

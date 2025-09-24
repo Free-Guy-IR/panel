@@ -83,10 +83,10 @@ const NoiseItem = memo<NoiseItemProps>(({ index, form, onRemove, t }) => {
         render={({ field }) => (
           <FormItem>
             <FormControl>
-              <Input 
-                placeholder={t('hostsDialog.noise.packetPlaceholder')} 
-                {...field} 
-                value={field.value || ''} 
+              <Input
+                placeholder={t('hostsDialog.noise.packetPlaceholder')}
+                {...field}
+                value={field.value || ''}
                 className="h-8"
               />
             </FormControl>
@@ -172,7 +172,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
                 <Info className="h-4 w-4 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-3" side="right" align="start" sideOffset={5}>
+            <PopoverContent className="w-[280px] sm:w-[320px] p-3" side="top" align="start" sideOffset={5}>
               {infoContent}
             </PopoverContent>
           </Popover>
@@ -183,7 +183,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
           <Button
             variant="outline"
             role="combobox"
-            className="w-full justify-between min-h-[40px] h-auto p-2 text-left"
+            className="w-full min-w-[200px] max-w-[200px] xs:max-w-[240px] sm:max-w-xs md:max-w-sm lg:max-w-md h-auto p-2 text-left"
             title={displayValue}
           >
             <span className={`truncate ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>
@@ -191,7 +191,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full p-1" align="start">
+        <PopoverContent className="w-full max-w-[280px] xs:max-w-[320px] sm:max-w-xs md:max-w-sm lg:max-w-md p-1" align="start">
           <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
             {/* Input for adding new items */}
             <Input
@@ -199,22 +199,22 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full"
+              className="w-full text-sm"
             />
-            
+
             {/* Selected items list */}
             {field.value && field.value.length > 0 && (
               <div className="space-y-1">
                 {field.value.map((item: string, index: number) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 p-2 rounded-sm cursor-pointer hover:bg-accent"
+                    className="flex items-center gap-2 p-1.5 xs:p-2 rounded-sm cursor-pointer hover:bg-accent"
                     onClick={() => removeItem(index)}
                   >
                     <div className="flex items-center justify-center w-4 h-4 border rounded-sm bg-primary border-primary">
                       <X className="h-3 w-3 text-primary-foreground" />
                     </div>
-                    <span className="flex-1 text-sm">{item}</span>
+                    <span className="flex-1 text-xs xs:text-sm leading-tight">{item}</span>
                   </div>
                 ))}
               </div>
@@ -811,7 +811,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                           </div>
                         </div>
                       )
-                      
+
                       return (
                         <ArrayInput
                           field={field}
@@ -884,7 +884,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 <p className="text-[11px] text-muted-foreground">{t('hostsDialog.host.wildcard')}</p>
                               </div>
                             )
-                            
+
                             return (
                               <ArrayInput
                                 field={field}
@@ -1280,28 +1280,30 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                   <AccordionContent>
                     <div className="space-y-4">
                       <Tabs defaultValue="xhttp" className="w-full">
-                        <TabsList className="mb-4 flex h-auto w-full flex-wrap gap-1 overflow-x-auto px-1 sm:flex-nowrap sm:gap-4">
-                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="xhttp">
-                            <span className="hidden sm:inline">XHTTP</span>
-                            <span className="sm:hidden">XHTTP</span>
-                          </TabsTrigger>
-                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="grpc">
-                            <span className="hidden sm:inline">gRPC</span>
-                            <span className="sm:hidden">gRPC</span>
-                          </TabsTrigger>
-                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="kcp">
-                            <span className="hidden sm:inline">KCP</span>
-                            <span className="sm:hidden">KCP</span>
-                          </TabsTrigger>
-                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="tcp">
-                            <span className="hidden sm:inline">TCP</span>
-                            <span className="sm:hidden">TCP</span>
-                          </TabsTrigger>
-                          <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="websocket">
-                            <span className="hidden sm:inline">WebSocket</span>
-                            <span className="sm:hidden">WS</span>
-                          </TabsTrigger>
-                        </TabsList>
+                        <div className='w-full flex items-center justify-center'>
+                          <TabsList className="mb-4 flex h-auto w-full sm:w-fit flex-wrap gap-1 overflow-x-auto px-1 sm:flex-nowrap sm:gap-4">
+                            <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="xhttp">
+                              <span className="hidden sm:inline">XHTTP</span>
+                              <span className="sm:hidden text-[11.5px]">XHTTP</span>
+                            </TabsTrigger>
+                            <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="grpc">
+                              <span className="hidden sm:inline">gRPC</span>
+                              <span className="text-[11.5px] sm:hidden">gRPC</span>
+                            </TabsTrigger>
+                            <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="kcp">
+                              <span className="hidden sm:inline">KCP</span>
+                              <span className="text-[11.5px] sm:hidden">KCP</span>
+                            </TabsTrigger>
+                            <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="tcp">
+                              <span className="hidden sm:inline">TCP</span>
+                              <span className="text-[11.5px] sm:hidden">TCP</span>
+                            </TabsTrigger>
+                            <TabsTrigger className="flex-1 px-1 text-xs sm:flex-none sm:px-2 sm:text-sm" value="websocket">
+                              <span className="hidden sm:inline">WebSocket</span>
+                              <span className="text-[11.5px] sm:hidden">WS</span>
+                            </TabsTrigger>
+                          </TabsList>
+                        </div>
 
                         {/* XHTTP Settings */}
                         <TabsContent dir={dir} value="xhttp" className="space-y-4 p-2">
@@ -1402,7 +1404,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem className="col-span-2 md:col-span-1">
                                     <FormLabel>{t('hostsDialog.xhttp.maxConcurrency')}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} />
+                                      <Input {...field} value={field.value || ''} />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -1416,7 +1418,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem className="col-span-2 md:col-span-1">
                                     <FormLabel>{t('hostsDialog.xhttp.maxConnections')}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} />
+                                      <Input {...field} value={field.value || ''} />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -1430,7 +1432,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem className="col-span-2 md:col-span-1">
                                     <FormLabel>{t('hostsDialog.xhttp.cMaxReuseTimes')}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} />
+                                      <Input {...field} value={field.value || ''} />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -1444,7 +1446,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem className="col-span-2 md:col-span-1">
                                     <FormLabel>{t('hostsDialog.xhttp.cMaxLifetime')}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} />
+                                      <Input {...field} value={field.value || ''} />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -1458,7 +1460,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem className="col-span-2 md:col-span-1">
                                     <FormLabel>{t('hostsDialog.xhttp.hMaxRequestTimes')}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} />
+                                      <Input {...field} value={field.value || ''} />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -2852,13 +2854,13 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
               <Button type="button" variant="outline" onClick={() => handleModalOpenChange(false)}>
                 {t('cancel')}
               </Button>
-               <LoaderButton
-                 type="submit"
-                 disabled={form.formState.isSubmitting}
-                 isLoading={form.formState.isSubmitting}
-                 loadingText={editingHost ? t('modifying') : t('creating')}
-                 size="sm"
-               >
+              <LoaderButton
+                type="submit"
+                disabled={form.formState.isSubmitting}
+                isLoading={form.formState.isSubmitting}
+                loadingText={editingHost ? t('modifying') : t('creating')}
+                size="sm"
+              >
                 {editingHost ? t('modify') : t('create')}
               </LoaderButton>
             </div>
