@@ -1,6 +1,6 @@
 import asyncio
 
-from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
+from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode, Health
 
 from app import on_shutdown, on_startup, scheduler
 from app.db import GetDB
@@ -32,13 +32,32 @@ async def node_health_check():
             if e.code > 0:
                 await node_operator.connect_node(node_id=id)
 
-    broken_nodes, not_connected_nodes = await node_manager.get_nodes_by_health_status()
+    async def check_health(db_node: Node, node: PasarGuardNode):
+        if node is None:
+            return
+        try:
+            health = await asyncio.wait_for(node.get_health(), timeout=10)
+        except (asyncio.TimeoutError, NodeAPIError):
+            await node_operator.update_node_status(db_node.id, NodeStatus.error, err="Get health timeout")
 
-    check_tasks = [check_node(id, node) for id, node in broken_nodes]
-    connect_tasks = [node_operator.connect_node(id) for id, _ in not_connected_nodes]
+        if db_node.status in (NodeStatus.connecting, NodeStatus.error) and health is Health.HEALTHY:
+            await node_operator.update_node_status(db_node.id, NodeStatus.connected)
 
-    # Use return_exceptions=True to prevent one failed node from stopping others
-    await asyncio.gather(*check_tasks + connect_tasks, return_exceptions=True)
+        elif db_node.status in (NodeStatus.connecting, NodeStatus.error) and health in (
+            Health.NOT_CONNECTED,
+            Health.BROKEN,
+        ):
+            await node_operator.connect_node(node_id=db_node.id)
+
+        elif db_node.status == NodeStatus.connected and health is not Health.HEALTHY:
+            await check_node(db_node.id, node)
+
+    async with GetDB() as db:
+        db_nodes = await get_nodes(db=db, enabled=True)
+        dict_nodes = await node_manager.get_nodes()
+
+        check_tasks = [check_health(db_node, dict_nodes[db_node.id]) for db_node in db_nodes]
+        await asyncio.gather(*check_tasks, return_exceptions=True)
 
 
 @on_startup

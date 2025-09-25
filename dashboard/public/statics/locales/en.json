@@ -634,6 +634,7 @@
     "sniPlaceholder": "SNI (e.g. example.com)",
     "host": "Host",
     "path": "Path",
+    "selectAlpn": "Select ALPN",
     "networkSettings": "Network Settings",
     "transportSettings": "Transport Settings",
     "transportType": "Transport Type",
@@ -748,8 +749,10 @@
     },
     "noise": {
       "title": "Noise",
+      "type": "Type",
       "addNoise": "Add Noise",
       "removeNoise": "Remove Noise",
+      "noNoiseSettings": "No noise settings configured",
       "packet": "Packet",
       "packetPlaceholder": "Enter packet value (e.g. rand:10-20)",
       "delay": "Delay",

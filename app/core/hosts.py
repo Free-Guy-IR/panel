@@ -4,9 +4,40 @@ from app import on_startup
 from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, get_or_create_inbound
-from app.db.models import ProxyHostSecurity
+from app.db.models import ProxyHost, ProxyHostSecurity
 from app.models.host import MuxSettings, TransportSettings
 from app.utils.store import DictStorage
+
+
+def _prepare_host_data(host: ProxyHost) -> dict:
+    return {
+        "remark": host.remark,
+        "inbound_tag": host.inbound_tag,
+        "address": [v for v in host.address],
+        "port": host.port,
+        "path": host.path or None,
+        "sni": [v for v in host.sni] if host.sni else [],
+        "host": [v for v in host.host] if host.host else [],
+        "alpn": [alpn.value for alpn in host.alpn] if host.alpn else [],
+        "fingerprint": host.fingerprint.value,
+        "tls": None if host.security == ProxyHostSecurity.inbound_default else host.security.value,
+        "allowinsecure": host.allowinsecure,
+        "fragment_settings": host.fragment_settings,
+        "noise_settings": host.noise_settings,
+        "random_user_agent": host.random_user_agent,
+        "use_sni_as_host": host.use_sni_as_host,
+        "http_headers": host.http_headers,
+        "mux_settings": MuxSettings.model_validate(host.mux_settings).model_dump(by_alias=True, exclude_none=True)
+        if host.mux_settings
+        else {},
+        "transport_settings": TransportSettings.model_validate(host.transport_settings).model_dump(
+            by_alias=True, exclude_none=True
+        )
+        if host.transport_settings
+        else {},
+        "status": host.status,
+        "ech_config_list": host.ech_config_list,
+    }
 
 
 @DictStorage
@@ -29,66 +60,10 @@ async def hosts(storage: dict, db: AsyncSession):
         ):
             downstream = await get_host_by_id(db, ds_host)
 
-        host_data = {
-            "remark": host.remark,
-            "inbound_tag": host.inbound_tag,
-            "address": [addr.strip() for addr in host.address.split(",")] if host.address else [],
-            "port": host.port,
-            "path": host.path or None,
-            "sni": [s.strip() for s in host.sni.split(",")] if host.sni else [],
-            "host": [h.strip() for h in host.host.split(",")] if host.host else [],
-            "alpn": host.alpn.value,
-            "fingerprint": host.fingerprint.value,
-            "tls": None if host.security == ProxyHostSecurity.inbound_default else host.security.value,
-            "allowinsecure": host.allowinsecure,
-            "fragment_settings": host.fragment_settings,
-            "noise_settings": host.noise_settings,
-            "random_user_agent": host.random_user_agent,
-            "use_sni_as_host": host.use_sni_as_host,
-            "http_headers": host.http_headers,
-            "mux_settings": MuxSettings.model_validate(host.mux_settings).model_dump(by_alias=True, exclude_none=True)
-            if host.mux_settings
-            else {},
-            "transport_settings": TransportSettings.model_validate(host.transport_settings).model_dump(
-                by_alias=True, exclude_none=True
-            )
-            if host.transport_settings
-            else {},
-            "status": host.status,
-            "ech_config_list": host.ech_config_list,
-        }
+        host_data = _prepare_host_data(host)
 
         if downstream:
-            host_data["downloadSettings"] = {
-                "remark": downstream.remark,
-                "inbound_tag": downstream.inbound_tag,
-                "address": [addr.strip() for addr in downstream.address.split(",")] if downstream.address else [],
-                "port": downstream.port,
-                "path": downstream.path or None,
-                "sni": [s.strip() for s in downstream.sni.split(",")] if downstream.sni else [],
-                "host": [h.strip() for h in downstream.host.split(",")] if downstream.host else [],
-                "alpn": downstream.alpn.value,
-                "fingerprint": downstream.fingerprint.value,
-                "tls": None if downstream.security == ProxyHostSecurity.inbound_default else downstream.security.value,
-                "allowinsecure": downstream.allowinsecure,
-                "fragment_settings": downstream.fragment_settings,
-                "noise_settings": downstream.noise_settings,
-                "random_user_agent": downstream.random_user_agent,
-                "use_sni_as_host": downstream.use_sni_as_host,
-                "http_headers": downstream.http_headers,
-                "mux_settings": MuxSettings.model_validate(downstream.mux_settings).model_dump(
-                    by_alias=True, exclude_none=True
-                )
-                if downstream.mux_settings
-                else {},
-                "transport_settings": TransportSettings.model_validate(downstream.transport_settings).model_dump(
-                    by_alias=True, exclude_none=True
-                )
-                if downstream.transport_settings
-                else {},
-                "status": downstream.status,
-                "ech_config_list": host.ech_config_list,
-            }
+            host_data["downloadSettings"] = _prepare_host_data(downstream)
         else:
             host_data["downloadSettings"] = None
 

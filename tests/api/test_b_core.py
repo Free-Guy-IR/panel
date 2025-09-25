@@ -315,15 +315,17 @@ def test_core_create(access_token):
         json={
             "config": xray_config,
             "name": "xray_config",
-            "exclude_inbound_tags": "",
-            "fallbacks_inbound_tags": "fallback-B,fallback-A",
+            "exclude_inbound_tags": [],
+            "fallbacks_inbound_tags": ["fallback-A", "fallback-B"],
         },
     )
     assert response.status_code == status.HTTP_201_CREATED
     assert response.json()["config"] == xray_config
     assert response.json()["name"] == "xray_config"
-    assert response.json()["exclude_inbound_tags"] == ""
-    assert response.json()["fallbacks_inbound_tags"] == "fallback-B,fallback-A"
+    for v in response.json()["fallbacks_inbound_tags"]:
+        assert v in {"fallback-A", "fallback-B"}
+    assert len(response.json()["fallbacks_inbound_tags"]) == 2
+    assert len(response.json()["exclude_inbound_tags"]) == 0
 
 
 def test_core_update(access_token):
@@ -335,16 +337,20 @@ def test_core_update(access_token):
         json={
             "config": xray_config,
             "name": "xray_config_update",
-            "exclude_inbound_tags": "",
-            "fallbacks_inbound_tags": "fallback-B,fallback-A",
+            "exclude_inbound_tags": ["Exclude"],
+            "fallbacks_inbound_tags": ["fallback-A", "fallback-B", "fallback-C", "fallback-D"],
         },
         params={"restart_nodes": False},
     )
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["config"] == xray_config
     assert response.json()["name"] == "xray_config_update"
-    assert response.json()["exclude_inbound_tags"] == ""
-    assert response.json()["fallbacks_inbound_tags"] == "fallback-B,fallback-A"
+    for v in response.json()["exclude_inbound_tags"]:
+        assert v in {"Exclude"}
+    for v in response.json()["fallbacks_inbound_tags"]:
+        assert v in {"fallback-A", "fallback-B", "fallback-C", "fallback-D"}
+    assert len(response.json()["fallbacks_inbound_tags"]) == 4
+    assert len(response.json()["exclude_inbound_tags"]) == 1
 
 
 def test_core_get(access_token):
@@ -376,16 +382,18 @@ def test_core_delete_2(access_token):
         json={
             "config": xray_config,
             "name": "xray_config",
-            "exclude_inbound_tags": "",
-            "fallbacks_inbound_tags": "fallback-B,fallback-A",
+            "exclude_inbound_tags": [],
+            "fallbacks_inbound_tags": ["fallback-A", "fallback-B"],
         },
     )
 
     assert response.status_code == status.HTTP_201_CREATED
     assert response.json()["config"] == xray_config
     assert response.json()["name"] == "xray_config"
-    assert response.json()["exclude_inbound_tags"] == ""
-    assert response.json()["fallbacks_inbound_tags"] == "fallback-B,fallback-A"
+    assert len(response.json()["fallbacks_inbound_tags"]) == 2
+    assert len(response.json()["exclude_inbound_tags"]) == 0
+    for v in response.json()["fallbacks_inbound_tags"]:
+        assert v in {"fallback-A", "fallback-B"}
 
     response = client.delete(
         url=f"/api/core/{response.json()['id']}",
@@ -407,4 +415,4 @@ def test_inbounds_get(access_token):
     response_tags = [inbound for inbound in response.json() if "<=>" not in inbound]
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) > 0
-    assert response_tags == config_tags
+    assert set(response_tags) == set(config_tags)

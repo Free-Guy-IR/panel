@@ -581,6 +581,7 @@
   "hostsDialog.advancedOptions": "Дополнительные опции",
   "hostsDialog.useSniAsHost": "Использовать SNI как хост",
   "hostsDialog.alpn": "ALPN",
+  "hostsDialog.selectAlpn": "Выберите ALPN",
   "hostsDialog.apply": "Применить",
   "hostsDialog.currentServer": "IP текущего сервера",
   "hostsDialog.currentServerv6": "IPv6 текущего сервера",
@@ -607,8 +608,10 @@
   "hostsDialog.fragment.recordFragment": "Запись фрагмента",
   "hostsDialog.noise": {
     "title": "Шум",
+    "type": "Тип",
     "addNoise": "Добавить шум",
     "removeNoise": "Удалить шум",
+    "noNoiseSettings": "Настройки шума не настроены",
     "packet": "Пакет",
     "packetPlaceholder": "Введите значение пакета (например: rand:10-20)",
     "delay": "Задержка",

@@ -636,8 +636,10 @@
   "hostsDialog.fragment.recordFragment": "记录分片",
   "hostsDialog.noise": {
     "title": "噪声",
+    "type": "类型",
     "addNoise": "添加噪声",
     "removeNoise": "删除噪声",
+    "noNoiseSettings": "未配置噪声设置",
     "packet": "数据包",
     "packetPlaceholder": "输入数据包值（例如：rand:10-20）",
     "delay": "延迟",
@@ -861,6 +863,7 @@
     "sni": "SNI",
     "host": "主机",
     "path": "路径",
+    "selectAlpn": "选择 ALPN",
     "networkSettings": "网络设置",
     "transportSettings": "传输设置",
     "transportType": "传输类型",

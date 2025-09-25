@@ -66,7 +66,7 @@ export default function HostsPage() {
             const hostData: CreateHost = {
                 ...formData,
                 priority,
-                alpn: formData.alpn as ProxyHostALPN | undefined,
+                alpn: formData.alpn as ProxyHostALPN[] | undefined,
                 fingerprint: formData.fingerprint as ProxyHostFingerprint | undefined,
                 ech_config_list: formData.ech_config_list || undefined,
                 transport_settings: formData.transport_settings
@@ -92,6 +92,7 @@ export default function HostsPage() {
                             ...formData.mux_settings,
                             sing_box: formData.mux_settings.sing_box
                                 ? {
+                                    enable: formData.mux_settings.sing_box.enable || false,
                                     protocol: formData.mux_settings.sing_box.protocol === 'none' ? undefined : (formData.mux_settings.sing_box.protocol as MultiplexProtocol),
                                     max_connections: formData.mux_settings.sing_box.max_connections || undefined,
                                     max_streams: formData.mux_settings.sing_box.max_streams || undefined,
@@ -102,6 +103,7 @@ export default function HostsPage() {
                                 : undefined,
                             clash: formData.mux_settings.clash
                                 ? {
+                                    enable: formData.mux_settings.clash.enable || false,
                                     protocol: formData.mux_settings.clash.protocol === 'none' ? undefined : (formData.mux_settings.clash.protocol as MultiplexProtocol),
                                     max_connections: formData.mux_settings.clash.max_connections || undefined,
                                     max_streams: formData.mux_settings.clash.max_streams || undefined,
@@ -114,9 +116,10 @@ export default function HostsPage() {
                                 : undefined,
                             xray: formData.mux_settings.xray
                                 ? {
+                                    enable: formData.mux_settings.xray.enable || false,
                                     concurrency: formData.mux_settings.xray.concurrency || undefined,
                                     xudp_concurrency: formData.mux_settings.xray.xudp_concurrency || undefined,
-                                    xudp_proxy_443: formData.mux_settings.xray.xudp_proxy_443 === 'none' ? undefined : (formData.mux_settings.xray.xudp_proxy_443 as Xudp),
+                                    xudp_proxy_udp_443: formData.mux_settings.xray.xudp_proxy_443 === 'none' ? undefined : (formData.mux_settings.xray.xudp_proxy_443 as Xudp),
                                 }
                                 : undefined,
                         }
@@ -124,9 +127,9 @@ export default function HostsPage() {
                 fragment_settings: (() => {
                     const xraySettings = formData.fragment_settings?.xray
                         ? {
-                            packets: formData.fragment_settings.xray.packets || undefined,
-                            length: formData.fragment_settings.xray.length || undefined,
-                            interval: formData.fragment_settings.xray.interval || undefined,
+                            packets: formData.fragment_settings.xray.packets || '',
+                            length: formData.fragment_settings.xray.length || '',
+                            interval: formData.fragment_settings.xray.interval || '',
                         }
                         : undefined
 

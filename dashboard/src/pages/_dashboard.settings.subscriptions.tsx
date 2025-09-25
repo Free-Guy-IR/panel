@@ -306,7 +306,7 @@ export default function SubscriptionSettings() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-7xl mx-auto p-4 sm:py-6 lg:py-8">
+      <div className="w-full  p-4 sm:py-6 lg:py-8">
         <div className="space-y-6 sm:space-y-8 lg:space-y-10">
           {/* General Settings Skeleton */}
           <div className="space-y-4 sm:space-y-6">
@@ -395,7 +395,7 @@ export default function SubscriptionSettings() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
+    <div className="w-full">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 sm:space-y-8 lg:space-y-10 p-4 sm:py-6 lg:py-8">
           

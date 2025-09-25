@@ -780,10 +780,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
             },
           })
           toast.success(
-            t('userDialog.userEdited', {
-              username: values.username,
-              defaultValue: 'User «{{name}}» has been updated successfully',
-            }),
+              t('userDialog.userEdited', {
+                username: values.username,
+                defaultValue: 'User «{{name}}» has been updated successfully',
+              }),
           )
         } else {
           await createUserFromTemplateMutation.mutateAsync({
@@ -794,26 +794,24 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
             },
           })
           toast.success(
-            t('userDialog.userCreated', {
-              username: values.username,
-              defaultValue: 'User «{{name}}» has been created successfully',
-            }),
+              t('userDialog.userCreated', {
+                username: values.username,
+                defaultValue: 'User «{{name}}» has been created successfully',
+              }),
           )
         }
+
         onOpenChange(false)
         form.reset()
         setSelectedTemplateId(null)
+
       } catch (error: any) {
-        toast.error(
-          error?.response?._data?.detail ||
-            t(editingUser ? 'userDialog.editError' : 'userDialog.createError', {
-              name: values.username,
-              defaultValue: `Failed to ${editingUser ? 'update' : 'create'} user «{{name}}»`,
-            }),
-        )
+          const fields = ['username' ,'note']
+          handleError({ error, fields, form, contextKey: 'users' })
       } finally {
         setLoading(false)
       }
+
     },
     [editingUser, selectedTemplateId, form, onOpenChange, t],
   )

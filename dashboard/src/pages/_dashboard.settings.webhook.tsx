@@ -136,7 +136,7 @@ export default function WebhookSettings() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-7xl mx-auto p-4 sm:py-6 lg:py-8">
+      <div className="w-full  p-4 sm:py-6 lg:py-8">
         <div className="space-y-6 sm:space-y-8 lg:space-y-10">
           {/* General Settings Skeleton */}
           <div className="space-y-4">
@@ -181,7 +181,7 @@ export default function WebhookSettings() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto min-h-[calc(100vh-200px)] flex flex-col">
+    <div className="w-full min-h-[calc(100vh-200px)] flex flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 p-4 sm:py-6 lg:py-8">
           <div className="flex-1 space-y-6 sm:space-y-8 lg:space-y-10">

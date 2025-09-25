@@ -110,25 +110,25 @@ PasarGuard 是一个用户友好、功能丰富且可靠的工具。它让您可
 运行以下命令以使用 SQLite 数据库安装 PasarGuard。
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --pre-release
 ```
 
 运行以下命令以使用 MySQL 数据库安装 PasarGuard。
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mysql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql --pre-release
 ```
 
 运行以下命令以使用 MariaDB 数据库安装 PasarGuard。
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mariadb --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb --pre-release
 ```
 
 运行以下命令以使用 PostgreSQL 数据库安装 PasarGuard。
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database postgresql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql --pre-release
 ```
 
 安装完成后：
@@ -353,7 +353,7 @@ PasarGuard 的备份服务会高效地压缩所有必要文件并将它们发送
 安装最新版 PasarGuard 命令：
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/pasarguard.sh)" @ install-script
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install-script
 ```
 
 设置备份服务：

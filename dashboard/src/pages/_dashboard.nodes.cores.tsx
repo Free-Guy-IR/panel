@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useState, useMemo } from 'react'
-import { useTheme } from '../components/theme-provider'
+import { useCallback, useState, useMemo } from 'react'
 import Cores from '@/components/settings/Cores'
-import { useGetCoreConfig, useModifyCoreConfig, useGetAllCores, useDeleteCoreConfig, useCreateCoreConfig } from '@/service/api'
+import { useGetAllCores, useDeleteCoreConfig, useCreateCoreConfig } from '@/service/api'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import CoreConfigModal, { coreConfigFormSchema, CoreConfigFormValues } from '@/components/dialogs/CoreConfigModal'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { LoaderButton } from '@/components/ui/loader-button'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
@@ -38,7 +37,7 @@ const defaultConfig = {
 } as const
 
 export default function CoreSettings() {
-  const { data: coresData, isLoading: isCoresLoading } = useGetAllCores({})
+  const { data: coresData } = useGetAllCores({})
   const queryClient = useQueryClient()
   const deleteCoreConfig = useDeleteCoreConfig()
   const createCoreMutation = useCreateCoreConfig()
@@ -68,19 +67,9 @@ export default function CoreSettings() {
       const coreToEdit = coresData?.cores?.find(core => core.id === numericCoreId)
 
       if (coreToEdit) {
-        const excludedInboundIds = coreToEdit.exclude_inbound_tags
-          ? coreToEdit.exclude_inbound_tags
-              .split(',')
-              .map(id => id.trim())
-              .filter(Boolean)
-          : []
+        const excludedInboundIds = coreToEdit.exclude_inbound_tags || []
 
-        const fallbackIds = coreToEdit.fallbacks_inbound_tags
-          ? coreToEdit.fallbacks_inbound_tags
-              .split(',')
-              .map(id => id.trim())
-              .filter(Boolean)
-          : []
+        const fallbackIds = coreToEdit.fallbacks_inbound_tags || []
 
         coreConfigForm.reset({
           name: coreToEdit.name,

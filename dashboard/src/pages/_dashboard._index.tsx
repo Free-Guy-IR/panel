@@ -199,19 +199,24 @@ const Dashboard = () => {
     },
   })
 
-  const hostForm = useForm<HostFormValues>({
+  const hostForm = useForm<HostFormValues, any, HostFormValues>({
     defaultValues: {
       inbound_tag: '',
       status: [],
       remark: '',
-      address: '',
+      address: [],
       port: 443,
-      sni: '',
-      host: '',
+      sni: [],
+      host: [],
       path: '',
       priority: 1,
       alpn: undefined,
       fingerprint: undefined,
+      security: 'none',
+      allowinsecure: false,
+      is_disabled: false,
+      random_user_agent: false,
+      use_sni_as_host: false,
       mux_settings: undefined,
       fragment_settings: undefined,
     },
@@ -374,7 +379,7 @@ const Dashboard = () => {
                               {selectedAdmin?.username === 'Total' ? <Sigma className="h-3 w-3" /> : selectedAdmin?.username?.charAt(0).toUpperCase() || '?'}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="truncate text-xs sm:text-sm">{selectedAdmin?.username || t('selectAdmin')}</span>
+                          <span className="truncate text-xs sm:text-sm">{selectedAdmin?.username || t('advanceSearch.selectAdmin')}</span>
                           {selectedAdmin && selectedAdmin.username !== 'Total' && (
                             <div className="flex-shrink-0">{selectedAdmin.is_sudo ? <UserCog className="h-3 w-3 text-primary" /> : <UserRound className="h-3 w-3 text-primary" />}</div>
                           )}

@@ -1,11 +1,9 @@
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from enum import IntEnum
-import secrets
 
 from fastapi import HTTPException
 
 from app.core.manager import core_manager
-from app.node import node_manager
 from app.db import AsyncSession
 from app.db.crud import (
     get_admin,
@@ -17,14 +15,12 @@ from app.db.crud import (
     get_user_template,
 )
 from app.db.crud.user import get_user_by_id
-from app.db.models import Admin as DBAdmin, CoreConfig, Group, Node, ProxyHost, User, UserTemplate, UserStatus
+from app.db.models import Admin as DBAdmin, CoreConfig, Group, Node, ProxyHost, User, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
-from app.models.user import UserCreate, UserModify, UserNotificationResponse
+from app.models.user import UserCreate, UserModify
 from app.utils.helpers import fix_datetime_timezone
-from app.utils.jwt import get_subscription_payload, create_subscription_token
-from app.settings import subscription_settings
-from config import SUBSCRIPTION_PATH
+from app.utils.jwt import get_subscription_payload
 
 
 class OperatorType(IntEnum):
@@ -160,31 +156,3 @@ class BaseOperation:
         if not db_core_config:
             await self.raise_error(message="Core config not found", code=404)
         return db_core_config
-
-    @staticmethod
-    async def generate_subscription_url(user: UserNotificationResponse):
-        salt = secrets.token_hex(8)
-        settings = await subscription_settings()
-        url_prefix = (
-            user.admin.sub_domain.replace("*", salt)
-            if user.admin and user.admin.sub_domain
-            else (settings.url_prefix).replace("*", salt)
-        )
-        token = await create_subscription_token(user.username)
-        return f"{url_prefix}/{SUBSCRIPTION_PATH}/{token}"
-
-    async def validate_user(self, user: User) -> UserNotificationResponse:
-        user = UserNotificationResponse.model_validate(user)
-        user.subscription_url = await self.generate_subscription_url(user)
-        return user
-
-    async def update_user(self, db_user: User) -> UserNotificationResponse:
-        user = await self.validate_user(db_user)
-
-        if db_user.status in (UserStatus.active, UserStatus.on_hold):
-            user_inbounds = await db_user.inbounds()
-            await node_manager.update_user(user, inbounds=user_inbounds)
-        else:
-            await node_manager.remove_user(user)
-
-        return user

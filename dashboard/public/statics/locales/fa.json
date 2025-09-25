@@ -1,5 +1,5 @@
 {
-  "PasarGuard": "پاسارگارد",
+  "pasargaurd": "پاسارگارد",
   "dashboard": "داشبورد",
   "master": "همه گره‌ها",
   "dashboardDescription": "داشبورد مدیریت مـرزبان",
@@ -515,6 +515,7 @@
     "sniPlaceholder": "SNI (مثال: example.com)",
     "host": "هاست",
     "path": "مسیر",
+    "selectAlpn": "انتخاب ALPN",
     "networkSettings": "تنظیمات شبکه",
     "transportSettings": "تنظیمات انتقال",
     "transportType": "نوع انتقال",
@@ -643,8 +644,10 @@
     },
     "noise": {
       "title": "نویز",
+      "type": "نوع",
       "addNoise": "افزودن نویز",
       "removeNoise": "حذف نویز",
+      "noNoiseSettings": "هیچ تنظیمات نویزی پیکربندی نشده",
       "packet": "بسته",
       "packetPlaceholder": "مقدار پکت را وارد کنید (مثال: rand:10-20)",
       "delay": "تاخیر",

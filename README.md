@@ -113,25 +113,25 @@ PasarGuard is user-friendly, feature-rich and reliable. It lets you to create di
 Run the following command to install PasarGuard with SQLite database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --pre-release
 ```
 
 Run the following command to install PasarGuard with MySQL database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mysql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql --pre-release
 ```
 
 Run the following command to install PasarGuard with MariaDB database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mariadb --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb --pre-release
 ```
 
 Run the following command to install PasarGuard with PostgreSQL database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database postgresql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql --pre-release
 ```
 
 Once the installation is complete:
@@ -347,7 +347,7 @@ PasarGuard's backup service efficiently zips all necessary files and sends them 
 Install the Latest Version of PasarGuard Command:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/pasarguard.sh)" @ install-script
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install-script
 ```
 
 Setup the Backup Service:

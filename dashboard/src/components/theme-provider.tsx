@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 
 export type Theme = 'dark' | 'light' | 'system'
 export type ColorTheme = 'default' | 'red' | 'rose' | 'orange' | 'green' | 'blue' | 'yellow' | 'violet'
@@ -657,7 +657,7 @@ export function ThemeProvider({
     setRadiusState(defaultRadius)
   }, [storageKey, colorStorageKey, radiusStorageKey, defaultTheme, defaultColorTheme, defaultRadius])
 
-  const value: ThemeProviderState = {
+  const value: ThemeProviderState = useMemo(() => ({
     theme,
     colorTheme,
     radius,
@@ -667,7 +667,7 @@ export function ThemeProvider({
     setRadius,
     resetToDefaults,
     isSystemTheme: theme === 'system',
-  }
+  }), [theme, colorTheme, radius, resolvedTheme, setTheme, setColorTheme, setRadius, resetToDefaults])
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>

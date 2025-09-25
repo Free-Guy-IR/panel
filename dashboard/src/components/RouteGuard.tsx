@@ -28,14 +28,12 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       const isRestrictedRoute = restrictedRoutes.some(route => currentPath.startsWith(route))
 
       if (isRestrictedRoute) {
-        console.log('RouteGuard: Redirecting non-sudo admin from restricted route:', currentPath)
         navigate('/users', { replace: true })
         return
       }
 
       // Handle settings routes
       if (currentPath === '/settings') {
-        console.log('RouteGuard: Redirecting non-sudo admin from /settings to /settings/theme')
         navigate('/settings/theme', { replace: true })
         return
       }
@@ -44,7 +42,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       const restrictedSettingsRoutes = ['/settings/general', '/settings/notifications', '/settings/subscriptions', '/settings/telegram', '/settings/discord', '/settings/webhook', '/settings/cleanup']
 
       if (restrictedSettingsRoutes.includes(currentPath)) {
-        console.log('RouteGuard: Redirecting non-sudo admin from restricted settings:', currentPath)
+        // Redirecting non-sudo admin from restricted settings
         navigate('/settings/theme', { replace: true })
         return
       }

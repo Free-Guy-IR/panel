@@ -51,7 +51,7 @@ class StandardLinks(BaseSubscription):
             tls=inbound["tls"],
             sni=inbound.get("sni", ""),
             fp=inbound.get("fp", ""),
-            alpn=inbound.get("alpn", ""),
+            alpn=inbound.get("alpn", None),
             pbk=inbound.get("pbk", ""),
             sid=inbound.get("sid", ""),
             spx=inbound.get("spx", ""),
@@ -204,7 +204,7 @@ class StandardLinks(BaseSubscription):
         tls: str,
         sni: str,
         fp: str,
-        alpn: str,
+        alpn: list | None,
         pbk: str,
         sid: str,
         spx: str,
@@ -216,7 +216,7 @@ class StandardLinks(BaseSubscription):
         payload["sni"] = sni
         payload["fp"] = fp
         if alpn:
-            payload["alpn"] = alpn
+            payload["alpn"] = ",".join(alpn)
         if fs:
             xray_fragment = fs["xray"]
             payload["fragment"] = (
@@ -252,7 +252,7 @@ class StandardLinks(BaseSubscription):
         tls="none",
         sni="",
         fp="",
-        alpn="",
+        alpn=None,
         pbk="",
         sid="",
         spx="",
@@ -329,7 +329,7 @@ class StandardLinks(BaseSubscription):
         tls="none",
         sni="",
         fp="",
-        alpn="",
+        alpn=None,
         pbk="",
         sid="",
         spx="",
@@ -395,7 +395,7 @@ class StandardLinks(BaseSubscription):
         tls="none",
         sni="",
         fp="",
-        alpn="",
+        alpn=None,
         pbk="",
         sid="",
         spx="",

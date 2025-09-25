@@ -12,7 +12,7 @@ def escape_md_user(user: UserNotificationResponse, by: str) -> tuple[str, str, s
 
 def escape_md_host(host: BaseHost, by: str) -> tuple[str, str, str, str]:
     """Escapes markdown special characters in host and by strings for Discord."""
-    return escape_ds_markdown_list((host.remark, host.address, host.inbound_tag, by))
+    return escape_ds_markdown_list((host.remark, host.address_str, host.inbound_tag, by))
 
 
 def escape_md_template(template: UserTemplateResponse, by: str) -> tuple[str, str, str, str]:
@@ -29,4 +29,4 @@ def escape_md_template(template: UserTemplateResponse, by: str) -> tuple[str, st
 
 def escape_md_core(core: CoreResponse, by: str) -> tuple[str, str, str, str]:
     """Escapes markdown special characters in core and by strings for Discord."""
-    return escape_ds_markdown_list((core.name, core.exclude_inbound_tags, core.fallbacks_inbound_tags, by))
+    return escape_ds_markdown_list((core.name, core.exclude_tags, core.fallback_tags, by))

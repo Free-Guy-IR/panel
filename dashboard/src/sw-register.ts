@@ -8,10 +8,10 @@ export function registerSW() {
     navigator.serviceWorker
       .register(`${baseUrl}sw.js`)
       .then(registration => {
-        console.log('SW registered: ', registration)
+        // Registration successful
       })
       .catch(registrationError => {
-        console.log('SW registration failed: ', registrationError)
+        // Registration failed
       })
   }
 }

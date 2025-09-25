@@ -3,40 +3,41 @@ import { Language } from '@/components/Language'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
 import { NavUser } from '@/components/nav-user'
+import { useTheme } from '@/components/theme-provider'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { cn } from '@/lib/utils'
 import { getSystemStats } from '@/service/api'
-import { useTheme } from '@/components/theme-provider'
 import {
-	ArrowUpDown,
-	Bell,
-	BookOpen,
-	Calendar,
-	Cpu,
-	Database,
-	FileText,
-	GithubIcon,
-	Layers,
-	LayoutDashboardIcon,
-	LayoutTemplate,
-	LifeBuoy,
-	ListTodo,
-	Lock,
-	MessageCircle,
-	Palette,
-	PieChart,
-	RssIcon,
-	Send,
-	Settings2,
-	Share2Icon,
-	UserCog,
-	Users2,
-	Settings,
-	UsersIcon,
-	Webhook,
+  ArrowUpDown,
+  Bell,
+  BookOpen,
+  Calendar,
+  Cpu,
+  Database,
+  FileText,
+  GithubIcon,
+  Layers,
+  LayoutDashboardIcon,
+  LayoutTemplate,
+  LifeBuoy,
+  ListTodo,
+  Lock,
+  MessageCircle,
+  Palette,
+  PieChart,
+  RssIcon,
+  Send,
+  Settings,
+  Settings2,
+  Share2Icon,
+  UserCog,
+  Users2,
+  UsersIcon,
+  Webhook,
 } from 'lucide-react'
 import * as React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -300,35 +301,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <>
-       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
-         <div className="flex items-center gap-2">
-           <img 
-             src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
-             alt="PasarGuard Logo" 
-             className="w-8 h-8 object-contain"
-           />
-           <span className="text-sm font-bold">{t('pasargaurd')}</span>
-         </div>
-         <SidebarTrigger />
-       </div>
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
+        <div className="flex items-center gap-2">
+          <img
+            src={resolvedTheme === 'dark' ? window.location.pathname + 'statics/favicon/logo.png' : window.location.pathname + 'statics/favicon/logo-dark.png'}
+            alt="PasarGuard Logo"
+            className="h-8 w-8 object-contain"
+          />
+          <span dir={isRTL ? 'rtl' : 'ltr'} className="text-sm font-bold">
+            {t('pasargaurd')}
+          </span>
+        </div>
+        <SidebarTrigger />
+      </div>
       <Sidebar variant="sidebar" {...props} className="border-sidebar-border p-0" side={isRTL ? 'right' : 'left'}>
         <SidebarRail />
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-               <SidebarMenuButton size="lg" asChild>
-                 <a href={REPO_URL} target="_blank" className="!gap-2">
-                   <img 
-                     src={resolvedTheme === 'dark' ? "/statics/favicon/logo.png" : "/statics/favicon/logo-dark.png"} 
-                     alt="PasarGuard Logo" 
-                     className="w-8 h-8 object-contain flex-shrink-0"
-                   />
-                   <div className="flex flex-col">
-                     <span className="truncate text-sm font-semibold leading-tight">{t('pasargaurd')}</span>
-                     <span className="text-xs opacity-45">{version}</span>
-                   </div>
-                 </a>
-               </SidebarMenuButton>
+              <SidebarMenuButton size="lg" asChild>
+                <a href={REPO_URL} target="_blank" className="!gap-2">
+                  <img
+                    src={resolvedTheme === 'dark' ? window.location.pathname + 'statics/favicon/logo.png' : window.location.pathname + 'statics/favicon/logo-dark.png'}
+                    alt="PasarGuard Logo"
+                    className="h-8 w-8 flex-shrink-0 object-contain"
+                  />
+                  <div className="flex flex-col">
+                    <span className={cn(isRTL ? 'text-right' : 'text-left', 'truncate text-sm font-semibold leading-tight')}>{t('pasargaurd')}</span>
+                    <span className="text-xs opacity-45">{version}</span>
+                  </div>
+                </a>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>

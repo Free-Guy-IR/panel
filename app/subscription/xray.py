@@ -37,7 +37,7 @@ class XrayConfiguration(BaseSubscription):
             "echConfigList": ech_config_list,
         }
         if alpn:
-            tls_settings["alpn"] = [alpn] if not isinstance(alpn, list) else alpn
+            tls_settings["alpn"] = alpn
 
         return self._remove_none_values(tls_settings)
 
@@ -307,14 +307,13 @@ class XrayConfiguration(BaseSubscription):
         if (fragment or noise) and not link_format:
             dialer_proxy = "dsdialer"
 
-        alpn = inbound.get("alpn", None)
         download_settings = self.make_stream_setting(
             net=net,
             tls=tls,
             sni=inbound["sni"],
             host=inbound["host"],
             path=path,
-            alpn=alpn.rsplit(sep=",") if alpn else None,
+            alpn=inbound.get("alpn", None),
             fp=inbound.get("fp", ""),
             pbk=inbound.get("pbk", ""),
             sid=inbound.get("sid", ""),
@@ -447,7 +446,7 @@ class XrayConfiguration(BaseSubscription):
         tls="",
         sni="",
         fp="",
-        alpn="",
+        alpn=None,
         pbk="",
         sid="",
         spx="",
@@ -630,14 +629,13 @@ class XrayConfiguration(BaseSubscription):
             if ds_outbound:
                 outbounds.append(ds_outbound)
 
-        alpn = inbound.get("alpn", None)
         outbound["streamSettings"] = self.make_stream_setting(
             net=net,
             tls=tls,
             sni=inbound["sni"],
             host=inbound["host"],
             path=path,
-            alpn=alpn.rsplit(sep=",") if alpn else None,
+            alpn=inbound.get("alpn", None),
             fp=inbound.get("fp", ""),
             pbk=inbound.get("pbk", ""),
             sid=inbound.get("sid", ""),

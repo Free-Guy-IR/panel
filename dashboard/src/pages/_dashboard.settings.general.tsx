@@ -72,7 +72,7 @@ export default function General() {
   // TODO: skeleton needs to be improved
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl p-4 sm:py-6 lg:py-8">
+      <div className="w-full p-4 sm:py-6 lg:py-8">
         <div className="space-y-6 sm:space-y-8 lg:space-y-10">
           {/* General Settings Skeleton */}
           <div className="space-y-4">
@@ -126,7 +126,7 @@ export default function General() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-200px)] w-full max-w-7xl flex-col">
+    <div className="flex min-h-[calc(100vh-200px)] w-full flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col p-4 sm:py-6 lg:py-8">
           <div className="flex-1 space-y-6 sm:space-y-8 lg:space-y-10">

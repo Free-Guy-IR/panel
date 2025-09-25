@@ -33,8 +33,8 @@ async def create_core_config(db: AsyncSession, core_config: CoreCreate) -> CoreC
     db_core_config = CoreConfig(
         name=core_config.name,
         config=core_config.config,
-        exclude_inbound_tags=core_config.exclude_inbound_tags or "",
-        fallbacks_inbound_tags=core_config.fallbacks_inbound_tags or "",
+        exclude_inbound_tags=core_config.exclude_inbound_tags or set(),
+        fallbacks_inbound_tags=core_config.fallbacks_inbound_tags or set(),
     )
     db.add(db_core_config)
     await db.commit()

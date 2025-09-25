@@ -113,25 +113,25 @@ PasarGuard удобен в использовании, многофункцио�
 Установка PasarGuard с базой данных SQLite (по умолчанию):
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --pre-release
 ```
 
 Установка PasarGuard с базой данных MySQL:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mysql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql --pre-release
 ```
 
 Установка PasarGuard с базой данных MariaDB:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mariadb --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb --pre-release
 ```
 
 Установка PasarGuard с базой данных PostgreSQL:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database postgresql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql --pre-release
 ```
 
 Когда установка будет завершена:
@@ -370,7 +370,7 @@ PasarGuard поставляется с встроенным ботом Telegram,
 Установка последней версии PasarGuard:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/pasarguard.sh)" @ install-script
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install-script
 ```
 
 Настройка сервиса резервного копирования:

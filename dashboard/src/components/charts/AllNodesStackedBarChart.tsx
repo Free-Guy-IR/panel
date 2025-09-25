@@ -287,9 +287,8 @@ export function AllNodesStackedBarChart() {
           group_by_node: true,
         }
         const response = await getUsage(params)
-        
-        console.log('API Response:', response)
-        console.log('Nodes List:', nodeList)
+
+        // API response and nodes list logged
         
         // Handle the response format exactly like CostumeBarChart
         let statsByNode: Record<string, NodeUsageStat[]> = {}
@@ -302,23 +301,23 @@ export function AllNodesStackedBarChart() {
             console.warn('Unexpected array format for all nodes usage')
           }
         }
-        
-        console.log('Stats by Node:', statsByNode)
+
+        // Stats by node processed
         
         // Build a map from node id to node name for quick lookup
         const nodeIdToName = nodeList.reduce((acc, node) => {
           acc[node.id] = node.name
           return acc
         }, {} as Record<string, string>)
-        
-        console.log('Node ID to Name mapping:', nodeIdToName)
+
+        // Node ID to name mapping created
         
         // Check if we have data for individual nodes or aggregated data
         const hasIndividualNodeData = Object.keys(statsByNode).some(key => key !== '-1')
         
         if (!hasIndividualNodeData && statsByNode['-1']) {
           // API returned aggregated data for all nodes combined
-          console.log('Using aggregated data for all nodes')
+          // Using aggregated data for all nodes
           const aggregatedStats = statsByNode['-1']
           
           if (aggregatedStats.length > 0) {
@@ -347,8 +346,8 @@ export function AllNodesStackedBarChart() {
               })
               return entry
             })
-            
-            console.log('Final chart data (aggregated):', data)
+
+            // Final chart data (aggregated) processed
             setChartData(data)
             
             // Calculate total usage
@@ -366,9 +365,8 @@ export function AllNodesStackedBarChart() {
           Object.values(statsByNode).forEach((arr) => arr.forEach((stat) => allPeriods.add(stat.period_start)))
           // Sort periods
           const sortedPeriods = Array.from(allPeriods).sort()
-          
-          console.log('All periods:', sortedPeriods)
-          console.log('Period type:', period)
+
+          // All periods and period type processed
           
           if (sortedPeriods.length > 0) {
             // Build chart data: [{ time, [nodeName]: usage, ... }]
@@ -399,7 +397,7 @@ export function AllNodesStackedBarChart() {
                   // Store uplink and downlink for tooltip
                   entry[`_uplink_${nodeName}`] = nodeStats.uplink
                   entry[`_downlink_${nodeName}`] = nodeStats.downlink
-                  console.log(`Node ${nodeName}: ${usageInGB.toFixed(2)} GB at ${timeFormat}`)
+                  // Node usage processed
                 } else {
                   entry[nodeName] = 0
                   entry[`_uplink_${nodeName}`] = 0
@@ -408,8 +406,8 @@ export function AllNodesStackedBarChart() {
               })
               return entry
             })
-            
-            console.log('Final chart data:', data)
+
+            // Final chart data processed
             setChartData(data)
             
             // Calculate total usage
@@ -418,7 +416,7 @@ export function AllNodesStackedBarChart() {
             const formattedTotal = formatBytes(total, 2)
             if (typeof formattedTotal === 'string') setTotalUsage(formattedTotal)
           } else {
-            console.log('No periods found, setting empty data')
+            // No periods found, setting empty data
             setChartData(null)
             setTotalUsage('0')
           }

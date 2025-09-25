@@ -102,6 +102,7 @@ class NodeOperation(BaseOperation):
                     users=await core_users(db=db),
                     keep_alive=db_node.keep_alive,
                     ghather_logs=db_node.gather_logs,
+                    exclude_inbounds=core.exclude_inbound_tags,
                     timeout=10,
                 )
                 await NodeOperation.update_node_status(

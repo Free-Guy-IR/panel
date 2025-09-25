@@ -111,25 +111,25 @@
 با دستور زیر پاسارگارد را با دیتابیس SQLite نصب کنید:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --pre-release
 ```
 
 با دستور زیر پاسارگارد را با دیتابیس MySQL نصب کنید:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mysql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql --pre-release
 ```
 
 با دستور زیر پاسارگارد را با دیتابیس MariaDB نصب کنید:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database mariadb --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb --pre-release
 ```
 
 با دستور زیر پاسارگارد را با دیتابیس PostgreSQL نصب کنید:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/PasarGuard.sh)" @ install --database postgresql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql --pre-release
 ```
 
 وقتی نصب تمام شد:
@@ -338,7 +338,7 @@ server {
 نصب آخرین ورژن پاسارگارد کامند:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/master/pasarguard.sh)" @ install-script
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install-script
 ```
 
 راه‌اندازی سرویس پشتیبان گیری:

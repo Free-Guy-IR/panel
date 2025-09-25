@@ -206,7 +206,7 @@ export default function CleanupSettings() {
                     <Avatar className="h-4 w-4 flex-shrink-0 sm:h-5 sm:w-5">
                       <AvatarFallback className="bg-muted text-xs font-medium">{selectedAdmin?.username?.charAt(0).toUpperCase() || '?'}</AvatarFallback>
                     </Avatar>
-                    <span className="truncate text-xs sm:text-sm">{selectedAdmin?.username || t('selectAdmin')}</span>
+                    <span className="truncate text-xs sm:text-sm">{selectedAdmin?.username || t('advanceSearch.selectAdmin')}</span>
                     {selectedAdmin && <div className="flex-shrink-0">{selectedAdmin.is_sudo ? <UserCog className="h-3 w-3 text-primary" /> : <UserRound className="h-3 w-3 text-primary" />}</div>}
                   </div>
                   <ChevronDown className="ml-1 h-3 w-3 flex-shrink-0 text-muted-foreground" />
