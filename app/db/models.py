@@ -50,9 +50,7 @@ class Admin(Base):
     username: Mapped[str] = mapped_column(String(34), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(128))
     users: Mapped[List["User"]] = relationship(back_populates="admin", init=False, default_factory=list)
-    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(
-        back_populates="admin", init=False, default_factory=list, cascade="all, delete-orphan"
-    )
+    usage_logs: Mapped[List["AdminUsageLogs"]] = relationship(back_populates="admin", init=False, default_factory=list)
     is_sudo: Mapped[bool] = mapped_column(default=False)
     password_reset_at: Mapped[Optional[dt]] = mapped_column(DateTime(timezone=True), default=None)
     telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, default=None)
