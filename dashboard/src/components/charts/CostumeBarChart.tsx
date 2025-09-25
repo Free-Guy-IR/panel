@@ -282,9 +282,17 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
             className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px]" 
           />
         ) : (
-          <ChartContainer dir={'ltr'} config={chartConfig} className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px] w-full">
+          <ChartContainer 
+            dir={'ltr'} 
+            config={chartConfig} 
+            className="max-h-[300px] sm:max-h-[400px] min-h-[150px] sm:min-h-[200px] w-full overflow-x-auto"
+          >
             {chartData && chartData.length > 0 ? (
-              <BarChart accessibilityLayer data={chartData}>
+              <BarChart 
+                accessibilityLayer 
+                data={chartData}
+                margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+              >
                 <CartesianGrid direction={'ltr'} vertical={false} />
                 <XAxis 
                   direction={'ltr'} 
@@ -297,6 +305,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
                     fontSize: 8,
                     fontWeight: 500,
                   }}
+                  minTickGap={5}
                 />
                 <YAxis 
                   direction={'ltr'} 

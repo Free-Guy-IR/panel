@@ -493,12 +493,31 @@ export function AllNodesStackedBarChart() {
             className="max-h-[400px] min-h-[200px]" 
           />
         ) : (
-          <ChartContainer dir={'ltr'} config={chartContainerConfig} className="max-h-[400px] min-h-[200px] w-full">
+          <ChartContainer 
+            dir={'ltr'} 
+            config={chartContainerConfig} 
+            className="max-h-[400px] min-h-[200px] w-full overflow-x-auto"
+          >
             {chartData && chartData.length > 0 ? (
-              <BarChart accessibilityLayer data={chartData}>
+              <BarChart 
+                accessibilityLayer 
+                data={chartData}
+                margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+              >
                 <CartesianGrid direction={'ltr'} vertical={false} />
-                <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} />
-                <YAxis direction={'ltr'} tickLine={false} axisLine={false} tickFormatter={value => `${value.toFixed(2)} GB`} 
+                <XAxis 
+                  direction={'ltr'} 
+                  dataKey="time" 
+                  tickLine={false} 
+                  tickMargin={10} 
+                  axisLine={false} 
+                  minTickGap={5}
+                />
+                <YAxis 
+                  direction={'ltr'} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tickFormatter={value => `${value.toFixed(2)} GB`} 
                   tick={{
                     fill: 'hsl(var(--muted-foreground))',
                     fontSize: 9,
