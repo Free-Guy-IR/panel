@@ -20,17 +20,8 @@ class XRayConfig(dict):
     ):
         """Initialize the XRay config."""
         if isinstance(config, str):
-            try:
-                # considering string as json
-                config = commentjson.loads(config)
-            except (json.JSONDecodeError, ValueError):
-                # considering string as file path
-                with open(config, "r") as file:
-                    config = commentjson.loads(file.read())
-
-        if isinstance(config, PosixPath):
-            with open(config, "r") as file:
-                config = commentjson.loads(file.read())
+            # considering string as json
+            config = commentjson.loads(config)
 
         if isinstance(config, dict):
             config = deepcopy(config)
