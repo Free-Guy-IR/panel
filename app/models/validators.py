@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
+from urllib.parse import urlparse
 
 from app.db.models import UserStatusCreate
 
@@ -173,8 +174,11 @@ class ProxyValidator:
 class DiscordValidator:
     @staticmethod
     def validate_webhook(value: str | None):
-        if value and not value.startswith("https://discord.com"):
-            raise ValueError("Discord webhook must start with 'https://discord.com'")
+        if value:
+            parsed = urlparse(value)
+            # validate scheme and hostname
+            if parsed.scheme != "https" or parsed.hostname not in {"discord.com"}:
+                raise ValueError("Discord webhook must use https scheme and point to 'discord.com'")
         return value
 
 
