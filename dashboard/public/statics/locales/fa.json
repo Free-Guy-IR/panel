@@ -25,6 +25,7 @@
   "manageSettings": "مدیریت و کنترل تنظیمات",
   "monitorUsers": "مدیریت کاربران",
   "alltime": "همه زمان",
+  "coreUsername": "نام کاربری هسته",
   "settings": {
     "title": "تنظیمات",
     "notifications": {

@@ -20,6 +20,7 @@
   "creating": "Creating",
   "monitorUsers": "Monitor Users",
   "alltime": "All time",
+  "coreUsername": "Core Username",
   "nodes": {
     "title": "Nodes",
     "description": "Manage your nodes",

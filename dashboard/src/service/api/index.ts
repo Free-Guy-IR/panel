@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.0.0-beta-3
+ * OpenAPI spec version: 1.0.0-beta-1
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -161,6 +161,8 @@ export interface XrayNoiseSettings {
   packet: string
   /** @pattern ^\d{1,16}(-\d{1,16})?$ */
   delay: string
+  /** @pattern ip|ipv4|ipv6 */
+  apply_to?: string
 }
 
 export type XrayMuxSettingsOutputXudpConcurrency = number | null
@@ -211,7 +213,7 @@ export const XTLSFlows = {
   'xtls-rprx-vision': 'xtls-rprx-vision',
 } as const
 
-export type XMuxSettingsOutputHKeepAlivePeriod = string | null
+export type XMuxSettingsOutputHKeepAlivePeriod = number | null
 
 export type XMuxSettingsOutputHMaxRequestTimes = string | null
 
@@ -232,7 +234,7 @@ export interface XMuxSettingsOutput {
   hKeepAlivePeriod?: XMuxSettingsOutputHKeepAlivePeriod
 }
 
-export type XMuxSettingsInputHKeepAlivePeriod = string | number | null
+export type XMuxSettingsInputHKeepAlivePeriod = number | null
 
 export type XMuxSettingsInputHMaxRequestTimes = string | number | null
 
@@ -558,8 +560,6 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -614,6 +614,21 @@ export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
 
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
   expire?: UserModifyExpire
@@ -628,19 +643,6 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -754,6 +756,7 @@ export interface Telegram {
   webhook_url?: TelegramWebhookUrl
   webhook_secret?: TelegramWebhookSecret
   proxy_url?: TelegramProxyUrl
+  method?: RunMethod
   mini_app_login?: boolean
   mini_app_web_url?: TelegramMiniAppWebUrl
   for_admins_only?: boolean
@@ -959,6 +962,14 @@ export interface SettingsSchemaInput {
   subscription?: SettingsSchemaInputSubscription
   general?: SettingsSchemaInputGeneral
 }
+
+export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RunMethod = {
+  webhook: 'webhook',
+  'long-polling': 'long-polling',
+} as const
 
 export interface RemoveUsersResponse {
   users: string[]
