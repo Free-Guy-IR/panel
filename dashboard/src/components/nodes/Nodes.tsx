@@ -8,6 +8,8 @@ import NodeModal from '@/components/dialogs/NodeModal'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { nodeFormSchema, NodeFormValues } from '@/components/dialogs/NodeModal'
+import { Card, CardContent } from '@/components/ui/card'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 const initialDefaultValues: Partial<NodeFormValues> = {
   name: '',
@@ -26,7 +28,7 @@ export default function Nodes() {
   const [editingNode, setEditingNode] = useState<NodeResponse | null>(null)
   const modifyNodeMutation = useModifyNode()
 
-  const { data: nodesData } = useGetNodes(undefined, {
+  const { data: nodesData, isLoading } = useGetNodes(undefined, {
     query: {
       refetchInterval: 5000,
       refetchIntervalInBackground: true,
@@ -101,6 +103,10 @@ export default function Nodes() {
     }
   }
 
+  if (isLoading) {
+    return <LoadingSpinner />
+  }
+
   return (
     <div className="flex flex-col gap-2 w-full items-start">
       <div className="flex-1 space-y-4 pt-6 w-full">
@@ -110,6 +116,28 @@ export default function Nodes() {
         >
           {nodesData?.map(node => <Node key={node.id} node={node} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)}
         </div>
+
+        {(!nodesData || nodesData.length === 0) && (
+          <Card className="mb-12">
+            <CardContent className="p-8 text-center">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">{t('nodes.noNodes')}</h3>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  {t('nodes.noNodesDescription')}{' '}
+                  <a
+                    href="https://github.com/PasarGuard/node"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline-offset-4 hover:underline font-medium"
+                  >
+                    PasarGuard/node
+                  </a>{' '}
+                  {t('nodes.noNodesDescription2', { defaultValue: 'and connect it to the panel.' })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <NodeModal
           isDialogOpen={isDialogOpen}

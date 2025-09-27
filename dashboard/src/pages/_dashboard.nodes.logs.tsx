@@ -219,11 +219,17 @@ export default function NodeLogs() {
 		return logs.filter((log) => {
 			const logType = getLogType(log.message).type;
 
-			if (typeFilter.length === 0) {
-				return true;
+			// Filter by type
+			if (typeFilter.length > 0 && !typeFilter.includes(logType)) {
+				return false;
 			}
 
-			return typeFilter.includes(logType);
+			// Filter by search term
+			if (search && !log.message.toLowerCase().includes(search.toLowerCase())) {
+				return false;
+			}
+
+			return true;
 		});
 	};
 
