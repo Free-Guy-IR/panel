@@ -16,3 +16,8 @@ export const numberWithCommas = (x: number | undefined | null) => {
   if (x === undefined || x === null) return '0'
   return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
+
+export const toPersianNumerals = (num: number | string): string => {
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
+  return num.toString().replace(/\d/g, (digit) => persianDigits[parseInt(digit)])
+}
