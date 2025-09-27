@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { DateRange } from 'react-day-picker'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
+import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { getUsage, Period, type NodeUsageStat } from '@/service/api'
@@ -159,57 +159,44 @@ export function AllNodesStackedBarChart() {
   // Build color palette for nodes
   const nodeList: NodeResponse[] = useMemo(() => (Array.isArray(nodesData) ? nodesData : []), [nodesData])
   
-  // Helper function to extract hue from HSL string
-  const extractHue = (hslString: string): number => {
-    const match = hslString.match(/hsl\(([^,]+)/)
-    if (match) {
-      const hue = parseFloat(match[1])
-      return isNaN(hue) ? 0 : hue
-    }
-    return 0
-  }
 
   // Function to generate distinct colors based on theme
-  const generateDistinctColor = (index: number, _totalNodes: number, isDark: boolean): string => {
-    // Get current theme colors for reference
-    const root = document.documentElement
-    const computedStyle = getComputedStyle(root)
-    
-    // Extract base colors from current theme
-    const primaryHue = extractHue(computedStyle.getPropertyValue('--primary'))
-    const chart1Hue = extractHue(computedStyle.getPropertyValue('--chart-1'))
-    const chart2Hue = extractHue(computedStyle.getPropertyValue('--chart-2'))
-    
-    // Create a palette of distinct hues
-    const baseHues = [primaryHue, chart1Hue, chart2Hue]
-    const additionalHues = [
-      (primaryHue + 60) % 360,   // Complementary
-      (primaryHue + 120) % 360,  // Triadic
-      (primaryHue + 180) % 360,  // Opposite
-      (primaryHue + 240) % 360,  // Triadic
-      (primaryHue + 300) % 360,  // Triadic
-      (chart1Hue + 60) % 360,
-      (chart1Hue + 120) % 360,
-      (chart2Hue + 60) % 360,
-      (chart2Hue + 120) % 360,
-      (primaryHue + 30) % 360,   // Analogous
-      (primaryHue + 90) % 360,   // Split complementary
-      (primaryHue + 150) % 360,
-      (primaryHue + 210) % 360,
-      (primaryHue + 270) % 360,
-      (primaryHue + 330) % 360,
+  const generateDistinctColor = useCallback((index: number, _totalNodes: number, isDark: boolean): string => {
+    // Define a more distinct color palette with better contrast
+    const distinctHues = [
+      0,    // Red
+      30,   // Orange
+      60,   // Yellow
+      120,  // Green
+      180,  // Cyan
+      210,  // Blue
+      240,  // Indigo
+      270,  // Purple
+      300,  // Magenta
+      330,  // Pink
+      15,   // Red-orange
+      45,   // Yellow-orange
+      75,   // Yellow-green
+      150,  // Green-cyan
+      200,  // Cyan-blue
+      225,  // Blue-indigo
+      255,  // Indigo-purple
+      285,  // Purple-magenta
+      315,  // Magenta-pink
+      345,  // Pink-red
     ]
     
-    const allHues = [...baseHues, ...additionalHues]
-    const hue = allHues[index % allHues.length]
+    const hue = distinctHues[index % distinctHues.length]
     
-    // For dark theme: higher saturation, moderate lightness
-    // For light theme: moderate saturation, lower lightness
-    const saturation = isDark ? 70 + (index % 20) : 60 + (index % 25)
-    const lightness = isDark ? 50 + (index % 15) : 45 + (index % 20)
+    // Create more distinct saturation and lightness values
+    const saturationVariations = [65, 75, 85, 70, 80, 60, 90, 55, 95, 50]
+    const lightnessVariations = isDark ? [45, 55, 35, 50, 40, 60, 30, 65, 25, 70] : [40, 50, 30, 45, 35, 55, 25, 60, 20, 65]
+    
+    const saturation = saturationVariations[index % saturationVariations.length]
+    const lightness = lightnessVariations[index % lightnessVariations.length]
     
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`
-  }
+  }, [])
   
   // Build chart config dynamically based on nodes
   const chartConfig = useMemo(() => {
@@ -233,33 +220,12 @@ export function AllNodesStackedBarChart() {
       }
     })
     return config
-  }, [nodeList, resolvedTheme])
-
-  // Chart configuration for the container
-  const chartContainerConfig = useMemo(() => {
-    const config: ChartConfig = {}
-    const isDark = resolvedTheme === 'dark'
-    nodeList.forEach((node, idx) => {
-      let color
-      if (idx === 0) {
-        // First node uses primary color like CostumeBarChart
-        color = 'hsl(var(--primary))'
-      } else if (idx < 5) {
-        // Use palette colors for nodes 2-5: --chart-2, --chart-3, ...
-        color = `hsl(var(--chart-${idx + 1}))`
-      } else {
-        // Generate distinct colors for nodes beyond palette
-        color = generateDistinctColor(idx, nodeList.length, isDark)
-      }
-      config[node.name] = {
-        label: node.name,
-        color: color,
-      }
-    })
-    return config
-  }, [nodeList, resolvedTheme])
+  }, [nodeList, resolvedTheme, generateDistinctColor])
 
   useEffect(() => {
+    let isCancelled = false
+    let timeoutId: NodeJS.Timeout
+    
     const fetchUsageData = async () => {
       if (!dateRange?.from || !dateRange?.to) {
         setChartData(null)
@@ -273,12 +239,8 @@ export function AllNodesStackedBarChart() {
         const endDate = dateRange.to
         const period = getPeriodFromDateRange(dateRange)
         
-        // Check if end date is today
-        const today = dateUtils.toDayjs(new Date())
-        const isEndDateToday = dateUtils.toDayjs(endDate).isSame(today, 'day')
-        
-        // Use current time if end date is today, otherwise use end of day
-        const endTime = isEndDateToday ? new Date().toISOString() : dateUtils.toDayjs(endDate).endOf('day').toISOString()
+        // Always use end of day for daily period to avoid extra bars
+        const endTime = period === Period.day ? dateUtils.toDayjs(endDate).endOf('day').toISOString() : new Date().toISOString()
         
         const params: Parameters<typeof getUsage>[0] = {
           period: period,
@@ -287,6 +249,9 @@ export function AllNodesStackedBarChart() {
           group_by_node: true,
         }
         const response = await getUsage(params)
+        
+        // Check if component is still mounted
+        if (isCancelled) return
 
         // API response and nodes list logged
         
@@ -348,12 +313,14 @@ export function AllNodesStackedBarChart() {
             })
 
             // Final chart data (aggregated) processed
-            setChartData(data)
-            
-            // Calculate total usage
-            const total = aggregatedStats.reduce((sum: number, point: NodeUsageStat) => sum + point.uplink + point.downlink, 0)
-            const formattedTotal = formatBytes(total, 2)
-            if (typeof formattedTotal === 'string') setTotalUsage(formattedTotal)
+            if (!isCancelled) {
+              setChartData(data)
+              
+              // Calculate total usage
+              const total = aggregatedStats.reduce((sum: number, point: NodeUsageStat) => sum + point.uplink + point.downlink, 0)
+              const formattedTotal = formatBytes(total, 2)
+              if (typeof formattedTotal === 'string') setTotalUsage(formattedTotal)
+            }
           } else {
             setChartData(null)
             setTotalUsage('0')
@@ -408,13 +375,15 @@ export function AllNodesStackedBarChart() {
             })
 
             // Final chart data processed
-            setChartData(data)
-            
-            // Calculate total usage
-            let total = 0
-            Object.values(statsByNode).forEach((arr) => arr.forEach((stat) => { total += stat.uplink + stat.downlink }))
-            const formattedTotal = formatBytes(total, 2)
-            if (typeof formattedTotal === 'string') setTotalUsage(formattedTotal)
+            if (!isCancelled) {
+              setChartData(data)
+              
+              // Calculate total usage
+              let total = 0
+              Object.values(statsByNode).forEach((arr) => arr.forEach((stat) => { total += stat.uplink + stat.downlink }))
+              const formattedTotal = formatBytes(total, 2)
+              if (typeof formattedTotal === 'string') setTotalUsage(formattedTotal)
+            }
           } else {
             // No periods found, setting empty data
             setChartData(null)
@@ -427,10 +396,23 @@ export function AllNodesStackedBarChart() {
         setTotalUsage('0')
         console.error('Error fetching usage data:', err)
       } finally {
-        setIsLoading(false)
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
       }
     }
-    fetchUsageData()
+    
+    // Debounce the API call to prevent excessive requests during zoom
+    timeoutId = setTimeout(() => {
+      fetchUsageData()
+    }, 300)
+    
+    return () => {
+      isCancelled = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
   }, [dateRange, nodeList])
 
   // Add effect to update dateRange when selectedTime changes
@@ -443,11 +425,15 @@ export function AllNodesStackedBarChart() {
       } else if (selectedTime === '24h') {
         from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
       } else if (selectedTime === '3d') {
-        from = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+        from = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
       } else if (selectedTime === '1w') {
-        from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        from = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
       }
-      if (from) setDateRange({ from, to: now })
+      if (from) {
+        // For 1w and 3d, set to end of current day to avoid extra bar
+        const to = (selectedTime === '1w' || selectedTime === '3d') ? dateUtils.toDayjs(now).endOf('day').toDate() : now
+        setDateRange({ from, to })
+      }
     }
   }, [selectedTime, showCustomRange])
 
@@ -493,61 +479,83 @@ export function AllNodesStackedBarChart() {
             className="max-h-[400px] min-h-[200px]" 
           />
         ) : (
-          <ChartContainer 
-            dir={'ltr'} 
-            config={chartContainerConfig} 
-            className="max-h-[400px] min-h-[200px] w-full overflow-x-auto"
-          >
-            {chartData && chartData.length > 0 ? (
-              <BarChart 
-                accessibilityLayer 
-                data={chartData}
-                margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
-              >
-                <CartesianGrid direction={'ltr'} vertical={false} />
-                <XAxis 
-                  direction={'ltr'} 
-                  dataKey="time" 
-                  tickLine={false} 
-                  tickMargin={10} 
-                  axisLine={false} 
-                  minTickGap={5}
-                />
-                <YAxis 
-                  direction={'ltr'} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tickFormatter={value => `${value.toFixed(2)} GB`} 
-                  tick={{
-                    fill: 'hsl(var(--muted-foreground))',
-                    fontSize: 9,
-                    fontWeight: 500,
-                  }}
-                  width={32}
-                  tickMargin={2}
-                />
-                {/* When using ChartTooltip, pass period as a prop */}
-                <ChartTooltip cursor={false} content={<CustomTooltip chartConfig={chartConfig} dir={dir} period={getPeriodFromDateRange(dateRange)} />} />
-                <ChartLegend className={"overflow-x-auto justify-evenly"} content={<ChartLegendContent />} />
-                {nodeList.map((node, idx) => (
-                  <Bar 
-                    key={node.id} 
-                    dataKey={node.name} 
-                    stackId="a" 
-                    fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
-                    radius={idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+          <div className="w-full max-w-7xl mx-auto">
+            <ChartContainer 
+              dir={'ltr'} 
+              config={chartConfig} 
+              className="max-h-[400px] min-h-[200px] w-full"
+            >
+              {chartData && chartData.length > 0 ? (
+                <BarChart 
+                  accessibilityLayer 
+                  data={chartData}
+                  margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid direction={'ltr'} vertical={false} />
+                  <XAxis 
+                    direction={'ltr'} 
+                    dataKey="time" 
+                    tickLine={false} 
+                    tickMargin={10} 
+                    axisLine={false} 
+                    minTickGap={5}
                   />
-                ))}
-              </BarChart>
-            ) : (
-              <EmptyState 
-                type="no-data" 
-                title={t('statistics.noDataInRange')}
-                description={t('statistics.noDataInRangeDescription')}
-                className="max-h-[400px] min-h-[200px]" 
-              />
+                  <YAxis 
+                    direction={'ltr'} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tickFormatter={value => `${value.toFixed(2)} GB`} 
+                    tick={{
+                      fill: 'hsl(var(--muted-foreground))',
+                      fontSize: 9,
+                      fontWeight: 500,
+                    }}
+                    width={32}
+                    tickMargin={2}
+                  />
+                  {/* When using ChartTooltip, pass period as a prop */}
+                  <ChartTooltip cursor={false} content={<CustomTooltip chartConfig={chartConfig} dir={dir} period={getPeriodFromDateRange(dateRange)} />} />
+                  {nodeList.map((node, idx) => (
+                    <Bar
+                      key={node.id}
+                      dataKey={node.name}
+                      stackId="a"
+                      fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
+                      radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              ) : (
+                <EmptyState 
+                  type="no-data" 
+                  title={t('statistics.noDataInRange')}
+                  description={t('statistics.noDataInRangeDescription')}
+                  className="max-h-[400px] min-h-[200px]" 
+                />
+              )}
+            </ChartContainer>
+            {/* Separate scrollable legend */}
+            {chartData && chartData.length > 0 && (
+              <div className="overflow-x-auto pt-3">
+                <div className="flex items-center justify-center gap-4 min-w-max">
+                  {nodeList.map((node) => {
+                    const itemConfig = chartConfig[node.name]
+                    return (
+                      <div key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
+                        <div
+                          className="h-2 w-2 shrink-0 rounded-[2px]"
+                          style={{
+                            backgroundColor: itemConfig?.color || 'hsl(var(--chart-1))',
+                          }}
+                        />
+                        <span className="whitespace-nowrap text-xs">{node.name}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
-          </ChartContainer>
+          </div>
         )}
       </CardContent>
     </Card>
