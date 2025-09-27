@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Card, CardTitle } from '../ui/card'
-import FlagFromIP from '@/utils/flagFromIP'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu'
 import { Button } from '../ui/button'
 import { MoreVertical, Pencil, Trash2, Power, Activity, RotateCcw, Wifi, Loader2 } from 'lucide-react'
@@ -130,7 +129,6 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
               <div className="font-medium truncate">{node.name}</div>
             </div>
             <CardTitle className="text-sm text-muted-foreground truncate flex items-center gap-1">
-              <FlagFromIP ip={node.address} />
               <span>
                 {node.address}:{node.port}
               </span>
