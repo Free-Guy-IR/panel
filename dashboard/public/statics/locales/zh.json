@@ -54,7 +54,7 @@
     "selectNode": "选择节点",
     "noNodes": "未配置节点",
     "noNodesDescription": "主面板没有配置任何核心。您需要从",
-    "noNodesDescription2": "添加和配置节点，并将其连接到面板。",
+    "noNodesDescription2": "连接和配置节点，并将其连接到面板。",
     "logs": {
       "title": "日志",
       "description": "查看和监控节点日志",

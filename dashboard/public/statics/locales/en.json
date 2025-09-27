@@ -59,7 +59,7 @@
     "selectNode": "Select a node",
     "noNodes": "No nodes configured",
     "noNodesDescription": "Master Panel doesn't have any cores configured. You need to add and configure a node from",
-    "noNodesDescription2": "and connect it to the panel.",
+    "noNodesDescription2": "connect and configure it to the panel.",
     "logs": {
       "title": "Logs",
       "description": "View and monitor node logs",
