@@ -192,14 +192,13 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
     setCurrentPage(newPage)
 
     try {
-      // Wait for state to update before refetching
-      await new Promise(resolve => setTimeout(resolve, 0))
+      // Immediate refetch without delay
       await refetch()
     } finally {
-      // Add a small delay to prevent flickering
+      // Minimal delay for instant response
       setTimeout(() => {
         setIsChangingPage(false)
-      }, 300)
+      }, 50)
     }
   }
 
@@ -209,14 +208,13 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
     setCurrentPage(0) // Reset to first page when items per page changes
 
     try {
-      // Wait for state to update before refetching
-      await new Promise(resolve => setTimeout(resolve, 0))
+      // Immediate refetch without delay
       await refetch()
     } finally {
-      // Add a small delay to prevent flickering
+      // Minimal delay for instant response
       setTimeout(() => {
         setIsChangingPage(false)
-      }, 300)
+      }, 50)
     }
   }
 

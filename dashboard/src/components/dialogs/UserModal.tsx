@@ -8,8 +8,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { Calendar as PersianCalendar } from '@/components/ui/persian-calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -30,7 +30,7 @@ import {
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarIcon, Layers, ListStart, Lock, RefreshCcw, Users, X } from 'lucide-react'
+import { CalendarIcon, ChevronDown, Layers, ListStart, Lock, RefreshCcw, Users, X } from 'lucide-react'
 import React, { useEffect, useState, useTransition } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -275,7 +275,7 @@ const ExpiryDateField = ({
         <PopoverContent
           className="w-auto p-0"
           align="start"
-          onInteractOutside={e => {
+          onInteractOutside={(e: Event) => {
             e.preventDefault()
             setCalendarOpen(false)
           }}
@@ -372,6 +372,98 @@ const ExpiryDateField = ({
 }
 
 export { ExpiryDateField }
+
+// Custom Select component that works reliably on mobile
+const StatusSelect = ({
+  value,
+  onValueChange,
+  placeholder,
+  children,
+  disabled
+}: {
+  value?: string
+  onValueChange?: (value: string) => void
+  placeholder?: string
+  children: React.ReactNode
+  disabled?: boolean
+}) => {
+  const [open, setOpen] = useState(false)
+  const { t } = useTranslation()
+
+  const handleSelect = (selectedValue: string) => {
+    onValueChange?.(selectedValue)
+    setOpen(false)
+  }
+
+  const getStatusText = (statusValue?: string) => {
+    if (!statusValue) return placeholder || t('userDialog.selectStatus', { defaultValue: 'Select status' })
+
+    switch (statusValue) {
+      case 'active': return t('status.active', { defaultValue: 'Active' })
+      case 'disabled': return t('status.disabled', { defaultValue: 'Disabled' })
+      case 'on_hold': return t('status.on_hold', { defaultValue: 'On Hold' })
+      default: return placeholder || t('userDialog.selectStatus', { defaultValue: 'Select status' })
+    }
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between h-9 px-3 py-2 text-sm"
+          disabled={disabled}
+        >
+          <span className="truncate">{getStatusText(value)}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-1" align="start">
+        {React.Children.map(children, (child) => {
+          if (React.isValidElement(child) && child.props.value) {
+            return React.cloneElement(child, {
+              onSelect: handleSelect
+            })
+          }
+          return child
+        })}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+const StatusSelectItem = ({
+  value,
+  children,
+  onSelect
+}: {
+  value: string
+  children: React.ReactNode
+  onSelect?: (value: string) => void
+}) => {
+  const getDotColor = () => {
+    switch (value) {
+      case 'active': return 'bg-green-500'
+      case 'disabled': return 'bg-zinc-500'
+      case 'on_hold': return 'bg-violet-500'
+      default: return 'bg-gray-500'
+    }
+  }
+
+  return (
+    <div
+      className="relative flex w-full min-w-0 cursor-pointer select-none items-center rounded-sm py-2 px-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground transition-colors"
+      onClick={() => onSelect?.(value)}
+    >
+      <span className="truncate min-w-0 flex-1 pr-2">{children}</span>
+      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+        <div className={`h-2 w-2 rounded-full ${getDotColor()}`} />
+      </span>
+    </div>
+  )
+}
 
 export default function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserId, onSuccessCallback }: UserModalProps) {
   const { t } = useTranslation()
@@ -494,14 +586,14 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     },
   )
 
-  // Fetch data for tabs with proper caching and refetch on page view
+  // Fetch data for tabs without caching
   const { data: templatesData, isLoading: templatesLoading } = useGetUserTemplates(undefined, {
     query: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes
-      refetchOnWindowFocus: true,
+      staleTime: 0, // No stale time - always fetch fresh data
+      gcTime: 0, // No garbage collection time - no caching
+      refetchOnWindowFocus: false,
       refetchOnMount: true,
-      refetchOnReconnect: true,
+      refetchOnReconnect: false,
     },
   })
 
@@ -1081,6 +1173,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     setUsePersianCalendar(i18n.language === 'fa')
   }, [i18n.language])
 
+
   return (
     <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
       <DialogContent className={`lg:min-w-[900px] ${editingUser ? 'h-full sm:h-auto' : 'h-auto'}`}>
@@ -1154,23 +1247,18 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                               <FormItem className="w-1/3">
                                 <FormLabel>{t('status', { defaultValue: 'Status' })}</FormLabel>
                                 <FormControl>
-                                  <Select
+                                  <StatusSelect
+                                    value={field.value || ''}
                                     onValueChange={value => {
                                       field.onChange(value)
                                       handleFieldChange('status', value)
-                                      handleFieldBlur('status')
                                     }}
-                                    value={field.value || ''}
+                                    placeholder={t('userDialog.selectStatus', { defaultValue: 'Select status' })}
                                   >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder={t('userDialog.selectStatus', { defaultValue: 'Select status' })} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="active">{t('status.active', { defaultValue: 'Active' })}</SelectItem>
-                                      {editingUser && <SelectItem value="disabled">{t('status.disabled', { defaultValue: 'Disabled' })}</SelectItem>}
-                                      <SelectItem value="on_hold">{t('status.on_hold', { defaultValue: 'On Hold' })}</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    <StatusSelectItem value="active">{t('status.active', { defaultValue: 'Active' })}</StatusSelectItem>
+                                    {editingUser && <StatusSelectItem value="disabled">{t('status.disabled', { defaultValue: 'Disabled' })}</StatusSelectItem>}
+                                    <StatusSelectItem value="on_hold">{t('status.on_hold', { defaultValue: 'On Hold' })}</StatusSelectItem>
+                                  </StatusSelect>
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -1916,7 +2004,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               >
                 {t('cancel', { defaultValue: 'Cancel' })}
               </Button>
-              <LoaderButton type="submit" isLoading={loading} disabled={false} loadingText={editingUser ? t('modifying') : t('creating')}>
+              <LoaderButton type="submit" isLoading={loading} disabled={!isFormValid} loadingText={editingUser ? t('modifying') : t('creating')}>
                 {editingUser ? t('modify', { defaultValue: 'Modify' }) : t('create', { defaultValue: 'Create' })}
               </LoaderButton>
             </div>

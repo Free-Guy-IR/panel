@@ -2,7 +2,7 @@ import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, memo, useCallback } from 'react'
 import { ChevronDown, Edit2, Power, PowerOff, RefreshCw, Trash2, User, UserRound, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AdminDetails } from '@/service/api'
@@ -23,7 +23,7 @@ interface DataTableProps<TData extends AdminDetails> {
   isFetching?: boolean
 }
 
-const ExpandedRowContent = ({
+const ExpandedRowContent = memo(({
   row,
   onEdit,
   onDelete,
@@ -76,12 +76,11 @@ const ExpandedRowContent = ({
       </div>
     </div>
   )
-}
+})
 
 export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, onDelete, onToggleStatus, onResetUsage, isLoading = false, isFetching = false }: DataTableProps<TData>) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const { t } = useTranslation()
-  const [visibleRows, setVisibleRows] = useState<number>(0)
   const table = useReactTable({
     data,
     columns,
@@ -90,26 +89,6 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
   const dir = useDirDetection()
   const isRTL = dir === 'rtl'
   const isLoadingData = isLoading || isFetching
-
-  useEffect(() => {
-    if (isLoading || isFetching) {
-      setVisibleRows(0)
-      return
-    }
-
-    const totalRows = table.getRowModel().rows.length
-    let currentRow = 0
-
-    const loadNextRow = () => {
-      if (currentRow < totalRows) {
-        setVisibleRows(prev => prev + 1)
-        currentRow++
-        setTimeout(loadNextRow, 50)
-      }
-    }
-
-    loadNextRow()
-  }, [isLoading, isFetching, table.getRowModel().rows.length])
 
   const LoadingState = useMemo(() => (
     <TableRow>
@@ -130,17 +109,17 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
     </TableRow>
   ), [columns.length, t])
 
-  const handleRowToggle = (rowId: string) => {
+  const handleRowToggle = useCallback((rowId: string) => {
     setExpandedRow(expandedRow === rowId ? null : rowId)
-  }
+  }, [expandedRow])
 
-  const handleEditModal = (cellId: string, rowData: AdminDetails) => {
+  const handleEditModal = useCallback((cellId: string, rowData: AdminDetails) => {
     const isChevron = cellId === 'chevron'
     const isSmallScreen = window.innerWidth < 768
     if (!isSmallScreen && !isChevron) {
       onEdit(rowData)
     }
-  }
+  }, [onEdit])
 
   return (
     <div className="rounded-md border">
@@ -171,18 +150,13 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
         </TableHeader>
         <TableBody>
           {isLoadingData ? LoadingState : table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row, index) => (
+            table.getRowModel().rows.map((row) => (
               <React.Fragment key={row.id}>
                 <TableRow
                   className={cn(
                     'cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50',
-                    expandedRow === row.id && 'border-transparent',
-                    index >= visibleRows && 'opacity-0',
-                    'transition-all duration-300 ease-in-out'
+                    expandedRow === row.id && 'border-transparent'
                   )}
-                  style={{
-                    transform: index >= visibleRows ? 'translateY(10px)' : 'translateY(0)',
-                  }}
                   onClick={() => window.innerWidth < 768 && handleRowToggle(row.id)}
                   data-state={row.getIsSelected() && 'selected'}
                 >
@@ -204,7 +178,7 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
                     >
                       {cell.column.id === 'chevron' ? (
                         <div className="flex items-center justify-center cursor-pointer" onClick={() => handleRowToggle(row.id)}>
-                          <ChevronDown className={cn('h-4 w-4 transition-transform duration-300', expandedRow === row.id && 'rotate-180')} />
+                          <ChevronDown className={cn('h-4 w-4', expandedRow === row.id && 'rotate-180')} />
                         </div>
                       ) : (
                         flexRender(cell.column.columnDef.cell, cell.getContext())
@@ -214,14 +188,7 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
                 </TableRow>
                 {expandedRow === row.id && (
                   <TableRow 
-                    className={cn(
-                      "md:hidden border-b hover:!bg-inherit",
-                      index >= visibleRows && 'opacity-0',
-                      'transition-all duration-300 ease-in-out'
-                    )}
-                    style={{
-                      transform: index >= visibleRows ? 'translateY(10px)' : 'translateY(0)',
-                    }}
+                    className="md:hidden border-b hover:!bg-inherit"
                   >
                     <TableCell colSpan={columns.length} className="p-0 text-sm">
                       <ExpandedRowContent

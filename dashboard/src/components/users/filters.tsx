@@ -39,14 +39,14 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   const userQuery = useGetUsers(filters)
   const handleRefetch = refetch || userQuery.refetch
 
-  // Debounced search function
+  // Ultra-fast debounced search function
   const setSearchField = useCallback(
     debounce((value: string) => {
       onFilterChange({
         search: value,
         offset: 0, // Reset to first page when search is updated
       })
-    }, 300),
+    }, 25), // Ultra-fast debounce
     [onFilterChange], // Recreate the debounced function when onFilterChange changes
   )
 
@@ -71,10 +71,8 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
     try {
       await handleRefetch()
     } finally {
-      // Add a small delay to prevent flickering
-      setTimeout(() => {
-        setIsRefreshing(false)
-      }, 300)
+      // Instant response - no delay
+      setIsRefreshing(false)
     }
   }
 
@@ -177,8 +175,8 @@ interface PaginationControlsProps {
   itemsPerPage: number
   totalUsers: number
   isLoading: boolean
-  onPageChange: (page: number) => Promise<void>
-  onItemsPerPageChange: (value: number) => Promise<void>
+  onPageChange: (page: number) => void
+  onItemsPerPageChange: (value: number) => void
 }
 
 export const PaginationControls = ({ currentPage, totalPages, itemsPerPage, isLoading, onPageChange, onItemsPerPageChange }: PaginationControlsProps) => {

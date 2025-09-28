@@ -7,14 +7,14 @@ import { useGetUsers, UserResponse } from '@/service/api'
 import { useAdmin } from '@/hooks/use-admin'
 import { getUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import UserModal from '../dialogs/UserModal'
 import { PaginationControls } from './filters'
-import AdvanceSearchModal, {AdvanceSearchFormValue} from "@/components/dialogs/AdvanceSearchModal.tsx";
+import AdvanceSearchModal, { AdvanceSearchFormValue } from "@/components/dialogs/AdvanceSearchModal.tsx";
 
-const UsersTable = () => {
+const UsersTable = memo(() => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const queryClient = useQueryClient()
@@ -63,11 +63,11 @@ const UsersTable = () => {
       proxy_settings: selectedUser?.proxy_settings || undefined,
       next_plan: selectedUser?.next_plan
         ? {
-            user_template_id: selectedUser?.next_plan.user_template_id ? Number(selectedUser?.next_plan.user_template_id) : undefined,
-            data_limit: selectedUser?.next_plan.data_limit ? Number(selectedUser?.next_plan.data_limit) : undefined,
-            expire: selectedUser?.next_plan.expire ? Number(selectedUser?.next_plan.expire) : undefined,
-            add_remaining_traffic: selectedUser?.next_plan.add_remaining_traffic || false,
-          }
+          user_template_id: selectedUser?.next_plan.user_template_id ? Number(selectedUser?.next_plan.user_template_id) : undefined,
+          data_limit: selectedUser?.next_plan.data_limit ? Number(selectedUser?.next_plan.data_limit) : undefined,
+          expire: selectedUser?.next_plan.expire ? Number(selectedUser?.next_plan.expire) : undefined,
+          add_remaining_traffic: selectedUser?.next_plan.add_remaining_traffic || false,
+        }
         : undefined,
     },
   })
@@ -88,11 +88,11 @@ const UsersTable = () => {
         proxy_settings: selectedUser.proxy_settings || undefined,
         next_plan: selectedUser.next_plan
           ? {
-              user_template_id: selectedUser.next_plan.user_template_id ? Number(selectedUser.next_plan.user_template_id) : undefined,
-              data_limit: selectedUser.next_plan.data_limit ? Number(selectedUser.next_plan.data_limit) : undefined,
-              expire: selectedUser.next_plan.expire ? Number(selectedUser.next_plan.expire) : undefined,
-              add_remaining_traffic: selectedUser.next_plan.add_remaining_traffic || false,
-            }
+            user_template_id: selectedUser.next_plan.user_template_id ? Number(selectedUser.next_plan.user_template_id) : undefined,
+            data_limit: selectedUser.next_plan.data_limit ? Number(selectedUser.next_plan.data_limit) : undefined,
+            expire: selectedUser.next_plan.expire ? Number(selectedUser.next_plan.expire) : undefined,
+            add_remaining_traffic: selectedUser.next_plan.add_remaining_traffic || false,
+          }
           : undefined,
       }
       userForm.reset(values)
@@ -115,22 +115,17 @@ const UsersTable = () => {
     isFetching,
   } = useGetUsers(filters, {
     query: {
-      refetchOnWindowFocus: true,
-      staleTime: 30000, // Consider data stale after 30 seconds
+      refetchOnWindowFocus: false,
+      staleTime: 0, // No stale time - always fetch fresh data
+      gcTime: 0, // No garbage collection time - no caching
+      retry: 1,
     },
   })
 
-  // Force refresh when filters change
-  useEffect(() => {
-    // Allow state to settle then refetch
-    const timeoutId = setTimeout(() => {
-      refetch()
-    }, 10)
+  // Remove automatic refetch on filter change to prevent lag
+  // Filters will trigger new queries automatically
 
-    return () => clearTimeout(timeoutId)
-  }, [filters, refetch])
-
-  const handleSort = (column: string) => {
+  const handleSort = useCallback((column: string) => {
     let newSort: string
 
     if (filters.sort === column) {
@@ -142,9 +137,9 @@ const UsersTable = () => {
     }
 
     setFilters(prev => ({ ...prev, sort: newSort }))
-  }
+  }, [filters.sort])
 
-  const handleStatusFilter = (value: any) => {
+  const handleStatusFilter = useCallback((value: any) => {
     // If value is '0' or empty, set status to undefined to remove it from the URL
     if (value === '0' || value === '') {
       setFilters(prev => ({
@@ -161,9 +156,9 @@ const UsersTable = () => {
     }
 
     setCurrentPage(0) // Reset current page
-  }
+  }, [])
 
-  const handleFilterChange = (newFilters: Partial<typeof filters>) => {
+  const handleFilterChange = useCallback((newFilters: Partial<typeof filters>) => {
     setFilters(prev => {
       let updated = { ...prev, ...newFilters };
       if ('search' in newFilters) {
@@ -182,7 +177,7 @@ const UsersTable = () => {
     if (newFilters.search !== undefined) {
       setCurrentPage(0);
     }
-  }
+  }, [])
 
   const handleManualRefresh = async () => {
     // Invalidate queries to ensure fresh data
@@ -191,39 +186,23 @@ const UsersTable = () => {
     return refetch()
   }
 
-  const handlePageChange = async (newPage: number) => {
+  const handlePageChange = (newPage: number) => {
     if (newPage === currentPage || isChangingPage) return
 
     setIsChangingPage(true)
     setCurrentPage(newPage)
 
-    try {
-      // Wait for state to update before refetching
-      await new Promise(resolve => setTimeout(resolve, 0))
-      await refetch()
-    } finally {
-      // Add a small delay to prevent flickering
-      setTimeout(() => {
-        setIsChangingPage(false)
-      }, 300)
-    }
+    // Remove async/await and setTimeout for instant response
+    setIsChangingPage(false)
   }
 
-  const handleItemsPerPageChange = async (value: number) => {
+  const handleItemsPerPageChange = (value: number) => {
     setIsChangingPage(true)
     setItemsPerPage(value)
     setCurrentPage(0) // Reset to first page when items per page changes
 
-    try {
-      // Wait for state to update before refetching
-      await new Promise(resolve => setTimeout(resolve, 0))
-      await refetch()
-    } finally {
-      // Add a small delay to prevent flickering
-      setTimeout(() => {
-        setIsChangingPage(false)
-      }, 300)
-    }
+    // Remove async/await and setTimeout for instant response
+    setIsChangingPage(false)
   }
 
   const handleEdit = (user: UserResponse) => {
@@ -266,10 +245,10 @@ const UsersTable = () => {
 
   return (
     <div>
-      <Filters 
-        filters={filters} 
-        onFilterChange={handleFilterChange} 
-        advanceSearchOnOpen={setIsAdvanceSearchOpen} 
+      <Filters
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        advanceSearchOnOpen={setIsAdvanceSearchOpen}
         refetch={handleManualRefresh}
         advanceSearchForm={advanceSearchForm}
         onClearAdvanceSearch={() => {
@@ -312,19 +291,19 @@ const UsersTable = () => {
         />
       )}
       {isAdvanceSearchOpen && (
-          <AdvanceSearchModal
-              isDialogOpen={isAdvanceSearchOpen}
-              onOpenChange={open => {
-                setIsAdvanceSearchOpen(open)
-                if (!open) advanceSearchForm.reset() // Reset form when closing
-              }}
-              form={advanceSearchForm}
-              onSubmit={handleAdvanceSearchSubmit}
-              isSudo={isSudo}
-          />
+        <AdvanceSearchModal
+          isDialogOpen={isAdvanceSearchOpen}
+          onOpenChange={open => {
+            setIsAdvanceSearchOpen(open)
+            if (!open) advanceSearchForm.reset() // Reset form when closing
+          }}
+          form={advanceSearchForm}
+          onSubmit={handleAdvanceSearchSubmit}
+          isSudo={isSudo}
+        />
       )}
     </div>
   )
-}
+})
 
 export default UsersTable

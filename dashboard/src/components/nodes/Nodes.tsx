@@ -30,8 +30,9 @@ export default function Nodes() {
 
   const { data: nodesData, isLoading } = useGetNodes(undefined, {
     query: {
-      refetchInterval: 5000,
-      refetchIntervalInBackground: true,
+      refetchInterval: 5000, // 5s
+      staleTime: 0, // No stale time - always fetch fresh data
+      gcTime: 0, // No garbage collection time - no caching
     },
   })
 

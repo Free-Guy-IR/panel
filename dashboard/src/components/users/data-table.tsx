@@ -1,5 +1,5 @@
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, memo } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
@@ -19,39 +19,20 @@ interface DataTableProps<TData extends UserResponse, TValue> {
   onEdit?: (user: UserResponse) => void
 }
 
-export function DataTable<TData extends UserResponse, TValue>({ columns, data, isLoading = false, isFetching = false, onEdit }: DataTableProps<TData, TValue>) {
+export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, data, isLoading = false, isFetching = false, onEdit }: DataTableProps<TData, TValue>) => {
   const { t } = useTranslation()
   const [expandedRow, setExpandedRow] = useState<number | null>(null)
   const dir = useDirDetection()
   const isRTL = dir === 'rtl'
-  const [visibleRows, setVisibleRows] = useState<number>(0)
-
-  const table = useReactTable({
+  
+  // Memoize table configuration to prevent unnecessary re-renders
+  const tableConfig = useMemo(() => ({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-  })
-
-  // Add effect to handle staggered loading
-  React.useEffect(() => {
-    if (isLoading || isFetching) {
-      setVisibleRows(0)
-      return
-    }
-
-    const totalRows = table.getRowModel().rows.length
-    let currentRow = 0
-
-    const loadNextRow = () => {
-      if (currentRow < totalRows) {
-        setVisibleRows(prev => prev + 1)
-        currentRow++
-        setTimeout(loadNextRow, 50) // Adjust timing as needed
-      }
-    }
-
-    loadNextRow()
-  }, [isLoading, isFetching, table.getRowModel().rows.length])
+  }), [data, columns])
+  
+  const table = useReactTable(tableConfig)
 
   const handleRowToggle = useCallback((rowId: number) => {
     setExpandedRow(prev => prev === rowId ? null : rowId)
@@ -69,7 +50,7 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
 
   const isLoadingData = isLoading || isFetching
 
-  const ExpandedRowContent = useCallback(({ row }: { row: any }) => (
+  const ExpandedRowContent = memo(({ row }: { row: any }) => (
     <div className="p-4 flex flex-col gap-y-4">
       <UsageSliderCompact
         isMobile
@@ -96,7 +77,7 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
         </div>
       </div>
     </div>
-  ), [])
+  ))
 
   const LoadingState = useMemo(() => (
     <TableRow>
@@ -144,18 +125,13 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
         </TableHeader>
         <TableBody>
           {isLoadingData ? LoadingState : table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row, index) => (
+            table.getRowModel().rows.map((row) => (
               <React.Fragment key={row.id}>
-                <TableRow
-                  className={cn(
-                    'cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50',
-                    expandedRow === row.original.id && 'border-transparent',
-                    index >= visibleRows && 'opacity-0',
-                    'transition-all duration-300 ease-in-out'
-                  )}
-                  style={{
-                    transform: index >= visibleRows ? 'translateY(10px)' : 'translateY(0)',
-                  }}
+                 <TableRow
+                   className={cn(
+                     'cursor-pointer md:cursor-default border-b hover:!bg-inherit md:hover:!bg-muted/50',
+                     expandedRow === row.original.id && 'border-transparent'
+                   )}
                   onClick={e => handleEditModal(e, row.original)}
                   data-state={row.getIsSelected() && 'selected'}
                 >
@@ -181,7 +157,7 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
                             handleRowToggle(row.original.id)
                           }}
                         >
-                          <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', expandedRow === row.original.id && 'rotate-180')} />
+                           <ChevronDown className={cn('h-4 w-4', expandedRow === row.original.id && 'rotate-180')} />
                         </div>
                       ) : (
                         flexRender(cell.column.columnDef.cell, cell.getContext())
@@ -189,22 +165,15 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
                     </TableCell>
                   ))}
                 </TableRow>
-                {expandedRow === row.original.id && (
-                  <TableRow 
-                    className={cn(
-                      "md:hidden border-b hover:!bg-inherit",
-                      index >= visibleRows && 'opacity-0',
-                      'transition-all duration-300 ease-in-out'
-                    )}
-                    style={{
-                      transform: index >= visibleRows ? 'translateY(10px)' : 'translateY(0)',
-                    }}
+                 {expandedRow === row.original.id && (
+                   <TableRow 
+                     className="md:hidden border-b hover:!bg-inherit"
                   >
                     <TableCell colSpan={columns.length} className="p-0 text-sm">
                       <ExpandedRowContent row={row} />
                     </TableCell>
                   </TableRow>
-                )}
+                 )}
               </React.Fragment>
             ))
           ) : EmptyState}
@@ -212,4 +181,4 @@ export function DataTable<TData extends UserResponse, TValue>({ columns, data, i
       </Table>
     </div>
   )
-}
+})

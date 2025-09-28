@@ -38,7 +38,7 @@ export function Filters<T extends BaseFilters>({ filters, onFilterChange }: Filt
         username: value ? value : null,
         offset: 0, // Reset to first page when search is updated
       } as Partial<T>)
-    }, 300),
+    }, 50),
     [onFilterChange],
   )
 
