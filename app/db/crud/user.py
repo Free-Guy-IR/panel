@@ -816,6 +816,7 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
     result: list[UserNotificationResponse] = []
     if expired_users:
         for user in expired_users:
+            await load_user_attrs(user)
             result.append(UserNotificationResponse.model_validate(user))
 
         await remove_users(db, expired_users)
