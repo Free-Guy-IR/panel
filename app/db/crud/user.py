@@ -25,7 +25,7 @@ from app.db.models import (
 )
 from app.models.proxy import ProxyTable
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList
-from app.models.user import UserCreate, UserModify
+from app.models.user import UserCreate, UserModify, UserNotificationResponse
 from config import USERS_AUTODELETE_DAYS
 
 from .general import _build_trunc_expression, build_json_proxy_settings_search_condition
@@ -778,7 +778,7 @@ async def get_user_sub_update_list(
     return result, count
 
 
-async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> List[User]:
+async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> list[UserNotificationResponse]:
     """
     Deletes expired (optionally also limited) users whose auto-delete time has passed.
 
@@ -788,7 +788,7 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
             Defaults to False.
 
     Returns:
-        list[User]: List of deleted users.
+        list[UserNotificationResponse]: List of deleted users.
     """
     target_status = [UserStatus.expired] if not include_limited_users else [UserStatus.expired, UserStatus.limited]
 
@@ -813,10 +813,14 @@ async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool
         <= datetime.now(timezone.utc)
     ]
 
+    result: list[UserNotificationResponse] = []
     if expired_users:
+        for user in expired_users:
+            result.append(UserNotificationResponse.model_validate(user))
+
         await remove_users(db, expired_users)
 
-    return expired_users
+    return result
 
 
 async def get_all_users_usages(
