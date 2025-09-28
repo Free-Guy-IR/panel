@@ -245,6 +245,11 @@
         "webhookSecret": "Webhook Secret",
         "webhookSecretPlaceholder": "Enter webhook secret",
         "webhookSecretDescription": "Secret token for webhook security",
+        "method": "Connection Method",
+        "methodPlaceholder": "Select connection method",
+        "methodDescription": "Choose how the bot receives updates from Telegram",
+        "webhook": "Webhook",
+        "longPolling": "Long Polling",
         "proxyUrl": "Proxy URL",
         "proxyUrlPlaceholder": "socks5://proxy.example.com:1080",
         "proxyUrlDescription": "Proxy URL for Telegram API connections (optional)"

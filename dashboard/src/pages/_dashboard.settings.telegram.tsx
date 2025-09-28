@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Bot, Webhook, Shield, Globe, Smartphone, Send, Users } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Bot, Webhook, Shield, Globe, Smartphone, Send, Users, Settings } from 'lucide-react'
 import { useSettingsContext } from './_dashboard.settings'
 import { toast } from 'sonner'
 
@@ -17,6 +18,7 @@ import { toast } from 'sonner'
 const telegramSettingsSchema = z.object({
   enable: z.boolean().default(false),
   token: z.string().optional(),
+  method: z.enum(['webhook', 'long-polling']).default('webhook'),
   webhook_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')).refine((url) => {
     if (!url || url === '') return true; // Allow empty URLs
     try {
@@ -69,6 +71,7 @@ export default function TelegramSettings() {
     defaultValues: {
       enable: false,
       token: '',
+      method: 'webhook',
       webhook_url: '',
       webhook_secret: '',
       proxy_url: '',
@@ -78,8 +81,9 @@ export default function TelegramSettings() {
     }
   })
 
-  // Watch the enable and mini_app_login fields for conditional rendering
+  // Watch the enable, method, and mini_app_login fields for conditional rendering
   const enableTelegram = form.watch('enable')
+  const method = form.watch('method')
 
   // Update form when settings are loaded
   useEffect(() => {
@@ -88,6 +92,7 @@ export default function TelegramSettings() {
       form.reset({
         enable: telegramData.enable || false,
         token: telegramData.token || '',
+        method: telegramData.method || 'webhook',
         webhook_url: telegramData.webhook_url || '',
         webhook_secret: telegramData.webhook_secret || '',
         proxy_url: telegramData.proxy_url || '',
@@ -114,6 +119,7 @@ export default function TelegramSettings() {
       form.reset({
         enable: telegramData.enable || false,
         token: telegramData.token || '',
+        method: telegramData.method || 'webhook',
         webhook_url: telegramData.webhook_url || '',
         webhook_secret: telegramData.webhook_secret || '',
         proxy_url: telegramData.proxy_url || '',
@@ -215,6 +221,47 @@ export default function TelegramSettings() {
               )}
             />
 
+            {/* Method Selection - Only show when Telegram is enabled */}
+            {enableTelegram && (
+              <FormField
+                control={form.control}
+                name="method"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      {t('settings.telegram.general.method')}
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={t('settings.telegram.general.methodPlaceholder')} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="webhook">
+                          <div className="flex items-center gap-2">
+                            <Webhook className="h-4 w-4" />
+                            {t('settings.telegram.general.webhook')}
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="long-polling">
+                          <div className="flex items-center gap-2">
+                            <Send className="h-4 w-4" />
+                            {t('settings.telegram.general.longPolling')}
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-sm text-muted-foreground">
+                      {t('settings.telegram.general.methodDescription')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             {/* Configuration Fields - Only show when Telegram is enabled */}
             {enableTelegram && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -242,55 +289,61 @@ export default function TelegramSettings() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="webhook_url"
-                  render={({ field }) => (
-                    <FormItem className="space-y-2">
-                      <FormLabel className="text-sm font-medium flex items-center gap-2">
-                        <Webhook className="h-4 w-4" />
-                        {t('settings.telegram.general.webhookUrl')}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          type="url"
-                          placeholder={t('settings.telegram.general.webhookUrlPlaceholder')}
-                          {...field}
-                          className="font-mono"
-                        />
-                      </FormControl>
-                      <FormDescription className="text-sm text-muted-foreground">
-                        {t('settings.telegram.general.webhookUrlDescription')}
-                        <br />
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Webhook URL - Only show when method is webhook */}
+                {method === 'webhook' && (
+                  <FormField
+                    control={form.control}
+                    name="webhook_url"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel className="text-sm font-medium flex items-center gap-2">
+                          <Webhook className="h-4 w-4" />
+                          {t('settings.telegram.general.webhookUrl')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="url"
+                            placeholder={t('settings.telegram.general.webhookUrlPlaceholder')}
+                            {...field}
+                            className="font-mono"
+                          />
+                        </FormControl>
+                        <FormDescription className="text-sm text-muted-foreground">
+                          {t('settings.telegram.general.webhookUrlDescription')}
+                          <br />
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-                <FormField
-                  control={form.control}
-                  name="webhook_secret"
-                  render={({ field }) => (
-                    <FormItem className="space-y-2">
-                      <FormLabel className="text-sm font-medium flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        {t('settings.telegram.general.webhookSecret')}
-                      </FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          placeholder={t('settings.telegram.general.webhookSecretPlaceholder')}
-                          {...field}
-                          className="font-mono"
-                        />
-                      </FormControl>
-                      <FormDescription className="text-sm text-muted-foreground">
-                        {t('settings.telegram.general.webhookSecretDescription')}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Webhook Secret - Only show when method is webhook */}
+                {method === 'webhook' && (
+                  <FormField
+                    control={form.control}
+                    name="webhook_secret"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel className="text-sm font-medium flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          {t('settings.telegram.general.webhookSecret')}
+                        </FormLabel>
+                        <FormControl>
+                          <PasswordInput
+                            placeholder={t('settings.telegram.general.webhookSecretPlaceholder')}
+                            {...field}
+                            className="font-mono"
+                          />
+                        </FormControl>
+                        <FormDescription className="text-sm text-muted-foreground">
+                          {t('settings.telegram.general.webhookSecretDescription')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}

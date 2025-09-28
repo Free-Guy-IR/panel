@@ -245,6 +245,11 @@
         "webhookSecret": "Секрет Webhook",
         "webhookSecretPlaceholder": "Введите секрет webhook",
         "webhookSecretDescription": "Секретный токен для безопасности webhook",
+        "method": "Метод подключения",
+        "methodPlaceholder": "Выберите метод подключения",
+        "methodDescription": "Выберите, как бот получает обновления от Telegram",
+        "webhook": "Webhook",
+        "longPolling": "Long Polling",
         "proxyUrl": "URL прокси",
         "proxyUrlPlaceholder": "socks5://proxy.example.com:1080",
         "proxyUrlDescription": "URL прокси для подключений к API Telegram (необязательно)"
