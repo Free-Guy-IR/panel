@@ -69,11 +69,30 @@ export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged 
     if (!host.id) return
 
     try {
-      // Include required fields for the modify operation
+      // Send full host data with only is_disabled toggled
       await modifyHost(host.id, {
         remark: host.remark || '',
-        priority: host.priority || 0,
+        address: host.address || [],
+        port: host.port,
+        inbound_tag: host.inbound_tag || '',
+        status: host.status || [],
+        host: host.host || [],
+        sni: host.sni || [],
+        path: host.path || '',
+        security: host.security || 'inbound_default',
+        alpn: (!host.alpn || host.alpn.length === 0) ? undefined : host.alpn,
+        fingerprint: host.fingerprint === '' ? undefined : host.fingerprint,
+        allowinsecure: host.allowinsecure || false,
         is_disabled: !host.is_disabled,
+        random_user_agent: host.random_user_agent || false,
+        use_sni_as_host: host.use_sni_as_host || false,
+        priority: host.priority || 0,
+        ech_config_list: host.ech_config_list,
+        fragment_settings: host.fragment_settings,
+        noise_settings: host.noise_settings,
+        mux_settings: host.mux_settings,
+        transport_settings: host.transport_settings as any, // Type cast needed due to Output/Input mismatch
+        http_headers: host.http_headers || {},
       })
 
       toast.success(

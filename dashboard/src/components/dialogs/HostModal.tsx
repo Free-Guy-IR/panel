@@ -377,7 +377,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
-      <DialogContent className="h-full w-full max-w-2xl md:max-h-[95dvh]" onOpenAutoFocus={e => e.preventDefault()}>
+      <DialogContent className="h-full sm:py-4 w-full max-w-2xl sm:max-h-[95dvh]" onOpenAutoFocus={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className={cn(dir === 'rtl' ? 'text-right' : 'text-left')}>{editingHost ? t('editHost.title') : t('hostsDialog.addHost')}</DialogTitle>
         </DialogHeader>
@@ -2787,7 +2787,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
               <Button type="button" variant="outline" onClick={() => handleModalOpenChange(false)}>
                 {t('cancel')}
               </Button>
-              <LoaderButton type="submit" disabled={form.formState.isSubmitting} isLoading={form.formState.isSubmitting} loadingText={editingHost ? t('modifying') : t('creating')} size="sm">
+              <LoaderButton type="submit" disabled={form.formState.isSubmitting} isLoading={form.formState.isSubmitting} loadingText={editingHost ? t('modifying') : t('creating')}>
                 {editingHost ? t('modify') : t('create')}
               </LoaderButton>
             </div>
