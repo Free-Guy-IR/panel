@@ -33,7 +33,7 @@ async def reset_user_by_next_report(db: AsyncSession, db_user: User):
     inbounds = await db_user.inbounds()
     user = UserNotificationResponse.model_validate(db_user)
 
-    asyncio.create_task(node_manager.update_user(user, inbounds))
+    await node_manager.update_user(user, inbounds)
     asyncio.create_task(notification.user_data_reset_by_next(user, SYSTEM_ADMIN))
 
     logger.info(f'User "{db_user.username}" next plan activated')
@@ -42,7 +42,7 @@ async def reset_user_by_next_report(db: AsyncSession, db_user: User):
 async def change_status(db: AsyncSession, db_user: User, status: UserStatus):
     user = UserNotificationResponse.model_validate(db_user)
     if user.status is not UserStatus.active:
-        asyncio.create_task(node_manager.remove_user(user))
+        await node_manager.remove_user(user)
     asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
 
     logger.info(f'User "{db_user.username}" status changed to {status.value}')
