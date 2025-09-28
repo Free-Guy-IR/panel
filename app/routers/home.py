@@ -43,9 +43,9 @@ async def get_manifest(request: Request, start_url: Optional[str] = None):
         "start_url": resolved_start_url,
         "scope": DASHBOARD_ROUTE or "/",
         "icons": [
-            {"src": "/statics/favicon/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png"},
-            {"src": "/statics/favicon/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png"},
-            {"src": "/statics/favicon/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"},
+            {"src": "/statics/favicon/logo-pwa.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/statics/favicon/logo-pwa.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "/statics/favicon/logo-pwa.png", "sizes": "180x180", "type": "image/png"},
         ],
     }
 
