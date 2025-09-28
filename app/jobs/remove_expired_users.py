@@ -18,7 +18,7 @@ async def remove_expired_users():
 
         for user in deleted_users:
             asyncio.create_task(notification.remove_user(user=user, by=SYSTEM_ADMIN))
-            logger.info("Expired user %s deleted.")
+            logger.info(f"User `{user.username}` has been deleted due to expiration.")
 
 
 scheduler.add_job(
