@@ -85,36 +85,40 @@ export default function Settings() {
         // Extract validation errors from FetchError
         let errorMessage = t(`settings.${activeTab}.saveFailed`)
 
+        // Helper function to extract nested error messages
+        const extractErrorMessages = (obj: any, prefix = ''): string[] => {
+          const messages: string[] = []
+          
+          if (typeof obj === 'string') {
+            messages.push(prefix ? `${prefix}: ${obj}` : obj)
+          } else if (Array.isArray(obj)) {
+            obj.forEach((item, index) => {
+              messages.push(...extractErrorMessages(item, `${prefix}[${index}]`))
+            })
+          } else if (obj && typeof obj === 'object') {
+            Object.entries(obj).forEach(([key, value]) => {
+              const newPrefix = prefix ? `${prefix}.${key}` : key
+              messages.push(...extractErrorMessages(value, newPrefix))
+            })
+          }
+          
+          return messages
+        }
+
         // For FetchError from ofetch/nuxt
         if (error?.data?.detail) {
           const detail = error.data.detail
-
-          // If detail is an object with field-specific errors
-          if (typeof detail === 'object' && !Array.isArray(detail)) {
-            const fieldErrors = Object.entries(detail)
-              .map(([field, message]) => `${field}: ${message}`)
-              .join(', ')
-            errorMessage = fieldErrors
-          }
-          // If detail is a string
-          else if (typeof detail === 'string') {
-            errorMessage = detail
-          }
-          // If detail is an array of errors
-          else if (Array.isArray(detail)) {
-            errorMessage = detail.join(', ')
+          const extractedMessages = extractErrorMessages(detail)
+          if (extractedMessages.length > 0) {
+            errorMessage = extractedMessages.join(', ')
           }
         }
         // Fallback for other error structures
         else if (error?.response?.data?.detail) {
           const detail = error.response.data.detail
-          if (typeof detail === 'object' && !Array.isArray(detail)) {
-            const fieldErrors = Object.entries(detail)
-              .map(([field, message]) => `${field}: ${message}`)
-              .join(', ')
-            errorMessage = fieldErrors
-          } else if (typeof detail === 'string') {
-            errorMessage = detail
+          const extractedMessages = extractErrorMessages(detail)
+          if (extractedMessages.length > 0) {
+            errorMessage = extractedMessages.join(', ')
           }
         }
         // Fallback to error message

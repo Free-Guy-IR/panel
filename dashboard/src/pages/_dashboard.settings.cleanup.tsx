@@ -129,8 +129,37 @@ export default function CleanupSettings() {
           const count = response?.count || 0
           toast.success(t('settings.cleanup.expiredUsers.deleteSuccess', { count }))
         },
-        onError: () => {
-          toast.error(t('settings.cleanup.expiredUsers.deleteFailed'))
+        onError: (error: any) => {
+          // Extract detailed error message
+          let errorMessage = t('settings.cleanup.expiredUsers.deleteFailed')
+          
+          if (error?.data?.detail) {
+            const detail = error.data.detail
+            if (typeof detail === 'string') {
+              errorMessage = detail
+            } else if (typeof detail === 'object' && !Array.isArray(detail)) {
+              const fieldErrors = Object.entries(detail)
+                .map(([field, message]) => `${field}: ${message}`)
+                .join(', ')
+              errorMessage = fieldErrors
+            }
+          } else if (error?.response?.data?.detail) {
+            const detail = error.response.data.detail
+            if (typeof detail === 'string') {
+              errorMessage = detail
+            } else if (typeof detail === 'object' && !Array.isArray(detail)) {
+              const fieldErrors = Object.entries(detail)
+                .map(([field, message]) => `${field}: ${message}`)
+                .join(', ')
+              errorMessage = fieldErrors
+            }
+          } else if (error?.message) {
+            errorMessage = error.message
+          }
+          
+          toast.error(t('settings.cleanup.expiredUsers.deleteFailed'), {
+            description: errorMessage,
+          })
         },
       },
     )
@@ -152,8 +181,37 @@ export default function CleanupSettings() {
       onSuccess: () => {
         toast.success(t('settings.cleanup.resetUsage.resetSuccess'))
       },
-      onError: () => {
-        toast.error(t('settings.cleanup.resetUsage.resetFailed'))
+      onError: (error: any) => {
+        // Extract detailed error message
+        let errorMessage = t('settings.cleanup.resetUsage.resetFailed')
+        
+        if (error?.data?.detail) {
+          const detail = error.data.detail
+          if (typeof detail === 'string') {
+            errorMessage = detail
+          } else if (typeof detail === 'object' && !Array.isArray(detail)) {
+            const fieldErrors = Object.entries(detail)
+              .map(([field, message]) => `${field}: ${message}`)
+              .join(', ')
+            errorMessage = fieldErrors
+          }
+        } else if (error?.response?.data?.detail) {
+          const detail = error.response.data.detail
+          if (typeof detail === 'string') {
+            errorMessage = detail
+          } else if (typeof detail === 'object' && !Array.isArray(detail)) {
+            const fieldErrors = Object.entries(detail)
+              .map(([field, message]) => `${field}: ${message}`)
+              .join(', ')
+            errorMessage = fieldErrors
+          }
+        } else if (error?.message) {
+          errorMessage = error.message
+        }
+        
+        toast.error(t('settings.cleanup.resetUsage.resetFailed'), {
+          description: errorMessage,
+        })
       },
     })
   }
@@ -177,8 +235,37 @@ export default function CleanupSettings() {
         onSuccess: () => {
           toast.success(t('settings.cleanup.clearUsageData.clearSuccess', { table: selectedTable }))
         },
-        onError: () => {
-          toast.error(t('settings.cleanup.clearUsageData.clearFailed'))
+        onError: (error: any) => {
+          // Extract detailed error message
+          let errorMessage = t('settings.cleanup.clearUsageData.clearFailed')
+          
+          if (error?.data?.detail) {
+            const detail = error.data.detail
+            if (typeof detail === 'string') {
+              errorMessage = detail
+            } else if (typeof detail === 'object' && !Array.isArray(detail)) {
+              const fieldErrors = Object.entries(detail)
+                .map(([field, message]) => `${field}: ${message}`)
+                .join(', ')
+              errorMessage = fieldErrors
+            }
+          } else if (error?.response?.data?.detail) {
+            const detail = error.response.data.detail
+            if (typeof detail === 'string') {
+              errorMessage = detail
+            } else if (typeof detail === 'object' && !Array.isArray(detail)) {
+              const fieldErrors = Object.entries(detail)
+                .map(([field, message]) => `${field}: ${message}`)
+                .join(', ')
+              errorMessage = fieldErrors
+            }
+          } else if (error?.message) {
+            errorMessage = error.message
+          }
+          
+          toast.error(t('settings.cleanup.clearUsageData.clearFailed'), {
+            description: errorMessage,
+          })
         },
       },
     )

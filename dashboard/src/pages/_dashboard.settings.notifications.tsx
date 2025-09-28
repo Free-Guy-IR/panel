@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Button } from '@/components/ui/button'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -42,6 +42,7 @@ const notificationSettingsSchema = z.object({
 })
 
 type NotificationSettingsForm = z.infer<typeof notificationSettingsSchema>
+
 
 export default function NotificationSettings() {
   const { t } = useTranslation()
@@ -396,18 +397,47 @@ export default function NotificationSettings() {
                     <FormField
                       control={form.control}
                       name="notification_settings.telegram_admin_id"
-                      render={({ field }) => (
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field}
-                            value={field.value || ''}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                            className="w-full"
-                            placeholder="123456789"
-                          />
-                        </FormControl>
-                      )}
+                      render={({ field }) => {
+                        const [inputValue, setInputValue] = useState(field.value?.toString() ?? '');
+
+                        // Sync input value when field value changes (e.g., from form reset)
+                        useEffect(() => {
+                          setInputValue(field.value?.toString() ?? '');
+                        }, [field.value]);
+
+                        return (
+                          <FormControl>
+                            <Input
+                              type="text"
+                              name={field.name}
+                              ref={field.ref}
+                              value={inputValue}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setInputValue(value);
+
+                                // Update form value for valid inputs or empty
+                                if (value === '') {
+                                  field.onChange(undefined);
+                                } else if (/^-?\d+$/.test(value)) {
+                                  field.onChange(parseInt(value));
+                                }
+                                // Keep invalid input in display but don't update form
+                              }}
+                              onBlur={() => {
+                                // On blur, ensure the display matches the form value
+                                // If current input is invalid, reset display to form value
+                                if (inputValue !== '' && !/^-?\d+$/.test(inputValue)) {
+                                  setInputValue(field.value?.toString() ?? '');
+                                }
+                                field.onBlur();
+                              }}
+                              className="w-full"
+                              placeholder="123456789"
+                            />
+                          </FormControl>
+                        );
+                      }}
                     />
                   </div>
                   
@@ -419,18 +449,47 @@ export default function NotificationSettings() {
                     <FormField
                       control={form.control}
                       name="notification_settings.telegram_channel_id"
-                      render={({ field }) => (
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field}
-                            value={field.value || ''}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                            className="w-full"
-                            placeholder="-1001234567890"
-                          />
-                        </FormControl>
-                      )}
+                      render={({ field }) => {
+                        const [inputValue, setInputValue] = useState(field.value?.toString() ?? '');
+
+                        // Sync input value when field value changes (e.g., from form reset)
+                        useEffect(() => {
+                          setInputValue(field.value?.toString() ?? '');
+                        }, [field.value]);
+
+                        return (
+                          <FormControl>
+                            <Input
+                              type="text"
+                              name={field.name}
+                              ref={field.ref}
+                              value={inputValue}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setInputValue(value);
+
+                                // Update form value for valid inputs or empty
+                                if (value === '') {
+                                  field.onChange(undefined);
+                                } else if (/^-?\d+$/.test(value)) {
+                                  field.onChange(parseInt(value));
+                                }
+                                // Keep invalid input in display but don't update form
+                              }}
+                              onBlur={() => {
+                                // On blur, ensure the display matches the form value
+                                // If current input is invalid, reset display to form value
+                                if (inputValue !== '' && !/^-?\d+$/.test(inputValue)) {
+                                  setInputValue(field.value?.toString() ?? '');
+                                }
+                                field.onBlur();
+                              }}
+                              className="w-full"
+                              placeholder="-1001234567890"
+                            />
+                          </FormControl>
+                        );
+                      }}
                     />
                   </div>
                   
@@ -442,18 +501,47 @@ export default function NotificationSettings() {
                     <FormField
                       control={form.control}
                       name="notification_settings.telegram_topic_id"
-                      render={({ field }) => (
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field}
-                            value={field.value || ''}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                            className="w-full"
-                            placeholder="123"
-                          />
-                        </FormControl>
-                      )}
+                      render={({ field }) => {
+                        const [inputValue, setInputValue] = useState(field.value?.toString() ?? '');
+
+                        // Sync input value when field value changes (e.g., from form reset)
+                        useEffect(() => {
+                          setInputValue(field.value?.toString() ?? '');
+                        }, [field.value]);
+
+                        return (
+                          <FormControl>
+                            <Input
+                              type="text"
+                              name={field.name}
+                              ref={field.ref}
+                              value={inputValue}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setInputValue(value);
+
+                                // Update form value for valid inputs or empty
+                                if (value === '') {
+                                  field.onChange(undefined);
+                                } else if (/^-?\d+$/.test(value)) {
+                                  field.onChange(parseInt(value));
+                                }
+                                // Keep invalid input in display but don't update form
+                              }}
+                              onBlur={() => {
+                                // On blur, ensure the display matches the form value
+                                // If current input is invalid, reset display to form value
+                                if (inputValue !== '' && !/^-?\d+$/.test(inputValue)) {
+                                  setInputValue(field.value?.toString() ?? '');
+                                }
+                                field.onBlur();
+                              }}
+                              className="w-full"
+                              placeholder="123"
+                            />
+                          </FormControl>
+                        );
+                      }}
                     />
                   </div>
                 </div>
@@ -550,12 +638,24 @@ export default function NotificationSettings() {
                     name="notification_settings.max_retries"
                     render={({ field }) => (
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="1" 
+                        <Input
+                          type="number"
+                          min="1"
                           max="10"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value))}
+                          name={field.name}
+                          ref={field.ref}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Allow typing any characters, but only set valid positive numbers or empty (defaults to 3)
+                            if (value === '') {
+                              field.onChange(3);
+                            } else if (/^\d+$/.test(value)) {
+                              field.onChange(parseInt(value));
+                            }
+                            // Ignore invalid input
+                          }}
+                          onBlur={field.onBlur}
                           className="w-full"
                           placeholder="3"
                         />
