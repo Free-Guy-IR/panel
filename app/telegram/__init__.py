@@ -20,6 +20,7 @@ logger = get_logger("telegram-bot")
 
 
 _bot = None
+_polling_task: asyncio.Task = None
 _lock = Lock()
 _dp = Dispatcher()
 
@@ -36,6 +37,7 @@ async def startup_telegram_bot():
     restart = False
     global _bot
     global _dp
+    global _polling_task
 
     if _bot:
         await shutdown_telegram_bot()
@@ -58,8 +60,8 @@ async def startup_telegram_bot():
                 pass
 
             try:
-                if settings.method == RunMethod.LONGPULLING:
-                    asyncio.create_task(_dp.start_polling(_bot))
+                if settings.method == RunMethod.LONGPOLLING:
+                    _polling_task = asyncio.create_task(_dp.start_polling(_bot, handle_signals=False))
                 else:
                     # register webhook
                     webhook_address = f"{settings.webhook_url}/api/tghook"
@@ -86,13 +88,21 @@ async def startup_telegram_bot():
 async def shutdown_telegram_bot():
     global _bot
     global _dp
+    global _polling_task
 
     async with _lock:
         if isinstance(_bot, Bot):
             logger.info("Shutting down telegram bot")
             try:
-                await _bot.get_webhook_info(5)
-                await _bot.delete_webhook(drop_pending_updates=True)
+                if _polling_task is not None and not _polling_task.done():
+                    logger.info("stopping long polling")
+                    # Force stop the dispatcher first
+                    await _dp.stop_polling()
+                    # Cancel the polling task
+                    _polling_task.cancel()
+                    _polling_task = None
+                else:
+                    await _bot.delete_webhook(drop_pending_updates=True)
             except (
                 TelegramNetworkError,
                 TelegramRetryAfter,
@@ -101,11 +111,6 @@ async def shutdown_telegram_bot():
             ) as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
-                elif isinstance(err, TelegramUnauthorizedError):
-                    try:
-                        asyncio.create_task(_dp.stop_polling())
-                    except Exception:
-                        pass
                 else:
                     logger.error(err)
 

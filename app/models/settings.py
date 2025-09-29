@@ -12,7 +12,7 @@ TELEGRAM_TOKEN_PATTERN = r"^\d{8,12}:[A-Za-z0-9_-]{35}$"
 
 class RunMethod(StrEnum):
     WEBHOOK = "webhook"
-    LONGPULLING = "long-polling"
+    LONGPOLLING = "long-polling"
 
 
 class Telegram(BaseModel):
@@ -55,8 +55,14 @@ class Telegram(BaseModel):
 
     @model_validator(mode="after")
     def check_enable_requires_token_and_url(self):
-        if self.enable and (not self.token or not self.webhook_url or not self.webhook_secret):
-            raise ValueError("Telegram bot cannot be enabled without token, webhook_url and webhook_secret.")
+        if self.enable and (
+            (self.method == RunMethod.WEBHOOK and (not self.token or not self.webhook_url or not self.webhook_secret))
+            or (self.method == RunMethod.LONGPOLLING and not self.token)
+        ):
+            if self.method == RunMethod.WEBHOOK:
+                raise ValueError("Telegram bot cannot be enabled without token, webhook_url and webhook_secret.")
+            elif self.method == RunMethod.LONGPOLLING:
+                raise ValueError("Telegram bot cannot be enabled without token.")
         return self
 
 

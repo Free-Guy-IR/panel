@@ -1,4 +1,3 @@
-import asyncio
 import ipaddress
 import logging
 import os
@@ -15,7 +14,6 @@ from app import app, logger  # noqa
 from app.utils.logger import LOGGING_CONFIG
 from config import (
     DEBUG,
-    MONITOR,
     UVICORN_HOST,
     UVICORN_LOOP,
     UVICORN_PORT,
@@ -141,37 +139,14 @@ Then, navigate to {click.style(f"http://{ip}:{UVICORN_PORT}", bold=True)} on you
     LOGGING_CONFIG["loggers"]["uvicorn.error"]["level"] = log_level
     LOGGING_CONFIG["loggers"]["uvicorn.access"]["level"] = log_level
 
-    async def main():
-        import aiomonitor
-
-        config = uvicorn.Config(
-            app,
+    try:
+        uvicorn.run(
+            "main:app",
             **bind_args,
             workers=1,
             reload=DEBUG,
             log_config=LOGGING_CONFIG,
-            loop="asyncio",
+            loop=UVICORN_LOOP,
         )
-        server = uvicorn.Server(config)
-
-        loop = asyncio.get_running_loop()
-        run_forever = loop.create_future()
-
-        with aiomonitor.start_monitor(loop):
-            await server.serve()
-            await run_forever
-
-    if MONITOR:
-        asyncio.run(main())
-    else:
-        try:
-            uvicorn.run(
-                "main:app",
-                **bind_args,
-                workers=1,
-                reload=DEBUG,
-                log_config=LOGGING_CONFIG,
-                loop=UVICORN_LOOP,
-            )
-        except FileNotFoundError:  # to prevent error on removing unix sock
-            pass
+    except FileNotFoundError:  # to prevent error on removing unix sock
+        pass
