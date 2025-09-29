@@ -87,8 +87,8 @@ class Webhook(BaseModel):
     webhooks: list[WebhookInfo] = Field(default=[])
     days_left: list[int] = Field(default=[])
     usage_percent: list[int] = Field(default=[])
-    timeout: int = Field(gt=1)
-    recurrent: int = Field(gt=1)
+    timeout: int = Field(gt=0)
+    recurrent: int = Field(gt=0)
     proxy_url: str | None = Field(default=None)
 
     @field_validator("proxy_url", mode="before")
