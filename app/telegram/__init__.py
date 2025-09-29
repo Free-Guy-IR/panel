@@ -1,7 +1,5 @@
 import asyncio
-import signal
 from asyncio import Lock
-from threading import Thread
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -35,15 +33,6 @@ def get_dispatcher():
     return _dp
 
 
-def _signal_handler():
-    """Handle SIGINT/SIGTERM signals during polling"""
-    logger.info("Signal received, shutting down telegram bot...")
-    if _polling_task and not _polling_task.done():
-        # Force stop dispatcher and cancel task
-        _dp._running = False
-        _polling_task.cancel()
-
-
 async def startup_telegram_bot():
     restart = False
     global _bot
@@ -72,15 +61,6 @@ async def startup_telegram_bot():
 
             try:
                 if settings.method == RunMethod.LONGPOLLING:
-                    # Set up signal handlers for graceful shutdown
-                    for sig in (signal.SIGTERM, signal.SIGINT):
-                        try:
-                            signal.signal(sig, lambda s, f: _signal_handler())
-                        except ValueError:
-                            # Signal only works in main thread
-                            pass
-                    
-                    # Create polling task that responds to signals
                     _polling_task = asyncio.create_task(_dp.start_polling(_bot, handle_signals=False))
                 else:
                     # register webhook
@@ -117,26 +97,12 @@ async def shutdown_telegram_bot():
                 if _polling_task is not None and not _polling_task.done():
                     logger.info("stopping long polling")
                     # Force stop the dispatcher first
-                    _dp._running = False
+                    await _dp.stop_polling()
                     # Cancel the polling task
                     _polling_task.cancel()
-                    try:
-                        # Give it limited time to respond to cancellation
-                        await asyncio.wait_for(_polling_task, timeout=3.0)
-                    except asyncio.TimeoutError:
-                        logger.warning("Polling task did not respond to cancellation, forcing shutdown")
-                    except asyncio.CancelledError:
-                        logger.info("Telegram bot polling task cancelled successfully")
-                    except Exception as e:
-                        logger.warning(f"Error during polling task cancellation: {e}")
-                    finally:
-                        _polling_task = None
+                    _polling_task = None
                 else:
-                    try:
-                        await asyncio.wait_for(_bot.get_webhook_info(), timeout=5.0)
-                        await _bot.delete_webhook(drop_pending_updates=True)
-                    except asyncio.TimeoutError:
-                        logger.warning("Webhook cleanup timed out")
+                    await _bot.delete_webhook(drop_pending_updates=True)
             except (
                 TelegramNetworkError,
                 TelegramRetryAfter,
@@ -145,11 +111,6 @@ async def shutdown_telegram_bot():
             ) as err:
                 if hasattr(err, "message"):
                     logger.error(err.message)
-                # elif isinstance(err, TelegramUnauthorizedError):
-                #     try:
-                #         asyncio.create_task(_dp.stop_polling())
-                #     except Exception:
-                #         pass
                 else:
                     logger.error(err)
 
