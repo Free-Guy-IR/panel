@@ -125,6 +125,7 @@
 
   body {
     @apply bg-background text-foreground font-body;
+    overflow-x: hidden; /* Prevent horizontal scroll from drag-and-drop elements */
   }
 
   /* Enhanced shadcn-style scrollbar */
@@ -190,6 +191,23 @@
 
   .scrollbar-muted::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Fix for drag-and-drop elements causing horizontal overflow in RTL */
+  [data-rbd-draggable-id],
+  [data-rbd-drag-handle-draggable-id],
+  [data-dnd-kit-drag-overlay] {
+    max-width: 100vw !important;
+    left: 0 !important;
+    right: auto !important;
+  }
+
+  /* Ensure drag overlay elements don't extend beyond viewport */
+  [data-dnd-kit-drag-overlay] {
+    position: fixed !important;
+    z-index: 9999 !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100vh - 20px) !important;
   }
 }
 
