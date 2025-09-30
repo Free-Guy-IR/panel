@@ -436,14 +436,12 @@ export interface HostsProps {
 
 export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editingHost, setEditingHost }: HostsProps) {
   const [hosts, setHosts] = useState<BaseHost[] | undefined>()
-  const [debouncedHosts, setDebouncedHosts] = useState<BaseHost[] | undefined>([])
-  const [skipNextDebounce, setSkipNextDebounce] = useState(false)
+  const [isUpdatingPriorities, setIsUpdatingPriorities] = useState(false)
   const { t } = useTranslation()
 
   // Set up hosts data from props
   useEffect(() => {
     setHosts(data ?? [])
-    setSkipNextDebounce(true)
   }, [data])
 
   const form = useForm<HostFormValues>({
@@ -611,47 +609,8 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
     if (!host) return
 
     try {
-      // Find all hosts with priorities equal to or less than the host being duplicated
-      // Get the host's index in the sorted array
-      const sortedHosts = [...(hosts ?? [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-      const hostIndex = sortedHosts.findIndex(h => h.id === host.id)
-
-      if (hostIndex === -1) return
-
-      // Find the next host's priority
-      let newPriority: number
-      if (hostIndex === sortedHosts.length - 1) {
-        // If it's the last host, just add 1 to its priority
-        newPriority = (host.priority ?? 0) + 1
-      } else {
-        // Set priority after the current host but before the next host
-        // Always use an integer value
-        const nextHostPriority = sortedHosts[hostIndex + 1].priority ?? hostIndex + 1
-        const currentPriority = host.priority ?? 0
-
-        if (nextHostPriority > currentPriority + 1) {
-          // If there's space between priorities, simply add 1
-          newPriority = currentPriority + 1
-        } else {
-          // Otherwise increment all priorities after this host
-          newPriority = currentPriority + 1
-
-          // Update all hosts after this one to have higher priorities
-          const hostsToUpdate = sortedHosts.slice(hostIndex + 1).map(h => ({
-            id: h.id,
-            remark: h.remark,
-            priority: (h.priority ?? 0) + 1,
-            inbound_tag: h.inbound_tag,
-          } as CreateHost))
-
-          if (hostsToUpdate.length > 0) {
-            // Update priorities in batch
-            await modifyHosts(hostsToUpdate)
-          }
-        }
-      }
-
-      // Create duplicate with new priority and slightly modified name
+      // Create duplicate with slightly modified name and same priority
+      // The priority will be handled by the drag-and-drop reordering system
       const newHost: CreateHost = {
         remark: `${host.remark || ''} (copy)`,
         address: host.address || [],
@@ -668,7 +627,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         is_disabled: host.is_disabled || false,
         random_user_agent: host.random_user_agent || false,
         use_sni_as_host: host.use_sni_as_host || false,
-        priority: newPriority,
+        priority: host.priority ?? 0, // Use the same priority as the original host
         ech_config_list: host.ech_config_list,
         fragment_settings: host.fragment_settings,
         noise_settings: host.noise_settings,
@@ -735,82 +694,74 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
     }),
   )
 
-  function handleDragEnd(event: DragEndEvent) {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
-    if (over && active.id !== over.id) {
-      setHosts(hosts => {
-        if (!hosts) return []
-        const oldIndex = hosts.findIndex(item => item.id === active.id)
-        const newIndex = hosts.findIndex(item => item.id === over.id)
-        const reorderedHosts = arrayMove(hosts, oldIndex, newIndex)
+    if (!over || active.id === over.id || !hosts) return
 
-        // Update priorities based on new order (lower number = higher priority)
-        return reorderedHosts.map((host, index) => ({
-          ...host,
-          priority: index,
-        }))
-      })
+    const oldIndex = hosts.findIndex(item => item.id === active.id)
+    const newIndex = hosts.findIndex(item => item.id === over.id)
+    
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // Optimistically update the UI first
+    const reorderedHosts = arrayMove(hosts, oldIndex, newIndex)
+    const updatedHosts = reorderedHosts.map((host, index) => ({
+      ...host,
+      priority: index,
+    }))
+    
+    setHosts(updatedHosts)
+    setIsUpdatingPriorities(true)
+
+    try {
+      // Prepare the hosts data for the API call
+      const hostsToUpdate: CreateHost[] = updatedHosts.map((host, index) => ({
+        id: host.id,
+        remark: host.remark || '',
+        address: host.address || [],
+        port: host.port,
+        inbound_tag: host.inbound_tag || '',
+        status: host.status || [],
+        host: host.host || [],
+        sni: host.sni || [],
+        path: host.path || '',
+        security: host.security || 'inbound_default',
+        alpn: host.alpn || [],
+        fingerprint: host.fingerprint || '',
+        allowinsecure: host.allowinsecure || false,
+        is_disabled: host.is_disabled || false,
+        random_user_agent: host.random_user_agent || false,
+        use_sni_as_host: host.use_sni_as_host || false,
+        priority: index, // New priority based on position
+        ech_config_list: host.ech_config_list,
+        fragment_settings: host.fragment_settings,
+        noise_settings: host.noise_settings,
+        mux_settings: host.mux_settings,
+        transport_settings: host.transport_settings as any,
+        http_headers: host.http_headers || {},
+      }))
+
+      // Make the API call to update priorities
+      await modifyHosts(hostsToUpdate)
+      
+      // Update local state with the response data
+      setHosts(updatedHosts)
+      
+      // Show success message
+      toast.success(t('host.priorityUpdated', { defaultValue: 'Host priorities updated' }))
+    } catch (error) {
+      console.error('Error updating host priorities:', error)
+      
+      // Revert the optimistic update on error
+      setHosts(hosts)
+      
+      // Show error message
+      toast.error(t('host.priorityUpdateError', { defaultValue: 'Failed to update priorities' }))
+    } finally {
+      setIsUpdatingPriorities(false)
     }
   }
-
-  // Debounce the host updates to prevent too many API calls
-  useEffect(() => {
-    if (skipNextDebounce) {
-      setSkipNextDebounce(false)
-      return
-    }
-    const handler = setTimeout(() => {
-      setDebouncedHosts(hosts)
-    }, 1500)
-
-    return () => {
-      clearTimeout(handler)
-    }
-  }, [hosts])
-
-  // Save debounced hosts to the server
-  useEffect(() => {
-    const updateHosts = async () => {
-      if (debouncedHosts && debouncedHosts.length > 0) {
-        try {
-          // Convert BaseHost to CreateHost with all fields for complete data preservation
-          const hostsToUpdate = debouncedHosts.map(host => ({
-            id: host.id,
-            remark: host.remark,
-            address: host.address,
-            inbound_tag: host.inbound_tag,
-            port: host.port,
-            sni: host.sni,
-            host: host.host,
-            path: host.path,
-            security: host.security,
-            alpn: host.alpn,
-            fingerprint: host.fingerprint,
-            allowinsecure: host.allowinsecure,
-            is_disabled: host.is_disabled,
-            http_headers: host.http_headers,
-            transport_settings: host.transport_settings,
-            mux_settings: host.mux_settings,
-            fragment_settings: host.fragment_settings,
-            noise_settings: host.noise_settings,
-            random_user_agent: host.random_user_agent,
-            use_sni_as_host: host.use_sni_as_host,
-            priority: host.priority,
-            ech_config_list: host.ech_config_list,
-            status: host.status,
-          } as CreateHost))
-          await modifyHosts(hostsToUpdate)
-          // Refresh data after modifying hosts order
-          refreshHostsData()
-        } catch (error) {
-          console.error('Error updating host order:', error)
-        }
-      }
-    }
-
-    updateHosts()
-  }, [debouncedHosts])
 
   // Filter out hosts without IDs for the sortable context
   const sortableHosts =
@@ -826,12 +777,23 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
   return (
     <div>
       <div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext 
+          sensors={isUpdatingPriorities ? [] : sensors} 
+          collisionDetection={closestCenter} 
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext items={sortableHosts} strategy={rectSortingStrategy}>
             <div className="max-w-screen-[2000px] min-h-screen overflow-hidden">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {sortedHosts.map(host => (
-                  <SortableHost key={host.id ?? 'new'} host={host} onEdit={handleEdit} onDuplicate={handleDuplicate} onDataChanged={refreshHostsData} />
+                  <SortableHost 
+                    key={host.id ?? 'new'} 
+                    host={host} 
+                    onEdit={handleEdit} 
+                    onDuplicate={handleDuplicate} 
+                    onDataChanged={refreshHostsData}
+                    disabled={isUpdatingPriorities}
+                  />
                 ))}
               </div>
             </div>

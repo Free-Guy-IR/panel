@@ -18,6 +18,7 @@ interface SortableHostProps {
   onEdit: (host: BaseHost) => void
   onDuplicate: (host: BaseHost) => Promise<void>
   onDataChanged?: () => void // New callback for notifying parent about data changes
+  disabled?: boolean // Disable drag and drop when updating priorities
 }
 
 const DeleteAlertDialog = ({ host, isOpen, onClose, onConfirm }: { host: BaseHost; isOpen: boolean; onClose: () => void; onConfirm: () => void }) => {
@@ -44,7 +45,7 @@ const DeleteAlertDialog = ({ host, isOpen, onClose, onConfirm }: { host: BaseHos
   )
 }
 
-export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged }: SortableHostProps) {
+export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged, disabled = false }: SortableHostProps) {
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false)
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -55,6 +56,7 @@ export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged 
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: host.id as UniqueIdentifier,
+    disabled: disabled,
   })
 
   const style = {
@@ -154,7 +156,15 @@ export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged 
     <div ref={setNodeRef} className="cursor-default" style={style} {...attributes}>
       <Card className="p-4 relative group h-full hover:bg-accent transition-colors">
         <div className="flex items-center gap-3">
-          <button style={{ cursor: cursor }} className="touch-none opacity-50 group-hover:opacity-100 transition-opacity" {...listeners}>
+          <button 
+            style={{ cursor: disabled ? 'not-allowed' : cursor }} 
+            className={cn(
+              "touch-none transition-opacity",
+              disabled ? "opacity-30 cursor-not-allowed" : "opacity-50 group-hover:opacity-100"
+            )} 
+            {...(disabled ? {} : listeners)}
+            disabled={disabled}
+          >
             <GripVertical className="h-5 w-5" />
             <span className="sr-only">Drag to reorder</span>
           </button>

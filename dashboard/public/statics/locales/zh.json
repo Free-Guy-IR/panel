@@ -1102,7 +1102,9 @@
     "disableSuccess": "主机「{{name}}」已成功禁用",
     "disableFailed": "禁用主机「{{name}}」失败",
     "duplicateSuccess": "主机「{{name}}」已成功复制",
-    "duplicateFailed": "复制主机「{{name}}」失败"
+    "duplicateFailed": "复制主机「{{name}}」失败",
+    "priorityUpdated": "主机已成功更新",
+    "priorityUpdateError": "更新主机失败"
   },
   "pasargaurd": "PasarGuard",
   "group": {

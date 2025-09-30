@@ -1113,7 +1113,9 @@
     "xudp_proxy_443": "XUDP Proxy 443",
     "reject": "Reject",
     "allow": "Allow",
-    "skip": "Skip"
+    "skip": "Skip",
+    "priorityUpdated": "Host priorities updated",
+    "priorityUpdateError": "Failed to update priorities"
   },
   "usersTable.sortByExpire": "Sort by expiry time",
   "dateInfo.day": " day",

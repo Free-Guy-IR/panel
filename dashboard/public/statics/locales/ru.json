@@ -1058,7 +1058,9 @@
     "xudp_proxy_443": "XUDP Прокси 443",
     "reject": "Отклонить",
     "allow": "Разрешить",
-    "skip": "Пропустить"
+    "skip": "Пропустить",
+    "priorityUpdated": "Хосты успешно обновлены",
+    "priorityUpdateError": "Не удалось обновить хосты"
   },
   "group": {
     "createSuccess": "Группа «{{name}}» успешно создана",
