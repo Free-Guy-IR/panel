@@ -25,9 +25,9 @@ export default function Core({ core, onEdit, onDuplicate, onDelete }: CoreProps)
   }
 
   return (
-    <Card className="px-4 py-5 relative group h-full hover:bg-accent transition-colors">
+    <Card className="px-4 py-5 relative group h-full hover:bg-accent transition-colors cursor-pointer" onClick={() => onEdit(core)}>
       <div className="flex items-center gap-3">
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(core)}>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <div className={cn('min-h-2 min-w-2 rounded-full', 'bg-green-500')} />
@@ -35,7 +35,8 @@ export default function Core({ core, onEdit, onDuplicate, onDelete }: CoreProps)
             </div>
           </div>
         </div>
-        <DropdownMenu>
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon">
               <MoreVertical className="h-4 w-4" />
@@ -68,6 +69,7 @@ export default function Core({ core, onEdit, onDuplicate, onDelete }: CoreProps)
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </Card>
   )

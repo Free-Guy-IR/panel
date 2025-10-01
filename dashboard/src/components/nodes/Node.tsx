@@ -116,9 +116,9 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
 
   return (
     <>
-      <Card className="p-4 relative group h-full hover:bg-accent transition-colors">
+      <Card className="p-4 relative group h-full hover:bg-accent transition-colors cursor-pointer" onClick={() => onEdit(node)}>
         <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(node)}>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <div
                 className={cn(
@@ -148,7 +148,8 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
               </div>
             )}
           </div>
-          <DropdownMenu>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
                 <MoreVertical className="h-4 w-4" />
@@ -219,6 +220,7 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </Card>
 

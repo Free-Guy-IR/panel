@@ -75,9 +75,9 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
 
   return (
     <>
-      <Card className="px-4 py-5 relative group h-full hover:bg-accent transition-colors">
+      <Card className="px-4 py-5 relative group h-full hover:bg-accent transition-colors cursor-pointer" onClick={() => onEdit(group)}>
         <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(group)}>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <div className={cn('min-h-2 min-w-2 rounded-full', group.is_disabled ? 'bg-red-500' : 'bg-green-500')} />
               <div className="flex items-center gap-2">
@@ -89,7 +89,8 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
               {t('admins.total.users')}: {group.total_users || 0}
             </div>
           </div>
-          <DropdownMenu>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
                 <MoreVertical className="h-4 w-4" />
@@ -121,6 +122,7 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </Card>
 
