@@ -210,7 +210,7 @@ export default function Settings() {
         <div className="relative w-full">
           <div className="flex border-b">
             <div className="w-full">
-              <div className="scrollbar-hide flex overflow-x-auto border-b px-4">
+              <div className="scrollbar-hide flex lg:flex-wrap overflow-x-auto border-b px-4">
                 {tabs.map(tab => {
                   const isActive = activeTab === tab.id
                   return (
