@@ -45,7 +45,7 @@ dependencies = [
     "uvloop>=0.21.0; sys_platform != 'win32'",
     "aiorwlock>=1.5.0",
     "typer>=0.17.3",
-    "pasarguard-node-bridge>=0.0.48",
+    "pasarguard-node-bridge>=0.0.49",
 ]
 
 [tool.ruff]
