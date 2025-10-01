@@ -459,11 +459,17 @@ async def create_user(db: AsyncSession, new_user: UserCreate, groups: list[Group
     db_user.groups = groups
     db_user.expire = new_user.expire or None
     db_user.proxy_settings = new_user.proxy_settings.dict()
-    db_user.next_plan = NextPlan(**new_user.next_plan.model_dump()) if new_user.next_plan else None
 
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
+
+    if new_user.next_plan:
+        db_user.next_plan = NextPlan(user_id=db_user.id, **new_user.next_plan.model_dump())
+        db.add(db_user.next_plan)
+        await db.commit()
+        await db.refresh(db_user)
+
     await load_user_attrs(db_user)
     return db_user
 
@@ -778,7 +784,9 @@ async def get_user_sub_update_list(
     return result, count
 
 
-async def autodelete_expired_users(db: AsyncSession, include_limited_users: bool = False) -> list[UserNotificationResponse]:
+async def autodelete_expired_users(
+    db: AsyncSession, include_limited_users: bool = False
+) -> list[UserNotificationResponse]:
     """
     Deletes expired (optionally also limited) users whose auto-delete time has passed.
 
