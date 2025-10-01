@@ -269,8 +269,8 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
     let timestamp: number | null = null
     if (update.created_at) {
       if (typeof update.created_at === 'string') {
-        const date = new Date(update.created_at)
-        timestamp = Math.floor(date.getTime() / 1000)
+        // Use dateUtils to properly convert ISO string to timestamp
+        timestamp = dateUtils.toDayjs(update.created_at).unix()
       } else if (typeof update.created_at === 'number') {
         timestamp = update.created_at
       }
