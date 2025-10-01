@@ -379,7 +379,9 @@ const Dashboard = () => {
                               {selectedAdmin?.username === 'Total' ? <Sigma className="h-3 w-3" /> : selectedAdmin?.username?.charAt(0).toUpperCase() || '?'}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="truncate text-xs sm:text-sm">{selectedAdmin?.username || t('advanceSearch.selectAdmin')}</span>
+                          <span className="truncate text-xs sm:text-sm">
+                            {selectedAdmin?.username === 'Total' ? t('admins.total') : selectedAdmin?.username || t('advanceSearch.selectAdmin')}
+                          </span>
                           {selectedAdmin && selectedAdmin.username !== 'Total' && (
                             <div className="flex-shrink-0">{selectedAdmin.is_sudo ? <UserCog className="h-3 w-3 text-primary" /> : <UserRound className="h-3 w-3 text-primary" />}</div>
                           )}
@@ -407,7 +409,7 @@ const Dashboard = () => {
                                 <Sigma className="h-3 w-3" />
                               </AvatarFallback>
                             </Avatar>
-                            <span className="flex-1 truncate">Total</span>
+                            <span className="flex-1 truncate">{t('admins.total')}</span>
                             <div className="flex flex-shrink-0 items-center gap-1">{selectedAdmin?.username === 'Total' && <Check className="h-3 w-3 text-primary" />}</div>
                           </CommandItem>
 

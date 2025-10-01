@@ -71,7 +71,7 @@ export function Filters<T extends BaseFilters>({ filters, onFilterChange }: Filt
       </div>
       {/* Refresh Button */}
       <div className="flex items-center gap-2 h-full">
-        <Button size="icon-md" onClick={() => refetch()} variant="ghost" className="flex items-center gap-2 border bg-input">
+        <Button size="icon-md" onClick={() => refetch()} variant="ghost" className="flex items-center gap-2 border">
           <RefreshCw className="w-4 h-4" />
         </Button>
       </div>
