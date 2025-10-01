@@ -160,14 +160,17 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     } else if (periodOption.hours) {
       start = now.subtract(periodOption.hours, 'hour')
     } else if (periodOption.days) {
-      start = now.subtract(periodOption.days, 'day')
+      // Match the logic from CostumeBarChart.tsx and AllNodesStackedBarChart.tsx
+      // For 7d, subtract 6 days; for 3d, subtract 2 days
+      const daysToSubtract = periodOption.days === 7 ? 6 : periodOption.days === 3 ? 2 : periodOption.days
+      start = now.subtract(daysToSubtract, 'day')
     } else {
       start = now
     }
     return { startDate: start.toISOString(), endDate: now.toISOString() }
   }, [periodOption])
 
-  const { data } = useGetUsersUsage(
+  const { data, isLoading } = useGetUsersUsage(
     {
       ...(admin_username ? { admin: [admin_username] } : {}),
       period: periodOption.period,
@@ -229,7 +232,29 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
         </Select>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col justify-center p-2 sm:p-6">
-        {chartData.length === 0 ? (
+        {isLoading ? (
+          <div className="w-full max-w-7xl mx-auto">
+            <div className="max-h-[320px] min-h-[200px] w-full">
+              <div className="flex flex-col h-full">
+                <div className="flex-1">
+                  <div className="h-full flex items-end justify-center">
+                    <div className="flex gap-2 h-48 items-end">
+                      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                        <div key={i} className="animate-pulse">
+                          <div className={`bg-muted rounded-t-lg w-8 ${i === 4 ? 'h-32' : i === 3 || i === 5 ? 'h-24' : i === 2 || i === 6 ? 'h-16' : 'h-20'}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-between mt-4">
+                  <div className="w-16 h-4 bg-muted rounded animate-pulse" />
+                  <div className="w-16 h-4 bg-muted rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : chartData.length === 0 ? (
           <div className="mt-16 flex flex-col items-center justify-center gap-4 text-muted-foreground min-h-[200px]">
             <SearchXIcon className="size-16" strokeWidth={1} />
             {t('admins.monitor.no_traffic', { defaultValue: 'No traffic data available' })}
