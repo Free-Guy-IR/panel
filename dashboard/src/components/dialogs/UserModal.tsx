@@ -216,62 +216,65 @@ const ExpiryDateField = ({
     [now],
   )
 
+  const dir = useDirDetection()
+
   return (
     <FormItem className="flex flex-1 flex-col">
       <FormLabel>{label}</FormLabel>
-      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-        <PopoverTrigger asChild>
-          <FormControl>
-            <div className="relative w-full">
-              <Button
-                dir={'ltr'}
-                variant={'outline'}
-                className={cn('!mt-3.5 h-fit w-full text-left font-normal', !field.value && 'text-muted-foreground')}
-                type="button"
-                onClick={e => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setCalendarOpen(true)
-                }}
-              >
-                {displayDate ? (
-                  usePersianCalendar ? (
-                    // Persian format - display in local time
-                    displayDate.toLocaleDateString('fa-IR', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                    }) +
-                    ' ' +
-                    displayDate.toLocaleTimeString('fa-IR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: false,
-                    })
+      <div className="relative">
+        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <PopoverTrigger asChild>
+            <FormControl>
+              <div className="relative w-full">
+                <Button
+                  dir={'ltr'}
+                  variant={'outline'}
+                  className={cn('mt-1 h-fit w-full text-left font-normal', !field.value && 'text-muted-foreground')}
+                  type="button"
+                  onClick={e => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setCalendarOpen(true)
+                  }}
+                >
+                  {displayDate ? (
+                    usePersianCalendar ? (
+                      // Persian format - display in local time
+                      displayDate.toLocaleDateString('fa-IR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                      }) +
+                      ' ' +
+                      displayDate.toLocaleTimeString('fa-IR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      })
+                    ) : (
+                      // Gregorian format - display in local time
+                      displayDate.toLocaleDateString('sv-SE', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                      }) +
+                      ' ' +
+                      displayDate.toLocaleTimeString('sv-SE', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      })
+                    )
+                  ) : field.value && !isNaN(Number(field.value)) ? (
+                    String(field.value)
                   ) : (
-                    // Gregorian format - display in local time
-                    displayDate.toLocaleDateString('sv-SE', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                    }) +
-                    ' ' +
-                    displayDate.toLocaleTimeString('sv-SE', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: false,
-                    })
-                  )
-                ) : field.value && !isNaN(Number(field.value)) ? (
-                  String(field.value)
-                ) : (
-                  <span>{t('userDialog.expireDate', { defaultValue: 'Expire date' })}</span>
-                )}
-                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-              </Button>
-            </div>
-          </FormControl>
-        </PopoverTrigger>
+                    <span>{t('userDialog.expireDate', { defaultValue: 'Expire date' })}</span>
+                  )}
+                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </div>
+            </FormControl>
+          </PopoverTrigger>
         <PopoverContent
           className="w-auto p-0"
           align="start"
@@ -358,14 +361,15 @@ const ExpiryDateField = ({
             )}
           </div>
         </PopoverContent>
-      </Popover>
-      {expireInfo && (
-        <p className={cn(!expireInfo.time && 'hidden', 'text-xs text-muted-foreground')}>
-          {expireInfo.time !== '0' && expireInfo.time !== '0s'
-            ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
-            : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
-        </p>
-      )}
+        </Popover>
+        {expireInfo && (
+          <p className={cn("absolute top-full mt-1 text-xs text-muted-foreground whitespace-nowrap", !expireInfo.time && 'hidden',dir ==="rtl" ? 'right-0' : 'left-0')}  >
+            {expireInfo.time !== '0' && expireInfo.time !== '0s'
+              ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
+              : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
+          </p>
+        )}
+      </div>
       <FormMessage />
     </FormItem>
   )
@@ -476,7 +480,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     { id: 'groups', label: 'groups', icon: Users },
     { id: 'templates', label: 'templates.title', icon: Layers },
   ]
-  const [nextPlanEnabled, setNextPlanEnabled] = useState(!!form.watch('next_plan'))
+  const [nextPlanEnabled, setNextPlanEnabled] = useState(() => {
+    const nextPlan = form.watch('next_plan')
+    return nextPlan !== undefined && nextPlan !== null && Object.keys(nextPlan).length > 0
+  })
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const [expireCalendarOpen, setExpireCalendarOpen] = useState(false)
   const [onHoldCalendarOpen, setOnHoldCalendarOpen] = useState(false)
@@ -712,11 +719,22 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   useEffect(() => {
     if (!nextPlanEnabled) {
       form.setValue('next_plan', undefined)
-    } else if (!form.watch('next_plan')) {
+      handleFieldChange('next_plan', undefined)
+    } else if (!form.watch('next_plan') || form.watch('next_plan') === null) {
       form.setValue('next_plan', {})
+      handleFieldChange('next_plan', {})
     }
     // eslint-disable-next-line
   }, [nextPlanEnabled])
+
+  // Sync switch state when next_plan value changes (e.g., when editing a user)
+  useEffect(() => {
+    const nextPlan = form.watch('next_plan')
+    const shouldBeEnabled = nextPlan !== undefined && nextPlan !== null && Object.keys(nextPlan).length > 0
+    if (nextPlanEnabled !== shouldBeEnabled) {
+      setNextPlanEnabled(shouldBeEnabled)
+    }
+  }, [form.watch('next_plan'), nextPlanEnabled])
 
   // Helper to convert GB to bytes
   function gbToBytes(gb: string | number | undefined): number | undefined {
@@ -770,6 +788,18 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
           return false
         }
         return true
+      }
+
+      // Special case for Next Plan enabled - if Next Plan is enabled and no other fields are touched,
+      // consider the form valid (Next Plan fields are optional)
+      if (nextPlanEnabled && editingUser && !isSubmit) {
+        const hasTouchedNonNextPlanFields = Object.keys(touchedFields).some(key => 
+          key !== 'next_plan' && !key.startsWith('next_plan.') && touchedFields[key]
+        )
+        if (!hasTouchedNonNextPlanFields) {
+          form.clearErrors()
+          return true
+        }
       }
 
       // Only validate fields that have been touched
@@ -976,6 +1006,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
           expire: preparedValues.expire,
           // Only include proxy_settings if they are filled
           ...(hasProxySettings ? { proxy_settings: cleanedProxySettings } : {}),
+          // Force send undefined when Next Plan is disabled
+          next_plan: nextPlanEnabled ? preparedValues.next_plan : undefined,
         }
 
         // Remove proxy_settings from the payload if it's empty or undefined
@@ -1321,14 +1353,14 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                   </div>
                   {/* Data limit and expire fields - show data_limit only when no template is selected */}
                   {activeTab === 'groups' && (
-                    <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
+                    <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-end">
                       {!selectedTemplateId && (
                         <>
                           <FormField
                             control={form.control}
                             name="data_limit"
                             render={({ field }) => (
-                              <FormItem className="flex-1">
+                              <FormItem className="flex-1 h-full">
                                 <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
                                 <FormControl>
                                   <Input
@@ -1391,7 +1423,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           )}
                         </>
                       )}
-                      <div className="flex items-start gap-4 lg:w-52">
+                      <div className="flex items-start gap-4 lg:w-52 h-full">
                         {status === 'on_hold' ? (
                             <FormField
                                 control={form.control}
@@ -1800,7 +1832,13 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           <ListStart className="h-4 w-4" />
                           <div>{t('userDialog.nextPlanTitle', { defaultValue: 'Next Plan' })}</div>
                         </div>
-                        <Switch checked={nextPlanEnabled} onCheckedChange={setNextPlanEnabled} />
+                        <Switch checked={nextPlanEnabled} onCheckedChange={value => {
+                          setNextPlanEnabled(value)
+                          // Trigger validation when Next Plan toggle changes
+                          const currentValues = form.getValues()
+                          const isValid = validateAllFields(currentValues, touchedFields)
+                          setIsFormValid(isValid)
+                        }} />
                       </div>
                       {nextPlanEnabled && (
                         <div className="flex flex-col gap-4 py-4">
@@ -1816,8 +1854,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     onValueChange={val => {
                                       if (val === 'none' || (field.value && String(field.value) === val)) {
                                         field.onChange(undefined)
+                                        handleFieldChange('next_plan.user_template_id', undefined)
                                       } else {
                                         field.onChange(Number(val))
+                                        handleFieldChange('next_plan.user_template_id', Number(val))
                                       }
                                     }}
                                   >
@@ -1858,6 +1898,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                           const days = e.target.value ? Number(e.target.value) : 0
                                           const seconds = dateUtils.daysToSeconds(days)
                                           field.onChange(seconds)
+                                          handleFieldChange('next_plan.expire', seconds)
                                         }}
                                       />
                                     </FormControl>
@@ -1881,7 +1922,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                         onChange={e => {
                                           const value = e.target.value ? Number(e.target.value) : 0
                                           // Convert GB to bytes (1 GB = 1024 * 1024 * 1024 bytes)
-                                          field.onChange(value ? value * 1024 * 1024 * 1024 : 0)
+                                          const bytesValue = value ? value * 1024 * 1024 * 1024 : 0
+                                          field.onChange(bytesValue)
+                                          handleFieldChange('next_plan.data_limit', bytesValue)
                                         }}
                                         value={field.value ? Math.round(field.value / (1024 * 1024 * 1024)) : ''}
                                       />
@@ -1900,7 +1943,10 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                               render={({ field }) => (
                                   <FormItem className="flex flex-row items-center justify-between w-full">
                                   <FormLabel>{t('userDialog.nextPlanAddRemainingTraffic', { defaultValue: 'Add Remaining Traffic' })}</FormLabel>
-                                  <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                                  <Switch checked={!!field.value} onCheckedChange={value => {
+                                    field.onChange(value)
+                                    handleFieldChange('next_plan.add_remaining_traffic', value)
+                                  }} />
                                   <FormMessage />
                                 </FormItem>
                               )}
