@@ -4,9 +4,11 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui
 import { type AdminDetails } from '@/service/api'
 import { ChevronsUpDown, LogOut, Network, Wifi, Shield, UsersIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
+import { useNavigate } from 'react-router'
 import { formatBytes } from '@/utils/formatByte'
 import { Badge } from '@/components/ui/badge'
+import { removeAuthToken } from '@/utils/authStorage'
+import { queryClient } from '@/utils/query-client'
 
 export function NavUser({
   username,
@@ -18,6 +20,20 @@ export function NavUser({
   admin: AdminDetails | null
 }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault()
+    // Cancel all ongoing queries
+    queryClient.cancelQueries()
+    // Remove auth token
+    removeAuthToken()
+    // Clear React Query cache
+    queryClient.clear()
+    // Navigate to login
+    navigate('/login', { replace: true })
+  }
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -101,11 +117,9 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="text-destructive focus:text-destructive">
-              <Link to="/login">
-                <LogOut className="mr-2 size-4" />
-                {t('header.logout')}
-              </Link>
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
+              <LogOut className="mr-2 size-4" />
+              {t('header.logout')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -431,7 +431,7 @@ Different action typs are: `user_created`, `user_updated`, `user_deleted`, `user
 
 # Donation
 
-If you found PasarGuard useful and would like to support its development, you can make a donation, [Click Here](https://donate.gozargah.pro)
+If you found PasarGuard useful and would like to support its development, you can make a donation, [Click Here](http://donate.pasarguard.org)
 
 Thank you for your support!
 

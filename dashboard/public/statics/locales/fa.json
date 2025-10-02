@@ -1478,5 +1478,11 @@
     "selectStatus": "انتخاب وضعیت ..."
   },
   "clearAllFilters": "پاک کردن همه فیلترها",
-  "activeFilters": "فعال"
+  "activeFilters": "فعال",
+  "donation": {
+    "title": "حمایت از پاسارگارد",
+    "message": "حمایت شما به ما کمک می‌کند تا پاسارگارد را بهبود بخشیم و ویژگی‌های بهتری برای همه بسازیم!",
+    "donate": "حمایت مالی",
+    "starOnGitHub": "ستاره در GitHub"
+  }
 }

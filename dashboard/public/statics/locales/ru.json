@@ -1487,5 +1487,11 @@
     "selectStatus": "Выберите статус ..."
   },
   "clearAllFilters": "Очистить все фильтры",
-  "activeFilters": "активных"
+  "activeFilters": "активных",
+  "donation": {
+    "title": "Поддержите PasarGuard",
+    "message": "Ваша поддержка помогает нам улучшать PasarGuard и создавать лучшие функции для всех!",
+    "donate": "Поддержать проект",
+    "starOnGitHub": "Поставить звезду на GitHub"
+  }
 }

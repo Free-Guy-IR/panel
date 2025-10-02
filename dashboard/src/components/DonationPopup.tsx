@@ -1,0 +1,271 @@
+import { Heart, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Button } from './ui/button'
+import { cn } from '@/lib/utils'
+
+const DONATION_STORAGE_KEY = 'donation_popup_data'
+const DAYS_BETWEEN_SHOWS = 3
+const FIRST_SHOW_DELAY = 10 * 60 * 1000 // 10 minutes in milliseconds
+const SUBSEQUENT_SHOW_DELAY = 5000 // 5 seconds for subsequent shows
+const SECRET_SALT = 'pasarguard_donation_v1' // Simple salt for checksum
+
+interface DonationData {
+  lastShown: string | null
+  nextShowTime: string
+  checksum: string
+}
+
+// Simple hash function for tamper detection
+const generateChecksum = (lastShown: string | null, nextShowTime: string): string => {
+  const data = `${lastShown || 'null'}_${nextShowTime}_${SECRET_SALT}`
+  let hash = 0
+  for (let i = 0; i < data.length; i++) {
+    const char = data.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36)
+}
+
+// Validate data integrity and reasonableness
+const validateData = (data: DonationData): boolean => {
+  // Check checksum
+  const expectedChecksum = generateChecksum(data.lastShown, data.nextShowTime)
+  if (data.checksum !== expectedChecksum) {
+    console.warn('Donation popup: Data tampering detected (checksum mismatch)')
+    return false
+  }
+
+  // Validate timestamps are valid dates
+  const nextShowTimestamp = new Date(data.nextShowTime).getTime()
+  if (isNaN(nextShowTimestamp)) {
+    console.warn('Donation popup: Invalid nextShowTime format')
+    return false
+  }
+
+  if (data.lastShown) {
+    const lastShownTimestamp = new Date(data.lastShown).getTime()
+    if (isNaN(lastShownTimestamp)) {
+      console.warn('Donation popup: Invalid lastShown format')
+      return false
+    }
+
+    // Validate relationship: nextShowTime should be after lastShown
+    if (nextShowTimestamp < lastShownTimestamp) {
+      console.warn('Donation popup: nextShowTime is before lastShown')
+      return false
+    }
+
+    // Validate: nextShowTime shouldn't be more than 4 days after lastShown (max 3 days + 1 day buffer)
+    const maxExpectedNext = lastShownTimestamp + (4 * 24 * 60 * 60 * 1000)
+    if (nextShowTimestamp > maxExpectedNext) {
+      console.warn('Donation popup: nextShowTime too far in future')
+      return false
+    }
+  }
+
+  // Validate: nextShowTime shouldn't be more than 1 year in the past or future from now
+  const now = Date.now()
+  const oneYearAgo = now - (365 * 24 * 60 * 60 * 1000)
+  const oneYearLater = now + (365 * 24 * 60 * 60 * 1000)
+  
+  if (nextShowTimestamp < oneYearAgo || nextShowTimestamp > oneYearLater) {
+    console.warn('Donation popup: nextShowTime outside reasonable range')
+    return false
+  }
+
+  return true
+}
+
+// localStorage helper functions
+const setStorageData = (data: Omit<DonationData, 'checksum'>) => {
+  const checksum = generateChecksum(data.lastShown, data.nextShowTime)
+  const fullData: DonationData = { ...data, checksum }
+  localStorage.setItem(DONATION_STORAGE_KEY, JSON.stringify(fullData))
+}
+
+const getStorageData = (): DonationData | null => {
+  const stored = localStorage.getItem(DONATION_STORAGE_KEY)
+  if (!stored) return null
+  try {
+    const data = JSON.parse(stored) as DonationData
+    // Validate data integrity
+    if (!validateData(data)) {
+      // Tampering detected, clear invalid data
+      localStorage.removeItem(DONATION_STORAGE_KEY)
+      return null
+    }
+    return data
+  } catch {
+    return null
+  }
+}
+
+export default function DonationPopup() {
+  const { t } = useTranslation()
+  const [isVisible, setIsVisible] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+
+  useEffect(() => {
+    const checkShouldShow = () => {
+      const data = getStorageData()
+      const now = Date.now()
+      
+      if (!data) {
+        // First time - schedule for 1 hour from now and store it
+        const nextShowTime = new Date(now + FIRST_SHOW_DELAY).toISOString()
+        setStorageData({ lastShown: null, nextShowTime })
+        setTimeout(() => showPopup(), FIRST_SHOW_DELAY)
+        return
+      }
+
+      // Check if it's time to show based on stored nextShowTime
+      const nextShowTimestamp = new Date(data.nextShowTime).getTime()
+      const timeUntilShow = nextShowTimestamp - now
+
+      if (timeUntilShow <= 0) {
+        // Time has passed, show immediately (after small delay for UX)
+        setTimeout(() => showPopup(), SUBSEQUENT_SHOW_DELAY)
+      } else {
+        // Schedule for the remaining time
+        setTimeout(() => showPopup(), timeUntilShow)
+      }
+    }
+
+    checkShouldShow()
+  }, [])
+
+  const showPopup = () => {
+    const now = Date.now()
+    // Update storage: set lastShown to now and nextShowTime to 3 days from now
+    const nextShowTime = new Date(now + (DAYS_BETWEEN_SHOWS * 24 * 60 * 60 * 1000)).toISOString()
+    setStorageData({ 
+      lastShown: new Date(now).toISOString(), 
+      nextShowTime 
+    })
+    
+    // Make visible immediately
+    setIsVisible(true)
+    
+    // Start animation after a frame for smooth CSS transition
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setIsAnimating(true)
+      })
+    })
+  }
+
+  const handleClose = () => {
+    setIsAnimating(false)
+    setTimeout(() => setIsVisible(false), 500)
+  }
+
+  const handleDonate = () => {
+    window.open('https://donate.pasarguard.org/', '_blank', 'noopener,noreferrer')
+    handleClose()
+  }
+
+  const handleGitHub = () => {
+    window.open('https://github.com/PasarGuard', '_blank', 'noopener,noreferrer')
+    handleClose()
+  }
+
+  if (!isVisible) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
+      {/* Backdrop */}
+      <div
+        className={cn(
+          'absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto',
+          'transition-opacity duration-700 ease-in-out will-change-opacity',
+          isAnimating ? 'opacity-100' : 'opacity-0'
+        )}
+        onClick={handleClose}
+      />
+
+      {/* Popup */}
+      <div
+        className={cn(
+          'relative w-full max-w-md pointer-events-auto',
+          'transform transition-all duration-700 ease-out will-change-transform',
+          isAnimating
+            ? 'translate-y-0 opacity-100 scale-100'
+            : '-translate-y-8 opacity-0 scale-95'
+        )}
+      >
+        <div className="relative bg-gradient-to-br from-card via-card to-card/95 border-2 border-primary/20 rounded-2xl shadow-2xl overflow-hidden">
+          {/* Animated gradient background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10" />
+          <div className="absolute inset-0 bg-gradient-to-tr from-primary/0 via-primary/5 to-primary/0" />
+          
+          {/* Close button */}
+          <button
+            onClick={handleClose}
+            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-background/80 hover:bg-background transition-all duration-200 hover:scale-110"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          {/* Content */}
+          <div className="relative p-8">
+            {/* Heart icon with enhanced animation */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/30 rounded-full blur-xl" />
+                <div className="absolute -inset-2 bg-primary/20 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="relative bg-gradient-to-br from-primary/20 to-primary/10 p-4 rounded-full backdrop-blur-sm border border-primary/20">
+                  <Heart className="w-10 h-10 text-primary fill-primary" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-2xl font-bold text-center mb-3 bg-gradient-to-r from-primary via-primary to-primary/80 bg-clip-text text-transparent">
+              {t('donation.title', { defaultValue: 'Support PasarGuard' })}
+            </h3>
+
+            {/* Message */}
+            <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed px-2">
+              {t('donation.message', { 
+                defaultValue: 'Your support helps us improve PasarGuard and build better features for everyone!' 
+              })}
+            </p>
+
+            {/* Action buttons */}
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={handleDonate}
+                size="lg"
+                className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.03] active:scale-[0.98]"
+              >
+                <Heart className="w-5 h-5 mr-2 fill-current" />
+                {t('donation.donate', { defaultValue: 'Donate Now' })}
+              </Button>
+
+              <Button
+                onClick={handleGitHub}
+                variant="outline"
+                size="lg"
+                className="w-full border-primary/30 hover:bg-primary/5 hover:border-primary/50 transition-all duration-300 hover:scale-[1.03] active:scale-[0.98]"
+              >
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                </svg>
+                {t('donation.starOnGitHub', { defaultValue: 'Star on GitHub' })}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+

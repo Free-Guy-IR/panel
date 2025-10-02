@@ -1498,5 +1498,11 @@
     "selectStatus": "Select Status ... "
   },
   "clearAllFilters": "Clear All Filters",
-  "activeFilters": "active"
+  "activeFilters": "active",
+  "donation": {
+    "title": "Support PasarGuard",
+    "message": "Your support helps us improve PasarGuard and build better features for everyone!",
+    "donate": "Donate Now",
+    "starOnGitHub": "Star on GitHub"
+  }
 }

@@ -437,7 +437,7 @@ Body:
 
 # 捐赠
 
-如果您觉得 PasarGuard 有用并希望支持其发展，您可以捐款，[点击这里](https://donate.gozargah.pro)
+如果您觉得 PasarGuard 有用并希望支持其发展，您可以捐款，[点击这里](https://donate.pasarguard.org)
 
 感谢您的支持！
 
