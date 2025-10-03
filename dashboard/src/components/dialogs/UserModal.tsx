@@ -500,6 +500,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         form.reset()
         setTouchedFields({})
         setIsFormValid(false)
+        setActiveTab('groups')
+        setSelectedTemplateId(null)
       }
       onOpenChange(open)
     },
@@ -917,6 +919,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         onOpenChange(false)
         form.reset()
         setSelectedTemplateId(null)
+        setActiveTab('groups')
       } catch (error: any) {
         const fields = ['username', 'note']
         handleError({ error, fields, form, contextKey: 'users' })
@@ -1045,6 +1048,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         onOpenChange(false)
         form.reset()
         setTouchedFields({})
+        setActiveTab('groups')
+        setSelectedTemplateId(null)
       } catch (error: any) {
         const fields = ['username', 'data_limit', 'expire', 'note', 'data_limit_reset_strategy', 'on_hold_expire_duration', 'on_hold_timeout', 'group_ids']
         handleError({ error, fields, form, contextKey: 'users' })
