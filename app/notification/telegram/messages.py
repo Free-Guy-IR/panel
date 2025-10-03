@@ -17,6 +17,7 @@ CREATE_USER = """
 <b>Data Limit</b>: <code>{data_limit}</code>
 <b>Expire Date:</b> <code>{expire_date}</code>
 <b>Data Limit Reset Strategy:</b> <code>{data_limit_reset_strategy}</code>
+<b>Groups:</b> <code>{groups}</code>
 <b>Has Next Plan</b>: <code>{has_next_plan}</code>
 ➖➖➖➖➖➖➖➖➖
 <i>Belongs To</i>: <code>{admin_username}</code>
@@ -30,6 +31,7 @@ MODIFY_USER = """
 <b>Data Limit</b>: <code>{data_limit}</code>
 <b>Expire Date:</b> <code>{expire_date}</code>
 <b>Data Limit Reset Strategy:</b> <code>{data_limit_reset_strategy}</code>
+<b>Groups:</b> <code>{groups}</code>
 <b>Has Next Plan</b>: <code>{has_next_plan}</code>
 ➖➖➖➖➖➖➖➖➖
 <i>Belongs To</i>: <code>{admin_username}</code>
