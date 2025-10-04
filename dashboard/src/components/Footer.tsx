@@ -4,10 +4,11 @@ import { FC } from 'react'
 const FooterContent = () => {
   return (
     <p className="inline-block flex-grow text-center text-xs text-gray-500">
-      Made with ❤️ in &nbsp;
+      Made with ❤️ by &nbsp;
       <a className="text-blue-400" href={REPO_URL}>
-        PasarGuard Team
-      </a>
+        PasarGuard
+      </a>{' '}
+      Team
     </p>
   )
 }
