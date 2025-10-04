@@ -64,14 +64,14 @@ def test_update_admin(access_token):
         url=f"/api/admin/{username}",
         json={
             "password": password,
-            "is_sudo": True,
+            "is_sudo": False,
             "is_disabled": True,
         },
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["username"] == username
-    assert response.json()["is_sudo"] is True
+    assert response.json()["is_sudo"] is False
     assert response.json()["is_disabled"] is True
 
 
