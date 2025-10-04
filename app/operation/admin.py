@@ -62,13 +62,9 @@ class AdminOperation(BaseOperation):
     async def remove_admin(self, db: AsyncSession, username: str, current_admin: AdminDetails | None = None):
         """Remove an admin from the database."""
         db_admin = await self.get_validated_admin(db, username=username)
-        if (
-            self.operator_type != OperatorType.CLI
-            and (db_admin.username == current_admin.username)
-            and db_admin.is_sudo
-        ):
+        if self.operator_type != OperatorType.CLI and db_admin.is_sudo:
             await self.raise_error(
-                message="You're not allowed to delete sudoer's account. Use pasarguard-cli instead.", code=403
+                message="You're not allowed to remove sudoer's account. Use pasarguard-cli instead.", code=403
             )
 
         await remove_admin(db, db_admin)
