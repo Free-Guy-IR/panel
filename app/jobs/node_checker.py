@@ -62,7 +62,7 @@ async def node_health_check():
 
 @on_startup
 async def initialize_nodes():
-    logger.info("Starting main and nodes' cores...")
+    logger.info("Starting nodes' cores...")
 
     async with GetDB() as db:
         db_nodes = await get_nodes(db=db, enabled=True)
@@ -76,11 +76,12 @@ async def initialize_nodes():
 
             await node_operator.connect_node(node_id=node.id)
 
-        start_tasks = [start_node(node=db_node) for db_node in db_nodes]
-
-        await asyncio.gather(*start_tasks)
-
-    logger.info("All nodes' cores have been started.")
+        if not db_nodes:
+            logger.warning("Attention: You have no node, you need to have at least one node")
+        else:
+            start_tasks = [start_node(node=db_node) for db_node in db_nodes]
+            await asyncio.gather(*start_tasks)
+            logger.info("All nodes' cores have been started.")
 
     scheduler.add_job(
         node_health_check, "interval", seconds=JOB_CORE_HEALTH_CHECK_INTERVAL, coalesce=True, max_instances=1
