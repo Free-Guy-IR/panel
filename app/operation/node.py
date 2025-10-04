@@ -78,8 +78,8 @@ class NodeOperation(BaseOperation):
 
     @staticmethod
     async def connect_node(node_id: int) -> None:
-        gozargah_node: PasarGuardNode | None = await node_manager.get_node(node_id)
-        if gozargah_node is None:
+        pg_node: PasarGuardNode | None = await node_manager.get_node(node_id)
+        if pg_node is None:
             return
 
         async with GetDB() as db:
@@ -96,7 +96,7 @@ class NodeOperation(BaseOperation):
             core = await core_manager.get_core(db_node.core_config_id if db_node.core_config_id else 1)
 
             try:
-                info = await gozargah_node.start(
+                info = await pg_node.start(
                     config=core.to_str(),
                     backend_type=0,
                     users=await core_users(db=db),
@@ -325,12 +325,12 @@ class NodeOperation(BaseOperation):
         if db_node.status != NodeStatus.connected:
             await self.raise_error(message="Node is not connected", code=406)
 
-        gozargah_node = await node_manager.get_node(node_id)
-        if gozargah_node is None:
+        pg_node = await node_manager.get_node(node_id)
+        if pg_node is None:
             await self.raise_error(message="Node is not connected", code=409)
 
         try:
-            await gozargah_node.sync_users(await core_users(db=db), flush_queue=flush_users)
+            await pg_node.sync_users(await core_users(db=db), flush_queue=flush_users)
         except NodeAPIError as e:
             await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
             await self.raise_error(message=e.detail, code=e.code)

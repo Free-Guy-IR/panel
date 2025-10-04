@@ -53,6 +53,19 @@ async def get_nodes(
     return await node_operator.get_db_nodes(db=db, core_id=backend_id, offset=offset, limit=limit)
 
 
+@router.post("s/reconnect")
+async def reconnect_all_node(
+    core_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(check_sudo_admin),
+):
+    """
+    Trigger reconnection for all nodes or a specific core.
+    """
+    await node_operator.restart_all_node(db=db, admin=admin, core_id=core_id)
+    return {}
+
+
 @router.post(
     "",
     response_model=NodeResponse,
