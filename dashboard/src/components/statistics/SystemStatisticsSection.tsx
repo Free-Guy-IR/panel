@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { SystemStats, NodeRealtimeStats } from '@/service/api'
 import { useTranslation } from 'react-i18next'
-import { Cpu, MemoryStick, Database, Upload, Download } from 'lucide-react'
+import { Cpu, MemoryStick, Database, Upload, Download, Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { formatBytes } from '@/utils/formatByte'
@@ -14,45 +14,41 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
   const { t } = useTranslation()
   const dir = useDirDetection()
 
+  // Helper to check if stats are from a node (realtime stats)
+  const isNodeStats = (stats: SystemStats | NodeRealtimeStats): stats is NodeRealtimeStats => {
+    return 'incoming_bandwidth_speed' in stats
+  }
+
   const getTotalTrafficValue = () => {
     if (!currentStats) return 0
 
-    if ('incoming_bandwidth' in currentStats && 'outgoing_bandwidth' in currentStats) {
+    if (isNodeStats(currentStats)) {
+      // Node stats - use bandwidth speed
+      return Number(currentStats.incoming_bandwidth_speed) + Number(currentStats.outgoing_bandwidth_speed)
+    } else {
       // Master server stats - use total traffic
-      const stats = currentStats as SystemStats
-      return Number(stats.incoming_bandwidth) + Number(stats.outgoing_bandwidth)
-    } else if ('incoming_bandwidth_speed' in currentStats && 'outgoing_bandwidth_speed' in currentStats) {
-      // Node stats - for now, use speed values as proxy
-      // Note: In a real implementation, you might want to accumulate these values over time
-      const stats = currentStats as NodeRealtimeStats
-      return Number(stats.incoming_bandwidth_speed) + Number(stats.outgoing_bandwidth_speed)
+      return Number(currentStats.incoming_bandwidth) + Number(currentStats.outgoing_bandwidth)
     }
-
-    return 0
   }
 
   const getIncomingBandwidth = () => {
     if (!currentStats) return 0
 
-    if ('incoming_bandwidth' in currentStats) {
-      return Number(currentStats.incoming_bandwidth) || 0
-    } else if ('incoming_bandwidth_speed' in currentStats) {
+    if (isNodeStats(currentStats)) {
       return Number(currentStats.incoming_bandwidth_speed) || 0
+    } else {
+      return Number(currentStats.incoming_bandwidth) || 0
     }
-
-    return 0
   }
 
   const getOutgoingBandwidth = () => {
     if (!currentStats) return 0
 
-    if ('outgoing_bandwidth' in currentStats) {
-      return Number(currentStats.outgoing_bandwidth) || 0
-    } else if ('outgoing_bandwidth_speed' in currentStats) {
+    if (isNodeStats(currentStats)) {
       return Number(currentStats.outgoing_bandwidth_speed) || 0
+    } else {
+      return Number(currentStats.outgoing_bandwidth) || 0
     }
-
-    return 0
   }
 
   const getMemoryUsage = () => {
@@ -170,7 +166,7 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
         </Card>
       </div>
 
-      {/* Total Traffic with Incoming/Outgoing Details */}
+      {/* Total Traffic / Network Speed (depends on whether it's master or node stats) */}
       <div className="h-full w-full animate-fade-in" style={{ animationDuration: '600ms', animationDelay: '250ms' }}>
         <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
           <div
@@ -184,10 +180,16 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
             <div className="mb-2 flex items-start justify-between sm:mb-3">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="rounded-lg bg-primary/10 p-1.5 sm:p-2">
-                  <Database className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
+                  {currentStats && isNodeStats(currentStats) ? (
+                    <Activity className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
+                  ) : (
+                    <Database className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">{t('statistics.totalTraffic')}</p>
+                  <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">
+                    {currentStats && isNodeStats(currentStats) ? t('statistics.networkSpeed') : t('statistics.totalTraffic')}
+                  </p>
                 </div>
               </div>
             </div>
@@ -195,7 +197,14 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
             <div className="flex items-end justify-between gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
                 <span dir="ltr" className="truncate text-xl font-bold transition-all duration-300 sm:text-2xl lg:text-3xl">
-                  {formatBytes(getTotalTrafficValue() || 0, 1)}
+                  {currentStats && isNodeStats(currentStats) ? (
+                    <>
+                      {formatBytes(getTotalTrafficValue() || 0, 1)}
+                      <span className="text-base font-normal text-muted-foreground sm:text-lg">/s</span>
+                    </>
+                  ) : (
+                    formatBytes(getTotalTrafficValue() || 0, 1)
+                  )}
                 </span>
               </div>
 
@@ -205,12 +214,14 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
                   <Download className="h-3 w-3" />
                   <span dir="ltr" className="font-medium">
                     {formatBytes(getIncomingBandwidth() || 0, 1)}
+                    {currentStats && isNodeStats(currentStats) && <span className="text-[10px]">/s</span>}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-1 text-blue-600 dark:text-blue-400">
                   <Upload className="h-3 w-3" />
                   <span dir="ltr" className="font-medium">
                     {formatBytes(getOutgoingBandwidth() || 0, 1)}
+                    {currentStats && isNodeStats(currentStats) && <span className="text-[10px]">/s</span>}
                   </span>
                 </div>
               </div>

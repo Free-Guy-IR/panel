@@ -1101,6 +1101,7 @@
   "usersTable.total": "Total",
   "statistics.system": "System",
   "statistics.totalTraffic": "Total Traffic",
+  "statistics.networkSpeed": "Network Speed",
   "statistics.ramUsage": "RAM Usage",
   "statistics.cpuUsage": "CPU Usage",
   "statistics.cores": "cores",

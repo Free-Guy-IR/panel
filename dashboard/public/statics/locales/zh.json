@@ -846,6 +846,7 @@
   "usersTable.total": "总共",
   "statistics.system": "系统",
   "statistics.totalTraffic": "总流量",
+  "statistics.networkSpeed": "网络速度",
   "statistics.ramUsage": "RAM 使用情况",
   "statistics.cpuUsage": "CPU 使用情况",
   "statistics.cores": "核心",
