@@ -6,6 +6,7 @@ from aiorwlock import RWLock
 from app.db.models import Node, NodeConnectionType, User
 from app.node.user import serialize_user_for_node, core_users, serialize_users_for_node
 from app.models.user import UserResponse
+from app.utils.logger import get_logger
 
 
 type_map = {
@@ -18,6 +19,7 @@ class NodeManager:
     def __init__(self):
         self._nodes: dict[int, PasarGuardNode] = {}
         self._lock = RWLock(fast=True)
+        self.logger = get_logger("node-manager")
 
     async def update_node(self, node: Node) -> PasarGuardNode:
         async with self._lock.writer_lock:
@@ -37,7 +39,9 @@ class NodeManager:
                 port=node.port,
                 server_ca=node.server_ca,
                 api_key=node.api_key,
+                name=node.name,
                 max_logs=node.max_logs,
+                logger=self.logger,
                 extra={"id": node.id, "usage_coefficient": node.usage_coefficient},
             )
 
