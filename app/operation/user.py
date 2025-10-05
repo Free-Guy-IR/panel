@@ -142,7 +142,7 @@ class UserOperation(BaseOperation):
 
         user = await self.validate_user(db_user)
         await remove_user(db, db_user)
-        node_manager.remove_user(user)
+        await node_manager.remove_user(user)
 
         asyncio.create_task(notification.remove_user(user, admin))
 

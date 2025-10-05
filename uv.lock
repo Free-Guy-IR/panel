@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -976,7 +976,7 @@ requires-dist = [
     { name = "jdatetime", specifier = ">=5.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "packaging", specifier = ">=24.2" },
-    { name = "pasarguard-node-bridge", specifier = ">=0.0.50" },
+    { name = "pasarguard-node-bridge", specifier = ">=0.0.52" },
     { name = "passlib", specifier = "==1.7.4" },
     { name = "psutil", specifier = "==5.9.4" },
     { name = "pydantic", specifier = ">=2.11.3" },
@@ -1011,7 +1011,7 @@ dev = [
 
 [[package]]
 name = "pasarguard-node-bridge"
-version = "0.0.51"
+version = "0.0.52"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiorwlock" },
@@ -1019,9 +1019,9 @@ dependencies = [
     { name = "httpx" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/67/22bb88a012e4d8b087ec9997f48c0a08f9ea3f758390efffd805b02acdfc/pasarguard_node_bridge-0.0.51.tar.gz", hash = "sha256:c8d38ff7bb1d84b593848283855d490d781a06fb4e82f7c51ca1ec2f3715bbc1", size = 44926, upload-time = "2025-10-04T16:19:01.93Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/08/4657b956cade362eef092a3f960c2af0b767b0691dfd052fb90c8676fe6a/pasarguard_node_bridge-0.0.52.tar.gz", hash = "sha256:b80f2c9b4f380b26d152555d60f734dc9874c281aec047d17a6b423d7821fdd0", size = 45033, upload-time = "2025-10-05T12:12:42.767Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/18/e8f8d2cf6b21e21eaca424da85ac77103e0e2e1589ca00327f04b6307f15/pasarguard_node_bridge-0.0.51-py3-none-any.whl", hash = "sha256:42212ef8f443b0f339615f7d9fb273bc919764805f23939a98aff7ac9771eca4", size = 32808, upload-time = "2025-10-04T16:19:00.831Z" },
+    { url = "https://files.pythonhosted.org/packages/45/a5/373ffa0f51b2fe9d11aa0d33746d7ef919817bd2a95b89e6a17d68374f7d/pasarguard_node_bridge-0.0.52-py3-none-any.whl", hash = "sha256:d4e8df18e72fe270c1cabe4aa291417a983b40d7def55474f3c40dfb40db08e6", size = 32949, upload-time = "2025-10-05T12:12:41.726Z" },
 ]
 
 [[package]]
