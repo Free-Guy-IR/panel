@@ -13,7 +13,7 @@
 First of all, you need to set a directory for all of your templates (home, subscription page, etc.).
 
 ```shell
-CUSTOM_TEMPLATES_DIRECTORY="/var/lib/marzban/templates/"
+CUSTOM_TEMPLATES_DIRECTORY="/var/lib/pasarguard/templates/"
 ```
 
 Make sure you put all of your templates in this folder.\
@@ -21,7 +21,7 @@ If you are using Docker, make sure Docker has access to this folder.\
 Then, we need to make a directory for our Sing-box template.
 
 ```shell
-mkdir /var/lib/marzban/templates/sing-box
+mkdir /var/lib/pasarguard/templates/sing-box
 ```
 
 After that, put your templates (config and settings) in the directory.\
