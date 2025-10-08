@@ -180,7 +180,7 @@ async def get_outbounds_stats(node: PasarGuardNode):
     try:
         stats_respons = await node.get_stats(stat_type=StatType.Outbounds, reset=True, timeout=10)
         params = [
-            {"up": stat.value, "down": 0} if stat.link == "uplink" else {"up": 0, "down": stat.value}
+            {"up": stat.value, "down": 0} if stat.type == "uplink" else {"up": 0, "down": stat.value}
             for stat in filter(attrgetter("value"), stats_respons.stats)
         ]
         return params
