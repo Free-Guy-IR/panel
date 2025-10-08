@@ -1,11 +1,10 @@
-from PasarGuardNodeBridge import PasarGuardNode, create_node, Health, NodeType
 from aiorwlock import RWLock
+from PasarGuardNodeBridge import Health, NodeType, PasarGuardNode, create_node
 
 from app.db.models import Node, NodeConnectionType, User
-from app.node.user import serialize_user_for_node, core_users, serialize_users_for_node
 from app.models.user import UserResponse
+from app.node.user import core_users, serialize_user_for_node, serialize_users_for_node
 from app.utils.logger import get_logger
-
 
 type_map = {
     NodeConnectionType.rest: NodeType.rest,
@@ -92,7 +91,7 @@ class NodeManager:
         proto_users = await serialize_users_for_node(users)
         async with self._lock.reader_lock:
             for node in self._nodes.values():
-                node.update_users(proto_users)
+                await node.update_users(proto_users)
 
     async def _update_user(self, user):
         async with self._lock.reader_lock:
