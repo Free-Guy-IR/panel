@@ -90,7 +90,9 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
 
     # Update status for recovering nodes
     if db_node.status in (NodeStatus.connecting, NodeStatus.error) and health == Health.HEALTHY:
-        await node_operator.update_node_status(db_node.id, NodeStatus.connected)
+        await node_operator.update_node_status(
+            db_node.id, NodeStatus.connected, core_version=node.core_version(), node_version=node.node_version()
+        )
         return
 
     # For all other cases, update connection status
