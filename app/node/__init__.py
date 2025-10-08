@@ -97,7 +97,7 @@ class NodeManager:
     async def _update_user(self, user):
         async with self._lock.reader_lock:
             for node in self._nodes.values():
-                node.update_user(user)
+                await node.update_user(user)
 
     async def update_user(self, user: UserResponse, inbounds: list[str] = None):
         proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings.dict(), inbounds)
