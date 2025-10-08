@@ -96,6 +96,7 @@ class NodeManager:
     async def _update_user(self, user):
         async with self._lock.reader_lock:
             for node in self._nodes.values():
+                self.logger.info(f"[{node.name}] sending update request")
                 await node.update_user(user)
 
     async def update_user(self, user: UserResponse, inbounds: list[str] = None):
