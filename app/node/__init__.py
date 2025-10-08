@@ -1,5 +1,3 @@
-import asyncio
-
 from PasarGuardNodeBridge import PasarGuardNode, create_node, Health, NodeType
 from aiorwlock import RWLock
 
@@ -90,25 +88,24 @@ class NodeManager:
             ]
             return nodes
 
-    async def update_user(self, user: UserResponse, inbounds: list[str] = None):
-        proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings.dict(), inbounds)
-
-        async with self._lock.reader_lock:
-            add_tasks = [node.update_user(proto_user) for node in self._nodes.values()]
-            await asyncio.gather(*add_tasks, return_exceptions=True)
-
     async def update_users(self, users: list[User]):
         proto_users = await serialize_users_for_node(users)
         async with self._lock.reader_lock:
-            add_tasks = [node.update_users(proto_users) for node in self._nodes.values()]
-            await asyncio.gather(*add_tasks, return_exceptions=True)
+            for node in self._nodes.values():
+                node.update_users(proto_users)
+
+    async def _update_user(self, user):
+        async with self._lock.reader_lock:
+            for node in self._nodes.values():
+                node.update_user(user)
+
+    async def update_user(self, user: UserResponse, inbounds: list[str] = None):
+        proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings.dict(), inbounds)
+        await self._update_user(proto_user)
 
     async def remove_user(self, user: UserResponse):
         proto_user = serialize_user_for_node(user.id, user.username, user.proxy_settings.dict())
-
-        async with self._lock.reader_lock:
-            remove_tasks = [node.update_user(proto_user) for node in self._nodes.values()]
-            await asyncio.gather(*remove_tasks, return_exceptions=True)
+        await self._update_user(proto_user)
 
 
 node_manager: NodeManager = NodeManager()
