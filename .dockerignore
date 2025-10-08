@@ -21,4 +21,4 @@ venv*
 .venv*
 LICENSE
 install_service.sh
-Marzban.code-workspace
+PasarGuard.code-workspace

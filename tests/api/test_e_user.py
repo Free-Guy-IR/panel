@@ -115,7 +115,7 @@ def test_user_sub_update_user_agent(access_token):
     users = test_users_get(access_token)
     user = users[0]
     url = f"{user['subscription_url']}"
-    user_agent = "v2rayNG/1.9.46 This is Marzban Test"
+    user_agent = "v2rayNG/1.9.46 This is PasarGuard Test"
     client.get(url, headers={"User-Agent": user_agent})
     response = client.get(
         f"/api/user/{user['username']}/sub_update",
