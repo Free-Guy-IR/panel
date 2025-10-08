@@ -1,7 +1,6 @@
 import base64
 import json
 import urllib.parse as urlparse
-from enum import Enum
 from random import choice
 from typing import Union
 from urllib.parse import quote
@@ -154,7 +153,6 @@ class StandardLinks(BaseSubscription):
         elif net in ("splithttp", "xhttp"):
             payload["path"] = path
             payload["host"] = host
-            mode = mode.value if isinstance(mode, Enum) else mode
             if protocol == "vmess":
                 payload["type"] = mode
             else:
@@ -176,7 +174,7 @@ class StandardLinks(BaseSubscription):
                 else:
                     extra["headers"]["User-Agent"] = choice(self.user_agent_list)
 
-            extra = self._remove_none_values(extra)
+            extra = self._normalize_and_remove_none_values(extra)
 
             if extra:
                 payload["extra"] = (json.dumps(extra)).replace(" ", "")
@@ -312,6 +310,7 @@ class StandardLinks(BaseSubscription):
             self._make_tls_settings(
                 payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list, mldsa65_verify
             )
+        payload = self._normalize_and_remove_none_values(payload)
         return "vmess://" + base64.b64encode(json.dumps(payload, sort_keys=True).encode("utf-8")).decode()
 
     def vless(
@@ -379,6 +378,7 @@ class StandardLinks(BaseSubscription):
             self._make_tls_settings(
                 payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list, mldsa65_verify
             )
+        payload = self._normalize_and_remove_none_values(payload)
         return "vless://" + f"{id}@{address}:{port}?" + urlparse.urlencode(payload) + f"#{(urlparse.quote(remark))}"
 
     def trojan(
@@ -445,6 +445,7 @@ class StandardLinks(BaseSubscription):
             self._make_tls_settings(
                 payload, tls, sni, fp, alpn, pbk, sid, spx, fs, ais, ech_config_list, mldsa65_verify
             )
+        payload = self._normalize_and_remove_none_values(payload)
         return (
             "trojan://"
             + f"{urlparse.quote(password, safe=':')}@{address}:{port}?"

@@ -62,7 +62,7 @@ class SingBoxConfiguration(BaseSubscription):
         if fragment and (singbox_fragment := fragment.get("sing_box")):
             config.update(singbox_fragment)
 
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def http_config(
         self,
@@ -87,7 +87,7 @@ class SingBoxConfiguration(BaseSubscription):
         if random_user_agent:
             config["headers"]["User-Agent"] = choice(self.user_agent_list)
 
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def ws_config(
         self,
@@ -108,7 +108,7 @@ class SingBoxConfiguration(BaseSubscription):
         if random_user_agent:
             config["headers"]["User-Agent"] = [choice(self.user_agent_list)]
 
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def grpc_config(self, path="", idle_timeout: str = "", ping_timeout: str = "", permit_without_stream: bool = False):
         config = {
@@ -117,7 +117,7 @@ class SingBoxConfiguration(BaseSubscription):
             "ping_timeout": f"{ping_timeout}s" if ping_timeout else "15s",
             "permit_without_stream": permit_without_stream,
         }
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def httpupgrade_config(self, host="", path="", random_user_agent: bool = False, http_headers: dict | None = None):
         config = {
@@ -127,7 +127,7 @@ class SingBoxConfiguration(BaseSubscription):
         }
         if random_user_agent:
             config["headers"]["User-Agent"] = choice(self.user_agent_list)
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def transport_config(
         self,
@@ -277,7 +277,7 @@ class SingBoxConfiguration(BaseSubscription):
             )
 
         if mux_settings and (singbox_mux := mux_settings.get("sing_box")):
-            singbox_mux = self._remove_none_values(singbox_mux)
+            singbox_mux = self._normalize_and_remove_none_values(singbox_mux)
             config["multiplex"] = singbox_mux
 
         return config

@@ -1,5 +1,6 @@
 import json
 import re
+from enum import Enum
 
 from app.templates import render_template
 from config import GRPC_USER_AGENT_TEMPLATE, USER_AGENT_TEMPLATE
@@ -33,7 +34,18 @@ class BaseSubscription:
                 return new
             c += 1
 
-    def _remove_none_values(self, data: dict) -> dict:
+    def _normalize_and_remove_none_values(self, data: dict) -> dict:
+        """
+        Clean dictionary by removing None, empty strings, and 0 values.
+        Converts Enum values and recursively cleans nested dictionaries.
+
+        Args:
+            data: Input dictionary to clean
+
+        Returns:
+            Cleaned dictionary with empty values removed
+        """
+
         def clean_dict(d: dict) -> dict:
             new_dict = {}
             for k, v in d.items():
@@ -42,7 +54,10 @@ class BaseSubscription:
                         if cleaned_dict := clean_dict(v):
                             new_dict[k] = cleaned_dict
                     else:
-                        new_dict[k] = v
+                        if isinstance(v, Enum):
+                            new_dict[k] = v.value
+                        else:
+                            new_dict[k] = v
             return new_dict
 
         return clean_dict(data)

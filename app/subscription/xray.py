@@ -1,5 +1,4 @@
 import json
-from enum import Enum
 from random import choice
 from typing import Union
 
@@ -39,7 +38,7 @@ class XrayConfiguration(BaseSubscription):
         if alpn:
             tls_settings["alpn"] = alpn
 
-        return self._remove_none_values(tls_settings)
+        return self._normalize_and_remove_none_values(tls_settings)
 
     def reality_config(self, sni=None, fp=None, pbk=None, sid=None, spx=None, mldsa65_verify=None) -> dict:
         reality_settings = {
@@ -52,7 +51,7 @@ class XrayConfiguration(BaseSubscription):
             "mldsa65Verify": mldsa65_verify,
         }
 
-        return self._remove_none_values(reality_settings)
+        return self._normalize_and_remove_none_values(reality_settings)
 
     def ws_config(
         self,
@@ -70,7 +69,7 @@ class XrayConfiguration(BaseSubscription):
         }
         if random_user_agent:
             ws_settings["headers"]["User-Agent"] = choice(self.user_agent_list)
-        return self._remove_none_values(ws_settings)
+        return self._normalize_and_remove_none_values(ws_settings)
 
     def httpupgrade_config(
         self, path: str = "", host: str = "", random_user_agent: bool = False, http_headers=None
@@ -83,7 +82,7 @@ class XrayConfiguration(BaseSubscription):
         if random_user_agent:
             httpupgrade_settings["headers"]["User-Agent"] = choice(self.user_agent_list)
 
-        return self._remove_none_values(httpupgrade_settings)
+        return self._normalize_and_remove_none_values(httpupgrade_settings)
 
     def xhttp_config(
         self,
@@ -102,7 +101,6 @@ class XrayConfiguration(BaseSubscription):
     ) -> dict:
         xhttp_settings = {}
 
-        mode = mode.value if isinstance(mode, Enum) else mode
         xhttp_settings["mode"] = mode
         if path:
             xhttp_settings["path"] = path
@@ -125,7 +123,7 @@ class XrayConfiguration(BaseSubscription):
                 extra["headers"]["User-Agent"] = choice(self.user_agent_list)
 
         xhttp_settings["extra"] = extra
-        return self._remove_none_values(xhttp_settings)
+        return self._normalize_and_remove_none_values(xhttp_settings)
 
     def grpc_config(
         self,
@@ -152,7 +150,7 @@ class XrayConfiguration(BaseSubscription):
             grpc_settings["user_agent"] = http_headers["user-agent"]
         if random_user_agent:
             grpc_settings["user_agent"] = choice(self.grpc_user_agent_data)
-        return self._remove_none_values(grpc_settings)
+        return self._normalize_and_remove_none_values(grpc_settings)
 
     def tcp_config(
         self,
@@ -220,7 +218,7 @@ class XrayConfiguration(BaseSubscription):
         if random_user_agent:
             tcp_settings["header"]["request"]["headers"]["User-Agent"] = [choice(self.user_agent_list)]
 
-        return self._remove_none_values(tcp_settings)
+        return self._normalize_and_remove_none_values(tcp_settings)
 
     def http_config(
         self, path: str = "", host: str = "", random_user_agent: bool = False, http_headers: dict | None = None
@@ -232,11 +230,11 @@ class XrayConfiguration(BaseSubscription):
         }
         if random_user_agent:
             http_settings["headers"]["User-Agent"] = [choice(self.user_agent_list)]
-        return self._remove_none_values(http_settings)
+        return self._normalize_and_remove_none_values(http_settings)
 
     def quic_config(self, path=None, host=None, header="none") -> dict:
         quicSettings = {"security": host, "header": {"type": header}, "key": path}
-        return self._remove_none_values(quicSettings)
+        return self._normalize_and_remove_none_values(quicSettings)
 
     def kcp_config(
         self,
@@ -262,7 +260,7 @@ class XrayConfiguration(BaseSubscription):
             "writeBufferSize": writeBufferSize if writeBufferSize else 2,
             "seed": seed,
         }
-        return self._remove_none_values(kcp_settings)
+        return self._normalize_and_remove_none_values(kcp_settings)
 
     @staticmethod
     def stream_setting_config(
@@ -424,7 +422,7 @@ class XrayConfiguration(BaseSubscription):
             "fragment": fragment.get("xray") if fragment else None,
             "noises": [{self.snake_to_camel(k): v for k, v in noise.items()} for noise in xray_noises] or None,
         }
-        dialer_settings = self._remove_none_values(dialer_settings)
+        dialer_settings = self._normalize_and_remove_none_values(dialer_settings)
 
         if dialer_settings:
             return {"tag": dialer_tag, "protocol": "freedom", "settings": dialer_settings}
@@ -665,7 +663,7 @@ class XrayConfiguration(BaseSubscription):
 
         mux_settings: dict = inbound.get("mux_settings", {})
         if mux_settings and (xray_mux := mux_settings.get("xray")):
-            xray_mux = self._remove_none_values(xray_mux)
+            xray_mux = self._normalize_and_remove_none_values(xray_mux)
             outbound["mux"] = xray_mux
 
         self.add_config(remarks=remark, outbounds=outbounds)

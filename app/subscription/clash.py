@@ -60,7 +60,7 @@ class ClashConfiguration(BaseSubscription):
         if random_user_agent:
             config["headers"]["User-Agent"] = choice(self.user_agent_list)
 
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def ws_config(
         self,
@@ -83,18 +83,18 @@ class ClashConfiguration(BaseSubscription):
         if random_user_agent:
             config["headers"]["User-Agent"] = choice(self.user_agent_list)
 
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def grpc_config(self, path=""):
         config = {"grpc-service-name": path}
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def h2_config(self, path="", host=""):
         config = {
             "path": path,
             "host": [host] if host else None,
         }
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def tcp_config(
         self,
@@ -106,7 +106,7 @@ class ClashConfiguration(BaseSubscription):
             "path": [path] if path else None,
             "headers": {**http_headers, "Host": host} if http_headers else {"Host": host},
         }
-        return self._remove_none_values(config)
+        return self._normalize_and_remove_none_values(config)
 
     def make_node(
         self,
@@ -206,7 +206,7 @@ class ClashConfiguration(BaseSubscription):
         if mux_settings and (clash_mux := mux_settings.get("clash")):
             clash_mux = {
                 "enabled": clash_mux.get("enable"),
-                "protocol": clash_mux.get("protocol"),
+                "protocol": clash_mux.get("protocol", "smux"),
                 "max-connections": clash_mux.get("max_connections"),
                 "min-streams": clash_mux.get("min_streams"),
                 "max-streams": clash_mux.get("max_streams"),
@@ -221,7 +221,7 @@ class ClashConfiguration(BaseSubscription):
                 if clash_mux.get("brutal")
                 else None,
             }
-            node["smux"] = self._remove_none_values(clash_mux)
+            node["smux"] = self._normalize_and_remove_none_values(clash_mux)
 
         return node
 
