@@ -83,9 +83,6 @@ export function parseLogs(logString: string): LogLine[] {
 
 // Detect log type based on Xray core message content
 export const getLogType = (message: string): LogStyle => {
-  const lowerMessage = message.toLowerCase()
-
-  // Xray core log format detection - check bracketed log levels first
   if (/\[error\]/i.test(message)) {
     return LOG_STYLES.error
   }
@@ -102,44 +99,11 @@ export const getLogType = (message: string): LogStyle => {
     return LOG_STYLES.debug
   }
 
-  // Fallback pattern detection for non-bracketed logs
-  if (
-    /(?:^|\s)(?:error|err):?\s/i.test(lowerMessage) ||
-    /\b(?:exception|failed|failure)\b/i.test(lowerMessage) ||
-    /(?:stack\s?trace):\s*$/i.test(lowerMessage) ||
-    /^\s*at\s+[\w.]+\s*\(?.+:\d+:\d+\)?/.test(lowerMessage) ||
-    /\b(?:uncaught|unhandled)\s+(?:exception|error)\b/i.test(lowerMessage) ||
-    /Error:\s.*(?:in|at)\s+.*:\d+(?::\d+)?/.test(lowerMessage) ||
-    /\b(?:errno|code):\s*(?:\d+|[A-Z_]+)\b/i.test(lowerMessage) ||
-    /\b(?:crash|critical|fatal)\b/i.test(lowerMessage) ||
-    /\b(?:fail(?:ed|ure)?|broken|dead)\b/i.test(lowerMessage)
-  ) {
-    return LOG_STYLES.error
-  }
-
-  if (
-    /(?:^|\s)(?:warning|warn):?\s/i.test(lowerMessage) ||
-    /\b(?:caution|attention|notice):\s/i.test(lowerMessage) ||
-    /(?:deprecated|obsolete)\s+(?:since|in|as\s+of)/i.test(lowerMessage) ||
-    /\b(?:deprecated|obsolete)\b/i.test(lowerMessage) ||
-    /\b(?:unstable|experimental)\b/i.test(lowerMessage)
-  ) {
-    return LOG_STYLES.warning
-  }
-
-  if (/(?:^|\s)(?:debug|dbg):?\s/i.test(lowerMessage) || /\b(?:version|config|import|load|get|HTTP|PATCH|POST)\b:?/i.test(lowerMessage) || /\b(?:trace)\b/i.test(lowerMessage)) {
-    return LOG_STYLES.debug
-  }
-
-  // Default to info for connection logs and general messages
-  if (
-    /\b(?:status|state|current|progress)\b:?\s/i.test(lowerMessage) ||
-    /\b(?:processing|executing|performing)\b/i.test(lowerMessage) ||
-    /(?:connected|established|ready)\s+(?:to|for|on)/i.test(lowerMessage) ||
-    /\b(?:started|starting|active)\b/i.test(lowerMessage)
-  ) {
+  // Xray access logs: "from IP:port accepted tcp/udp:destination:port [info] email: user@example.com"
+  if (/from\s+.+:\d+\s+accepted\s+(tcp|udp):.+:\d+\s+\[.+\]\s+email:\s+.+/i.test(message)) {
     return LOG_STYLES.info
   }
 
+  // Default to info
   return LOG_STYLES.info
 }
