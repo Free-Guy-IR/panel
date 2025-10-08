@@ -505,7 +505,7 @@
   "deleteUser.title": "حذف کاربر",
   "disabled": "غیر فعال",
   "expire": "انقضا",
-  "expired": "{{time}} پیش منقضی شده",
+  "expired": "{{time}} منقضی شده",
   "expires": "پایان در {{time}}",
   "header.donation": "کمک مالی",
   "header.hostSettings": "تنظیمات هاست",

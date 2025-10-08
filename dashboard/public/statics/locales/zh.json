@@ -616,7 +616,7 @@
   "deleteUser.title": "删除用户",
   "disabled": "禁用",
   "expire": "过期",
-  "expired": "{{time}}前已过期",
+  "expired": "{{time}}已过期",
   "expires": "将在 {{time}} 后过期",
   "header.donation": "捐赠",
   "header.hostSettings": "设置",
