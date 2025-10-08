@@ -590,7 +590,7 @@
   "deleteUser.title": "Удалить пользователя",
   "disabled": "disabled",
   "expire": "Истекает",
-  "expired": "Истекло {{time}} назад",
+  "expired": "Истёк {{time}} назад",
   "expires": "Истекает через {{time}}",
   "header.donation": "Пожертвование",
   "header.hostSettings": "Настройки хоста",
