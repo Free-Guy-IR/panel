@@ -68,11 +68,16 @@ async def update_node_connection_status(node_id: int, node: PasarGuardNode):
 async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     """
     Process health check for a single node:
-    1. Verify backend health
-    2. Compare with database status
-    3. Update status if needed
+    1. Check if node requires hard reset
+    2. Verify backend health
+    3. Compare with database status
+    4. Update status if needed
     """
     if node is None:
+        return
+
+    if node.requires_hard_reset():
+        await node_operator.connect_node(db_node.id)
         return
 
     try:
