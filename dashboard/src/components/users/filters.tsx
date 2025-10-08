@@ -227,8 +227,8 @@ export const PaginationControls = ({ currentPage, totalPages, itemsPerPage, isLo
         <span className="whitespace-nowrap text-sm text-muted-foreground">{t('itemsPerPage')}</span>
       </div>
 
-      <Pagination dir="ltr" className={`md:justify-end ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
-        <PaginationContent className="max-w-[300px] overflow-x-auto sm:max-w-full">
+      <Pagination dir="ltr" className={`md:justify-end ic ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
+        <PaginationContent className="w-full overflow-x-auto justify-center">
           <PaginationItem>
             <PaginationPrevious onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 0 || isLoading} />
           </PaginationItem>

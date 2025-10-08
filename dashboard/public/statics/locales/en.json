@@ -618,7 +618,7 @@
   "disabled": "disabled",
   "expire": "Expire",
   "expires": "Expires in {{time}}",
-  "expired": "Expired in {{time}}",
+  "expired": "Expired {{time}}",
   "header.donation": "Donation",
   "header.hostSettings": "Host Settings",
   "header.logout": "Log out",
