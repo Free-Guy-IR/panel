@@ -18,8 +18,6 @@ def mock_db_session(monkeypatch: pytest.MonkeyPatch):
 @pytest.fixture(autouse=True)
 def mock_lock(monkeypatch: pytest.MonkeyPatch):
     _lock = MagicMock(spec=RWLock(fast=True))
-    monkeypatch.setattr("app.core.manager.core_manager._lock", _lock)
-    _lock = MagicMock(spec=RWLock(fast=True))
     monkeypatch.setattr("app.node.node_manager._lock", _lock)
 
 
