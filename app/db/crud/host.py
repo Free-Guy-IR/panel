@@ -5,7 +5,7 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ProxyInbound, ProxyHost
+from app.db.models import ProxyHost, ProxyInbound
 from app.models.host import CreateHost
 
 
@@ -140,10 +140,15 @@ async def create_host(db: AsyncSession, new_host: CreateHost) -> ProxyHost:
 
 
 async def modify_host(db: AsyncSession, db_host: ProxyHost, modified_host: CreateHost) -> ProxyHost:
-    host_data = modified_host.model_dump(exclude={"id"})
+    host_data = modified_host.model_dump(exclude={"id", "inbound_tag"})
 
     for key, value in host_data.items():
         setattr(db_host, key, value)
+
+    if not modified_host.inbound_tag:
+        db_host.inbound = None
+    else:
+        db_host.inbound = await get_or_create_inbound(db, modified_host.inbound_tag)
 
     await db.commit()
     await db.refresh(db_host)
