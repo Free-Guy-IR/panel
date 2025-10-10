@@ -37,9 +37,11 @@ async def safe_execute(db: AsyncSession, stmt, params=None, max_retries: int = 3
     """
     dialect = db.bind.dialect.name
 
-    # MySQL-specific IGNORE prefix
+    # MySQL-specific IGNORE prefix - but skip if using ON DUPLICATE KEY UPDATE
     if dialect == "mysql" and isinstance(stmt, Insert):
-        stmt = stmt.prefix_with("IGNORE")
+        # Check if statement already has ON DUPLICATE KEY UPDATE
+        if not hasattr(stmt, '_post_values_clause') or stmt._post_values_clause is None:
+            stmt = stmt.prefix_with("IGNORE")
 
     for attempt in range(max_retries):
         try:
@@ -50,14 +52,16 @@ async def safe_execute(db: AsyncSession, stmt, params=None, max_retries: int = 3
             # Rollback the session
             await db.rollback()
 
-            # Specific error code handling
+            # Specific error code handling with exponential backoff
             if dialect == "mysql":
                 # MySQL deadlock (Error 1213)
                 if err.orig.args[0] == 1213 and attempt < max_retries - 1:
+                    await asyncio.sleep(0.05 * (2 ** attempt))  # 50ms, 100ms, 200ms
                     continue
             elif dialect == "postgresql":
                 # PostgreSQL deadlock (Error 40P01)
                 if err.orig.code == "40P01" and attempt < max_retries - 1:
+                    await asyncio.sleep(0.05 * (2 ** attempt))
                     continue
             elif dialect == "sqlite":
                 # SQLite database locked error
