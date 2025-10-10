@@ -80,7 +80,7 @@ SUDOERS = (
 
 DISABLE_RECORDING_NODE_USAGE = config("DISABLE_RECORDING_NODE_USAGE", cast=bool, default=False)
 
-# due to high amout of data this job is only available for postgresql and timescaledb
+# due to high amount of data this job is only available for postgresql and timescaledb
 if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
     ENABLE_RECORDING_NODES_STATS = config("ENABLE_RECORDING_NODES_STATS", cast=bool, default=False)
 else:
