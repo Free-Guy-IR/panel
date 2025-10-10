@@ -5,7 +5,6 @@ from sqlalchemy import and_, case, cast, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import DATABASE_DIALECT
 from app.db.models import (
     Admin,
     Group,
@@ -266,7 +265,7 @@ async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> tuple[l
         await db.execute(select(func.count(User.id)).where(and_(final_filter, User.expire.isnot(None))))
     ).scalar_one_or_none() or 0
     # Get database-specific datetime addition expression
-    new_expire = get_datetime_add_expression(User.expire, bulk_model.amount)
+    new_expire = get_datetime_add_expression(db, User.expire, bulk_model.amount)
     current_time = dt.now(tz.utc)
 
     # First, get the users that will have status changes BEFORE updating
@@ -377,8 +376,10 @@ async def update_users_proxy_settings(
     if not users_to_update:
         return [], count_effctive_users
 
+    dialect = db.bind.dialect.name
+
     # Prepare the update statement
-    if DATABASE_DIALECT == "postgresql":
+    if dialect == "postgresql":
         proxy_settings_expr = cast(User.proxy_settings, JSONB)
         if bulk_model.flow is not None:
             proxy_settings_expr = func.jsonb_set(

@@ -2,7 +2,6 @@ from sqlalchemy import func, select, delete
 
 from app import scheduler
 from app.db import GetDB
-from app.db.base import DATABASE_DIALECT
 from app.db.models import UserSubscriptionUpdate
 from app.utils.logger import get_logger
 from config import USER_SUBSCRIPTION_CLIENTS_LIMIT, JOB_CLEANUP_SUBSCRIPTION_UPDATES_INTERVAL
@@ -26,8 +25,10 @@ async def cleanup_user_subscription_updates():
             logger.info("No users with excess subscription updates")
             return
 
+        dialect = db.bind.dialect.name
+
         # Second query: Use different approaches based on database type
-        if DATABASE_DIALECT == "mysql":
+        if dialect == "mysql":
             # MySQL/MariaDB: Use correlated subquery without LIMIT
             total_deleted = 0
             for user_id in user_ids:

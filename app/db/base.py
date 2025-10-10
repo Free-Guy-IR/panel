@@ -28,16 +28,6 @@ else:
 
 SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Determine dialect once at startup based on connection URL
-if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
-    DATABASE_DIALECT = "sqlite"
-elif SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
-    DATABASE_DIALECT = "postgresql"
-elif SQLALCHEMY_DATABASE_URL.startswith("mysql"):
-    DATABASE_DIALECT = "mysql"
-else:
-    raise ValueError("Unsupported database URL")
-
 
 class Base(DeclarativeBase, MappedAsDataclass, AsyncAttrs):
     pass

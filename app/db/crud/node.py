@@ -99,7 +99,7 @@ async def get_nodes_usage(
     Returns:
         NodeUsageStatsList: A NodeUsageStatsList contain list of NodeUsageResponse objects containing usage data.
     """
-    trunc_expr = _build_trunc_expression(period, NodeUsage.created_at)
+    trunc_expr = _build_trunc_expression(db, period, NodeUsage.created_at)
 
     conditions = [NodeUsage.created_at >= start, NodeUsage.created_at <= end]
 
@@ -147,7 +147,7 @@ async def get_nodes_usage(
 async def get_node_stats(
     db: AsyncSession, node_id: int, start: datetime, end: datetime, period: Period
 ) -> NodeStatsList:
-    trunc_expr = _build_trunc_expression(period, NodeStat.created_at)
+    trunc_expr = _build_trunc_expression(db, period, NodeStat.created_at)
     conditions = [NodeStat.created_at >= start, NodeStat.created_at <= end, NodeStat.node_id == node_id]
 
     stmt = (

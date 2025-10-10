@@ -1,7 +1,6 @@
 from sqlalchemy import String, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import DATABASE_DIALECT
 from app.db.models import JWT, System
 from app.models.stats import Period
 
@@ -19,39 +18,43 @@ SQLITE_FORMATS = {
 }
 
 
-def _build_trunc_expression(period: Period, column):
-    """Builds the appropriate truncation SQL expression based on DATABASE_DIALECT and period."""
-    if DATABASE_DIALECT == "postgresql":
+def _build_trunc_expression(db: AsyncSession, period: Period, column):
+    dialect = db.bind.dialect.name
+
+    """Builds the appropriate truncation SQL expression based on dialect and period."""
+    if dialect == "postgresql":
         return func.date_trunc(period.value, column)
-    elif DATABASE_DIALECT == "mysql":
+    elif dialect == "mysql":
         return func.date_format(column, MYSQL_FORMATS[period.value])
-    elif DATABASE_DIALECT == "sqlite":
+    elif dialect == "sqlite":
         return func.strftime(SQLITE_FORMATS[period.value], column)
 
-    raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
+    raise ValueError(f"Unsupported dialect: {dialect}")
 
 
-def get_datetime_add_expression(datetime_column, seconds: int):
+def get_datetime_add_expression(db: AsyncSession, datetime_column, seconds: int):
     """
     Get database-specific datetime addition expression
     """
-    if DATABASE_DIALECT == "mysql":
+    dialect = db.bind.dialect.name
+    if dialect == "mysql":
         return func.date_add(datetime_column, text("INTERVAL :seconds SECOND").bindparams(seconds=seconds))
-    elif DATABASE_DIALECT == "postgresql":
+    elif dialect == "postgresql":
         return datetime_column + func.make_interval(0, 0, 0, 0, 0, 0, seconds)
-    elif DATABASE_DIALECT == "sqlite":
+    elif dialect == "sqlite":
         return func.datetime(func.strftime("%s", datetime_column) + seconds, "unixepoch")
 
-    raise ValueError(f"Unsupported dialect: {DATABASE_DIALECT}")
+    raise ValueError(f"Unsupported dialect: {dialect}")
 
 
-def json_extract(column, path: str):
+def json_extract(db: AsyncSession, column, path: str):
     """
     Args:
         column: The JSON column in your model
         path: JSON path (e.g., '$.theme')
     """
-    match DATABASE_DIALECT:
+    dialect = db.bind.dialect.name
+    match dialect:
         case "postgresql":
             keys = path.replace("$.", "").split(".")
             expr = column
@@ -64,14 +67,14 @@ def json_extract(column, path: str):
             return func.json_extract(column, path).cast(String)
 
 
-def build_json_proxy_settings_search_condition(column, value: str):
+def build_json_proxy_settings_search_condition(db: AsyncSession, column, value: str):
     """
     Builds a condition to search JSON column for UUIDs or passwords.
     Supports PostgresSQL, MySQL, SQLite.
     """
     return or_(
         *[
-            json_extract(column, field) == value
+            json_extract(db, column, field) == value
             for field in ("$.vmess.id", "$.vless.id", "$.trojan.password", "$.shadowsocks.password")
         ],
     )

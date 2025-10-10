@@ -157,7 +157,7 @@ async def get_users(
     if group_ids:
         filters.append(User.groups.any(Group.id.in_(group_ids)))
     if proxy_id:
-        filters.append(build_json_proxy_settings_search_condition(User.proxy_settings, proxy_id))
+        filters.append(build_json_proxy_settings_search_condition(db, User.proxy_settings, proxy_id))
 
     if filters:
         stmt = stmt.where(and_(*filters))
@@ -337,7 +337,7 @@ async def get_user_usages(
     """
 
     # Build the appropriate truncation expression
-    trunc_expr = _build_trunc_expression(period, NodeUserUsage.created_at)
+    trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at)
 
     conditions = [
         NodeUserUsage.created_at >= start,
@@ -862,7 +862,7 @@ async def get_all_users_usages(
     admin_users = {user.id for user in await get_users(db=db, admins=admin)}
 
     # Build the appropriate truncation expression
-    trunc_expr = _build_trunc_expression(period, NodeUserUsage.created_at)
+    trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at)
 
     conditions = [
         NodeUserUsage.created_at >= start,
