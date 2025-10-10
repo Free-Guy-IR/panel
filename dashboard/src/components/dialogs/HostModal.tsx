@@ -2450,17 +2450,16 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel>{t('hostsDialog.protocol')}</FormLabel>
-                                      <Select onValueChange={value => field.onChange(value === 'null' ? undefined : value)} value={field.value ?? 'null'}>
+                                      <Select onValueChange={value => field.onChange(value === 'null' ? undefined : value)} value={field.value ?? 'smux'}>
                                         <FormControl>
                                           <SelectTrigger>
                                             <SelectValue placeholder={t('hostsDialog.selectProtocol')} />
                                           </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                          <SelectItem value="none">{t('none')}</SelectItem>
-                                          <SelectItem value="h2mux">h2mux</SelectItem>
                                           <SelectItem value="smux">smux</SelectItem>
                                           <SelectItem value="yamux">yamux</SelectItem>
+                                          <SelectItem value="h2mux">h2mux</SelectItem>
                                         </SelectContent>
                                       </Select>
                                       <FormMessage />
@@ -2621,14 +2620,13 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel>{t('hostsDialog.protocol')}</FormLabel>
-                                      <Select onValueChange={value => field.onChange(value === 'null' ? undefined : value)} value={field.value ?? 'null'}>
+                                      <Select onValueChange={value => field.onChange(value === 'null' ? undefined : value)} value={field.value ?? 'smux'}>
                                         <FormControl>
                                           <SelectTrigger>
                                             <SelectValue placeholder={t('hostsDialog.selectProtocol')} />
                                           </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                          <SelectItem value="none">{t('none')}</SelectItem>
                                           <SelectItem value="smux">smux</SelectItem>
                                           <SelectItem value="yamux">yamux</SelectItem>
                                           <SelectItem value="h2mux">h2mux</SelectItem>
