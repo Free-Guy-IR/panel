@@ -112,14 +112,16 @@ async def record_user_stats(params: list[dict], node_id: int, usage_coefficient:
 
         elif dialect == "mysql":
             # MySQL: INSERT ... ON DUPLICATE KEY UPDATE
-
             stmt = mysql_insert(NodeUserUsage).values(
                 user_id=bindparam("uid"),
                 node_id=bindparam("node_id"),
                 created_at=bindparam("created_at"),
                 used_traffic=bindparam("value"),
             )
-            stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + bindparam("value"))
+            # Use stmt.inserted to reference the inserted value (VALUES() in SQL)
+            stmt = stmt.on_duplicate_key_update(
+                used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic
+            )
             await safe_execute(db, stmt, upsert_params)
 
         else:  # SQLite
@@ -199,9 +201,10 @@ async def record_node_stats(params: list[dict], node_id: int):
                 uplink=bindparam("up"),
                 downlink=bindparam("down"),
             )
+            # Use stmt.inserted to reference the inserted values (VALUES() in SQL)
             stmt = stmt.on_duplicate_key_update(
-                uplink=NodeUsage.uplink + bindparam("up"),
-                downlink=NodeUsage.downlink + bindparam("down"),
+                uplink=NodeUsage.uplink + stmt.inserted.uplink,
+                downlink=NodeUsage.downlink + stmt.inserted.downlink,
             )
             await safe_execute(db, stmt, [upsert_param])
 
