@@ -350,7 +350,14 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
           />
         ) : (
           <div className="mx-auto w-full max-w-7xl">
-            <ChartContainer dir={'ltr'} config={chartConfig} className="max-h-[300px] min-h-[150px] w-full overflow-x-auto sm:max-h-[400px] sm:min-h-[200px]">
+            <ChartContainer
+              dir={'ltr'}
+              config={chartConfig}
+              className="max-h-[300px] min-h-[150px] w-full overflow-x-auto sm:max-h-[400px] sm:min-h-[200px]"
+              style={{
+                marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${0.18 * window.innerWidth}px` : '0',
+              }}
+            >
               {chartData && chartData.length > 0 ? (
                 <BarChart accessibilityLayer data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <CartesianGrid direction={'ltr'} vertical={false} />
