@@ -12,7 +12,7 @@ from app.db.models import ProxyHost, ProxyHostSecurity
 from app.models.host import MuxSettings, TransportSettings, BaseHost
 
 
-def _prepare_host_data(host: ProxyHost) -> dict:
+def _prepare_host_data(host: BaseHost) -> dict:
     return {
         "remark": host.remark,
         "inbound_tag": host.inbound_tag,
@@ -30,12 +30,8 @@ def _prepare_host_data(host: ProxyHost) -> dict:
         "random_user_agent": host.random_user_agent,
         "use_sni_as_host": host.use_sni_as_host,
         "http_headers": host.http_headers,
-        "mux_settings": MuxSettings.model_validate(host.mux_settings).model_dump(by_alias=True, exclude_none=True)
-        if host.mux_settings
-        else {},
-        "transport_settings": TransportSettings.model_validate(host.transport_settings).model_dump(
-            by_alias=True, exclude_none=True
-        )
+        "mux_settings": host.mux_settings.model_dump(by_alias=True, exclude_none=True) if host.mux_settings else {},
+        "transport_settings": host.transport_settings.model_dump(by_alias=True, exclude_none=True)
         if host.transport_settings
         else {},
         "status": host.status,
@@ -56,15 +52,17 @@ class HostManager:
         await self.get_hosts.cache.clear()
 
     @staticmethod
-    async def _prepare_host_entry(db: AsyncSession, host: BaseHost, inbounds_list: list[str]) -> tuple[int, dict] | None:
+    async def _prepare_host_entry(
+        db: AsyncSession, host: BaseHost, inbounds_list: list[str]
+    ) -> tuple[int, dict] | None:
         if host.is_disabled or (host.inbound_tag not in inbounds_list):
             return None
 
         downstream = None
         if (
             host.transport_settings
-            and host.transport_settings.get("xhttp_settings")
-            and (ds_host := host.transport_settings.get("xhttp_settings", {}).get("download_settings"))
+            and host.transport_settings.xhttp_settings
+            and (ds_host := host.transport_settings.xhttp_settings.download_settings)
         ):
             downstream = await get_host_by_id(db, ds_host)
 
@@ -114,6 +112,7 @@ class HostManager:
 
 
 host_manager: HostManager = HostManager()
+
 
 @on_startup
 async def initialize_hosts():
