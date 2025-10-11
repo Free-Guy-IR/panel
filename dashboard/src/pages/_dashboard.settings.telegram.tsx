@@ -10,9 +10,11 @@ import { PasswordInput } from '@/components/ui/password-input'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Bot, Webhook, Shield, Globe, Smartphone, Send, Users, Settings } from 'lucide-react'
+import { Bot, Webhook, Shield, Globe, Smartphone, Send, Users, Settings, RefreshCcw } from 'lucide-react'
 import { useSettingsContext } from './_dashboard.settings'
 import { toast } from 'sonner'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useState } from 'react'
 
 // Telegram settings validation schema
 const telegramSettingsSchema = z.object({
@@ -58,6 +60,13 @@ const telegramSettingsSchema = z.object({
 
 type TelegramSettingsForm = z.infer<typeof telegramSettingsSchema>
 
+// Helper function to get current panel URL
+const getCurrentPanelUrl = () => {
+  const protocol = window.location.protocol
+  const host = window.location.host
+  return `${protocol}//${host}`
+}
+
 // Helper to map frontend Telegram form data to backend payload
 function mapTelegramFormToPayload(data: TelegramSettingsForm) {
   const mapped = {
@@ -76,6 +85,7 @@ function mapTelegramFormToPayload(data: TelegramSettingsForm) {
 export default function TelegramSettings() {
   const { t } = useTranslation()
   const { settings, isLoading, error, updateSettings, isSaving } = useSettingsContext()
+  const [popoverOpen, setPopoverOpen] = useState(false)
 
   const form = useForm<TelegramSettingsForm>({
     resolver: zodResolver(telegramSettingsSchema),
@@ -295,9 +305,38 @@ export default function TelegramSettings() {
                             <Webhook className="h-4 w-4" />
                             {t('settings.telegram.general.webhookUrl')}
                           </FormLabel>
-                          <FormControl>
-                            <Input type="url" placeholder={t('settings.telegram.general.webhookUrlPlaceholder')} {...field} className="font-mono" />
-                          </FormControl>
+                          <div className="relative">
+                            <FormControl>
+                              <Input type="url" placeholder={t('settings.telegram.general.webhookUrlPlaceholder')} {...field} className="font-mono pr-10" />
+                            </FormControl>
+                            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 hover:bg-accent"
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    const currentUrl = getCurrentPanelUrl()
+                                    field.onChange(currentUrl)
+                                    toast.success(t('settings.telegram.general.panelUrlApplied'))
+                                    setPopoverOpen(false)
+                                  }}
+                                  onMouseEnter={() => setPopoverOpen(true)}
+                                  onMouseLeave={() => setPopoverOpen(false)}
+                                >
+                                  <RefreshCcw className="h-3 w-3" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80" side="top" align="end">
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium">{t('settings.telegram.general.usePanelUrl')}</p>
+                                  <p className="text-xs text-muted-foreground">{t('settings.telegram.general.usePanelUrlDescription')}</p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                           <FormDescription className="text-sm text-muted-foreground">
                             {t('settings.telegram.general.webhookUrlDescription')}
                             <br />
