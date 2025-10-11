@@ -24,6 +24,7 @@ const UsersTable = memo(() => {
   const [isEditModalOpen, setEditModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null)
   const [isAdvanceSearchOpen, setIsAdvanceSearchOpen] = useState(false)
+  const [isSorting, setIsSorting] = useState(false)
   const { admin } = useAdmin()
   const isSudo = admin?.is_sudo || false
 
@@ -126,19 +127,33 @@ const UsersTable = memo(() => {
 
   const handleSort = useCallback(
     (column: string) => {
+      // Prevent rapid clicking
+      if (isSorting) return
+
+      setIsSorting(true)
+
       let newSort: string
 
-      if (filters.sort === column) {
-        newSort = '-' + column
-      } else if (filters.sort === '-' + column) {
-        newSort = '-created_at'
+      // Clean the column name in case it comes with prefix
+      const cleanColumn = column.startsWith('-') ? column.slice(1) : column
+
+      if (filters.sort === cleanColumn) {
+        // If currently ascending, make it descending
+        newSort = '-' + cleanColumn
+      } else if (filters.sort === '-' + cleanColumn) {
+        // If currently descending, make it ascending (toggle back)
+        newSort = cleanColumn
       } else {
-        newSort = column
+        // If different column or default, make it ascending
+        newSort = cleanColumn
       }
 
       setFilters(prev => ({ ...prev, sort: newSort }))
+
+      // Release the lock after a short delay
+      setTimeout(() => setIsSorting(false), 100)
     },
-    [filters.sort],
+    [filters.sort, isSorting],
   )
 
   const handleStatusFilter = useCallback((value: any) => {
