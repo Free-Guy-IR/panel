@@ -551,7 +551,7 @@ export function AllNodesStackedBarChart() {
               config={chartConfig}
               className="max-h-[400px] min-h-[200px] w-full"
               style={{
-                marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${window.innerWidth * 0.13 + window.innerWidth / 20}px` : '0',
+                marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${0.18 * window.innerWidth}px` : '0',
               }}
             >
               {chartData && chartData.length > 0 ? (

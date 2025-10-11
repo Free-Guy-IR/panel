@@ -355,7 +355,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
               config={chartConfig}
               className="max-h-[300px] min-h-[150px] w-full overflow-x-auto sm:max-h-[400px] sm:min-h-[200px]"
               style={{
-                marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${window.innerWidth * 0.13 + window.innerWidth / 20}px` : '0',
+                marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${0.18 * window.innerWidth}px` : '0',
               }}
             >
               {chartData && chartData.length > 0 ? (
