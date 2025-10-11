@@ -159,19 +159,19 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
               </DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => handleSort && handleSort('username')}
-                className={filters.sort === 'username' ? 'bg-accent' : ''}
+                className={`whitespace-nowrap ${filters.sort === 'username' ? 'bg-accent' : ''}`}
               >
-                <User className="mr-2 h-4 w-4" />
-                {t('sort.username.asc')}
-                {filters.sort === 'username' && <ChevronDown className="ml-auto h-4 w-4 rotate-180" />}
+                <User className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('sort.username.asc')}</span>
+                {filters.sort === 'username' && <ChevronDown className="ml-auto h-4 w-4 flex-shrink-0 rotate-180" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleSort && handleSort('-username')}
-                className={filters.sort === '-username' ? 'bg-accent' : ''}
+                className={`whitespace-nowrap ${filters.sort === '-username' ? 'bg-accent' : ''}`}
               >
-                <User className="mr-2 h-4 w-4" />
-                {t('sort.username.desc')}
-                {filters.sort === '-username' && <ChevronDown className="ml-auto h-4 w-4" />}
+                <User className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('sort.username.desc')}</span>
+                {filters.sort === '-username' && <ChevronDown className="ml-auto h-4 w-4 flex-shrink-0" />}
               </DropdownMenuItem>
               
               <DropdownMenuSeparator />
@@ -183,19 +183,19 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
               </DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => handleSort && handleSort('expire')}
-                className={filters.sort === 'expire' ? 'bg-accent' : ''}
+                className={`whitespace-nowrap ${filters.sort === 'expire' ? 'bg-accent' : ''}`}
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                {t('sort.expire.oldest')}
-                {filters.sort === 'expire' && <ChevronDown className="ml-auto h-4 w-4 rotate-180" />}
+                <Calendar className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('sort.expire.oldest')}</span>
+                {filters.sort === 'expire' && <ChevronDown className="ml-auto h-4 w-4 flex-shrink-0 rotate-180" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleSort && handleSort('-expire')}
-                className={filters.sort === '-expire' ? 'bg-accent' : ''}
+                className={`whitespace-nowrap ${filters.sort === '-expire' ? 'bg-accent' : ''}`}
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                {t('sort.expire.newest')}
-                {filters.sort === '-expire' && <ChevronDown className="ml-auto h-4 w-4" />}
+                <Calendar className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('sort.expire.newest')}</span>
+                {filters.sort === '-expire' && <ChevronDown className="ml-auto h-4 w-4 flex-shrink-0" />}
               </DropdownMenuItem>
               
               <DropdownMenuSeparator />
@@ -207,19 +207,19 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
               </DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => handleSort && handleSort('used_traffic')}
-                className={filters.sort === 'used_traffic' ? 'bg-accent' : ''}
+                className={`whitespace-nowrap ${filters.sort === 'used_traffic' ? 'bg-accent' : ''}`}
               >
-                <ChartPie className="mr-2 h-4 w-4" />
-                {t('sort.usage.low')}
-                {filters.sort === 'used_traffic' && <ChevronDown className="ml-auto h-4 w-4 rotate-180" />}
+                <ChartPie className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('sort.usage.low')}</span>
+                {filters.sort === 'used_traffic' && <ChevronDown className="ml-auto h-4 w-4 flex-shrink-0 rotate-180" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleSort && handleSort('-used_traffic')}
-                className={filters.sort === '-used_traffic' ? 'bg-accent' : ''}
+                className={`whitespace-nowrap ${filters.sort === '-used_traffic' ? 'bg-accent' : ''}`}
               >
-                <ChartPie className="mr-2 h-4 w-4" />
-                {t('sort.usage.high')}
-                {filters.sort === '-used_traffic' && <ChevronDown className="ml-auto h-4 w-4" />}
+                <ChartPie className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('sort.usage.high')}</span>
+                {filters.sort === '-used_traffic' && <ChevronDown className="ml-auto h-4 w-4 flex-shrink-0" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
