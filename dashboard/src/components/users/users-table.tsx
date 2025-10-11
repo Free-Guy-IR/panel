@@ -5,7 +5,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { UseEditFormValues } from '@/pages/_dashboard.users'
 import { useGetUsers, UserResponse } from '@/service/api'
 import { useAdmin } from '@/hooks/use-admin'
-import { getUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
+import { getUsersPerPageLimitSize, setUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
 import { useQueryClient } from '@tanstack/react-query'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -202,6 +202,9 @@ const UsersTable = memo(() => {
     setIsChangingPage(true)
     setItemsPerPage(value)
     setCurrentPage(0) // Reset to first page when items per page changes
+    
+    // Save to localStorage
+    setUsersPerPageLimitSize(value.toString())
 
     // Remove async/await and setTimeout for instant response
     setIsChangingPage(false)

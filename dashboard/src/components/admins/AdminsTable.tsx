@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
+import { getAdminsPerPageLimitSize, setAdminsPerPageLimitSize } from '@/utils/userPreferenceStorage'
 
 interface AdminFilters {
   sort: string
@@ -105,7 +106,7 @@ const ResetUsersUsageConfirmationDialog = ({ adminUsername, isOpen, onClose, onC
 export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetUsage }: AdminsTableProps) {
   const { t } = useTranslation()
   const [currentPage, setCurrentPage] = useState(0)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(getAdminsPerPageLimitSize())
   const [isChangingPage, setIsChangingPage] = useState(false)
   const [filters, setFilters] = useState<AdminFilters>({
     sort: '-created_at',
@@ -206,6 +207,9 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
     setIsChangingPage(true)
     setItemsPerPage(value)
     setCurrentPage(0) // Reset to first page when items per page changes
+    
+    // Save to localStorage
+    setAdminsPerPageLimitSize(value.toString())
 
     try {
       // Immediate refetch without delay

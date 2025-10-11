@@ -21,13 +21,13 @@ i18n
       },
       load: 'languageOnly',
       detection: {
-        caches: ['localStorage', 'sessionStorage', 'cookie'],
+        caches: ['localStorage', 'sessionStorage'],
       },
       backend: {
         loadPath: joinURL(import.meta.env.BASE_URL, `statics/locales/{{lng}}.json`),
       },
     },
-    function (err, t) {
+    function (err) {
       if (err) {
         console.error('i18next initialization error:', err)
       }
