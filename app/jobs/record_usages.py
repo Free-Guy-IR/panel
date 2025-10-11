@@ -26,6 +26,167 @@ from config import (
 logger = get_logger("record-usages")
 
 
+async def get_dialect() -> str:
+    """Get the database dialect name without holding the session open."""
+    async with GetDB() as db:
+        return db.bind.dialect.name
+
+
+def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
+    """
+    Build UPSERT statement for NodeUserUsage based on database dialect.
+
+    Args:
+        dialect: Database dialect name ('postgresql', 'mysql', or 'sqlite')
+        upsert_params: List of parameter dicts with keys: uid, node_id, created_at, value
+
+    Returns:
+        tuple: (statements_list, params_list) - For SQLite returns 2 statements, others return 1
+    """
+    if dialect == "postgresql":
+        stmt = pg_insert(NodeUserUsage).values(
+            user_id=bindparam("uid"),
+            node_id=bindparam("node_id"),
+            created_at=bindparam("created_at"),
+            used_traffic=bindparam("value"),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["created_at", "user_id", "node_id"],
+            set_={"used_traffic": NodeUserUsage.used_traffic + bindparam("value")},
+        )
+        return [(stmt, upsert_params)]
+
+    elif dialect == "mysql":
+        stmt = mysql_insert(NodeUserUsage).values(
+            user_id=bindparam("uid"),
+            node_id=bindparam("node_id"),
+            created_at=bindparam("created_at"),
+            used_traffic=bindparam("value"),
+        )
+        stmt = stmt.on_duplicate_key_update(
+            used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic
+        )
+        return [(stmt, upsert_params)]
+
+    else:  # SQLite
+        # Insert with OR IGNORE
+        insert_stmt = (
+            insert(NodeUserUsage)
+            .values(
+                user_id=bindparam("uid"),
+                node_id=bindparam("node_id"),
+                created_at=bindparam("created_at"),
+                used_traffic=0,
+            )
+            .prefix_with("OR IGNORE")
+        )
+
+        # Update with renamed bindparams to avoid conflicts
+        update_stmt = (
+            update(NodeUserUsage)
+            .values(used_traffic=NodeUserUsage.used_traffic + bindparam("value"))
+            .where(
+                and_(
+                    NodeUserUsage.user_id == bindparam("b_uid"),
+                    NodeUserUsage.node_id == bindparam("b_node_id"),
+                    NodeUserUsage.created_at == bindparam("b_created_at"),
+                )
+            )
+        )
+
+        # Remap params for update statement
+        update_params = [
+            {
+                "value": p["value"],
+                "b_uid": p["uid"],
+                "b_node_id": p["node_id"],
+                "b_created_at": p["created_at"],
+            }
+            for p in upsert_params
+        ]
+
+        return [(insert_stmt, upsert_params), (update_stmt, update_params)]
+
+
+def build_node_usage_upsert(dialect: str, upsert_param: dict):
+    """
+    Build UPSERT statement for NodeUsage based on database dialect.
+
+    Args:
+        dialect: Database dialect name ('postgresql', 'mysql', or 'sqlite')
+        upsert_param: Parameter dict with keys: node_id, created_at, up, down
+
+    Returns:
+        tuple: (statements_list, params_list) - For SQLite returns 2 statements, others return 1
+    """
+    if dialect == "postgresql":
+        stmt = pg_insert(NodeUsage).values(
+            node_id=bindparam("node_id"),
+            created_at=bindparam("created_at"),
+            uplink=bindparam("up"),
+            downlink=bindparam("down"),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["created_at", "node_id"],
+            set_={
+                "uplink": NodeUsage.uplink + bindparam("up"),
+                "downlink": NodeUsage.downlink + bindparam("down"),
+            },
+        )
+        return [(stmt, [upsert_param])]
+
+    elif dialect == "mysql":
+        stmt = mysql_insert(NodeUsage).values(
+            node_id=bindparam("node_id"),
+            created_at=bindparam("created_at"),
+            uplink=bindparam("up"),
+            downlink=bindparam("down"),
+        )
+        stmt = stmt.on_duplicate_key_update(
+            uplink=NodeUsage.uplink + stmt.inserted.uplink,
+            downlink=NodeUsage.downlink + stmt.inserted.downlink,
+        )
+        return [(stmt, [upsert_param])]
+
+    else:  # SQLite
+        # Insert with OR IGNORE
+        insert_stmt = (
+            insert(NodeUsage)
+            .values(
+                node_id=bindparam("node_id"),
+                created_at=bindparam("created_at"),
+                uplink=0,
+                downlink=0,
+            )
+            .prefix_with("OR IGNORE")
+        )
+
+        # Update with renamed bindparams to avoid conflicts
+        update_stmt = (
+            update(NodeUsage)
+            .values(
+                uplink=NodeUsage.uplink + bindparam("up"),
+                downlink=NodeUsage.downlink + bindparam("down"),
+            )
+            .where(
+                and_(
+                    NodeUsage.node_id == bindparam("b_node_id"),
+                    NodeUsage.created_at == bindparam("b_created_at"),
+                )
+            )
+        )
+
+        # Remap params for update statement
+        update_param = {
+            "up": upsert_param["up"],
+            "down": upsert_param["down"],
+            "b_node_id": upsert_param["node_id"],
+            "b_created_at": upsert_param["created_at"],
+        }
+
+        return [(insert_stmt, [upsert_param]), (update_stmt, [update_param])]
+
+
 async def safe_execute(stmt, params=None, max_retries: int = 5):
     """
     Safely execute database operations with deadlock and connection handling.
@@ -96,72 +257,24 @@ async def record_user_stats(params: list[dict], node_id: int, usage_coefficient:
 
     created_at = dt.now(tz.utc).replace(minute=0, second=0, microsecond=0)
 
-    async with GetDB() as db:
-        dialect = db.bind.dialect.name
+    # Get dialect without holding session
+    dialect = await get_dialect()
 
-        # Prepare parameters - ensure uid is converted to int
-        upsert_params = [
-            {
-                "uid": int(p["uid"]),
-                "value": int(p["value"] * usage_coefficient),
-                "node_id": node_id,
-                "created_at": created_at,
-            }
-            for p in params
-        ]
+    # Prepare parameters - ensure uid is converted to int
+    upsert_params = [
+        {
+            "uid": int(p["uid"]),
+            "value": int(p["value"] * usage_coefficient),
+            "node_id": node_id,
+            "created_at": created_at,
+        }
+        for p in params
+    ]
 
-        if dialect == "postgresql":
-            stmt = pg_insert(NodeUserUsage).values(
-                user_id=bindparam("uid"),
-                node_id=bindparam("node_id"),
-                created_at=bindparam("created_at"),
-                used_traffic=bindparam("value"),
-            )
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["created_at", "user_id", "node_id"],
-                set_={"used_traffic": NodeUserUsage.used_traffic + bindparam("value")},
-            )
-            await safe_execute(stmt, upsert_params)
-
-        elif dialect == "mysql":
-            # MySQL: INSERT ... ON DUPLICATE KEY UPDATE
-            stmt = mysql_insert(NodeUserUsage).values(
-                user_id=bindparam("uid"),
-                node_id=bindparam("node_id"),
-                created_at=bindparam("created_at"),
-                used_traffic=bindparam("value"),
-            )
-            # Use stmt.inserted to reference the inserted value (VALUES() in SQL)
-            stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic)
-            await safe_execute(stmt, upsert_params)
-
-        else:  # SQLite
-            # SQLite: Use INSERT OR IGNORE + UPDATE pattern
-            insert_stmt = (
-                insert(NodeUserUsage)
-                .values(
-                    user_id=bindparam("uid"),
-                    node_id=bindparam("node_id"),
-                    created_at=bindparam("created_at"),
-                    used_traffic=0,
-                )
-                .prefix_with("OR IGNORE")
-            )
-            await safe_execute(insert_stmt, upsert_params)
-
-            # Update all rows (existing + newly inserted)
-            update_stmt = (
-                update(NodeUserUsage)
-                .values(used_traffic=NodeUserUsage.used_traffic + bindparam("value"))
-                .where(
-                    and_(
-                        NodeUserUsage.user_id == bindparam("uid"),
-                        NodeUserUsage.node_id == bindparam("node_id"),
-                        NodeUserUsage.created_at == bindparam("created_at"),
-                    )
-                )
-            )
-            await safe_execute(update_stmt, upsert_params)
+    # Build and execute queries for the specific dialect
+    queries = build_node_user_usage_upsert(dialect, upsert_params)
+    for stmt, stmt_params in queries:
+        await safe_execute(stmt, stmt_params)
 
 
 async def record_node_stats(params: list[dict], node_id: int):
@@ -181,77 +294,20 @@ async def record_node_stats(params: list[dict], node_id: int):
     total_up = sum(p.get("up", 0) for p in params)
     total_down = sum(p.get("down", 0) for p in params)
 
-    async with GetDB() as db:
-        dialect = db.bind.dialect.name
+    # Get dialect without holding session
+    dialect = await get_dialect()
 
-        upsert_param = {
-            "node_id": node_id,
-            "created_at": created_at,
-            "up": total_up,
-            "down": total_down,
-        }
+    upsert_param = {
+        "node_id": node_id,
+        "created_at": created_at,
+        "up": total_up,
+        "down": total_down,
+    }
 
-        if dialect == "postgresql":
-            # PostgreSQL: INSERT ... ON CONFLICT DO UPDATE
-            stmt = pg_insert(NodeUsage).values(
-                node_id=bindparam("node_id"),
-                created_at=bindparam("created_at"),
-                uplink=bindparam("up"),
-                downlink=bindparam("down"),
-            )
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["created_at", "node_id"],
-                set_={
-                    "uplink": NodeUsage.uplink + bindparam("up"),
-                    "downlink": NodeUsage.downlink + bindparam("down"),
-                },
-            )
-            await safe_execute(stmt, [upsert_param])
-
-        elif dialect == "mysql":
-            # MySQL: INSERT ... ON DUPLICATE KEY UPDATE
-            stmt = mysql_insert(NodeUsage).values(
-                node_id=bindparam("node_id"),
-                created_at=bindparam("created_at"),
-                uplink=bindparam("up"),
-                downlink=bindparam("down"),
-            )
-            # Use stmt.inserted to reference the inserted values (VALUES() in SQL)
-            stmt = stmt.on_duplicate_key_update(
-                uplink=NodeUsage.uplink + stmt.inserted.uplink,
-                downlink=NodeUsage.downlink + stmt.inserted.downlink,
-            )
-            await safe_execute(stmt, [upsert_param])
-
-        else:  # SQLite
-            # SQLite: Use INSERT OR IGNORE + UPDATE pattern
-            insert_stmt = (
-                insert(NodeUsage)
-                .values(
-                    node_id=bindparam("node_id"),
-                    created_at=bindparam("created_at"),
-                    uplink=0,
-                    downlink=0,
-                )
-                .prefix_with("OR IGNORE")
-            )
-            await safe_execute(insert_stmt, [upsert_param])
-
-            # Update the row (existing or newly inserted)
-            update_stmt = (
-                update(NodeUsage)
-                .values(
-                    uplink=NodeUsage.uplink + bindparam("up"),
-                    downlink=NodeUsage.downlink + bindparam("down"),
-                )
-                .where(
-                    and_(
-                        NodeUsage.node_id == bindparam("node_id"),
-                        NodeUsage.created_at == bindparam("created_at"),
-                    )
-                )
-            )
-            await safe_execute(update_stmt, [upsert_param])
+    # Build and execute queries for the specific dialect
+    queries = build_node_usage_upsert(dialect, upsert_param)
+    for stmt, stmt_params in queries:
+        await safe_execute(stmt, stmt_params)
 
 
 async def get_users_stats(node: PasarGuardNode):
