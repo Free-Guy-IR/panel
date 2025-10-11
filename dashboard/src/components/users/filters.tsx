@@ -24,8 +24,8 @@ const sortSections = [
     label: 'username',
     items: [
       { value: 'username', label: 'sort.username.asc' },
-      { value: '-username', label: 'sort.username.desc' }
-    ]
+      { value: '-username', label: 'sort.username.desc' },
+    ],
   },
   {
     key: 'expire',
@@ -33,8 +33,8 @@ const sortSections = [
     label: 'expireDate',
     items: [
       { value: 'expire', label: 'sort.expire.oldest' },
-      { value: '-expire', label: 'sort.expire.newest' }
-    ]
+      { value: '-expire', label: 'sort.expire.newest' },
+    ],
   },
   {
     key: 'usage',
@@ -42,9 +42,9 @@ const sortSections = [
     label: 'dataUsage',
     items: [
       { value: 'used_traffic', label: 'sort.usage.low' },
-      { value: '-used_traffic', label: 'sort.usage.high' }
-    ]
-  }
+      { value: '-used_traffic', label: 'sort.usage.high' },
+    ],
+  },
 ] as const
 
 interface FiltersProps {
@@ -74,13 +74,14 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
 
   // Ultra-fast debounced search function
   const debouncedFilterChange = useMemo(
-    () => debounce((value: string) => {
-      onFilterChange({
-        search: value,
-        offset: 0, // Reset to first page when search is updated
-      })
-    }, 25), // Ultra-fast debounce
-    [onFilterChange]
+    () =>
+      debounce((value: string) => {
+        onFilterChange({
+          search: value,
+          offset: 0, // Reset to first page when search is updated
+        })
+      }, 25), // Ultra-fast debounce
+    [onFilterChange],
   )
 
   // Handle input change
@@ -177,16 +178,9 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         <div className="flex h-full items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                size="icon-md" 
-                variant="ghost" 
-                className="relative flex items-center gap-2 border"
-                aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}
-              >
+              <Button size="icon-md" variant="ghost" className="relative flex items-center gap-2 border" aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}>
                 <ArrowUpDown className="h-4 w-4" />
-                {filters.sort && filters.sort !== '-created_at' && (
-                  <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />
-                )}
+                {filters.sort && filters.sort !== '-created_at' && <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 md:w-56">
@@ -197,26 +191,20 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
                     <section.icon className="h-3 w-3" />
                     <span className="text-xs md:text-sm">{t(section.label)}</span>
                   </DropdownMenuLabel>
-                  
+
                   {/* Section Items */}
-                  {section.items.map((item) => (
+                  {section.items.map(item => (
                     <DropdownMenuItem
                       key={item.value}
                       onClick={() => handleSort && handleSort(item.value)}
-                      className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 md:text-sm ${
-                        filters.sort === item.value ? 'bg-accent' : ''
-                      }`}
+                      className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 md:text-sm ${filters.sort === item.value ? 'bg-accent' : ''}`}
                     >
                       <section.icon className="mr-1.5 h-3 w-3 flex-shrink-0 md:mr-2 md:h-4 md:w-4" />
                       <span className="truncate">{t(item.label)}</span>
-                      {filters.sort === item.value && (
-                        <ChevronDown className={`ml-auto h-3 w-3 flex-shrink-0 md:h-4 md:w-4 ${
-                          item.value.startsWith('-') ? '' : 'rotate-180'
-                        }`} />
-                      )}
+                      {filters.sort === item.value && <ChevronDown className={`ml-auto h-3 w-3 flex-shrink-0 md:h-4 md:w-4 ${item.value.startsWith('-') ? '' : 'rotate-180'}`} />}
                     </DropdownMenuItem>
                   ))}
-                  
+
                   {/* Add separator except for last section */}
                   {sectionIndex < sortSections.length - 1 && <DropdownMenuSeparator />}
                 </div>
