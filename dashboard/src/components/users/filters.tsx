@@ -228,7 +228,7 @@ export const PaginationControls = ({ currentPage, totalPages, itemsPerPage, isLo
       </div>
 
       <Pagination dir="ltr" className={`md:justify-end ic ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
-        <PaginationContent className="w-full overflow-x-auto justify-center">
+        <PaginationContent className={cn("w-full overflow-x-auto justify-center", dir === 'rtl' ? 'md:justify-start' : 'md:justify-end')}>
           <PaginationItem>
             <PaginationPrevious onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 0 || isLoading} />
           </PaginationItem>
