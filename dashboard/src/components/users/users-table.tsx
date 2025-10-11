@@ -126,7 +126,7 @@ const UsersTable = memo(() => {
   // Filters will trigger new queries automatically
 
   const handleSort = useCallback(
-    (column: string) => {
+    (column: string, fromDropdown = false) => {
       // Prevent rapid clicking
       if (isSorting) return
 
@@ -136,24 +136,38 @@ const UsersTable = memo(() => {
 
       // Clean the column name in case it comes with prefix
       const cleanColumn = column.startsWith('-') ? column.slice(1) : column
-      const isDescending = column.startsWith('-')
 
-      if (isDescending) {
-        // User clicked on descending option
-        if (filters.sort === '-' + cleanColumn) {
-          // If already descending, reset to default
-          newSort = '-created_at'
+      if (fromDropdown) {
+        // Dropdown behavior: click to sort, click again to reset
+        if (column.startsWith('-')) {
+          // Dropdown descending option clicked
+          if (filters.sort === '-' + cleanColumn) {
+            // If already descending, reset to default
+            newSort = '-created_at'
+          } else {
+            // Set to descending
+            newSort = '-' + cleanColumn
+          }
         } else {
-          // Set to descending
-          newSort = '-' + cleanColumn
+          // Dropdown ascending option clicked
+          if (filters.sort === cleanColumn) {
+            // If already ascending, reset to default
+            newSort = '-created_at'
+          } else {
+            // Set to ascending
+            newSort = cleanColumn
+          }
         }
       } else {
-        // User clicked on ascending option
+        // Table column behavior: traditional 3-state cycling (asc → desc → asc)
         if (filters.sort === cleanColumn) {
-          // If already ascending, reset to default
-          newSort = '-created_at'
+          // If currently ascending, make it descending
+          newSort = '-' + cleanColumn
+        } else if (filters.sort === '-' + cleanColumn) {
+          // If currently descending, make it ascending
+          newSort = cleanColumn
         } else {
-          // Set to ascending
+          // If different column or default, make it ascending
           newSort = cleanColumn
         }
       }

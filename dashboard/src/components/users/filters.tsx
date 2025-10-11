@@ -61,7 +61,7 @@ interface FiltersProps {
   advanceSearchOnOpen: (status: boolean) => void
   advanceSearchForm?: UseFormReturn<Record<string, unknown>>
   onClearAdvanceSearch?: () => void
-  handleSort?: (column: string) => void
+  handleSort?: (column: string, fromDropdown?: boolean) => void
 }
 
 export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, advanceSearchForm, onClearAdvanceSearch, handleSort }: FiltersProps) => {
@@ -196,7 +196,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
                   {section.items.map(item => (
                     <DropdownMenuItem
                       key={item.value}
-                      onClick={() => handleSort && handleSort(item.value)}
+                      onClick={() => handleSort && handleSort(item.value, true)}
                       className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 ${filters.sort === item.value ? 'bg-accent' : ''}`}
                     >
                       <section.icon className="mr-1.5 h-3 w-3 flex-shrink-0 md:mr-2 md:h-4 md:w-4" />

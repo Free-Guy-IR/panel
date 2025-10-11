@@ -15,7 +15,7 @@ export const setupColumns = ({
   dir,
 }: {
   t: (key: string) => string
-  handleSort: (column: string) => void
+  handleSort: (column: string, fromDropdown?: boolean) => void
   filters: { sort: string; status?: string }
   handleStatusFilter: (value: string) => void
   dir: string
@@ -23,7 +23,7 @@ export const setupColumns = ({
   {
     accessorKey: 'username',
     header: () => (
-      <button onClick={handleSort.bind(null, 'username')} className="flex w-full items-center gap-1 px-2 py-3">
+      <button onClick={() => handleSort('username')} className="flex w-full items-center gap-1 px-2 py-3">
         <div className="text-xs">
           <span className="md:hidden">{t('users')}</span>
           <span className="hidden capitalize md:block">{t('username')}</span>
@@ -77,7 +77,7 @@ export const setupColumns = ({
         {/* Desktop expire sorting */}
         <div className="hidden items-center sm:flex">
           <span>/</span>
-          <button className="flex w-full items-center gap-1 px-2 py-3" onClick={handleSort.bind(null, 'expire')}>
+          <button className="flex w-full items-center gap-1 px-2 py-3" onClick={() => handleSort('expire')}>
             <div className="text-xs capitalize">
               <span className="md:hidden">{t('expire')}</span>
               <span className="hidden md:block">{t('expire')}</span>
@@ -115,7 +115,7 @@ export const setupColumns = ({
   {
     id: 'details',
     header: () => (
-      <button className="flex w-full items-center gap-1 px-0 py-3" onClick={handleSort.bind(null, 'used_traffic')}>
+      <button className="flex w-full items-center gap-1 px-0 py-3" onClick={() => handleSort('used_traffic')}>
         <div className="text-xs capitalize">
           <span className="md:hidden">{t('dataUsage')}</span>
           <span className="hidden md:block">{t('dataUsage')}</span>
