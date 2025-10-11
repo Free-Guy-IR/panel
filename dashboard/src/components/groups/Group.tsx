@@ -75,17 +75,17 @@ export default function Group({ group, onEdit, onToggleStatus }: GroupProps) {
 
   return (
     <>
-      <Card className="group relative h-full cursor-pointer px-4 py-5 transition-colors hover:bg-accent" onClick={() => onEdit(group)}>
+      <Card className="group relative cursor-pointer px-4 py-5 transition-colors hover:bg-accent" onClick={() => onEdit(group)}>
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <div className={cn('min-h-2 min-w-2 rounded-full', group.is_disabled ? 'bg-red-500' : 'bg-green-500')} />
-              <div className="flex items-center gap-2">
-                <div className="truncate font-medium">{group.name}</div>
-                <div className="font-mono text-xs text-muted-foreground">({group.inbound_tags?.length || 0})</div>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={cn('min-h-2 min-w-2 rounded-full flex-shrink-0', group.is_disabled ? 'bg-red-500' : 'bg-green-500')} />
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="truncate font-medium min-w-0">{group.name}</div>
+                <div className="font-mono text-xs text-muted-foreground flex-shrink-0">({group.inbound_tags?.length || 0})</div>
               </div>
             </div>
-            <div className="truncate text-sm text-muted-foreground">
+            <div className="truncate text-sm text-muted-foreground min-w-0">
               {t('admins.total.users')}: {group.total_users || 0}
             </div>
           </div>
