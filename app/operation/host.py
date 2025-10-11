@@ -6,7 +6,7 @@ from app.models.host import CreateHost, BaseHost
 from app.models.admin import AdminDetails
 from app.operation import BaseOperation
 from app.db.crud.host import create_host, get_host_by_id, remove_host, get_hosts, modify_host
-from app.core.hosts import hosts as hosts_storage
+from app.core.hosts import host_manager
 from app.utils.logger import get_logger
 
 from app import notification
@@ -49,7 +49,7 @@ class HostOperation(BaseOperation):
         host = BaseHost.model_validate(db_host)
         asyncio.create_task(notification.create_host(host, admin.username))
 
-        await hosts_storage.update(db)
+        await host_manager.add_host(db, db_host)
 
         return host
 
@@ -70,7 +70,7 @@ class HostOperation(BaseOperation):
         host = BaseHost.model_validate(db_host)
         asyncio.create_task(notification.modify_host(host, admin.username))
 
-        await hosts_storage.update(db)
+        await host_manager.add_host(db, db_host)
 
         return host
 
@@ -83,7 +83,7 @@ class HostOperation(BaseOperation):
 
         asyncio.create_task(notification.remove_host(host, admin.username))
 
-        await hosts_storage.update(db)
+        await host_manager.remove_host(host.id)
 
     async def modify_hosts(
         self, db: AsyncSession, modified_hosts: list[CreateHost], admin: AdminDetails
@@ -100,7 +100,7 @@ class HostOperation(BaseOperation):
             else:
                 await modify_host(db, old_host, host)
 
-        await hosts_storage.update(db)
+        await host_manager.add_hosts(db, modified_hosts)
 
         logger.info(f'Host\'s has been modified by admin "{admin.username}"')
 

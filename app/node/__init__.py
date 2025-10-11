@@ -28,7 +28,7 @@ class NodeManager:
                 except Exception:
                     pass
                 finally:
-                    del self._nodes[node.id]
+                    self._nodes.pop(node.id, None)
 
             new_node = create_node(
                 connection=type_map[node.connection_type],
@@ -56,7 +56,7 @@ class NodeManager:
                 except Exception:
                     pass
                 finally:
-                    del self._nodes[id]
+                    self._nodes.pop(id, None)
 
     async def get_node(self, id: int) -> PasarGuardNode | None:
         async with self._lock.reader_lock:

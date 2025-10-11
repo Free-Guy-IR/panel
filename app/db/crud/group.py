@@ -4,14 +4,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import ProxyInbound, Group
 from app.models.group import GroupCreate, GroupModify
 
-from .host import get_or_create_inbound
+from .host import upsert_inbounds
 
 
 async def get_inbounds_by_tags(db: AsyncSession, tags: list[str]) -> list[ProxyInbound]:
     """
-    Retrieves inbounds by their tags.
+    Retrieves or creates inbounds by their tags using efficient bulk upsert.
     """
-    return [(await get_or_create_inbound(db, tag)) for tag in tags]
+    inbounds_map = await upsert_inbounds(db, tags)
+    # Return in the same order as input tags
+    return [inbounds_map[tag] for tag in tags]
 
 
 async def load_group_attrs(group: Group):
@@ -124,13 +126,14 @@ async def modify_group(db: AsyncSession, db_group: Group, modified_group: GroupM
         Group: The updated Group object.
     """
 
+    if modified_group.inbound_tags:
+        inbounds = await get_inbounds_by_tags(db, modified_group.inbound_tags)
+        db_group.inbounds = inbounds
     if db_group.name != modified_group.name:
         db_group.name = modified_group.name
     if modified_group.is_disabled is not None:
         db_group.is_disabled = modified_group.is_disabled
-    if modified_group.inbound_tags:
-        inbounds = await get_inbounds_by_tags(db, modified_group.inbound_tags)
-        db_group.inbounds = inbounds
+
     await db.commit()
     await db.refresh(db_group)
     await load_group_attrs(db_group)

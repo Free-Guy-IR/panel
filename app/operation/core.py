@@ -7,7 +7,7 @@ from app.models.core import CoreCreate, CoreResponseList, CoreResponse
 from app.core.manager import core_manager
 from app.operation import BaseOperation
 from app import notification
-from app.core.hosts import hosts as hosts_storage
+from app.core.hosts import host_manager
 from app.utils.logger import get_logger
 
 
@@ -28,7 +28,7 @@ class CoreOperation(BaseOperation):
         core = CoreResponse.model_validate(db_core)
         asyncio.create_task(notification.create_core(core, admin.username))
 
-        await hosts_storage.update(db)
+        await host_manager.setup(db)
 
         return core
 
@@ -55,7 +55,7 @@ class CoreOperation(BaseOperation):
         core = CoreResponse.model_validate(db_core)
         asyncio.create_task(notification.modify_core(core, admin.username))
 
-        await hosts_storage.update(db)
+        await host_manager.setup(db)
 
         return core
 
@@ -72,4 +72,4 @@ class CoreOperation(BaseOperation):
 
         logger.info(f'core config "{db_core.name}" deleted by admin "{admin.username}"')
 
-        await hosts_storage.update(db)
+        await host_manager.setup(db)

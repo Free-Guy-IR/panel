@@ -2,16 +2,69 @@ import asyncio
 from enum import Enum
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import bindparam, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ProxyHost, ProxyInbound
 from app.models.host import CreateHost
 
 
+async def upsert_inbounds(db: AsyncSession, inbound_tags: list[str]) -> dict[str, ProxyInbound]:
+    """
+    Efficiently upserts multiple proxy inbounds and returns them.
+    Uses INSERT ... ON CONFLICT DO NOTHING pattern to avoid unnecessary SELECT queries.
+
+    Args:
+        db (AsyncSession): Database session.
+        inbound_tags (List[str]): List of inbound tags to upsert.
+
+    Returns:
+        dict[str, ProxyInbound]: Mapping of tag to ProxyInbound object.
+
+    Note:
+        This function does not commit the transaction. The caller is responsible for committing.
+    """
+    if not inbound_tags:
+        return {}
+
+    # Remove duplicates while preserving order
+    unique_tags = list(dict.fromkeys(inbound_tags))
+
+    dialect = db.bind.dialect.name
+
+    # Build upsert statement based on dialect
+    if dialect == "postgresql":
+        stmt = pg_insert(ProxyInbound).values(tag=bindparam("tag"))
+        stmt = stmt.on_conflict_do_nothing(index_elements=["tag"])
+    elif dialect == "mysql":
+        stmt = mysql_insert(ProxyInbound).values(tag=bindparam("tag"))
+        stmt = stmt.on_duplicate_key_update(tag=ProxyInbound.tag)
+    else:  # SQLite
+        stmt = insert(ProxyInbound).values(tag=bindparam("tag")).prefix_with("OR IGNORE")
+
+    # Execute upsert for all tags
+    params = [{"tag": tag} for tag in unique_tags]
+    await db.execute(stmt, params)
+    await db.flush()  # Flush to make inserted rows visible in this transaction
+
+    # Now select all the inbounds we just upserted
+    select_stmt = select(ProxyInbound).where(ProxyInbound.tag.in_(unique_tags))
+    result = await db.execute(select_stmt)
+    inbounds = result.scalars().all()
+
+    # Return as a mapping
+    return {inbound.tag: inbound for inbound in inbounds}
+
+
 async def get_or_create_inbound(db: AsyncSession, inbound_tag: str) -> ProxyInbound:
     """
     Retrieves or creates a proxy inbound based on the given tag.
+
+    Note: This function is deprecated. Use upsert_inbounds() for better performance,
+    especially when dealing with multiple inbounds.
 
     Args:
         db (AsyncSession): Database session.
@@ -20,17 +73,8 @@ async def get_or_create_inbound(db: AsyncSession, inbound_tag: str) -> ProxyInbo
     Returns:
         ProxyInbound: The retrieved or newly created proxy inbound.
     """
-    stmt = select(ProxyInbound).where(ProxyInbound.tag == inbound_tag)
-    result = await db.execute(stmt)
-    inbound = result.scalar_one_or_none()
-
-    if not inbound:
-        inbound = ProxyInbound(tag=inbound_tag)
-        db.add(inbound)
-        await db.commit()
-        await db.refresh(inbound)
-
-    return inbound
+    result = await upsert_inbounds(db, [inbound_tag])
+    return result[inbound_tag]
 
 
 async def get_inbounds_not_in_tags(db: AsyncSession, excluded_tags: List[str]) -> List[ProxyInbound]:

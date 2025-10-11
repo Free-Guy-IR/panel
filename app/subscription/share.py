@@ -6,7 +6,7 @@ from datetime import datetime as dt, timedelta, timezone
 
 from jdatetime import date as jd
 
-from app.core.hosts import hosts as hosts_storage
+from app.core.hosts import host_manager
 from app.core.manager import core_manager
 from app.db.models import UserStatus
 from app.models.user import UsersResponseWithInbounds
@@ -271,7 +271,7 @@ async def process_inbounds_and_tags(
     reverse=False,
 ) -> list | str:
     proxy_settings = user.proxy_settings.dict()
-    for host in await filter_hosts(hosts_storage.values(), user.status):
+    for host in await filter_hosts((await host_manager.get_hosts()).values(), user.status):
         host_data = await process_host(host, format_variables, user.inbounds, proxy_settings, conf)
         if not host_data:
             continue
