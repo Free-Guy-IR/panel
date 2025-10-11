@@ -136,16 +136,26 @@ const UsersTable = memo(() => {
 
       // Clean the column name in case it comes with prefix
       const cleanColumn = column.startsWith('-') ? column.slice(1) : column
+      const isDescending = column.startsWith('-')
 
-      if (filters.sort === cleanColumn) {
-        // If currently ascending, make it descending
-        newSort = '-' + cleanColumn
-      } else if (filters.sort === '-' + cleanColumn) {
-        // If currently descending, make it ascending (toggle back)
-        newSort = cleanColumn
+      if (isDescending) {
+        // User clicked on descending option
+        if (filters.sort === '-' + cleanColumn) {
+          // If already descending, reset to default
+          newSort = '-created_at'
+        } else {
+          // Set to descending
+          newSort = '-' + cleanColumn
+        }
       } else {
-        // If different column or default, make it ascending
-        newSort = cleanColumn
+        // User clicked on ascending option
+        if (filters.sort === cleanColumn) {
+          // If already ascending, reset to default
+          newSort = '-created_at'
+        } else {
+          // Set to ascending
+          newSort = cleanColumn
+        }
       }
 
       setFilters(prev => ({ ...prev, sort: newSort }))
