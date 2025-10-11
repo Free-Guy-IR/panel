@@ -253,6 +253,7 @@ const UsersTable = memo(() => {
         advanceSearchOnOpen={setIsAdvanceSearchOpen}
         refetch={handleManualRefresh}
         advanceSearchForm={advanceSearchForm}
+        handleSort={handleSort}
         onClearAdvanceSearch={() => {
           advanceSearchForm.reset({
             is_username: true,

@@ -4,10 +4,11 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
-import { RefreshCw, SearchIcon, Filter, X } from 'lucide-react'
+import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useGetUsers, UserStatus } from '@/service/api'
@@ -29,9 +30,10 @@ interface FiltersProps {
   advanceSearchOnOpen: (status: boolean) => void
   advanceSearchForm?: UseFormReturn<any>
   onClearAdvanceSearch?: () => void
+  handleSort?: (column: string) => void
 }
 
-export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, advanceSearchForm, onClearAdvanceSearch }: FiltersProps) => {
+export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, advanceSearchForm, onClearAdvanceSearch, handleSort }: FiltersProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [search, setSearch] = useState(filters.search || '')
@@ -132,6 +134,97 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
           </Popover>
         )}
       </div>
+      {/* Sort Button */}
+      {handleSort && (
+        <div className="flex h-full items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                size="icon-md" 
+                variant="ghost" 
+                className="relative flex items-center gap-2 border"
+                aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}
+              >
+                <ArrowUpDown className="h-4 w-4" />
+                {filters.sort && filters.sort !== '-created_at' && (
+                  <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {/* Username Section */}
+              <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground">
+                <User className="h-3 w-3" />
+                {t('username')}
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => handleSort && handleSort('username')}
+                className={filters.sort === 'username' ? 'bg-accent' : ''}
+              >
+                <User className="mr-2 h-4 w-4" />
+                {t('sort.username.asc')}
+                {filters.sort === 'username' && <ChevronDown className="ml-auto h-4 w-4 rotate-180" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSort && handleSort('-username')}
+                className={filters.sort === '-username' ? 'bg-accent' : ''}
+              >
+                <User className="mr-2 h-4 w-4" />
+                {t('sort.username.desc')}
+                {filters.sort === '-username' && <ChevronDown className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              
+              {/* Expire Date Section */}
+              <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Calendar className="h-3 w-3" />
+                {t('expireDate')}
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => handleSort && handleSort('expire')}
+                className={filters.sort === 'expire' ? 'bg-accent' : ''}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {t('sort.expire.oldest')}
+                {filters.sort === 'expire' && <ChevronDown className="ml-auto h-4 w-4 rotate-180" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSort && handleSort('-expire')}
+                className={filters.sort === '-expire' ? 'bg-accent' : ''}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {t('sort.expire.newest')}
+                {filters.sort === '-expire' && <ChevronDown className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              
+              {/* Data Usage Section */}
+              <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground">
+                <ChartPie className="h-3 w-3" />
+                {t('dataUsage')}
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => handleSort && handleSort('used_traffic')}
+                className={filters.sort === 'used_traffic' ? 'bg-accent' : ''}
+              >
+                <ChartPie className="mr-2 h-4 w-4" />
+                {t('sort.usage.low')}
+                {filters.sort === 'used_traffic' && <ChevronDown className="ml-auto h-4 w-4 rotate-180" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSort && handleSort('-used_traffic')}
+                className={filters.sort === '-used_traffic' ? 'bg-accent' : ''}
+              >
+                <ChartPie className="mr-2 h-4 w-4" />
+                {t('sort.usage.high')}
+                {filters.sort === '-used_traffic' && <ChevronDown className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
       {/* Refresh Button */}
       <div className="flex h-full items-center gap-2">
         <Button size="icon-md" onClick={handleRefreshClick} variant="ghost" className="flex items-center gap-2 border" disabled={isRefreshing}>
