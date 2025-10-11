@@ -1,14 +1,13 @@
+import MainSection, { HostFormValues } from '@/components/hosts/Hosts'
 import PageHeader from '@/components/page-header'
-import { Plus } from 'lucide-react'
-import MainSection from '@/components/hosts/Hosts'
-import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getHosts, createHost, modifyHost, CreateHost, ProxyHostALPN, ProxyHostFingerprint, MultiplexProtocol, Xudp, BaseHost } from '@/service/api'
-import { HostFormValues } from '@/components/hosts/Hosts'
-import { toast } from 'sonner'
-import { useTranslation } from 'react-i18next'
-import { Separator } from '@/components/ui/separator'
 import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { BaseHost, createHost, CreateHost, getHosts, modifyHost, MultiplexProtocol, ProxyHostALPN, ProxyHostFingerprint, Xudp } from '@/service/api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus } from 'lucide-react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 export default function HostsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -106,7 +105,7 @@ export default function HostsPage() {
                   : undefined,
                 xray: formData.mux_settings.xray
                   ? {
-                      enable: formData.mux_settings.xray.enable || false,
+                      enable: formData.mux_settings.xray.enabled || false,
                       concurrency: formData.mux_settings.xray.concurrency || undefined,
                       xudp_concurrency: formData.mux_settings.xray.xudp_concurrency || undefined,
                       xudp_proxy_udp_443: formData.mux_settings.xray.xudp_proxy_443 === 'none' ? undefined : (formData.mux_settings.xray.xudp_proxy_443 as Xudp),

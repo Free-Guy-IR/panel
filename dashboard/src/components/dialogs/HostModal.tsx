@@ -16,7 +16,7 @@ import { getHosts, getInbounds, UserStatus } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
 import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2, X } from 'lucide-react'
-import { useState, useMemo, useCallback, memo } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -2329,7 +2329,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                           <div className="space-y-4">
                             <FormField
                               control={form.control}
-                              name="mux_settings.xray.enable"
+                              name="mux_settings.xray.enabled"
                               render={({ field }) => (
                                 <FormItem className="flex cursor-pointer flex-row items-center justify-between rounded-lg border p-4" onClick={() => field.onChange(!field.value)}>
                                   <div className="space-y-0.5">
@@ -2353,7 +2353,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 </FormItem>
                               )}
                             />
-                            {form.watch('mux_settings.xray.enable') === true ? (
+                            {form.watch('mux_settings.xray.enabled') === true ? (
                               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <FormField
                                   control={form.control}
@@ -2432,7 +2432,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                           field.onChange(checked)
                                           if (checked) {
                                             // Disable other mux settings when enabling this one
-                                            form.setValue('mux_settings.xray.enable', false)
+                                            form.setValue('mux_settings.xray.enabled', false)
                                             form.setValue('mux_settings.clash.enable', false)
                                           }
                                         }}
@@ -2602,7 +2602,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                           field.onChange(checked)
                                           if (checked) {
                                             // Disable other mux settings when enabling this one
-                                            form.setValue('mux_settings.xray.enable', false)
+                                            form.setValue('mux_settings.xray.enabled', false)
                                             form.setValue('mux_settings.sing_box.enable', false)
                                           }
                                         }}

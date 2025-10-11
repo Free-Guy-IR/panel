@@ -151,7 +151,7 @@ class ClashMuxSettings(SingBoxMuxSettings):
 
 
 class XrayMuxSettings(BaseModel):
-    enable: bool = Field(default=False)
+    enabled: bool = Field(default=False)
     concurrency: int | None = Field(default=None)
     xudp_concurrency: int | None = Field(None, serialization_alias="xudpConcurrency")
     xudp_proxy_udp_443: XUDP = Field(default=XUDP.reject, serialization_alias="xudpProxyUDP443")

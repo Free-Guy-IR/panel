@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.0.0-rc-2
+ * OpenAPI spec version: 1.0.0-rc-3
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -174,7 +174,7 @@ export type XrayMuxSettingsOutputXudpConcurrency = number | null
 export type XrayMuxSettingsOutputConcurrency = number | null
 
 export interface XrayMuxSettingsOutput {
-  enable?: boolean
+  enabled?: boolean
   concurrency?: XrayMuxSettingsOutputConcurrency
   xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
   xudpProxyUDP443?: Xudp
@@ -185,7 +185,7 @@ export type XrayMuxSettingsInputXudpConcurrency = number | null
 export type XrayMuxSettingsInputConcurrency = number | null
 
 export interface XrayMuxSettingsInput {
-  enable?: boolean
+  enabled?: boolean
   concurrency?: XrayMuxSettingsInputConcurrency
   xudp_concurrency?: XrayMuxSettingsInputXudpConcurrency
   xudp_proxy_udp_443?: Xudp
