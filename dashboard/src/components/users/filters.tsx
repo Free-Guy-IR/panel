@@ -4,16 +4,48 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
-import { RefreshCw, SearchIcon, Filter, X } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown } from 'lucide-react'
+import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useGetUsers, UserStatus } from '@/service/api'
 import { RefetchOptions } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { UseFormReturn } from 'react-hook-form'
+
+// Sort configuration to eliminate duplication
+const sortSections = [
+  {
+    key: 'username',
+    icon: User,
+    label: 'username',
+    items: [
+      { value: 'username', label: 'sort.username.asc' },
+      { value: '-username', label: 'sort.username.desc' },
+    ],
+  },
+  {
+    key: 'expire',
+    icon: Calendar,
+    label: 'expireDate',
+    items: [
+      { value: 'expire', label: 'sort.expire.oldest' },
+      { value: '-expire', label: 'sort.expire.newest' },
+    ],
+  },
+  {
+    key: 'usage',
+    icon: ChartPie,
+    label: 'dataUsage',
+    items: [
+      { value: 'used_traffic', label: 'sort.usage.low' },
+      { value: '-used_traffic', label: 'sort.usage.high' },
+    ],
+  },
+] as const
 
 interface FiltersProps {
   filters: {
@@ -25,13 +57,14 @@ interface FiltersProps {
     load_sub: boolean
   }
   onFilterChange: (filters: Partial<FiltersProps['filters']>) => void
-  refetch?: (options?: RefetchOptions) => Promise<any>
+  refetch?: (options?: RefetchOptions) => Promise<unknown>
   advanceSearchOnOpen: (status: boolean) => void
-  advanceSearchForm?: UseFormReturn<any>
+  advanceSearchForm?: UseFormReturn<Record<string, unknown>>
   onClearAdvanceSearch?: () => void
+  handleSort?: (column: string) => void
 }
 
-export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, advanceSearchForm, onClearAdvanceSearch }: FiltersProps) => {
+export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, advanceSearchForm, onClearAdvanceSearch, handleSort }: FiltersProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [search, setSearch] = useState(filters.search || '')
@@ -40,20 +73,22 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   const handleRefetch = refetch || userQuery.refetch
 
   // Ultra-fast debounced search function
-  const setSearchField = useCallback(
-    debounce((value: string) => {
-      onFilterChange({
-        search: value,
-        offset: 0, // Reset to first page when search is updated
-      })
-    }, 25), // Ultra-fast debounce
-    [onFilterChange], // Recreate the debounced function when onFilterChange changes
+  const debouncedFilterChange = useMemo(
+    () =>
+      debounce((value: string) => {
+        onFilterChange({
+          search: value,
+          offset: 0, // Reset to first page when search is updated
+        })
+      }, 25), // Ultra-fast debounce
+    [onFilterChange],
   )
 
   // Handle input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value)
-    setSearchField(e.target.value)
+    const value = e.target.value
+    setSearch(value)
+    debouncedFilterChange(value)
   }
 
   // Clear search field
@@ -83,18 +118,24 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   // Check if any advance search filters are active
   const hasActiveAdvanceFilters = () => {
     if (!advanceSearchForm) return false
-    const values = advanceSearchForm.getValues()
-    return (values.admin && values.admin.length > 0) || (values.group && values.group.length > 0) || values.status !== '0'
+    const values = advanceSearchForm.getValues() as Record<string, unknown>
+    const admin = values.admin as string[] | undefined
+    const group = values.group as string[] | undefined
+    const status = values.status as string | undefined
+    return (admin && admin.length > 0) || (group && group.length > 0) || status !== '0'
   }
 
   // Get the count of active advance filters
   const getActiveFiltersCount = () => {
     if (!advanceSearchForm) return 0
-    const values = advanceSearchForm.getValues()
+    const values = advanceSearchForm.getValues() as Record<string, unknown>
+    const admin = values.admin as string[] | undefined
+    const group = values.group as string[] | undefined
+    const status = values.status as string | undefined
     let count = 0
-    if (values.admin && values.admin.length > 0) count++
-    if (values.group && values.group.length > 0) count++
-    if (values.status !== '0') count++
+    if (admin && admin.length > 0) count++
+    if (group && group.length > 0) count++
+    if (status !== '0') count++
     return count
   }
 
@@ -132,6 +173,46 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
           </Popover>
         )}
       </div>
+      {/* Sort Button */}
+      {handleSort && (
+        <div className="flex h-full items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon-md" variant="ghost" className="relative flex items-center gap-2 border" aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}>
+                <ArrowUpDown className="h-4 w-4" />
+                {filters.sort && filters.sort !== '-created_at' && <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 md:w-56">
+              {sortSections.map((section, sectionIndex) => (
+                <div key={section.key}>
+                  {/* Section Label */}
+                  <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground md:gap-2 md:px-3 md:py-2">
+                    <section.icon className="h-3 w-3" />
+                    <span className="text-xs md:text-sm">{t(section.label)}</span>
+                  </DropdownMenuLabel>
+
+                  {/* Section Items */}
+                  {section.items.map(item => (
+                    <DropdownMenuItem
+                      key={item.value}
+                      onClick={() => handleSort && handleSort(item.value)}
+                      className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 ${filters.sort === item.value ? 'bg-accent' : ''}`}
+                    >
+                      <section.icon className="mr-1.5 h-3 w-3 flex-shrink-0 md:mr-2 md:h-4 md:w-4" />
+                      <span className="truncate">{t(item.label)}</span>
+                      {filters.sort === item.value && <ChevronDown className={`ml-auto h-3 w-3 flex-shrink-0 md:h-4 md:w-4 ${item.value.startsWith('-') ? '' : 'rotate-180'}`} />}
+                    </DropdownMenuItem>
+                  ))}
+
+                  {/* Add separator except for last section */}
+                  {sectionIndex < sortSections.length - 1 && <DropdownMenuSeparator />}
+                </div>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
       {/* Refresh Button */}
       <div className="flex h-full items-center gap-2">
         <Button size="icon-md" onClick={handleRefreshClick} variant="ghost" className="flex items-center gap-2 border" disabled={isRefreshing}>

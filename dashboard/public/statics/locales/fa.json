@@ -508,8 +508,24 @@
   "deleteUser.title": "حذف کاربر",
   "disabled": "غیر فعال",
   "expire": "انقضا",
+  "expireDate": "تاریخ انقضا",
   "expired": "{{time}} منقضی شده",
   "expires": "پایان در {{time}}",
+  "sortOptions": "گزینه‌های مرتب‌سازی",
+  "sort": {
+    "username": {
+      "asc": "نام کاربری (الف-ی)",
+      "desc": "نام کاربری (ی-الف)"
+    },
+    "expire": {
+      "oldest": "تاریخ انقضا (قدیمی‌ترین اول)",
+      "newest": "تاریخ انقضا (جدیدترین اول)"
+    },
+    "usage": {
+      "low": "مصرف داده (کم به زیاد)",
+      "high": "مصرف داده (زیاد به کم)"
+    }
+  },
   "header.donation": "کمک مالی",
   "header.hostSettings": "تنظیمات هاست",
   "header.logout": "خروج",

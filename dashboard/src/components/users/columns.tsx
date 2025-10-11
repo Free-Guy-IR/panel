@@ -17,8 +17,8 @@ export const setupColumns = ({
   t: (key: string) => string
   handleSort: (column: string) => void
   filters: { sort: string; status?: string }
-  handleStatusFilter: (value: any) => void
-  dir: any
+  handleStatusFilter: (value: string) => void
+  dir: string
 }): ColumnDef<UserResponse>[] => [
   {
     accessorKey: 'username',
@@ -59,7 +59,7 @@ export const setupColumns = ({
     accessorKey: 'status',
     header: () => (
       <div className="flex items-center">
-        <Select dir={dir || ''} onValueChange={handleStatusFilter} value={filters.status || '0'}>
+        <Select dir={dir as 'ltr' | 'rtl'} onValueChange={handleStatusFilter} value={filters.status || '0'}>
           <SelectTrigger icon={false} className="ring-none w-fit max-w-28 border-none p-0 sm:px-1">
             <span className="px-0 text-xs capitalize">{t('usersTable.status')}</span>
           </SelectTrigger>
@@ -74,6 +74,7 @@ export const setupColumns = ({
             <SelectItem value="expired">{t('hostsDialog.status.expired')}</SelectItem>
           </SelectContent>
         </Select>
+        {/* Desktop expire sorting */}
         <div className="hidden items-center sm:flex">
           <span>/</span>
           <button className="flex w-full items-center gap-1 px-2 py-3" onClick={handleSort.bind(null, 'expire')}>
