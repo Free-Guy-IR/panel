@@ -197,7 +197,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
                     <DropdownMenuItem
                       key={item.value}
                       onClick={() => handleSort && handleSort(item.value)}
-                      className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 md:text-sm ${filters.sort === item.value ? 'bg-accent' : ''}`}
+                      className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 ${filters.sort === item.value ? 'bg-accent' : ''}`}
                     >
                       <section.icon className="mr-1.5 h-3 w-3 flex-shrink-0 md:mr-2 md:h-4 md:w-4" />
                       <span className="truncate">{t(item.label)}</span>
