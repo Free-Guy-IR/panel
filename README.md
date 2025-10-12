@@ -193,7 +193,7 @@ Then access: `http://localhost:8000/dashboard/`
 
 ```bash
 # Create admin account
-pasarguard cli admin create --sudo
+pasarguard cli admins --create <username>
 
 # Get help
 pasarguard --help

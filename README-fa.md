@@ -193,7 +193,7 @@ ssh -L 8000:localhost:8000 user@serverip
 
 ```bash
 # ایجاد حساب ادمین
-pasarguard cli admin create --sudo
+pasarguard cli admins --create <username>
 
 # دریافت راهنما
 pasarguard --help
