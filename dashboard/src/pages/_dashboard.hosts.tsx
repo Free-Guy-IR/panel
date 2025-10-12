@@ -105,7 +105,7 @@ export default function HostsPage() {
                   : undefined,
                 xray: formData.mux_settings.xray
                   ? {
-                      enable: formData.mux_settings.xray.enabled || false,
+                      enabled: formData.mux_settings.xray.enabled || false,
                       concurrency: formData.mux_settings.xray.concurrency || undefined,
                       xudp_concurrency: formData.mux_settings.xray.xudp_concurrency || undefined,
                       xudp_proxy_udp_443: formData.mux_settings.xray.xudp_proxy_443 === 'none' ? undefined : (formData.mux_settings.xray.xudp_proxy_443 as Xudp),
