@@ -123,20 +123,21 @@ async def get_hosts(
     db: AsyncSession,
     offset: Optional[int] = 0,
     limit: Optional[int] = 0,
-    sort: ProxyHostSortingOptions = "priority",
+    sort: ProxyHostSortingOptions = ProxyHostSortingOptions.priority,
 ) -> list[ProxyHost]:
     """
-    Retrieves hosts.
+    Retrieves hosts sorted by priority (ascending) by default.
 
     Args:
         db (AsyncSession): Database session.
         offset (Optional[int]): Number of records to skip.
         limit (Optional[int]): Number of records to retrieve.
+        sort (ProxyHostSortingOptions): Sorting option. Defaults to priority ascending.
 
     Returns:
-        List[ProxyHost]: List of hosts for the inbound.
+        List[ProxyHost]: List of hosts sorted by the specified option.
     """
-    stmt = select(ProxyHost).order_by(sort)
+    stmt = select(ProxyHost).order_by(sort.value)
 
     if offset:
         stmt = stmt.offset(offset)

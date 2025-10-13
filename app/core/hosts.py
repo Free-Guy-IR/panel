@@ -8,8 +8,8 @@ from app import on_startup
 from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
-from app.db.models import ProxyHost, ProxyHostSecurity
-from app.models.host import MuxSettings, TransportSettings, BaseHost
+from app.db.models import ProxyHostSecurity
+from app.models.host import BaseHost
 
 
 def _prepare_host_data(host: BaseHost) -> dict:
@@ -36,6 +36,7 @@ def _prepare_host_data(host: BaseHost) -> dict:
         else {},
         "status": host.status,
         "ech_config_list": host.ech_config_list,
+        "priority": host.priority,
     }
 
 
@@ -108,7 +109,9 @@ class HostManager:
     @cached()
     async def get_hosts(self) -> dict[int, dict]:
         async with self._lock:
-            return deepcopy(self._hosts)
+            # Return hosts sorted by priority
+            sorted_hosts = dict(sorted(self._hosts.items(), key=lambda x: x[1]["priority"]))
+            return deepcopy(sorted_hosts)
 
 
 host_manager: HostManager = HostManager()
