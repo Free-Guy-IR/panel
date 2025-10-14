@@ -605,7 +605,6 @@ async def modify_user(db: AsyncSession, db_user: User, modify: UserModify) -> Us
 
 async def _reset_user_traffic_and_log(db: AsyncSession, db_user: User):
     """Helper to reset user traffic and log the action."""
-    await db_user.awaitable_attrs.node_usages
     await db_user.awaitable_attrs.next_plan
     usage_log = UserUsageResetLogs(
         user_id=db_user.id,
@@ -613,12 +612,12 @@ async def _reset_user_traffic_and_log(db: AsyncSession, db_user: User):
     )
     db.add(usage_log)
 
-    db_user.used_traffic = 0
-    db_user.node_usages.clear()
-
     if db_user.next_plan:
         await db.delete(db_user.next_plan)
         db_user.next_plan = None
+
+    db_user.used_traffic = 0
+    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id == db_user.id))
 
 
 async def reset_user_data_usage(db: AsyncSession, db_user: User) -> User:
