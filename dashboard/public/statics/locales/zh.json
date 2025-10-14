@@ -569,6 +569,7 @@
     "userDataLimitStrategy": "数据限制重置策略",
     "resetUsage": "重置使用量",
     "groupsExistingWarning": "您尚未添加任何<a>分组</a>。",
+    "nonSudoGroupsExistingWarning": "您还没有创建任何群组。请联系 sudo 管理员创建一个群组。",
     "deleteSuccess": "模板 {{name}} 已成功删除",
     "deleteFailed": "删除模板 {{name}} 失败",
     "deleteUserTemplateTitle": "删除用户模板",

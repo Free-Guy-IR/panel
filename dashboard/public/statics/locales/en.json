@@ -570,6 +570,7 @@
     "userDataLimitStrategy": "Data Limit Reset Strategy",
     "resetUsage": "Reset Usage",
     "groupsExistingWarning": "You dont create any <a>Groups</a> yet.",
+    "nonSudoGroupsExistingWarning": "You haven’t created any groups yet. Ask the sudo admin to create one.",
     "deleteSuccess": "Template {{name}} removed successfully",
     "deleteFailed": "Failed to remove template {{name}}",
     "deleteUserTemplateTitle": "Remove User Template",

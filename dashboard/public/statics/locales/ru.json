@@ -543,6 +543,7 @@
     "userDataLimitStrategy": "Стратегия сброса лимита данных",
     "resetUsage": "Сброс использования",
     "groupsExistingWarning": "Вы еще не добавили ни одной <a>группы</a>.",
+    "nonSudoGroupsExistingWarning" : "Вы ещё не создали ни одной группы. Попросите админа sudo создать группу.",
     "deleteSuccess": "Шаблон {{name}} успешно удалён",
     "deleteFailed": "Не удалось удалить шаблон {{name}}",
     "deleteUserTemplateTitle": "Удалить пользовательский шаблон",

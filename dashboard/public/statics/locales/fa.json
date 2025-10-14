@@ -459,6 +459,7 @@
     "userDataLimitStrategy": "استراتژی بازنشانی محدودیت داده‌ها",
     "resetUsage": "بازنشانی استفاده",
     "groupsExistingWarning": "شما هنوز هیچ <a>گروهی</a> اضافه نکرده‌اید.",
+    "nonSudoGroupsExistingWarning": "شما هنوز هیچ گروهی ایجاد نکرده اید. از ادمین sudo بخواهید تا یک گروه ایجاد کند.",
     "deleteSuccess": "قالب {{name}} با موفقیت حذف شد",
     "deleteFailed": "حذف قالب {{name}} ناموفق بود",
     "deleteUserTemplateTitle": "حذف قالب کاربر",
