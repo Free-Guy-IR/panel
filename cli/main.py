@@ -35,8 +35,10 @@ def version():
 def admins(
     list: bool = typer.Option(False, "--list", "-l", help="List all admins"),
     create: Optional[str] = typer.Option(None, "--create", "-c", help="Create new admin"),
+    sudo: bool = typer.Option(False, "--sudo", "-s", help="Create a sudo admin."),
     delete: Optional[str] = typer.Option(None, "--delete", "-d", help="Delete admin"),
     modify: Optional[str] = typer.Option(None, "--modify", "-m", help="Modify admin"),
+    disable: Optional[bool] = typer.Option(None, "--disable",  help="Disable or enable the admin account."),
     reset_usage: Optional[str] = typer.Option(None, "--reset-usage", "-r", help="Reset admin usage"),
 ):
     """List & manage admin accounts."""
@@ -44,11 +46,11 @@ def admins(
     if list or not any([create, delete, modify, reset_usage]):
         asyncio.run(list_admins())
     elif create:
-        asyncio.run(create_admin(create))
+        asyncio.run(create_admin(create, sudo))
     elif delete:
         asyncio.run(delete_admin(delete))
     elif modify:
-        asyncio.run(modify_admin(modify))
+        asyncio.run(modify_admin(modify, disable))
     elif reset_usage:
         asyncio.run(reset_admin_usage(reset_usage))
 
