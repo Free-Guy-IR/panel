@@ -6,6 +6,7 @@ Handles admin account management through the command line interface.
 
 import typer
 from pydantic import ValidationError
+from typing_extensions import Annotated
 
 from app.db.base import GetDB
 from app.models.admin import AdminCreate, AdminModify
@@ -45,7 +46,7 @@ class AdminCLI(BaseCLI):
 
         self.console.print(table)
 
-    async def create_admin(self, db, username: str):
+    async def create_admin(self, db, username: str, is_sudo: bool):
         """Create a new admin account."""
         admin_op = get_admin_operation()
 
@@ -69,7 +70,7 @@ class AdminCLI(BaseCLI):
 
             try:
                 # Create admin
-                new_admin = AdminCreate(username=username, password=password, is_sudo=False)
+                new_admin = AdminCreate(username=username, password=password, is_sudo=is_sudo)
                 await admin_op.create_admin(db, new_admin, SYSTEM_ADMIN)
                 self.console.print(f"[green]Admin '{username}' created successfully[/green]")
                 break
@@ -97,7 +98,7 @@ class AdminCLI(BaseCLI):
             except Exception as e:
                 self.console.print(f"[red]Error deleting admin: {e}[/red]")
 
-    async def modify_admin(self, db, username: str):
+    async def modify_admin(self, db, username: str, disable: bool):
         """Modify an admin account."""
         admin_op = get_admin_operation()
 
@@ -114,9 +115,12 @@ class AdminCLI(BaseCLI):
         self.console.print("[cyan]Current settings:[/cyan]")
         self.console.print(f"  Username: {current_admin.username}")
         self.console.print(f"  Is Sudo: {'✓' if current_admin.is_sudo else '✗'}")
+        self.console.print(f"  Is Disabled: {'✓' if current_admin.is_disabled else '✗'}")
 
         new_password = None
         is_sudo = current_admin.is_sudo
+        is_disabled = current_admin.is_disabled
+
         # Password modification
         if typer.confirm("Do you want to change the password?"):
             new_password = typer.prompt("New password", hide_input=True)
@@ -129,17 +133,27 @@ class AdminCLI(BaseCLI):
         if typer.confirm(f"Do you want to change sudo status? (Current: {'✓' if current_admin.is_sudo else '✗'})"):
             is_sudo = typer.confirm("Make this admin a sudo admin?")
 
+        # Disabled status modification
+        if disable is not None:
+            is_disabled = disable
+        elif typer.confirm(
+            f"Do you want to change disabled status? (Current: {'✓' if current_admin.is_disabled else '✗'})"
+        ):
+            is_disabled = typer.confirm("Disable this admin account?")
+
         # Confirm changes
         self.console.print("\n[cyan]Summary of changes:[/cyan]")
         if new_password:
             self.console.print("  Password: [yellow]Will be updated[/yellow]")
         if is_sudo != current_admin.is_sudo:
             self.console.print(f"  Is Sudo: {'✓' if is_sudo else '✗'} [yellow](changed)[/yellow]")
+        if is_disabled != current_admin.is_disabled:
+            self.console.print(f"  Is Disabled: {'✓' if is_disabled else '✗'} [yellow](changed)[/yellow]")
 
         if typer.confirm("Do you want to apply these changes?"):
             try:
                 # Interactive modification
-                modified_admin = AdminModify(is_sudo=is_sudo, password=new_password)
+                modified_admin = AdminModify(is_sudo=is_sudo, password=new_password, is_disabled=is_disabled)
                 await admin_op.modify_admin(db, username, modified_admin, SYSTEM_ADMIN)
                 self.console.print(f"[green]Admin '{username}' modified successfully[/green]")
             except Exception as e:
@@ -165,10 +179,12 @@ class AdminCLI(BaseCLI):
                 self.console.print(f"[red]Error resetting usage: {e}[/red]")
 
 
+admin_cli = AdminCLI()
+
+
 # CLI commands
 async def list_admins():
     """List all admin accounts."""
-    admin_cli = AdminCLI()
     async with GetDB() as db:
         try:
             await admin_cli.list_admins(db)
@@ -176,19 +192,22 @@ async def list_admins():
             console.print(f"[red]Error: {e}[/red]")
 
 
-async def create_admin(username: str):
+async def create_admin(
+    username: str,
+    sudo: Annotated[bool, typer.Option(False, "--sudo", "-s", help="Create a sudo admin.")] = False,
+):
     """Create a new admin account."""
-    admin_cli = AdminCLI()
     async with GetDB() as db:
         try:
-            await admin_cli.create_admin(db, username)
+            if not sudo:
+                sudo = typer.confirm("Make this admin a sudo admin?")
+            await admin_cli.create_admin(db, username, sudo)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
 
 async def delete_admin(username: str):
     """Delete an admin account."""
-    admin_cli = AdminCLI()
     async with GetDB() as db:
         try:
             await admin_cli.delete_admin(db, username)
@@ -196,19 +215,22 @@ async def delete_admin(username: str):
             console.print(f"[red]Error: {e}[/red]")
 
 
-async def modify_admin(username: str):
+async def modify_admin(
+    username: str,
+    disable: Annotated[bool, typer.Option(..., "--disable",  help="Disable or enable the admin account.")] = None,
+):
     """Modify an admin account."""
-    admin_cli = AdminCLI()
     async with GetDB() as db:
         try:
-            await admin_cli.modify_admin(db, username)
+            if disable is None:
+                disable = typer.confirm("Do you want to disable this admin?")
+            await admin_cli.modify_admin(db, username, disable)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
 
 async def reset_admin_usage(username: str):
     """Reset admin usage statistics."""
-    admin_cli = AdminCLI()
     async with GetDB() as db:
         try:
             await admin_cli.reset_admin_usage(db, username)
