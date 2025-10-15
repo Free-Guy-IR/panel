@@ -21,7 +21,7 @@
         <img src="https://img.shields.io/github/actions/workflow/status/PasarGuard/panel/build.yml?style=flat-square" />
     </a>
     <a href="https://hub.docker.com/r/PasarGuard/panel" target="_blank">
-        <img src="https://img.shields.io/docker/pulls/PasarGuard/panel?style=flat-square&logo=docker" />
+        <img src="https://img.shields.io/docker/pulls/pasarguard/panel?style=flat-square&logo=docker" />
     </a>
     <a href="#">
         <img src="https://img.shields.io/github/license/PasarGuard/panel?style=flat-square" />
