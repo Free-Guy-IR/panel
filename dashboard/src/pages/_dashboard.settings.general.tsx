@@ -238,14 +238,7 @@ export default function General() {
               <h3 className="text-sm font-medium">{t('nodes.title', { defaultValue: 'Reconnect All Nodes' })}</h3>
               <p className="text-xs text-muted-foreground">{t('nodes.reconnectinfo', { defaultValue: 'Refresh all nodes connections' })}</p>
             </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              type="button"
-              onClick={() => setIsReconnectAllDialogOpen(true)}
-              disabled={reconnectAllNodeMutation.isPending}
-              className="gap-2 shrink-0"
-            >
+            <Button variant="destructive" size="sm" type="button" onClick={() => setIsReconnectAllDialogOpen(true)} disabled={reconnectAllNodeMutation.isPending} className="shrink-0 gap-2">
               {reconnectAllNodeMutation.isPending ? (
                 <>
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -288,7 +281,7 @@ export default function General() {
           </AlertDialog>
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:gap-4 mt-auto">
+          <div className="mt-auto flex flex-col gap-3 pt-6 sm:flex-row sm:gap-4">
             <div className="flex-1"></div>
             <div className="flex flex-col gap-3 sm:shrink-0 sm:flex-row sm:gap-4">
               <Button type="button" variant="outline" onClick={handleCancel} className="w-full min-w-[100px] sm:w-auto" disabled={isSaving}>

@@ -25,5 +25,3 @@ export function useCurrentGoal() {
     retry: 2,
   })
 }
-
-

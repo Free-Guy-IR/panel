@@ -307,7 +307,7 @@ export default function TelegramSettings() {
                           </FormLabel>
                           <div className="relative">
                             <FormControl>
-                              <Input type="url" placeholder={t('settings.telegram.general.webhookUrlPlaceholder')} {...field} className="font-mono pr-10" />
+                              <Input type="url" placeholder={t('settings.telegram.general.webhookUrlPlaceholder')} {...field} className="pr-10 font-mono" />
                             </FormControl>
                             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                               <PopoverTrigger asChild>
@@ -316,7 +316,7 @@ export default function TelegramSettings() {
                                   variant="ghost"
                                   size="icon"
                                   className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 hover:bg-accent"
-                                  onClick={(e) => {
+                                  onClick={e => {
                                     e.preventDefault()
                                     const currentUrl = getCurrentPanelUrl()
                                     field.onChange(currentUrl)

@@ -45,7 +45,7 @@ export function GoalProgress() {
             <div
               className={cn(
                 'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                goal.status === 'completed' ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                goal.status === 'completed' ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
               )}
             >
               <TrendingUp className="h-3 w-3" />
@@ -57,9 +57,7 @@ export function GoalProgress() {
           <div className="space-y-1">
             <Progress value={progress} className="h-2" />
             <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-primary">
-                ${goal.paid_amount.toLocaleString()}
-              </span>
+              <span className="font-medium text-primary">${goal.paid_amount.toLocaleString()}</span>
               <span className="text-muted-foreground">
                 {t('goal.of')} ${goal.price.toLocaleString()}
               </span>
@@ -67,21 +65,13 @@ export function GoalProgress() {
           </div>
 
           {/* Details */}
-          {goal.detail && (
-            <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-              {goal.detail}
-            </p>
-          )}
+          {goal.detail && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{goal.detail}</p>}
 
           {/* Remaining */}
           {remaining > 0 && (
             <div className="flex items-center justify-between rounded-md bg-background/50 px-2 py-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('goal.remaining')}
-              </span>
-              <span className="text-xs font-semibold text-foreground">
-                ${remaining.toLocaleString()}
-              </span>
+              <span className="text-xs font-medium text-muted-foreground">{t('goal.remaining')}</span>
+              <span className="text-xs font-semibold text-foreground">${remaining.toLocaleString()}</span>
             </div>
           )}
 
@@ -100,5 +90,3 @@ export function GoalProgress() {
     </Card>
   )
 }
-
-

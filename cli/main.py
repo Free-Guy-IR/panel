@@ -38,7 +38,7 @@ def admins(
     sudo: bool = typer.Option(False, "--sudo", "-s", help="Create a sudo admin."),
     delete: Optional[str] = typer.Option(None, "--delete", "-d", help="Delete admin"),
     modify: Optional[str] = typer.Option(None, "--modify", "-m", help="Modify admin"),
-    disable: Optional[bool] = typer.Option(None, "--disable",  help="Disable or enable the admin account."),
+    disable: Optional[bool] = typer.Option(None, "--disable", help="Disable or enable the admin account."),
     reset_usage: Optional[str] = typer.Option(None, "--reset-usage", "-r", help="Reset admin usage"),
 ):
     """List & manage admin accounts."""

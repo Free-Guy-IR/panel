@@ -241,7 +241,7 @@ const UsersTable = memo(() => {
     setIsChangingPage(true)
     setItemsPerPage(value)
     setCurrentPage(0) // Reset to first page when items per page changes
-    
+
     // Save to localStorage
     setUsersPerPageLimitSize(value.toString())
 

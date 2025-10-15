@@ -180,11 +180,7 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
             <div className="mb-2 flex items-start justify-between sm:mb-3">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="rounded-lg bg-primary/10 p-1.5 sm:p-2">
-                  {currentStats && isNodeStats(currentStats) ? (
-                    <Activity className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
-                  ) : (
-                    <Database className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
-                  )}
+                  {currentStats && isNodeStats(currentStats) ? <Activity className="h-4 w-4 text-primary sm:h-5 sm:w-5" /> : <Database className="h-4 w-4 text-primary sm:h-5 sm:w-5" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">

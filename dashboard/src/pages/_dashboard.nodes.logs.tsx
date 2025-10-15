@@ -246,18 +246,18 @@ export default function NodeLogs() {
 
   useEffect(() => {
     const logs = parseLogs(rawLogs.join('\n'))
-    
+
     // Sort logs by their extracted timestamps (not SSE arrival time)
     const sortedLogs = logs.sort((a, b) => {
       // Logs without timestamps go to the end
       if (!a.timestamp && !b.timestamp) return 0
       if (!a.timestamp) return 1
       if (!b.timestamp) return -1
-      
+
       // Sort by actual log timestamp
       return a.timestamp.getTime() - b.timestamp.getTime()
     })
-    
+
     const filtered = handleFilter(sortedLogs)
     setFilteredLogs(filtered)
   }, [rawLogs, search, lines, since, typeFilter])

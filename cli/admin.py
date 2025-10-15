@@ -217,7 +217,7 @@ async def delete_admin(username: str):
 
 async def modify_admin(
     username: str,
-    disable: Annotated[bool, typer.Option(..., "--disable",  help="Disable or enable the admin account.")] = None,
+    disable: Annotated[bool, typer.Option(..., "--disable", help="Disable or enable the admin account.")] = None,
 ):
     """Modify an admin account."""
     async with GetDB() as db:

@@ -207,7 +207,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
     setIsChangingPage(true)
     setItemsPerPage(value)
     setCurrentPage(0) // Reset to first page when items per page changes
-    
+
     // Save to localStorage
     setAdminsPerPageLimitSize(value.toString())
 

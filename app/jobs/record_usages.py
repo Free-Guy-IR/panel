@@ -63,9 +63,7 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
             created_at=bindparam("created_at"),
             used_traffic=bindparam("value"),
         )
-        stmt = stmt.on_duplicate_key_update(
-            used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic
-        )
+        stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic)
         return [(stmt, upsert_params)]
 
     else:  # SQLite
