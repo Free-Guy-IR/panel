@@ -38,10 +38,6 @@
 </p>
 
 <p align="center">
- <a href="./README.md">
- 🇺🇸 English
- </a>
- /
  <a href="./README-fa.md">
  🇮🇷 فارسی
  </a>
@@ -136,27 +132,27 @@ PasarGuard is a user-friendly, feature-rich, and reliable proxy management tool.
 
 **TimescaleDB (Recommended):**
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
 
 **SQLite:**
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
 ```
 
 **MySQL:**
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
 ```
 
 **MariaDB:**
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
 ```
 
 **PostgreSQL:**
 ```bash
-sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql --pre-release
+sudo bash -c "$(curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
 ```
 
 ### 📋 After installation:
