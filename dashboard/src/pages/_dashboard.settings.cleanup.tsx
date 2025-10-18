@@ -113,7 +113,7 @@ export default function CleanupSettings() {
 
   const usageDataTables = [
     { value: 'node_user_usages', label: t('settings.cleanup.clearUsageData.tables.nodeUserUsages') },
-    { value: 'user_usages', label: t('settings.cleanup.clearUsageData.tables.userUsages') },
+    { value: 'node_usages', label: t('settings.cleanup.clearUsageData.tables.nodeUsages') },
   ]
 
   const handleDeleteExpired = async () => {

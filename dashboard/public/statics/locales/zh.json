@@ -377,7 +377,7 @@
         "warning": "警告：此操作将永久删除所选表中的所有使用数据。此操作无法撤销。",
         "tables": {
           "nodeUserUsages": "节点用户使用情况",
-          "userUsages": "用户使用情况"
+          "nodeUsages": "节点使用情况"
         }
       }
     },

@@ -396,7 +396,7 @@
         "warning": "Warning: This will permanently delete all usage data from the selected table. This action cannot be undone.",
         "tables": {
           "nodeUserUsages": "Node User Usages",
-          "userUsages": "User Usages"
+          "nodeUsages": "Node Usages"
         }
       }
     },
