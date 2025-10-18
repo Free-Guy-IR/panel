@@ -532,6 +532,18 @@
   "header.logout": "خروج",
   "header.nodeSettings": "تنظیمات گره‌ها",
   "header.nodesUsage": "نمودار گره‌ها",
+  "arrayInput": {
+    "addPlaceholder": "تایپ کنید و Enter بزنید تا اضافه شود...",
+    "addButton": "افزودن",
+    "items": "آیتم‌ها",
+    "noItems": "هنوز آیتمی اضافه نشده. در بالا تایپ کنید و Enter بزنید.",
+    "duplicateError": "این آیتم قبلاً وجود دارد",
+    "editItem": "ویرایش آیتم",
+    "removeItem": "حذف آیتم",
+    "saveEdit": "ذخیره ویرایش",
+    "cancelEdit": "لغو ویرایش",
+    "clickToEdit": "برای ویرایش کلیک کنید"
+  },
   "hostsDialog": {
     "addHost": "افزودن هاست",
     "loading": "در حال بارگذاری...",

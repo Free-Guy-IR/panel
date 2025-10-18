@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { getHosts, getInbounds, UserStatus } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
-import { Cable, ChevronsLeftRightEllipsis, GlobeLock, Info, Lock, Network, Plus, Trash2, X } from 'lucide-react'
+import { Cable, Check, ChevronsLeftRightEllipsis, Edit, GlobeLock, Info, Lock, Network, Plus, Trash2, X } from 'lucide-react'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -149,20 +149,44 @@ interface ArrayInputProps {
 const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoContent }) => {
   const [inputValue, setInputValue] = useState('')
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editingValue, setEditingValue] = useState('')
+  const { t } = useTranslation()
+  const dir = useDirDetection()
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault()
       addItem()
+    } else if (e.key === 'Escape') {
+      setInputValue('')
+      setIsPopoverOpen(false)
+    }
+  }
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter' && editingValue.trim()) {
+      e.preventDefault()
+      saveEdit(index)
+    } else if (e.key === 'Escape') {
+      cancelEdit()
     }
   }
 
   const addItem = () => {
     if (inputValue.trim()) {
       const currentValue = field.value || []
-      const newValue = [...currentValue, inputValue.trim()]
-      field.onChange(newValue)
-      setInputValue('')
+      const trimmedValue = inputValue.trim()
+
+      // Prevent duplicates
+      if (!currentValue.includes(trimmedValue)) {
+        const newValue = [...currentValue, trimmedValue]
+        field.onChange(newValue)
+        setInputValue('')
+      } else {
+        // Show visual feedback for duplicate
+        toast.error(t('arrayInput.duplicateError'))
+      }
     }
   }
 
@@ -170,13 +194,46 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
     const currentValue = field.value || []
     const newValue = currentValue.filter((_: any, i: number) => i !== index)
     field.onChange(newValue)
+    setEditingIndex(null)
+    setEditingValue('')
   }
+
+  const startEdit = (index: number, currentValue: string) => {
+    setEditingIndex(index)
+    setEditingValue(currentValue)
+  }
+
+  const saveEdit = (index: number) => {
+    if (editingValue.trim()) {
+      const currentValue = field.value || []
+      const trimmedValue = editingValue.trim()
+
+      // Check for duplicates (excluding the current item being edited)
+      const isDuplicate = currentValue.some((item: string, i: number) => i !== index && item === trimmedValue)
+
+      if (!isDuplicate) {
+        const newValue = [...currentValue]
+        newValue[index] = trimmedValue
+        field.onChange(newValue)
+        setEditingIndex(null)
+        setEditingValue('')
+      } else {
+        toast.error(t('arrayInput.duplicateError'))
+      }
+    }
+  }
+
+  const cancelEdit = () => {
+    setEditingIndex(null)
+    setEditingValue('')
+  }
+
 
   const displayValue = field.value && field.value.length > 0 ? (field.value.length <= 3 ? field.value.join(', ') : `${field.value.slice(0, 3).join(', ')}... (+${field.value.length - 3} more)`) : ''
 
   return (
     <FormItem>
-      <div className="flex items-center gap-2">
+      <div dir='ltr' className="flex items-center gap-2">
         <FormLabel>{label}</FormLabel>
         {infoContent && (
           <Popover>
@@ -191,33 +248,166 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
           </Popover>
         )}
       </div>
-      <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+      <Popover open={isPopoverOpen} onOpenChange={(open) => {
+        // Only close if we're not in edit mode
+        if (!open && editingIndex === null) {
+          setIsPopoverOpen(false)
+        } else if (open) {
+          setIsPopoverOpen(true)
+        }
+      }}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" className="xs:max-w-[240px] h-auto w-full min-w-[200px] max-w-[200px] p-2 text-left sm:max-w-xs md:max-w-sm lg:max-w-md" title={displayValue}>
-            <span className={`truncate ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>{displayValue || placeholder}</span>
+          <Button
+            variant="outline"
+            role="combobox"
+            className="h-auto w-full min-w-0 p-2 text-left"
+            title={displayValue || placeholder}
+          >
+            <span className={`truncate flex-1 ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>{displayValue || placeholder}</span>
+            <div className="ml-2 flex items-center gap-1 shrink-0">
+              {field.value && field.value.length > 0 && (
+                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                  {field.value.length}
+                </Badge>
+              )}
+              <ChevronsLeftRightEllipsis className="h-3 w-3 text-muted-foreground" />
+            </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="xs:max-w-[320px] w-full max-w-[280px] p-1 sm:max-w-xs md:max-w-sm lg:max-w-md" align="start">
-          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        <PopoverContent className="w-[min(90vw,400px)] p-3" align={dir === 'rtl' ? 'end' : 'start'} side="bottom" dir={dir}>
+          <div className="max-h-64 space-y-3 overflow-y-auto">
             {/* Input for adding new items with submit button */}
-            <div className="flex items-center gap-2">
-              <Input placeholder="Type and press Enter to add..." value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={handleKeyDown} className="flex-1 text-sm" />
-              <Button type="button" size="sm" variant="default" onClick={addItem} disabled={!inputValue.trim()} className="h-8 shrink-0 px-3 py-1">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center m-1.5">
+              <Input
+                placeholder={t('arrayInput.addPlaceholder')}
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1 text-sm min-w-0"
+                autoFocus={isPopoverOpen}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                onClick={addItem}
+                disabled={!inputValue.trim()}
+                className="h-8 shrink-0 px-3 py-1 w-full sm:w-auto"
+                title={t('arrayInput.addButton')}
+              >
                 <Plus className="h-4 w-4" />
+                <span className="ml-1 sm:hidden">{t('arrayInput.addButton')}</span>
               </Button>
             </div>
 
+
             {/* Selected items list */}
             {field.value && field.value.length > 0 && (
-              <div className="space-y-1">
-                {field.value.map((item: string, index: number) => (
-                  <div key={index} className="xs:p-2 flex cursor-pointer items-center gap-2 rounded-sm p-1.5 hover:bg-accent" onClick={() => removeItem(index)}>
-                    <div className="flex h-4 w-4 items-center justify-center rounded-sm border border-primary bg-primary">
-                      <X className="h-3 w-3 text-primary-foreground" />
+              <div dir='ltr' className="space-y-2">
+                <div dir={dir} className="text-xs font-medium text-muted-foreground">{t('arrayInput.items')} ({field.value.length})</div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {field.value.map((item: string, index: number) => (
+                    <div key={index} className="group flex items-center gap-2 rounded-md border p-2 hover:bg-accent/50 transition-colors min-w-0" onClick={(e) => e.stopPropagation()}>
+                      {editingIndex === index ? (
+                        <Input
+                          value={editingValue}
+                          onChange={e => setEditingValue(e.target.value)}
+                          onKeyDown={e => handleEditKeyDown(e, index)}
+                          className="flex-1 text-sm h-7 min-w-0"
+                          autoFocus
+                          onBlur={(e) => {
+                            // Only save if the blur is not caused by clicking a button
+                            if (!e.relatedTarget || !e.relatedTarget.closest('button')) {
+                              saveEdit(index)
+                            }
+                          }}
+                          dir="ltr"
+                        />
+                      ) : (
+                        <span
+                          className="flex-1 text-sm leading-tight cursor-text hover:text-primary transition-colors truncate min-w-0"
+                          onClick={() => startEdit(index, item)}
+                          title={t('arrayInput.clickToEdit')}
+                        >
+                          {item}
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {editingIndex === index ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                saveEdit(index)
+                              }}
+                              className="h-6 w-6 p-0 transition-all duration-200 hover:scale-105"
+                              title={t('arrayInput.saveEdit')}
+                              disabled={!editingValue.trim()}
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                cancelEdit()
+                              }}
+                              className="h-6 w-6 p-0 transition-all duration-200 hover:scale-105"
+                              title={t('arrayInput.cancelEdit')}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                startEdit(index, item)
+                              }}
+                              className="h-6 w-6 p-0 transition-all duration-200 hover:scale-105"
+                              title={t('arrayInput.editItem')}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                removeItem(index)
+                              }}
+                              className="h-6 w-6 p-0 transition-all duration-200 hover:scale-105"
+                              title={t('arrayInput.removeItem')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <span className="xs:text-sm flex-1 text-xs leading-tight">{item}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(!field.value || field.value.length === 0) && (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {t('arrayInput.noItems')}
               </div>
             )}
           </div>

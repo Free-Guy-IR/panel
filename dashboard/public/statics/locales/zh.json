@@ -884,6 +884,18 @@
   "statistics.selectTimeRange": "选择时间范围",
   "statistics.selectTimeRangeDescription": "选择用于历史数据分析的时间段",
   "statistics.selectTimeRangeToView": "请选择一个时间范围来查看历史数据",
+  "arrayInput": {
+    "addPlaceholder": "输入并按回车键添加...",
+    "addButton": "添加",
+    "items": "项目",
+    "noItems": "尚未添加项目。请在上方输入并按回车键。",
+    "duplicateError": "此项目已存在",
+    "editItem": "编辑项目",
+    "removeItem": "删除项目",
+    "saveEdit": "保存编辑",
+    "cancelEdit": "取消编辑",
+    "clickToEdit": "点击编辑"
+  },
   "hostsDialog": {
     "addHost": "添加主机",
     "selectInbound": "选择入站",

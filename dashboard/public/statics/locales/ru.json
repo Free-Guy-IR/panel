@@ -838,6 +838,18 @@
   "statistics.ramUsage": "Использование RAM",
   "statistics.cpuUsage": "Использование CPU",
   "statistics.cores": "ядер",
+  "arrayInput": {
+    "addPlaceholder": "Введите и нажмите Enter для добавления...",
+    "addButton": "Добавить",
+    "items": "Элементы",
+    "noItems": "Элементы еще не добавлены. Введите выше и нажмите Enter.",
+    "duplicateError": "Этот элемент уже существует",
+    "editItem": "Редактировать элемент",
+    "removeItem": "Удалить элемент",
+    "saveEdit": "Сохранить изменения",
+    "cancelEdit": "Отменить редактирование",
+    "clickToEdit": "Нажмите для редактирования"
+  },
   "hostsDialog": {
     "addHost": "Добавить хост",
     "selectInbound": "Выберите входящий",

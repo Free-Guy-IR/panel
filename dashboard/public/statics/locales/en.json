@@ -653,6 +653,18 @@
       "createFirstUser": "Create your first user"
     }
   },
+  "arrayInput": {
+    "addPlaceholder": "Type and press Enter to add...",
+    "addButton": "Add",
+    "items": "Items",
+    "noItems": "No items added yet. Type above and press Enter to add.",
+    "duplicateError": "This item already exists",
+    "editItem": "Edit item",
+    "removeItem": "Remove item",
+    "saveEdit": "Save edit",
+    "cancelEdit": "Cancel edit",
+    "clickToEdit": "Click to edit"
+  },
   "hostsDialog": {
     "addHost": "Create Host",
     "selectInbound": "Select an inbound",
