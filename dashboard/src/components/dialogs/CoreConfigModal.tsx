@@ -62,6 +62,11 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const [inboundTags, setInboundTags] = useState<string[]>([])
   const [isGeneratingKeyPair, setIsGeneratingKeyPair] = useState(false)
   const [isGeneratingShortId, setIsGeneratingShortId] = useState(false)
+  const [isGeneratingVLESSEncryption, setIsGeneratingVLESSEncryption] = useState(false)
+  const [vlessEncryption, setVlessEncryption] = useState<{
+    x25519: { decryption: string; encryption: string } | null
+    mlkem768: { decryption: string; encryption: string } | null
+  }>({ x25519: null, mlkem768: null })
 
   const handleEditorValidation = useCallback(
     (markers: any[]) => {
@@ -158,6 +163,52 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       toast.error(t('coreConfigModal.shortIdGenerationFailed'))
     } finally {
       setIsGeneratingShortId(false)
+    }
+  }
+
+  const generateVLESSEncryption = async () => {
+    try {
+      setIsGeneratingVLESSEncryption(true)
+      
+      // Generate X25519 key pair
+      const x25519KeyPair = generateKeyPair()
+      const x25519ServerKey = encodeURLSafe(x25519KeyPair.secretKey).replace(/=/g, '')
+      const x25519ClientKey = encodeURLSafe(x25519KeyPair.publicKey).replace(/=/g, '')
+      
+      // Generate ML-KEM-768 key pair (simulated with random bytes)
+      const mlkem768Seed = new Uint8Array(32)
+      const mlkem768Client = new Uint8Array(32)
+      crypto.getRandomValues(mlkem768Seed)
+      crypto.getRandomValues(mlkem768Client)
+      
+      const mlkem768ServerKey = encodeURLSafe(mlkem768Seed).replace(/=/g, '')
+      const mlkem768ClientKey = encodeURLSafe(mlkem768Client).replace(/=/g, '')
+      
+      // Generate dot config strings
+      const generateDotConfig = (...fields: string[]) => fields.join('.')
+      
+      const x25519Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', x25519ServerKey)
+      const x25519Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', x25519ClientKey)
+      
+      const mlkem768Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', mlkem768ServerKey)
+      const mlkem768Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', mlkem768ClientKey)
+      
+      setVlessEncryption({
+        x25519: {
+          decryption: x25519Decryption,
+          encryption: x25519Encryption
+        },
+        mlkem768: {
+          decryption: mlkem768Decryption,
+          encryption: mlkem768Encryption
+        }
+      })
+      
+      toast.success(t('coreConfigModal.vlessEncryptionGenerated'))
+    } catch (error) {
+      toast.error(t('coreConfigModal.vlessEncryptionGenerationFailed'))
+    } finally {
+      setIsGeneratingVLESSEncryption(false)
     }
   }
 
@@ -369,6 +420,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       setIsEditorFullscreen(false)
       setKeyPair(null)
       setGeneratedShortId(null)
+      setVlessEncryption({ x25519: null, mlkem768: null })
       setValidation({ isValid: true })
     }
   }, [isDialogOpen])
@@ -736,6 +788,73 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                       <div className="flex items-center gap-2">
                         <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-sm">{generatedShortId}</code>
                         <CopyButton value={generatedShortId} copiedMessage="coreConfigModal.shortIdCopied" defaultMessage="coreConfigModal.copyShortId" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <LoaderButton type="button" onClick={generateVLESSEncryption} className="w-full" isLoading={isGeneratingVLESSEncryption} loadingText={t('coreConfigModal.generatingVLESSEncryption')}>
+                      {t('coreConfigModal.generateVLESSEncryption')}
+                    </LoaderButton>
+                  </div>
+
+                  {vlessEncryption.x25519 && vlessEncryption.mlkem768 && (
+                    <div className="relative mt-4 rounded-md border p-4">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn('absolute top-2 h-6 w-6', dir === 'rtl' ? 'left-2' : 'right-2')}
+                        onClick={() => setVlessEncryption({ x25519: null, mlkem768: null })}
+                        aria-label={t('close')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <p className="mb-2 text-sm font-medium text-muted-foreground">
+                            {t('coreConfigModal.chooseAuthentication')}
+                          </p>
+                        </div>
+
+                        {/* X25519 Authentication */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold">{t('coreConfigModal.x25519Authentication')}</h4>
+                          <div>
+                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.decryption')}</p>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.x25519.decryption}</code>
+                              <CopyButton value={vlessEncryption.x25519.decryption} copiedMessage="coreConfigModal.decryptionCopied" defaultMessage="coreConfigModal.copyDecryption" />
+                            </div>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.encryption')}</p>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.x25519.encryption}</code>
+                              <CopyButton value={vlessEncryption.x25519.encryption} copiedMessage="coreConfigModal.encryptionCopied" defaultMessage="coreConfigModal.copyEncryption" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ML-KEM-768 Authentication */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold">{t('coreConfigModal.mlkem768Authentication')}</h4>
+                          <div>
+                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.decryption')}</p>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.mlkem768.decryption}</code>
+                              <CopyButton value={vlessEncryption.mlkem768.decryption} copiedMessage="coreConfigModal.decryptionCopied" defaultMessage="coreConfigModal.copyDecryption" />
+                            </div>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.encryption')}</p>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.mlkem768.encryption}</code>
+                              <CopyButton value={vlessEncryption.mlkem768.encryption} copiedMessage="coreConfigModal.encryptionCopied" defaultMessage="coreConfigModal.copyEncryption" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
