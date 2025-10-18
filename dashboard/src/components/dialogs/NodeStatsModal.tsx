@@ -1,9 +1,10 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Card, CardContent } from '../ui/card'
 import { Badge } from '../ui/badge'
+import { Button } from '../ui/button'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '@/utils/formatByte'
-import { Upload, Download, Calendar, Activity } from 'lucide-react'
+import { Upload, Download, Calendar, Activity, ChevronLeft, ChevronRight } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import useDirDetection from '@/hooks/use-dir-detection'
 
@@ -13,9 +14,12 @@ interface NodeStatsModalProps {
     data: any
     chartConfig: any
     period: string
+    allChartData?: any[]
+    currentIndex?: number
+    onNavigate?: (index: number) => void
 }
 
-const NodeStatsModal = ({ open, onClose, data, chartConfig, period }: NodeStatsModalProps) => {
+const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData = [], currentIndex = 0, onNavigate }: NodeStatsModalProps) => {
     const { t, i18n } = useTranslation()
     const dir = useDirDetection()
 
@@ -115,6 +119,23 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period }: NodeStatsM
 
     const isRTL = dir === 'rtl'
 
+    // Navigation logic
+    const hasNavigation = allChartData.length > 1
+    const canGoPrevious = hasNavigation && currentIndex > 0
+    const canGoNext = hasNavigation && currentIndex < allChartData.length - 1
+
+    const handlePrevious = () => {
+        if (canGoPrevious && onNavigate) {
+            onNavigate(currentIndex - 1)
+        }
+    }
+
+    const handleNext = () => {
+        if (canGoNext && onNavigate) {
+            onNavigate(currentIndex + 1)
+        }
+    }
+
     // Calculate total usage
     const totalUsage = Object.keys(data)
         .reduce((sum, key) => {
@@ -138,10 +159,37 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period }: NodeStatsM
         <Dialog open={open} onOpenChange={onClose}>
             <DialogContent className="max-w-md sm:max-w-lg md:max-w-xl" dir={dir}>
                 <DialogHeader>
-                    <DialogTitle className={`flex items-center gap-2 text-sm sm:text-base`}>
-                        <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
-                        {t('statistics.nodeStats', { defaultValue: 'Node Statistics' })}
-                    </DialogTitle>
+                    <div className="flex flex-col items-center gap-3">
+                        <DialogTitle className={`flex items-center gap-2 text-sm sm:text-base`}>
+                            <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
+                            {t('statistics.nodeStats', { defaultValue: 'Node Statistics' })}
+                        </DialogTitle>
+                        {hasNavigation && (
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handlePrevious}
+                                    disabled={!canGoPrevious}
+                                    className="h-8 w-8 p-0"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <span className="text-sm text-muted-foreground min-w-[60px] text-center font-medium">
+                                    {currentIndex + 1} / {allChartData.length}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleNext}
+                                    disabled={!canGoNext}
+                                    className="h-8 w-8 p-0"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </DialogHeader>
 
                 <Card className="border-none shadow-none">

@@ -220,11 +220,20 @@ export function AllNodesStackedBarChart() {
   const [totalUsage, setTotalUsage] = useState('0')
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedData, setSelectedData] = useState<any>(null)
+  const [currentDataIndex, setCurrentDataIndex] = useState(0)
 
   const { t } = useTranslation()
   const dir = useDirDetection()
   const { data: nodesData } = useGetNodes(undefined, { query: { enabled: true } })
   const { resolvedTheme } = useTheme()
+
+  // Navigation handler for modal
+  const handleModalNavigate = (index: number) => {
+    if (chartData && chartData[index]) {
+      setCurrentDataIndex(index)
+      setSelectedData(chartData[index])
+    }
+  }
 
   // Build color palette for nodes
   const nodeList: NodeResponse[] = useMemo(() => (Array.isArray(nodesData) ? nodesData : []), [nodesData])
@@ -585,7 +594,7 @@ export function AllNodesStackedBarChart() {
                   data={chartData}
                   margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                   onClick={(data) => {
-                    if (data && data.activePayload && data.activePayload.length > 0) {
+                    if (data && data.activePayload && data.activePayload.length > 0 && chartData) {
                       const clickedData = data.activePayload[0].payload
                       const activeNodesCount = Object.keys(clickedData).filter(key =>
                         !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0
@@ -593,6 +602,9 @@ export function AllNodesStackedBarChart() {
                       // Open modal if there are more nodes than shown in tooltip
                       const maxShown = window.innerWidth < 768 ? 3 : 6
                       if (activeNodesCount > maxShown) {
+                        // Find the index of the clicked data point
+                        const clickedIndex = chartData.findIndex(item => item._period_start === clickedData._period_start)
+                        setCurrentDataIndex(clickedIndex >= 0 ? clickedIndex : 0)
                         setSelectedData(clickedData)
                         setModalOpen(true)
                       }
@@ -664,6 +676,9 @@ export function AllNodesStackedBarChart() {
       data={selectedData}
       chartConfig={chartConfig}
       period={getPeriodFromDateRange(dateRange)}
+      allChartData={chartData || []}
+      currentIndex={currentDataIndex}
+      onNavigate={handleModalNavigate}
     />
     </>
   )
