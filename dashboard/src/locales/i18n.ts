@@ -21,7 +21,7 @@ i18n
       },
       load: 'languageOnly',
       detection: {
-        caches: ['localStorage', 'sessionStorage'],
+        caches: ['localStorage'],
       },
       backend: {
         loadPath: joinURL(import.meta.env.BASE_URL, `statics/locales/{{lng}}.json`),
