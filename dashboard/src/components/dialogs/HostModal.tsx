@@ -263,7 +263,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
             className="h-auto w-full min-w-0 p-2 text-left"
             title={displayValue || placeholder}
           >
-            <span className={`truncate flex-1 ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>{displayValue || placeholder}</span>
+            <span className={`truncate flex-1 max-w-[100px] sm:max-w-none ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`} title={displayValue || placeholder}>{displayValue || placeholder}</span>
             <div className="ml-2 flex items-center gap-1 shrink-0">
               {field.value && field.value.length > 0 && (
                 <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
@@ -482,6 +482,13 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
       const result: any = {}
       Object.entries(obj).forEach(([key, value]) => {
         const currentPath = [...path, key]
+        
+        // Always preserve priority field even if it's 0
+        if (key === 'priority') {
+          result[key] = value
+          return
+        }
+        
         if (value === null || value === undefined || value === '') return
 
         if (typeof value === 'object' && !Array.isArray(value)) {

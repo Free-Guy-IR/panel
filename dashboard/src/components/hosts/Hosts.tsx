@@ -492,7 +492,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
                 type: noise.type,
                 packet: noise.packet,
                 delay: noise.delay,
-                apply_to: noise.apply_to || 'ip',
+                apply_to: (noise.apply_to as 'ip' | 'ipv4' | 'ipv6') || 'ip',
               })) ?? undefined,
           }
         : undefined,
@@ -774,8 +774,21 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
         id: host.id as UniqueIdentifier,
       })) ?? []
 
-  // Sort hosts by priority (lower number = higher priority)
-  const sortedHosts = [...(hosts ?? [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+  // Sort hosts by priority (lower number = higher priority), then by ID for stable sorting
+  const sortedHosts = [...(hosts ?? [])].sort((a, b) => {
+    const priorityA = a.priority ?? 0
+    const priorityB = b.priority ?? 0
+    
+    // First sort by priority
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB
+    }
+    
+    // If priorities are the same, sort by ID for stable ordering
+    const idA = a.id ?? 0
+    const idB = b.id ?? 0
+    return idA - idB
+  })
 
   return (
     <div>

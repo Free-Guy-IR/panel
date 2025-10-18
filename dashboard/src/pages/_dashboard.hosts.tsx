@@ -47,7 +47,8 @@ export default function HostsPage() {
       // If creating a new host, set priority to max+1
       let priority = formData.priority
       if (!editingHost?.id && data && data.length > 0) {
-        const maxPriority = Math.max(...data.map(h => h.priority ?? 0))
+        const priorities = data.map(h => h.priority ?? 0)
+        const maxPriority = Math.max(...priorities)
         priority = maxPriority + 1
       }
 
