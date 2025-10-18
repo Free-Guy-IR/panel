@@ -52,7 +52,7 @@ const isDate = (v: unknown): v is Date => typeof v === 'object' && v !== null &&
 
 // Add template validation schema
 const templateUserSchema = z.object({
-  username: z.string().min(3).max(32),
+  username: z.string().min(3, 'validation.minLength').max(32, 'validation.maxLength'),
   note: z.string().optional(),
 })
 
@@ -785,6 +785,47 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         return true
       }
 
+      // Check for required fields in non-template mode
+      if (isSubmit) {
+        // Username validation
+        if (!currentValues.username || currentValues.username.length < 3) {
+          form.setError('username', {
+            type: 'manual',
+            message: t('validation.required', { field: t('username', { defaultValue: 'Username' }) }),
+          })
+          return false
+        }
+
+        // Groups validation (required for non-template mode)
+        if (!currentValues.group_ids || !Array.isArray(currentValues.group_ids) || currentValues.group_ids.length === 0) {
+          form.setError('group_ids', {
+            type: 'manual',
+            message: t('validation.required', { field: t('groups', { defaultValue: 'Groups' }) }),
+          })
+          return false
+        }
+
+        // Status validation
+        if (!currentValues.status) {
+          form.setError('status', {
+            type: 'manual',
+            message: t('validation.required', { field: t('status', { defaultValue: 'Status' }) }),
+          })
+          return false
+        }
+
+        // On hold specific validation
+        if (currentValues.status === 'on_hold') {
+          if (!currentValues.on_hold_expire_duration || currentValues.on_hold_expire_duration <= 0) {
+            form.setError('on_hold_expire_duration', {
+              type: 'manual',
+              message: t('validation.required', { field: t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration' }) }),
+            })
+            return false
+          }
+        }
+      }
+
       // Special case for Next Plan enabled - if Next Plan is enabled and no other fields are touched,
       // consider the form valid (Next Plan fields are optional)
       if (nextPlanEnabled && editingUser && !isSubmit) {
@@ -884,6 +925,12 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     async (values: UseFormValues | UseEditFormValues) => {
       if (!selectedTemplateId) return
 
+      // Validate template mode requirements
+      if (!values.username || values.username.length < 3) {
+        toast.error(t('validation.required', { field: t('username', { defaultValue: 'Username' }) }))
+        return
+      }
+
       setLoading(true)
       try {
         if (editingUser) {
@@ -943,6 +990,55 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
         // Regular create/edit flow
         if (!validateAllFields(values, touchedFields, true)) {
+          // Show toast for validation errors
+          const errors = form.formState.errors
+          const errorFields = Object.keys(errors)
+          
+          if (errorFields.length > 0) {
+            const firstError = errorFields[0]
+            let errorMessage = t('validation.formHasErrors', { defaultValue: 'Please fix the form errors before submitting' })
+            
+            // Try to get the specific error message
+            if (firstError === 'username' && errors.username?.message) {
+              errorMessage = errors.username.message
+            } else if (firstError === 'group_ids' && errors.group_ids?.message) {
+              errorMessage = errors.group_ids.message
+            } else if (firstError === 'status' && errors.status?.message) {
+              errorMessage = errors.status.message
+            } else if (firstError === 'on_hold_expire_duration' && errors.on_hold_expire_duration?.message) {
+              errorMessage = errors.on_hold_expire_duration.message
+            }
+            
+            toast.error(errorMessage)
+          } else {
+            // Check what's missing and show specific error
+            const missingFields = []
+            
+            if (!values.username || values.username.length < 3) {
+              missingFields.push(t('username', { defaultValue: 'Username' }))
+            }
+            
+            if (!values.group_ids || !Array.isArray(values.group_ids) || values.group_ids.length === 0) {
+              missingFields.push(t('groups', { defaultValue: 'Groups' }))
+            }
+            
+            if (!values.status) {
+              missingFields.push(t('status', { defaultValue: 'Status' }))
+            }
+            
+            if (values.status === 'on_hold' && (!values.on_hold_expire_duration || values.on_hold_expire_duration <= 0)) {
+              missingFields.push(t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration' }))
+            }
+            
+            if (missingFields.length > 0) {
+              toast.error(t('validation.missingFields', { 
+                fields: missingFields.join(', '), 
+                defaultValue: 'Please fill in the required fields: {{fields}}' 
+              }))
+            } else {
+              toast.error(t('validation.formInvalid', { defaultValue: 'Form is invalid. Please check all required fields.' }))
+            }
+          }
           return
         }
 
@@ -2045,7 +2141,56 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
               >
                 {t('cancel', { defaultValue: 'Cancel' })}
               </Button>
-              <LoaderButton type="submit" isLoading={loading} disabled={!isFormValid} loadingText={editingUser ? t('modifying') : t('creating')}>
+              <LoaderButton 
+                type="submit" 
+                isLoading={loading} 
+                disabled={!isFormValid} 
+                loadingText={editingUser ? t('modifying') : t('creating')}
+                onClick={(e) => {
+                  if (!isFormValid) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    
+                    // Check what's missing and show appropriate toast
+                    const currentValues = form.getValues()
+                    
+                    if (selectedTemplateId) {
+                      // Template mode - only username required
+                      if (!currentValues.username || currentValues.username.length < 3) {
+                        toast.error(t('validation.required', { field: t('username', { defaultValue: 'Username' }) }))
+                      }
+                    } else {
+                      // Regular mode - check required fields
+                      const missingFields = []
+                      
+                      if (!currentValues.username || currentValues.username.length < 3) {
+                        missingFields.push(t('username', { defaultValue: 'Username' }))
+                      }
+                      
+                      if (!currentValues.group_ids || !Array.isArray(currentValues.group_ids) || currentValues.group_ids.length === 0) {
+                        missingFields.push(t('groups', { defaultValue: 'Groups' }))
+                      }
+                      
+                      if (!currentValues.status) {
+                        missingFields.push(t('status', { defaultValue: 'Status' }))
+                      }
+                      
+                      if (currentValues.status === 'on_hold' && (!currentValues.on_hold_expire_duration || currentValues.on_hold_expire_duration <= 0)) {
+                        missingFields.push(t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration' }))
+                      }
+                      
+                      if (missingFields.length > 0) {
+                        toast.error(t('validation.missingFields', { 
+                          fields: missingFields.join(', '), 
+                          defaultValue: 'Please fill in the required fields: {{fields}}' 
+                        }))
+                      } else {
+                        toast.error(t('validation.formInvalid', { defaultValue: 'Form is invalid. Please check all fields.' }))
+                      }
+                    }
+                  }
+                }}
+              >
                 {editingUser ? t('modify', { defaultValue: 'Modify' }) : t('create', { defaultValue: 'Create' })}
               </LoaderButton>
             </div>

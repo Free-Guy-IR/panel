@@ -1367,7 +1367,12 @@
     "required": "{{field}} is required",
     "invalid_type": "{{field}} is required",
     "too_small": "{{field}} is too short",
-    "too_big": "{{field}} is too long"
+    "too_big": "{{field}} is too long",
+    "minLength": "String must contain at least 3 character(s)",
+    "maxLength": "String must contain at most 32 character(s)",
+    "formHasErrors": "Please fix the form errors before submitting",
+    "formInvalid": "Form is invalid. Please check all required fields.",
+    "missingFields": "Please fill in the required fields: {{fields}}"
   },
   "fields": {
     "username": "Username",

@@ -51,7 +51,7 @@ export const nextPlanModelSchema = z.object({
 })
 
 export const userCreateSchema = z.object({
-  username: z.string().min(3).max(32),
+  username: z.string().min(3, 'validation.minLength').max(32, 'validation.maxLength'),
   status: userStatusCreateEnum.optional(),
   group_ids: z.array(z.number()).min(1, { message: 'validation.required' }),
   data_limit: z.number().min(0),
@@ -79,7 +79,7 @@ export const userCreateSchema = z.object({
 })
 
 export const userEditSchema = z.object({
-  username: z.string().min(3).max(32),
+  username: z.string().min(3, 'validation.minLength').max(32, 'validation.maxLength'),
   status: userStatusEditEnum.optional(),
   group_ids: z.array(z.number()).min(1, { message: 'validation.required' }),
   data_limit: z.number().min(0),
