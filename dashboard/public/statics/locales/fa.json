@@ -1496,6 +1496,10 @@
   "statistics.totalUsage": "مصرف کل",
   "statistics.uplink": "ارسال",
   "statistics.downlink": "دریافت",
+  "statistics.nodeStats": "آمار گره‌ها",
+  "statistics.nodeStatsDescription": "آمار دقیق ترافیک هر گره در این بازه زمانی. روی میله‌های نمودار کلیک کنید تا جزئیات بیشتری ببینید.",
+  "statistics.clickForDetails": "برای جزئیات کلیک کنید",
+  "statistics.clickForMore": "برای جزئیات بیشتر کلیک کنید",
   "timeSelector.pickDate": "انتخاب تاریخ",
   "advanceSearch": {
     "title": "جستجوی پیشرفته",

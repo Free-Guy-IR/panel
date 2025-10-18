@@ -10,12 +10,13 @@ import { formatBytes } from '@/utils/formatByte'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TimeRangeSelector } from '@/components/common/TimeRangeSelector'
 import { EmptyState } from './EmptyState'
-import { TrendingUp, Upload, Download, Calendar } from 'lucide-react'
+import { TrendingUp, Upload, Download, Calendar, Info } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import { TooltipProps } from 'recharts'
 import { useGetNodes, NodeResponse } from '@/service/api'
 import { useTheme } from '@/components/theme-provider'
 import TimeSelector from './TimeSelector'
+import NodeStatsModal from '@/components/dialogs/NodeStatsModal'
 
 // Helper function to determine period (copied from CostumeBarChart)
 const getPeriodFromDateRange = (range?: DateRange): Period => {
@@ -32,6 +33,16 @@ const getPeriodFromDateRange = (range?: DateRange): Period => {
 
 function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipProps<any, any> & { chartConfig?: ChartConfig; dir: string; period?: string }) {
   const { t, i18n } = useTranslation()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768) // md breakpoint
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
   if (!active || !payload || !payload.length) return null
 
   const data = payload[0].payload
@@ -136,53 +147,64 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
 
   const isRTL = dir === 'rtl'
 
+  // Get active nodes with usage > 0, sorted by usage descending
+  const activeNodes = Object.keys(data)
+    .filter(key => !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (data[key] || 0) > 0)
+    .map(nodeName => ({
+      name: nodeName,
+      usage: data[nodeName] || 0,
+      uplink: data[`_uplink_${nodeName}`] || 0,
+      downlink: data[`_downlink_${nodeName}`] || 0
+    }))
+    .sort((a, b) => b.usage - a.usage)
+
+  // Determine how many nodes to show based on screen size
+  const maxNodesToShow = isMobile ? 3 : 6
+  const nodesToShow = activeNodes.slice(0, maxNodesToShow)
+  const hasMoreNodes = activeNodes.length > maxNodesToShow
+
   return (
-    <div className={`min-w-[140px] rounded border border-border bg-background p-2 text-[11px] shadow ${isRTL ? 'text-right' : 'text-left'}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className={`mb-1.5 text-[11px] font-semibold opacity-70 ${isRTL ? 'text-right' : 'text-center'}`}>
-        <span dir="ltr" className="inline-block">
+    <div className={`min-w-[120px] max-w-[280px] sm:min-w-[140px] sm:max-w-[300px] rounded border border-border bg-background p-1.5 sm:p-2 text-[10px] sm:text-xs shadow ${isRTL ? 'text-right' : 'text-left'} ${isMobile ? 'max-h-[200px] overflow-y-auto' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className={`mb-1 text-[10px] sm:text-xs font-semibold opacity-70 text-center`}>
+        <span dir="ltr" className="inline-block truncate">
           {formattedDate}
         </span>
       </div>
-      <div className={`mb-1.5 text-[11px] text-muted-foreground ${isRTL ? 'text-right' : 'text-center'}`}>
+      <div className={`mb-1.5 text-[10px] flex items-center justify-center gap-1.5 sm:text-xs text-muted-foreground text-center`}>
         <span>{t('statistics.totalUsage', { defaultValue: 'Total' })}: </span>
-        <span dir="ltr" className="inline-block font-mono">
-          {Object.keys(data)
-            .reduce((sum, key) => {
-              if (key.startsWith('_uplink_') || key.startsWith('_downlink_') || key === 'time' || key === '_period_start') return sum
-              return sum + (data[key] || 0)
-            }, 0)
-            .toFixed(2)}{' '}
+        <span dir="ltr" className="inline-block font-mono truncate">
+          {nodesToShow
+            .reduce((sum, node) => sum + node.usage, 0)
+            .toFixed(2)}
           GB
         </span>
       </div>
-      <div className={`grid gap-1 ${Object.keys(data).filter(key => !key.startsWith('_') && key !== 'time' && key !== '_period_start').length > 6 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        {Object.keys(data).map(key => {
-          if (key.startsWith('_uplink_') || key.startsWith('_downlink_') || key === 'time' || key === '_period_start') return null
-          const nodeName = key
-          const uplinkKey = `_uplink_${nodeName}`
-          const downlinkKey = `_downlink_${nodeName}`
-          const usage = data[key] || 0
-          if (usage === 0) return null
-          return (
-            <div key={nodeName} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
-              <span className={`flex items-center gap-1 text-[11px] font-semibold ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: getNodeColor(nodeName) }} />
-                <span>{nodeName}</span>
+      <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {nodesToShow.map(node => (
+          <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
+            <span className={`flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: getNodeColor(node.name) }} />
+              <span className="truncate max-w-[60px] sm:max-w-[80px] overflow-hidden text-ellipsis" title={node.name}>{node.name}</span>
+            </span>
+            <span className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+              <Upload className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+              <span dir="ltr" className="inline-block font-mono truncate max-w-[40px] sm:max-w-[50px] overflow-hidden text-ellipsis" title={String(formatBytes(node.uplink))}>
+                {formatBytes(node.uplink)}
               </span>
-              <span className={`flex items-center gap-1 text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-                <Upload className="h-3 w-3 flex-shrink-0" />
-                <span dir="ltr" className="inline-block font-mono">
-                  {formatBytes(data[uplinkKey] || 0)}
-                </span>
-                <span className={`opacity-60 ${isRTL ? 'mx-1' : 'mx-1'}`}>|</span>
-                <Download className="h-3 w-3 flex-shrink-0" />
-                <span dir="ltr" className="inline-block font-mono">
-                  {formatBytes(data[downlinkKey] || 0)}
-                </span>
+              <span className={`opacity-60 ${isRTL ? 'mx-0.5' : 'mx-0.5'} text-[8px] sm:text-[10px]`}>|</span>
+              <Download className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+              <span dir="ltr" className="inline-block font-mono truncate max-w-[40px] sm:max-w-[50px] overflow-hidden text-ellipsis" title={String(formatBytes(node.downlink))}>
+                {formatBytes(node.downlink)}
               </span>
-            </div>
-          )
-        })}
+            </span>
+          </div>
+        ))}
+        {hasMoreNodes && (
+          <div className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 ${isRTL ? 'flex-row-reverse justify-end' : 'flex-row justify-center'} col-span-full`}>
+            <Info className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+            <span className="truncate max-w-[100px] overflow-hidden text-ellipsis">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -196,6 +218,8 @@ export function AllNodesStackedBarChart() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [totalUsage, setTotalUsage] = useState('0')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedData, setSelectedData] = useState<any>(null)
 
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -490,7 +514,8 @@ export function AllNodesStackedBarChart() {
   }, [selectedTime, showCustomRange])
 
   return (
-    <Card>
+    <>
+      <Card>
       <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
         <div className="flex flex-1 flex-col gap-1 border-b px-6 py-6 sm:flex-row sm:py-6">
           <div className="flex flex-1 flex-col justify-center gap-1 px-1 py-1 align-middle">
@@ -555,7 +580,25 @@ export function AllNodesStackedBarChart() {
               }}
             >
               {chartData && chartData.length > 0 ? (
-                <BarChart accessibilityLayer data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                <BarChart
+                  accessibilityLayer
+                  data={chartData}
+                  margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+                  onClick={(data) => {
+                    if (data && data.activePayload && data.activePayload.length > 0) {
+                      const clickedData = data.activePayload[0].payload
+                      const activeNodesCount = Object.keys(clickedData).filter(key =>
+                        !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0
+                      ).length
+                      // Open modal if there are more nodes than shown in tooltip
+                      const maxShown = window.innerWidth < 768 ? 3 : 6
+                      if (activeNodesCount > maxShown) {
+                        setSelectedData(clickedData)
+                        setModalOpen(true)
+                      }
+                    }
+                  }}
+                >
                   <CartesianGrid direction={'ltr'} vertical={false} />
                   <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} minTickGap={5} />
                   <YAxis
@@ -580,6 +623,7 @@ export function AllNodesStackedBarChart() {
                       stackId="a"
                       fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
                       radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                      cursor="pointer"
                     />
                   ))}
                 </BarChart>
@@ -612,5 +656,15 @@ export function AllNodesStackedBarChart() {
         )}
       </CardContent>
     </Card>
+
+    {/* Node Stats Modal */}
+    <NodeStatsModal
+      open={modalOpen}
+      onClose={() => setModalOpen(false)}
+      data={selectedData}
+      chartConfig={chartConfig}
+      period={getPeriodFromDateRange(dateRange)}
+    />
+    </>
   )
 }
