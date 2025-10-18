@@ -207,10 +207,8 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     } else if (periodOption.hours) {
       start = now.subtract(periodOption.hours, 'hour')
     } else if (periodOption.days) {
-      // For day periods, start from the beginning of the day
-      // For 7d, subtract 6 days; for 3d, subtract 2 days; for 1d, start from today
       const daysToSubtract = periodOption.days === 7 ? 6 : periodOption.days === 3 ? 2 : periodOption.days === 1 ? 0 : periodOption.days
-      start = now.subtract(daysToSubtract, 'day').startOf('day')
+      start = now.subtract(daysToSubtract, 'day').utc().startOf('day')
     } else {
       start = now
     }
