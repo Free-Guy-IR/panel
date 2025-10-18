@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import { cn } from '@/lib/utils'
+import { getAuthToken } from '@/utils/authStorage'
 
 const DONATION_STORAGE_KEY = 'donation_popup_data'
 const DAYS_BETWEEN_SHOWS = 3
@@ -106,6 +107,11 @@ export default function DonationPopup() {
   const { t } = useTranslation()
   const [isVisible, setIsVisible] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
+
+  // Don't show popup if user is not authenticated
+  if (!getAuthToken()) {
+    return null
+  }
 
   useEffect(() => {
     const checkShouldShow = () => {
