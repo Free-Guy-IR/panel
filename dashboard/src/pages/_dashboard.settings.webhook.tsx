@@ -25,7 +25,7 @@ const webhookSettingsSchema = z.object({
       }),
     )
     .default([]),
-  days_left: z.array(z.number().min(1).max(365)).default([]),
+  days_left: z.array(z.number().min(0).max(365)).default([]),
   usage_percent: z.array(z.number().min(1).max(100)).default([]),
   timeout: z.number().min(1).max(300).default(30),
   recurrent: z.number().min(1).max(24).default(3),
@@ -387,7 +387,7 @@ export default function WebhookSettings() {
                           render={({ field }) => (
                             <FormItem>
                               <FormControl>
-                                <Input type="number" min="1" max="365" className="h-8 w-16 text-xs" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 1)} />
+                                <Input type="number" min="0" max="365" className="h-8 w-16 text-xs" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 0)} />
                               </FormControl>
                             </FormItem>
                           )}
