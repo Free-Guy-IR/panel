@@ -43,6 +43,7 @@ import {
 import * as React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {useNavigate} from "react-router";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const isRTL = useDirDetection() === 'rtl'
@@ -55,6 +56,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const touchEndX = useRef<number | null>(null)
   const minSwipeDistance = 50
   const edgeThreshold = 50 // Distance from edge to detect edge swipe
+  const navigate = useNavigate()
 
   const handleTouchStart = (e: TouchEvent) => {
     touchEndX.current = null
@@ -309,7 +311,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             alt="PasarGuard Logo"
             className="h-8 w-8 object-contain"
           />
-          <span dir={isRTL ? 'rtl' : 'ltr'} className="text-sm font-bold">
+          <span dir={isRTL ? 'rtl' : 'ltr'} className="text-sm font-bold" onClick={() => navigate('/')}>
             {t('pasarguard')}
           </span>
         </div>
