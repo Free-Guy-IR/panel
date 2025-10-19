@@ -86,15 +86,22 @@ class HostManager:
         await db.commit()
 
         prepared_hosts = []
+        hosts_to_remove = []
         for host in serialized_hosts:
             result = await self._prepare_host_entry(db, host, inbounds_list)
             if result:
                 prepared_hosts.append(result)
+            else:
+                hosts_to_remove.append(host.id)
 
         # Acquire lock only for updating the dict and cache
         async with self._lock:
             for host_id, host_data in prepared_hosts:
                 self._hosts[host_id] = host_data
+
+            for host_id in hosts_to_remove:
+                self._hosts.pop(host_id, None)
+
             await self._reset_cache()
 
     async def remove_host(self, id: int):
