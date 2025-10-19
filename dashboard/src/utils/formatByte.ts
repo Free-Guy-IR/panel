@@ -1,9 +1,21 @@
-export function formatBytes(bytes: number, decimals = 2, size: boolean = true, asArray = false) {
+export function formatBytes(
+    bytes: number,
+    decimals = 2,
+    size: boolean = true,
+    asArray = false,
+    forceUnit?: 'B' | 'KB' | 'MB' | 'GB' | 'TB' | 'PB' | 'EB' | 'ZB' | 'YB') {
   if (!+bytes) return size ? '0 B' : '0'
 
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+
+    if (forceUnit && sizes.includes(forceUnit)) {
+        const i = sizes.indexOf(forceUnit)
+        const value = parseFloat((bytes / Math.pow(k, i)).toFixed(dm))
+        if (asArray) return [value, forceUnit]
+        return size ? `${value} ${forceUnit}` : `${value}`
+    }
 
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   const value = parseFloat((bytes / Math.pow(k, i)).toFixed(dm))
