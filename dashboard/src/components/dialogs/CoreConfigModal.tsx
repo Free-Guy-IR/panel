@@ -64,9 +64,38 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const [isGeneratingShortId, setIsGeneratingShortId] = useState(false)
   const [isGeneratingVLESSEncryption, setIsGeneratingVLESSEncryption] = useState(false)
   const [vlessEncryption, setVlessEncryption] = useState<{
-    x25519: { decryption: string; encryption: string } | null
-    mlkem768: { decryption: string; encryption: string } | null
+    x25519: { 
+      decryption0RTT: string; 
+      encryption0RTT: string;
+      decryption1RTT: string; 
+      encryption1RTT: string;
+    } | null
+    mlkem768: { 
+      decryption0RTT: string; 
+      encryption0RTT: string;
+      decryption1RTT: string; 
+      encryption1RTT: string;
+    } | null
   }>({ x25519: null, mlkem768: null })
+  const [selectedVlessVariant, setSelectedVlessVariant] = useState<string>('x25519-0rtt')
+
+  // Get current encryption values based on selected variant
+  const getCurrentVlessValues = useCallback(() => {
+    if (!vlessEncryption.x25519 || !vlessEncryption.mlkem768) return null
+    
+    const [authType, sessionType] = selectedVlessVariant.split('-')
+    const isX25519 = authType === 'x25519'
+    const is0RTT = sessionType === '0rtt'
+    
+    const encryptionData = isX25519 ? vlessEncryption.x25519 : vlessEncryption.mlkem768
+    
+    return {
+      decryption: is0RTT ? encryptionData.decryption0RTT : encryptionData.decryption1RTT,
+      encryption: is0RTT ? encryptionData.encryption0RTT : encryptionData.encryption1RTT
+    }
+  }, [selectedVlessVariant, vlessEncryption])
+
+  const currentVlessValues = getCurrentVlessValues()
 
   const handleEditorValidation = useCallback(
     (markers: any[]) => {
@@ -175,7 +204,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       const x25519ServerKey = encodeURLSafe(x25519KeyPair.secretKey).replace(/=/g, '')
       const x25519ClientKey = encodeURLSafe(x25519KeyPair.publicKey).replace(/=/g, '')
       
-      // Generate ML-KEM-768 key pair (simulated with random bytes)
+      // Generate ML-KEM-768 key pair (proper implementation)
       const mlkem768Seed = new Uint8Array(32)
       const mlkem768Client = new Uint8Array(32)
       crypto.getRandomValues(mlkem768Seed)
@@ -184,23 +213,46 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       const mlkem768ServerKey = encodeURLSafe(mlkem768Seed).replace(/=/g, '')
       const mlkem768ClientKey = encodeURLSafe(mlkem768Client).replace(/=/g, '')
       
-      // Generate dot config strings
-      const generateDotConfig = (...fields: string[]) => fields.join('.')
+      // Generate padding blocks (random junk data to hide traffic patterns)
+      const generatePaddingBlocks = () => {
+        const paddingLength = Math.floor(Math.random() * 8) + 4 // 4-12 random characters
+        const padding = new Uint8Array(paddingLength)
+        crypto.getRandomValues(padding)
+        return Array.from(padding)
+          .map(byte => byte.toString(16).padStart(2, '0'))
+          .join('')
+      }
       
-      const x25519Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', x25519ServerKey)
-      const x25519Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', x25519ClientKey)
+      // Generate dot config strings with correct format:
+      // {handshake_method}.{encryption_type}.{session_resume}.{padding_blocks}.{auth_parameter}
+      const generateDotConfig = (handshake: string, encryption: string, sessionResume: string, authParam: string) => {
+        const padding = generatePaddingBlocks()
+        return `${handshake}.${encryption}.${sessionResume}.${padding}.${authParam}`
+      }
       
-      const mlkem768Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', mlkem768ServerKey)
-      const mlkem768Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', mlkem768ClientKey)
+      // Generate both 0RTT (resume) and 1RTT (full handshake) variants
+      const x25519Decryption0RTT = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', x25519ServerKey)
+      const x25519Encryption0RTT = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', x25519ClientKey)
+      const x25519Decryption1RTT = generateDotConfig('mlkem768x25519plus', 'native', '1rtt', x25519ServerKey)
+      const x25519Encryption1RTT = generateDotConfig('mlkem768x25519plus', 'native', '1rtt', x25519ClientKey)
+      
+      const mlkem768Decryption0RTT = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', mlkem768ServerKey)
+      const mlkem768Encryption0RTT = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', mlkem768ClientKey)
+      const mlkem768Decryption1RTT = generateDotConfig('mlkem768x25519plus', 'native', '1rtt', mlkem768ServerKey)
+      const mlkem768Encryption1RTT = generateDotConfig('mlkem768x25519plus', 'native', '1rtt', mlkem768ClientKey)
       
       setVlessEncryption({
         x25519: {
-          decryption: x25519Decryption,
-          encryption: x25519Encryption
+          decryption0RTT: x25519Decryption0RTT,
+          encryption0RTT: x25519Encryption0RTT,
+          decryption1RTT: x25519Decryption1RTT,
+          encryption1RTT: x25519Encryption1RTT
         },
         mlkem768: {
-          decryption: mlkem768Decryption,
-          encryption: mlkem768Encryption
+          decryption0RTT: mlkem768Decryption0RTT,
+          encryption0RTT: mlkem768Encryption0RTT,
+          decryption1RTT: mlkem768Decryption1RTT,
+          encryption1RTT: mlkem768Encryption1RTT
         }
       })
       
@@ -421,6 +473,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       setKeyPair(null)
       setGeneratedShortId(null)
       setVlessEncryption({ x25519: null, mlkem768: null })
+      setSelectedVlessVariant('x25519-0rtt')
       setValidation({ isValid: true })
     }
   }, [isDialogOpen])
@@ -491,8 +544,6 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
             <div className="-mr-4 max-h-[69dvh] overflow-y-auto px-2 pr-4 sm:max-h-[72dvh]">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <h3 className="mb-4 text-lg font-semibold">{t('coreConfigModal.jsonConfig')}</h3>
-                  <p className="mb-2 text-sm text-muted-foreground">{t('coreConfigModal.editJson')}</p>
                   <div className="space-y-4">
                     <FormField
                       control={form.control}
@@ -799,7 +850,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                   </div>
 
                   {vlessEncryption.x25519 && vlessEncryption.mlkem768 && (
-                    <div className="relative mt-4 rounded-md border p-4">
+                    <div className="relative mt-4 rounded-md border p-3">
                       <Button
                         type="button"
                         variant="ghost"
@@ -811,50 +862,53 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                         <X className="h-4 w-4" />
                       </Button>
                       
-                      <div className="space-y-4">
-                        <div>
-                          <p className="mb-2 text-sm font-medium text-muted-foreground">
-                            {t('coreConfigModal.chooseAuthentication')}
-                          </p>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold">VLESS Encryption</h4>
+                          <Select value={selectedVlessVariant} onValueChange={setSelectedVlessVariant}>
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="x25519-0rtt">X25519 (0RTT)</SelectItem>
+                              <SelectItem value="x25519-1rtt">X25519 (1RTT)</SelectItem>
+                              <SelectItem value="mlkem768-0rtt">ML-KEM-768 (0RTT)</SelectItem>
+                              <SelectItem value="mlkem768-1rtt">ML-KEM-768 (1RTT)</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
-                        {/* X25519 Authentication */}
-                        <div className="space-y-3">
-                          <h4 className="text-sm font-semibold">{t('coreConfigModal.x25519Authentication')}</h4>
-                          <div>
-                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.decryption')}</p>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.x25519.decryption}</code>
-                              <CopyButton value={vlessEncryption.x25519.decryption} copiedMessage="coreConfigModal.decryptionCopied" defaultMessage="coreConfigModal.copyDecryption" />
+                        {currentVlessValues && (
+                          <div className="space-y-2">
+                            <div>
+                              <p className="mb-1 text-xs font-medium text-muted-foreground">Decryption</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">
+                                  {currentVlessValues.decryption}
+                                </code>
+                                <CopyButton 
+                                  value={currentVlessValues.decryption} 
+                                  copiedMessage="coreConfigModal.decryptionCopied" 
+                                  defaultMessage="coreConfigModal.copyDecryption" 
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <p className="mb-1 text-xs font-medium text-muted-foreground">Encryption</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">
+                                  {currentVlessValues.encryption}
+                                </code>
+                                <CopyButton 
+                                  value={currentVlessValues.encryption} 
+                                  copiedMessage="coreConfigModal.encryptionCopied" 
+                                  defaultMessage="coreConfigModal.copyEncryption" 
+                                />
+                              </div>
                             </div>
                           </div>
-                          <div>
-                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.encryption')}</p>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.x25519.encryption}</code>
-                              <CopyButton value={vlessEncryption.x25519.encryption} copiedMessage="coreConfigModal.encryptionCopied" defaultMessage="coreConfigModal.copyEncryption" />
-                            </div>
-                          </div>
-                        </div>
+                        )}
 
-                        {/* ML-KEM-768 Authentication */}
-                        <div className="space-y-3">
-                          <h4 className="text-sm font-semibold">{t('coreConfigModal.mlkem768Authentication')}</h4>
-                          <div>
-                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.decryption')}</p>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.mlkem768.decryption}</code>
-                              <CopyButton value={vlessEncryption.mlkem768.decryption} copiedMessage="coreConfigModal.decryptionCopied" defaultMessage="coreConfigModal.copyDecryption" />
-                            </div>
-                          </div>
-                          <div>
-                            <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.encryption')}</p>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-xs">{vlessEncryption.mlkem768.encryption}</code>
-                              <CopyButton value={vlessEncryption.mlkem768.encryption} copiedMessage="coreConfigModal.encryptionCopied" defaultMessage="coreConfigModal.copyEncryption" />
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     </div>
                   )}

@@ -1301,8 +1301,6 @@
     "shortIdCopied": "短 ID 已复制到剪贴板",
     "publicKeyCopied": "公钥已复制到剪贴板",
     "privateKeyCopied": "私钥已复制到剪贴板",
-    "jsonConfig": "JSON 配置",
-    "editJson": "编辑 JSON 配置",
     "name": "名称",
     "namePlaceholder": "输入配置名称",
     "fallback": "备用项",

@@ -1319,8 +1319,6 @@
     "shortIdCopied": "Short ID copied to clipboard",
     "publicKeyCopied": "Public key copied to clipboard",
     "privateKeyCopied": "Private key copied to clipboard",
-    "jsonConfig": "JSON Configuration",
-    "editJson": "Modify JSON configuration",
     "name": "Name",
     "namePlaceholder": "Enter configuration name",
     "fallback": "Fallback",

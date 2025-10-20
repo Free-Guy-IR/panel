@@ -1239,8 +1239,6 @@
     "shortIdCopied": "شناسه کوتاه در کلیپ‌بورد کپی شد",
     "publicKeyCopied": "کلید عمومی در کلیپ‌بورد کپی شد",
     "privateKeyCopied": "کلید خصوصی در کلیپ‌بورد کپی شد",
-    "jsonConfig": "پیکربندی JSON",
-    "editJson": "ویرایش پیکربندی JSON",
     "name": "نام",
     "namePlaceholder": "نام پیکربندی را وارد کنید",
     "fallback": "پشتیبان",
