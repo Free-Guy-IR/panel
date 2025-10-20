@@ -33,18 +33,18 @@ export function NavMain({
       <SidebarGroupLabel>{t('platform')}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map(item => (
-          <Collapsible key={item.title} asChild defaultOpen={item.isActive || location.pathname.startsWith(item.url)}>
+          <Collapsible key={item.title} defaultOpen={item.isActive || location.pathname.startsWith(item.url)}>
             <SidebarMenuItem>
-              <NavLink to={item.url} className="block" onClick={handleNavigation}>
-                {({ isActive }) => (
-                  <CollapsibleTrigger className="w-full">
+              <CollapsibleTrigger asChild>
+                <NavLink to={item.url} onClick={handleNavigation}>
+                  {({ isActive }) => (
                     <SidebarMenuButton tooltip={t(item.title)} isActive={isActive}>
                       <item.icon />
                       <span>{t(item.title)}</span>
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                )}
-              </NavLink>
+                  )}
+                </NavLink>
+              </CollapsibleTrigger>
               {item.items?.length ? (
                 <>
                   <CollapsibleTrigger asChild>
