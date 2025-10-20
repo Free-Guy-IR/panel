@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Filter, FileText, Link, Clock, HelpCircle, User, Settings, Code, FileCode2, Sword, Shield, Lock, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Filter, FileText, Link, Clock, HelpCircle, User, Settings, Code, FileCode2, Sword, Shield, Lock, GripVertical, RotateCcw } from 'lucide-react'
 import { useSettingsContext } from './_dashboard.settings'
 import { ConfigFormat } from '@/service/api'
 import { toast } from 'sonner'
@@ -55,6 +55,30 @@ const configFormatOptions = [
   { value: 'clash_meta', label: 'settings.subscriptions.configFormats.clash_meta', icon: '🛡️' },
   { value: 'outline', label: 'settings.subscriptions.configFormats.outline', icon: '🔒' },
   { value: 'block', label: 'settings.subscriptions.configFormats.block', icon: '🚫' },
+]
+
+// Default subscription rules
+const defaultSubscriptionRules: { pattern: string; target: ConfigFormat }[] = [
+  {
+    pattern: '^([Cc]lash[\\-\\.]?[Vv]erge|[Cc]lash[\\-\\.]?[Mm]eta|[Ff][Ll][Cc]lash|[Mm]ihomo)',
+    target: 'clash_meta'
+  },
+  {
+    pattern: '^([Cc]lash|[Ss]tash)',
+    target: 'clash'
+  },
+  {
+    pattern: '^(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify[Nn]ext)|.*[Ss]ing[\\-b]?ox.*',
+    target: 'sing_box'
+  },
+  {
+    pattern: '^(SS|SSR|SSD|SSS|Outline|Shadowsocks|SSconf)',
+    target: 'outline'
+  },
+  {
+    pattern: '.*',
+    target: 'links_base64'
+  }
 ]
 
 // Sortable Rule Component
@@ -286,6 +310,11 @@ export default function SubscriptionSettings() {
     }
   }
 
+  const handleResetToDefault = () => {
+    form.setValue('rules', defaultSubscriptionRules)
+    toast.success(t('settings.subscriptions.resetToDefaultSuccess', { defaultValue: 'Reset to default settings' }))
+  }
+
   const addRule = () => {
     appendRule({ pattern: '', target: 'links' as ConfigFormat })
   }
@@ -506,17 +535,22 @@ export default function SubscriptionSettings() {
                 </h3>
                 <p className="text-sm text-muted-foreground">{t('settings.subscriptions.rules.description')}</p>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={addRule} className="flex shrink-0 items-center gap-2">
-                <Plus className="h-4 w-4" />
-                {t('settings.subscriptions.rules.addRule')}
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleResetToDefault} className="flex items-center gap-2" disabled={isSaving}>
+                  <RotateCcw className="h-4 w-4" />
+                  {t('settings.subscriptions.resetToDefault', { defaultValue: 'Reset to Default' })}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={addRule} className="flex shrink-0 items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  {t('settings.subscriptions.rules.addRule')}
+                </Button>
+              </div>
             </div>
 
             {ruleFields.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
                 <FileText className="mx-auto mb-3 h-8 w-8 opacity-30" />
-                <p className="mb-1 text-sm font-medium">No rules configured</p>
-                <p className="text-xs">{t('settings.subscriptions.rules.noRules')}</p>
+                <p className="mb-1 text-sm font-medium">{t('settings.subscriptions.rules.noRules')}</p>
               </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

@@ -232,7 +232,9 @@
         "clash_meta": "Clash Meta",
         "outline": "Outline",
         "block": "Блок"
-      }
+      },
+      "resetToDefault": "Сбросить к умолчанию",
+      "resetToDefaultSuccess": "Правила подписки сброшены к умолчанию"
     },
     "telegram": {
       "title": "Telegram",

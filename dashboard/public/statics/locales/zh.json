@@ -206,7 +206,9 @@
         "clash_meta": "Clash Meta",
         "outline": "Outline",
         "block": "阻止"
-      }
+      },
+      "resetToDefault": "重置为默认",
+      "resetToDefaultSuccess": "订阅规则已重置为默认"
     },
     "telegram": {
       "title": "Telegram",

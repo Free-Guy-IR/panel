@@ -135,7 +135,9 @@
         "clash_meta": "Clash Meta",
         "outline": "Outline",
         "block": "بلاک"
-      }
+      },
+      "resetToDefault": "بازگشت به پیش‌فرض",
+      "resetToDefaultSuccess": "قوانین اشتراک به پیش‌فرض بازنشانی شد"
     },
     "telegram": {
       "title": "تلگرام",

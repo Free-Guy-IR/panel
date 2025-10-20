@@ -228,7 +228,9 @@
         "clash_meta": "Clash Meta",
         "outline": "Outline",
         "block": "Block"
-      }
+      },
+      "resetToDefault": "Reset to Default",
+      "resetToDefaultSuccess": "Subscription rules reset to default"
     },
     "telegram": {
       "title": "Telegram",
