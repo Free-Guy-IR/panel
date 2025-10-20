@@ -564,6 +564,8 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -609,6 +611,8 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -617,21 +621,6 @@ export type UserModifyDataLimit = number | null
 export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
@@ -647,6 +636,17 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -866,6 +866,7 @@ export interface SubscriptionOutput {
   host_status_filter: boolean
   rules: SubRule[]
   manual_sub_request?: SubFormatEnable
+  applications?: ApplicationOutput[]
 }
 
 export interface SubscriptionInput {
@@ -876,6 +877,7 @@ export interface SubscriptionInput {
   host_status_filter: boolean
   rules: SubRule[]
   manual_sub_request?: SubFormatEnable
+  applications?: ApplicationInput[]
 }
 
 export type SingBoxMuxSettingsBrutal = Brutal | null
@@ -924,8 +926,6 @@ export type SettingsSchemaOutputGeneral = General | null
 export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
 
 export type SettingsSchemaOutputNotificationEnable = NotificationEnable | null
-
-export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
 
 export type SettingsSchemaOutputWebhook = Webhook | null
 
@@ -1031,6 +1031,19 @@ export const ProxyHostALPN = {
   h3: 'h3',
 } as const
 
+export type Platform = (typeof Platform)[keyof typeof Platform]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const Platform = {
+  android: 'android',
+  ios: 'ios',
+  windows: 'windows',
+  macos: 'macos',
+  linux: 'linux',
+  appletv: 'appletv',
+  androidtv: 'androidtv',
+} as const
+
 export type Period = (typeof Period)[keyof typeof Period]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -1065,6 +1078,8 @@ export interface NotificationSettings {
   /** */
   max_retries: number
 }
+
+export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
 
 export interface NotificationEnable {
   admin?: boolean
@@ -1296,6 +1311,16 @@ export interface ModifyUserByTemplate {
   note?: ModifyUserByTemplateNote
 }
 
+export type Language = (typeof Language)[keyof typeof Language]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const Language = {
+  fa: 'fa',
+  en: 'en',
+  ru: 'ru',
+  zh: 'zh',
+} as const
+
 export type KCPSettingsWriteBufferSize = number | null
 
 export type KCPSettingsReadBufferSize = number | null
@@ -1440,6 +1465,13 @@ export type ExtraSettingsFlow = XTLSFlows | null
 export interface ExtraSettings {
   flow?: ExtraSettingsFlow
   method?: ExtraSettingsMethod
+}
+
+export interface DownloadLink {
+  /** @maxLength 64 */
+  name: string
+  url: string
+  language: Language
 }
 
 export type DiscordProxyUrl = string | null
@@ -1691,6 +1723,36 @@ export interface BaseHost {
   priority: number
   status?: BaseHostStatus
   ech_config_list?: BaseHostEchConfigList
+}
+
+export type ApplicationOutputDescription = { [key: string]: string }
+
+export interface ApplicationOutput {
+  /** @maxLength 32 */
+  name: string
+  /** @maxLength 512 */
+  icon_url?: string
+  /** @maxLength 256 */
+  import_url?: string
+  description?: ApplicationOutputDescription
+  recommended?: boolean
+  platform: Platform
+  download_links: DownloadLink[]
+}
+
+export type ApplicationInputDescription = { [key: string]: string }
+
+export interface ApplicationInput {
+  /** @maxLength 32 */
+  name: string
+  /** @maxLength 512 */
+  icon_url?: string
+  /** @maxLength 256 */
+  import_url?: string
+  description?: ApplicationInputDescription
+  recommended?: boolean
+  platform: Platform
+  download_links: DownloadLink[]
 }
 
 export type AdminModifySupportUrl = string | null
@@ -5766,6 +5828,69 @@ export function useUserSubscriptionInfo<TData = Awaited<ReturnType<typeof userSu
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionInfo>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getUserSubscriptionInfoQueryOptions(token, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Get applications available for user's subscription.
+ * @summary User Subscription Apps
+ */
+export const userSubscriptionApps = (token: string, signal?: AbortSignal) => {
+  return orvalFetcher<ApplicationOutput[]>({ url: `/sub/${token}/apps`, method: 'GET', signal })
+}
+
+export const getUserSubscriptionAppsQueryKey = (token: string) => {
+  return [`/sub/${token}/apps`] as const
+}
+
+export const getUserSubscriptionAppsQueryOptions = <TData = Awaited<ReturnType<typeof userSubscriptionApps>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getUserSubscriptionAppsQueryKey(token)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof userSubscriptionApps>>> = ({ signal }) => userSubscriptionApps(token, signal)
+
+  return { queryKey, queryFn, enabled: !!token, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UserSubscriptionAppsQueryResult = NonNullable<Awaited<ReturnType<typeof userSubscriptionApps>>>
+export type UserSubscriptionAppsQueryError = ErrorType<HTTPValidationError>
+
+export function useUserSubscriptionApps<TData = Awaited<ReturnType<typeof userSubscriptionApps>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUserSubscriptionApps<TData = Awaited<ReturnType<typeof userSubscriptionApps>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUserSubscriptionApps<TData = Awaited<ReturnType<typeof userSubscriptionApps>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary User Subscription Apps
+ */
+
+export function useUserSubscriptionApps<TData = Awaited<ReturnType<typeof userSubscriptionApps>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionApps>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getUserSubscriptionAppsQueryOptions(token, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
