@@ -7,6 +7,7 @@ import { NavUser } from '@/components/nav-user'
 import { useTheme } from '@/components/theme-provider'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
+import { Link } from 'react-router'
 import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -43,7 +44,6 @@ import {
 import * as React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {useNavigate} from "react-router";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const isRTL = useDirDetection() === 'rtl'
@@ -56,7 +56,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const touchEndX = useRef<number | null>(null)
   const minSwipeDistance = 50
   const edgeThreshold = 50 // Distance from edge to detect edge swipe
-  const navigate = useNavigate()
 
   const handleTouchStart = (e: TouchEvent) => {
     touchEndX.current = null
@@ -134,143 +133,143 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
       ...(admin?.is_sudo
         ? [
-            {
-              title: 'statistics',
-              url: '/statistics',
-              icon: PieChart,
-            },
-            {
-              title: 'hosts',
-              url: '/hosts',
-              icon: ListTodo,
-            },
-            {
-              title: 'groups',
-              url: '/groups',
-              icon: Users2,
-            },
-            {
-              title: 'admins.title',
-              url: '/admins',
-              icon: UserCog,
-            },
-            {
-              title: 'nodes.title',
-              url: '/nodes',
-              icon: Share2Icon,
-              items: [
-                {
-                  title: 'nodes.title',
-                  url: '/nodes',
-                  icon: Share2Icon,
-                },
-                {
-                  title: 'settings.cores.title',
-                  url: '/nodes/cores',
-                  icon: Cpu,
-                },
-                {
-                  title: 'nodes.logs.title',
-                  url: '/nodes/logs',
-                  icon: FileText,
-                },
-              ],
-            },
-            {
-              title: 'templates.title',
-              url: '/templates',
-              icon: LayoutTemplate,
-            },
-            {
-              title: 'bulk.title',
-              url: '/bulk',
-              icon: Layers,
-              items: [
-                {
-                  title: 'bulk.groups',
-                  url: '/bulk',
-                  icon: Users2,
-                },
-                {
-                  title: 'bulk.expireDate',
-                  url: '/bulk/expire',
-                  icon: Calendar,
-                },
-                {
-                  title: 'bulk.dataLimit',
-                  url: '/bulk/data',
-                  icon: ArrowUpDown,
-                },
-                {
-                  title: 'bulk.proxySettings',
-                  url: '/bulk/proxy',
-                  icon: Lock,
-                },
-              ],
-            },
-            {
-              title: 'settings.title',
-              url: '/settings',
-              icon: Settings2,
-              items: [
-                {
-                  title: 'settings.general.title',
-                  url: '/settings/general',
-                  icon: Settings,
-                },
-                {
-                  title: 'settings.notifications.title',
-                  url: '/settings/notifications',
-                  icon: Bell,
-                },
-                {
-                  title: 'settings.subscriptions.title',
-                  url: '/settings/subscriptions',
-                  icon: ListTodo,
-                },
-                {
-                  title: 'settings.telegram.title',
-                  url: '/settings/telegram',
-                  icon: Send,
-                },
-                {
-                  title: 'settings.discord.title',
-                  url: '/settings/discord',
-                  icon: MessageCircle,
-                },
-                {
-                  title: 'settings.webhook.title',
-                  url: '/settings/webhook',
-                  icon: Webhook,
-                },
-                {
-                  title: 'settings.cleanup.title',
-                  url: '/settings/cleanup',
-                  icon: Database,
-                },
-                {
-                  title: 'theme.title',
-                  url: '/settings/theme',
-                  icon: Palette,
-                },
-              ],
-            },
-          ]
+          {
+            title: 'statistics',
+            url: '/statistics',
+            icon: PieChart,
+          },
+          {
+            title: 'hosts',
+            url: '/hosts',
+            icon: ListTodo,
+          },
+          {
+            title: 'groups',
+            url: '/groups',
+            icon: Users2,
+          },
+          {
+            title: 'admins.title',
+            url: '/admins',
+            icon: UserCog,
+          },
+          {
+            title: 'nodes.title',
+            url: '/nodes',
+            icon: Share2Icon,
+            items: [
+              {
+                title: 'nodes.title',
+                url: '/nodes',
+                icon: Share2Icon,
+              },
+              {
+                title: 'settings.cores.title',
+                url: '/nodes/cores',
+                icon: Cpu,
+              },
+              {
+                title: 'nodes.logs.title',
+                url: '/nodes/logs',
+                icon: FileText,
+              },
+            ],
+          },
+          {
+            title: 'templates.title',
+            url: '/templates',
+            icon: LayoutTemplate,
+          },
+          {
+            title: 'bulk.title',
+            url: '/bulk',
+            icon: Layers,
+            items: [
+              {
+                title: 'bulk.groups',
+                url: '/bulk',
+                icon: Users2,
+              },
+              {
+                title: 'bulk.expireDate',
+                url: '/bulk/expire',
+                icon: Calendar,
+              },
+              {
+                title: 'bulk.dataLimit',
+                url: '/bulk/data',
+                icon: ArrowUpDown,
+              },
+              {
+                title: 'bulk.proxySettings',
+                url: '/bulk/proxy',
+                icon: Lock,
+              },
+            ],
+          },
+          {
+            title: 'settings.title',
+            url: '/settings',
+            icon: Settings2,
+            items: [
+              {
+                title: 'settings.general.title',
+                url: '/settings/general',
+                icon: Settings,
+              },
+              {
+                title: 'settings.notifications.title',
+                url: '/settings/notifications',
+                icon: Bell,
+              },
+              {
+                title: 'settings.subscriptions.title',
+                url: '/settings/subscriptions',
+                icon: ListTodo,
+              },
+              {
+                title: 'settings.telegram.title',
+                url: '/settings/telegram',
+                icon: Send,
+              },
+              {
+                title: 'settings.discord.title',
+                url: '/settings/discord',
+                icon: MessageCircle,
+              },
+              {
+                title: 'settings.webhook.title',
+                url: '/settings/webhook',
+                icon: Webhook,
+              },
+              {
+                title: 'settings.cleanup.title',
+                url: '/settings/cleanup',
+                icon: Database,
+              },
+              {
+                title: 'theme.title',
+                url: '/settings/theme',
+                icon: Palette,
+              },
+            ],
+          },
+        ]
         : [
-            // For non-sudo admins, show only theme settings
-            {
-              title: 'settings.title',
-              url: '/settings',
-              icon: Settings2,
-              items: [
-                {
-                  title: 'theme.title',
-                  url: '/settings/theme',
-                  icon: Palette,
-                },
-              ],
-            },
-          ]),
+          // For non-sudo admins, show only theme settings
+          {
+            title: 'settings.title',
+            url: '/settings',
+            icon: Settings2,
+            items: [
+              {
+                title: 'theme.title',
+                url: '/settings/theme',
+                icon: Palette,
+              },
+            ],
+          },
+        ]),
     ],
     navSecondary: [
       {
@@ -305,16 +304,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-sidebar-border bg-neutral-200/75 px-4 py-3 backdrop-blur dark:bg-neutral-900/75 lg:hidden">
-        <div className="flex items-center gap-2">
+        <Link to='/' className="flex items-center gap-2">
           <img
             src={resolvedTheme === 'dark' ? window.location.pathname + 'statics/favicon/logo.png' : window.location.pathname + 'statics/favicon/logo-dark.png'}
             alt="PasarGuard Logo"
             className="h-8 w-8 object-contain"
           />
-          <span dir={isRTL ? 'rtl' : 'ltr'} className="text-sm font-bold" onClick={() => navigate('/')}>
+          <span dir={isRTL ? 'rtl' : 'ltr'} className="text-sm font-bold">
             {t('pasarguard')}
           </span>
-        </div>
+        </Link>
         <SidebarTrigger />
       </div>
       <Sidebar variant="sidebar" {...props} className="border-sidebar-border p-0" side={isRTL ? 'right' : 'left'}>
