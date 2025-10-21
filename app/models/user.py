@@ -95,7 +95,7 @@ class UserNotificationResponse(User):
     username: str
     status: UserStatus
     used_traffic: int
-    lifetime_used_traffic: int = 0
+    lifetime_used_traffic: int = Field(default=0)
     created_at: dt
     edit_at: dt | None = Field(default=None)
     online_at: dt | None = Field(default=None)

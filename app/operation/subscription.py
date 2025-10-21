@@ -34,6 +34,7 @@ class SubscriptionOperation(BaseOperation):
         user = UsersResponseWithInbounds.model_validate(db_user.__dict__)
         user.inbounds = await db_user.inbounds()
         user.expire = db_user.expire
+        user.lifetime_used_traffic = db_user.lifetime_used_traffic
 
         return user
 
