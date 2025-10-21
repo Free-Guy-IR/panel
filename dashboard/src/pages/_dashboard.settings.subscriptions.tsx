@@ -186,10 +186,10 @@ const defaultApplicationsData = {
         {
           name: 'FlClash',
           logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/flclash.jpeg',
-          description: 'A cross-platform GUI client for V2Ray.',
-          faDescription: 'Flclash یک کلاینت GUI چندسکویی برای V2Ray است.',
-          ruDescription: 'Кроссплатформенный GUI-клиент для V2Ray.',
-          zhDescription: '跨平台 V2Ray 图形界面客户端。',
+          description: 'A cross-platform GUI client for clash core.',
+          faDescription: 'Flclash یک کلاینت GUI چندسکویی برای clash core است.',
+          ruDescription: 'Кроссплатформенный GUI-клиент для clash core.',
+          zhDescription: '跨平台 clash core 图形界面客户端。',
           downloadLink: 'https://github.com/chen08209/FlClash/releases/latest'
         }
       ]
@@ -201,10 +201,10 @@ const defaultApplicationsData = {
         {
           name: 'FlClash',
           logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/flclash.jpeg',
-          description: 'A cross-platform GUI client for V2Ray.',
-          faDescription: 'Flclash یک کلاینت GUI چندسکویی برای V2Ray است.',
-          ruDescription: 'Кроссплатформенный GUI-клиент для V2Ray.',
-          zhDescription: '跨平台 V2Ray 图形界面客户端。',
+          description: 'A cross-platform GUI client for clash core.',
+          faDescription: 'Flclash یک کلاینت GUI چندسکویی برای clash core است.',
+          ruDescription: 'Кроссплатформенный GUI-клиент для clash core.',
+          zhDescription: '跨平台 clash core 图形界面客户端。',
           downloadLink: 'https://github.com/chen08209/FlClash/releases/latest'
         },
         {
