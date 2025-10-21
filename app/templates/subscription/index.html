@@ -1,81 +1,289 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>Subscription Information</title>
+        <title>{{ user.username }} - Subscription Information</title>
         <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            :root {
+                --background: 240 5% 96%;
+                --foreground: 240 5% 10%;
+                --muted: 240 5% 90%;
+                --muted-foreground: 240 5% 40%;
+                --card: 240 5% 98%;
+                --card-foreground: var(--foreground);
+                --border: 240 5% 80%;
+                --input: 240 6% 91%;
+                --primary: 216 46% 40%;
+                --primary-foreground: 240 5% 98%;
+                --secondary: 240 5% 90%;
+                --secondary-foreground: 240 5% 20%;
+                --accent: 240 5% 90%;
+                --accent-foreground: 240 5% 20%;
+                --destructive: 0 72% 51%;
+                --destructive-foreground: 0 0% 98%;
+                --success: 142 76% 36%;
+                --radius: 0.5rem;
+            }
+
+            /* Light mode override */
+            body.light {
+                --background: 240 5% 96%;
+                --foreground: 240 5% 10%;
+                --muted: 240 5% 90%;
+                --muted-foreground: 240 5% 40%;
+                --card: 240 5% 98%;
+                --card-foreground: var(--foreground);
+                --border: 240 5% 80%;
+                --input: 240 6% 91%;
+                --primary: 216 46% 40%;
+                --primary-foreground: 240 5% 98%;
+                --secondary: 240 5% 90%;
+                --secondary-foreground: 240 5% 20%;
+                --accent: 240 5% 90%;
+                --accent-foreground: 240 5% 20%;
+                --destructive: 0 72% 51%;
+                --destructive-foreground: 0 0% 98%;
+                --success: 142 76% 36%;
+            }
+
             body {
-                font-family: Arial, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: hsl(var(--background));
+                color: hsl(var(--foreground));
+                padding: 16px;
+                line-height: 1.4;
+                transition: background-color 0.3s, color 0.3s;
+            }
+
+            /* Default to dark mode */
+            body {
+                --background: 240 2% 11%;
+                --foreground: 0 0% 98%;
+                --muted: 0 0% 14.9%;
+                --muted-foreground: 0 0% 63.9%;
+                --card: 240 2% 11.5%;
+                --card-foreground: var(--foreground);
+                --border: 0 0% 18%;
+                --input: 240 2% 16.5%;
+                --primary: 216 46% 53%;
+                --primary-foreground: 0 0% 5%;
+                --secondary: 216 46% 53%;
+                --secondary-foreground: 0 0% 5%;
+                --accent: 240 4% 16%;
+                --accent-foreground: 0 0% 98%;
+                --destructive: 0 72% 51%;
+                --destructive-foreground: 210 40% 98%;
+                --success: 142 76% 36%;
+            }
+
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: hsl(var(--card));
+                border: 1px solid hsl(var(--border));
+                border-radius: 8px;
                 padding: 20px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                transition: background-color 0.3s, border-color 0.3s;
             }
 
             h1 {
-                margin-top: 0;
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: hsl(var(--foreground));
+                margin-bottom: 16px;
+                text-align: center;
             }
 
-            .link-input {
-                margin-bottom: 10px;
+            .user-info {
+                background: hsl(var(--muted));
+                border: 1px solid hsl(var(--border));
+                border-radius: 6px;
+                padding: 16px;
+                margin-bottom: 16px;
+                transition: background-color 0.3s, border-color 0.3s;
             }
 
-            .copy-button {
-                margin-left: 10px;
+            .info-item {
+                display: flex;
+                align-items: center;
+                margin-bottom: 8px;
+                font-size: 0.9rem;
+            }
+
+            .info-label {
+                font-weight: 500;
+                color: hsl(var(--muted-foreground));
+                min-width: 100px;
+                margin-right: 8px;
             }
 
             .status {
-                display: inline-block;
-                padding: 3px 8px;
-                border-radius: 3px;
-                font-weight: bold;
-                font-size: 16px;
-                line-height: 1;
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-weight: 500;
+                font-size: 0.75rem;
+                text-transform: uppercase;
             }
 
             .active {
-                background-color: #4caf50;
+                background: hsl(var(--success));
                 color: white;
             }
 
             .limited {
-                background-color: #f44336;
-                color: white;
+                background: hsl(var(--destructive));
+                color: hsl(var(--destructive-foreground));
             }
 
             .expired {
-                background-color: #ff9800;
+                background: #f59e0b;
                 color: white;
             }
 
             .disabled {
-                background-color: #9e9e9e;
+                background: hsl(var(--muted-foreground));
+                color: hsl(var(--background));
+            }
+
+            .on-hold {
+                background: #8b5cf6;
                 color: white;
             }
-            .on-hold {
-                background-color: #6e17ef;
+
+            .links-section {
+                background: hsl(var(--muted));
+                border: 1px solid hsl(var(--border));
+                border-radius: 6px;
+                padding: 16px;
+                margin-bottom: 16px;
+                transition: background-color 0.3s, border-color 0.3s;
+            }
+
+            .links-section h2 {
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: hsl(var(--foreground));
+                margin-bottom: 12px;
+                text-align: center;
+            }
+
+            .link-item {
+                display: flex;
+                align-items: center;
+                background: hsl(var(--card));
+                border: 1px solid hsl(var(--border));
+                border-radius: 6px;
+                padding: 8px;
+                margin-bottom: 8px;
+                gap: 8px;
+                transition: background-color 0.3s, border-color 0.3s;
+            }
+
+            .link-input {
+                flex: 1;
+                border: none;
+                background: transparent;
+                font-size: 0.8rem;
+                color: hsl(var(--foreground));
+                outline: none;
+                font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            }
+
+            .copy-button, .qr-button {
+                background: hsl(var(--primary));
+                color: hsl(var(--primary-foreground));
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 0.75rem;
+                transition: background-color 0.2s;
+            }
+
+            .copy-button:hover, .qr-button:hover {
+                background: hsl(var(--primary) / 0.9);
+            }
+
+            .copy-all-button {
+                background: hsl(var(--success));
                 color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 0.9rem;
+                margin-top: 12px;
+                width: 100%;
+                transition: background-color 0.2s;
+            }
+
+            .copy-all-button:hover {
+                background: hsl(var(--success) / 0.9);
             }
 
             .applications-container {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 20px;
-                margin-top: 20px;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 12px;
+                margin-top: 16px;
             }
 
             .application-card {
-                border: 1px solid #ccc;
-                border-radius: 8px;
-                padding: 15px;
-                width: 300px;
+                background: hsl(var(--card));
+                border: 1px solid hsl(var(--border));
+                border-radius: 6px;
+                padding: 16px;
+                transition: box-shadow 0.2s, background-color 0.3s, border-color 0.3s;
+            }
+
+            .application-card:hover {
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
 
+            .app-header {
+                display: flex;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+
+            .app-icon {
+                width: 32px;
+                height: 32px;
+                border-radius: 6px;
+                margin-right: 12px;
+                object-fit: cover;
+                border: 1px solid hsl(var(--border));
+            }
+
             .application-card h3 {
-                margin-top: 0;
-                color: #333;
+                font-size: 1rem;
+                font-weight: 600;
+                color: hsl(var(--foreground));
+                margin: 0;
             }
 
             .application-card h4 {
-                margin-bottom: 5px;
-                color: #555;
+                font-size: 0.85rem;
+                font-weight: 500;
+                color: hsl(var(--muted-foreground));
+                margin-bottom: 8px;
+            }
+
+            .application-card p {
+                color: hsl(var(--muted-foreground));
+                line-height: 1.4;
+                margin-bottom: 12px;
+                font-size: 0.8rem;
             }
 
             .application-card ul {
@@ -84,12 +292,15 @@
             }
 
             .application-card li {
-                margin-bottom: 5px;
+                margin-bottom: 4px;
             }
 
             .application-card a {
-                color: #007bff;
+                color: hsl(var(--primary));
                 text-decoration: none;
+                font-weight: 500;
+                font-size: 0.8rem;
+                transition: color 0.2s;
             }
 
             .application-card a:hover {
@@ -97,17 +308,21 @@
             }
 
             .application-card button {
-                background-color: #28a745;
-                color: white;
+                background: hsl(var(--primary));
+                color: hsl(var(--primary-foreground));
                 border: none;
-                padding: 8px 12px;
-                border-radius: 5px;
+                padding: 8px 16px;
+                border-radius: 4px;
                 cursor: pointer;
-                margin-top: 10px;
+                font-weight: 500;
+                margin-top: 8px;
+                transition: background-color 0.2s;
+                width: 100%;
+                font-size: 0.8rem;
             }
 
             .application-card button:hover {
-                background-color: #218838;
+                background: hsl(var(--primary) / 0.9);
             }
 
             .qr-popup {
@@ -115,117 +330,311 @@
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                background-color: white;
-                padding: 10px 25px 25px 25px;
+                background: hsl(var(--card));
+                border: 1px solid hsl(var(--border));
+                padding: 20px;
                 border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
                 display: none;
-                z-index: 9999;
+                z-index: 10000;
+                transition: background-color 0.3s, border-color 0.3s;
             }
 
             .qr-close-button {
                 text-align: right;
-                margin-bottom: 5px;
-                margin-right: -15px;
+                margin-bottom: 8px;
+            }
+
+            .qr-close-button button {
+                background: hsl(var(--destructive));
+                color: hsl(var(--destructive-foreground));
+                border: none;
+                padding: 4px 8px;
+                border-radius: 50%;
+                cursor: pointer;
+                font-weight: 500;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background-color 0.2s;
+                font-size: 0.8rem;
+            }
+
+            .qr-close-button button:hover {
+                background: hsl(var(--destructive) / 0.9);
+            }
+
+            /* Dark mode toggle */
+            .theme-toggle {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: hsl(var(--card));
+                border: 1px solid hsl(var(--border));
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.3s;
+                z-index: 1000;
+            }
+
+            .theme-toggle:hover {
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+
+            /* Responsive Design */
+            @media screen and (max-width: 1024px) {
+                .container {
+                    max-width: 90%;
+                }
+            }
+
+            @media screen and (max-width: 768px) {
+                body {
+                    padding: 12px;
+                }
+
+                .container {
+                    padding: 16px;
+                    margin: 0;
+                    max-width: 100%;
+                }
+
+                h1 {
+                    font-size: 1.25rem;
+                }
+
+                .user-info, .links-section {
+                    padding: 12px;
+                }
+
+                .info-item {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    margin-bottom: 6px;
+                }
+
+                .info-label {
+                    min-width: auto;
+                    margin-bottom: 2px;
+                    font-size: 0.85rem;
+                }
+
+                .link-item {
+                    flex-direction: column;
+                    gap: 6px;
+                    padding: 6px;
+                }
+
+                .copy-button, .qr-button {
+                    width: 100%;
+                    padding: 8px 12px;
+                    font-size: 0.8rem;
+                }
+
+                .applications-container {
+                    grid-template-columns: 1fr;
+                    gap: 8px;
+                }
+
+                .application-card {
+                    padding: 12px;
+                }
+
+                .theme-toggle {
+                    top: 10px;
+                    right: 10px;
+                    width: 36px;
+                    height: 36px;
+                }
+            }
+
+            @media screen and (max-width: 480px) {
+                body {
+                    padding: 8px;
+                }
+
+                .container {
+                    padding: 12px;
+                }
+
+                h1 {
+                    font-size: 1.1rem;
+                }
+
+                .user-info, .links-section {
+                    padding: 10px;
+                }
+
+                .application-card {
+                    padding: 10px;
+                }
+
+                .app-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+
+                .app-icon {
+                    margin-right: 0;
+                    margin-bottom: 8px;
+                }
             }
         </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     </head>
 
     <body>
-        <h1>User Information</h1>
-        <p>Username: {{ user.username }}</p>
-        <p>
-            Status:
-            <span
-                class="status {% if user.status.value == 'active' %}active{% elif user.status.value == 'limited' %}limited{% elif user.status.value == 'on_hold' %}on-hold{% elif user.status.value == 'expired' %}expired{% elif user.status.value == 'disabled' %}disabled{% endif %}"
-                >{{ user.status.value }}</span
-            >
-        </p>
-        <p>
-            Data Limit: {% if not user.data_limit %}∞{% else %}{{
-            user.data_limit | bytesformat }}{% endif %}
-        </p>
-        <p>
-            Data Used: {{ user.used_traffic | bytesformat }}{% if
-            user.data_limit_reset_strategy != 'no_reset' %} (resets every {{
-            user.data_limit_reset_strategy.value }}){% endif %}
-        </p>
-        <p>
-            {% if user.status.value == 'on_hold' %}
-                On Hold For: {% if not user.on_hold_expire_duration %}∞{% else %}{{ (user.on_hold_expire_duration / 86400) | int }} days{% endif %}
-                <p>
-                    On Hold Until: {% if user.on_hold_timeout %}{{ user.on_hold_timeout | datetime }}{% else %}∞{% endif %}
-                </p>
-            {% else %}
-                Expiration Date: {% if not user.expire %} ∞ {% else %} {% set
-                current_datetime = now() %} {% set remaining_days = ((user.expire -
-                current_datetime).days) %} {{ user.expire | datetime }} ({{
-                remaining_days | int }} days remaining) {% endif %}
-            {% endif %}
-        </p>
-
-        {% if user.status in ('active','on_hold') %}
-        <h2>Links:</h2>
-        <ul>
-            {% for link in links %}
-            <li>
-                <input type="text" value="{{ link }}" readonly />
-                <button
-                    class="copy-button"
-                    onclick="copyLink('{{ link }}', this)"
-                >
-                    Copy
-                </button>
-                <button class="qr-button" data-link="{{ link }}">
-                    QR Code
-                </button>
-            </li>
-            {% endfor %}
-        </ul>
-        <button
-            class="copy-all-button"
-            onclick="copyAllLinks(this)"
-            style="margin-top: 10px"
-        >
-            Copy All
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span id="theme-icon">🌙</span>
         </button>
+        
+        <div class="container">
+            <h1>Subscription Information</h1>
+            
+            <div class="user-info">
+                <div class="info-item">
+                    <span class="info-label">Username:</span>
+                    <span>{{ user.username }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span
+                        class="status {% if user.status.value == 'active' %}active{% elif user.status.value == 'limited' %}limited{% elif user.status.value == 'on_hold' %}on-hold{% elif user.status.value == 'expired' %}expired{% elif user.status.value == 'disabled' %}disabled{% endif %}"
+                        >{{ user.status.value }}</span
+                    >
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data Limit:</span>
+                    <span>{% if not user.data_limit %}∞{% else %}{{ user.data_limit | bytesformat }}{% endif %}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data Used:</span>
+                    <span>{{ user.used_traffic | bytesformat }}{% if user.data_limit_reset_strategy != 'no_reset' %} (resets every {{ user.data_limit_reset_strategy.value }}){% endif %}</span>
+                </div>
+                <div class="info-item">
+                    {% if user.status.value == 'on_hold' %}
+                        <span class="info-label">On Hold For:</span>
+                        <span>{% if not user.on_hold_expire_duration %}∞{% else %}{{ (user.on_hold_expire_duration / 86400) | int }} days{% endif %}</span>
+                    {% else %}
+                        <span class="info-label">Expiration Date:</span>
+                        <span>{% if not user.expire %} ∞ {% else %} {% set current_datetime = now() %} {% set remaining_days = ((user.expire - current_datetime).days) %} {{ user.expire | datetime }} ({{ remaining_days | int }} days remaining) {% endif %}</span>
+                    {% endif %}
+                </div>
+                {% if user.status.value == 'on_hold' %}
+                <div class="info-item">
+                    <span class="info-label">On Hold Until:</span>
+                    <span>{% if user.on_hold_timeout %}{{ user.on_hold_timeout | datetime }}{% else %}∞{% endif %}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if user.status in ('active','on_hold') %}
+            <div class="links-section">
+                <h2>Subscription Links</h2>
+                {% for link in links %}
+                <div class="link-item">
+                    <input type="text" class="link-input" value="{{ link }}" readonly />
+                    <button
+                        class="copy-button"
+                        onclick="copyLink('{{ link }}', this)"
+                    >
+                        Copy
+                    </button>
+                    <button class="qr-button" data-link="{{ link }}">
+                        QR Code
+                    </button>
+                </div>
+                {% endfor %}
+                <button
+                    class="copy-all-button"
+                    onclick="copyAllLinks(this)"
+                >
+                    Copy All Links
+                </button>
+            </div>
+            {% endif %}
+
+            {% if apps %}
+            <h2 style="text-align: center; font-size: 1.8rem; font-weight: 600; margin-bottom: 25px;">Recommended Applications</h2>
+            <div class="applications-container">
+                {% for app in apps %}
+                <div class="application-card">
+                    <div class="app-header">
+                        {% if app.icon_url %}
+                        <img src="{{ app.icon_url }}" alt="{{ app.name }}" class="app-icon" />
+                        {% endif %}
+                        <h3>{{ app.name }} {% if app.recommended %}(Recommended){% endif %}</h3>
+                    </div>
+                    {% if app.description["en"] %}
+                    <p>{{ app.description["en"] }}</p>
+                    {% endif %}
+                    {% if app.download_links %}
+                    <h4>Download Links:</h4>
+                    <ul>
+                        {% for link in app.download_links %}
+                        {% if link.language.value == 'en' %}
+                        <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if app.import_url %}
+                    <button onclick="importConfig('{{ app.import_url }}')">Import Config</button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
         <div class="qr-popup" id="qrPopup">
             <div class="qr-close-button">
-                <button onclick="closeQrPopup()">X</button>
+                <button onclick="closeQrPopup()">×</button>
             </div>
             <div id="qrCodeContainer"></div>
         </div>
-        {% endif %}
-
-        {% if apps %}
-        <h2>Recommended Applications:</h2>
-        <div class="applications-container">
-            {% for app in apps %}
-            <div class="application-card">
-                <h3>{{ app.name }} {% if app.recommended %}(Recommended){% endif %}</h3>
-                {% if app.description["en"] %}
-                <p>{{ app.description["en"] }}</p>
-                {% endif %}
-                {% if app.download_links %}
-                <h4>Download Links:</h4>
-                <ul>
-                    {% for link in app.download_links %}
-                    {% if link.language.value == 'en' %}
-                    <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
-                    {% endif %}
-                    {% endfor %}
-                </ul>
-                {% endif %}
-                {% if app.import_url %}
-                <button onclick="importConfig('{{ app.import_url }}')">Import Config</button>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
 
         <script>
+            // Theme toggle functionality
+            function toggleTheme() {
+                const body = document.body;
+                const themeIcon = document.getElementById('theme-icon');
+                
+                if (body.classList.contains('light')) {
+                    body.classList.remove('light');
+                    body.classList.add('dark');
+                    themeIcon.textContent = '☀️';
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    body.classList.remove('dark');
+                    body.classList.add('light');
+                    themeIcon.textContent = '🌙';
+                    localStorage.setItem('theme', 'light');
+                }
+            }
+
+            // Load saved theme on page load - default to dark mode
+            document.addEventListener('DOMContentLoaded', function() {
+                const savedTheme = localStorage.getItem('theme');
+                
+                // Default to dark mode
+                if (savedTheme === 'light') {
+                    document.body.classList.add('light');
+                    document.getElementById('theme-icon').textContent = '🌙';
+                } else {
+                    document.body.classList.add('dark');
+                    document.getElementById('theme-icon').textContent = '☀️';
+                }
+            });
+
             function copyLink(link, button) {
                 const tempInput = document.createElement("input");
                 tempInput.setAttribute("value", link);
@@ -242,7 +651,7 @@
 
             function copyAllLinks(button) {
                 const links = Array.from(
-                    document.querySelectorAll("ul li input[type='text']")
+                    document.querySelectorAll(".link-input")
                 ).map((input) => input.value);
                 const allLinks = links.join("\n");
 
@@ -257,7 +666,7 @@
 
                 button.textContent = "Copied All!";
                 setTimeout(function () {
-                    button.textContent = "Copy All";
+                    button.textContent = "Copy All Links";
                 }, 1500);
             }
 
