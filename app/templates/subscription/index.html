@@ -212,7 +212,7 @@
                 <ul>
                     {% for link in app.download_links %}
                     {% if link.language.value == 'en' %}
-                    <li><a href="{{ link.url }}" target="_blank">{{ link.name }} ({{ link.language.value }})</a></li>
+                    <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
                     {% endif %}
                     {% endfor %}
                 </ul>
