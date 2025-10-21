@@ -459,7 +459,7 @@ async def modify_with_template(event: CallbackQuery, db: AsyncSession, callback_
     )
 
 
-@router.callback_query(ChooseTemplate.Callback.filter(F.username))
+@router.callback_query(ChooseTemplate.Callback.filter(F.user_id))
 async def modify_with_template_done(
     event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: ChooseTemplate.Callback
 ):
