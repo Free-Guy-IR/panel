@@ -18,7 +18,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { SortableApplication } from '@/components/apps/sortable-application'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import useDirDetection from '@/hooks/use-dir-detection'
 
 // Enhanced validation schema for subscription settings
@@ -1206,11 +1206,12 @@ export default function SubscriptionSettings() {
         </form>
         {/* Create Application Modal */}
         <Dialog open={isAddAppOpen} onOpenChange={setIsAddAppOpen}>
-          <DialogContent className="sm:max-w-[520px]">
+          <DialogContent className="h-full max-w-full sm:h-auto sm:max-w-[520px]" onOpenAutoFocus={e => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle className={dir === "rtl" ? "text-right" : "text-left"}>{t('settings.subscriptions.applications.addApplication')}</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="-mr-4 max-h-[80dvh] overflow-y-auto px-2 pr-4 sm:max-h-[75dvh]">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.name')}</FormLabel>
                 <Input value={newAppName} onChange={e => setNewAppName(e.target.value)} placeholder={t('settings.subscriptions.applications.namePlaceholder')} className="h-8 text-xs" />
@@ -1256,10 +1257,10 @@ export default function SubscriptionSettings() {
               {/* Description (multilang) */}
               <div className="space-y-1 sm:col-span-2">
                 <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.descriptionApp')}</FormLabel>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Select value={newDescLang} onValueChange={(v: any) => setNewDescLang(v)}>
                     <FormControl>
-                      <SelectTrigger className="w-32 h-8 text-xs">
+                      <SelectTrigger className="w-full h-8 text-xs sm:w-32">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -1294,12 +1295,12 @@ export default function SubscriptionSettings() {
               {/* Initial Download Link */}
               <div className="space-y-1 sm:col-span-2">
                 <FormLabel className="text-xs font-medium text-muted-foreground/80">{t('settings.subscriptions.applications.downloadLinks')} (1)</FormLabel>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Input value={newLinkName} onChange={e => setNewLinkName(e.target.value)} placeholder={t('settings.subscriptions.applications.downloadLinkNamePlaceholder')} className="h-8 text-xs flex-1" />
                   <Input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.downloadLinkUrlPlaceholder')} className="h-8 text-xs font-mono flex-1" dir="ltr" />
                   <Select value={newLinkLang} onValueChange={(v: any) => setNewLinkLang(v)}>
                     <FormControl>
-                      <SelectTrigger className="h-8 text-xs w-28">
+                      <SelectTrigger className="h-8 text-xs w-full sm:w-28">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -1313,15 +1314,16 @@ export default function SubscriptionSettings() {
                   </Select>
                 </div>
               </div>
+              </div>
             </div>
-            <DialogFooter className='flex items-center gap-2'>
+            <div className="flex justify-end gap-2 mt-4">
               <Button type="button" variant="outline" onClick={() => setIsAddAppOpen(false)} disabled={isSaving}>
                 {t('cancel')}
               </Button>
-              <Button className='!ml-0' type="button" onClick={handleConfirmCreateApplication} disabled={isSaving}>
+              <Button type="button" onClick={handleConfirmCreateApplication} disabled={isSaving}>
                 {t('create')}
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </Form>
