@@ -52,6 +52,13 @@ class UserTemplateCreate(UserTemplateWithValidator):
     def group_ids_validator(cls, v):
         return ListValidator.not_null_list(v, "group")
 
+    @field_validator("name", mode="after")
+    @classmethod
+    def name_validator(cls, v):
+        if v:
+            return v
+        raise ValueError("name can't be empty")
+
 
 class UserTemplateModify(UserTemplateWithValidator):
     group_ids: list[int] | None = None
@@ -60,6 +67,13 @@ class UserTemplateModify(UserTemplateWithValidator):
     @classmethod
     def group_ids_validator(cls, v):
         return ListValidator.nullable_list(v, "group")
+    
+    @field_validator("name", mode="after")
+    @classmethod
+    def name_validator(cls, v):
+        if v == "":
+            raise ValueError("name can't be empty")
+        return v
 
 
 class UserTemplateResponse(UserTemplate):
