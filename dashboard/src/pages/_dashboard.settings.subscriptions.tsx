@@ -91,21 +91,10 @@ const defaultApplicationsData = {
   operatingSystems: [
     {
       name: 'iOS',
-      osLogo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/Apple_logo_black.svg',
       apps: [
         {
-          name: 'SingBox',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/singbox.png',
-          description: 'A client that provides a platform for routing traffic securely.',
-          faDescription: 'Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.',
-          ruDescription: 'Клиент, обеспечивающий безопасную маршрутизацию трафика.',
-          zhDescription: '提供安全流量路由的平台客户端。',
-          configLink: 'sing-box://import-remote-profile?url={url}',
-          downloadLink: 'https://apps.apple.com/us/app/sing-box-vt/id6673731168'
-        },
-        {
           name: 'Streisand',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/streisand.png',
+          logo: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/1e/29/e0/1e29e04f-273b-9186-5f12-9bbe48c0fce2/AppIcon-0-0-1x_U007epad-0-0-0-1-0-85-220.png/460x0w.webp',
           description: 'Flexible proxy client with rule-based setup, multiple protocols, and custom DNS. Supports VLESS(Reality), VMess, Trojan, Shadowsocks, Socks, SSH, Hysteria(V2), TUIC, Wireguard.',
           faDescription: 'کلاینت پراکسی انعطاف‌پذیر با قوانین، پشتیبانی از پروتکل‌های متعدد و DNS سفارشی. پشتیبانی از VLESS(Reality)، VMess، Trojan، Shadowsocks، Socks، SSH، Hysteria(V2)، TUIC، WireGuard.',
           ruDescription: 'Гибкий прокси‑клиент с правилами, поддержкой множества протоколов и кастомным DNS. Поддерживаются VLESS(Reality), VMess, Trojan, Shadowsocks, Socks, SSH, Hysteria(V2), TUIC, Wireguard.',
@@ -114,33 +103,32 @@ const defaultApplicationsData = {
           downloadLink: 'https://apps.apple.com/us/app/streisand/id6450534064'
         },
         {
+          name: 'SingBox',
+          logo: 'https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/dev-next/docs/assets/icon.svg',
+          description: 'A client that provides a platform for routing traffic securely.',
+          faDescription: 'Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.',
+          ruDescription: 'Клиент, обеспечивающий безопасную маршрутизацию трафика.',
+          zhDescription: '提供安全流量路由的平台客户端。',
+          configLink: 'sing-box://import-remote-profile?url={url}',
+          downloadLink: 'https://apps.apple.com/us/app/sing-box-vt/id6673731168'
+        },
+        {
           name: 'Shadowrocket',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/shadowrocket.png',
+          logo: 'https://shadowlaunch.com/static/icon.png',
           description: 'A rule-based proxy utility client for iOS.',
           faDescription: 'Shadowrocket یک ابزار پروکسی قانون‌محور برای iOS است.',
           ruDescription: 'Прокси‑клиент для iOS с маршрутизацией по правилам.',
           zhDescription: '基于规则的 iOS 代理工具客户端。',
           downloadLink: 'https://apps.apple.com/us/app/shadowrocket/id932747118'
-        },
-        {
-          name: 'V2box',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/v2box.png',
-          description: 'A cross-platform V2Ray client.',
-          faDescription: 'V2Box یک کلاینت V2Ray چندسکویی است.',
-          ruDescription: 'Кроссплатформенный клиент V2Ray.',
-          zhDescription: '跨平台 V2Ray 客户端。',
-          configLink: 'v2box://install-sub?url={url}&name=SUBnew',
-          downloadLink: 'https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690'
         }
       ]
     },
     {
       name: 'Android',
-      osLogo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/Android_logo_2019.svg.png',
       apps: [
         {
           name: 'V2rayNG',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/v2rayNG.png',
+          logo: 'https://en.v2rayng.org/wp-content/uploads/2023/12/1703901981-v2rayNG-icon.png',
           description: 'A V2Ray client for Android devices.',
           faDescription: 'V2rayNG یک کلاینت V2Ray برای دستگاه‌های اندرویدی است.',
           ruDescription: 'Клиент V2Ray для устройств Android.',
@@ -150,33 +138,22 @@ const defaultApplicationsData = {
         },
         {
           name: 'SingBox',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/singbox.png',
+          logo: 'https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/dev-next/docs/assets/icon.svg',
           description: 'A client that provides a platform for routing traffic securely.',
           faDescription: 'Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.',
           ruDescription: 'Клиент, обеспечивающий безопасную маршрутизацию трафика.',
           zhDescription: '提供安全流量路由的平台客户端。',
           configLink: 'sing-box://import-remote-profile?url={url}',
           downloadLink: 'https://play.google.com/store/apps/details?id=io.nekohasekai.sfa&hl=en'
-        },
-        {
-          name: 'V2box',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/v2box.png',
-          description: 'A cross-platform V2Ray client.',
-          faDescription: 'V2Box یک کلاینت V2Ray چندسکویی است.',
-          ruDescription: 'Кроссплатформенный клиент V2Ray.',
-          zhDescription: '跨平台 V2Ray 客户端。',
-          configLink: 'v2box://install-sub?url={url}&name=SUBnew',
-          downloadLink: 'https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box'
         }
       ]
     },
     {
       name: 'Windows',
-      osLogo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/Windows_logo_2021.svg.png',
       apps: [
         {
           name: 'V2rayN',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/v2rayN.png',
+          logo: 'https://raw.githubusercontent.com/2dust/v2rayN/refs/heads/master/v2rayN/v2rayN.Desktop/v2rayN.png',
           description: 'A Windows V2Ray client with GUI support.',
           faDescription: 'v2rayN یک کلاینت V2Ray برای ویندوز با پشتیبانی از رابط کاربری است.',
           ruDescription: 'V2Ray клиент для Windows с графическим интерфейсом.',
@@ -185,7 +162,7 @@ const defaultApplicationsData = {
         },
         {
           name: 'FlClash',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/flclash.jpeg',
+          logo: 'https://raw.githubusercontent.com/chen08209/FlClash/refs/heads/main/assets/images/icon.png',
           description: 'A cross-platform GUI client for clash core.',
           faDescription: 'Flclash یک کلاینت GUI چندسکویی برای clash core است.',
           ruDescription: 'Кроссплатформенный GUI-клиент для clash core.',
@@ -196,11 +173,10 @@ const defaultApplicationsData = {
     },
     {
       name: 'Linux',
-      osLogo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/Tux.png',
       apps: [
         {
           name: 'FlClash',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/flclash.jpeg',
+          logo: 'https://raw.githubusercontent.com/chen08209/FlClash/refs/heads/main/assets/images/icon.png',
           description: 'A cross-platform GUI client for clash core.',
           faDescription: 'Flclash یک کلاینت GUI چندسکویی برای clash core است.',
           ruDescription: 'Кроссплатформенный GUI-клиент для clash core.',
@@ -209,7 +185,7 @@ const defaultApplicationsData = {
         },
         {
           name: 'SingBox',
-          logo: 'https://raw.githubusercontent.com/PasarGuard/panel/refs/heads/next/dashboard/public/icons/singbox.png',
+          logo: 'https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/dev-next/docs/assets/icon.svg',
           description: 'A client that provides a platform for routing traffic securely.',
           faDescription: 'Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.',
           ruDescription: 'Клиент, обеспечивающий безопасную маршрутизацию трафика.',
@@ -693,10 +669,10 @@ export default function SubscriptionSettings() {
   const addApplication = () => {
     // Check if there's already an empty application (name is empty)
     const hasEmptyApplication = applicationFields.some(field => !field.name || field.name.trim() === '')
-    
+
     if (hasEmptyApplication) {
-      toast.error(t('settings.subscriptions.applications.duplicateApplication', { 
-        defaultValue: 'Please fill in the existing application before adding a new one' 
+      toast.error(t('settings.subscriptions.applications.duplicateApplication', {
+        defaultValue: 'Please fill in the existing application before adding a new one'
       }))
       return
     }
@@ -1013,7 +989,7 @@ export default function SubscriptionSettings() {
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 {/* Group items by platform and render separate SortableContexts to isolate drag-and-drop containers */}
-                {(['ios','android','windows','macos','linux','appletv','androidtv'] as const).map(platformKey => {
+                {(['ios', 'android', 'windows', 'macos', 'linux', 'appletv', 'androidtv'] as const).map(platformKey => {
                   const indices = applicationFields
                     .map((f, idx) => ({ id: f.id, idx }))
                     .filter(({ idx }) => (form.getValues('applications') as any[])?.[idx]?.platform === platformKey)
@@ -1212,108 +1188,108 @@ export default function SubscriptionSettings() {
             </DialogHeader>
             <div className="-mr-4 max-h-[80dvh] overflow-y-auto px-2 pr-4 sm:max-h-[75dvh]">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.name')}</FormLabel>
-                <Input value={newAppName} onChange={e => setNewAppName(e.target.value)} placeholder={t('settings.subscriptions.applications.namePlaceholder')} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.platform')}</FormLabel>
-                <Select value={newAppPlatform} onValueChange={(v: any) => setNewAppPlatform(v)}>
-                  <FormControl>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="scrollbar-thin z-[1001]">
-                    {(['android','ios','windows','macos','linux','appletv','androidtv'] as const).map(p => (
-                      <SelectItem key={p} value={p}>
-                        <span className="text-xs">{t(`settings.subscriptions.applications.platforms.${p}`)}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.iconUrl', { defaultValue: 'Icon URL' })}</FormLabel>
-                <div className="flex items-center gap-2">
-                  <Input value={newAppIconUrl} onChange={e => setNewAppIconUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.iconUrlPlaceholder', { defaultValue: 'https://...' })} className="h-8 text-xs font-mono" dir="ltr" />
-                  {/* live preview */}
-                  {newAppIconUrl && !newAppIconBroken ? (
-                    <img src={newAppIconUrl} alt="icon" className="h-6 w-6 rounded-sm object-cover" onError={() => setNewAppIconBroken(true)} />
-                  ) : (
-                    <div className="h-6 w-6 rounded-sm bg-muted text-muted-foreground/80 inline-flex items-center justify-center">
-                      <span className="text-[10px]">🖼️</span>
-                    </div>
-                  )}
+                <div className="space-y-1">
+                  <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.name')}</FormLabel>
+                  <Input value={newAppName} onChange={e => setNewAppName(e.target.value)} placeholder={t('settings.subscriptions.applications.namePlaceholder')} className="h-8 text-xs" />
                 </div>
-                <FormDescription className="text-xs text-muted-foreground">{t('settings.subscriptions.applications.iconUrlDescription', { defaultValue: 'Optional. Shown next to app name.' })}</FormDescription>
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.importUrl')}</FormLabel>
-                <Input value={newAppImportUrl} onChange={e => setNewAppImportUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.importUrlPlaceholder')} className="h-8 text-xs font-mono" dir="ltr" />
-                <FormDescription className="text-xs text-muted-foreground">{t('settings.subscriptions.applications.importUrlDescription')}</FormDescription>
-              </div>
-
-              {/* Description (multilang) */}
-              <div className="space-y-1 sm:col-span-2">
-                <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.descriptionApp')}</FormLabel>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Select value={newDescLang} onValueChange={(v: any) => setNewDescLang(v)}>
+                <div className="space-y-1">
+                  <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.platform')}</FormLabel>
+                  <Select value={newAppPlatform} onValueChange={(v: any) => setNewAppPlatform(v)}>
                     <FormControl>
-                      <SelectTrigger className="w-full h-8 text-xs sm:w-32">
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="scrollbar-thin z-[1001]">
-                      {(['en','fa','ru','zh'] as const).map(lang => (
-                        <SelectItem key={lang} value={lang}>
-                          <span className="text-xs">{lang.toUpperCase()}</span>
+                      {(['android', 'ios', 'windows', 'macos', 'linux', 'appletv', 'androidtv'] as const).map(p => (
+                        <SelectItem key={p} value={p}>
+                          <span className="text-xs">{t(`settings.subscriptions.applications.platforms.${p}`)}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input
-                    value={newAppDescription?.[newDescLang] || ''}
-                    onChange={e => setNewAppDescription(prev => ({ ...(prev || {}), [newDescLang]: e.target.value }))}
-                    placeholder={t('settings.subscriptions.applications.descriptionPlaceholder', { lang: newDescLang.toUpperCase() })}
-                    className="h-8 text-xs flex-1"
-                  />
                 </div>
-              </div>
-
-              {/* Recommended toggle */}
-              <div className="sm:col-span-2">
-                <div className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-xs font-medium">{t('settings.subscriptions.applications.recommended')}</FormLabel>
-                    <FormDescription className="text-xs text-muted-foreground">{t('settings.subscriptions.applications.recommendedDescription')}</FormDescription>
+                <div className="space-y-1 sm:col-span-2">
+                  <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.iconUrl', { defaultValue: 'Icon URL' })}</FormLabel>
+                  <div className="flex items-center gap-2">
+                    <Input value={newAppIconUrl} onChange={e => setNewAppIconUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.iconUrlPlaceholder', { defaultValue: 'https://...' })} className="h-8 text-xs font-mono" dir="ltr" />
+                    {/* live preview */}
+                    {newAppIconUrl && !newAppIconBroken ? (
+                      <img src={newAppIconUrl} alt="icon" className="h-6 w-6 rounded-sm object-cover" onError={() => setNewAppIconBroken(true)} />
+                    ) : (
+                      <div className="h-6 w-6 rounded-sm bg-muted text-muted-foreground/80 inline-flex items-center justify-center">
+                        <span className="text-[10px]">🖼️</span>
+                      </div>
+                    )}
                   </div>
-                  <Switch checked={newAppRecommended} onCheckedChange={setNewAppRecommended} />
+                  <FormDescription className="text-xs text-muted-foreground">{t('settings.subscriptions.applications.iconUrlDescription', { defaultValue: 'Optional. Shown next to app name.' })}</FormDescription>
                 </div>
-              </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.importUrl')}</FormLabel>
+                  <Input value={newAppImportUrl} onChange={e => setNewAppImportUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.importUrlPlaceholder')} className="h-8 text-xs font-mono" dir="ltr" />
+                  <FormDescription className="text-xs text-muted-foreground">{t('settings.subscriptions.applications.importUrlDescription')}</FormDescription>
+                </div>
 
-              {/* Initial Download Link */}
-              <div className="space-y-1 sm:col-span-2">
-                <FormLabel className="text-xs font-medium text-muted-foreground/80">{t('settings.subscriptions.applications.downloadLinks')} (1)</FormLabel>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input value={newLinkName} onChange={e => setNewLinkName(e.target.value)} placeholder={t('settings.subscriptions.applications.downloadLinkNamePlaceholder')} className="h-8 text-xs flex-1" />
-                  <Input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.downloadLinkUrlPlaceholder')} className="h-8 text-xs font-mono flex-1" dir="ltr" />
-                  <Select value={newLinkLang} onValueChange={(v: any) => setNewLinkLang(v)}>
-                    <FormControl>
-                      <SelectTrigger className="h-8 text-xs w-full sm:w-28">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="scrollbar-thin z-[1001]">
-                      {(['en','fa','ru','zh'] as const).map(l => (
-                        <SelectItem key={l} value={l}>
-                          <span className="text-xs">{l.toUpperCase()}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Description (multilang) */}
+                <div className="space-y-1 sm:col-span-2">
+                  <FormLabel className="text-xs text-muted-foreground/80">{t('settings.subscriptions.applications.descriptionApp')}</FormLabel>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Select value={newDescLang} onValueChange={(v: any) => setNewDescLang(v)}>
+                      <FormControl>
+                        <SelectTrigger className="w-full h-8 text-xs sm:w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="scrollbar-thin z-[1001]">
+                        {(['en', 'fa', 'ru', 'zh'] as const).map(lang => (
+                          <SelectItem key={lang} value={lang}>
+                            <span className="text-xs">{lang.toUpperCase()}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={newAppDescription?.[newDescLang] || ''}
+                      onChange={e => setNewAppDescription(prev => ({ ...(prev || {}), [newDescLang]: e.target.value }))}
+                      placeholder={t('settings.subscriptions.applications.descriptionPlaceholder', { lang: newDescLang.toUpperCase() })}
+                      className="h-8 text-xs flex-1"
+                    />
+                  </div>
                 </div>
-              </div>
+
+                {/* Recommended toggle */}
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-xs font-medium">{t('settings.subscriptions.applications.recommended')}</FormLabel>
+                      <FormDescription className="text-xs text-muted-foreground">{t('settings.subscriptions.applications.recommendedDescription')}</FormDescription>
+                    </div>
+                    <Switch checked={newAppRecommended} onCheckedChange={setNewAppRecommended} />
+                  </div>
+                </div>
+
+                {/* Initial Download Link */}
+                <div className="space-y-1 sm:col-span-2">
+                  <FormLabel className="text-xs font-medium text-muted-foreground/80">{t('settings.subscriptions.applications.downloadLinks')} (1)</FormLabel>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input value={newLinkName} onChange={e => setNewLinkName(e.target.value)} placeholder={t('settings.subscriptions.applications.downloadLinkNamePlaceholder')} className="h-8 text-xs flex-1" />
+                    <Input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} placeholder={t('settings.subscriptions.applications.downloadLinkUrlPlaceholder')} className="h-8 text-xs font-mono flex-1" dir="ltr" />
+                    <Select value={newLinkLang} onValueChange={(v: any) => setNewLinkLang(v)}>
+                      <FormControl>
+                        <SelectTrigger className="h-8 text-xs w-full sm:w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="scrollbar-thin z-[1001]">
+                        {(['en', 'fa', 'ru', 'zh'] as const).map(l => (
+                          <SelectItem key={l} value={l}>
+                            <span className="text-xs">{l.toUpperCase()}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
