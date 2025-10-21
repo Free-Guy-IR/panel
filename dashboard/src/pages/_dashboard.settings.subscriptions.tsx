@@ -128,7 +128,7 @@ const defaultApplicationsData = {
       apps: [
         {
           name: 'V2rayNG',
-          logo: 'https://en.v2rayng.org/wp-content/uploads/2023/12/1703901981-v2rayNG-icon.png',
+          logo: 'https://raw.githubusercontent.com/2dust/v2rayNG/refs/heads/master/V2rayNG/app/src/main/ic_launcher-web.png',
           description: 'A V2Ray client for Android devices.',
           faDescription: 'V2rayNG یک کلاینت V2Ray برای دستگاه‌های اندرویدی است.',
           ruDescription: 'Клиент V2Ray для устройств Android.',
