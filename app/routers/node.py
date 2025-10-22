@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sse_starlette.sse import EventSourceResponse
+from PasarGuardNodeBridge import NodeAPIError
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
@@ -127,26 +128,25 @@ async def node_logs(node_id: int, request: Request, _: AdminDetails = Depends(ch
     """
     Stream logs for a specific node as Server-Sent Events.
     """
-    log_queue = await node_operator.get_logs(node_id=node_id)
+    context_manager = await node_operator.get_logs(node_id=node_id)
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
-            while True:
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    break
-
-                try:
-                    log = await log_queue.get()
-                    if log is None:
+            async with context_manager() as log_queue:
+                while True:
+                    if await request.is_disconnected():
                         break
-                    yield f"{log}"
-
-                except Exception as e:
-                    yield f"Error retrieving logs: {str(e)}\n"
-                    break
+                    
+                    item = await log_queue.get()
+                    # Check if we received an error
+                    if isinstance(item, NodeAPIError):
+                        raise item
+                    # Process the log message
+                    yield f"{item}"
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            yield f"Error retrieving logs: {str(e)}\n"
 
     return EventSourceResponse(event_generator())
 

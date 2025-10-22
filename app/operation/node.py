@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime as dt
+from typing import AsyncIterator, Callable
 
 from PasarGuardNodeBridge import PasarGuardNode, NodeAPIError
 from sqlalchemy.exc import IntegrityError
@@ -101,7 +102,6 @@ class NodeOperation(BaseOperation):
                     backend_type=0,
                     users=await core_users(db=db),
                     keep_alive=db_node.keep_alive,
-                    ghather_logs=db_node.gather_logs,
                     exclude_inbounds=core.exclude_inbound_tags,
                     timeout=10,
                 )
@@ -211,18 +211,13 @@ class NodeOperation(BaseOperation):
         start, end = await self.validate_dates(start, end)
         return await get_nodes_usage(db, start, end, period=period, node_id=node_id, group_by_node=group_by_node)
 
-    async def get_logs(self, node_id: Node) -> asyncio.Queue:
+    async def get_logs(self, node_id: Node) -> Callable[[], AsyncIterator[asyncio.Queue]]:
         node = await node_manager.get_node(node_id)
 
         if node is None:
             await self.raise_error(message="Node not found", code=404)
 
-        try:
-            logs_queue = await node.get_logs()
-        except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
-
-        return logs_queue
+        return node.stream_logs
 
     async def get_node_stats_periodic(
         self, db: AsyncSession, node_id: id, start: dt = None, end: dt = None, period: Period = Period.hour

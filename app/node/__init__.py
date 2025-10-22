@@ -37,7 +37,6 @@ class NodeManager:
                 server_ca=node.server_ca,
                 api_key=node.api_key,
                 name=node.name,
-                max_logs=node.max_logs,
                 logger=self.logger,
                 extra={"id": node.id, "usage_coefficient": node.usage_coefficient},
             )
