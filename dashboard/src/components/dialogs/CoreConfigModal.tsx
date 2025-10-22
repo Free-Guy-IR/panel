@@ -9,20 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useCreateCoreConfig, useModifyCoreConfig } from '@/service/api'
+import { isEmptyObject } from '@/utils/isEmptyObject.ts'
 import { queryClient } from '@/utils/query-client'
 import Editor from '@monaco-editor/react'
 import { encodeURLSafe } from '@stablelib/base64'
 import { generateKeyPair } from '@stablelib/x25519'
-import { MlKem768 } from 'mlkem'
 import { debounce } from 'es-toolkit'
 import { Maximize2, Minimize2, X } from 'lucide-react'
+import { MlKem768 } from 'mlkem'
 import { useCallback, useEffect, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { useTheme } from '../../components/theme-provider'
-import { isEmptyObject } from '@/utils/isEmptyObject.ts'
 
 export const coreConfigFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -189,7 +189,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const generateVLESSEncryption = async () => {
     try {
       setIsGeneratingVLESSEncryption(true)
-      
+
       // Generate X25519 key pair
       const x25519KeyPair = generateKeyPair()
       const x25519ServerKey = encodeURLSafe(x25519KeyPair.secretKey).replace(/=/g, '')
@@ -205,8 +205,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
 
       // Match upstream dot config format:
       // {handshake_method}.{encryption_type}.{session_resume}.{auth_parameter}
-      const generateDotConfig = (handshake: string, encryption: string, sessionResume: string, authParam: string) =>
-        `${handshake}.${encryption}.${sessionResume}.${authParam}`
+      const generateDotConfig = (handshake: string, encryption: string, sessionResume: string, authParam: string) => `${handshake}.${encryption}.${sessionResume}.${authParam}`
 
       const x25519Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', x25519ServerKey)
       const x25519Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', x25519ClientKey)
@@ -216,14 +215,14 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       setVlessEncryption({
         x25519: {
           decryption: x25519Decryption,
-          encryption: x25519Encryption
+          encryption: x25519Encryption,
         },
         mlkem768: {
           decryption: mlkem768Decryption,
-          encryption: mlkem768Encryption
-        }
+          encryption: mlkem768Encryption,
+        },
       })
-      
+
       toast.success(t('coreConfigModal.vlessEncryptionGenerated'))
     } catch (error) {
       toast.error(t('coreConfigModal.vlessEncryptionGenerationFailed'))
@@ -441,7 +440,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       setKeyPair(null)
       setGeneratedShortId(null)
       setVlessEncryption({ x25519: null, mlkem768: null })
-      setSelectedVlessVariant('x25519-0rtt')
+      setSelectedVlessVariant('x25519')
       setValidation({ isValid: true })
     }
   }, [isDialogOpen])
@@ -812,7 +811,13 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                   )}
 
                   <div className="pt-2">
-                    <LoaderButton type="button" onClick={generateVLESSEncryption} className="w-full" isLoading={isGeneratingVLESSEncryption} loadingText={t('coreConfigModal.generatingVLESSEncryption')}>
+                    <LoaderButton
+                      type="button"
+                      onClick={generateVLESSEncryption}
+                      className="w-full"
+                      isLoading={isGeneratingVLESSEncryption}
+                      loadingText={t('coreConfigModal.generatingVLESSEncryption')}
+                    >
                       {t('coreConfigModal.generateVLESSEncryption')}
                     </LoaderButton>
                   </div>
@@ -829,14 +834,12 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                       >
                         <X className="h-4 w-4" />
                       </Button>
-                      
+
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <div>
                             <h4 className="text-sm font-semibold">VLESS Encryption</h4>
-                            <p className="text-xs text-muted-foreground">
-                              {t('coreConfigModal.chooseAuthentication')}
-                            </p>
+                            <p className="text-xs text-muted-foreground">{t('coreConfigModal.chooseAuthentication')}</p>
                           </div>
                           <Select value={selectedVlessVariant} onValueChange={handleVlessVariantChange}>
                             <SelectTrigger className="w-48">
@@ -854,32 +857,19 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                             <div>
                               <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.decryption')}</p>
                               <div className="flex items-center gap-2">
-                                <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">
-                                  {currentVlessValues.decryption}
-                                </code>
-                                <CopyButton 
-                                  value={currentVlessValues.decryption} 
-                                  copiedMessage="coreConfigModal.decryptionCopied" 
-                                  defaultMessage="coreConfigModal.copyDecryption" 
-                                />
+                                <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">{currentVlessValues.decryption}</code>
+                                <CopyButton value={currentVlessValues.decryption} copiedMessage="coreConfigModal.decryptionCopied" defaultMessage="coreConfigModal.copyDecryption" />
                               </div>
                             </div>
                             <div>
                               <p className="mb-1 text-xs font-medium text-muted-foreground">{t('coreConfigModal.encryption')}</p>
                               <div className="flex items-center gap-2">
-                                <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">
-                                  {currentVlessValues.encryption}
-                                </code>
-                                <CopyButton 
-                                  value={currentVlessValues.encryption} 
-                                  copiedMessage="coreConfigModal.encryptionCopied" 
-                                  defaultMessage="coreConfigModal.copyEncryption" 
-                                />
+                                <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">{currentVlessValues.encryption}</code>
+                                <CopyButton value={currentVlessValues.encryption} copiedMessage="coreConfigModal.encryptionCopied" defaultMessage="coreConfigModal.copyEncryption" />
                               </div>
                             </div>
                           </div>
                         )}
-
                       </div>
                     </div>
                   )}
