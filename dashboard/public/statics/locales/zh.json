@@ -1378,7 +1378,17 @@
     "decryptionCopied": "解密已复制到剪贴板",
     "encryptionCopied": "加密已复制到剪贴板",
     "copyDecryption": "复制解密",
-    "copyEncryption": "复制加密"
+    "copyEncryption": "复制加密",
+    "generateMldsa65": "生成 ML-DSA-65 密钥对",
+    "generatingMldsa65": "正在生成 ML-DSA-65...",
+    "mldsa65Generated": "ML-DSA-65 密钥生成成功",
+    "mldsa65GenerationFailed": "ML-DSA-65 密钥生成失败",
+    "mldsa65Seed": "ML-DSA-65 Seed",
+    "mldsa65Verify": "ML-DSA-65 Verify",
+    "copyMldsa65Seed": "复制 Seed",
+    "copyMldsa65Verify": "复制 Verify",
+    "mldsa65SeedCopied": "Seed 已复制到剪贴板",
+    "mldsa65VerifyCopied": "Verify 已复制到剪贴板"
   },
   "settings.cores.title": "核心",
   "settings.cores.description": "管理您的核心",

@@ -1397,7 +1397,17 @@
     "decryptionCopied": "Decryption copied to clipboard",
     "encryptionCopied": "Encryption copied to clipboard",
     "copyDecryption": "Copy Decryption",
-    "copyEncryption": "Copy Encryption"
+    "copyEncryption": "Copy Encryption",
+    "generateMldsa65": "Generate ML-DSA-65 Key Pair",
+    "generatingMldsa65": "Generating ML-DSA-65…",
+    "mldsa65Generated": "ML-DSA-65 keys generated successfully",
+    "mldsa65GenerationFailed": "Failed to generate ML-DSA-65 keys",
+    "mldsa65Seed": "ML-DSA-65 Seed",
+    "mldsa65Verify": "ML-DSA-65 Verify",
+    "copyMldsa65Seed": "Copy Seed",
+    "copyMldsa65Verify": "Copy Verify Key",
+    "mldsa65SeedCopied": "Seed copied to clipboard",
+    "mldsa65VerifyCopied": "Verify key copied to clipboard"
   },
   "settings.cores.title": "Cores",
   "settings.cores.description": "Manage Your Cores",

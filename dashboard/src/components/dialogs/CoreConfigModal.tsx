@@ -10,6 +10,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useCreateCoreConfig, useModifyCoreConfig } from '@/service/api'
 import { isEmptyObject } from '@/utils/isEmptyObject.ts'
+import { generateMldsa65 } from '@/utils/mldsa65'
 import { queryClient } from '@/utils/query-client'
 import Editor from '@monaco-editor/react'
 import { encodeURLSafe } from '@stablelib/base64'
@@ -73,6 +74,8 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const [generatedShadowsocksPassword, setGeneratedShadowsocksPassword] = useState<string | null>(null)
   const [selectedEncryptionMethod, setSelectedEncryptionMethod] = useState<string>(SHADOWSOCKS_ENCRYPTION_METHODS[0].value)
   const [isGeneratingShadowsocksPassword, setIsGeneratingShadowsocksPassword] = useState(false)
+  const [isGeneratingMldsa65, setIsGeneratingMldsa65] = useState(false)
+  const [mldsa65Keys, setMldsa65Keys] = useState<{ seed: string; verify: string } | null>(null)
   const [vlessEncryption, setVlessEncryption] = useState<{
     x25519: { decryption: string; encryption: string } | null
     mlkem768: { decryption: string; encryption: string } | null
@@ -210,6 +213,19 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       toast.error(t('coreConfigModal.shadowsocksPasswordGenerationFailed'))
     } finally {
       setIsGeneratingShadowsocksPassword(false)
+    }
+  }
+  const handleGenerateMldsa65 = async () => {
+    try {
+      setIsGeneratingMldsa65(true)
+      const result = await generateMldsa65()
+      setMldsa65Keys(result)
+      toast.success(t('coreConfigModal.mldsa65Generated'))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('coreConfigModal.mldsa65GenerationFailed', { defaultValue: 'Failed to generate ML-DSA-65 keys' })
+      toast.error(message)
+    } finally {
+      setIsGeneratingMldsa65(false)
     }
   }
   const generateVLESSEncryption = async () => {
@@ -467,6 +483,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       setGeneratedShortId(null)
       setVlessEncryption({ x25519: null, mlkem768: null })
       setSelectedVlessVariant('x25519')
+      setMldsa65Keys(null)
       setValidation({ isValid: true })
     }
   }, [isDialogOpen])
@@ -538,6 +555,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <div className="space-y-4">
+                    {/* Form: Core configuration JSON */}
                     <FormField
                       control={form.control}
                       name="config"
@@ -635,6 +653,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                 </div>
 
                 <div className="space-y-4">
+                  {/* Form: Core display name */}
                   <FormField
                     control={form.control}
                     name="name"
@@ -649,6 +668,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                     )}
                   />
 
+                  {/* Form: Fallback inbound selectors */}
                   <FormField
                     control={form.control}
                     name="fallback_id"
@@ -710,6 +730,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                     )}
                   />
 
+                  {/* Form: Excluded inbound selectors */}
                   <FormField
                     control={form.control}
                     name="excluded_inbound_ids"
@@ -837,6 +858,43 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                   )}
 
                   <div className="pt-2">
+                    <LoaderButton type="button" onClick={handleGenerateMldsa65} className="w-full" isLoading={isGeneratingMldsa65} loadingText={t('coreConfigModal.generatingMldsa65')}>
+                      {t('coreConfigModal.generateMldsa65')}
+                    </LoaderButton>
+                  </div>
+
+                  {mldsa65Keys && (
+                    <div className="relative mt-4 space-y-3 rounded-md border p-4">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn('absolute top-2 h-6 w-6', dir === 'rtl' ? 'left-2' : 'right-2')}
+                        onClick={() => setMldsa65Keys(null)}
+                        aria-label={t('close')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="mb-1 text-sm font-medium">{t('coreConfigModal.mldsa65Seed')}</p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-sm">{mldsa65Keys.seed}</code>
+                            <CopyButton value={mldsa65Keys.seed} copiedMessage="coreConfigModal.mldsa65SeedCopied" defaultMessage="coreConfigModal.copyMldsa65Seed" />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-sm font-medium">{t('coreConfigModal.mldsa65Verify')}</p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-muted p-2 text-sm">{mldsa65Keys.verify}</code>
+                            <CopyButton value={mldsa65Keys.verify} copiedMessage="coreConfigModal.mldsa65VerifyCopied" defaultMessage="coreConfigModal.copyMldsa65Verify" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2">
                     <LoaderButton
                       type="button"
                       onClick={generateVLESSEncryption}
@@ -959,6 +1017,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                 </div>
               </div>
             </div>
+            {/* Form: Restart nodes toggle */}
             {!isEditorFullscreen && (
               <div className="flex flex-col gap-2">
                 {editingCore && (
@@ -975,6 +1034,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                     )}
                   />
                 )}
+
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={createCoreMutation.isPending || modifyCoreMutation.isPending}>
                     {t('cancel')}

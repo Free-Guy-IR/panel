@@ -1316,7 +1316,17 @@
     "decryptionCopied": "رمزگشایی در کلیپ‌بورد کپی شد",
     "encryptionCopied": "رمزنگاری در کلیپ‌بورد کپی شد",
     "copyDecryption": "کپی رمزگشایی",
-    "copyEncryption": "کپی رمزنگاری"
+    "copyEncryption": "کپی رمزنگاری",
+    "generateMldsa65": "تولید کلید ML-DSA-65",
+    "generatingMldsa65": "در حال تولید ML-DSA-65...",
+    "mldsa65Generated": "کلیدهای ML-DSA-65 با موفقیت تولید شد",
+    "mldsa65GenerationFailed": "تولید کلیدهای ML-DSA-65 ناموفق بود",
+    "mldsa65Seed": "Seed ML-DSA-65",
+    "mldsa65Verify": "Verify ML-DSA-65",
+    "copyMldsa65Seed": "کپی Seed",
+    "copyMldsa65Verify": "کپی Verify",
+    "mldsa65SeedCopied": "Seed در کلیپ‌بورد کپی شد",
+    "mldsa65VerifyCopied": "Verify در کلیپ‌بورد کپی شد"
   },
   "settings.cores.title": "هسته‌ها",
   "settings.cores.description": "مدیریت هسته‌های شما",
