@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { getHosts, getInbounds, UserStatus } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { useQuery } from '@tanstack/react-query'
-import { Cable, Check, ChevronsLeftRightEllipsis, Edit, GlobeLock, Info, Lock, Network, Plus, Trash2, X } from 'lucide-react'
+import { Cable, Check, ChevronsLeftRightEllipsis, Copy, Edit, GlobeLock, Info, Lock, Network, Plus, Trash2, X } from 'lucide-react'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -45,13 +45,18 @@ interface NoiseItemProps {
   index: number
   form: UseFormReturn<HostFormValues>
   onRemove: (index: number) => void
+  onDuplicate: (index: number) => void
   t: (key: string) => string
 }
 
-const NoiseItem = memo<NoiseItemProps>(({ index, form, onRemove, t }) => {
+const NoiseItem = memo<NoiseItemProps>(({ index, form, onRemove, onDuplicate, t }) => {
   const handleRemove = useCallback(() => {
     onRemove(index)
   }, [index, onRemove])
+
+  const handleDuplicate = useCallback(() => {
+    onDuplicate(index)
+  }, [index, onDuplicate])
 
   return (
     <div className="grid grid-cols-[minmax(100px,120px),1fr,1fr,1fr,auto] gap-2">
@@ -122,16 +127,21 @@ const NoiseItem = memo<NoiseItemProps>(({ index, form, onRemove, t }) => {
           </FormItem>
         )}
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 shrink-0 border-red-500/20 transition-colors hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
-        onClick={handleRemove}
-        title={t('hostsDialog.noise.removeNoise')}
-      >
-        <Trash2 className="h-4 w-4 text-red-500" />
-      </Button>
+      <div className="flex items-center gap-1">
+        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 transition-colors hover:bg-muted/70" onClick={handleDuplicate} title={t('hostsDialog.noise.duplicateNoise')}>
+          <Copy className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 border-red-500/20 transition-colors hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+          onClick={handleRemove}
+          title={t('hostsDialog.noise.removeNoise')}
+        >
+          <Trash2 className="h-4 w-4 text-red-500" />
+        </Button>
+      </div>
     </div>
   )
 })
@@ -228,12 +238,11 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
     setEditingValue('')
   }
 
-
   const displayValue = field.value && field.value.length > 0 ? (field.value.length <= 3 ? field.value.join(', ') : `${field.value.slice(0, 3).join(', ')}... (+${field.value.length - 3} more)`) : ''
 
   return (
     <FormItem>
-      <div dir='ltr' className="flex items-center gap-2">
+      <div dir="ltr" className="flex items-center gap-2">
         <FormLabel>{label}</FormLabel>
         {infoContent && (
           <Popover>
@@ -248,25 +257,25 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
           </Popover>
         )}
       </div>
-      <Popover open={isPopoverOpen} onOpenChange={(open) => {
-        // Only close if we're not in edit mode
-        if (!open && editingIndex === null) {
-          setIsPopoverOpen(false)
-        } else if (open) {
-          setIsPopoverOpen(true)
-        }
-      }}>
+      <Popover
+        open={isPopoverOpen}
+        onOpenChange={open => {
+          // Only close if we're not in edit mode
+          if (!open && editingIndex === null) {
+            setIsPopoverOpen(false)
+          } else if (open) {
+            setIsPopoverOpen(true)
+          }
+        }}
+      >
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            className="h-auto w-full min-w-0 p-2 text-left"
-            title={displayValue || placeholder}
-          >
-            <span className={`truncate flex-1 max-w-[100px] sm:max-w-none ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`} title={displayValue || placeholder}>{displayValue || placeholder}</span>
-            <div className="ml-2 flex items-center gap-1 shrink-0">
+          <Button variant="outline" role="combobox" className="h-auto w-full min-w-0 p-2 text-left" title={displayValue || placeholder}>
+            <span className={`max-w-[100px] flex-1 truncate sm:max-w-none ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`} title={displayValue || placeholder}>
+              {displayValue || placeholder}
+            </span>
+            <div className="ml-2 flex shrink-0 items-center gap-1">
               {field.value && field.value.length > 0 && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                <Badge variant="secondary" className="px-1.5 py-0.5 text-xs">
                   {field.value.length}
                 </Badge>
               )}
@@ -277,45 +286,38 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
         <PopoverContent className="w-[min(90vw,400px)] p-3" align={dir === 'rtl' ? 'end' : 'start'} side="bottom" dir={dir}>
           <div className="max-h-64 space-y-3 overflow-y-auto">
             {/* Input for adding new items with submit button */}
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center m-1.5">
+            <div className="m-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 placeholder={t('arrayInput.addPlaceholder')}
                 value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="flex-1 text-sm min-w-0"
+                className="min-w-0 flex-1 text-sm"
                 autoFocus={isPopoverOpen}
               />
-              <Button
-                type="button"
-                size="sm"
-                variant="default"
-                onClick={addItem}
-                disabled={!inputValue.trim()}
-                className="h-8 shrink-0 px-3 py-1 w-full sm:w-auto"
-                title={t('arrayInput.addButton')}
-              >
+              <Button type="button" size="sm" variant="default" onClick={addItem} disabled={!inputValue.trim()} className="h-8 w-full shrink-0 px-3 py-1 sm:w-auto" title={t('arrayInput.addButton')}>
                 <Plus className="h-4 w-4" />
                 <span className="ml-1 sm:hidden">{t('arrayInput.addButton')}</span>
               </Button>
             </div>
 
-
             {/* Selected items list */}
             {field.value && field.value.length > 0 && (
-              <div dir='ltr' className="space-y-2">
-                <div dir={dir} className="text-xs font-medium text-muted-foreground">{t('arrayInput.items')} ({field.value.length})</div>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
+              <div dir="ltr" className="space-y-2">
+                <div dir={dir} className="text-xs font-medium text-muted-foreground">
+                  {t('arrayInput.items')} ({field.value.length})
+                </div>
+                <div className="max-h-48 space-y-1 overflow-y-auto">
                   {field.value.map((item: string, index: number) => (
-                    <div key={index} className="group flex items-center gap-2 rounded-md border p-2 hover:bg-accent/50 transition-colors min-w-0" onClick={(e) => e.stopPropagation()}>
+                    <div key={index} className="group flex min-w-0 items-center gap-2 rounded-md border p-2 transition-colors hover:bg-accent/50" onClick={e => e.stopPropagation()}>
                       {editingIndex === index ? (
                         <Input
                           value={editingValue}
                           onChange={e => setEditingValue(e.target.value)}
                           onKeyDown={e => handleEditKeyDown(e, index)}
-                          className="flex-1 text-sm h-7 min-w-0"
+                          className="h-7 min-w-0 flex-1 text-sm"
                           autoFocus
-                          onBlur={(e) => {
+                          onBlur={e => {
                             // Only save if the blur is not caused by clicking a button
                             if (!e.relatedTarget || !e.relatedTarget.closest('button')) {
                               saveEdit(index)
@@ -325,7 +327,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
                         />
                       ) : (
                         <span
-                          className="flex-1 text-sm leading-tight cursor-text hover:text-primary transition-colors truncate min-w-0"
+                          className="min-w-0 flex-1 cursor-text truncate text-sm leading-tight transition-colors hover:text-primary"
                           onClick={() => startEdit(index, item)}
                           title={t('arrayInput.clickToEdit')}
                         >
@@ -333,14 +335,14 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
                         </span>
                       )}
 
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex shrink-0 items-center gap-1">
                         {editingIndex === index ? (
                           <>
                             <Button
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 saveEdit(index)
@@ -355,7 +357,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 cancelEdit()
@@ -372,7 +374,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 startEdit(index, item)
@@ -386,7 +388,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 removeItem(index)
@@ -405,11 +407,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
               </div>
             )}
 
-            {(!field.value || field.value.length === 0) && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                {t('arrayInput.noItems')}
-              </div>
-            )}
+            {(!field.value || field.value.length === 0) && <div className="py-6 text-center text-sm text-muted-foreground">{t('arrayInput.noItems')}</div>}
           </div>
         </PopoverContent>
       </Popover>
@@ -461,6 +459,25 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     [form],
   )
 
+  const duplicateNoiseSetting = useCallback(
+    (index: number) => {
+      const currentNoiseSettings = form.getValues('noise_settings.xray') || []
+      const targetNoise = currentNoiseSettings[index]
+      if (!targetNoise) {
+        return
+      }
+
+      const duplicatedNoise = { ...targetNoise }
+      const newNoiseSettings = [...currentNoiseSettings.slice(0, index + 1), duplicatedNoise, ...currentNoiseSettings.slice(index + 1)]
+
+      form.setValue('noise_settings.xray', newNoiseSettings, {
+        shouldDirty: true,
+        shouldTouch: true,
+      })
+    },
+    [form],
+  )
+
   // Memoized noise settings array to prevent unnecessary re-renders
   const noiseSettings = useMemo(() => {
     return form.getValues('noise_settings.xray') || []
@@ -482,13 +499,13 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
       const result: any = {}
       Object.entries(obj).forEach(([key, value]) => {
         const currentPath = [...path, key]
-        
+
         // Always preserve priority field even if it's 0
         if (key === 'priority') {
           result[key] = value
           return
         }
-        
+
         if (value === null || value === undefined || value === '') return
 
         if (typeof value === 'object' && !Array.isArray(value)) {
@@ -2426,7 +2443,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             </div>
                             <div className="space-y-2">
                               {noiseSettings.map((_, index) => (
-                                <NoiseItem key={index} index={index} form={form} onRemove={removeNoiseSetting} t={t} />
+                                <NoiseItem key={index} index={index} form={form} onRemove={removeNoiseSetting} onDuplicate={duplicateNoiseSetting} t={t} />
                               ))}
                               {noiseSettings.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">{t('hostsDialog.noise.noNoiseSettings')}</div>}
                             </div>
