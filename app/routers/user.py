@@ -16,6 +16,7 @@ from app.models.user import (
     UserModify,
     UserResponse,
     UsersResponse,
+    UserSubscriptionUpdateChart,
     UserSubscriptionUpdateList,
 )
 from app.operation import OperatorType
@@ -123,6 +124,21 @@ async def reset_users_data_usage(db: AsyncSession = Depends(get_db), admin: Admi
     return {}
 
 
+@router.get(
+    "s/sub_update/chart",
+    response_model=UserSubscriptionUpdateChart,
+    responses={403: responses._403, 404: responses._404},
+)
+async def get_users_sub_update_chart(
+    username: str | None = None,
+    admin_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    """Get subscription agent distribution percentages (optionally filtered by username)"""
+    return await user_operator.get_users_sub_update_chart(db, admin=admin, username=username, admin_id=admin_id)
+
+
 @router.put("/{username}/set_owner", response_model=UserResponse, responses={403: responses._403})
 async def set_owner(
     username: str,
@@ -163,7 +179,7 @@ async def get_user_sub_update_list(
     admin: AdminDetails = Depends(get_current),
 ):
     """Get user subscription agent list"""
-    return await user_operator.get_user_sub_update_list(db, username=username, admin=admin, offset=offset, limit=limit)
+    return await user_operator.get_users_sub_update_list(db, username=username, admin=admin, offset=offset, limit=limit)
 
 
 @router.get(

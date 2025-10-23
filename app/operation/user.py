@@ -1,5 +1,7 @@
 import asyncio
+import re
 import secrets
+from collections import Counter
 from datetime import datetime as dt, timedelta as td, timezone as tz
 
 from pydantic import ValidationError
@@ -19,9 +21,10 @@ from app.db.crud.user import (
     create_user,
     get_all_users_usages,
     get_expired_users,
-    get_user_sub_update_list,
     get_user_usages,
     get_users,
+    get_users_sub_update_list,
+    get_users_subscription_agent_counts,
     modify_user,
     remove_user,
     remove_users,
@@ -44,6 +47,8 @@ from app.models.user import (
     UserNotificationResponse,
     UserResponse,
     UsersResponse,
+    UserSubscriptionUpdateChart,
+    UserSubscriptionUpdateChartSegment,
     UserSubscriptionUpdateList,
 )
 from app.node import node_manager
@@ -54,6 +59,9 @@ from app.utils.logger import get_logger
 from config import SUBSCRIPTION_PATH
 
 logger = get_logger("user-operation")
+
+_USER_AGENT_SPLIT_RE = re.compile(r"[;/\s\(\)]+")
+_VERSION_TOKEN_RE = re.compile(r"v?\d+(?:\.\d+)*", re.IGNORECASE)
 
 
 class UserOperation(BaseOperation):
@@ -499,10 +507,80 @@ class UserOperation(BaseOperation):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
 
-    async def get_user_sub_update_list(
+    async def get_users_sub_update_list(
         self, db: AsyncSession, username: str, admin: AdminDetails, offset: int = 0, limit: int = 10
     ) -> UserSubscriptionUpdateList:
         db_user = await self.get_validated_user(db, username, admin)
-        user_sub_data, count = await get_user_sub_update_list(db, user_id=db_user.id, offset=offset, limit=limit)
+        user_sub_data, count = await get_users_sub_update_list(db, user_id=db_user.id, offset=offset, limit=limit)
 
         return UserSubscriptionUpdateList(updates=user_sub_data, count=count)
+
+    async def get_users_sub_update_chart(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        username: str | None = None,
+        admin_id: int | None = None,
+    ) -> UserSubscriptionUpdateChart:
+        if username:
+            db_user = await self.get_validated_user(db, username, admin)
+            agent_counts = await get_users_subscription_agent_counts(db, user_id=db_user.id)
+            return self._build_user_agent_chart(agent_counts)
+
+        if admin_id:
+            if not admin.is_sudo and admin_id != admin.id:
+                await self.raise_error(message="You're not allowed", code=403)
+            elif admin.is_sudo and admin_id != admin.id:
+                await self.get_validated_admin_by_id(db, admin_id)
+        else:
+            admin_id = None if admin.is_sudo else admin.id
+
+        agent_counts = await get_users_subscription_agent_counts(db, admin_id=admin_id)
+        return self._build_user_agent_chart(agent_counts)
+
+    @classmethod
+    def _build_user_agent_chart(cls, agent_counts: list[tuple[str, int]]) -> UserSubscriptionUpdateChart:
+        if not agent_counts:
+            return UserSubscriptionUpdateChart(total=0, segments=[])
+
+        counts = Counter()
+        display_names: dict[str, str] = {}
+
+        for agent, count in agent_counts:
+            normalized = cls._normalize_user_agent(agent)
+            key = normalized.lower()
+            counts[key] += count
+            display_names.setdefault(key, normalized)
+
+        total = sum(counts.values())
+        segments = [
+            UserSubscriptionUpdateChartSegment(
+                name=display_names[key],
+                count=count,
+                percentage=round((count / total) * 100, 2) if total else 0.0,
+            )
+            for key, count in counts.most_common()
+        ]
+
+        return UserSubscriptionUpdateChart(total=total, segments=segments)
+
+    @staticmethod
+    def _normalize_user_agent(user_agent: str) -> str:
+        if not user_agent:
+            return "Unknown"
+
+        cleaned = user_agent.strip()
+        if not cleaned:
+            return "Unknown"
+
+        tokens = [token for token in _USER_AGENT_SPLIT_RE.split(cleaned) if token]
+
+        for token in tokens:
+            if _VERSION_TOKEN_RE.fullmatch(token):
+                continue
+
+            sanitized = token.strip("-_")
+            if sanitized:
+                return sanitized
+
+        return "Unknown"
