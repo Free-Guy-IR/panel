@@ -200,9 +200,9 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
           </div>
         ))}
         {hasMoreNodes && (
-          <div className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 ${isRTL ? 'flex-row-reverse justify-end' : 'flex-row justify-center'} col-span-full`}>
+          <div className={`flex items-center justify-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 w-full col-span-full`}>
             <Info className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-            <span className="truncate max-w-[100px] overflow-hidden text-ellipsis">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
+            <span className="text-center">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
           </div>
         )}
       </div>

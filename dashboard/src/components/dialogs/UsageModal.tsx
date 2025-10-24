@@ -39,8 +39,8 @@ const getPeriodMap = (now: number) => ({
   '1h': { period: Period.minute, start: new Date(now - 60 * 60 * 1000) },
   '12h': { period: Period.hour, start: new Date(now - 12 * 60 * 60 * 1000) },
   '24h': { period: Period.hour, start: new Date(now - 24 * 60 * 60 * 1000) },
-  '3d': { period: Period.day, start: new Date(now - 3 * 24 * 60 * 60 * 1000) },
-  '1w': { period: Period.day, start: new Date(now - 7 * 24 * 60 * 60 * 1000) },
+  '3d': { period: Period.day, start: new Date(now - 2 * 24 * 60 * 60 * 1000) },
+  '1w': { period: Period.day, start: new Date(now - 6 * 24 * 60 * 60 * 1000) },
 })
 
 interface UsageModalProps {
@@ -99,7 +99,7 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
       // If you have dayjs with jalali plugin, use it:
       // formattedDate = d.locale('fa').format('YYYY/MM/DD HH:mm')
       // Otherwise, fallback to toLocaleString
-      if (period === 'day' && isToday) {
+      if (period === Period.day && isToday) {
         formattedDate = new Date()
           .toLocaleString('fa-IR', {
             year: 'numeric',
@@ -110,7 +110,7 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
             hour12: false,
           })
           .replace(',', '')
-      } else if (period === 'day') {
+      } else if (period === Period.day) {
         const localDate = new Date(d.year(), d.month(), d.date(), 0, 0, 0)
         formattedDate = localDate
           .toLocaleString('fa-IR', {
@@ -234,27 +234,27 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
         </div>
       ) : (
         // Node breakdown data
-        <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          {nodesToShow.map(node => (
-            <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
-              <span className={`flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: getNodeColor(node.name) }} />
-                <span className="truncate max-w-[60px] sm:max-w-[80px] overflow-hidden text-ellipsis" title={node.name}>{node.name}</span>
-              </span>
-              <span className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {nodesToShow.map(node => (
+          <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
+            <span className={`flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: getNodeColor(node.name) }} />
+              <span className="truncate max-w-[60px] sm:max-w-[80px] overflow-hidden text-ellipsis" title={node.name}>{node.name}</span>
+            </span>
+            <span className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
                 <span className="font-mono">
                   {node.usage.toFixed(2)} GB
-                </span>
               </span>
-            </div>
-          ))}
-          {hasMoreNodes && (
-            <div className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 ${isRTL ? 'flex-row-reverse justify-end' : 'flex-row justify-center'} col-span-full`}>
-              <Info className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-              <span className="truncate max-w-[100px] overflow-hidden text-ellipsis">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
-            </div>
-          )}
-        </div>
+            </span>
+          </div>
+        ))}
+        {hasMoreNodes && (
+          <div className={`flex items-center justify-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 w-full col-span-full`}>
+            <Info className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+            <span className="text-center">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
+          </div>
+        )}
+      </div>
       )}
     </div>
   )
@@ -395,15 +395,30 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
   }, [backendPeriod])
 
   const userUsageParams = useMemo(() => {
+    const baseParams: any = {
+      period: backendPeriod,
+      start: start.toISOString(),
+      node_id: selectedNodeId,
+    }
+
+    // Add group_by_node when all nodes are selected (selectedNodeId is undefined)
+    if (selectedNodeId === undefined) {
+      baseParams.group_by_node = true
+    }
+
     if (showCustomRange && customRange?.from && customRange?.to) {
       return {
-        period: backendPeriod,
-        start: start.toISOString(),
+        ...baseParams,
         end: dateUtils.toDayjs(customRange.to).endOf('day').toISOString(),
-        node_id: selectedNodeId,
       }
     }
-    return { period: backendPeriod, start: start.toISOString(), node_id: selectedNodeId }
+    
+    // For preset periods, set end time for daily periods to avoid extra bars
+    const endTime = backendPeriod === Period.day ? dateUtils.toDayjs(new Date()).endOf('day').toISOString() : undefined
+    return {
+      ...baseParams,
+      ...(endTime && { end: endTime }),
+    }
   }, [backendPeriod, start, end, period, customRange, showCustomRange, selectedNodeId])
 
   // Only fetch when modal is open
@@ -412,79 +427,185 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
   // Prepare chart data for BarChart with node grouping
   const processedChartData = useMemo(() => {
     if (!data?.stats) return []
-    let flatStats: any[] = []
+
+    // If all nodes selected (selectedNodeId is undefined), handle like AllNodesStackedBarChart
+    if (selectedNodeId === undefined) {
+    let statsByNode: Record<string, any[]> = {}
     if (data.stats) {
       if (typeof data.stats === 'object' && !Array.isArray(data.stats)) {
-        // Dict format: use nodeId if provided, else '-1', else first key
-        const key = selectedNodeId !== undefined ? String(selectedNodeId) : '-1'
-        if (data.stats[key] && Array.isArray(data.stats[key])) {
-          flatStats = data.stats[key]
-        } else {
-          const firstKey = Object.keys(data.stats)[0]
-          if (firstKey && Array.isArray(data.stats[firstKey])) {
-            flatStats = data.stats[firstKey]
-          } else {
-            flatStats = []
-          }
-        }
+          // This is the expected format when no node_id is provided
+          statsByNode = data.stats
       } else if (Array.isArray(data.stats)) {
-        // List format: use node_id === -1, then 0, else first
-        let selectedStats = data.stats.find((s: any) => s.node_id === -1)
-        if (!selectedStats) selectedStats = data.stats.find((s: any) => s.node_id === 0)
-        if (!selectedStats) selectedStats = data.stats[0]
-        flatStats = selectedStats?.stats || []
-        if (!Array.isArray(flatStats)) flatStats = []
+          // fallback: old format - not expected for all nodes
+          console.warn('Unexpected array format for all nodes usage')
       }
     }
-    let filtered = flatStats
-    if ((period === '12h' || period === '24h') && !showCustomRange) {
-      if (!start || !end)
-        return flatStats.map((point: any) => {
-          const dateObj = dateUtils.toDayjs(point.period_start)
-          let timeFormat
-          if (period === '12h' || period === '24h' || (showCustomRange && backendPeriod === Period.hour)) {
-            timeFormat = dateObj.format('HH:mm')
-          } else {
-            timeFormat = dateObj.format('MM/DD')
-          }
-          const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
-          return {
-            time: timeFormat,
-            usage: parseFloat(usageInGB.toFixed(2)),
-            _period_start: point.period_start,
-            local_period_start: dateObj.toISOString(),
-          }
-        })
-      const from = dateUtils.toDayjs((start as Date) || new Date(0))
-      const to = dateUtils.toDayjs((end as Date) || new Date(0))
-      filtered = filtered.filter((point: any) => {
-        const pointTime = dateUtils.toDayjs(point.period_start)
-        return (pointTime.isSame(from) || pointTime.isAfter(from)) && (pointTime.isSame(to) || pointTime.isBefore(to))
-      })
-    } else if (showCustomRange && customRange?.from && customRange?.to) {
-      filtered = filtered.filter((point: any) => {
-        if (!customRange.from || !customRange.to) return false
-        const dateObj = dateUtils.toDayjs(point.period_start)
-        return dateObj.isAfter(dateUtils.toDayjs(customRange.from).subtract(1, 'minute')) && dateObj.isBefore(dateUtils.toDayjs(customRange.to).add(1, 'minute'))
-      })
-    }
-    return filtered.map((point: any) => {
-      const dateObj = dateUtils.toDayjs(point.period_start)
-      let timeFormat
-      if (period === '12h' || period === '24h' || (showCustomRange && backendPeriod === Period.hour)) {
-        timeFormat = dateObj.format('HH:mm')
+
+    // Build a map from node id to node name for quick lookup
+    const nodeIdToName = nodeList.reduce(
+      (acc, node) => {
+        acc[node.id] = node.name
+        return acc
+      },
+      {} as Record<string, string>,
+    )
+
+    // Check if we have data for individual nodes or aggregated data
+    const hasIndividualNodeData = Object.keys(statsByNode).some(key => key !== '-1')
+
+      if (!hasIndividualNodeData && statsByNode['-1']) {
+        // API returned aggregated data for all nodes combined
+        const aggregatedStats = statsByNode['-1']
+
+        if (aggregatedStats.length > 0) {
+          const data = aggregatedStats.map((point: any) => {
+            const d = dateUtils.toDayjs(point.period_start)
+            let timeFormat
+            if (backendPeriod === Period.hour) {
+              timeFormat = d.format('HH:mm')
+            } else {
+              timeFormat = d.format('MM/DD')
+            }
+            const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
+            // Create entry with all nodes having the same usage (aggregated)
+            const entry: any = {
+              time: timeFormat,
+              _period_start: point.period_start,
+            }
+            nodeList.forEach(node => {
+              // Distribute usage equally among nodes
+              const nodeUsage = parseFloat((usageInGB / nodeList.length).toFixed(2))
+              entry[node.name] = nodeUsage
+            })
+            return entry
+          })
+
+          return data
+        } else {
+          return []
+        }
       } else {
-        timeFormat = dateObj.format('MM/DD')
+        // Handle individual node data
+        // Build a set of all period_start values
+        const allPeriods = new Set<string>()
+        Object.values(statsByNode).forEach(arr => arr.forEach(stat => allPeriods.add(stat.period_start)))
+        // Sort periods
+        const sortedPeriods = Array.from(allPeriods).sort()
+
+        if (sortedPeriods.length > 0) {
+          // Build chart data: [{ time, [nodeName]: usage, ... }]
+          const data = sortedPeriods.map(periodStart => {
+            const d = dateUtils.toDayjs(periodStart)
+            let timeFormat
+            if (backendPeriod === Period.hour) {
+              timeFormat = d.format('HH:mm')
+            } else {
+              timeFormat = d.format('MM/DD')
+            }
+            const entry: any = {
+              time: timeFormat,
+              _period_start: periodStart,
+            }
+
+            Object.entries(statsByNode).forEach(([nodeId, statsArr]) => {
+              if (nodeId === '-1') return // Skip aggregated data
+              const nodeName = nodeIdToName[nodeId]
+              if (!nodeName) {
+                console.warn('No node name found for ID:', nodeId)
+                return
+              }
+              const nodeStats = statsArr.find(s => s.period_start === periodStart)
+              if (nodeStats) {
+                const usageInGB = nodeStats.total_traffic / (1024 * 1024 * 1024)
+                entry[nodeName] = parseFloat(usageInGB.toFixed(2))
+              } else {
+                entry[nodeName] = 0
+              }
+            })
+            return entry
+          })
+
+          return data
+        } else {
+          return []
+        }
       }
-      const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
-      return {
-        time: timeFormat,
-        usage: parseFloat(usageInGB.toFixed(2)),
-        _period_start: point.period_start,
-        local_period_start: dateObj.toISOString(),
+    } else {
+      // Single node selected - use existing logic
+      let flatStats: any[] = []
+      if (data.stats) {
+        if (typeof data.stats === 'object' && !Array.isArray(data.stats)) {
+          // Dict format: use nodeId if provided, else '-1', else first key
+          const key = selectedNodeId !== undefined ? String(selectedNodeId) : '-1'
+          if (data.stats[key] && Array.isArray(data.stats[key])) {
+            flatStats = data.stats[key]
+          } else {
+            const firstKey = Object.keys(data.stats)[0]
+            if (firstKey && Array.isArray(data.stats[firstKey])) {
+              flatStats = data.stats[firstKey]
+            } else {
+              flatStats = []
+            }
+          }
+        } else if (Array.isArray(data.stats)) {
+          // List format: use node_id === -1, then 0, else first
+          let selectedStats = data.stats.find((s: any) => s.node_id === -1)
+          if (!selectedStats) selectedStats = data.stats.find((s: any) => s.node_id === 0)
+          if (!selectedStats) selectedStats = data.stats[0]
+          flatStats = selectedStats?.stats || []
+          if (!Array.isArray(flatStats)) flatStats = []
+        }
       }
-    })
-  }, [data, period, showCustomRange, customRange, backendPeriod, start, end, selectedNodeId])
+      let filtered = flatStats
+      if ((period === '12h' || period === '24h') && !showCustomRange) {
+        if (!start || !end)
+          return flatStats.map((point: any) => {
+            const dateObj = dateUtils.toDayjs(point.period_start)
+            let timeFormat
+            if (period === '12h' || period === '24h' || (showCustomRange && backendPeriod === Period.hour)) {
+              timeFormat = dateObj.format('HH:mm')
+            } else {
+              timeFormat = dateObj.format('MM/DD')
+            }
+            const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
+            return {
+              time: timeFormat,
+              usage: parseFloat(usageInGB.toFixed(2)),
+              _period_start: point.period_start,
+              local_period_start: dateObj.toISOString(),
+            }
+          })
+        const from = dateUtils.toDayjs((start as Date) || new Date(0))
+        const to = dateUtils.toDayjs((end as Date) || new Date(0))
+        filtered = filtered.filter((point: any) => {
+          const pointTime = dateUtils.toDayjs(point.period_start)
+          return (pointTime.isSame(from) || pointTime.isAfter(from)) && (pointTime.isSame(to) || pointTime.isBefore(to))
+        })
+      } else if (showCustomRange && customRange?.from && customRange?.to) {
+        filtered = filtered.filter((point: any) => {
+          if (!customRange.from || !customRange.to) return false
+          const dateObj = dateUtils.toDayjs(point.period_start)
+          return dateObj.isAfter(dateUtils.toDayjs(customRange.from).subtract(1, 'minute')) && dateObj.isBefore(dateUtils.toDayjs(customRange.to).add(1, 'minute'))
+        })
+      }
+      return filtered.map((point: any) => {
+        const dateObj = dateUtils.toDayjs(point.period_start)
+        let timeFormat
+        if (period === '12h' || period === '24h' || (showCustomRange && backendPeriod === Period.hour)) {
+          timeFormat = dateObj.format('HH:mm')
+        } else {
+          timeFormat = dateObj.format('MM/DD')
+        }
+        const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
+        return {
+          time: timeFormat,
+          usage: parseFloat(usageInGB.toFixed(2)),
+          _period_start: point.period_start,
+          local_period_start: dateObj.toISOString(),
+        }
+      })
+    }
+  }, [data, period, showCustomRange, customRange, backendPeriod, start, end, selectedNodeId, nodeList])
 
   // Update chartData state when processedChartData changes
   useEffect(() => {
@@ -494,12 +615,25 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
   // Calculate trend (simple: compare last and previous usage)
   const trend = useMemo(() => {
     if (!processedChartData || processedChartData.length < 2) return null
-    const last = processedChartData[processedChartData.length - 1].usage
-    const prev = processedChartData[processedChartData.length - 2].usage
+
+    const getTotalUsage = (dataPoint: any) => {
+      if (selectedNodeId === undefined) {
+        // All nodes selected - sum all node usages
+        return Object.keys(dataPoint)
+          .filter(key => !key.startsWith('_') && key !== 'time' && key !== 'usage' && (dataPoint[key] || 0) > 0)
+          .reduce((sum, nodeName) => sum + (dataPoint[nodeName] || 0), 0)
+      } else {
+        // Single node selected - use usage field
+        return dataPoint.usage
+      }
+    }
+
+    const last = getTotalUsage(processedChartData[processedChartData.length - 1])
+    const prev = getTotalUsage(processedChartData[processedChartData.length - 2])
     if (prev === 0) return null
     const percent = ((last - prev) / prev) * 100
     return percent
-  }, [processedChartData])
+  }, [processedChartData, selectedNodeId])
 
 
   // Handlers
@@ -588,17 +722,15 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
                   <ResponsiveContainer width="100%" height={width < 500 ? 200 : 320}>
                     <BarChart
                       data={processedChartData}
-                      margin={{ top: 16, right: processedChartData.length > 7 ? 0 : 8, left: processedChartData.length > 7 ? 0 : 8, bottom: 8 }}
-                      barSize={Math.max(16, Math.min(40, Math.floor(width / (processedChartData.length * 1.5))))}
+                      margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                       onClick={(data) => {
                         if (data && data.activePayload && data.activePayload.length > 0 && processedChartData) {
                           const clickedData = data.activePayload[0].payload
                           const activeNodesCount = Object.keys(clickedData).filter(key =>
-                            !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0
+                            !key.startsWith('_') && key !== 'time' && key !== '_period_start' && key !== 'usage' && (clickedData[key] || 0) > 0
                           ).length
-                          // Open modal if there are more nodes than shown in tooltip
-                          const maxShown = window.innerWidth < 768 ? 3 : 6
-                          if (activeNodesCount > maxShown) {
+                          // Open modal if there are active nodes (regardless of count)
+                          if (activeNodesCount > 0) {
                             // Find the index of the clicked data point
                             const clickedIndex = processedChartData.findIndex(item => item._period_start === clickedData._period_start)
                             setCurrentDataIndex(clickedIndex >= 0 ? clickedIndex : 0)
@@ -608,15 +740,42 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
                         }
                       }}
                     >
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis dataKey="time" tickLine={false} tickMargin={10} axisLine={false} />
-                      <YAxis tick={{ fontSize: 12 }} unit="GB" />
+                      <CartesianGrid direction={'ltr'} vertical={false} />
+                      <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} minTickGap={5} />
+                      <YAxis
+                        direction={'ltr'}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={value => `${value.toFixed(2)} GB`}
+                        tick={{
+                          fill: 'hsl(var(--muted-foreground))',
+                          fontSize: 9,
+                          fontWeight: 500,
+                        }}
+                        width={32}
+                        tickMargin={2}
+                      />
                       <ChartTooltip cursor={false} content={<CustomBarTooltip chartConfig={chartConfig} dir={dir} period={currentPeriod} />} />
+                      {selectedNodeId === undefined ? (
+                        // All nodes selected - render stacked bars
+                        nodeList.map((node, idx) => (
+                          <Bar
+                            key={node.id}
+                            dataKey={node.name}
+                            stackId="a"
+                            fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
+                            radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                            cursor="pointer"
+                          />
+                        ))
+                      ) : (
+                        // Single node selected - render single bar
                       <Bar dataKey="usage" radius={6} cursor="pointer">
                         {processedChartData.map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={'hsl(var(--primary))'} />
                         ))}
                       </Bar>
+                      )}
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
@@ -649,6 +808,7 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
         allChartData={processedChartData || []}
         currentIndex={currentDataIndex}
         onNavigate={handleModalNavigate}
+        hideUplinkDownlink={true}
       />
     </Dialog>
   )

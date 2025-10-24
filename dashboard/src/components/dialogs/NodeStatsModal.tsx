@@ -17,9 +17,10 @@ interface NodeStatsModalProps {
     allChartData?: any[]
     currentIndex?: number
     onNavigate?: (index: number) => void
+    hideUplinkDownlink?: boolean
 }
 
-const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData = [], currentIndex = 0, onNavigate }: NodeStatsModalProps) => {
+const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData = [], currentIndex = 0, onNavigate, hideUplinkDownlink = false }: NodeStatsModalProps) => {
     const { t, i18n } = useTranslation()
     const dir = useDirDetection()
 
@@ -136,6 +137,12 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
         }
     }
 
+    // In RTL, swap the button actions for intuitive navigation
+    const handleLeftButton = isRTL ? handleNext : handlePrevious
+    const handleRightButton = isRTL ? handlePrevious : handleNext
+    const canGoLeft = isRTL ? canGoNext : canGoPrevious
+    const canGoRight = isRTL ? canGoPrevious : canGoNext
+
     // Calculate total usage
     const totalUsage = Object.keys(data)
         .reduce((sum, key) => {
@@ -169,30 +176,30 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={handlePrevious}
-                                    disabled={!canGoPrevious}
+                                    onClick={handleLeftButton}
+                                    disabled={!canGoLeft}
                                     className="h-8 w-8 p-0"
                                 >
-                                    <ChevronLeft className="h-4 w-4" />
+                                    <ChevronLeft className={`h-4 w-4 ${isRTL ? 'rotate-180' : ''}`} />
                                 </Button>
-                                <span className="text-sm text-muted-foreground min-w-[60px] text-center font-medium">
+                                <span dir='ltr' className="text-sm text-muted-foreground min-w-[60px] text-center font-medium">
                                     {currentIndex + 1} / {allChartData.length}
                                 </span>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={handleNext}
-                                    disabled={!canGoNext}
+                                    onClick={handleRightButton}
+                                    disabled={!canGoRight}
                                     className="h-8 w-8 p-0"
                                 >
-                                    <ChevronRight className="h-4 w-4" />
+                                    <ChevronRight className={`h-4 w-4 ${isRTL ? 'rotate-180' : ''}`} />
                                 </Button>
                             </div>
                         )}
                     </div>
                 </DialogHeader>
 
-                <Card className="border-none shadow-none">
+                <Card className="border-none shadow-none bg-transparent">
                     <CardContent className="space-y-4 p-0">
                         {/* Date and Total Usage */}
                         <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -202,7 +209,7 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
                                     {formattedDate}
                                 </span>
                             </div>
-                            <Badge variant="secondary" className="font-mono text-xs sm:text-sm px-2 py-1">
+                            <Badge dir='ltr' variant="secondary" className="font-mono text-xs sm:text-sm px-2 py-1">
                                 {totalUsage.toFixed(2)} GB
                             </Badge>
                         </div>
@@ -217,7 +224,7 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
                                 {activeNodes.map((node) => (
                                     <div
                                         key={node.name}
-                                        className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border bg-card`}
+                                        className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border`}
                                     >
                                         <div className={`flex items-center gap-2 sm:gap-3 min-w-0 flex-1`}>
                                             <div
@@ -234,20 +241,22 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
                                             </div>
                                         </div>
 
-                                        <div className={`flex items-center gap-1 sm:gap-2 text-xs`}>
-                                            <div className={`flex items-center gap-1`}>
-                                                <Upload className="h-2 w-2 sm:h-3 sm:w-3 text-green-500" />
-                                                <span dir="ltr" className="font-mono text-xs truncate max-w-[60px] sm:max-w-none">
-                                                    {formatBytes(node.uplink)}
-                                                </span>
+                                        {!hideUplinkDownlink && (
+                                            <div className={`flex items-center gap-1 sm:gap-2 text-xs`}>
+                                                <div className={`flex items-center gap-1`}>
+                                                    <Upload className="h-2 w-2 sm:h-3 sm:w-3 text-green-500" />
+                                                    <span dir="ltr" className="font-mono text-xs truncate max-w-[60px] sm:max-w-none">
+                                                        {formatBytes(node.uplink)}
+                                                    </span>
+                                                </div>
+                                                <div className={`flex items-center gap-1`}>
+                                                    <Download className="h-2 w-2 sm:h-3 sm:w-3 text-blue-500" />
+                                                    <span dir="ltr" className="font-mono text-xs truncate max-w-[60px] sm:max-w-none">
+                                                        {formatBytes(node.downlink)}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className={`flex items-center gap-1`}>
-                                                <Download className="h-2 w-2 sm:h-3 sm:w-3 text-blue-500" />
-                                                <span dir="ltr" className="font-mono text-xs truncate max-w-[60px] sm:max-w-none">
-                                                    {formatBytes(node.downlink)}
-                                                </span>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
