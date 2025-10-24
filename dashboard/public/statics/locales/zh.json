@@ -922,6 +922,7 @@
   "statistics.realtime": "实时",
   "statistics.realtimeDescription": "为您的服务器和用户提供实时统计和图表。",
   "statistics.historicalDescription": "所选时间范围内的历史服务器性能数据",
+  "statistics.subscriptions": "订阅",
   "statistics.subscriptionDistribution": "订阅客户端分布",
   "statistics.subscriptionDistributionDescription": "不同代理和应用的订阅更新占比。",
   "statistics.totalSubscriptions": "总更新次数",

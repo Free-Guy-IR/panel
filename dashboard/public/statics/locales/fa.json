@@ -1032,6 +1032,7 @@
   "statistics.realtime": "زمان واقعی",
   "statistics.realtimeDescription": "آمار و نمودارهای زنده برای سرورها و کاربران شما.",
   "statistics.historicalDescription": "داده‌های عملکرد تاریخی سرور برای بازه زمانی انتخاب شده",
+  "statistics.subscriptions": "اشتراک‌ها",
   "statistics.subscriptionDistribution": "توزیع کلاینت‌های اشتراک",
   "statistics.subscriptionDistributionDescription": "سهم به‌روزرسانی‌های لینک اشتراک بین عامل‌ها و برنامه‌ها.",
   "statistics.totalSubscriptions": "مجموع به‌روزرسانی‌ها",

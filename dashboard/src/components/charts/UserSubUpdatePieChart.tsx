@@ -1,14 +1,15 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { type GetUsersSubUpdateChartParams, useGetAdmins, useGetUsersSubUpdateChart, type UserSubscriptionUpdateChartSegment } from '@/service/api'
 import { numberWithCommas } from '@/utils/formatByte'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Cell, LabelList, Pie, PieChart } from 'recharts'
+import { Cell, Pie, PieChart } from 'recharts'
 import { ChartEmptyState } from './EmptyState'
 
 const COLOR_PALETTE = Array.from({ length: 5 }, (_, index) => `hsl(var(--chart-${index + 1}))`)
@@ -35,7 +36,63 @@ const buildSegmentKey = (name: string, index: number) => {
   return sanitized || `segment-${index}`
 }
 
-export function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps) {
+// Custom tooltip component with shadcn styling
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: Array<{
+    payload: {
+      agent: string
+      updates: number
+      percentage: number
+      fill: string
+    }
+  }>
+  label?: string
+}
+
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
+  const { t } = useTranslation()
+
+  if (!active || !payload || !payload.length) {
+    return null
+  }
+
+  const data = payload[0].payload
+  const { agent, updates, percentage, fill } = data
+
+  return (
+    <div className="rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur-sm">
+      <div className="flex items-center gap-2">
+        <div 
+          className="h-3 w-3 rounded-full border border-border/20" 
+          style={{ backgroundColor: fill }}
+        />
+        <span className="text-sm font-medium text-foreground">{agent}</span>
+      </div>
+      
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <Users className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{t('statistics.subscriptions')}</span>
+          </div>
+          <span className="text-sm font-semibold text-foreground font-mono">
+            {numberWithCommas(updates)}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">{t('statistics.percentage')}</span>
+          <Badge variant="secondary" className="text-xs font-medium">
+            {percentage.toFixed(1)}%
+          </Badge>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [selectedAdmin, setSelectedAdmin] = useState(() => (adminId != null ? String(adminId) : 'all'))
@@ -132,7 +189,7 @@ export function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieCha
     <Card>
       <CardHeader className="flex flex-col gap-4 pb-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <CardTitle>{t('statistics.subscriptionDistribution')}</CardTitle>
+          <CardTitle className='mb-2'>{t('statistics.subscriptionDistribution')}</CardTitle>
           <CardDescription>{t('statistics.subscriptionDistributionDescription')}</CardDescription>
         </div>
         <div className="flex w-full flex-col gap-2 lg:max-w-xs">
@@ -164,31 +221,13 @@ export function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieCha
         ) : (
           <div className="flex flex-col items-center gap-6 lg:flex-row">
             <div className="w-full lg:w-1/2">
-              <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[320px] max-w-[320px] [&_.recharts-text]:fill-background">
+              <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[320px] max-w-[320px] [&_.recharts-text]:fill-transparent">
                 <PieChart>
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        nameKey="updates"
-                        hideLabel
-                        formatter={(value, _name, item) => {
-                          const payload = item?.payload as { percentage: number }
-                          return `${numberWithCommas(value as number)} • ${payload?.percentage?.toFixed(1) ?? '0.0'}%`
-                        }}
-                      />
-                    }
-                  />
-                  <Pie data={chartData} dataKey="updates" nameKey="segmentKey" innerRadius="55%" outerRadius="95%" paddingAngle={chartData.length > 1 ? 3 : 0} strokeWidth={2} isAnimationActive>
+                  <ChartTooltip content={<CustomTooltip />} />
+                  <Pie data={chartData} dataKey="updates" nameKey="agent" innerRadius="55%" outerRadius="95%" paddingAngle={chartData.length > 1 ? 3 : 0} strokeWidth={2} isAnimationActive>
                     {chartData.map(segment => (
                       <Cell key={segment.segmentKey} fill={segment.fill} />
                     ))}
-                    <LabelList
-                      dataKey="segmentKey"
-                      position="outside"
-                      className="fill-background text-[10px] font-medium sm:text-xs"
-                      stroke="none"
-                      formatter={(value: string) => chartConfig[value]?.label ?? value}
-                    />
                   </Pie>
                 </PieChart>
               </ChartContainer>
@@ -221,15 +260,14 @@ export function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieCha
         )}
       </CardContent>
       {leadingSegment && (
-        <CardFooter className="flex-col gap-2 text-xs text-muted-foreground sm:text-sm">
-          <div className="flex items-center gap-2 font-medium text-foreground">
+        <CardFooter className="flex-col gap-1 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             {t('statistics.leadingClientMessage', {
               client: leadingSegment.name,
               percentage: leadingSegment.percentage.toFixed(1),
             })}
-            <TrendingUp className="h-4 w-4" />
+            <TrendingUp className="h-3 w-3" />
           </div>
-          <div>{t('statistics.subscriptionDistributionDescription')}</div>
         </CardFooter>
       )}
     </Card>

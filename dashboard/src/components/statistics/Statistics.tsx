@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { lazy, Suspense } from 'react'
 import { CostumeBarChart } from '../charts/CostumeBarChart'
 import { EmptyState } from '../charts/EmptyState'
-import { UserSubUpdatePieChart } from '../charts/UserSubUpdatePieChart'
+import UserSubUpdatePieChart from '../charts/UserSubUpdatePieChart'
 import SystemStatisticsSection from './SystemStatisticsSection'
 import { AllNodesStackedBarChart } from '../charts/AllNodesStackedBarChart'
 
@@ -85,14 +85,14 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
 
       {/* Charts Section */}
       <div className="space-y-8">
-        <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '200ms', animationFillMode: 'both' }}>
-          <UserSubUpdatePieChart />
-        </div>
         {is_sudo && (
           <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '260ms', animationFillMode: 'both' }}>
             {actualSelectedServer === 'master' ? <AllNodesStackedBarChart /> : <CostumeBarChart nodeId={selectedNodeId} />}
           </div>
         )}
+        <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '200ms', animationFillMode: 'both' }}>
+          <UserSubUpdatePieChart />
+        </div>
         <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '320ms', animationFillMode: 'both' }}>
           <Suspense fallback={<div />}>
             <AreaCostumeChart nodeId={selectedNodeId} currentStats={currentStats} realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} />
