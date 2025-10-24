@@ -650,7 +650,7 @@ export function AllNodesStackedBarChart() {
                   {nodeList.map(node => {
                     const itemConfig = chartConfig[node.name]
                     return (
-                      <div key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
+                      <div dir='ltr' key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
                         <div
                           className="h-2 w-2 shrink-0 rounded-[2px]"
                           style={{
