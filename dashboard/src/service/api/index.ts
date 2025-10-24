@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.1.0
+ * OpenAPI spec version: 1.2.0
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -158,6 +158,7 @@ export type GetAdminsParams = {
   username?: string | null
   offset?: number | null
   limit?: number | null
+  sort?: string | null
 }
 
 export type GetManifestParams = {
