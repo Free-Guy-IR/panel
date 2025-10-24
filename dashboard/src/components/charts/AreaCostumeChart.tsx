@@ -316,7 +316,6 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
         <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div className="flex items-center space-x-3">
             <div className="flex items-center gap-x-2">
-              {viewMode === 'realtime' ? <Clock className="h-5 w-5 flex-shrink-0" /> : <History className="h-5 w-5 flex-shrink-0" />}
               <CardTitle className="text-lg md:text-xl">{viewMode === 'realtime' ? t('statistics.realTimeData') : t('statistics.historicalData')}</CardTitle>
             </div>
           </div>
@@ -340,7 +339,7 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
         </div>
 
         {/* Description */}
-        <CardDescription className="text-sm text-muted-foreground">{viewMode === 'realtime' ? t('statistics.realtimeDescription') : t('statistics.historicalDescription')}</CardDescription>
+        <CardDescription className="text-sm text-muted-foreground sm:!mt-0">{viewMode === 'realtime' ? t('statistics.realtimeDescription') : t('statistics.historicalDescription')}</CardDescription>
 
         {/* Stats Display - Responsive Grid */}
         <div className="grid grid-cols-2 gap-4 pt-2 sm:gap-6">
