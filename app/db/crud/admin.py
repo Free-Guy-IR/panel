@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from enum import Enum
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,19 @@ async def load_admin_attrs(admin: Admin):
         await admin.awaitable_attrs.usage_logs
     except AttributeError:
         pass
+
+
+AdminsSortingOptions = Enum(
+    "AdminsSortingOptions",
+    {
+        "username": Admin.username.asc(),
+        "created_at": Admin.created_at.asc(),
+        "used_traffic": Admin.used_traffic.asc(),
+        "-username": Admin.username.desc(),
+        "-created_at": Admin.created_at.desc(),
+        "-used_traffic": Admin.used_traffic.desc(),
+    },
+)
 
 
 async def get_admin(db: AsyncSession, username: str) -> Admin:
@@ -154,7 +168,11 @@ async def get_admin_by_discord_id(db: AsyncSession, discord_id: int) -> Admin:
 
 
 async def get_admins(
-    db: AsyncSession, offset: int | None = None, limit: int | None = None, username: str | None = None
+    db: AsyncSession,
+    offset: int | None = None,
+    limit: int | None = None,
+    username: str | None = None,
+    sort: list[AdminsSortingOptions] | None = None,
 ) -> list[Admin]:
     """
     Retrieves a list of admins with optional filters and pagination.
@@ -164,6 +182,7 @@ async def get_admins(
         offset (Optional[int]): The number of records to skip (for pagination).
         limit (Optional[int]): The maximum number of records to return.
         username (Optional[str]): The username to filter by.
+        sort (Optional[list[AdminsSortingOptions]]): Sort options for ordering results.
 
     Returns:
         List[Admin]: A list of admin objects.
@@ -171,6 +190,10 @@ async def get_admins(
     query = select(Admin)
     if username:
         query = query.where(Admin.username.ilike(f"%{username}%"))
+
+    if sort:
+        query = query.order_by(*sort)
+
     if offset:
         query = query.offset(offset)
     if limit:

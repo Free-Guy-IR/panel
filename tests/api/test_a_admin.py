@@ -81,6 +81,7 @@ def test_get_admins(access_token):
     username = "testadmincreate"
     response = client.get(
         url="/api/admins",
+        params={"sort": "-created_at"},
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK

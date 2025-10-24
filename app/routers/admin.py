@@ -121,11 +121,12 @@ async def get_admins(
     username: str | None = None,
     offset: int | None = None,
     limit: int | None = None,
+    sort: str | None = None,
     db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(check_sudo_admin),
 ):
     """Fetch a list of admins with optional filters for pagination and username."""
-    return await admin_operator.get_admins(db, username=username, offset=offset, limit=limit)
+    return await admin_operator.get_admins(db, username=username, offset=offset, limit=limit, sort=sort)
 
 
 @router.post("/{username}/users/disable", responses={404: responses._404})

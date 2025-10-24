@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import (
+    AdminsSortingOptions,
     create_admin,
     get_admins,
     get_admins_count,
@@ -75,9 +76,24 @@ class AdminOperation(BaseOperation):
             asyncio.create_task(notification.remove_admin(username, current_admin.username))
 
     async def get_admins(
-        self, db: AsyncSession, username: str | None = None, offset: int | None = None, limit: int | None = None
+        self,
+        db: AsyncSession,
+        username: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        sort: str | None = None,
     ) -> list[DBAdmin]:
-        return await get_admins(db, offset, limit, username)
+        sort_list = []
+        if sort is not None:
+            opts = sort.strip(",").split(",")
+            for opt in opts:
+                try:
+                    enum_member = AdminsSortingOptions[opt]
+                    sort_list.append(enum_member.value)
+                except KeyError:
+                    await self.raise_error(message=f'"{opt}" is not a valid sort option', code=400)
+
+        return await get_admins(db, offset, limit, username, sort_list if sort_list else None)
 
     async def get_admins_count(self, db: AsyncSession) -> int:
         return await get_admins_count(db)
