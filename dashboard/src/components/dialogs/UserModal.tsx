@@ -713,6 +713,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
 
   useEffect(() => {
     if (!nextPlanEnabled) {
+      // Clear all next_plan data when disabled
       form.setValue('next_plan', undefined)
       handleFieldChange('next_plan', undefined)
     } else if (!form.watch('next_plan') || form.watch('next_plan') === null) {
@@ -723,11 +724,17 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }, [nextPlanEnabled])
 
   // Sync switch state when next_plan value changes (e.g., when editing a user)
+  // Only sync when the form has data but the switch is off (initial load scenario)
   useEffect(() => {
     const nextPlan = form.watch('next_plan')
     const shouldBeEnabled = nextPlan !== undefined && nextPlan !== null && Object.keys(nextPlan).length > 0
-    if (nextPlanEnabled !== shouldBeEnabled) {
-      setNextPlanEnabled(shouldBeEnabled)
+    
+    // Only sync if:
+    // 1. The form has data (shouldBeEnabled is true)
+    // 2. The switch is currently off (nextPlanEnabled is false)
+    // 3. We're not in the middle of a user manually disabling it
+    if (shouldBeEnabled && !nextPlanEnabled) {
+      setNextPlanEnabled(true)
     }
   }, [form.watch('next_plan'), nextPlanEnabled])
 
