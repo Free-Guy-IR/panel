@@ -155,7 +155,7 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
               <span dir="ltr" className="truncate text-lg font-bold transition-all duration-300 sm:text-xl lg:text-2xl">
                 {currentStats ? (
                   <span className="whitespace-nowrap">
-                    {formatBytes(memory.used, 1, false)}/{formatBytes(memory.total, 1, true)}
+                    {formatBytes(memory.used, 1, false, false, 'GB')}/{formatBytes(memory.total, 1, true, false, 'GB')}
                   </span>
                 ) : (
                   0
