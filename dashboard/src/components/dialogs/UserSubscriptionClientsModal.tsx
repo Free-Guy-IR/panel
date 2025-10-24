@@ -317,7 +317,7 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-w-4xl flex-col p-6" dir={dir}>
+      <DialogContent className="flex h-[90vh] max-w-4xl flex-col sm:h-[600px]" dir={dir}>
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2`}>
             <Users className="h-5 w-5 flex-shrink-0" />
@@ -328,7 +328,8 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex w-full flex-col gap-4">
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden">
           {isLoading && (
             <div className={`flex items-center justify-center py-8 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
               <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin" />
@@ -340,7 +341,7 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
 
           {!isLoading && !error && subUpdateList && (
             <>
-              <div className={`flex items-center justify-between ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex items-center justify-between py-4 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
                 <span className="text-sm text-muted-foreground">
                   {t('subscriptionClients.total', {
                     defaultValue: 'Total: {{count}} clients',
@@ -357,9 +358,9 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
                 )}
               </div>
 
-              <ScrollArea className="flex h-[500px] rounded-lg border p-4">
+              <ScrollArea className="h-[400px]">
                 {subUpdateList.updates && subUpdateList.updates.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{subUpdateList.updates.map((update, index) => renderClientCard(update, index))}</div>
+                  <div className="grid grid-cols-1 gap-4 p-1 sm:grid-cols-2 lg:grid-cols-3">{subUpdateList.updates.map((update, index) => renderClientCard(update, index))}</div>
                 ) : (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
                     <div className="text-center">
@@ -380,12 +381,12 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
               </ScrollArea>
             </>
           )}
+        </div>
 
-          <div className={`flex ${dir === 'rtl' ? 'justify-start' : 'justify-end'}`}>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              {t('close', { defaultValue: 'Close' })}
-            </Button>
-          </div>
+        <div className={`flex ${dir === 'rtl' ? 'justify-start' : 'justify-end'}`}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('close', { defaultValue: 'Close' })}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
