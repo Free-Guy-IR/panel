@@ -1,13 +1,12 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useGetUserSubUpdateList, UserSubscriptionUpdateSchema } from '@/service/api'
 import { parseUserAgent, formatClientInfo } from '@/utils/userAgentParser'
 import { dateUtils } from '@/utils/dateFormatter'
-import { Monitor, Smartphone, Globe, HelpCircle, Users, Loader2 } from 'lucide-react'
-import { FC } from 'react'
+import { Monitor, Smartphone, Globe, HelpCircle, Users, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { FC, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import dayjs from '@/lib/dayjs'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -237,6 +236,8 @@ const detectVersion = (userAgent: string): string => {
 export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps> = ({ isOpen, onOpenChange, username }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
+  const [currentPage, setCurrentPage] = useState(0)
+  const itemsPerPage = 20
 
   const {
     data: subUpdateList,
@@ -244,7 +245,7 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
     error,
   } = useGetUserSubUpdateList(
     username,
-    { offset: 0, limit: 50 }, // Get last 50 clients
+    { offset: currentPage * itemsPerPage, limit: itemsPerPage },
     {
       query: {
         enabled: isOpen && !!username,
@@ -315,9 +316,26 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
     )
   }
 
+  // Pagination handlers
+  const totalPages = subUpdateList ? Math.ceil(subUpdateList.count / itemsPerPage) : 0
+  const hasNextPage = currentPage < totalPages - 1
+  const hasPrevPage = currentPage > 0
+
+  const handleNextPage = () => {
+    if (hasNextPage) {
+      setCurrentPage(prev => prev + 1)
+    }
+  }
+
+  const handlePrevPage = () => {
+    if (hasPrevPage) {
+      setCurrentPage(prev => prev - 1)
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[90vh] max-w-4xl flex-col sm:h-[600px]" dir={dir}>
+      <DialogContent className="flex max-h-[95vh] max-w-4xl flex-col sm:max-h-[600px]" dir={dir}>
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2`}>
             <Users className="h-5 w-5 flex-shrink-0" />
@@ -329,7 +347,7 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
         </DialogHeader>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           {isLoading && (
             <div className={`flex items-center justify-center py-8 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
               <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin" />
@@ -348,17 +366,16 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
                     count: subUpdateList.count,
                   })}
                 </span>
-                {subUpdateList.updates && subUpdateList.updates.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {t('subscriptionClients.showing', {
-                      defaultValue: 'Showing last {{count}} accesses',
-                      count: subUpdateList.updates.length,
-                    })}
-                  </span>
-                )}
+                <div className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {totalPages > 1 && (
+                    <span className="text-xs text-muted-foreground" dir="ltr">
+                      {currentPage + 1} / {totalPages}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <ScrollArea className="h-[400px]">
+              <div className="max-h-[300px] sm:max-h-[400px] overflow-y-auto">
                 {subUpdateList.updates && subUpdateList.updates.length > 0 ? (
                   <div className="grid grid-cols-1 gap-4 p-1 sm:grid-cols-2 lg:grid-cols-3">{subUpdateList.updates.map((update, index) => renderClientCard(update, index))}</div>
                 ) : (
@@ -378,10 +395,41 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
                     </div>
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className={`flex items-center justify-between border-t py-3 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrevPage}
+              disabled={!hasPrevPage || isLoading}
+              className={`flex items-center gap-1 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {t('previous', { defaultValue: 'Previous' })}
+            </Button>
+            
+            <span className="text-sm text-muted-foreground" dir="ltr">
+              {currentPage + 1} / {totalPages}
+            </span>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextPage}
+              disabled={!hasNextPage || isLoading}
+              className={`flex items-center gap-1 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}
+            >
+              {t('next', { defaultValue: 'Next' })}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         <div className={`flex ${dir === 'rtl' ? 'justify-start' : 'justify-end'}`}>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
