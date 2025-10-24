@@ -239,22 +239,24 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
                   {numberWithCommas(total)}
                 </p>
               </div>
-              <ul className="w-full space-y-3">
-                {segments.map(segment => (
-                  <li key={segment.key} className={`flex items-center justify-between gap-4 rounded-md border border-border/40 px-3 py-2 ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
-                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: segment.color }} />
-                      <span className="text-sm font-medium text-foreground">{segment.name}</span>
-                    </div>
-                    <div className={`flex items-baseline gap-3 text-sm font-semibold text-foreground ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
-                      <span dir="ltr" className="font-mono">
-                        {numberWithCommas(segment.count)}
-                      </span>
-                      <span className="text-xs font-normal text-muted-foreground">{segment.percentage.toFixed(1)}%</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="w-full max-h-64 overflow-y-auto">
+                <ul className="w-full space-y-3">
+                  {segments.map(segment => (
+                    <li key={segment.key} className={`flex items-center justify-between gap-4 rounded-md border border-border/40 px-3 py-2 ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                      <div className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: segment.color }} />
+                        <span className="text-sm font-medium text-foreground">{segment.name}</span>
+                      </div>
+                      <div className={`flex items-baseline gap-3 text-sm font-semibold text-foreground ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                        <span dir="ltr" className="font-mono">
+                          {numberWithCommas(segment.count)}
+                        </span>
+                        <span className="text-xs font-normal text-muted-foreground">{segment.percentage.toFixed(1)}%</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         )}
