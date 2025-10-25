@@ -374,19 +374,15 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {subscribeLinks.map(subLink => (
-                  <DropdownMenuItem className="justify-start p-0" key={subLink.link}>
-                    <Button
-                      dir="ltr"
-                      variant="ghost"
-                      className="h-full w-full justify-start px-2"
-                      aria-label={subLink.protocol.includes('links') ? 'Copy' : 'Download'}
-                      onClick={() => handleCopyOrDownload(subLink)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm">{subLink.icon}</span>
-                        <span>{subLink.protocol}</span>
-                      </span>
-                    </Button>
+                  <DropdownMenuItem 
+                    className="justify-start p-0" 
+                    key={subLink.link}
+                    onClick={() => handleCopyOrDownload(subLink)}
+                  >
+                    <span className="flex items-center gap-2 w-full px-2 py-1.5">
+                      <span className="text-sm">{subLink.icon}</span>
+                      <span>{subLink.protocol}</span>
+                    </span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
