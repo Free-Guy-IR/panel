@@ -46,7 +46,7 @@ const UsersTable = memo(() => {
       group: [],
       status: '0',
     },
-  })
+  }) as any
 
   // Create form for user editing
   const userForm = useForm<UseEditFormValues>({
@@ -250,7 +250,6 @@ const UsersTable = memo(() => {
   }
 
   const handleEdit = (user: UserResponse) => {
-    console.log(user)
     setSelectedUser(user)
     setEditModalOpen(true)
   }
