@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { useTheme } from 'next-themes'
 import { type GetUsersSubUpdateChartParams, useGetAdmins, useGetUsersSubUpdateChart, type UserSubscriptionUpdateChartSegment } from '@/service/api'
 import { numberWithCommas } from '@/utils/formatByte'
 import { TrendingUp, Users } from 'lucide-react'
@@ -11,8 +12,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Cell, Pie, PieChart } from 'recharts'
 import { ChartEmptyState } from './EmptyState'
-
-const COLOR_PALETTE = Array.from({ length: 5 }, (_, index) => `hsl(var(--chart-${index + 1}))`)
 
 interface UserSubUpdatePieChartProps {
   username?: string
@@ -34,6 +33,44 @@ const buildSegmentKey = (name: string, index: number) => {
     .replace(/^-+|-+$/g, '')
 
   return sanitized || `segment-${index}`
+}
+
+// Generate distinct colors for segments beyond the palette
+const generateDistinctColor = (index: number, _totalNodes: number, isDark: boolean): string => {
+  // Define a more distinct color palette with better contrast
+  const distinctHues = [
+    0, // Red
+    30, // Orange
+    60, // Yellow
+    120, // Green
+    180, // Cyan
+    210, // Blue
+    240, // Indigo
+    270, // Purple
+    300, // Magenta
+    330, // Pink
+    15, // Red-orange
+    45, // Yellow-orange
+    75, // Yellow-green
+    150, // Green-cyan
+    200, // Cyan-blue
+    225, // Blue-indigo
+    255, // Indigo-purple
+    285, // Purple-magenta
+    315, // Magenta-pink
+    345, // Pink-red
+  ]
+
+  const hue = distinctHues[index % distinctHues.length]
+
+  // Create more distinct saturation and lightness values
+  const saturationVariations = [65, 75, 85, 70, 80, 60, 90, 55, 95, 50]
+  const lightnessVariations = isDark ? [45, 55, 35, 50, 40, 60, 30, 65, 25, 70] : [40, 50, 30, 45, 35, 55, 25, 60, 20, 65]
+
+  const saturation = saturationVariations[index % saturationVariations.length]
+  const lightness = lightnessVariations[index % lightnessVariations.length]
+
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
 }
 
 // Custom tooltip component with shadcn styling
@@ -95,6 +132,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
 function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
+  const { resolvedTheme } = useTheme()
   const [selectedAdmin, setSelectedAdmin] = useState(() => (adminId != null ? String(adminId) : 'all'))
 
   useEffect(() => {
@@ -141,15 +179,28 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
       const safeCount = typeof segment.count === 'number' && !Number.isNaN(segment.count) ? segment.count : 0
       const key = buildSegmentKey(segment.name, index)
 
+      // Color assignment logic similar to AllNodesStackedBarChart
+      let color
+      if (index === 0) {
+        // First segment uses primary color
+        color = 'hsl(var(--primary))'
+      } else if (index < 5) {
+        // Use palette colors for segments 2-5: --chart-2, --chart-3, ...
+        color = `hsl(var(--chart-${index + 1}))`
+      } else {
+        // Generate distinct colors for segments beyond palette
+        color = generateDistinctColor(index, data?.segments?.length || 0, resolvedTheme === 'dark')
+      }
+
       return {
         ...segment,
         key,
         percentage: safePercentage,
         count: safeCount,
-        color: COLOR_PALETTE[index % COLOR_PALETTE.length],
+        color,
       }
     })
-  }, [data?.segments])
+  }, [data?.segments, resolvedTheme])
 
   const chartData = useMemo(
     () =>
@@ -179,6 +230,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
       ...dynamicConfig,
     }
   }, [segments, t])
+
 
   const hasData = segments.some(segment => segment.count > 0)
   const total = data?.total ?? 0
