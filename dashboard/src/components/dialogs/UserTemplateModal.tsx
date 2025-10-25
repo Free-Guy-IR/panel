@@ -320,8 +320,8 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                   control={form.control}
                   name="on_hold_timeout"
                   render={({ field }) => {
-                    const changeValue = (value: number | undefined) => {
-                      if (!value) return value
+                    const convertToDisplayValue = (value: number | undefined) => {
+                      if (!value) return ''
                       switch (timeType) {
                         case 'seconds':
                           return value
@@ -333,6 +333,22 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                           return value
                       }
                     }
+
+                    const convertToSeconds = (inputValue: string, type: string) => {
+                      const numValue = parseInt(inputValue)
+                      if (isNaN(numValue)) return undefined
+                      switch (type) {
+                        case 'seconds':
+                          return numValue
+                        case 'hours':
+                          return numValue * 60 * 60
+                        case 'days':
+                          return numValue * 24 * 60 * 60
+                        default:
+                          return numValue
+                      }
+                    }
+
                     // Only show if status is on_hold
                     const status = form.watch('status')
                     if (status !== UserStatusCreate.on_hold) {
@@ -347,9 +363,11 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                               <Input
                                 type="number"
                                 placeholder={t('templates.onHoldTimeout')}
-                                {...field}
-                                onChange={e => field.onChange(parseInt(e.target.value))}
-                                value={changeValue(field.value)}
+                                value={convertToDisplayValue(field.value)}
+                                onChange={e => {
+                                  const secondsValue = convertToSeconds(e.target.value, timeType)
+                                  field.onChange(secondsValue)
+                                }}
                                 className="flex-[3] rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                               />
                             </div>
