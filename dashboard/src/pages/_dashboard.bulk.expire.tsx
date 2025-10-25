@@ -126,6 +126,15 @@ export default function BulkExpirePage() {
   const totalTargets = selectedUsers.length + selectedAdmins.length + selectedGroups.length
   const isApplyToAll = totalTargets === 0
 
+  // Format time for display
+  const formatTime = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+    if (seconds < 86400) return `${Math.round(seconds / 3600)}h`
+    if (seconds < 2592000) return `${Math.round(seconds / 86400)}d`
+    return `${Math.round(seconds / 2592000)}mo`
+  }
+
   return (
     <div className="mt-3 flex w-full flex-col space-y-6">
       {/* Expire Date Section */}
@@ -277,7 +286,7 @@ export default function BulkExpirePage() {
               {expireSeconds ? (
                 <span dir="ltr" className="flex items-center gap-1">
                   {operation === 'add' ? <Plus className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
-                  {`${expireSeconds}s`}
+                  {formatTime(expireSeconds)}
                 </span>
               ) : (
                 t('bulk.noDateSelected', { defaultValue: 'No date selected' })
@@ -305,12 +314,12 @@ export default function BulkExpirePage() {
               {isApplyToAll
                 ? t('bulk.confirmApplyExpireDescriptionAll', {
                     defaultValue: 'Are you sure you want to apply the expiration date {{expireDate}} to ALL users, admins, and groups? This will update the expiration date for everyone.',
-                    expireDate: expireSeconds ? `${expireSeconds}s` : '',
+                    expireDate: expireSeconds ? formatTime(expireSeconds) : '',
                   })
                 : t('bulk.confirmApplyExpireDescription', {
                     defaultValue:
                       'Are you sure you want to apply the expiration date {{expireDate}} to {{totalTargets}} target(s)? This will update the expiration date for all selected groups, users, and admins.',
-                    expireDate: expireSeconds ? `${expireSeconds}s` : '',
+                    expireDate: expireSeconds ? formatTime(expireSeconds) : '',
                     totalTargets,
                   })}
             </AlertDialogDescription>
