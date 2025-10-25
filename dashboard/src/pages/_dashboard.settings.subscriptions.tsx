@@ -349,7 +349,7 @@ function SortableRule({ index, onRemove, form, id }: SortableRuleProps) {
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent className="scrollbar-thin z-[1001]">
+                    <SelectContent className="scrollbar-thin z-[50]">
                       {configFormatOptions.map(option => (
                         <SelectItem key={option.value} value={option.value}>
                           <div className="flex items-center gap-1.5">
@@ -1200,7 +1200,7 @@ export default function SubscriptionSettings() {
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent className="scrollbar-thin z-[1001]">
+                    <SelectContent className="scrollbar-thin z-[50]">
                       {(['android', 'ios', 'windows', 'macos', 'linux', 'appletv', 'androidtv'] as const).map(p => (
                         <SelectItem key={p} value={p}>
                           <span className="text-xs">{t(`settings.subscriptions.applications.platforms.${p}`)}</span>
@@ -1240,7 +1240,7 @@ export default function SubscriptionSettings() {
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="scrollbar-thin z-[1001]">
+                      <SelectContent className="scrollbar-thin z-[50]">
                         {(['en', 'fa', 'ru', 'zh'] as const).map(lang => (
                           <SelectItem key={lang} value={lang}>
                             <span className="text-xs">{lang.toUpperCase()}</span>
@@ -1280,7 +1280,7 @@ export default function SubscriptionSettings() {
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="scrollbar-thin z-[1001]">
+                      <SelectContent className="scrollbar-thin z-[50]">
                         {(['en', 'fa', 'ru', 'zh'] as const).map(l => (
                           <SelectItem key={l} value={l}>
                             <span className="text-xs">{l.toUpperCase()}</span>
