@@ -246,7 +246,7 @@ export function SortableApplication({ index, onRemove, form, id }: SortableAppli
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                 </FormControl>
-                                                <SelectContent className="scrollbar-thin z-[1001]">
+                                                <SelectContent className="scrollbar-thin z-[50]">
                                                     {platformOptions.map(option => (
                                                         <SelectItem key={option.value} value={option.value}>
                                                             <div className="flex items-center gap-1.5">
@@ -296,7 +296,7 @@ export function SortableApplication({ index, onRemove, form, id }: SortableAppli
                                                         <SelectTrigger className="w-32 h-8 text-xs">
                                                             <SelectValue />
                                                         </SelectTrigger>
-                                                        <SelectContent className="scrollbar-thin z-[1001]">
+                                                        <SelectContent className="scrollbar-thin z-[50]">
                                                             {languageOptions.map(option => (
                                                                 <SelectItem key={option.value} value={option.value}>
                                                                     <div className="flex items-center gap-1.5">
@@ -435,7 +435,7 @@ export function SortableApplication({ index, onRemove, form, id }: SortableAppli
                                                                             <SelectValue />
                                                                         </SelectTrigger>
                                                                     </FormControl>
-                                                                    <SelectContent className="scrollbar-thin z-[1001]">
+                                                                    <SelectContent className="scrollbar-thin z-[50]">
                                                                         {languageOptions.map(option => (
                                                                             <SelectItem key={option.value} value={option.value}>
                                                                                 <div className="flex items-center gap-1.5">
