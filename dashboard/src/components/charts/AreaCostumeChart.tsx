@@ -1,5 +1,5 @@
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { DateRange } from 'react-day-picker'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartConfig, ChartContainer } from '@/components/ui/chart'
@@ -9,8 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TimeRangeSelector } from '@/components/common/TimeRangeSelector'
 import { EmptyState } from './EmptyState'
 import { Button } from '@/components/ui/button'
-import { Clock, History } from 'lucide-react'
+import { Clock, History, Cpu, MemoryStick } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
+import { useTheme } from 'next-themes'
+import { useSidebar } from '@/components/ui/sidebar'
 
 type DataPoint = {
   time: string
@@ -18,72 +20,83 @@ type DataPoint = {
   ram: number
 }
 
-const chartConfig = {
-  cpu: {
-    label: 'CPU Usage',
-    color: 'hsl(210, 100%, 56%)', // Blue
-  },
-  ram: {
-    label: 'RAM Usage',
-    color: 'hsl(200, 100%, 70%)', // Light blue/cyan
-  },
-} satisfies ChartConfig
+// Chart configuration will be created dynamically with theme colors
 
-// Custom gradient definitions for the chart
-const gradientDefs = {
-  cpu: {
-    id: 'cpuGradient',
-    color1: 'hsl(210, 100%, 56%)',
-    color2: 'rgba(0, 120, 255, 0.2)',
-    color3: 'rgba(0, 120, 255, 0.05)',
-    color4: 'rgba(0, 120, 255, 0)',
-  },
-  ram: {
-    id: 'ramGradient',
-    color1: 'hsl(200, 100%, 70%)',
-    color2: 'rgba(0, 200, 255, 0.2)',
-    color3: 'rgba(0, 200, 255, 0.05)',
-    color4: 'rgba(0, 200, 255, 0)',
-  },
-}
-
-// Custom tooltip component
+// Custom tooltip component with proper time formatting
 const CustomTooltip = ({ active, payload, label }: any) => {
+  const { i18n } = useTranslation()
+  
   if (active && payload && payload.length) {
-    // Parse the label as a date if possible
     let formattedDate = label
+    
     try {
       const today = new Date()
-      // Try to parse label as MM/DD or HH:mm
-      if (/\d{2}\/\d{2}/.test(label)) {
-        // MM/DD format, treat as past day
-        const [month, day] = label.split('/')
-        const localDate = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day), 0, 0, 0)
-        formattedDate = localDate
-          .toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          })
-          .replace(',', '')
-      } else if (/\d{2}:\d{2}/.test(label)) {
-        // HH:mm format, treat as today
-        const now = new Date()
-        formattedDate = now
-          .toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          })
-          .replace(',', '')
+      
+      if (i18n.language === 'fa') {
+        // Use Persian (Jalali) calendar and Persian locale
+        if (/\d{2}\/\d{2}/.test(label)) {
+          // MM/DD format, treat as past day
+          const [month, day] = label.split('/')
+          const localDate = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day), 0, 0, 0)
+          formattedDate = localDate
+            .toLocaleString('fa-IR', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+            .replace(',', '')
+        } else if (/\d{2}:\d{2}/.test(label)) {
+          // HH:mm format, treat as today
+          const now = new Date()
+          formattedDate = now
+            .toLocaleString('fa-IR', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+            .replace(',', '')
+        }
+      } else {
+        // English formatting
+        if (/\d{2}\/\d{2}/.test(label)) {
+          // MM/DD format, treat as past day
+          const [month, day] = label.split('/')
+          const localDate = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day), 0, 0, 0)
+          formattedDate = localDate
+            .toLocaleString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+            .replace(',', '')
+        } else if (/\d{2}:\d{2}/.test(label)) {
+          // HH:mm format, treat as today
+          const now = new Date()
+          formattedDate = now
+            .toLocaleString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+            .replace(',', '')
+        }
       }
-    } catch {}
+    } catch {
+      formattedDate = label
+    }
+    
     return (
       <div dir="ltr" className="rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur-sm">
         <p className="text-sm font-medium text-muted-foreground">
@@ -142,11 +155,50 @@ const isNodeRealtimeStats = (stats: SystemStats | NodeRealtimeStats): stats is N
 
 export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCostumeChartProps) {
   const { t } = useTranslation()
+  const { resolvedTheme } = useTheme()
+  const { state: sidebarState } = useSidebar()
   const [statsHistory, setStatsHistory] = useState<DataPoint[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [viewMode, setViewMode] = useState<'realtime' | 'historical'>('realtime')
+  const [chartKey, setChartKey] = useState(0) // Force chart refresh
+  
+  // Add refs for chart container
+  const chartContainerRef = useRef<HTMLDivElement>(null)
+
+  // Dynamic chart configuration with theme colors
+  const chartConfig = useMemo<ChartConfig>(() => ({
+    cpu: {
+      label: t('statistics.cpuUsage'),
+      color: 'hsl(var(--chart-1))', // Use theme chart color 1
+    },
+    ram: {
+      label: t('statistics.ramUsage'),
+      color: 'hsl(var(--chart-2))', // Use theme chart color 2
+    },
+  }), [t])
+
+  // Dynamic gradient definitions with theme colors
+  const gradientDefs = useMemo(() => {
+    const isDark = resolvedTheme === 'dark'
+    return {
+      cpu: {
+        id: 'cpuGradient',
+        color1: 'hsl(var(--chart-1))',
+        color2: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.3)',
+        color3: isDark ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.1)',
+        color4: 'rgba(59, 130, 246, 0)',
+      },
+      ram: {
+        id: 'ramGradient',
+        color1: 'hsl(var(--chart-2))',
+        color2: isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.3)',
+        color3: isDark ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)',
+        color4: 'rgba(16, 185, 129, 0)',
+      },
+    }
+  }, [resolvedTheme])
 
   // Clear stats when node changes
   useEffect(() => {
@@ -154,6 +206,27 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
     setDateRange(undefined)
     setViewMode('realtime')
   }, [nodeId])
+
+  // INSTANT sidebar state change detection - ZERO delay
+  useEffect(() => {
+    if (statsHistory.length > 0) {
+      setChartKey(k => k + 1)
+    }
+  }, [sidebarState, statsHistory.length])
+
+  // INSTANT resize handling - ZERO delay
+  useEffect(() => {
+    const handleResize = () => {
+      if (statsHistory.length > 0) {
+        setChartKey(k => k + 1)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [statsHistory.length])
 
   // Toggle between real-time and historical view
   const toggleViewMode = () => {
@@ -344,11 +417,17 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
         {/* Stats Display - Responsive Grid */}
         <div className="grid grid-cols-2 gap-4 pt-2 sm:gap-6">
           <div className="flex flex-col items-center space-y-2 rounded-lg bg-muted/50 p-3">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('statistics.cpuUsage')}</span>
+            <div className="flex items-center gap-2">
+              <Cpu className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('statistics.cpuUsage')}</span>
+            </div>
             <span className="text-xl font-bold text-foreground sm:text-2xl">{displayCpuUsage}</span>
           </div>
           <div className="flex flex-col items-center space-y-2 rounded-lg bg-muted/50 p-3">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('statistics.ramUsage')}</span>
+            <div className="flex items-center gap-2">
+              <MemoryStick className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('statistics.ramUsage')}</span>
+            </div>
             <span dir="ltr" className="text-xl font-bold text-foreground sm:text-2xl">
               {displayRamUsage}
             </span>
@@ -387,10 +466,22 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
             className="h-[280px] sm:h-[320px] lg:h-[360px]"
           />
         ) : (
-          <div className="h-[280px] w-full sm:h-[320px] lg:h-[360px]">
+          <div 
+            ref={chartContainerRef}
+            key={`chart-container-${chartKey}`} // Force container refresh
+            className="h-[280px] w-full sm:h-[320px] lg:h-[360px] transition-all duration-300 ease-in-out"
+          >
             <ChartContainer dir="ltr" config={chartConfig} className="h-full w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={statsHistory} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <ResponsiveContainer 
+                key={`responsive-${chartKey}`} // Force re-render when sidebar state changes
+                width="100%" 
+                height="100%"
+                debounce={100} // Enable debouncing for smoother updates
+              >
+                <AreaChart 
+                  data={statsHistory} 
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                >
                   <defs>
                     <linearGradient id={gradientDefs.cpu.id} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={gradientDefs.cpu.color1} stopOpacity={0.9} />
@@ -468,8 +559,10 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
                       stroke: gradientDefs.cpu.color1,
                       strokeWidth: 2,
                     }}
-                    animationDuration={viewMode === 'realtime' ? 1000 : 2000}
-                    animationEasing="ease-in-out"
+                    animationDuration={viewMode === 'realtime' ? 800 : 1500}
+                    animationEasing="ease-out"
+                    isAnimationActive={true}
+                    animationBegin={0}
                   />
 
                   <Area
@@ -494,8 +587,10 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
                       stroke: gradientDefs.ram.color1,
                       strokeWidth: 2,
                     }}
-                    animationDuration={viewMode === 'realtime' ? 1000 : 2000}
-                    animationEasing="ease-in-out"
+                    animationDuration={viewMode === 'realtime' ? 800 : 1500}
+                    animationEasing="ease-out"
+                    isAnimationActive={true}
+                    animationBegin={100}
                   />
                 </AreaChart>
               </ResponsiveContainer>

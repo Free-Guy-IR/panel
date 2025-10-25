@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { DateRange } from 'react-day-picker'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -221,11 +221,69 @@ export function AllNodesStackedBarChart() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedData, setSelectedData] = useState<any>(null)
   const [currentDataIndex, setCurrentDataIndex] = useState(0)
+  const [chartKey, setChartKey] = useState(0)
+
+  const chartContainerRef = useRef<HTMLDivElement>(null)
 
   const { t } = useTranslation()
   const dir = useDirDetection()
   const { data: nodesData } = useGetNodes(undefined, { query: { enabled: true } })
   const { resolvedTheme } = useTheme()
+
+  // Improved resize handling
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+
+    const handleResize = () => {
+      clearTimeout(timeoutId)
+      // Debounce to avoid excessive re-renders
+      timeoutId = setTimeout(() => {
+        setChartKey(prev => prev + 1)
+      }, 150)
+    }
+
+    // Listen to window resize
+    window.addEventListener('resize', handleResize)
+
+    // Use ResizeObserver on the chart container and its parent
+    const resizeObserver = new ResizeObserver(handleResize)
+
+    // Observe the chart container
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current)
+    }
+
+    // Observe main content area (catches sidebar changes)
+    const mainContent = document.querySelector('main') || document.querySelector('[role="main"]') || document.getElementById('main-content')
+    if (mainContent) {
+      resizeObserver.observe(mainContent)
+    }
+
+    // Observe body for class/attribute changes (sidebar state)
+    const mutationObserver = new MutationObserver(handleResize)
+    mutationObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class', 'data-sidebar-state', 'data-state'],
+      childList: false,
+      subtree: false
+    })
+
+    // Also observe the sidebar element itself if it exists
+    const sidebar = document.querySelector('[data-sidebar]') || document.querySelector('aside')
+    if (sidebar) {
+      mutationObserver.observe(sidebar, {
+        attributes: true,
+        attributeFilter: ['class', 'data-state'],
+      })
+    }
+
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener('resize', handleResize)
+      resizeObserver.disconnect()
+      mutationObserver.disconnect()
+    }
+  }, [])
 
   // Navigation handler for modal
   const handleModalNavigate = (index: number) => {
@@ -525,161 +583,162 @@ export function AllNodesStackedBarChart() {
   return (
     <>
       <Card>
-      <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
-        <div className="flex flex-1 flex-col gap-1 border-b px-6 py-6 sm:flex-row sm:py-6">
-          <div className="flex flex-1 flex-col justify-center gap-1 px-1 py-1 align-middle">
-            <CardTitle>{t('statistics.trafficUsage')}</CardTitle>
-            <CardDescription>{t('statistics.trafficUsageDescription')}</CardDescription>
-          </div>
-          <div className="flex flex-col justify-center gap-2 px-1 py-1 align-middle">
-            <div className="flex items-center gap-2">
-              {showCustomRange ? (
-                <TimeRangeSelector
-                  onRangeChange={range => {
-                    setDateRange(range)
-                    setShowCustomRange(true)
-                  }}
-                  initialRange={dateRange}
-                />
-              ) : (
-                <TimeSelector
-                  selectedTime={selectedTime}
-                  setSelectedTime={v => {
-                    setSelectedTime(v)
-                    setShowCustomRange(false)
-                  }}
-                />
-              )}
-              <button type="button" aria-label="Custom Range" className={`rounded border p-1 ${showCustomRange ? 'bg-muted' : ''}`} onClick={() => setShowCustomRange(v => !v)}>
-                <Calendar className="h-4 w-4" />
-              </button>
+        <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
+          <div className="flex flex-1 flex-col gap-1 border-b px-6 py-6 sm:flex-row sm:py-6">
+            <div className="flex flex-1 flex-col justify-center gap-1 px-1 py-1 align-middle">
+              <CardTitle>{t('statistics.trafficUsage')}</CardTitle>
+              <CardDescription>{t('statistics.trafficUsageDescription')}</CardDescription>
+            </div>
+            <div className="flex flex-col justify-center gap-2 px-1 py-1 align-middle">
+              <div className="flex items-center gap-2">
+                {showCustomRange ? (
+                  <TimeRangeSelector
+                    onRangeChange={range => {
+                      setDateRange(range)
+                      setShowCustomRange(true)
+                    }}
+                    initialRange={dateRange}
+                  />
+                ) : (
+                  <TimeSelector
+                    selectedTime={selectedTime}
+                    setSelectedTime={v => {
+                      setSelectedTime(v)
+                      setShowCustomRange(false)
+                    }}
+                  />
+                )}
+                <button type="button" aria-label="Custom Range" className={`rounded border p-1 ${showCustomRange ? 'bg-muted' : ''}`} onClick={() => setShowCustomRange(v => !v)}>
+                  <Calendar className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="m-0 flex flex-col justify-center p-6 px-4 sm:border-l">
-          <span className="text-xs text-muted-foreground sm:text-sm">{t('statistics.usageDuringPeriod')}</span>
-          <span dir="ltr" className="flex justify-center text-lg text-foreground">
-            {isLoading ? <Skeleton className="h-5 w-20" /> : totalUsage}
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent dir={dir} className="pt-8">
-        {isLoading ? (
-          <div className="flex max-h-[400px] min-h-[200px] w-full items-center justify-center">
-            <Skeleton className="h-[300px] w-full" />
+          <div className="m-0 flex flex-col justify-center p-6 px-4 sm:border-l">
+            <span className="text-xs text-muted-foreground sm:text-sm">{t('statistics.usageDuringPeriod')}</span>
+            <span dir="ltr" className="flex justify-center text-lg text-foreground">
+              {isLoading ? <Skeleton className="h-5 w-20" /> : totalUsage}
+            </span>
           </div>
-        ) : error ? (
-          <EmptyState type="error" className="max-h-[400px] min-h-[200px]" />
-        ) : !dateRange ? (
-          <EmptyState
-            type="no-data"
-            title={t('statistics.selectTimeRange')}
-            description={t('statistics.selectTimeRangeDescription')}
-            icon={<TrendingUp className="h-12 w-12 text-muted-foreground/50" />}
-            className="max-h-[400px] min-h-[200px]"
-          />
-        ) : (
-          <div className="mx-auto w-full max-w-7xl">
-            <ChartContainer
-              dir={'ltr'}
-              config={chartConfig}
-              className="max-h-[400px] min-h-[200px] w-full"
-              style={{
-                marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${0.18 * window.innerWidth}px` : '0',
-              }}
-            >
-              {chartData && chartData.length > 0 ? (
-                <BarChart
-                  accessibilityLayer
-                  data={chartData}
-                  margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
-                  onClick={(data) => {
-                    if (data && data.activePayload && data.activePayload.length > 0 && chartData) {
-                      const clickedData = data.activePayload[0].payload
-                      const activeNodesCount = Object.keys(clickedData).filter(key =>
-                        !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0
-                      ).length
-                      // Open modal if there are more nodes than shown in tooltip
-                      const maxShown = window.innerWidth < 768 ? 3 : 6
-                      if (activeNodesCount > maxShown) {
-                        // Find the index of the clicked data point
-                        const clickedIndex = chartData.findIndex(item => item._period_start === clickedData._period_start)
-                        setCurrentDataIndex(clickedIndex >= 0 ? clickedIndex : 0)
-                        setSelectedData(clickedData)
-                        setModalOpen(true)
+        </CardHeader>
+        <CardContent ref={chartContainerRef} dir={dir} className="pt-8">
+          {isLoading ? (
+            <div className="flex max-h-[400px] min-h-[200px] w-full items-center justify-center">
+              <Skeleton className="h-[300px] w-full" />
+            </div>
+          ) : error ? (
+            <EmptyState type="error" className="max-h-[400px] min-h-[200px]" />
+          ) : !dateRange ? (
+            <EmptyState
+              type="no-data"
+              title={t('statistics.selectTimeRange')}
+              description={t('statistics.selectTimeRangeDescription')}
+              icon={<TrendingUp className="h-12 w-12 text-muted-foreground/50" />}
+              className="max-h-[400px] min-h-[200px]"
+            />
+          ) : (
+            <div className="mx-auto w-full max-w-7xl">
+              <ChartContainer
+                key={chartKey}
+                dir={'ltr'}
+                config={chartConfig}
+                className="max-h-[400px] min-h-[200px] w-full"
+                style={{
+                  marginBottom: navigator.userAgent.includes('Safari') && navigator.platform.includes('Mac') ? `${0.18 * window.innerWidth}px` : '0',
+                }}
+              >
+                {chartData && chartData.length > 0 ? (
+                  <BarChart
+                    accessibilityLayer
+                    data={chartData}
+                    margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+                    onClick={(data) => {
+                      if (data && data.activePayload && data.activePayload.length > 0 && chartData) {
+                        const clickedData = data.activePayload[0].payload
+                        const activeNodesCount = Object.keys(clickedData).filter(key =>
+                          !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0
+                        ).length
+                        // Open modal if there are more nodes than shown in tooltip
+                        const maxShown = window.innerWidth < 768 ? 3 : 6
+                        if (activeNodesCount > maxShown) {
+                          // Find the index of the clicked data point
+                          const clickedIndex = chartData.findIndex(item => item._period_start === clickedData._period_start)
+                          setCurrentDataIndex(clickedIndex >= 0 ? clickedIndex : 0)
+                          setSelectedData(clickedData)
+                          setModalOpen(true)
+                        }
                       }
-                    }
-                  }}
-                >
-                  <CartesianGrid direction={'ltr'} vertical={false} />
-                  <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} minTickGap={5} />
-                  <YAxis
-                    direction={'ltr'}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={value => `${value.toFixed(2)} GB`}
-                    tick={{
-                      fill: 'hsl(var(--muted-foreground))',
-                      fontSize: 9,
-                      fontWeight: 500,
                     }}
-                    width={32}
-                    tickMargin={2}
-                  />
-                  {/* When using ChartTooltip, pass period as a prop */}
-                  <ChartTooltip cursor={false} content={<CustomTooltip chartConfig={chartConfig} dir={dir} period={getPeriodFromDateRange(dateRange)} />} />
-                  {nodeList.map((node, idx) => (
-                    <Bar
-                      key={node.id}
-                      dataKey={node.name}
-                      stackId="a"
-                      fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
-                      radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                      cursor="pointer"
+                  >
+                    <CartesianGrid direction={'ltr'} vertical={false} />
+                    <XAxis direction={'ltr'} dataKey="time" tickLine={false} tickMargin={10} axisLine={false} minTickGap={5} />
+                    <YAxis
+                      direction={'ltr'}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={value => `${value.toFixed(2)} GB`}
+                      tick={{
+                        fill: 'hsl(var(--muted-foreground))',
+                        fontSize: 9,
+                        fontWeight: 500,
+                      }}
+                      width={32}
+                      tickMargin={2}
                     />
-                  ))}
-                </BarChart>
-              ) : (
-                <EmptyState type="no-data" title={t('statistics.noDataInRange')} description={t('statistics.noDataInRangeDescription')} className="max-h-[400px] min-h-[200px]" />
-              )}
-            </ChartContainer>
-            {/* Separate scrollable legend */}
-            {chartData && chartData.length > 0 && (
-              <div className="overflow-x-auto pt-3">
-                <div className="flex min-w-max items-center justify-center gap-4">
-                  {nodeList.map(node => {
-                    const itemConfig = chartConfig[node.name]
-                    return (
-                      <div dir='ltr' key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
-                        <div
-                          className="h-2 w-2 shrink-0 rounded-[2px]"
-                          style={{
-                            backgroundColor: itemConfig?.color || 'hsl(var(--chart-1))',
-                          }}
-                        />
-                        <span className="whitespace-nowrap text-xs">{node.name}</span>
-                      </div>
-                    )
-                  })}
+                    {/* When using ChartTooltip, pass period as a prop */}
+                    <ChartTooltip cursor={false} content={<CustomTooltip chartConfig={chartConfig} dir={dir} period={getPeriodFromDateRange(dateRange)} />} />
+                    {nodeList.map((node, idx) => (
+                      <Bar
+                        key={node.id}
+                        dataKey={node.name}
+                        stackId="a"
+                        fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
+                        radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                        cursor="pointer"
+                      />
+                    ))}
+                  </BarChart>
+                ) : (
+                  <EmptyState type="no-data" title={t('statistics.noDataInRange')} description={t('statistics.noDataInRangeDescription')} className="max-h-[400px] min-h-[200px]" />
+                )}
+              </ChartContainer>
+              {/* Separate scrollable legend */}
+              {chartData && chartData.length > 0 && (
+                <div className="overflow-x-auto pt-3">
+                  <div className="flex min-w-max items-center justify-center gap-4">
+                    {nodeList.map(node => {
+                      const itemConfig = chartConfig[node.name]
+                      return (
+                        <div dir='ltr' key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
+                          <div
+                            className="h-2 w-2 shrink-0 rounded-[2px]"
+                            style={{
+                              backgroundColor: itemConfig?.color || 'hsl(var(--chart-1))',
+                            }}
+                          />
+                          <span className="whitespace-nowrap text-xs">{node.name}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-    {/* Node Stats Modal */}
-    <NodeStatsModal
-      open={modalOpen}
-      onClose={() => setModalOpen(false)}
-      data={selectedData}
-      chartConfig={chartConfig}
-      period={getPeriodFromDateRange(dateRange)}
-      allChartData={chartData || []}
-      currentIndex={currentDataIndex}
-      onNavigate={handleModalNavigate}
-    />
+      {/* Node Stats Modal */}
+      <NodeStatsModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        data={selectedData}
+        chartConfig={chartConfig}
+        period={getPeriodFromDateRange(dateRange)}
+        allChartData={chartData || []}
+        currentIndex={currentDataIndex}
+        onNavigate={handleModalNavigate}
+      />
     </>
   )
 }

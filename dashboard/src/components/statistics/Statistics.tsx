@@ -1,13 +1,13 @@
 import { Skeleton } from '@/components/ui/skeleton'
 import { NodeRealtimeStats, SystemStats, useGetNodes, useRealtimeNodeStats } from '@/service/api'
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { lazy, Suspense } from 'react'
 import { CostumeBarChart } from '../charts/CostumeBarChart'
 import { EmptyState } from '../charts/EmptyState'
 import UserSubUpdatePieChart from '../charts/UserSubUpdatePieChart'
 import SystemStatisticsSection from './SystemStatisticsSection'
 import { AllNodesStackedBarChart } from '../charts/AllNodesStackedBarChart'
+import { AreaCostumeChart } from '../charts/AreaCostumeChart'
 
 interface StatisticsProps {
   data?: SystemStats
@@ -19,6 +19,10 @@ interface StatisticsProps {
 
 export default function Statistics({ data, isLoading, error, selectedServer, is_sudo }: StatisticsProps) {
   const { t } = useTranslation()
+  
+  // Add state for chart refresh
+  const [chartRefreshKey, setChartRefreshKey] = useState(0)
+  const resizeTimeoutRef = useRef<NodeJS.Timeout>()
 
   // Only fetch nodes for sudo admins
   const { isLoading: isLoadingNodes, error: nodesError } = useGetNodes(undefined, {
@@ -38,6 +42,35 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
       refetchInterval: 5000, // Update every 5 seconds
     },
   })
+
+  // Handle resize events to refresh charts
+  const handleResize = useCallback(() => {
+    if (resizeTimeoutRef.current) {
+      clearTimeout(resizeTimeoutRef.current)
+    }
+    resizeTimeoutRef.current = setTimeout(() => {
+      setChartRefreshKey(k => k + 1)
+    }, 100) // Debounce resize events
+  }, [])
+
+  // Listen for window resize events
+  useEffect(() => {
+    window.addEventListener('resize', handleResize)
+    
+    // Listen for sidebar toggle events
+    const handleSidebarToggle = () => {
+      setTimeout(() => setChartRefreshKey(k => k + 1), 300) // Wait for animation to complete
+    }
+    window.addEventListener('sidebar-toggle', handleSidebarToggle)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current)
+      }
+    }
+  }, [handleResize])
 
   // Clear any existing intervals when server selection changes
   useEffect(() => {
@@ -94,9 +127,12 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
           <UserSubUpdatePieChart />
         </div>
         <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '320ms', animationFillMode: 'both' }}>
-          <Suspense fallback={<div />}>
-            <AreaCostumeChart nodeId={selectedNodeId} currentStats={currentStats} realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} />
-          </Suspense>
+          <AreaCostumeChart 
+            key={chartRefreshKey} 
+            nodeId={selectedNodeId} 
+            currentStats={currentStats} 
+            realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} 
+          />
         </div>
       </div>
     </div>
@@ -142,4 +178,3 @@ function StatisticsSkeletons({ is_sudo }: { is_sudo: boolean }) {
   )
 }
 
-const AreaCostumeChart = lazy(() => import('../charts/AreaCostumeChart').then(m => ({ default: m.AreaCostumeChart })))
