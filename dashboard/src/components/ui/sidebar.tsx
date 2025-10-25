@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar:state'
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+const SIDEBAR_LOCALSTORAGE_KEY = 'sidebar:state'
 const SIDEBAR_WIDTH = '16rem'
 const SIDEBAR_WIDTH_MOBILE = '18rem'
 const SIDEBAR_WIDTH_ICON = '3rem'
@@ -53,9 +54,24 @@ const SidebarProvider = React.forwardRef<
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
+  // Initialize from localStorage if available, otherwise use defaultOpen
+  const getInitialState = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(SIDEBAR_LOCALSTORAGE_KEY)
+        if (stored !== null) {
+          return stored === 'true'
+        }
+      } catch (error) {
+        console.warn('Failed to read sidebar state from localStorage:', error)
+      }
+    }
+    return defaultOpen
+  }, [defaultOpen])
+
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen)
+  const [_open, _setOpen] = React.useState(getInitialState)
   const open = openProp ?? _open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -66,8 +82,14 @@ const SidebarProvider = React.forwardRef<
         _setOpen(openState)
       }
 
-      // This sets the cookie to keep the sidebar state.
+      // Store in both cookie and localStorage for persistence
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      
+      try {
+        localStorage.setItem(SIDEBAR_LOCALSTORAGE_KEY, openState.toString())
+      } catch (error) {
+        console.warn('Failed to save sidebar state to localStorage:', error)
+      }
     },
     [setOpenProp, open],
   )
@@ -89,6 +111,21 @@ const SidebarProvider = React.forwardRef<
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggleSidebar])
+
+  // Listen for localStorage changes to sync across tabs
+  React.useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === SIDEBAR_LOCALSTORAGE_KEY && event.newValue !== null) {
+        const newState = event.newValue === 'true'
+        if (newState !== open && !openProp) {
+          _setOpen(newState)
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [open, openProp])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.

@@ -209,6 +209,85 @@
     max-width: calc(100vw - 20px) !important;
     max-height: calc(100vh - 20px) !important;
   }
+
+  /* Z-index management for proper layering */
+  .sidebar {
+    z-index: 40;
+  }
+
+  .sidebar-overlay {
+    z-index: 30;
+  }
+
+  .modal-overlay {
+    z-index: 50;
+  }
+
+  .dropdown-content {
+    z-index: 60;
+  }
+
+  .tooltip {
+    z-index: 70;
+  }
+
+  /* Fix for responsive modal positioning */
+  [data-radix-dialog-content] {
+    z-index: 50 !important;
+  }
+
+  [data-radix-select-content] {
+    z-index: 60 !important;
+  }
+
+  /* Ensure proper responsive behavior for sidebar */
+  @media (max-width: 1024px) {
+    .sidebar {
+      z-index: 45;
+    }
+  }
+
+  /* Fix for mobile sidebar overlay */
+  [data-sidebar="sidebar"][data-mobile="true"] {
+    z-index: 50;
+  }
+
+  /* Ensure proper spacing when sidebar is collapsed */
+  .group\/sidebar-wrapper[data-state="collapsed"] {
+    --sidebar-width: 3rem;
+  }
+
+  /* Fix for content area when sidebar is collapsed */
+  .group\/sidebar-wrapper[data-state="collapsed"] ~ main {
+    margin-left: 3rem;
+  }
+
+  /* Responsive fixes for smaller screens */
+  @media (max-width: 768px) {
+    .group\/sidebar-wrapper[data-state="collapsed"] ~ main {
+      margin-left: 0;
+    }
+  }
+
+  /* Enhanced styling for collapsed sidebar icons */
+  [data-sidebar="sidebar"][data-collapsible="icon"] .sidebar-icon-button {
+    @apply h-8 w-8 rounded-md border border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent hover:border-sidebar-accent-foreground/20 transition-all duration-200;
+  }
+
+  /* Popover styling for collapsed sidebar */
+  [data-sidebar="sidebar"][data-collapsible="icon"] [data-radix-popover-content] {
+    @apply border-sidebar-border bg-sidebar shadow-lg;
+  }
+
+  /* Smooth transitions for sidebar state changes */
+  [data-sidebar="sidebar"] {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Icon-only button styling */
+  .sidebar-icon-only {
+    @apply h-8 w-8 rounded-md flex items-center justify-center;
+  }
 }
 
 @layer utilities {

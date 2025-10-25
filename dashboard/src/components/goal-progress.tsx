@@ -1,15 +1,19 @@
 import { Progress } from '@/components/ui/progress'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAllGoals } from '@/hooks/use-goal'
-import { Target, TrendingUp } from 'lucide-react'
+import { Target, TrendingUp, Heart } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useEffect, useState, useRef } from 'react'
+import { useSidebar } from '@/components/ui/sidebar'
 
 export function GoalProgress() {
   const { data: goalsData, isLoading, isError } = useAllGoals()
   const { t } = useTranslation()
+  const { state } = useSidebar()
   const [currentGoalIndex, setCurrentGoalIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
 
@@ -135,6 +139,69 @@ export function GoalProgress() {
   const progress = Math.min((currentGoal.paid_amount / currentGoal.price) * 100, 100)
   const remaining = Math.max(currentGoal.price - currentGoal.paid_amount, 0)
 
+  // Collapsed state - simple donate button with popover
+  if (state === 'collapsed') {
+    return (
+      <div className="mx-2 mb-2">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md"
+            >
+              <Heart className="h-4 w-4 text-primary" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-4" side="right" align="start">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Heart className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">{currentGoal.name}</span>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-medium">{progress.toFixed(0)}%</span>
+                </div>
+                <Progress value={progress} className="h-2" />
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-primary">${currentGoal.paid_amount.toLocaleString()}</span>
+                  <span className="text-muted-foreground">
+                    {t('goal.of')} ${currentGoal.price.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {remaining > 0 && (
+                <div className="rounded-md bg-muted/50 px-3 py-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{t('goal.remaining')}</span>
+                    <span className="font-semibold">${remaining.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+
+              <Button asChild className="w-full">
+                <a
+                  href="https://donate.pasarguard.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2"
+                >
+                  <Target className="h-4 w-4" />
+                  {t('goal.contribute')}
+                </a>
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    )
+  }
+
+  // Expanded state - full card
   return (
     <Card
       className="mx-2 mb-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 cursor-grab active:cursor-grabbing select-none user-select-none"

@@ -50,7 +50,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
   const [version, setVersion] = useState<string>('')
   const { admin } = useAdmin()
-  const { setOpenMobile, openMobile } = useSidebar()
+  const { setOpenMobile, openMobile, state } = useSidebar()
   const { resolvedTheme } = useTheme()
   const touchStartX = useRef<number | null>(null)
   const touchEndX = useRef<number | null>(null)
@@ -316,24 +316,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </Link>
         <SidebarTrigger />
       </div>
-      <Sidebar variant="sidebar" {...props} className="border-sidebar-border p-0" side={isRTL ? 'right' : 'left'}>
+      <Sidebar variant="sidebar" collapsible="icon" {...props} className="border-sidebar-border p-0" side={isRTL ? 'right' : 'left'}>
         <SidebarRail />
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild>
-                <a href={REPO_URL} target="_blank" className="!gap-2">
-                  <img
-                    src={resolvedTheme === 'dark' ? window.location.pathname + 'statics/favicon/logo.png' : window.location.pathname + 'statics/favicon/logo-dark.png'}
-                    alt="PasarGuard Logo"
-                    className="h-8 w-8 flex-shrink-0 object-contain"
-                  />
-                  <div className="flex flex-col">
-                    <span className={cn(isRTL ? 'text-right' : 'text-left', 'truncate text-sm font-semibold leading-tight')}>{t('pasarguard')}</span>
-                    <span className="text-xs opacity-45">{version}</span>
-                  </div>
-                </a>
-              </SidebarMenuButton>
+              {state === 'collapsed' ? (
+                <SidebarMenuButton size="lg" asChild>
+                  <a href={REPO_URL} target="_blank" className="!gap-0 justify-center">
+                    <img
+                      src={resolvedTheme === 'dark' ? window.location.pathname + 'statics/favicon/logo.png' : window.location.pathname + 'statics/favicon/logo-dark.png'}
+                      alt="PasarGuard Logo"
+                      className="h-6 w-6 flex-shrink-0 object-contain"
+                    />
+                  </a>
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton size="lg" asChild>
+                  <a href={REPO_URL} target="_blank" className="!gap-2">
+                    <img
+                      src={resolvedTheme === 'dark' ? window.location.pathname + 'statics/favicon/logo.png' : window.location.pathname + 'statics/favicon/logo-dark.png'}
+                      alt="PasarGuard Logo"
+                      className="h-8 w-8 flex-shrink-0 object-contain"
+                    />
+                    <div className="flex flex-col">
+                      <span className={cn(isRTL ? 'text-right' : 'text-left', 'truncate text-sm font-semibold leading-tight')}>{t('pasarguard')}</span>
+                      <span className="text-xs opacity-45">{version}</span>
+                    </div>
+                  </a>
+                </SidebarMenuButton>
+              )}
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -342,12 +354,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           {admin?.is_sudo && <NavSecondary items={data.community} label={t('community')} />}
           <NavSecondary items={data.navSecondary} className="mt-auto" />
           <GoalProgress />
-          <div className="flex justify-between px-4 [&>:first-child]:[direction:ltr]">
-            <GithubStar />
-            <div className="flex items-start gap-2">
-              <Language />
-              <ThemeToggle />
-            </div>
+          <div className="flex justify-between items-center px-2 [&>:first-child]:[direction:ltr]">
+            {state !== 'collapsed' && (
+              <GithubStar />
+            )}
+            {state !== 'collapsed' && (
+              <div className="flex items-start gap-2">
+                <Language />
+                <ThemeToggle />
+              </div>
+            )}
           </div>
         </SidebarContent>
         <SidebarFooter>

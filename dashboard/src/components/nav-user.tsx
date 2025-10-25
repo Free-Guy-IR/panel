@@ -1,14 +1,19 @@
 'use client'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useSidebar } from '@/components/ui/sidebar'
 import { type AdminDetails } from '@/service/api'
-import { ChevronsUpDown, LogOut, Network, Wifi, Shield, UsersIcon } from 'lucide-react'
+import { ChevronsUpDown, LogOut, Network, Wifi, Shield, UsersIcon, UserCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { formatBytes } from '@/utils/formatByte'
 import { Badge } from '@/components/ui/badge'
 import { removeAuthToken } from '@/utils/authStorage'
 import { queryClient } from '@/utils/query-client'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { Language } from '@/components/Language'
 
 export function NavUser({
   username,
@@ -20,6 +25,7 @@ export function NavUser({
   admin: AdminDetails | null
 }) {
   const { t } = useTranslation()
+  const { state } = useSidebar()
   const navigate = useNavigate()
 
   const handleLogout = (e: React.MouseEvent) => {
@@ -34,6 +40,95 @@ export function NavUser({
     navigate('/login', { replace: true })
   }
 
+
+  // Collapsed state - admin icon with popover
+  if (state === 'collapsed') {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-md"
+              >
+                <UserCircle className="h-4 w-4 text-sidebar-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" side="right" align="start">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <UserCircle className="h-4 w-4 text-primary" />
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">{username.name}</span>
+                    {admin && (
+                      <Badge variant={admin.is_sudo ? 'secondary' : 'outline'} className="h-4 px-1 py-0 text-[10px]">
+                        {admin.is_sudo ? (
+                          <>
+                            <Shield className="mr-1 size-3" />
+                            {t('sudo')}
+                          </>
+                        ) : (
+                          <>
+                            <UsersIcon className="mr-1 size-3" />
+                            {t('admin')}
+                          </>
+                        )}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {admin && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{t('admins.used.traffic')}</span>
+                      <span className="font-medium">
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                          {formatBytes(admin?.used_traffic || 0)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{t('admins.lifetime.used.traffic')}</span>
+                      <span className="font-medium">
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                          {formatBytes(admin?.lifetime_used_traffic || 0)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{t('admins.total.users')}</span>
+                      <span className="font-medium">{admin?.total_users || 0}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Theme and Language Controls */}
+                <div className="flex gap-1 border-t pt-2">
+                  <ThemeToggle />
+                  <Language />
+                </div>
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="w-full mt-2"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t('header.logout')}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  // Expanded state - full dropdown
   return (
     <SidebarMenu>
       <SidebarMenuItem>
