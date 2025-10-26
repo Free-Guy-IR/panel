@@ -649,19 +649,19 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="-mr-4 max-h-[69dvh] overflow-y-auto px-2 pr-4 sm:max-h-[72dvh]">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:h-full md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-6">
+                <div className="flex flex-col">
+                  <div className="flex flex-col space-y-4 md:h-full">
                     {/* Form: Core configuration JSON */}
                     <FormField
                       control={form.control}
                       name="config"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
+                        <FormItem className="md:flex md:h-full md:flex-col">
+                          <FormControl className="md:flex md:flex-1">
                             <div
                               className={cn(
-                                'relative h-[450px] rounded-lg border sm:h-[500px] md:h-[550px]',
+                                'relative min-h-[420px] rounded-lg border sm:min-h-[480px] md:flex-1 md:min-h-0',
                                 isEditorFullscreen && 'fixed inset-0 z-50 m-0 flex h-full max-h-none w-full max-w-none flex-col bg-background p-0',
                               )}
                               dir="ltr"
