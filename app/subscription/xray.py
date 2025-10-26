@@ -371,7 +371,7 @@ class XrayConfiguration(BaseSubscription):
 
     # ========== Protocol Builders (Registry Methods) ==========
 
-    def _build_vmess(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
+    def _build_vmess(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
         """Build VMess outbound - returns (main_outbound, extra_outbounds_list)"""
         return self._build_outbound(
             protocol_type="vmess",
@@ -380,11 +380,18 @@ class XrayConfiguration(BaseSubscription):
             user_settings={"id": str(settings["id"]), "alterId": 0, "security": "auto"},
         )
 
-    def _build_vless(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
+    def _build_vless(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
         """Build VLESS outbound - returns (main_outbound, extra_outbounds_list)"""
         flow = settings.get("flow", "")
         user_settings = {"id": str(settings["id"]), "encryption": inbound.encryption}
-        if flow:
+
+        # Only add flow for specific conditions
+        header_type = getattr(inbound.transport_config, "header_type", "none")
+        if flow and (
+            inbound.tls_config.tls in ("tls", "reality")
+            and inbound.network in ("tcp", "raw", "kcp")
+            and header_type != "http"
+        ):
             user_settings["flow"] = flow
 
         return self._build_outbound(
@@ -394,12 +401,9 @@ class XrayConfiguration(BaseSubscription):
             user_settings=user_settings,
         )
 
-    def _build_trojan(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
+    def _build_trojan(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
         """Build Trojan outbound - returns (main_outbound, extra_outbounds_list)"""
-        flow = settings.get("flow", "")
         user_settings = {"password": settings["password"]}
-        if flow:
-            user_settings["flow"] = flow
 
         return self._build_outbound(
             protocol_type="trojan",
@@ -408,7 +412,7 @@ class XrayConfiguration(BaseSubscription):
             user_settings=user_settings,
         )
 
-    def _build_shadowsocks(self, address: str, remark: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
+    def _build_shadowsocks(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
         """Build Shadowsocks outbound"""
         method, password = self.detect_shadowsocks_2022(
             inbound.is_2022,

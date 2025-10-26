@@ -223,12 +223,24 @@ class SingBoxConfiguration(BaseSubscription):
 
     def _build_vless(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
         """Build VLESS outbound"""
+        flow = settings.get("flow", "")
+        user_settings = {"uuid": str(settings["id"])}
+
+        # Only add flow for specific conditions
+        header_type = getattr(inbound.transport_config, "header_type", "none")
+        if flow and (
+            inbound.tls_config.tls in ("tls", "reality")
+            and inbound.network in ("tcp", "raw", "kcp")
+            and header_type != "http"
+        ):
+            user_settings["flow"] = flow
+
         return self._build_outbound(
             protocol_type="vless",
             remark=remark,
             address=address,
             inbound=inbound,
-            user_settings={"uuid": str(settings["id"]), "flow": settings.get("flow", "")},
+            user_settings=user_settings,
         )
 
     def _build_trojan(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
@@ -238,7 +250,7 @@ class SingBoxConfiguration(BaseSubscription):
             remark=remark,
             address=address,
             inbound=inbound,
-            user_settings={"password": settings["password"], "flow": settings.get("flow", "")},
+            user_settings={"password": settings["password"]},
         )
 
     def _build_shadowsocks(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
@@ -294,16 +306,6 @@ class SingBoxConfiguration(BaseSubscription):
             "server_port": self._select_port(inbound.port),
             **user_settings,
         }
-
-        # Add flow for specific combinations
-        header_type = getattr(inbound.transport_config, "header_type", "none")
-        if (
-            network in ("tcp", "raw", "kcp")
-            and header_type != "http"
-            and inbound.tls_config.tls in ("tls", "reality")
-            and user_settings.get("flow")
-        ):
-            config["flow"] = user_settings["flow"]
 
         # Add transport
         if network in ("http", "ws", "quic", "grpc", "httpupgrade", "h2", "h3"):

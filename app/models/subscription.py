@@ -5,24 +5,9 @@ Broken down into small, focused models - each transport/protocol gets only what 
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
-
-
-class ClientType(str, Enum):
-    """Supported subscription client types"""
-
-    XRAY = "xray"
-    SINGBOX = "sing-box"
-    CLASH = "clash"
-    CLASH_META = "clash-meta"
-    LINKS = "links"
-    OUTLINE = "outline"
-
-
-# ========== TLS Configuration (Shared) ==========
 
 
 class TLSConfig(BaseModel):
