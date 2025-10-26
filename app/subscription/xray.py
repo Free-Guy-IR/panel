@@ -66,7 +66,7 @@ class XrayConfiguration(BaseSubscription):
             return
 
         # Build outbound(s)
-        result = handler(remark=remark, address=address, inbound=inbound, settings=settings)
+        result = handler(address=address, inbound=inbound, settings=settings)
         if not result:
             return
 
