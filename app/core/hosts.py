@@ -52,7 +52,7 @@ async def _prepare_subscription_inbound_data(
     # Merge TLS settings: host overrides inbound defaults
     tls_value = None if host.security == ProxyHostSecurity.inbound_default else host.security.value
     if tls_value is None:
-        tls_value = inbound_config.get("tls")
+        tls_value = inbound_config.get("tls", "none")
 
     alpn_list = [alpn.value for alpn in host.alpn] if host.alpn else inbound_config.get("alpn", [])
     fp = host.fingerprint.value if host.fingerprint.value != "none" else inbound_config.get("fp", "")
@@ -60,7 +60,7 @@ async def _prepare_subscription_inbound_data(
 
     # Create TLS config once with merged data
     tls_config = TLSConfig(
-        tls=tls_value,
+        tls=tls_value if tls_value != "none" else None,
         sni=sni_list,
         fingerprint=fp,
         allowinsecure=ais,
