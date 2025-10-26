@@ -220,6 +220,7 @@ class SubscriptionInboundData(BaseModel):
 
     # Flow (from inbound, user can override)
     inbound_flow: str = ""
+    flow_enabled: bool = False  # Computed once: if this inbound supports flow
 
     # Additional settings
     random_user_agent: bool = False

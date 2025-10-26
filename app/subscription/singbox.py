@@ -223,16 +223,10 @@ class SingBoxConfiguration(BaseSubscription):
 
     def _build_vless(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
         """Build VLESS outbound"""
-        flow = settings.get("flow", "")
         user_settings = {"uuid": str(settings["id"])}
 
-        # Only add flow for specific conditions
-        header_type = getattr(inbound.transport_config, "header_type", "none")
-        if flow and (
-            inbound.tls_config.tls in ("tls", "reality")
-            and inbound.network in ("tcp", "raw", "kcp")
-            and header_type != "http"
-        ):
+        # Only add flow if inbound supports it
+        if inbound.flow_enabled and (flow := settings.get("flow", "")):
             user_settings["flow"] = flow
 
         return self._build_outbound(
@@ -318,7 +312,7 @@ class SingBoxConfiguration(BaseSubscription):
             config["tls"] = self._apply_tls(inbound.tls_config, inbound.fragment_settings)
 
         # Add mux
-        if inbound.mux_settings and (singbox_mux := inbound.mux_settings.get("sing_box")):
+        if inbound.mux_settings and (singbox_mux := inbound.mux_settings.get("sing_box")) and singbox_mux.get("enable"):
             singbox_mux = self._normalize_and_remove_none_values(singbox_mux)
             config["multiplex"] = singbox_mux
 

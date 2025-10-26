@@ -219,7 +219,6 @@ class StandardLinks(BaseSubscription):
         """Build VLESS link"""
         # Process grpc path
         path = self._process_path(inbound)
-        flow = settings.get("flow", "")
 
         payload = {
             "encryption": inbound.encryption,
@@ -228,12 +227,8 @@ class StandardLinks(BaseSubscription):
             "headerType": getattr(inbound.transport_config, "header_type", "none"),
         }
 
-        header_type = getattr(inbound.transport_config, "header_type", "none")
-        if flow and (
-            inbound.tls_config.tls in ("tls", "reality")
-            and inbound.network in ("tcp", "raw", "kcp")
-            and header_type != "http"
-        ):
+        # Only add flow if inbound supports it
+        if inbound.flow_enabled and (flow := settings.get("flow", "")):
             payload["flow"] = flow
 
         self._apply_transport_settings(payload, "vless", inbound, path)
@@ -251,21 +246,12 @@ class StandardLinks(BaseSubscription):
         """Build Trojan link"""
         # Process grpc path
         path = self._process_path(inbound)
-        flow = settings.get("flow", "")
 
         payload = {
             "security": inbound.tls_config.tls,
             "type": inbound.network,
             "headerType": getattr(inbound.transport_config, "header_type", "none"),
         }
-
-        header_type = getattr(inbound.transport_config, "header_type", "none")
-        if flow and (
-            inbound.tls_config.tls in ("tls", "reality")
-            and inbound.network in ("tcp", "raw", "kcp")
-            and header_type != "http"
-        ):
-            payload["flow"] = flow
 
         self._apply_transport_settings(payload, "trojan", inbound, path)
 

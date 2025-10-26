@@ -198,6 +198,8 @@ class ClashConfiguration(BaseSubscription):
         """Apply mux settings if present"""
         if not mux_settings or not (clash_mux := mux_settings.get("clash")):
             return
+        if not clash_mux.get("enable"):
+            return
 
         clash_mux_config = {
             "enabled": clash_mux.get("enable"),
@@ -327,14 +329,9 @@ class ClashMetaConfiguration(ClashConfiguration):
             "encryption": "" if inbound.encryption == "none" else inbound.encryption,
         }
 
-        # Add flow for specific conditions
-        if (
-            inbound.network in ("tcp", "raw", "kcp")
-            and hasattr(inbound.transport_config, "header_type")
-            and inbound.transport_config.header_type != "http"
-            and inbound.tls_config.tls != "none"
-        ):
-            node["flow"] = settings.get("flow", "")
+        # Only add flow if inbound supports it
+        if inbound.flow_enabled and (flow := settings.get("flow", "")):
+            node["flow"] = flow
 
         self._apply_tls_meta(node, inbound.tls_config, "vless")
         self._apply_transport(node, inbound, inbound.transport_config.path, inbound.random_user_agent)

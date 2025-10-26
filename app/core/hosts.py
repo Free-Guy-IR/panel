@@ -106,6 +106,9 @@ async def _prepare_subscription_inbound_data(
     # Network comes from inbound, NOT from checking which transport exists on host!
     # Host can have ALL transport configs, inbound determines which one is used
 
+    # Get header_type from inbound (will be used for KCP, QUIC, TCP)
+    inbound_header_type = inbound_config.get("header_type", "none")
+
     # Create transport config based on network type from inbound
     # Always create the config, merge host settings with inbound defaults (host overrides inbound)
     if network in ("xhttp", "splithttp"):
@@ -141,7 +144,7 @@ async def _prepare_subscription_inbound_data(
         transport_config = KCPTransportConfig(
             path=path,
             host=host_list,
-            header_type=ks.header if ks else "none",
+            header_type=ks.header if ks else inbound_header_type,
             mtu=ks.mtu if ks else None,
             tti=ks.tti if ks else None,
             uplink_capacity=ks.uplink_capacity if ks else None,
@@ -155,7 +158,7 @@ async def _prepare_subscription_inbound_data(
         transport_config = QUICTransportConfig(
             path=path,
             host=host_list,
-            header_type=qs.header if qs else "none",
+            header_type=qs.header if qs else inbound_header_type,
         )
     elif network in ("ws", "websocket", "httpupgrade"):
         ws = ts.websocket_settings if ts else None
@@ -172,7 +175,7 @@ async def _prepare_subscription_inbound_data(
         transport_config = TCPTransportConfig(
             path=path,
             host=host_list,
-            header_type=tcps.header if tcps else "none",
+            header_type=tcps.header if tcps else inbound_header_type,
             request=tcps.request.model_dump(by_alias=True, exclude_none=True) if tcps and tcps.request else None,
             response=tcps.response.model_dump(by_alias=True, exclude_none=True) if tcps and tcps.response else None,
             http_headers=host.http_headers,
@@ -183,10 +186,19 @@ async def _prepare_subscription_inbound_data(
         transport_config = TCPTransportConfig(
             path=path,
             host=host_list,
-            header_type="none",
+            header_type=inbound_header_type,
             http_headers=host.http_headers,
             random_user_agent=host.random_user_agent,
         )
+
+    # Compute flow_enabled: only for VLESS with specific conditions
+    header_type = getattr(transport_config, "header_type", "none")
+    flow_enabled = (
+        protocol == "vless"
+        and tls_value in ("tls", "reality")
+        and network in ("tcp", "raw", "kcp")
+        and header_type != "http"
+    )
 
     return SubscriptionInboundData(
         remark=host.remark,
@@ -203,6 +215,7 @@ async def _prepare_subscription_inbound_data(
         password=ss_password,
         encryption=encryption,
         inbound_flow=inbound_flow,
+        flow_enabled=flow_enabled,
         random_user_agent=host.random_user_agent,
         use_sni_as_host=host.use_sni_as_host,
         fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
