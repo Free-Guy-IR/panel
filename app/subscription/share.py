@@ -35,28 +35,26 @@ STATUS_EMOJIS = {
 }
 
 
+config_format_handler = {
+    "links": StandardLinks,
+    "clash": ClashMetaConfiguration,
+    "clash_meta": ClashMetaConfiguration,
+    "sing_box": SingBoxConfiguration,
+    "outline": OutlineConfiguration,
+    "xray": XrayConfiguration,
+}
+
+
 async def generate_subscription(
     user: UsersResponseWithInbounds, config_format: str, as_base64: bool, reverse: bool = False
 ) -> str:
-    conf = None
-    if config_format == "links":
-        conf = StandardLinks()
-    elif config_format == "clash-meta":
-        conf = ClashMetaConfiguration()
-    elif config_format == "clash":
-        conf = ClashConfiguration()
-    elif config_format == "sing-box":
-        conf = SingBoxConfiguration()
-    elif config_format == "outline":
-        conf = OutlineConfiguration()
-    elif config_format == "xray":
-        conf = XrayConfiguration()
-    else:
+    conf = config_format_handler.get(config_format, None)
+    if conf is None:
         raise ValueError(f'Unsupported format "{config_format}"')
 
     format_variables = setup_format_variables(user)
 
-    config = await process_inbounds_and_tags(user, format_variables, conf, reverse)
+    config = await process_inbounds_and_tags(user, format_variables, conf(), reverse)
 
     if as_base64:
         config = base64.b64encode(config.encode()).decode()
@@ -259,7 +257,6 @@ async def _prepare_download_settings(
     | ClashMetaConfiguration
     | OutlineConfiguration,
 ) -> SubscriptionInboundData | dict | None:
-
     result = await process_host(download_data, format_variables, inbounds, proxies)
 
     if not result:

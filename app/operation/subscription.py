@@ -18,9 +18,9 @@ from config import SUBSCRIPTION_PAGE_TEMPLATE
 from . import BaseOperation
 
 client_config = {
-    ConfigFormat.clash_meta: {"config_format": "clash-meta", "media_type": "text/yaml", "as_base64": False},
+    ConfigFormat.clash_meta: {"config_format": "clash_meta", "media_type": "text/yaml", "as_base64": False},
     ConfigFormat.clash: {"config_format": "clash", "media_type": "text/yaml", "as_base64": False},
-    ConfigFormat.sing_box: {"config_format": "sing-box", "media_type": "application/json", "as_base64": False},
+    ConfigFormat.sing_box: {"config_format": "sing_box", "media_type": "application/json", "as_base64": False},
     ConfigFormat.links_base64: {"config_format": "links", "media_type": "text/plain", "as_base64": True},
     ConfigFormat.links: {"config_format": "links", "media_type": "text/plain", "as_base64": False},
     ConfigFormat.outline: {"config_format": "outline", "media_type": "application/json", "as_base64": False},

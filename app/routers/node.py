@@ -136,7 +136,7 @@ async def node_logs(node_id: int, request: Request, _: AdminDetails = Depends(ch
                 while True:
                     if await request.is_disconnected():
                         break
-                    
+
                     item = await log_queue.get()
                     # Check if we received an error
                     if isinstance(item, NodeAPIError):

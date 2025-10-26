@@ -37,7 +37,7 @@ async def _prepare_subscription_inbound_data(
 
     ts = host.transport_settings
     network = inbound_config.get("network", "tcp")
-    path = host.path or ""
+    path = host.path or inbound_config.get("path", "")
 
     sni_list = list(host.sni) if host.sni else inbound_config.get("sni", [])
     host_list = list(host.host) if host.host else inbound_config.get("host", [])
