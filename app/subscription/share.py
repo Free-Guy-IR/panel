@@ -2,13 +2,14 @@ import base64
 import random
 import secrets
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime as dt, timedelta, timezone
 
 from jdatetime import date as jd
 
 from app.core.hosts import host_manager
-from app.core.manager import core_manager
 from app.db.models import UserStatus
+from app.models.subscription import SubscriptionInboundData
 from app.models.user import UsersResponseWithInbounds
 from app.settings import subscription_settings
 from app.utils.system import get_public_ip, get_public_ipv6, readable_size
@@ -67,7 +68,7 @@ def format_time_left(seconds_left: int) -> str:
     if not seconds_left or seconds_left <= 0:
         return "∞"
 
-    minutes, seconds = divmod(seconds_left, 60)
+    minutes, _ = divmod(seconds_left, 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
     months, days = divmod(days, 30)
@@ -81,8 +82,6 @@ def format_time_left(seconds_left: int) -> str:
         result.append(f"{int(hours)}h")
     if minutes and not (months or days):
         result.append(f"{int(minutes)}m")
-    if seconds and not (months or days):
-        result.append(f"{int(seconds)}s")
     return " ".join(result)
 
 
@@ -164,99 +163,118 @@ def setup_format_variables(user: UsersResponseWithInbounds) -> dict:
     return format_variables
 
 
-async def filter_hosts(hosts: list, user_status: UserStatus) -> list:
+async def filter_hosts(hosts: list[SubscriptionInboundData], user_status: UserStatus) -> list[SubscriptionInboundData]:
     if not (await subscription_settings()).host_status_filter:
         return hosts
 
-    return [host for host in hosts if not host["status"] or user_status in host["status"]]
+    return [host for host in hosts if not host.status or user_status in host.status]
 
 
 async def process_host(
-    host: dict, format_variables: dict, inbounds: list[str], proxies: dict, conf
-) -> tuple[dict, dict, str]:
-    tag = host["inbound_tag"]
+    inbound: SubscriptionInboundData, format_variables: dict, inbounds: list[str], proxies: dict
+) -> tuple:
+    """
+    Process host data for subscription generation.
+    Now only does random selection and user-specific formatting!
+    All merging and data preparation is done in hosts.py.
+    """
 
-    if tag not in inbounds:
+    if inbound.inbound_tag not in inbounds:
         return
 
-    host_inbound: dict = await core_manager.get_inbound_by_tag(tag)
-    protocol = host_inbound["protocol"]
-
-    settings = proxies.get(protocol)
+    # Get user settings for this protocol
+    settings = proxies.get(inbound.protocol)
     if not settings:
         return
 
-    if "flow" in host_inbound:
-        if settings["flow"] == "":
-            settings["flow"] = "" if host_inbound["flow"] == "none" else host_inbound["flow"]
+    # Handle flow: user settings have priority, fall back to inbound flow
+    if "flow" in settings and settings["flow"] == "":
+        # User has empty flow, use inbound flow as default
+        settings["flow"] = inbound.inbound_flow
 
-    format_variables.update({"PROTOCOL": protocol})
-    format_variables.update({"TRANSPORT": host_inbound["network"]})
+    # Update format variables
+    format_variables.update({"PROTOCOL": inbound.protocol})
+    format_variables.update({"TRANSPORT": inbound.network})
+
+    salt = secrets.token_hex(8)
+
     sni = ""
-    sni_list = host["sni"] or host_inbound["sni"]
-    if sni_list:
-        salt = secrets.token_hex(8)
-        sni = random.choice(sni_list).replace("*", salt)
+    if isinstance(inbound.tls_config.sni, list) and inbound.tls_config.sni:
+        sni = random.choice(inbound.tls_config.sni)
+    sni = sni.replace("*", salt)
 
     req_host = ""
-    req_host_list = host["host"] or host_inbound["host"]
-    if req_host_list:
-        salt = secrets.token_hex(8)
-        req_host = random.choice(req_host_list).replace("*", salt)
+    host_list = inbound.transport_config.host
+    if isinstance(host_list, list) and host_list:
+        req_host = random.choice(host_list)
+    req_host = req_host.replace("*", salt)
 
     address = ""
-    address_list = host["address"]
-    if host["address"]:
-        salt = secrets.token_hex(8)
-        address = random.choice(address_list).replace("*", salt)
+    if inbound.address:
+        address = random.choice(inbound.address).replace("*", salt)
 
-    if sids := host_inbound.get("sids"):
-        host_inbound["sid"] = random.choice(sids)
+    # Select random port from list
+    port = random.choice(inbound.port) if inbound.port else 0
 
-    if host["path"] is not None:
-        path = host["path"].format_map(format_variables)
+    # Select random Reality short ID if available
+    if inbound.tls_config.reality_short_ids:
+        reality_sid = random.choice(inbound.tls_config.reality_short_ids)
     else:
-        path = host_inbound.get("path", "").format_map(format_variables)
+        reality_sid = inbound.tls_config.reality_short_id
 
-    if host.get("use_sni_as_host", False) and sni:
+    # Format path with variables
+    path = inbound.transport_config.path.format_map(format_variables) if inbound.transport_config.path else ""
+
+    # Apply use_sni_as_host override
+    if inbound.use_sni_as_host and sni:
         req_host = sni
 
-    host_inbound.update(
-        {
-            "port": host["port"] or host_inbound["port"],
-            "sni": sni,
-            "host": req_host,
-            "tls": host_inbound["tls"] if host["tls"] is None else host["tls"],
-            "alpn": host["alpn"] if host["alpn"] else None,
-            "path": path,
-            "fp": host["fingerprint"] or host_inbound.get("fp", ""),
-            "ais": host["allowinsecure"] or host_inbound.get("allowinsecure", ""),
-            "fragment_settings": host["fragment_settings"],
-            "noise_settings": host["noise_settings"],
-            "random_user_agent": host["random_user_agent"],
-            "http_headers": host["http_headers"],
-            "mux_settings": host["mux_settings"],
-            "ech_config_list": host["ech_config_list"],
-        },
-    )
-    if ts := host["transport_settings"]:
-        for v in ts.values():
-            if v:
-                if "type" in v:
-                    v["header_type"] = v["type"]
-                host_inbound.update(v)
+    # Create a copy of the inbound data with selected random values
+    inbound_copy = deepcopy(inbound)
 
-    if host.get("downloadSettings"):
-        ds_data = await process_host(host["downloadSettings"], format_variables, inbounds, proxies, conf)
-        if ds_data and ds_data[0]:
-            ds_data[0]["address"] = ds_data[2].format_map(format_variables)
-            if isinstance(conf, StandardLinks):
-                xc = XrayConfiguration()
-                host_inbound["downloadSettings"] = xc.download_config(ds_data[0], True)
-            else:
-                host_inbound["downloadSettings"] = ds_data[0]
+    # Update TLS config with selected values
+    inbound_copy.tls_config.sni = sni
+    inbound_copy.tls_config.reality_short_id = reality_sid
 
-    return host_inbound, settings, address
+    # Update transport config with selected host
+    inbound_copy.transport_config.host = req_host
+    inbound_copy.transport_config.path = path
+
+    # Update address and port with selected values
+    inbound_copy.address = address
+    inbound_copy.port = port
+
+    return inbound_copy, settings
+
+
+async def _prepare_download_settings(
+    download_data: SubscriptionInboundData,
+    format_variables: dict,
+    inbounds: list[str],
+    proxies: dict,
+    conf: StandardLinks
+    | XrayConfiguration
+    | SingBoxConfiguration
+    | ClashConfiguration
+    | ClashMetaConfiguration
+    | OutlineConfiguration,
+) -> SubscriptionInboundData | dict | None:
+
+    result = await process_host(download_data, format_variables, inbounds, proxies)
+
+    if not result:
+        return
+
+    download_copy, _ = result
+
+    if isinstance(download_copy.address, str):
+        download_copy.address = download_copy.address.format_map(format_variables)
+
+    if isinstance(conf, StandardLinks):
+        xc = XrayConfiguration()
+        return xc._download_config(download_copy, link_format=True)
+
+    return download_copy
 
 
 async def process_inbounds_and_tags(
@@ -271,19 +289,36 @@ async def process_inbounds_and_tags(
     reverse=False,
 ) -> list | str:
     proxy_settings = user.proxy_settings.dict()
-    for host in await filter_hosts((await host_manager.get_hosts()).values(), user.status):
-        host_data = await process_host(host, format_variables, user.inbounds, proxy_settings, conf)
-        if not host_data:
+    for host_data in await filter_hosts((await host_manager.get_hosts()).values(), user.status):
+        result = await process_host(host_data, format_variables, user.inbounds, proxy_settings)
+        if not result:
             continue
-        host_inbound, settings, address = host_data
 
-        if host_inbound:
-            conf.add(
-                remark=host["remark"].format_map(format_variables),
-                address=address.format_map(format_variables),
-                inbound=host_inbound,
-                settings=settings,
+        inbound_copy: SubscriptionInboundData
+        inbound_copy, settings = result
+
+        # Format remark and address with user variables
+        remark = inbound_copy.remark.format_map(format_variables)
+        formatted_address = inbound_copy.address.format_map(format_variables)
+
+        download_settings = getattr(inbound_copy.transport_config, "download_settings", None)
+        if download_settings:
+            processed_download_settings = await _prepare_download_settings(
+                download_settings,
+                format_variables,
+                user.inbounds,
+                proxy_settings,
+                conf,
             )
+            if hasattr(inbound_copy.transport_config, "download_settings"):
+                inbound_copy.transport_config.download_settings = processed_download_settings
+
+        conf.add(
+            remark=remark,
+            address=formatted_address,
+            inbound=inbound_copy,
+            settings=settings,
+        )
 
     return conf.render(reverse=reverse)
 
