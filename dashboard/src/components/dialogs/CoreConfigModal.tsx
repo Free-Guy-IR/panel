@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -55,6 +56,45 @@ const SHADOWSOCKS_ENCRYPTION_METHODS = [
   { value: '2022-blake3-aes-256-gcm', label: '2022-blake3-aes-256-gcm', length: 32 },
 ] as const
 type VlessVariant = 'x25519' | 'mlkem768'
+const DEFAULT_VLESS_HANDSHAKE = 'mlkem768x25519plus'
+const DEFAULT_VLESS_ENCRYPTION = 'native'
+const DEFAULT_VLESS_PADDING = '100-111-1111.75-0-111.50-0-3333'
+const DEFAULT_VLESS_SERVER_TICKET = '600s'
+const VLESS_HANDSHAKE_OPTIONS = [
+  { value: DEFAULT_VLESS_HANDSHAKE, label: 'mlkem768x25519plus', translationKey: 'coreConfigModal.vlessHandshakeOptionMlkem768x25519plus' },
+] as const
+const VLESS_RESUME_OPTIONS = [
+  { value: '0rtt', label: '0rtt', translationKey: 'coreConfigModal.vlessResumeOption0rtt' },
+  { value: '1rtt', label: '1rtt', translationKey: 'coreConfigModal.vlessResumeOption1rtt' },
+] as const
+const DEFAULT_VLESS_RESUME = VLESS_RESUME_OPTIONS[0].value
+const VLESS_ENCRYPTION_METHODS = [
+  { value: 'native', label: 'native', translationKey: 'coreConfigModal.vlessEncryptionOptionNative' },
+  { value: 'xorpub', label: 'xorpub', translationKey: 'coreConfigModal.vlessEncryptionOptionXorpub' },
+  { value: 'random', label: 'random', translationKey: 'coreConfigModal.vlessEncryptionOptionRandom' },
+] as const
+
+interface VlessBuilderOptions {
+  handshakeMethod: string
+  encryptionMethod: string
+  serverTicket: string
+  clientTicket: string
+  serverPadding: string
+  clientPadding: string
+  includeServerPadding: boolean
+  includeClientPadding: boolean
+}
+
+const createDefaultVlessOptions = (): VlessBuilderOptions => ({
+  handshakeMethod: DEFAULT_VLESS_HANDSHAKE,
+  encryptionMethod: DEFAULT_VLESS_ENCRYPTION,
+  serverTicket: DEFAULT_VLESS_SERVER_TICKET,
+  clientTicket: DEFAULT_VLESS_RESUME,
+  serverPadding: DEFAULT_VLESS_PADDING,
+  clientPadding: DEFAULT_VLESS_PADDING,
+  includeServerPadding: false,
+  includeClientPadding: false,
+})
 
 export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, editingCore, editingCoreId }: CoreConfigModalProps) {
   const { t } = useTranslation()
@@ -81,6 +121,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
     mlkem768: { decryption: string; encryption: string } | null
   }>({ x25519: null, mlkem768: null })
   const [selectedVlessVariant, setSelectedVlessVariant] = useState<VlessVariant>('x25519')
+  const [vlessOptions, setVlessOptions] = useState<VlessBuilderOptions>(() => createDefaultVlessOptions())
   const handleVlessVariantChange = useCallback(
     (value: string) => {
       if (value === 'x25519' || value === 'mlkem768') {
@@ -232,12 +273,10 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
     try {
       setIsGeneratingVLESSEncryption(true)
 
-      // Generate X25519 key pair
       const x25519KeyPair = generateKeyPair()
       const x25519ServerKey = encodeURLSafe(x25519KeyPair.secretKey).replace(/=/g, '')
       const x25519ClientKey = encodeURLSafe(x25519KeyPair.publicKey).replace(/=/g, '')
 
-      // Generate ML-KEM-768 key pair based on upstream implementation
       const mlkem768Seed = new Uint8Array(64)
       crypto.getRandomValues(mlkem768Seed)
       const mlkem768 = new MlKem768()
@@ -245,14 +284,71 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       const mlkem768ServerKey = encodeURLSafe(mlkem768Seed).replace(/=/g, '')
       const mlkem768ClientKey = encodeURLSafe(mlkem768Client).replace(/=/g, '')
 
-      // Match upstream dot config format:
-      // {handshake_method}.{encryption_type}.{session_resume}.{auth_parameter}
-      const generateDotConfig = (handshake: string, encryption: string, sessionResume: string, authParam: string) => `${handshake}.${encryption}.${sessionResume}.${authParam}`
+      const sanitizeSegments = (value: string) =>
+        value
+          .split('.')
+          .map(segment => segment.trim())
+          .filter(segment => segment.length > 0)
 
-      const x25519Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', x25519ServerKey)
-      const x25519Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', x25519ClientKey)
-      const mlkem768Decryption = generateDotConfig('mlkem768x25519plus', 'native', '600s', mlkem768ServerKey)
-      const mlkem768Encryption = generateDotConfig('mlkem768x25519plus', 'native', '0rtt', mlkem768ClientKey)
+      const normalizeOption = (value: string | undefined, fallback: string) => {
+        if (!value) return fallback
+        const trimmed = value.trim()
+        return trimmed.length > 0 ? trimmed : fallback
+      }
+
+      const handshakeMethod = normalizeOption(vlessOptions.handshakeMethod, DEFAULT_VLESS_HANDSHAKE)
+      const encryptionMethod = normalizeOption(vlessOptions.encryptionMethod, DEFAULT_VLESS_ENCRYPTION)
+
+      const buildConfig = ({
+        ticketValue,
+        paddingValue,
+        includePadding,
+        authParam,
+        fallbackTicket,
+      }: {
+        ticketValue: string
+        paddingValue: string
+        includePadding: boolean
+        authParam: string
+        fallbackTicket: string
+      }) => {
+        const segments = [handshakeMethod, encryptionMethod, normalizeOption(ticketValue, fallbackTicket)]
+        if (includePadding) {
+          const paddingSegments = sanitizeSegments(normalizeOption(paddingValue, DEFAULT_VLESS_PADDING))
+          segments.push(...paddingSegments)
+        }
+        segments.push(authParam)
+        return segments.join('.')
+      }
+
+      const x25519Decryption = buildConfig({
+        ticketValue: vlessOptions.serverTicket,
+        paddingValue: vlessOptions.serverPadding,
+        includePadding: vlessOptions.includeServerPadding,
+        authParam: x25519ServerKey,
+        fallbackTicket: DEFAULT_VLESS_SERVER_TICKET,
+      })
+      const x25519Encryption = buildConfig({
+        ticketValue: vlessOptions.clientTicket,
+        paddingValue: vlessOptions.clientPadding,
+        includePadding: vlessOptions.includeClientPadding,
+        authParam: x25519ClientKey,
+        fallbackTicket: DEFAULT_VLESS_RESUME,
+      })
+      const mlkem768Decryption = buildConfig({
+        ticketValue: vlessOptions.serverTicket,
+        paddingValue: vlessOptions.serverPadding,
+        includePadding: vlessOptions.includeServerPadding,
+        authParam: mlkem768ServerKey,
+        fallbackTicket: DEFAULT_VLESS_SERVER_TICKET,
+      })
+      const mlkem768Encryption = buildConfig({
+        ticketValue: vlessOptions.clientTicket,
+        paddingValue: vlessOptions.clientPadding,
+        includePadding: vlessOptions.includeClientPadding,
+        authParam: mlkem768ClientKey,
+        fallbackTicket: DEFAULT_VLESS_RESUME,
+      })
 
       setVlessEncryption({
         x25519: {
@@ -483,6 +579,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       setGeneratedShortId(null)
       setVlessEncryption({ x25519: null, mlkem768: null })
       setSelectedVlessVariant('x25519')
+      setVlessOptions(createDefaultVlessOptions())
       setMldsa65Keys(null)
       setValidation({ isValid: true })
     }
@@ -893,6 +990,133 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-4 space-y-3 rounded-md border p-3">
+                    <div>
+                      <h4 className="text-sm font-semibold">{t('coreConfigModal.vlessBuilderTitle', { defaultValue: 'VLESS encryption builder' })}</h4>
+                      <p className="text-xs text-muted-foreground">
+                        {t('coreConfigModal.vlessBuilderDescription', {
+                          defaultValue: 'Adjust handshake, encryption, tickets and padding values before generating.',
+                        })}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="vless-handshake">{t('coreConfigModal.vlessHandshakeLabel', { defaultValue: 'Handshake method' })}</Label>
+                        <Select value={vlessOptions.handshakeMethod} onValueChange={value => setVlessOptions(prev => ({ ...prev, handshakeMethod: value }))}>
+                          <SelectTrigger id="vless-handshake">
+                            <SelectValue placeholder={t('coreConfigModal.select', { defaultValue: 'Select' })} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {VLESS_HANDSHAKE_OPTIONS.map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {t(option.translationKey, { defaultValue: option.label })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="vless-encryption">{t('coreConfigModal.vlessEncryptionLabel', { defaultValue: 'Encryption method' })}</Label>
+                        <Select value={vlessOptions.encryptionMethod} onValueChange={value => setVlessOptions(prev => ({ ...prev, encryptionMethod: value }))}>
+                          <SelectTrigger id="vless-encryption">
+                            <SelectValue placeholder={t('coreConfigModal.select', { defaultValue: 'Select' })} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {VLESS_ENCRYPTION_METHODS.map(method => (
+                              <SelectItem key={method.value} value={method.value}>
+                                {t(method.translationKey, { defaultValue: method.label })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {t('coreConfigModal.vlessEncryptionHint', { defaultValue: 'Choose the wire format for encrypted payloads.' })}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="vless-server-ticket">{t('coreConfigModal.vlessServerTicket', { defaultValue: 'Decryption ticket / validity' })}</Label>
+                          <Input
+                            id="vless-server-ticket"
+                            value={vlessOptions.serverTicket}
+                            placeholder="600s or 100-500s"
+                            onChange={event => setVlessOptions(prev => ({ ...prev, serverTicket: event.target.value }))}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="vless-client-ticket">{t('coreConfigModal.vlessClientTicket', { defaultValue: 'Encryption resume strategy' })}</Label>
+                          <Select value={vlessOptions.clientTicket} onValueChange={value => setVlessOptions(prev => ({ ...prev, clientTicket: value }))}>
+                            <SelectTrigger id="vless-client-ticket">
+                              <SelectValue placeholder={t('coreConfigModal.select', { defaultValue: 'Select' })} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {VLESS_RESUME_OPTIONS.map(option => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {t(option.translationKey, { defaultValue: option.label })}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border p-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="vless-server-padding"
+                            checked={vlessOptions.includeServerPadding}
+                            onCheckedChange={checked => setVlessOptions(prev => ({ ...prev, includeServerPadding: checked === true }))}
+                          />
+                          <Label htmlFor="vless-server-padding" className="text-sm font-medium">
+                            {t('coreConfigModal.vlessServerPaddingToggle', { defaultValue: 'Include server padding blocks' })}
+                          </Label>
+                        </div>
+                        <Input
+                          id="vless-server-padding-input"
+                          className="mt-2"
+                          value={vlessOptions.serverPadding}
+                          placeholder={DEFAULT_VLESS_PADDING}
+                          disabled={!vlessOptions.includeServerPadding}
+                          onChange={event => setVlessOptions(prev => ({ ...prev, serverPadding: event.target.value }))}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('coreConfigModal.vlessPaddingHint', {
+                            defaultValue: 'Use probability-min-max blocks separated by dots, e.g. 100-111-1111.75-0-111.50-0-3333.',
+                          })}
+                        </p>
+                      </div>
+
+                      <div className="rounded-md border p-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="vless-client-padding"
+                            checked={vlessOptions.includeClientPadding}
+                            onCheckedChange={checked => setVlessOptions(prev => ({ ...prev, includeClientPadding: checked === true }))}
+                          />
+                          <Label htmlFor="vless-client-padding" className="text-sm font-medium">
+                            {t('coreConfigModal.vlessClientPaddingToggle', { defaultValue: 'Include client padding blocks' })}
+                          </Label>
+                        </div>
+                        <Input
+                          id="vless-client-padding-input"
+                          className="mt-2"
+                          value={vlessOptions.clientPadding}
+                          placeholder={DEFAULT_VLESS_PADDING}
+                          disabled={!vlessOptions.includeClientPadding}
+                          onChange={event => setVlessOptions(prev => ({ ...prev, clientPadding: event.target.value }))}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('coreConfigModal.vlessClientPaddingHint', {
+                            defaultValue: 'Padding blocks alternate with delay blocks; leave disabled to rely on core defaults.',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="pt-2">
                     <LoaderButton
