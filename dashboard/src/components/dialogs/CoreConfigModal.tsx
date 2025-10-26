@@ -1035,6 +1035,14 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                         <p className="text-xs text-muted-foreground">
                           {t('coreConfigModal.vlessEncryptionHint', { defaultValue: 'Choose the wire format for encrypted payloads.' })}
                         </p>
+                        <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                          <p className="font-medium">{t('coreConfigModal.vlessEncryptionInfoTitle', { defaultValue: 'Method overview' })}</p>
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            <li>{t('coreConfigModal.vlessEncryptionNativeInfo', { defaultValue: 'native: Sends frames in their original layout for maximum compatibility.' })}</li>
+                            <li>{t('coreConfigModal.vlessEncryptionXorpubInfo', { defaultValue: 'xorpub: Obfuscates the public-key section for moderate camouflage.' })}</li>
+                            <li>{t('coreConfigModal.vlessEncryptionRandomInfo', { defaultValue: 'random: Wraps everything in random bytes similar to VMess/ShadowSocks for highest disguise.' })}</li>
+                          </ul>
+                        </div>
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -1185,7 +1193,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                   <div className="pt-2">
                     <LoaderButton
                       type="button"
-                      onClick={e => generateShadowsocksPassword(selectedEncryptionMethod)}
+                      onClick={() => generateShadowsocksPassword(selectedEncryptionMethod)}
                       className="w-full"
                       isLoading={isGeneratingShadowsocksPassword}
                       loadingText={t('coreConfigModal.generatingShadowsocksPassword')}
