@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { getAdminsPerPageLimitSize, setAdminsPerPageLimitSize } from '@/utils/userPreferenceStorage'
 
 interface AdminFilters {
-  sort: string
+  sort?: string
   username?: string | null
   limit: number
   offset: number
@@ -109,10 +109,8 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   const [itemsPerPage, setItemsPerPage] = useState(getAdminsPerPageLimitSize())
   const [isChangingPage, setIsChangingPage] = useState(false)
   const [filters, setFilters] = useState<AdminFilters>({
-    sort: '-created_at',
     limit: itemsPerPage,
     offset: 0,
-    username: null,
   })
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [statusToggleDialogOpen, setStatusToggleDialogOpen] = useState(false)
@@ -137,14 +135,19 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   const handleFilterChange = (newFilters: Partial<AdminFilters>) => {
     setFilters(prev => {
       const resetPage = newFilters.username !== undefined && newFilters.username !== prev.username
-      return {
+      const updatedFilters = {
         ...prev,
         ...newFilters,
         offset: resetPage ? 0 : newFilters.offset !== undefined ? newFilters.offset : prev.offset,
       }
+      // If username is explicitly set to undefined, remove it from the filters
+      if ('username' in newFilters && newFilters.username === undefined) {
+        delete updatedFilters.username
+      }
+      return updatedFilters
     })
     // Reset page if search changes
-    if (newFilters.username !== undefined) {
+    if (newFilters.username !== undefined && newFilters.username !== filters.username) {
       setCurrentPage(0)
     }
   }
@@ -223,15 +226,21 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   }
 
   const handleSort = (column: string) => {
-    let newSort: string
-    if (filters.sort === column) {
-      newSort = '-' + column
-    } else if (filters.sort === '-' + column) {
-      newSort = '-username'
+    const currentSort = filters.sort
+    
+    if (currentSort === column) {
+      // First click: ascending, make it descending
+      setFilters(prev => ({ ...prev, sort: '-' + column }))
+    } else if (currentSort === '-' + column) {
+      // Second click: descending, remove sort (third state: no sort)
+      setFilters(prev => {
+        const { sort, ...restFilters } = prev
+        return restFilters as AdminFilters
+      })
     } else {
-      newSort = column
+      // Default state or different column: make it ascending
+      setFilters(prev => ({ ...prev, sort: column }))
     }
-    setFilters(prev => ({ ...prev, sort: newSort }))
   }
 
   const columns = setupColumns({

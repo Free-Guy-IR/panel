@@ -9,7 +9,7 @@ import { AdminStatusBadge } from '@/components/AdminStatusBadge'
 interface ColumnSetupProps {
   t: (key: string) => string
   handleSort: (column: string) => void
-  filters: { sort: string }
+  filters: { sort?: string }
   onEdit: (admin: AdminDetails) => void
   onDelete: (admin: AdminDetails) => void
   toggleStatus: (admin: AdminDetails) => void
@@ -22,16 +22,28 @@ const createSortButton = (
   t: (key: string) => string,
   handleSort: (column: string) => void,
   filters: {
-    sort: string
+    sort?: string
   },
-) => (
-  <button onClick={handleSort.bind(null, column)} className="flex w-full items-center gap-1 py-1">
-    <div className="text-xs">{t(label)}</div>
-    {filters.sort && (filters.sort === column || filters.sort === '-' + column) && (
-      <ChevronDown size={16} className={`transition-transform duration-300 ${filters.sort === column ? 'rotate-180' : ''} ${filters.sort === '-' + column ? 'rotate-0' : ''} `} />
-    )}
-  </button>
-)
+) => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    console.log('Sorting by column:', column)
+    handleSort(column)
+  }
+  
+  return (
+    <button 
+      onClick={handleClick}
+      className="flex w-full items-center gap-1 py-1"
+    >
+      <div className="text-xs">{t(label)}</div>
+      {filters.sort && (filters.sort === column || filters.sort === '-' + column) && (
+        <ChevronDown size={16} className={`transition-transform duration-300 ${filters.sort === column ? 'rotate-180' : ''} ${filters.sort === '-' + column ? 'rotate-0' : ''} `} />
+      )}
+    </button>
+  )
+}
 
 export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleStatus, onResetUsage }: ColumnSetupProps): ColumnDef<AdminDetails>[] => [
   {
@@ -69,7 +81,7 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
   },
   {
     accessorKey: 'lifetime_used_traffic',
-    header: () => createSortButton('lifetime_used_traffic', 'admins.lifetime.used.traffic', t, handleSort, filters),
+    header: () => <div className="flex items-center text-xs capitalize">{t('admins.lifetime.used.traffic')}</div>,
     cell: ({ row }) => {
       const total = row.getValue('lifetime_used_traffic') as number | null
       return (
@@ -94,7 +106,7 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
   },
   {
     accessorKey: 'total_users',
-    header: () => createSortButton('total_users', 'admins.total.users', t, handleSort, filters),
+    header: () => <div className="flex items-center text-xs capitalize">{t('admins.total.users')}</div>,
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         <User className="h-4 w-4" />

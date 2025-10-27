@@ -6,13 +6,13 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
 import { RefreshCw, SearchIcon, X } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useGetAdmins } from '@/service/api'
 import { LoaderCircle } from 'lucide-react'
 
 interface BaseFilters {
-  sort: string
+  sort?: string
   username?: string | null
   limit?: number
   offset?: number
@@ -30,17 +30,28 @@ export function Filters<T extends BaseFilters>({ filters, onFilterChange }: Filt
   const dir = useDirDetection()
   const { refetch } = useGetAdmins(filters)
   const [search, setSearch] = useState(filters.username || '')
+  const onFilterChangeRef = useRef(onFilterChange)
+
+  // Keep the ref in sync with the prop
+  onFilterChangeRef.current = onFilterChange
 
   // Debounced search function
   const setSearchField = useCallback(
     debounce((value: string) => {
-      onFilterChange({
-        username: value ? value : null,
+      onFilterChangeRef.current({
+        username: value || undefined,
         offset: 0, // Reset to first page when search is updated
       } as Partial<T>)
-    }, 50),
-    [onFilterChange],
+    }, 300),
+    [],
   )
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setSearchField.cancel()
+    }
+  }, [setSearchField])
 
   // Handle input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,8 +62,9 @@ export function Filters<T extends BaseFilters>({ filters, onFilterChange }: Filt
   // Clear search field
   const clearSearch = () => {
     setSearch('')
-    onFilterChange({
-      username: null,
+    setSearchField.cancel()
+    onFilterChangeRef.current({
+      username: undefined,
       offset: 0,
     } as Partial<T>)
   }
