@@ -9,7 +9,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
 import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown } from 'lucide-react'
-import { useState, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useGetUsers, UserStatus } from '@/service/api'
 import { RefetchOptions } from '@tanstack/react-query'
@@ -71,29 +71,39 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   const [isRefreshing, setIsRefreshing] = useState(false)
   const userQuery = useGetUsers(filters)
   const handleRefetch = refetch || userQuery.refetch
+  const onFilterChangeRef = useRef(onFilterChange)
 
-  // Ultra-fast debounced search function
-  const debouncedFilterChange = useMemo(
-    () =>
-      debounce((value: string) => {
-        onFilterChange({
-          search: value,
-          offset: 0, // Reset to first page when search is updated
-        })
-      }, 25), // Ultra-fast debounce
-    [onFilterChange],
+  // Keep the ref in sync with the prop
+  onFilterChangeRef.current = onFilterChange
+
+  // Create debounced function using es-toolkit, stored in ref to avoid recreation
+  const debouncedFilterChangeRef = useRef(
+    debounce((value: string) => {
+      onFilterChangeRef.current({
+        search: value,
+        offset: 0,
+      })
+    }, 300)
   )
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      debouncedFilterChangeRef.current.cancel()
+    }
+  }, [])
 
   // Handle input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setSearch(value)
-    debouncedFilterChange(value)
+    debouncedFilterChangeRef.current(value)
   }
 
   // Clear search field
   const clearSearch = () => {
     setSearch('')
+    debouncedFilterChangeRef.current.cancel()
     onFilterChange({
       search: '',
       offset: 0,
