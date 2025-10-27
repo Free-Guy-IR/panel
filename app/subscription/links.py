@@ -5,14 +5,14 @@ from random import choice
 from urllib.parse import quote
 
 from app.models.subscription import (
-    SubscriptionInboundData,
-    TLSConfig,
     GRPCTransportConfig,
-    WebSocketTransportConfig,
-    XHTTPTransportConfig,
     KCPTransportConfig,
     QUICTransportConfig,
+    SubscriptionInboundData,
     TCPTransportConfig,
+    TLSConfig,
+    WebSocketTransportConfig,
+    XHTTPTransportConfig,
 )
 from config import EXTERNAL_CONFIG
 
@@ -163,8 +163,7 @@ class StandardLinks(BaseSubscription):
 
         # Fragment settings (from inbound, not TLS)
         if fragment_settings:
-            xray_fragment = fragment_settings.get("xray")
-            if xray_fragment:
+            if xray_fragment := fragment_settings.get("xray"):
                 payload["fragment"] = (
                     f"{xray_fragment['length']},{xray_fragment['interval']},{xray_fragment['packets']}"
                 )

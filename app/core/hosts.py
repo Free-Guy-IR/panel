@@ -47,6 +47,7 @@ async def _prepare_subscription_inbound_data(
     reality_pbk = inbound_config.get("pbk", "")
     reality_sid = inbound_config.get("sid", "")
     reality_sids = inbound_config.get("sids", [])
+    mldsa65_verify = inbound_config.get("mldsa65Verify")
     reality_spx = inbound_config.get("spx") or ""  # Convert None to empty string
 
     # Merge TLS settings: host overrides inbound defaults
@@ -70,6 +71,7 @@ async def _prepare_subscription_inbound_data(
         reality_short_id=reality_sid,
         reality_short_ids=reality_sids,
         reality_spx=reality_spx,
+        mldsa65_verify=mldsa65_verify,
     )
 
     # Merge port: host overrides inbound (store as list for random selection)
