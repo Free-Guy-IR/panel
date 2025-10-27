@@ -13,19 +13,19 @@ from pydantic import BaseModel, Field, computed_field
 class TLSConfig(BaseModel):
     """TLS configuration - only TLS-related fields"""
 
-    tls: str | None = None
+    tls: str | None = Field(None)
     sni: list[str] | str = Field(default_factory=list)
-    fingerprint: str = ""
-    allowinsecure: bool = False
+    fingerprint: str = Field("")
+    allowinsecure: bool = Field(False)
     alpn_list: list[str] = Field(default_factory=list)
-    ech_config_list: str | None = None
+    ech_config_list: str | None = Field(None)
 
     # Reality specific
-    reality_public_key: str = ""
-    reality_short_id: str = ""
+    reality_public_key: str = Field("")
+    reality_short_id: str = Field("")
     reality_short_ids: list[str] = Field(default_factory=list)  # List for random selection in share.py
-    reality_spx: str = ""
-    mldsa65_verify: str | None = None
+    reality_spx: str = Field("")
+    mldsa65_verify: str | None = Field(None)
 
     @computed_field
     @property
@@ -60,7 +60,7 @@ class TLSConfig(BaseModel):
 class BaseTransportConfig(BaseModel):
     """Base config for all transports - minimal shared fields"""
 
-    path: str = ""
+    path: str = Field("")
     host: list[str] | str = Field(default_factory=list)
 
     model_config = {"validate_assignment": True}
@@ -70,63 +70,63 @@ class GRPCTransportConfig(BaseTransportConfig):
     """GRPC/Gun transport - only grpc-specific fields"""
 
     multi_mode: bool = Field(False, serialization_alias="multiMode")
-    idle_timeout: int | None = None
-    health_check_timeout: int | None = None
-    permit_without_stream: bool = False
-    initial_windows_size: int | None = None
-    http_headers: dict[str, str] | None = None
-    random_user_agent: bool = False
+    idle_timeout: int | None = Field(None)
+    health_check_timeout: int | None = Field(None)
+    permit_without_stream: bool = Field(False)
+    initial_windows_size: int | None = Field(None)
+    http_headers: dict[str, str] | None = Field(None)
+    random_user_agent: bool = Field(False)
 
 
 class WebSocketTransportConfig(BaseTransportConfig):
     """WebSocket transport - only ws-specific fields"""
 
     heartbeat_period: int | None = Field(None, serialization_alias="heartbeatPeriod")
-    http_headers: dict[str, str] | None = None
-    random_user_agent: bool = False
+    http_headers: dict[str, str] | None = Field(None)
+    random_user_agent: bool = Field(False)
 
 
 class XHTTPTransportConfig(BaseTransportConfig):
     """xHTTP/SplitHTTP transport - only xhttp-specific fields"""
 
-    mode: str = "auto"
-    no_grpc_header: bool | None = None
+    mode: str = Field("auto")
+    no_grpc_header: bool | None = Field(None)
     sc_max_each_post_bytes: int | None = Field(None, serialization_alias="scMaxEachPostBytes")
     sc_min_posts_interval_ms: int | None = Field(None, serialization_alias="scMinPostsIntervalMs")
     x_padding_bytes: str | None = Field(None, serialization_alias="xPaddingBytes")
-    xmux: dict[str, Any] | None = None
+    xmux: dict[str, Any] | None = Field(None)
     download_settings: SubscriptionInboundData | dict | None = Field(None, serialization_alias="downloadSettings")
-    http_headers: dict[str, str] | None = None
-    random_user_agent: bool = False
+    http_headers: dict[str, str] | None = Field(None)
+    random_user_agent: bool = Field(False)
 
 
 class KCPTransportConfig(BaseTransportConfig):
     """KCP transport - only kcp-specific fields"""
 
-    header_type: str = "none"
-    mtu: int | None = None
-    tti: int | None = None
-    uplink_capacity: int | None = None
-    downlink_capacity: int | None = None
-    congestion: bool = False
-    read_buffer_size: int | None = None
-    write_buffer_size: int | None = None
+    header_type: str = Field("none")
+    mtu: int | None = Field(None)
+    tti: int | None = Field(None)
+    uplink_capacity: int | None = Field(None)
+    downlink_capacity: int | None = Field(None)
+    congestion: bool = Field(False)
+    read_buffer_size: int | None = Field(None)
+    write_buffer_size: int | None = Field(None)
 
 
 class QUICTransportConfig(BaseTransportConfig):
     """QUIC transport - only quic-specific fields"""
 
-    header_type: str = "none"
+    header_type: str = Field("none")
 
 
 class TCPTransportConfig(BaseTransportConfig):
     """TCP/Raw/HTTP transport - only tcp-specific fields"""
 
-    header_type: str = "none"
-    request: dict[str, Any] | None = None
-    response: dict[str, Any] | None = None
-    http_headers: dict[str, str] | None = None
-    random_user_agent: bool = False
+    header_type: str = Field("none")
+    request: dict[str, Any] | None = Field(None)
+    response: dict[str, Any] | None = Field(None)
+    http_headers: dict[str, str] | None = Field(None)
+    random_user_agent: bool = Field(False)
 
 
 # ========== Protocol-Specific Models (Only protocol fields) ==========
@@ -150,7 +150,7 @@ class VLESSProtocolData(BaseModel):
     port: int | str
     address: str
     remark: str
-    encryption: str = "none"
+    encryption: str = Field("none")
 
     model_config = {"validate_assignment": True}
 
@@ -174,7 +174,7 @@ class ShadowsocksProtocolData(BaseModel):
     port: int | str
     address: str
     remark: str
-    is_2022: bool = False
+    is_2022: bool = Field(False)
 
     model_config = {"validate_assignment": True}
 
@@ -208,30 +208,30 @@ class SubscriptionInboundData(BaseModel):
     )
 
     # Mux settings
-    mux_settings: dict[str, Any] | None = None
+    mux_settings: dict[str, Any] | None = Field(None)
 
     # Shadowsocks specific
-    is_2022: bool = False
-    method: str = ""
-    password: str = ""
+    is_2022: bool = Field(False)
+    method: str = Field("")
+    password: str = Field("")
 
     # VLESS specific
-    encryption: str = "none"
+    encryption: str = Field("none")
 
     # Flow (from inbound, user can override)
-    inbound_flow: str = ""
-    flow_enabled: bool = False  # Computed once: if this inbound supports flow
+    inbound_flow: str = Field("")
+    flow_enabled: bool = Field(False)  # Computed once: if this inbound supports flow
 
     # Additional settings
-    random_user_agent: bool = False
-    use_sni_as_host: bool = False
+    random_user_agent: bool = Field(False)
+    use_sni_as_host: bool = Field(False)
 
     # Fragment and noise settings
-    fragment_settings: dict[str, Any] | None = None
-    noise_settings: dict[str, Any] | None = None
+    fragment_settings: dict[str, Any] | None = Field(None)
+    noise_settings: dict[str, Any] | None = Field(None)
 
     # Priority and status
-    priority: int = 0
-    status: list[str] | None = None
+    priority: int = Field(0)
+    status: list[str] | None = Field(None)
 
     model_config = {"validate_assignment": True}
