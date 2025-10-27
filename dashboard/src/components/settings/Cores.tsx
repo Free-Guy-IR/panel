@@ -112,10 +112,10 @@ export default function Cores({ isDialogOpen, onOpenChange, cores, onEditCore, o
           {isLoading ? (
             [...Array(6)].map((_, i) => (
               <Card key={i} className="px-4 py-5">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-2 w-2 rounded-full" />
-                  <Skeleton className="h-5 w-32" />
-                  <div className="ml-auto">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
+                  <Skeleton className="h-5 w-24 sm:w-32" />
+                  <div className="ml-auto shrink-0">
                     <Skeleton className="h-8 w-8" />
                   </div>
                 </div>

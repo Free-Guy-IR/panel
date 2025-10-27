@@ -85,13 +85,13 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
           {isLoading ? (
             [...Array(6)].map((_, i) => (
               <Card key={i} className="px-4 py-5">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-8 w-8 flex-shrink-0 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-5 w-32" />
-                    <Skeleton className="h-4 w-24" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-5 w-24 sm:w-32" />
+                    <Skeleton className="h-4 w-20 sm:w-24" />
                   </div>
-                  <Skeleton className="h-8 w-8" />
+                  <Skeleton className="h-8 w-8 shrink-0" />
                 </div>
               </Card>
             ))

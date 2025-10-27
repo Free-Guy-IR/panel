@@ -120,19 +120,19 @@ export default function UserTemplates() {
         >
           {isLoading ? (
             [...Array(6)].map((_, i) => (
-              <Card key={i} className="px-5 py-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
+              <Card key={i} className="px-4 py-5 sm:px-5 sm:py-6">
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-x-2">
-                      <Skeleton className="h-2 w-2 rounded-full" />
-                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
+                      <Skeleton className="h-5 w-24 sm:w-32" />
                     </div>
                     <div className="mt-2 space-y-2">
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-4 w-32 sm:w-40 md:w-48" />
+                      <Skeleton className="h-4 w-28 sm:w-36 md:w-40" />
                     </div>
                   </div>
-                  <Skeleton className="h-8 w-8" />
+                  <Skeleton className="h-8 w-8 shrink-0" />
                 </div>
               </Card>
             ))
