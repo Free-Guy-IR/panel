@@ -1609,6 +1609,7 @@
   },
   "operationSuccess": "عملیات موفق بود!",
   "operationFailed": "عملیات ناموفق بود!",
+  "applying": "در حال اعمال...",
   "settingsApplied": "تنظیمات با موفقیت اعمال شد!",
   "inboundTags": "تگ‌های ورودی",
   "searchInbounds": "جستجوی ورودی‌ها...",
