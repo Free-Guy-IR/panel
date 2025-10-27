@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next'
 import { queryClient } from '@/utils/query-client'
 import { Button } from '@/components/ui/button'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from '@/components/ui/card'
 
 const initialDefaultValues: Partial<CoreConfigFormValues> = {
   name: '',
@@ -107,16 +109,30 @@ export default function Cores({ isDialogOpen, onOpenChange, cores, onEditCore, o
     <div className="w-full flex-1">
       <ScrollArea dir={dir} className="h-[calc(100vh-8rem)]">
         <div className="grid w-full grid-cols-1 gap-4 pt-6 md:grid-cols-2 lg:grid-cols-3">
-          {(cores || coresData?.cores)?.map((core: CoreResponse) => (
-            <Core
-              key={core.id}
-              core={core}
-              onEdit={onEditCore ? () => onEditCore(core.id) : () => handleEdit(core)}
-              onToggleStatus={handleToggleStatus}
-              onDuplicate={onDuplicateCore ? () => onDuplicateCore(core.id) : undefined}
-              onDelete={onDeleteCore ? () => onDeleteCore(core.name, core.id) : undefined}
-            />
-          ))}
+          {isLoading ? (
+            [...Array(6)].map((_, i) => (
+              <Card key={i} className="px-4 py-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-2 w-2 rounded-full" />
+                  <Skeleton className="h-5 w-32" />
+                  <div className="ml-auto">
+                    <Skeleton className="h-8 w-8" />
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            (cores || coresData?.cores)?.map((core: CoreResponse) => (
+              <Core
+                key={core.id}
+                core={core}
+                onEdit={onEditCore ? () => onEditCore(core.id) : () => handleEdit(core)}
+                onToggleStatus={handleToggleStatus}
+                onDuplicate={onDuplicateCore ? () => onDuplicateCore(core.id) : undefined}
+                onDelete={onDeleteCore ? () => onDeleteCore(core.name, core.id) : undefined}
+              />
+            ))
+          )}
         </div>
       </ScrollArea>
 

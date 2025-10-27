@@ -10,6 +10,8 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { queryClient } from '@/utils/query-client'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from '@/components/ui/card'
 
 const initialDefaultValues: Partial<GroupFormValues> = {
   name: '',
@@ -27,7 +29,7 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
   const { t } = useTranslation()
   const modifyGroupMutation = useModifyGroup()
   const dir = useDirDetection()
-  const { data: groupsData } = useGetAllGroups({})
+  const { data: groupsData, isLoading } = useGetAllGroups({})
 
   const form = useForm<GroupFormValues>({
     resolver: zodResolver(groupFormSchema),
@@ -80,9 +82,22 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
     <div className="w-full flex-1 space-y-4 pt-4">
       <ScrollArea className="h-[calc(100vh-8rem)]">
         <div dir={dir} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {groupsData?.groups.map(group => (
-            <Group key={group.id} group={group} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />
-          ))}
+          {isLoading ? (
+            [...Array(6)].map((_, i) => (
+              <Card key={i} className="px-4 py-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-8 flex-shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              </Card>
+            ))
+          ) : (
+            groupsData?.groups.map(group => <Group key={group.id} group={group} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)
+          )}
         </div>
       </ScrollArea>
 

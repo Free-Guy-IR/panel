@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { nodeFormSchema, NodeFormValues } from '@/components/dialogs/NodeModal'
 import { Card, CardContent } from '@/components/ui/card'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const initialDefaultValues: Partial<NodeFormValues> = {
   name: '',
@@ -104,10 +104,6 @@ export default function Nodes() {
     }
   }
 
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
-
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="w-full flex-1 space-y-4 pt-6">
@@ -115,9 +111,25 @@ export default function Nodes() {
           className="mb-12 grid transform-gpu animate-slide-up grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
           style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}
         >
-          {nodesData?.map(node => (
-            <Node key={node.id} node={node} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />
-          ))}
+          {isLoading ? (
+            [...Array(6)].map((_, i) => (
+              <Card key={i} className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-6 w-6 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-24" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-8" />
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            nodesData?.map(node => <Node key={node.id} node={node} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)
+          )}
         </div>
 
         {(!nodesData || nodesData.length === 0) && (

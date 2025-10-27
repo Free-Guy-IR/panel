@@ -1,4 +1,5 @@
 import useDirDetection from '@/hooks/use-dir-detection'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { SystemStats } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
@@ -9,6 +10,37 @@ import { Card, CardContent } from '../ui/card'
 const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefined }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
+
+  // Show skeleton loader while data is being fetched
+  if (!systemData) {
+    return (
+      <div
+        className={cn(
+          'grid h-full w-full gap-3 sm:gap-4 lg:gap-6',
+          'grid-cols-1 sm:grid-cols-2',
+          'auto-rows-fr',
+          dir === 'rtl' && 'lg:grid-flow-col-reverse',
+        )}
+      >
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className="h-full overflow-hidden border">
+            <CardContent className="flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
+              <div className="mb-2 flex items-start justify-between sm:mb-3">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Skeleton className="h-7 w-7 rounded-lg sm:h-9 sm:w-9" />
+                  <Skeleton className="h-4 w-24 sm:h-5" />
+                </div>
+              </div>
+              <div className="flex items-end justify-between gap-2">
+                <Skeleton className="h-8 w-20 sm:h-10 sm:w-32 lg:h-12 lg:w-40" />
+                <Skeleton className="h-6 w-16 sm:h-7 sm:w-20" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
+  }
 
   const getTotalTrafficValue = () => {
     if (!systemData) return 0
