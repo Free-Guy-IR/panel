@@ -1653,6 +1653,19 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                               {t('coreConfigModal.generateMldsa65')}
                             </span>
                           </LoaderButton>
+
+                          <LoaderButton
+                            type="button"
+                            onClick={viewShortId}
+                            className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
+                            isLoading={isGeneratingShortId}
+                            loadingText={t('coreConfigModal.generatingShortId')}
+                          >
+                            <span className="flex items-center gap-2 truncate">
+                              {generatedShortId && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
+                              {t('coreConfigModal.generateShortId')}
+                            </span>
+                          </LoaderButton>
                         </div>
 
                       </TabsContent>
@@ -1684,33 +1697,18 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-                          <LoaderButton
-                            type="button"
-                            onClick={viewShortId}
-                            className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
-                            isLoading={isGeneratingShortId}
-                            loadingText={t('coreConfigModal.generatingShortId')}
-                          >
-                            <span className="flex items-center gap-2 truncate">
-                              {generatedShortId && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
-                              {t('coreConfigModal.generateShortId')}
-                            </span>
-                          </LoaderButton>
-
-                          <LoaderButton
-                            type="button"
-                            onClick={viewShadowsocksPassword}
-                            className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
-                            isLoading={isGeneratingShadowsocksPassword}
-                            loadingText={t('coreConfigModal.generatingShadowsocksPassword')}
-                          >
-                            <span className="flex items-center gap-2 truncate">
-                              {generatedShadowsocksPassword && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
-                              {t('coreConfigModal.generateShadowsocksPassword')}
-                            </span>
-                          </LoaderButton>
-                        </div>
+                        <LoaderButton
+                          type="button"
+                          onClick={viewShadowsocksPassword}
+                          className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
+                          isLoading={isGeneratingShadowsocksPassword}
+                          loadingText={t('coreConfigModal.generatingShadowsocksPassword')}
+                        >
+                          <span className="flex items-center gap-2 truncate">
+                            {generatedShadowsocksPassword && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
+                            {t('coreConfigModal.generateShadowsocksPassword')}
+                          </span>
+                        </LoaderButton>
 
                       </TabsContent>
 
@@ -1719,19 +1717,17 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       ============================================ */}
                       <TabsContent value="vless" className="mt-3 space-y-3 animate-in fade-in-50 duration-300">
                         {/* VLESS Buttons */}
-                        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-                          <LoaderButton
-                            type="button"
-                            onClick={viewVLESS}
-                            className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
-                            isLoading={false}
-                          >
-                            <span className="flex items-center gap-2 truncate">
-                              {generatedVLESS && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
-                              {t('coreConfigModal.generateVLESSEncryption')}
-                            </span>
-                          </LoaderButton>
-                        </div>
+                        <LoaderButton
+                          type="button"
+                          onClick={viewVLESS}
+                          className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
+                          isLoading={false}
+                        >
+                          <span className="flex items-center gap-2 truncate">
+                            {generatedVLESS && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
+                            {t('coreConfigModal.generateVLESSEncryption')}
+                          </span>
+                        </LoaderButton>
                       </TabsContent>
                     </Tabs>
                   </div>
