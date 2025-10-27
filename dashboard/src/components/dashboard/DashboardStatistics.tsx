@@ -1,9 +1,9 @@
-import useDirDetection from '@/hooks/use-dir-detection'
 import { Skeleton } from '@/components/ui/skeleton'
+import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { SystemStats } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
-import { Cpu, MemoryStick, Database, Users, Upload, Download } from 'lucide-react'
+import { Cpu, Database, Download, MemoryStick, Upload, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent } from '../ui/card'
 
@@ -14,14 +14,7 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
   // Show skeleton loader while data is being fetched
   if (!systemData) {
     return (
-      <div
-        className={cn(
-          'grid h-full w-full gap-3 sm:gap-4 lg:gap-6',
-          'grid-cols-1 sm:grid-cols-2',
-          'auto-rows-fr',
-          dir === 'rtl' && 'lg:grid-flow-col-reverse',
-        )}
-      >
+      <div className={cn('grid h-full w-full gap-3 sm:gap-4 lg:gap-6', 'grid-cols-1 sm:grid-cols-2', 'auto-rows-fr', dir === 'rtl' && 'lg:grid-flow-col-reverse')}>
         {[...Array(4)].map((_, i) => (
           <Card key={i} className="h-full overflow-hidden border">
             <CardContent className="flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
@@ -164,7 +157,7 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
               <span dir="ltr" className="truncate text-lg font-bold transition-all duration-300 sm:text-xl lg:text-2xl">
                 {systemData ? (
                   <span className="whitespace-nowrap">
-                    {formatBytes(memory.used, 1, false, false , 'GB')}/{formatBytes(memory.total, 1, true)}
+                    {formatBytes(memory.used, 1, false, false, 'GB')}/{formatBytes(memory.total, 1, true, false, 'GB')}
                   </span>
                 ) : (
                   0
