@@ -25,7 +25,7 @@ export function NavUser({
   admin: AdminDetails | null
 }) {
   const { t } = useTranslation()
-  const { state } = useSidebar()
+  const { state, isMobile } = useSidebar()
   const navigate = useNavigate()
 
   const handleLogout = (e: React.MouseEvent) => {
@@ -41,8 +41,9 @@ export function NavUser({
   }
 
 
-  // Collapsed state - admin icon with popover
-  if (state === 'collapsed') {
+  // Collapsed state (desktop only) - admin icon with popover
+  // On mobile, always use expanded UI since there's no collapsed sidebar concept
+  if (state === 'collapsed' && !isMobile) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>

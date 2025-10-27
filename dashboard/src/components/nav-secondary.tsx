@@ -19,10 +19,11 @@ export function NavSecondary({
   }[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   const { t } = useTranslation()
-  const { state } = useSidebar()
+  const { state, isMobile } = useSidebar()
 
-  // Collapsed state - show only icons with popover
-  if (state === 'collapsed') {
+  // Collapsed state (desktop only) - show only icons with popover
+  // On mobile, always use expanded UI since there's no collapsed sidebar concept
+  if (state === 'collapsed' && !isMobile) {
     return (
       <SidebarGroup {...props}>
         <SidebarMenu>

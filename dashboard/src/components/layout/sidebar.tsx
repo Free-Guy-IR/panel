@@ -50,7 +50,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
   const [version, setVersion] = useState<string>('')
   const { admin } = useAdmin()
-  const { setOpenMobile, openMobile, state } = useSidebar()
+  const { setOpenMobile, openMobile, state, isMobile } = useSidebar()
   const { resolvedTheme } = useTheme()
   const touchStartX = useRef<number | null>(null)
   const touchEndX = useRef<number | null>(null)
@@ -321,7 +321,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              {state === 'collapsed' ? (
+              {state === 'collapsed' && !isMobile ? (
                 <SidebarMenuButton size="lg" asChild>
                   <a href={REPO_URL} target="_blank" className="!gap-0 justify-center">
                     <img
@@ -363,6 +363,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <Language />
                 <ThemeToggle />
               </div>
+            )}
+            {state === 'collapsed' && isMobile && (
+              <>
+                <GithubStar />
+
+                <div className="flex items-start gap-2">
+                  <Language />
+                  <ThemeToggle />
+                </div>
+              </>
             )}
           </div>
         </SidebarContent>

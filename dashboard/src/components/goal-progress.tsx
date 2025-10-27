@@ -13,7 +13,7 @@ import { useSidebar } from '@/components/ui/sidebar'
 export function GoalProgress() {
   const { data: goalsData, isLoading, isError } = useAllGoals()
   const { t } = useTranslation()
-  const { state } = useSidebar()
+  const { state, isMobile } = useSidebar()
   const [currentGoalIndex, setCurrentGoalIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
 
@@ -139,8 +139,9 @@ export function GoalProgress() {
   const progress = Math.min((currentGoal.paid_amount / currentGoal.price) * 100, 100)
   const remaining = Math.max(currentGoal.price - currentGoal.paid_amount, 0)
 
-  // Collapsed state - simple donate button with popover
-  if (state === 'collapsed') {
+  // Collapsed state (desktop only) - simple donate button with popover
+  // On mobile, always use expanded UI since there's no collapsed sidebar concept
+  if (state === 'collapsed' && !isMobile) {
     return (
       <div className="mx-2 mb-2">
         <Popover>

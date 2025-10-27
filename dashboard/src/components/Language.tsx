@@ -10,9 +10,11 @@ export const Language: React.FC = () => {
   
   // Safely get sidebar state, defaulting to 'expanded' if not available
   let sidebarState: 'expanded' | 'collapsed' = 'expanded'
+  let isMobile = false
   try {
-    const { state } = useSidebar()
+    const { state, isMobile: mobileFlag } = useSidebar()
     sidebarState = state
+    isMobile = mobileFlag
   } catch (error) {
     // useSidebar is not available, use default state
     console.warn('useSidebar not available in Language component, using default expanded state')
@@ -24,8 +26,9 @@ export const Language: React.FC = () => {
       document.documentElement.setAttribute('dir', i18n.dir())
   }
 
-  // Collapsed state - icon with popover
-  if (sidebarState === 'collapsed') {
+  // Collapsed state (desktop only) - icon with popover
+  // On mobile, always use expanded UI since there's no collapsed sidebar concept
+  if (sidebarState === 'collapsed' && !isMobile) {
     return (
       <Popover>
         <PopoverTrigger asChild>
