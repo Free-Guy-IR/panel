@@ -1392,6 +1392,7 @@
     "shadowsocksPassword": "Shadowsocks Password",
     "shadowsocksPasswordCopied": "Password copied to clipboard",
     "copyShadowsocksPassword": "Copy Password",
+    "shadowsocksEncryptionMethod": "Shadowsocks Encryption Method",
     "selectEncryptionMethod": "Select Encryption Method",
     "regeneratePassword": "Regenerate Password",
     "generateVLESSEncryption": "VLESS Encryption",

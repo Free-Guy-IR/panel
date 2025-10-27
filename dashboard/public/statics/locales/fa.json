@@ -1311,6 +1311,7 @@
     "shadowsocksPassword": "رمز عبور Shadowsocks",
     "shadowsocksPasswordCopied": "رمز عبور در کلیپ‌بورد کپی شد",
     "copyShadowsocksPassword": "کپی رمز عبور",
+    "shadowsocksEncryptionMethod": "روش رمزنگاری Shadowsocks",
     "selectEncryptionMethod": "انتخاب روش رمزنگاری",
     "regeneratePassword": "تولید مجدد رمز عبور",
     "generateVLESSEncryption": "رمزنگاری VLESS",

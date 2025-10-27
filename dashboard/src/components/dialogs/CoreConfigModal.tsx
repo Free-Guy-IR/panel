@@ -119,7 +119,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const [isGeneratingKeyPair, setIsGeneratingKeyPair] = useState(false)
   const [isGeneratingShortId, setIsGeneratingShortId] = useState(false)
   const [isGeneratingVLESSEncryption, setIsGeneratingVLESSEncryption] = useState(false)
-  const [selectedEncryptionMethod] = useState<string>(SHADOWSOCKS_ENCRYPTION_METHODS[0].value)
+  const [selectedEncryptionMethod, setSelectedEncryptionMethod] = useState<string>(SHADOWSOCKS_ENCRYPTION_METHODS[0].value)
   const [isGeneratingShadowsocksPassword, setIsGeneratingShadowsocksPassword] = useState(false)
   const [isGeneratingMldsa65, setIsGeneratingMldsa65] = useState(false)
   const [selectedVlessVariant, setSelectedVlessVariant] = useState<VlessVariant>('x25519')
@@ -1661,6 +1661,28 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
           Shadowsocks TAB
       ============================================ */}
                       <TabsContent value="shadowsocks" className="mt-3 space-y-3 animate-in fade-in-50 duration-300">
+                        {/* Encryption Method Selector */}
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
+                            {t('coreConfigModal.shadowsocksEncryptionMethod', { defaultValue: 'Encryption Method' })}
+                          </Label>
+                          <Select
+                            value={selectedEncryptionMethod}
+                            onValueChange={setSelectedEncryptionMethod}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SHADOWSOCKS_ENCRYPTION_METHODS.map(method => (
+                                <SelectItem key={method.value} value={method.value}>
+                                  {method.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         {/* Action Buttons */}
                         <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
                           <LoaderButton

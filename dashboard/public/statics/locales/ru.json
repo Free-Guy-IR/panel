@@ -1331,6 +1331,7 @@
     "shadowsocksPassword": "Пароль Shadowsocks",
     "shadowsocksPasswordCopied": "Пароль скопирован в буфер обмена",
     "copyShadowsocksPassword": "Копировать пароль",
+    "shadowsocksEncryptionMethod": "Метод шифрования Shadowsocks",
     "selectEncryptionMethod": "Выберите метод шифрования",
     "regeneratePassword": "Сгенерировать пароль заново",
     "generateVLESSEncryption": "Шифрование VLESS",

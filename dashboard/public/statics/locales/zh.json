@@ -1373,6 +1373,7 @@
     "shadowsocksPassword": "Shadowsocks 密码",
     "shadowsocksPasswordCopied": "密码已复制到剪贴板",
     "copyShadowsocksPassword": "复制密码",
+    "shadowsocksEncryptionMethod": "Shadowsocks 加密方法",
     "selectEncryptionMethod": "选择加密方法",
     "regeneratePassword": "重新生成密码",
     "generateVLESSEncryption": "VLESS 加密",
