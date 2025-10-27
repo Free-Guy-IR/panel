@@ -31,6 +31,7 @@ class StandardLinks(BaseSubscription):
             "splithttp": self._transport_xhttp,
             "xhttp": self._transport_xhttp,
             "ws": self._transport_ws,
+            "httpupgrade": self._transport_httpupgrade,
             "quic": self._transport_quic,
             "kcp": self._transport_kcp,
             "tcp": self._transport_tcp,
@@ -121,6 +122,12 @@ class StandardLinks(BaseSubscription):
         host = config.host if isinstance(config.host, str) else ""
         if config.heartbeat_period:
             payload["heartbeatPeriod"] = config.heartbeat_period
+        payload["path"] = path
+        payload["host"] = host
+
+    def _transport_httpupgrade(self, payload: dict, protocol: str, config: WebSocketTransportConfig, path: str):
+        """Handle httpupgrade transport - only gets HTTPUPGRADE config"""
+        host = config.host if isinstance(config.host, str) else ""
         payload["path"] = path
         payload["host"] = host
 
