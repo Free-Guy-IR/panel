@@ -13,9 +13,9 @@ import { SelectorPanel } from '@/components/bulk/SelectorPanel'
 
 export default function BulkGroupsPage() {
   const { t } = useTranslation()
-  const { data: usersData } = useGetUsers()
-  const { data: adminsData } = useGetAdmins()
-  const { data: groupsData } = useGetAllGroups()
+  const { data: usersData, isLoading: usersLoading } = useGetUsers()
+  const { data: adminsData, isLoading: adminsLoading } = useGetAdmins()
+  const { data: groupsData, isLoading: groupsLoading } = useGetAllGroups()
 
   const [operation, setOperation] = useState<'add' | 'remove'>('add')
 
@@ -70,8 +70,18 @@ export default function BulkGroupsPage() {
       {
         onSuccess: response => {
           const detail = typeof response === 'object' && response && 'detail' in response ? response.detail : undefined
+          let descriptionText = ''
+          if (detail) {
+            descriptionText = typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2)
+          } else if (typeof response === 'string') {
+            descriptionText = response
+          } else if (response && Object.keys(response).length > 0) {
+            descriptionText = JSON.stringify(response, null, 2)
+          } else {
+            descriptionText = 'Operation completed successfully'
+          }
           toast.success(t('operationSuccess', { defaultValue: 'Operation successful!' }), {
-            description: detail || (typeof response === 'string' ? response : JSON.stringify(response, null, 2)),
+            description: descriptionText,
           })
           // Reset selections after successful operation
           setSelectedGroups([])
@@ -95,7 +105,7 @@ export default function BulkGroupsPage() {
   const isApplyToAll = totalTargets === 0
 
   return (
-    <div className="mt-3 flex w-full flex-col space-y-6">
+    <div className="mt-3 flex w-full flex-col space-y-4 lg:space-y-6">
       {/* Operation Selection */}
       <Card className="bg-card">
         <CardHeader className="pb-4">
@@ -141,6 +151,7 @@ export default function BulkGroupsPage() {
             itemValueKey="id"
             searchKey="name"
             t={t}
+            isLoading={groupsLoading}
           />
         </CardContent>
       </Card>
@@ -155,7 +166,7 @@ export default function BulkGroupsPage() {
           <p className="text-sm text-muted-foreground">{t('bulk.applyToDesc', { defaultValue: 'Select the user or admin you want to apply settings' })}</p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
             <SelectorPanel
               icon={Users2}
               title={t('bulk.selectHasGroups', { defaultValue: 'Select Has Groups' })}
@@ -171,6 +182,7 @@ export default function BulkGroupsPage() {
               itemValueKey="id"
               searchKey="name"
               t={t}
+              isLoading={groupsLoading}
             />
 
             <SelectorPanel
@@ -188,6 +200,7 @@ export default function BulkGroupsPage() {
               itemValueKey="id"
               searchKey="username"
               t={t}
+              isLoading={usersLoading}
             />
 
             <SelectorPanel
@@ -205,6 +218,7 @@ export default function BulkGroupsPage() {
               itemValueKey="id"
               searchKey="username"
               t={t}
+              isLoading={adminsLoading}
             />
           </div>
         </CardContent>
@@ -212,7 +226,7 @@ export default function BulkGroupsPage() {
 
       {/* Apply Section */}
       <Card className="bg-card">
-        <CardContent className="flex flex-col items-center justify-center space-y-6 py-8">
+        <CardContent className="flex flex-col items-center justify-center space-y-6 py-6 lg:py-8">
           <div className="space-y-2 text-center">
             <h3 className="text-lg font-semibold">{t('bulk.applyChanges', { defaultValue: 'Apply Changes' })}</h3>
             <p className="text-sm text-muted-foreground">

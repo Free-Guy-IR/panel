@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { TFunction } from 'i18next'
 import { Search } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -38,6 +39,7 @@ type SelectorPanelProps = {
   itemValueKey: 'id'
   searchKey: 'name' | 'username'
   t: TFunction
+  isLoading?: boolean
 }
 
 export function SelectorPanel({
@@ -55,6 +57,7 @@ export function SelectorPanel({
   itemValueKey,
   searchKey,
   t,
+  isLoading = false,
 }: SelectorPanelProps) {
   const handleSelectAll = () => setSelected(items.map(item => (typeof item[itemValueKey] === 'number' ? (item[itemValueKey] as number) : -1)).filter(id => id !== -1))
   const handleDeselectAll = () => setSelected([])
@@ -100,43 +103,65 @@ export function SelectorPanel({
       </CardHeader>
 
       <CardContent className="space-y-3 sm:space-y-4">
-        {/* Search */}
-        <div className="relative" dir="ltr">
-          <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 transform text-muted-foreground sm:h-4 sm:w-4" />
-          <Input placeholder={searchPlaceholder} value={search} onChange={e => setSearch(e.target.value)} className="h-8 bg-background pl-8 text-xs sm:h-9 sm:pl-9 sm:text-sm" />
-        </div>
+        {isLoading ? (
+          <>
+            {/* Skeleton Search */}
+            <div className="relative" dir="ltr">
+              <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 transform text-muted-foreground sm:h-4 sm:w-4" />
+              <Skeleton className="h-8 w-full bg-muted sm:h-9" />
+            </div>
 
-        {/* Items List */}
-        <div className="max-h-[150px] space-y-1 overflow-y-auto sm:max-h-[200px]" dir="ltr">
-          {filteredItems.map(item => {
-            const id = typeof item[itemValueKey] === 'number' ? (item[itemValueKey] as number) : undefined
-            let label = ''
-            if (itemLabelKey === 'name' && 'name' in item && typeof item.name === 'string') label = item.name
-            if (itemLabelKey === 'username' && 'username' in item && typeof item.username === 'string') label = item.username
-            if (id === undefined) return null
-
-            const isSelected = selected.includes(id)
-
-            return (
-              <div
-                key={id}
-                onClick={() => handleItemToggle(id)}
-                className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent sm:gap-3 sm:px-3 sm:py-2',
-                  isSelected && 'border border-primary bg-accent',
-                )}
-              >
-                <div className="relative">
-                  <div className={cn('h-3 w-3 rounded-full border-2 transition-colors sm:h-4 sm:w-4', isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30 bg-background')}>
-                    {isSelected && <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 transform rounded-full bg-primary-foreground sm:h-2 sm:w-2" />}
-                  </div>
+            {/* Skeleton Items List */}
+            <div className="max-h-[150px] space-y-1 overflow-y-auto sm:max-h-[200px] lg:max-h-[300px]" dir="ltr">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-2 rounded-md px-2 py-1.5 sm:gap-3 sm:px-3 sm:py-2">
+                  <Skeleton className="h-3 w-3 rounded-full sm:h-4 sm:w-4" />
+                  <Skeleton className="h-3 w-24 sm:h-4 sm:w-32" />
                 </div>
-                <span className="flex-1 truncate text-xs sm:text-sm">{label}</span>
-              </div>
-            )
-          })}
-          {filteredItems.length === 0 && <div className="py-4 text-center text-xs text-muted-foreground sm:py-8 sm:text-sm">{t('noResults', { defaultValue: 'No results found.' })}</div>}
-        </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Search */}
+            <div className="relative" dir="ltr">
+              <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 transform text-muted-foreground sm:h-4 sm:w-4" />
+              <Input placeholder={searchPlaceholder} value={search} onChange={e => setSearch(e.target.value)} className="h-8 bg-background pl-8 text-xs sm:h-9 sm:pl-9 sm:text-sm" />
+            </div>
+
+            {/* Items List */}
+            <div className="max-h-[150px] space-y-1 overflow-y-auto sm:max-h-[200px] lg:max-h-[300px]" dir="ltr">
+              {filteredItems.map(item => {
+                const id = typeof item[itemValueKey] === 'number' ? (item[itemValueKey] as number) : undefined
+                let label = ''
+                if (itemLabelKey === 'name' && 'name' in item && typeof item.name === 'string') label = item.name
+                if (itemLabelKey === 'username' && 'username' in item && typeof item.username === 'string') label = item.username
+                if (id === undefined) return null
+
+                const isSelected = selected.includes(id)
+
+                return (
+                  <div
+                    key={id}
+                    onClick={() => handleItemToggle(id)}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent sm:gap-3 sm:px-3 sm:py-2',
+                      isSelected && 'border border-primary bg-accent',
+                    )}
+                  >
+                    <div className="relative">
+                      <div className={cn('h-3 w-3 rounded-full border-2 transition-colors sm:h-4 sm:w-4', isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30 bg-background')}>
+                        {isSelected && <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 transform rounded-full bg-primary-foreground sm:h-2 sm:w-2" />}
+                      </div>
+                    </div>
+                    <span className="flex-1 truncate text-xs sm:text-sm">{label}</span>
+                  </div>
+                )
+              })}
+              {filteredItems.length === 0 && <div className="py-4 text-center text-xs text-muted-foreground sm:py-8 sm:text-sm">{t('noResults', { defaultValue: 'No results found.' })}</div>}
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   )

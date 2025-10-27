@@ -82,7 +82,7 @@ const BulkPage = () => {
             </button>
           ))}
         </div>
-        <div className="px-4">
+        <div className="px-4 lg:px-6">
           <PageTransition isContentTransition={true}>
             <Outlet />
           </PageTransition>
