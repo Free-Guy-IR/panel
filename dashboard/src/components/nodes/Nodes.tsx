@@ -132,7 +132,7 @@ export default function Nodes() {
           )}
         </div>
 
-        {(!nodesData || nodesData.length === 0) && (
+        {!isLoading && (!nodesData || nodesData.length === 0) && (
           <Card className="mb-12">
             <CardContent className="p-8 text-center">
               <div className="space-y-4">
