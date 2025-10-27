@@ -1,5 +1,4 @@
 import useDirDetection from '@/hooks/use-dir-detection'
-import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useGetSystemStats } from '@/service/api'
 import { numberWithCommas } from '@/utils/formatByte'
@@ -44,7 +43,7 @@ const UsersStatistics = () => {
   const [prevData, setPrevData] = useState<any>(null)
   const [isIncreased, setIsIncreased] = useState<Record<string, boolean>>({})
 
-  const { data, isLoading } = useGetSystemStats(undefined, {
+  const { data } = useGetSystemStats(undefined, {
     query: {
       refetchInterval: 5000,
     },
@@ -61,27 +60,6 @@ const UsersStatistics = () => {
     setPrevData(data)
   }, [data])
 
-  if (isLoading || !data) {
-    return (
-      <div className="flex flex-col gap-y-4">
-        <div className={cn('flex flex-col items-center justify-between gap-x-4 gap-y-4 lg:flex-row', dir === 'rtl' && 'lg:flex-row-reverse')}>
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="w-full animate-fade-in" style={{ animationDuration: '600ms', animationDelay: `${i * 50}ms` }}>
-              <Card className="w-full overflow-hidden rounded-md">
-                <CardTitle className="flex items-center justify-between gap-x-4 px-4 py-6">
-                  <div className="flex items-center gap-x-4">
-                    <Skeleton className="h-5 w-5 rounded-full" />
-                    <Skeleton className="h-5 w-32" />
-                  </div>
-                  <Skeleton className="h-9 w-16" />
-                </CardTitle>
-              </Card>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col gap-y-4">
