@@ -553,7 +553,7 @@
     "discordId": "Discord ID",
     "lifetime.used.traffic": "Total",
     "used": {
-      "traffic": "Traffic Usage"
+      "traffic": "Usage"
     },
     "monitor": {
       "traffic": "Monitor admin traffic usage over time",

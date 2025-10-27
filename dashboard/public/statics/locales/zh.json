@@ -551,7 +551,7 @@
     "discordId": "Discord ID",
     "lifetime.used.traffic": "总计",
     "used": {
-      "traffic": "使用情况"
+      "traffic": "使用量"
     },
     "monitor": {
       "traffic": "监控管理员使用情况",

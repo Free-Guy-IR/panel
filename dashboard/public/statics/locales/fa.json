@@ -443,7 +443,7 @@
     "discordId": "شناسه دیسکورد",
     "lifetime.used.traffic": "مجموع کل",
     "used": {
-      "traffic": "مصرف ترافیک"
+      "traffic": "مصرف"
     },
     "monitor": {
       "traffic": "نظارت بر مصرف ترافیک مدیر در طول زمان",

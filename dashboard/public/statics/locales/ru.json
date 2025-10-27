@@ -538,7 +538,7 @@
     "discordId": "Discord ID",
     "lifetime.used.traffic": "Всего",
     "used": {
-      "traffic": "Использование трафика"
+      "traffic": "Использование"
     },
     "monitor": {
       "traffic": "Мониторинг использования трафика администратором во времени",

@@ -39,7 +39,7 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
     header: () => createSortButton('username', 'username', t, handleSort, filters),
     cell: ({ row }) => (
       <div className="overflow-hidden text-ellipsis whitespace-nowrap pl-1 font-medium md:pl-2">
-        <div className="flex items-start gap-x-3 px-1 py-1">
+        <div className="flex items-start gap-x-3 py-1 md:px-1">
           <div className="pt-1">
             {row.original.is_disabled ? (
               <div className="min-h-[10px] min-w-[10px] rounded-full border border-gray-400 shadow-sm dark:border-gray-600" />
@@ -60,9 +60,9 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
     cell: ({ row }) => {
       const traffic = row.getValue('used_traffic') as number | null
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <ChartPie className="hidden h-4 w-4 sm:block" />
-          <span dir="ltr">{traffic ? formatBytes(traffic) : '0 B'}</span>
+          <span dir="ltr" className="text-xs">{traffic ? formatBytes(traffic) : '0 B'}</span>
         </div>
       )
     },
@@ -73,8 +73,8 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
     cell: ({ row }) => {
       const total = row.getValue('lifetime_used_traffic') as number | null
       return (
-        <div className="flex items-center gap-2">
-          <span dir="ltr">{formatBytes(total || 0)}</span>
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <span dir="ltr" className="text-xs">{formatBytes(total || 0)}</span>
         </div>
       )
     },
