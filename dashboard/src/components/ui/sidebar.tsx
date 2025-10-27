@@ -55,7 +55,7 @@ const SidebarProvider = React.forwardRef<
   const [openMobile, setOpenMobile] = React.useState(false)
 
   // Initialize from localStorage if available, otherwise use defaultOpen
-  const getInitialState = React.useCallback(() => {
+  const getInitialState = () => {
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(SIDEBAR_LOCALSTORAGE_KEY)
@@ -67,7 +67,7 @@ const SidebarProvider = React.forwardRef<
       }
     }
     return defaultOpen
-  }, [defaultOpen])
+  }
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
