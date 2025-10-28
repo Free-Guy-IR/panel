@@ -322,6 +322,17 @@ class SingBoxConfiguration(BaseSubscription):
         if inbound.mux_settings and (singbox_mux := inbound.mux_settings.get("sing_box")) and singbox_mux.get("enable"):
             # Filter out the enable field as it's not part of singbox multiplex config
             multiplex_config = {k: v for k, v in singbox_mux.items() if k != "enable"}
+            
+            # Handle brutal configuration - only include if brutal.enable is True
+            if "brutal" in multiplex_config:
+                brutal_config = multiplex_config["brutal"]
+                if brutal_config and brutal_config.get("enable"):
+                    # Filter out the enable field from brutal config
+                    multiplex_config["brutal"] = {k: v for k, v in brutal_config.items() if k != "enable"}
+                else:
+                    # Remove brutal config entirely if enable is False or brutal is None
+                    multiplex_config.pop("brutal", None)
+            
             multiplex_config = self._normalize_and_remove_none_values(multiplex_config)
             config["multiplex"] = multiplex_config
 
