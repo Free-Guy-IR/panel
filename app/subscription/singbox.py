@@ -97,7 +97,9 @@ class SingBoxConfiguration(BaseSubscription):
         }
 
         if config.header_type == "http" and config.request:
-            transport.update(config.request)
+            # Filter out invalid fields for singbox transport
+            request_config = {k: v for k, v in config.request.items() if k != "version"}
+            transport.update(request_config)
         else:
             transport["headers"] = {k: [v] for k, v in config.http_headers.items()} if config.http_headers else {}
 
