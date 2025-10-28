@@ -170,7 +170,7 @@ class SingBoxConfiguration(BaseSubscription):
             return None
 
         # Pass only the config this transport needs
-        if network in ("http", "h2", "h3"):
+        if network in ("http", "h2", "h3", "raw", "tcp"):
             return handler(inbound.transport_config, path, network)
         else:
             return handler(inbound.transport_config, path)
