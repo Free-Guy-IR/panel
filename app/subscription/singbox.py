@@ -320,8 +320,10 @@ class SingBoxConfiguration(BaseSubscription):
 
         # Add mux
         if inbound.mux_settings and (singbox_mux := inbound.mux_settings.get("sing_box")) and singbox_mux.get("enable"):
-            singbox_mux = self._normalize_and_remove_none_values(singbox_mux)
-            config["multiplex"] = singbox_mux
+            # Filter out the enable field as it's not part of singbox multiplex config
+            multiplex_config = {k: v for k, v in singbox_mux.items() if k != "enable"}
+            multiplex_config = self._normalize_and_remove_none_values(multiplex_config)
+            config["multiplex"] = multiplex_config
 
         return self._normalize_and_remove_none_values(config)
 
