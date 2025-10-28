@@ -136,13 +136,15 @@ class SingBoxConfiguration(BaseSubscription):
 
     def _transport_grpc(self, config: GRPCTransportConfig, path: str) -> dict:
         """Handle GRPC transport - only gets GRPC config"""
-        return self._normalize_and_remove_none_values({
-            "type": "grpc",
-            "service_name": path,
-            "idle_timeout": f"{config.idle_timeout}s" if config.idle_timeout else "15s",
-            "ping_timeout": f"{config.health_check_timeout}s" if config.health_check_timeout else "15s",
-            "permit_without_stream": config.permit_without_stream,
-        })
+        return self._normalize_and_remove_none_values(
+            {
+                "type": "grpc",
+                "service_name": path,
+                "idle_timeout": f"{config.idle_timeout}s" if config.idle_timeout else "15s",
+                "ping_timeout": f"{config.health_check_timeout}s" if config.health_check_timeout else "15s",
+                "permit_without_stream": config.permit_without_stream,
+            }
+        )
 
     def _transport_httpupgrade(self, config: WebSocketTransportConfig, path: str) -> dict:
         """Handle HTTPUpgrade transport - only gets WS config (similar to WS)"""
@@ -190,7 +192,10 @@ class SingBoxConfiguration(BaseSubscription):
             if isinstance(tls_config.sni, str)
             else (tls_config.sni[0] if tls_config.sni else None),
             "insecure": tls_config.allowinsecure,
-            "utls": {"enabled": bool(tls_config.fingerprint) or tls_config.tls == "reality", "fingerprint": tls_config.fingerprint}
+            "utls": {
+                "enabled": bool(tls_config.fingerprint) or tls_config.tls == "reality",
+                "fingerprint": tls_config.fingerprint,
+            }
             if tls_config.fingerprint or tls_config.tls == "reality"
             else None,
             "alpn": tls_config.alpn_singbox,  # Pre-formatted for sing-box!
@@ -322,7 +327,7 @@ class SingBoxConfiguration(BaseSubscription):
         if inbound.mux_settings and (singbox_mux := inbound.mux_settings.get("sing_box")) and singbox_mux.get("enable"):
             # Filter out the enable field as it's not part of singbox multiplex config
             multiplex_config = {k: v for k, v in singbox_mux.items() if k != "enable"}
-            
+
             # Handle brutal configuration - only include if brutal.enable is True
             if "brutal" in multiplex_config:
                 brutal_config = multiplex_config["brutal"]
@@ -332,7 +337,7 @@ class SingBoxConfiguration(BaseSubscription):
                 else:
                     # Remove brutal config entirely if enable is False or brutal is None
                     multiplex_config.pop("brutal", None)
-            
+
             multiplex_config = self._normalize_and_remove_none_values(multiplex_config)
             config["multiplex"] = multiplex_config
 

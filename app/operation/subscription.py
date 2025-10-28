@@ -49,16 +49,14 @@ class SubscriptionOperation(BaseOperation):
     def create_response_headers(user: UsersResponseWithInbounds, request_url: str, sub_settings: SubSettings) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
-        user_info = {"upload": 0, "download": user.used_traffic}
+        user_info = {"upload": 0, "download": user.used_traffic, "expire": 0}
 
         if user.data_limit:
             user_info["total"] = user.data_limit
-        
+
         # Always include expire key - use 0 if no expiration date
         if user.expire:
             user_info["expire"] = int(user.expire.timestamp())
-        else:
-            user_info["expire"] = 0
 
         # Create and return headers
         return {
