@@ -53,8 +53,12 @@ class SubscriptionOperation(BaseOperation):
 
         if user.data_limit:
             user_info["total"] = user.data_limit
+        
+        # Always include expire key - use 0 if no expiration date
         if user.expire:
             user_info["expire"] = int(user.expire.timestamp())
+        else:
+            user_info["expire"] = 0
 
         # Create and return headers
         return {
