@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { LoaderButton } from '@/components/ui/loader-button'
 import { useTranslation } from 'react-i18next'
 import { UseFormReturn } from 'react-hook-form'
 import { useCreateGroup, useModifyGroup, useGetInbounds } from '@/service/api'
@@ -140,9 +141,14 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={addGroupMutation.isPending || modifyGroupMutation.isPending} className="bg-primary hover:bg-primary/90">
+              <LoaderButton 
+                type="submit" 
+                isLoading={addGroupMutation.isPending || modifyGroupMutation.isPending}
+                loadingText={editingGroup ? t('modifying') : t('creating')}
+                className="bg-primary hover:bg-primary/90"
+              >
                 {editingGroup ? t('edit') : t('create')}
-              </Button>
+              </LoaderButton>
             </div>
           </form>
         </Form>
