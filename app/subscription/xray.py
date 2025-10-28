@@ -489,8 +489,10 @@ class XrayConfiguration(BaseSubscription):
         )
 
         # Add mux
-        if inbound.mux_settings and (xray_mux := inbound.mux_settings.get("xray")):
-            outbound["mux"] = xray_mux
+        if inbound.mux_settings and (xray_mux := inbound.mux_settings.get("xray")) and xray_mux.get("enabled"):
+            # Filter out the enabled field as it's not part of xray mux config
+            mux_config = {k: v for k, v in xray_mux.items() if k != "enabled"}
+            outbound["mux"] = self._normalize_and_remove_none_values(mux_config)
 
         return self._normalize_and_remove_none_values(outbound), extra_outbounds
 
