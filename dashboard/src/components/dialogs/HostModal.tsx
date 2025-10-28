@@ -1770,7 +1770,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                 <FormItem>
                                   <FormLabel>{t('hostsDialog.grpc.permitWithoutStream')}</FormLabel>
                                   <FormControl>
-                                    <Input type="number" {...field} onChange={e => field.onChange(e.target.value ? Number(e.target.value) : 0)} value={field.value} />
+                                    <Switch checked={Boolean(field.value)} onCheckedChange={field.onChange} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>

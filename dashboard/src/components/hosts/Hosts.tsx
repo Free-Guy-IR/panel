@@ -116,7 +116,7 @@ export interface HostFormValues {
       multi_mode?: boolean
       idle_timeout?: number
       health_check_timeout?: number
-      permit_without_stream?: number
+      permit_without_stream?: boolean
       initial_windows_size?: number
     }
     kcp_settings?: {
@@ -181,7 +181,7 @@ const transportSettingsSchema = z
         multi_mode: z.boolean().nullish().optional(),
         idle_timeout: z.number().nullish().optional(),
         health_check_timeout: z.number().nullish().optional(),
-        permit_without_stream: z.number().nullish().optional(),
+        permit_without_stream: z.boolean().nullish().optional(),
         initial_windows_size: z.number().nullish().optional(),
       })
       .nullish()
