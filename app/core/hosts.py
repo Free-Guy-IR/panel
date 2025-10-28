@@ -136,7 +136,7 @@ async def _prepare_subscription_inbound_data(
             multi_mode=gs.multi_mode if gs else False,
             idle_timeout=gs.idle_timeout if gs else None,
             health_check_timeout=gs.health_check_timeout if gs else None,
-            permit_without_stream=gs.permit_without_stream if gs and gs.permit_without_stream is not None else False,
+            permit_without_stream=gs.permit_without_stream if gs else False,
             initial_windows_size=gs.initial_windows_size if gs else None,
             http_headers=host.http_headers,
             random_user_agent=host.random_user_agent,

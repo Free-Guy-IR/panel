@@ -122,10 +122,10 @@ class KCPSettings(BaseModel):
 
 
 class GRPCSettings(BaseModel):
-    multi_mode: bool | None = Field(default=None)
+    multi_mode: bool = Field(default=False)
     idle_timeout: int | None = Field(default=None)
     health_check_timeout: int | None = Field(default=None)
-    permit_without_stream: bool | None = Field(default=None)
+    permit_without_stream: bool = Field(default=False)
     initial_windows_size: int | None = Field(default=None)
 
 
