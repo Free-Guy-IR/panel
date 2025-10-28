@@ -501,6 +501,12 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
         db (AsyncSession): Database session.
         dbusers (list[User]): List of user objects to be removed.
     """
+    user_ids = [user.id for user in db_users]
+
+    # Delete related subscription updates first
+    await db.execute(
+        delete(UserSubscriptionUpdate).where(UserSubscriptionUpdate.user_id.in_(user_ids))
+    )
 
     await asyncio.gather(*[db.delete(user) for user in db_users])
     await db.commit()
