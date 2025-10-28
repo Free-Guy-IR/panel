@@ -506,6 +506,12 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
           return
         }
 
+        // Always preserve boolean values (including false)
+        if (typeof value === 'boolean') {
+          result[key] = value
+          return
+        }
+
         if (value === null || value === undefined || value === '') return
 
         if (typeof value === 'object' && !Array.isArray(value)) {

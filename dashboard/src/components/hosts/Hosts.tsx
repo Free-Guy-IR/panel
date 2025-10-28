@@ -371,6 +371,7 @@ export const HostFormSchema = z.object({
           padding: z.boolean().nullable().optional(),
           brutal: z
             .object({
+              enable: z.boolean().optional(),
               up_mbps: z.number().nullable().optional(),
               down_mbps: z.number().nullable().optional(),
             })
@@ -388,6 +389,7 @@ export const HostFormSchema = z.object({
           padding: z.boolean().nullable().optional(),
           brutal: z
             .object({
+              enable: z.boolean().optional(),
               up_mbps: z.number().nullable().optional(),
               down_mbps: z.number().nullable().optional(),
             })
