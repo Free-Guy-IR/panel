@@ -2,11 +2,11 @@ import json
 from random import choice
 
 from app.models.subscription import (
-    SubscriptionInboundData,
-    TLSConfig,
     GRPCTransportConfig,
-    WebSocketTransportConfig,
+    SubscriptionInboundData,
     TCPTransportConfig,
+    TLSConfig,
+    WebSocketTransportConfig,
 )
 from app.templates import render_template
 from app.utils.helpers import UUIDEncoder
@@ -29,6 +29,8 @@ class SingBoxConfiguration(BaseSubscription):
             "httpupgrade": self._transport_httpupgrade,
             "h2": self._transport_http,
             "h3": self._transport_http,
+            "tcp": self._transport_http,
+            "raw": self._transport_http,
         }
 
         # Registry for protocol builders
@@ -133,15 +135,13 @@ class SingBoxConfiguration(BaseSubscription):
 
     def _transport_grpc(self, config: GRPCTransportConfig, path: str) -> dict:
         """Handle GRPC transport - only gets GRPC config"""
-        return self._normalize_and_remove_none_values(
-            {
-                "type": "grpc",
-                "service_name": path,
-                "idle_timeout": f"{config.idle_timeout}s" if config.idle_timeout else "15s",
-                "ping_timeout": f"{config.health_check_timeout}s" if config.health_check_timeout else "15s",
-                "permit_without_stream": config.permit_without_stream,
-            }
-        )
+        return self._normalize_and_remove_none_values({
+            "type": "grpc",
+            "service_name": path,
+            "idle_timeout": f"{config.idle_timeout}s" if config.idle_timeout else "15s",
+            "ping_timeout": f"{config.health_check_timeout}s" if config.health_check_timeout else "15s",
+            "permit_without_stream": config.permit_without_stream,
+        })
 
     def _transport_httpupgrade(self, config: WebSocketTransportConfig, path: str) -> dict:
         """Handle HTTPUpgrade transport - only gets WS config (similar to WS)"""
@@ -302,7 +302,7 @@ class SingBoxConfiguration(BaseSubscription):
         }
 
         # Add transport
-        if network in ("http", "ws", "quic", "grpc", "httpupgrade", "h2", "h3"):
+        if network in ("http", "tcp", "raw", "ws", "quic", "grpc", "httpupgrade", "h2", "h3"):
             transport = self._apply_transport(network, inbound, path)
             if transport:
                 config["transport"] = transport
