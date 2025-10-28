@@ -211,11 +211,10 @@ class ClashConfiguration(BaseSubscription):
             "only-tcp": clash_mux.get("only_tcp"),
             "padding": clash_mux.get("padding"),
             "brutal-opts": {
-                "enabled": clash_mux.get("brutal", {}).get("enable"),
                 "up": clash_mux["brutal"]["up_mbps"],
                 "down": clash_mux["brutal"]["down_mbps"],
             }
-            if clash_mux.get("brutal")
+            if clash_mux.get("brutal") and clash_mux["brutal"].get("enable")
             else None,
         }
         node["smux"] = self._normalize_and_remove_none_values(clash_mux_config)
