@@ -29,7 +29,6 @@ class SingBoxConfiguration(BaseSubscription):
             "httpupgrade": self._transport_httpupgrade,
             "h2": self._transport_http,
             "h3": self._transport_http,
-            "tcp": self._transport_http,
             "raw": self._transport_http,
         }
 
@@ -166,6 +165,10 @@ class SingBoxConfiguration(BaseSubscription):
         # Map network types
         if network in ("tcp", "raw") and getattr(inbound.transport_config, "header_type", "none") == "http":
             network = "http"
+
+        # For pure TCP connections without HTTP headers, don't add transport config
+        if network in ("tcp", "raw") and getattr(inbound.transport_config, "header_type", "none") != "http":
+            return None
 
         handler = self.transport_handlers.get(network)
         if not handler:
