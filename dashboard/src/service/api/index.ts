@@ -277,16 +277,6 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
-
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -308,6 +298,16 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
+
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -628,8 +628,6 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -638,6 +636,19 @@ export type UserModifyDataLimit = number | null
 export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
@@ -653,17 +664,6 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -1446,7 +1446,7 @@ export interface General {
 
 export type GRPCSettingsInitialWindowsSize = number | null
 
-export type GRPCSettingsPermitWithoutStream = number | null
+export type GRPCSettingsPermitWithoutStream = boolean | null
 
 export type GRPCSettingsHealthCheckTimeout = number | null
 
@@ -1872,6 +1872,22 @@ export interface AdminCreate {
   profile_title?: AdminCreateProfileTitle
   support_url?: AdminCreateSupportUrl
   username: string
+}
+
+export type AdminContactInfoSubDomain = string | null
+
+export type AdminContactInfoDiscordWebhook = string | null
+
+export type AdminContactInfoTelegramId = number | null
+
+/**
+ * Base model containing the core admin identification fields.
+ */
+export interface AdminContactInfo {
+  username: string
+  telegram_id?: AdminContactInfoTelegramId
+  discord_webhook?: AdminContactInfoDiscordWebhook
+  sub_domain?: AdminContactInfoSubDomain
 }
 
 /**

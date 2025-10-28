@@ -125,7 +125,7 @@ class GRPCSettings(BaseModel):
     multi_mode: bool | None = Field(default=None)
     idle_timeout: int | None = Field(default=None)
     health_check_timeout: int | None = Field(default=None)
-    permit_without_stream: int | None = Field(default=None)
+    permit_without_stream: bool | None = Field(default=None)
     initial_windows_size: int | None = Field(default=None)
 
 
