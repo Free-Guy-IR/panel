@@ -146,6 +146,8 @@ class SingBoxConfiguration(BaseSubscription):
     def _transport_httpupgrade(self, config: WebSocketTransportConfig, path: str) -> dict:
         """Handle HTTPUpgrade transport - only gets WS config (similar to WS)"""
         host = config.host if isinstance(config.host, str) else (config.host[0] if config.host else "")
+        if "?ed=" in path:
+            path, _ = path.split("?ed=")
 
         transport = {
             "type": "httpupgrade",
