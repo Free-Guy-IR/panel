@@ -190,8 +190,8 @@ class SingBoxConfiguration(BaseSubscription):
             if isinstance(tls_config.sni, str)
             else (tls_config.sni[0] if tls_config.sni else None),
             "insecure": tls_config.allowinsecure,
-            "utls": {"enabled": bool(tls_config.fingerprint), "fingerprint": tls_config.fingerprint}
-            if tls_config.fingerprint
+            "utls": {"enabled": bool(tls_config.fingerprint) or tls_config.tls == "reality", "fingerprint": tls_config.fingerprint}
+            if tls_config.fingerprint or tls_config.tls == "reality"
             else None,
             "alpn": tls_config.alpn_singbox,  # Pre-formatted for sing-box!
             "ech": {
