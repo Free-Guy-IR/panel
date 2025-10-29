@@ -211,6 +211,7 @@ class ClashConfiguration(BaseSubscription):
             "only-tcp": clash_mux.get("only_tcp"),
             "padding": clash_mux.get("padding"),
             "brutal-opts": {
+                "enabled": True,
                 "up": clash_mux["brutal"]["up_mbps"],
                 "down": clash_mux["brutal"]["down_mbps"],
             }
