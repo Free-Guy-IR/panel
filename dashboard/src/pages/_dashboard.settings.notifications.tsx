@@ -640,15 +640,8 @@ export default function NotificationSettings() {
               <Button type="button" variant="outline" onClick={handleCancel} className="w-full min-w-[100px] sm:w-auto" disabled={isSaving}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={isSaving} className="w-full min-w-[100px] sm:w-auto">
-                {isSaving ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>
-                    {t('saving')}
-                  </div>
-                ) : (
-                  t('save')
-                )}
+              <Button type="submit" disabled={isSaving} isLoading={isSaving} loadingText={t('saving')} className="w-full min-w-[100px] sm:w-auto">
+                {t('save')}
               </Button>
             </div>
           </div>

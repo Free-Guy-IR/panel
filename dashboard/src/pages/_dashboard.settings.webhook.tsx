@@ -455,8 +455,8 @@ export default function WebhookSettings() {
               <Button type="button" variant="outline" onClick={handleCancel} disabled={isSaving} className="sm:w-auto">
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={isSaveDisabled} className="sm:w-auto">
-                {isSaving ? t('saving') : t('save')}
+              <Button type="submit" disabled={isSaveDisabled} isLoading={isSaving} loadingText={t('saving')} className="sm:w-auto">
+                {t('save')}
               </Button>
             </div>
           </div>
