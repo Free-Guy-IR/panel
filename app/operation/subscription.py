@@ -11,7 +11,7 @@ from app.models.settings import Application, ConfigFormat, SubRule, Subscription
 from app.models.stats import Period, UserUsageStatsList
 from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
 from app.settings import subscription_settings
-from app.subscription.share import encode_title, generate_subscription
+from app.subscription.share import encode_title, generate_subscription, setup_format_variables
 from app.templates import render_template
 from config import SUBSCRIPTION_PAGE_TEMPLATE
 
@@ -58,6 +58,24 @@ class SubscriptionOperation(BaseOperation):
         if user.expire:
             user_info["expire"] = int(user.expire.timestamp())
 
+        # Setup format variables for dynamic title
+        format_variables = setup_format_variables(user)
+
+        # Get profile title and format it with variables
+        profile_title = (
+            user.admin.profile_title
+            if user.admin and user.admin.profile_title
+            else sub_settings.profile_title
+        )
+
+        # Format profile title with dynamic variables (same as host remark)
+        if profile_title:
+            try:
+                profile_title = profile_title.format_map(format_variables)
+            except (ValueError, KeyError):
+                # If formatting fails (e.g., invalid format string), use original title
+                pass
+
         # Create and return headers
         return {
             "content-disposition": f'attachment; filename="{user.username}"',
@@ -65,9 +83,7 @@ class SubscriptionOperation(BaseOperation):
             "support-url": user.admin.support_url
             if user.admin and user.admin.support_url
             else sub_settings.support_url,
-            "profile-title": encode_title(user.admin.profile_title)
-            if user.admin and user.admin.profile_title
-            else encode_title(sub_settings.profile_title),
+            "profile-title": encode_title(profile_title) if profile_title else encode_title("Subscription"),
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
         }
@@ -98,9 +114,9 @@ class SubscriptionOperation(BaseOperation):
         # Handle HTML request (subscription page)
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token)
-        response_headers = self.create_response_headers(db_user, request_url, sub_settings)
-
         user = await self.validated_user(db_user)
+        
+        response_headers = self.create_response_headers(user, request_url, sub_settings)
 
         if "text/html" in accept_header:
             template = (
@@ -141,9 +157,9 @@ class SubscriptionOperation(BaseOperation):
         if client_type == ConfigFormat.block or not getattr(sub_settings.manual_sub_request, client_type):
             await self.raise_error(message="Client not supported", code=406)
         db_user = await self.get_validated_sub(db, token=token)
-        response_headers = self.create_response_headers(db_user, request_url, sub_settings)
-
         user = await self.validated_user(db_user)
+        
+        response_headers = self.create_response_headers(user, request_url, sub_settings)
         conf, media_type = await self.fetch_config(user, client_type)
 
         # Create response headers

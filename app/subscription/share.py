@@ -96,9 +96,10 @@ def setup_format_variables(user: UsersResponseWithInbounds) -> dict:
     if user_status != UserStatus.on_hold:
         if expire is not None:
             seconds_left = (expire - now).total_seconds()
-            expire_date = expire.date()
+            expire_date_obj = expire.date()
+            expire_date = expire_date_obj.strftime("%Y-%m-%d")
             jalali_expire_date = jd.fromgregorian(
-                year=expire_date.year, month=expire_date.month, day=expire_date.day
+                year=expire_date_obj.year, month=expire_date_obj.month, day=expire_date_obj.day
             ).strftime("%Y-%m-%d")
             if now < expire:
                 days_left = (expire - now).days + 1
