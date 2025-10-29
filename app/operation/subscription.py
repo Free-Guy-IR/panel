@@ -50,9 +50,10 @@ class SubscriptionOperation(BaseOperation):
         user: UsersResponseWithInbounds, format_variables: dict, sub_settings: SubSettings
     ) -> str:
         """Format profile title with dynamic variables, falling back to default if needed."""
+        # Use getattr to safely access profile_title which may not exist on AdminContactInfo
         profile_title = (
-            user.admin.profile_title if user.admin and user.admin.profile_title else sub_settings.profile_title
-        )
+            getattr(user.admin, "profile_title", None) if user.admin else None
+        ) or sub_settings.profile_title
         
         if not profile_title:
             return "Subscription"
@@ -79,12 +80,10 @@ class SubscriptionOperation(BaseOperation):
         format_variables = setup_format_variables(user)
         formatted_title = SubscriptionOperation._format_profile_title(user, format_variables, sub_settings)
 
-        # Get support URL
+        # Get support URL (use getattr since AdminContactInfo may not have support_url)
         support_url = (
-            user.admin.support_url
-            if user.admin and user.admin.support_url
-            else sub_settings.support_url
-        )
+            getattr(user.admin, "support_url", None) if user.admin else None
+        ) or sub_settings.support_url
 
         return {
             "content-disposition": f'attachment; filename="{user.username}"',
