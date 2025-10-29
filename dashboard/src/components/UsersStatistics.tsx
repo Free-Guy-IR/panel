@@ -1,41 +1,11 @@
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useGetSystemStats } from '@/service/api'
-import { numberWithCommas } from '@/utils/formatByte'
 import { Users, Wifi } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardTitle } from './ui/card'
-
-const CountUp = ({ end, duration = 1500 }: { end: number; duration?: number }) => {
-  const [count, setCount] = useState(0)
-
-  useEffect(() => {
-    if (!end) return
-
-    let startTimestamp: number | null = null
-    const startValue = count
-    const step = (timestamp: number) => {
-      if (!startTimestamp) startTimestamp = timestamp
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1)
-      // Using easeOutQuad for a softer animation
-      const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2
-      const currentCount = Math.floor(eased * (end - startValue) + startValue)
-
-      setCount(currentCount)
-
-      if (progress < 1) {
-        window.requestAnimationFrame(step)
-      } else {
-        setCount(end)
-      }
-    }
-
-    window.requestAnimationFrame(step)
-  }, [end, duration])
-
-  return <>{numberWithCommas(count)}</>
-}
+import { CountUp } from './ui/count-up'
 
 const UsersStatistics = () => {
   const { t } = useTranslation()

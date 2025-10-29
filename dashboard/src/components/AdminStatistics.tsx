@@ -1,11 +1,11 @@
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils.ts'
-import { numberWithCommas } from '@/utils/formatByte'
 import { useTranslation } from 'react-i18next'
 import { Card, CardTitle } from '@/components/ui/card'
+import { CountUp } from '@/components/ui/count-up'
 import { type AdminDetails } from '@/service/api'
 import { User, UserCheck, UserX } from 'lucide-react'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface AdminsStatisticsProps {
   data: AdminDetails[]
@@ -14,9 +14,26 @@ interface AdminsStatisticsProps {
 export default function AdminStatisticsSection({ data }: AdminsStatisticsProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
+  const [prevStats, setPrevStats] = useState<{ total: number; active: number; disabled: number } | null>(null)
+  const [isIncreased, setIsIncreased] = useState<Record<string, boolean>>({})
+
   const total = data.length
   const disabled = data.filter(a => a.is_disabled).length
   const active = total - disabled
+
+  const currentStats = { total, active, disabled }
+
+  useEffect(() => {
+    if (prevStats) {
+      setIsIncreased({
+        total: currentStats.total > prevStats.total,
+        active: currentStats.active > prevStats.active,
+        disabled: currentStats.disabled > prevStats.disabled,
+      })
+    }
+    setPrevStats(currentStats)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
 
   const stats = [
     {
@@ -24,18 +41,21 @@ export default function AdminStatisticsSection({ data }: AdminsStatisticsProps) 
       label: t('admins.total'),
       value: total,
       color: '',
+      key: 'total',
     },
     {
       icon: UserCheck,
       label: t('admins.active'),
       value: active,
       color: '',
+      key: 'active',
     },
     {
       icon: UserX,
       label: t('admins.disable'),
       value: disabled,
       color: '',
+      key: 'disabled',
     },
   ]
 
@@ -64,8 +84,15 @@ export default function AdminStatisticsSection({ data }: AdminsStatisticsProps) 
               {React.createElement(stat.icon, { className: 'h-6 w-6' })}
               <span>{stat.label}</span>
             </div>
-            <span className="text-3xl font-bold" dir="ltr">
-              {numberWithCommas(stat.value)}
+            <span
+              className={cn(
+                'mx-2 text-3xl font-bold transition-all duration-500',
+                isIncreased[stat.key] ? 'animate-zoom-out' : ''
+              )}
+              style={{ animationDuration: '400ms' }}
+              dir="ltr"
+            >
+              <CountUp end={stat.value} />
             </span>
           </CardTitle>
         </Card>
