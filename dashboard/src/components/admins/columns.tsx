@@ -35,7 +35,7 @@ const createSortButton = (
   return (
     <button 
       onClick={handleClick}
-      className="flex w-full items-center gap-1 py-1"
+      className="flex w-full items-center gap-1"
     >
       <div className="text-xs">{t(label)}</div>
       {filters.sort && (filters.sort === column || filters.sort === '-' + column) && (
@@ -50,16 +50,16 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
     accessorKey: 'username',
     header: () => createSortButton('username', 'username', t, handleSort, filters),
     cell: ({ row }) => (
-      <div className="overflow-hidden text-ellipsis whitespace-nowrap pl-1 font-medium md:pl-2">
-        <div className="flex items-start gap-x-3 py-1 md:px-1">
-          <div className="pt-1">
+      <div className="overflow-hidden text-ellipsis whitespace-nowrap font-medium py-1.5">
+        <div className="flex items-center gap-x-3">
+          <div>
             {row.original.is_disabled ? (
               <div className="min-h-[10px] min-w-[10px] rounded-full border border-gray-400 shadow-sm dark:border-gray-600" />
             ) : (
               <div className="min-h-[10px] min-w-[10px] rounded-full bg-green-500 shadow-sm" />
             )}
           </div>
-          <div className="flex flex-col gap-y-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
+          <div className="flex flex-col overflow-hidden text-ellipsis whitespace-nowrap">
             <span className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium">{row.getValue('username')}</span>
           </div>
         </div>

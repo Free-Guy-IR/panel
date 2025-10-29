@@ -182,7 +182,7 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
                             handleEditModal(cell.column.id, row.original)
                           }}
                           className={cn(
-                            'py-4 text-sm',
+                            'py-2 text-sm',
                             index === 5 && 'hidden md:w-[85px]',
                             index >= 3 && 'hidden md:table-cell',
                             cell.column.id === 'chevron' && 'table-cell md:hidden',
