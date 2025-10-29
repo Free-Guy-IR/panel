@@ -46,6 +46,24 @@ class SubscriptionOperation(BaseOperation):
                 return rule.target
 
     @staticmethod
+    def _format_profile_title(
+        user: UsersResponseWithInbounds, format_variables: dict, sub_settings: SubSettings
+    ) -> str:
+        """Format profile title with dynamic variables, falling back to default if needed."""
+        profile_title = (
+            user.admin.profile_title if user.admin and user.admin.profile_title else sub_settings.profile_title
+        )
+        
+        if not profile_title:
+            return "Subscription"
+        
+        try:
+            return profile_title.format_map(format_variables)
+        except (ValueError, KeyError):
+            # Invalid format string, return original title
+            return profile_title
+
+    @staticmethod
     def create_response_headers(user: UsersResponseWithInbounds, request_url: str, sub_settings: SubSettings) -> dict:
         """Create response headers for subscription responses, including user subscription info."""
         # Generate user subscription info
@@ -54,36 +72,25 @@ class SubscriptionOperation(BaseOperation):
         if user.data_limit:
             user_info["total"] = user.data_limit
 
-        # Always include expire key - use 0 if no expiration date
         if user.expire:
             user_info["expire"] = int(user.expire.timestamp())
 
-        # Setup format variables for dynamic title
+        # Format profile title with dynamic variables
         format_variables = setup_format_variables(user)
+        formatted_title = SubscriptionOperation._format_profile_title(user, format_variables, sub_settings)
 
-        # Get profile title and format it with variables
-        profile_title = (
-            user.admin.profile_title
-            if user.admin and user.admin.profile_title
-            else sub_settings.profile_title
+        # Get support URL
+        support_url = (
+            user.admin.support_url
+            if user.admin and user.admin.support_url
+            else sub_settings.support_url
         )
 
-        # Format profile title with dynamic variables (same as host remark)
-        if profile_title:
-            try:
-                profile_title = profile_title.format_map(format_variables)
-            except (ValueError, KeyError):
-                # If formatting fails (e.g., invalid format string), use original title
-                pass
-
-        # Create and return headers
         return {
             "content-disposition": f'attachment; filename="{user.username}"',
             "profile-web-page-url": request_url,
-            "support-url": user.admin.support_url
-            if user.admin and user.admin.support_url
-            else sub_settings.support_url,
-            "profile-title": encode_title(profile_title) if profile_title else encode_title("Subscription"),
+            "support-url": support_url,
+            "profile-title": encode_title(formatted_title),
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
         }
