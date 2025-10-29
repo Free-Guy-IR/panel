@@ -54,7 +54,7 @@ interface ValidationResult {
 }
 // Add encryption methods enum
 const SHADOWSOCKS_ENCRYPTION_METHODS = [
-  { value: '2022-blanke3-aes-128-gcm', label: '2022-blanke3-aes-128-gcm', length: 16 },
+  { value: '2022-blake3-aes-128-gcm', label: '2022-blake3-aes-128-gcm', length: 16 },
   { value: '2022-blake3-aes-256-gcm', label: '2022-blake3-aes-256-gcm', length: 32 },
 ] as const
 type VlessVariant = 'x25519' | 'mlkem768'
@@ -293,10 +293,8 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
 
       const randomBytes = new Uint8Array(method.length)
       crypto.getRandomValues(randomBytes)
+      // Shadowsocks 2022 requires standard base64 encoding (not URL-safe)
       const password = btoa(String.fromCharCode(...randomBytes))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '')
       setGeneratedShadowsocksPassword({ password, encryptionMethod: method.label })
       showResultDialog('shadowsocksPassword', { password, encryptionMethod: method.label })
       toast.success(t('coreConfigModal.shadowsocksPasswordGenerated'))
