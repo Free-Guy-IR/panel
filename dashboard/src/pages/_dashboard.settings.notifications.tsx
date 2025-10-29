@@ -47,6 +47,20 @@ const notificationSettingsSchema = z.object({
 
 type NotificationSettingsForm = z.infer<typeof notificationSettingsSchema>
 
+const notificationTypes = [
+  { key: 'admin', translationKey: 'admin' },
+  { key: 'core', translationKey: 'core' },
+  { key: 'group', translationKey: 'group' },
+  { key: 'host', translationKey: 'host' },
+  { key: 'login', translationKey: 'login' },
+  { key: 'node', translationKey: 'node' },
+  { key: 'user_template', translationKey: 'userTemplate' },
+  { key: 'user', translationKey: 'user' },
+  { key: 'days_left', translationKey: 'daysLeft' },
+  { key: 'percentage_reached', translationKey: 'percentageReached' },
+] as const
+
+
 export default function NotificationSettings() {
   const { t } = useTranslation()
 
@@ -129,8 +143,8 @@ export default function NotificationSettings() {
         ...((data.notification_settings?.notify_telegram || data.notification_settings?.notify_discord) &&
           data.notification_settings?.proxy_url &&
           data.notification_settings.proxy_url.trim() !== '' && {
-            proxy_url: data.notification_settings.proxy_url.trim(),
-          }),
+          proxy_url: data.notification_settings.proxy_url.trim(),
+        }),
       },
     }
 
@@ -192,135 +206,21 @@ export default function NotificationSettings() {
 
             {/* Mobile: 1 column, Tablet: 2 columns, Desktop: 3-5 columns */}
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 lg:gap-6 xl:grid-cols-4 2xl:grid-cols-5">
-              <FormField
-                control={form.control}
-                name="notification_enable.admin"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm">{t('settings.notifications.types.admin')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.core"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.core')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.group"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.group')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.host"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.host')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.login"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.login')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.node"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.node')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.user_template"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.userTemplate')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.user"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.user')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.days_left"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.daysLeft')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notification_enable.percentage_reached"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
-                    <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t('settings.notifications.types.percentageReached')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value || false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+              {notificationTypes.map(type => (
+                <FormField
+                  key={type.key}
+                  control={form.control}
+                  name={`notification_enable.${type.key}` as any}
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between space-y-0 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50 sm:p-4">
+                      <FormLabel className="cursor-pointer truncate pr-2 text-xs font-medium sm:text-sm xl:text-base">{t(`settings.notifications.types.${type.translationKey}`)}</FormLabel>
+                      <FormControl>
+                        <Switch checked={field.value || false} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              ))}
             </div>
           </div>
 
