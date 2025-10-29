@@ -901,6 +901,7 @@
       "jalali_expire_date": "Expiry date of the user in solar calendar",
       "time_left": "Remaining time of the user",
       "status_emoji": "User status as an emoji (✅,⌛️,🪫,❌,🔌)",
+      "usage_percentage": "Data usage percentage",
       "protocol": "Proxy protocol (e.g. VMess)",
       "transport": "Proxy transport method (e.g. ws)",
       "admin_username": "Admin username"
