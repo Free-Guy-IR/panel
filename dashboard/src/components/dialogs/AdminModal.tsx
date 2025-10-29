@@ -13,6 +13,7 @@ import { PasswordInput } from '@/components/ui/password-input'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { LoaderButton } from '@/components/ui/loader-button'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { VariablesPopover } from '@/components/ui/variables-popover'
 
 interface AdminModalProps {
   isDialogOpen: boolean
@@ -191,164 +192,163 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminUse
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="-mr-4 max-h-[80dvh] overflow-y-auto px-2 pr-4 sm:max-h-[75dvh]">
-              <div className="flex flex-col items-start gap-4 pb-4 sm:flex-row">
-                <div className="w-full flex-1">
-                  <FormField
-                    control={form.control}
-                    name="username"
-                    render={({ field }) => {
-                      const hasError = !!form.formState.errors.username
-                      return (
-                        <FormItem className="min-h-[100px]">
-                          <FormLabel>{t('admins.username')}</FormLabel>
-                          <FormControl>
-                            <Input placeholder={t('admins.enterUsername')} disabled={editingAdmin} isError={hasError} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )
-                    }}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => {
-                      const hasError = !!form.formState.errors.password
-                      return (
-                        <FormItem className="min-h-[100px]">
-                          <FormLabel>{t('admins.password')}</FormLabel>
-                          <FormControl>
-                            <PasswordInput placeholder={t('admins.enterPassword')} isError={hasError} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )
-                    }}
-                  />
+              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 items-end">
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => {
+                    const hasError = !!form.formState.errors.username
+                    return (
+                      <FormItem>
+                        <FormLabel>{t('admins.username')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder={t('admins.enterUsername')} disabled={editingAdmin} isError={hasError} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => {
+                    const hasError = !!form.formState.errors.password
+                    return (
+                      <FormItem>
+                        <FormLabel>{t('admins.password')}</FormLabel>
+                        <FormControl>
+                          <PasswordInput placeholder={t('admins.enterPassword')} isError={hasError} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
+                />
 
-                  <FormField
-                    control={form.control}
-                    name="passwordConfirm"
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.passwordConfirm')}</FormLabel>
-                        <FormControl>
-                          <PasswordInput placeholder={t('admins.enterPasswordConfirm')} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={'telegram_id'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.telegramId')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder={t('Telegram ID (e.g. 36548974)')}
-                            onChange={e => {
-                              const value = e.target.value
-                              field.onChange(value ? parseInt(value) : 0)
-                            }}
-                            value={field.value ? field.value : ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={'discord_id'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.discordId')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder={t('admins.discordId')}
-                            onChange={e => {
-                              const value = e.target.value
-                              field.onChange(value ? parseInt(value) : 0)
-                            }}
-                            value={field.value ? field.value : ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="w-full flex-1">
-                  <FormField
-                    control={form.control}
-                    name={'discord_webhook'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.discord')}</FormLabel>
-                        <FormControl>
-                          <Input placeholder={t('admins.discord')} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={'support_url'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.supportUrl')}</FormLabel>
-                        <FormControl>
-                          <Input placeholder={t('admins.supportUrl')} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={'profile_title'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
+                <FormField
+                  control={form.control}
+                  name="passwordConfirm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.passwordConfirm')}</FormLabel>
+                      <FormControl>
+                        <PasswordInput placeholder={t('admins.enterPasswordConfirm')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'telegram_id'}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.telegramId')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder={t('Telegram ID (e.g. 36548974)')}
+                          onChange={e => {
+                            const value = e.target.value
+                            field.onChange(value ? parseInt(value) : 0)
+                          }}
+                          value={field.value ? field.value : ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'discord_id'}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.discordId')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder={t('admins.discordId')}
+                          onChange={e => {
+                            const value = e.target.value
+                            field.onChange(value ? parseInt(value) : 0)
+                          }}
+                          value={field.value ? field.value : ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'discord_webhook'}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.discord')}</FormLabel>
+                      <FormControl>
+                        <Input placeholder={t('admins.discord')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'support_url'}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.supportUrl')}</FormLabel>
+                      <FormControl>
+                        <Input placeholder={t('admins.supportUrl')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'profile_title'}
+                  render={({ field }) => (
+                    <FormItem className='h-fit'>
+                      <div className="flex items-center gap-2">
                         <FormLabel>{t('admins.profile')}</FormLabel>
-                        <FormControl>
-                          <Input placeholder={t('admins.profile')} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={'sub_domain'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.subDomain')}</FormLabel>
-                        <FormControl>
-                          <Input placeholder={t('admins.subDomain')} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={'sub_template'}
-                    render={({ field }) => (
-                      <FormItem className="min-h-[100px]">
-                        <FormLabel>{t('admins.subTemplate')}</FormLabel>
-                        <FormControl>
-                          <Input placeholder={t('admins.subTemplate')} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                        <VariablesPopover />
+                      </div>
+                      <FormControl>
+                        <Input placeholder={t('admins.profile')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'sub_domain'}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.subDomain')}</FormLabel>
+                      <FormControl>
+                        <Input placeholder={t('admins.subDomain')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={'sub_template'}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admins.subTemplate')}</FormLabel>
+                      <FormControl>
+                        <Input placeholder={t('admins.subTemplate')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
               <FormField
                 control={form.control}
