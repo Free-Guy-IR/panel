@@ -1,33 +1,37 @@
 import asyncio
-from datetime import datetime as dt, timezone as tz, timedelta as td
+from datetime import datetime as dt, timedelta as td, timezone as tz
 
 import httpx
-from sqlalchemy import delete
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import delete
 
 from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.models import NotificationReminder
 from app.models.settings import Webhook
-from app.settings import webhook_settings
 from app.notification.webhook import queue
+from app.settings import webhook_settings
 from app.utils.logger import get_logger
 from config import JOB_SEND_NOTIFICATIONS_INTERVAL
 
 logger = get_logger("send-notification")
 
 
-async def send_to_all_webhooks(client, notification, webhooks):
+async def send_to_all_webhooks(client: httpx.AsyncClient, notifications, webhooks):
     """
-    Send the notification to all webhooks concurrently.
+    Send the notifications to all webhooks concurrently.
     Returns True if at least one webhook succeeds.
     """
+    if not notifications:
+        return True
+
+    payload = jsonable_encoder(notifications)
 
     async def send_one(webhook):
         webhook_headers = {"x-webhook-secret": webhook.secret} if webhook.secret else None
         try:
-            r = await client.post(webhook.url, json=jsonable_encoder(notification), headers=webhook_headers)
-            if r.status_code in [200, 201, 202, 204]:
+            r = await client.post(webhook.url, json=payload, headers=webhook_headers)
+            if r.status_code in (200, 201, 202, 204):
                 return True
             else:
                 logger.error(f"Webhook {webhook.url} failed: {r.status_code} - {r.text}")
@@ -48,6 +52,7 @@ async def send_notifications():
 
     processed = 0
     failed_to_requeue = []
+    ready_notifications = []
     current_time = dt.now(tz.utc).timestamp()
 
     try:
@@ -66,19 +71,29 @@ async def send_notifications():
                         failed_to_requeue.append(notification)
                         continue
 
-                    # Send to all webhooks in settings
-                    success = await send_to_all_webhooks(client, notification, settings.webhooks)
-
-                    if not success:
-                        notification.tries += 1
-                        if notification.tries < settings.recurrent:
-                            notification.send_at = current_time + settings.timeout
-                            failed_to_requeue.append(notification)
-
-                    processed += 1
-
+                    ready_notifications.append(notification)
                 except Exception:
                     failed_to_requeue.append(notification)
+
+            if ready_notifications:
+                batch_size = 50
+                for start in range(0, len(ready_notifications), batch_size):
+                    batch = ready_notifications[start : start + batch_size]
+                    logger.info(
+                        f"Sending batch of {len(batch)} notifications to {len(settings.webhooks)} webhooks "
+                        f"(chunk {start // batch_size + 1})"
+                    )
+                    success = await send_to_all_webhooks(client, batch, settings.webhooks)
+
+                    if not success:
+                        retry_at = dt.now(tz.utc).timestamp()
+                        for notification in batch:
+                            notification.tries += 1
+                            if notification.tries < settings.recurrent:
+                                notification.send_at = retry_at + settings.timeout
+                                failed_to_requeue.append(notification)
+
+                    processed += len(batch)
 
     finally:
         # Don't requeue failed items if webhook disabled
@@ -90,7 +105,7 @@ async def send_notifications():
             await queue.put(notif)
 
         if processed or failed_to_requeue:
-            logger.debug(f"Processed {processed} notifications, requeued {len(failed_to_requeue)}")
+            logger.info(f"Processed {processed} notifications, requeued {len(failed_to_requeue)}")
 
 
 async def delete_expired_reminders() -> None:
