@@ -66,7 +66,7 @@ app = FastAPI(
     openapi_url="/openapi.json" if DOCS else None,
 )
 
-scheduler = AsyncIOScheduler(job_defaults={"max_instances": 20}, timezone="UTC")
+scheduler = AsyncIOScheduler(job_defaults={"max_instances": 30}, timezone="UTC")
 logger = get_logger()
 
 
