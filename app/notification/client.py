@@ -84,7 +84,7 @@ async def _send_telegram_message_direct(
     channel_id: int | None,
     topic_id: int | None,
     max_retries: int,
-    telegram_api_token: str
+    telegram_api_token: str,
 ) -> bool:
     """
     Internal function to send Telegram message with proper retry_after handling.
@@ -170,7 +170,7 @@ async def process_telegram_queue():
                 channel_id=notification.channel_id,
                 topic_id=notification.topic_id,
                 max_retries=settings.max_retries,
-                telegram_api_token=settings.telegram_api_token
+                telegram_api_token=settings.telegram_api_token,
             )
 
             if success:
@@ -199,9 +199,7 @@ async def process_discord_queue():
             notification: DiscordNotification = await discord_queue.get()
 
             success = await _send_discord_webhook_direct(
-                json_data=notification.json_data,
-                webhook=notification.webhook,
-                max_retries=settings.max_retries
+                json_data=notification.json_data, webhook=notification.webhook, max_retries=settings.max_retries
             )
 
             if success:

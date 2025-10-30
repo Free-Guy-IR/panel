@@ -338,7 +338,7 @@ class SingBoxConfiguration(BaseSubscription):
                     # Add enabled: true to brutal config
                     multiplex_config["brutal"] = {
                         "enabled": True,
-                        **{k: v for k, v in brutal_config.items() if k != "enable"}
+                        **{k: v for k, v in brutal_config.items() if k != "enable"},
                     }
                 else:
                     # Remove brutal config entirely if enable is False or brutal is None
