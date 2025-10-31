@@ -1,4 +1,3 @@
-import asyncio
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
@@ -200,6 +199,7 @@ async def get_expired_users(
         query = query.where(User.expire <= expired_before)
     if admin_id:
         query = query.where(User.admin_id == admin_id)
+
 
     return (await db.execute(query)).unique().scalars().all()
 
@@ -503,10 +503,7 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
     """
     user_ids = [user.id for user in db_users]
 
-    # Delete related subscription updates first
-    await db.execute(delete(UserSubscriptionUpdate).where(UserSubscriptionUpdate.user_id.in_(user_ids)))
-
-    await asyncio.gather(*[db.delete(user) for user in db_users])
+    await db.execute(delete(User).where(User.id.in_(user_ids)))
     await db.commit()
 
 
