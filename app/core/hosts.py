@@ -247,6 +247,7 @@ class HostManager:
             return None
 
         # Handle downstream for xhttp
+        downstream_data = None
         if (
             host.transport_settings
             and host.transport_settings.xhttp_settings
