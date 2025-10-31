@@ -1211,8 +1211,6 @@ export interface NodeRealtimeStats {
 
 export type NodeModifyStatus = NodeStatus | null
 
-export type NodeModifyApiPort = number | null
-
 export type NodeModifyGatherLogs = boolean | null
 
 export type NodeModifyApiKey = string | null
@@ -1247,7 +1245,6 @@ export interface NodeModify {
   core_config_id?: NodeModifyCoreConfigId
   api_key?: NodeModifyApiKey
   gather_logs?: NodeModifyGatherLogs
-  api_port?: NodeModifyApiPort
   status?: NodeModifyStatus
 }
 

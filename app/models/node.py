@@ -121,7 +121,6 @@ class NodeModify(NodeCreate):
     name: str | None = Field(default=None)
     address: str | None = Field(default=None)
     port: int | None = Field(default=None)
-    api_port: int | None = Field(default=None)
     status: NodeStatus | None = Field(default=None)
     usage_coefficient: float | None = Field(default=None)
     server_ca: str | None = Field(default=None)
