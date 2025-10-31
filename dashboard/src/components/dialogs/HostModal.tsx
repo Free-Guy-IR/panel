@@ -1323,10 +1323,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
                               <FormField
                                 control={form.control}
-                                name="transport_settings.xhttp_settings.xmux.c_max_lifetime"
+                                name="transport_settings.xhttp_settings.xmux.h_max_reusable_secs"
                                 render={({ field }) => (
                                   <FormItem className="col-span-2 md:col-span-1">
-                                    <FormLabel>{t('hostsDialog.xhttp.cMaxLifetime')}</FormLabel>
+                                    <FormLabel>{t('hostsDialog.xhttp.hMaxReusableSecs')}</FormLabel>
                                     <FormControl>
                                       <Input {...field} value={field.value || ''} />
                                     </FormControl>

@@ -107,7 +107,7 @@ export interface HostFormValues {
         max_concurrency?: string
         max_connections?: string
         c_max_reuse_times?: string
-        c_max_lifetime?: string
+        h_max_reusable_secs?: string
         h_max_request_times?: string
         h_keep_alive_period?: number
       }
@@ -167,7 +167,7 @@ const transportSettingsSchema = z
             max_concurrency: z.string().nullish().optional(),
             max_connections: z.string().nullish().optional(),
             c_max_reuse_times: z.string().nullish().optional(),
-            c_max_lifetime: z.string().nullish().optional(),
+            h_max_reusable_secs: z.string().nullish().optional(),
             h_max_request_times: z.string().nullish().optional(),
             h_keep_alive_period: z.number().nullish().optional(),
           })
@@ -549,7 +549,7 @@ export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editing
                         max_concurrency: host.transport_settings.xhttp_settings.xmux.maxConcurrency ?? undefined,
                         max_connections: host.transport_settings.xhttp_settings.xmux.maxConnections ?? undefined,
                         c_max_reuse_times: host.transport_settings.xhttp_settings.xmux.cMaxReuseTimes ?? undefined,
-                        c_max_lifetime: host.transport_settings.xhttp_settings.xmux.cMaxLifetime ?? undefined,
+                        h_max_reusable_secs: host.transport_settings.xhttp_settings.xmux.hMaxReusableSecs ?? undefined,
                         h_max_request_times: host.transport_settings.xhttp_settings.xmux.hMaxRequestTimes ?? undefined,
                         h_keep_alive_period: host.transport_settings.xhttp_settings.xmux.hKeepAlivePeriod ?? undefined,
                       }

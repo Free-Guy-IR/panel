@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.3.1
+ * OpenAPI spec version: 1.3.2
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -227,7 +227,7 @@ export type XMuxSettingsOutputHKeepAlivePeriod = number | null
 
 export type XMuxSettingsOutputHMaxRequestTimes = string | null
 
-export type XMuxSettingsOutputCMaxLifetime = string | null
+export type XMuxSettingsOutputHMaxReusableSecs = string | null
 
 export type XMuxSettingsOutputCMaxReuseTimes = string | null
 
@@ -239,7 +239,7 @@ export interface XMuxSettingsOutput {
   maxConcurrency?: XMuxSettingsOutputMaxConcurrency
   maxConnections?: XMuxSettingsOutputMaxConnections
   cMaxReuseTimes?: XMuxSettingsOutputCMaxReuseTimes
-  cMaxLifetime?: XMuxSettingsOutputCMaxLifetime
+  hMaxReusableSecs?: XMuxSettingsOutputHMaxReusableSecs
   hMaxRequestTimes?: XMuxSettingsOutputHMaxRequestTimes
   hKeepAlivePeriod?: XMuxSettingsOutputHKeepAlivePeriod
 }
@@ -248,7 +248,7 @@ export type XMuxSettingsInputHKeepAlivePeriod = number | null
 
 export type XMuxSettingsInputHMaxRequestTimes = string | number | null
 
-export type XMuxSettingsInputCMaxLifetime = string | number | null
+export type XMuxSettingsInputHMaxReusableSecs = string | number | null
 
 export type XMuxSettingsInputCMaxReuseTimes = string | number | null
 
@@ -260,7 +260,7 @@ export interface XMuxSettingsInput {
   max_concurrency?: XMuxSettingsInputMaxConcurrency
   max_connections?: XMuxSettingsInputMaxConnections
   c_max_reuse_times?: XMuxSettingsInputCMaxReuseTimes
-  c_max_lifetime?: XMuxSettingsInputCMaxLifetime
+  h_max_reusable_secs?: XMuxSettingsInputHMaxReusableSecs
   h_max_request_times?: XMuxSettingsInputHMaxRequestTimes
   h_keep_alive_period?: XMuxSettingsInputHKeepAlivePeriod
 }
@@ -276,6 +276,16 @@ export type XHttpSettingsOutputScMaxEachPostBytes = string | null
 export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
+
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
 
 export type XHttpSettingsInputDownloadSettings = number | null
 
@@ -298,16 +308,6 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
-
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -581,8 +581,6 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -628,6 +626,8 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -636,19 +636,6 @@ export type UserModifyDataLimit = number | null
 export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
@@ -664,6 +651,19 @@ export interface UserModify {
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
 }
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -1443,19 +1443,15 @@ export interface General {
 
 export type GRPCSettingsInitialWindowsSize = number | null
 
-export type GRPCSettingsPermitWithoutStream = boolean | null
-
 export type GRPCSettingsHealthCheckTimeout = number | null
 
 export type GRPCSettingsIdleTimeout = number | null
 
-export type GRPCSettingsMultiMode = boolean | null
-
 export interface GRPCSettings {
-  multi_mode?: GRPCSettingsMultiMode
+  multi_mode?: boolean
   idle_timeout?: GRPCSettingsIdleTimeout
   health_check_timeout?: GRPCSettingsHealthCheckTimeout
-  permit_without_stream?: GRPCSettingsPermitWithoutStream
+  permit_without_stream?: boolean
   initial_windows_size?: GRPCSettingsInitialWindowsSize
 }
 

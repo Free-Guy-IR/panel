@@ -64,8 +64,8 @@ class XMuxSettings(BaseModel):
     c_max_reuse_times: str | int | None = Field(
         None, pattern=r"^\d{1,16}(-\d{1,16})?$", serialization_alias="cMaxReuseTimes"
     )
-    c_max_lifetime: str | int | None = Field(
-        None, pattern=r"^\d{1,16}(-\d{1,16})?$", serialization_alias="cMaxLifetime"
+    h_max_reusable_secs: str | int | None = Field(
+        None, pattern=r"^\d{1,16}(-\d{1,16})?$", serialization_alias="hMaxReusableSecs"
     )
     h_max_request_times: str | int | None = Field(
         None, pattern=r"^\d{1,16}(-\d{1,16})?$", serialization_alias="hMaxRequestTimes"

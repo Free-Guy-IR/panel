@@ -1014,7 +1014,7 @@
       "maxConcurrency": "最大并发数",
       "maxConnections": "最大连接数",
       "cMaxReuseTimes": "最大重用次数",
-      "cMaxLifetime": "最大生命周期",
+      "hMaxReusableSecs": "最大可复用秒数",
       "hMaxRequestTimes": "最大请求次数",
       "hKeepAlivePeriod": "保活周期",
       "downloadSettings": "下载设置",
