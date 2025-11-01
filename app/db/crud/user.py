@@ -200,7 +200,6 @@ async def get_expired_users(
     if admin_id:
         query = query.where(User.admin_id == admin_id)
 
-
     return (await db.execute(query)).unique().scalars().all()
 
 

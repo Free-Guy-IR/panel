@@ -497,23 +497,6 @@ export type UserTemplateCreateDataLimit = number | null
 
 export type UserTemplateCreateName = string | null
 
-export interface UserTemplateCreate {
-  name?: UserTemplateCreateName
-  /** data_limit can be 0 or greater */
-  data_limit?: UserTemplateCreateDataLimit
-  /** expire_duration can be 0 or greater in seconds */
-  expire_duration?: UserTemplateCreateExpireDuration
-  username_prefix?: UserTemplateCreateUsernamePrefix
-  username_suffix?: UserTemplateCreateUsernameSuffix
-  group_ids: number[]
-  extra_settings?: UserTemplateCreateExtraSettings
-  status?: UserTemplateCreateStatus
-  reset_usages?: UserTemplateCreateResetUsages
-  on_hold_timeout?: UserTemplateCreateOnHoldTimeout
-  data_limit_reset_strategy?: UserDataLimitResetStrategy
-  is_disabled?: UserTemplateCreateIsDisabled
-}
-
 export interface UserSubscriptionUpdateSchema {
   created_at: string
   user_agent: string
@@ -612,6 +595,16 @@ export interface UserResponse {
   admin?: UserResponseAdmin
 }
 
+export interface UserNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  status_change?: boolean
+  reset_data_usage?: boolean
+  data_reset_by_next?: boolean
+  subscription_revoked?: boolean
+}
+
 export type UserModifyStatus = UserStatusModify | null
 
 export type UserModifyNextPlan = NextPlanModel | null
@@ -663,7 +656,22 @@ export const UserDataLimitResetStrategy = {
   year: 'year',
 } as const
 
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
+export interface UserTemplateCreate {
+  name?: UserTemplateCreateName
+  /** data_limit can be 0 or greater */
+  data_limit?: UserTemplateCreateDataLimit
+  /** expire_duration can be 0 or greater in seconds */
+  expire_duration?: UserTemplateCreateExpireDuration
+  username_prefix?: UserTemplateCreateUsernamePrefix
+  username_suffix?: UserTemplateCreateUsernameSuffix
+  group_ids: number[]
+  extra_settings?: UserTemplateCreateExtraSettings
+  status?: UserTemplateCreateStatus
+  reset_usages?: UserTemplateCreateResetUsages
+  on_hold_timeout?: UserTemplateCreateOnHoldTimeout
+  data_limit_reset_strategy?: UserDataLimitResetStrategy
+  is_disabled?: UserTemplateCreateIsDisabled
+}
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -944,6 +952,8 @@ export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
 
 export type SettingsSchemaOutputNotificationEnable = NotificationEnable | null
 
+export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
+
 export type SettingsSchemaOutputWebhook = Webhook | null
 
 export type SettingsSchemaOutputDiscord = Discord | null
@@ -1096,17 +1106,14 @@ export interface NotificationSettings {
   max_retries: number
 }
 
-export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
-
 export interface NotificationEnable {
-  admin?: boolean
-  core?: boolean
-  group?: boolean
-  host?: boolean
-  login?: boolean
-  node?: boolean
-  user?: boolean
-  user_template?: boolean
+  admin?: AdminNotificationEnable
+  core?: BaseNotificationEnable
+  group?: BaseNotificationEnable
+  host?: HostNotificationEnable
+  node?: NodeNotificationEnable
+  user?: UserNotificationEnable
+  user_template?: BaseNotificationEnable
   days_left?: boolean
   percentage_reached?: boolean
 }
@@ -1207,6 +1214,14 @@ export interface NodeRealtimeStats {
   cpu_usage: number
   incoming_bandwidth_speed: number
   outgoing_bandwidth_speed: number
+}
+
+export interface NodeNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  connect?: boolean
+  error?: boolean
 }
 
 export type NodeModifyStatus = NodeStatus | null
@@ -1359,6 +1374,13 @@ export interface KCPSettings {
   congestion?: KCPSettingsCongestion
   read_buffer_size?: KCPSettingsReadBufferSize
   write_buffer_size?: KCPSettingsWriteBufferSize
+}
+
+export interface HostNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  modify_hosts?: boolean
 }
 
 export interface HTTPValidationError {
@@ -1677,6 +1699,12 @@ export interface BodyAdminTokenApiAdminTokenPost {
   client_secret?: BodyAdminTokenApiAdminTokenPostClientSecret
 }
 
+export interface BaseNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+}
+
 export type BaseHostEchConfigList = string | null
 
 export type BaseHostStatus = UserStatus[] | null
@@ -1763,6 +1791,14 @@ export interface ApplicationInput {
   recommended?: boolean
   platform: Platform
   download_links: DownloadLink[]
+}
+
+export interface AdminNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  reset_usage?: boolean
+  login?: boolean
 }
 
 export type AdminModifySupportUrl = string | null
