@@ -40,7 +40,7 @@ class GroupOperation(BaseOperation):
         db_group = await modify_group(db, db_group, modified_group)
 
         users = await get_users(db, group_ids=[db_group.id])
-        await node_manager.update_users(users)
+        asyncio.create_task(node_manager.update_users(users))
 
         group = GroupResponse.model_validate(db_group)
 
@@ -58,7 +58,7 @@ class GroupOperation(BaseOperation):
         await remove_group(db, db_group)
         users = await get_users(db, usernames=username_list)
 
-        await node_manager.update_users(users)
+        asyncio.create_task(node_manager.update_users(users))
 
         logger.info(f'Group "{db_group.name}" deleted by admin "{admin.username}"')
 
@@ -69,7 +69,7 @@ class GroupOperation(BaseOperation):
 
         users, users_count = await add_groups_to_users(db, bulk_model)
 
-        await node_manager.update_users(users)
+        asyncio.create_task(node_manager.update_users(users))
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
@@ -80,7 +80,7 @@ class GroupOperation(BaseOperation):
 
         users, users_count = await remove_groups_from_users(db, bulk_model)
 
-        await node_manager.update_users(users)
+        asyncio.create_task(node_manager.update_users(users))
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
