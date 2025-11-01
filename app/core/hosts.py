@@ -246,8 +246,8 @@ class HostManager:
         if host.is_disabled or (host.inbound_tag not in inbounds_list):
             return None
 
-        downstream_dict = None
         # Handle downstream for xhttp
+        downstream_data = None
         if (
             host.transport_settings
             and host.transport_settings.xhttp_settings
@@ -255,9 +255,7 @@ class HostManager:
         ):
             downstream = await get_host_by_id(db, ds_host)
             downstream_data: SubscriptionInboundData = await _prepare_subscription_inbound_data(downstream)
-            downstream_dict = downstream_data.model_dump(by_alias=True, exclude_none=True)
-
-        subscription_data = await _prepare_subscription_inbound_data(host, downstream_dict)
+        subscription_data = await _prepare_subscription_inbound_data(host, downstream_data)
 
         # Return subscription data directly
         return host.id, subscription_data

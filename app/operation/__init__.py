@@ -1,4 +1,4 @@
-from datetime import datetime as dt, timedelta as td, timezone as tz
+from datetime import datetime as dt, timezone as tz
 from enum import IntEnum
 
 from fastapi import HTTPException
@@ -14,8 +14,8 @@ from app.db.crud import (
     get_user,
     get_user_template,
 )
-from app.db.crud.user import get_user_by_id
 from app.db.crud.admin import get_admin_by_id
+from app.db.crud.user import get_user_by_id
 from app.db.models import Admin as DBAdmin, CoreConfig, Group, Node, ProxyHost, User, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
@@ -50,19 +50,18 @@ class BaseOperation:
 
     async def validate_dates(self, start: dt | None, end: dt | None) -> tuple[dt, dt]:
         """Validate if start and end dates are correct and if end is after start."""
+
+        start_date = None
+        end_date = None
         try:
             if start:
                 start_date = fix_datetime_timezone(start)
-            else:
-                start_date = dt.now(tz.utc) - td(days=30)
 
             if end:
                 end_date = fix_datetime_timezone(end)
-            else:
-                end_date = dt.now(tz.utc)
 
             # Compare dates only after both are set
-            if end_date < start_date:
+            if (start_date and end_date) and end_date < start_date:
                 await self.raise_error(message="Start date must be before end date", code=400)
 
             return start_date, end_date

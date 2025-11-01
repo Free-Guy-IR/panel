@@ -985,7 +985,7 @@
       "maxConcurrency": "Максимум параллельных",
       "maxConnections": "Максимум соединений",
       "cMaxReuseTimes": "Максимум повторных использований",
-      "cMaxLifetime": "Максимальный срок службы",
+      "hMaxReusableSecs": "Максимальное время повторного использования (сек)",
       "hMaxRequestTimes": "Максимум запросов",
       "hKeepAlivePeriod": "Период поддержания соединения",
       "downloadSettings": "Настройки загрузки",

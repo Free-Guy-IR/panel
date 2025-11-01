@@ -2,9 +2,9 @@ import { Theme, useTheme } from '@/components/theme-provider'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useSidebar } from '@/components/ui/sidebar'
+import { SidebarContext } from '@/components/ui/sidebar'
 import { Monitor, Moon, Sun } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 
 export function ThemeToggle() {
@@ -12,16 +12,9 @@ export function ThemeToggle() {
   const { t } = useTranslation()
   
   // Safely get sidebar state, defaulting to 'expanded' if not available
-  let sidebarState: 'expanded' | 'collapsed' = 'expanded'
-  let isMobile = false
-  try {
-    const { state, isMobile: mobileFlag } = useSidebar()
-    sidebarState = state
-    isMobile = mobileFlag
-  } catch (error) {
-    // useSidebar is not available, use default state
-    console.warn('useSidebar not available, using default expanded state')
-  }
+  const sidebarContext = useContext(SidebarContext)
+  const sidebarState: 'expanded' | 'collapsed' = sidebarContext?.state ?? 'expanded'
+  const isMobile = sidebarContext?.isMobile ?? false
 
   const toggleTheme = useCallback(
     (theme: Theme) => {

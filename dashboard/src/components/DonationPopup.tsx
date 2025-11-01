@@ -1,5 +1,5 @@
 import { Heart, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import { cn } from '@/lib/utils'
@@ -108,12 +108,32 @@ export default function DonationPopup() {
   const [isVisible, setIsVisible] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
 
-  // Don't show popup if user is not authenticated
-  if (!getAuthToken()) {
-    return null
-  }
+  const showPopup = useCallback(() => {
+    const now = Date.now()
+    // Update storage: set lastShown to now and nextShowTime to 3 days from now
+    const nextShowTime = new Date(now + DAYS_BETWEEN_SHOWS * 24 * 60 * 60 * 1000).toISOString()
+    setStorageData({
+      lastShown: new Date(now).toISOString(),
+      nextShowTime,
+    })
+
+    // Make visible immediately
+    setIsVisible(true)
+
+    // Start animation after a frame for smooth CSS transition
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setIsAnimating(true)
+      })
+    })
+  }, [])
 
   useEffect(() => {
+    // Don't show popup if user is not authenticated
+    if (!getAuthToken()) {
+      return
+    }
+
     const checkShouldShow = () => {
       const data = getStorageData()
       const now = Date.now()
@@ -140,26 +160,11 @@ export default function DonationPopup() {
     }
 
     checkShouldShow()
-  }, [])
+  }, [showPopup])
 
-  const showPopup = () => {
-    const now = Date.now()
-    // Update storage: set lastShown to now and nextShowTime to 3 days from now
-    const nextShowTime = new Date(now + DAYS_BETWEEN_SHOWS * 24 * 60 * 60 * 1000).toISOString()
-    setStorageData({
-      lastShown: new Date(now).toISOString(),
-      nextShowTime,
-    })
-
-    // Make visible immediately
-    setIsVisible(true)
-
-    // Start animation after a frame for smooth CSS transition
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setIsAnimating(true)
-      })
-    })
+  // Don't render popup if user is not authenticated
+  if (!getAuthToken()) {
+    return null
   }
 
   const handleClose = () => {

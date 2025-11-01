@@ -227,7 +227,7 @@ export type XMuxSettingsOutputHKeepAlivePeriod = number | null
 
 export type XMuxSettingsOutputHMaxRequestTimes = string | null
 
-export type XMuxSettingsOutputCMaxLifetime = string | null
+export type XMuxSettingsOutputHMaxReusableSecs = string | null
 
 export type XMuxSettingsOutputCMaxReuseTimes = string | null
 
@@ -239,7 +239,7 @@ export interface XMuxSettingsOutput {
   maxConcurrency?: XMuxSettingsOutputMaxConcurrency
   maxConnections?: XMuxSettingsOutputMaxConnections
   cMaxReuseTimes?: XMuxSettingsOutputCMaxReuseTimes
-  cMaxLifetime?: XMuxSettingsOutputCMaxLifetime
+  hMaxReusableSecs?: XMuxSettingsOutputHMaxReusableSecs
   hMaxRequestTimes?: XMuxSettingsOutputHMaxRequestTimes
   hKeepAlivePeriod?: XMuxSettingsOutputHKeepAlivePeriod
 }
@@ -248,7 +248,7 @@ export type XMuxSettingsInputHKeepAlivePeriod = number | null
 
 export type XMuxSettingsInputHMaxRequestTimes = string | number | null
 
-export type XMuxSettingsInputCMaxLifetime = string | number | null
+export type XMuxSettingsInputHMaxReusableSecs = string | number | null
 
 export type XMuxSettingsInputCMaxReuseTimes = string | number | null
 
@@ -260,7 +260,7 @@ export interface XMuxSettingsInput {
   max_concurrency?: XMuxSettingsInputMaxConcurrency
   max_connections?: XMuxSettingsInputMaxConnections
   c_max_reuse_times?: XMuxSettingsInputCMaxReuseTimes
-  c_max_lifetime?: XMuxSettingsInputCMaxLifetime
+  h_max_reusable_secs?: XMuxSettingsInputHMaxReusableSecs
   h_max_request_times?: XMuxSettingsInputHMaxRequestTimes
   h_keep_alive_period?: XMuxSettingsInputHKeepAlivePeriod
 }
@@ -563,8 +563,6 @@ export type UserResponseOnHoldTimeout = string | number | null
 export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
-
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 /**
  * data_limit can be 0 or greater
@@ -1228,8 +1226,6 @@ export interface NodeNotificationEnable {
 
 export type NodeModifyStatus = NodeStatus | null
 
-export type NodeModifyApiPort = number | null
-
 export type NodeModifyGatherLogs = boolean | null
 
 export type NodeModifyApiKey = string | null
@@ -1264,7 +1260,6 @@ export interface NodeModify {
   core_config_id?: NodeModifyCoreConfigId
   api_key?: NodeModifyApiKey
   gather_logs?: NodeModifyGatherLogs
-  api_port?: NodeModifyApiPort
   status?: NodeModifyStatus
 }
 

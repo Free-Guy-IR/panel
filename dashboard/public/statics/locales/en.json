@@ -789,7 +789,7 @@
       "maxConcurrency": "Max Concurrency",
       "maxConnections": "Max Connections",
       "cMaxReuseTimes": "Max Reuse Times",
-      "cMaxLifetime": "Max Lifetime",
+      "hMaxReusableSecs": "Max Reusable Seconds",
       "hMaxRequestTimes": "Max Request Times",
       "hKeepAlivePeriod": "Keep Alive Period",
       "downloadSettings": "Download Settings",

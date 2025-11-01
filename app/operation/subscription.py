@@ -54,10 +54,10 @@ class SubscriptionOperation(BaseOperation):
         profile_title = (
             getattr(user.admin, "profile_title", None) if user.admin else None
         ) or sub_settings.profile_title
-        
+
         if not profile_title:
             return "Subscription"
-        
+
         try:
             return profile_title.format_map(format_variables)
         except (ValueError, KeyError):
@@ -81,9 +81,7 @@ class SubscriptionOperation(BaseOperation):
         formatted_title = SubscriptionOperation._format_profile_title(user, format_variables, sub_settings)
 
         # Get support URL (use getattr since AdminContactInfo may not have support_url)
-        support_url = (
-            getattr(user.admin, "support_url", None) if user.admin else None
-        ) or sub_settings.support_url
+        support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
 
         return {
             "content-disposition": f'attachment; filename="{user.username}"',
@@ -121,7 +119,7 @@ class SubscriptionOperation(BaseOperation):
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token)
         user = await self.validated_user(db_user)
-        
+
         response_headers = self.create_response_headers(user, request_url, sub_settings)
 
         if "text/html" in accept_header:
@@ -164,7 +162,7 @@ class SubscriptionOperation(BaseOperation):
             await self.raise_error(message="Client not supported", code=406)
         db_user = await self.get_validated_sub(db, token=token)
         user = await self.validated_user(db_user)
-        
+
         response_headers = self.create_response_headers(user, request_url, sub_settings)
         conf, media_type = await self.fetch_config(user, client_type)
 

@@ -669,7 +669,7 @@
       "maxConcurrency": "حداکثر همزمانی",
       "maxConnections": "حداکثر اتصالات",
       "cMaxReuseTimes": "حداکثر دفعات استفاده مجدد",
-      "cMaxLifetime": "حداکثر طول عمر",
+      "hMaxReusableSecs": "حداکثر زمان استفاده مجدد (ثانیه)",
       "hMaxRequestTimes": "حداکثر دفعات درخواست",
       "hKeepAlivePeriod": "دوره نگهداری اتصال",
       "downloadSettings": "تنظیمات دانلود",

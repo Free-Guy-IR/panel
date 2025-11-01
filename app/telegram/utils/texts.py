@@ -1,14 +1,13 @@
-from aiogram.utils.formatting import html_decoration
-
-from app.models.group import Group
-from app.models.user import UserResponse, UserStatus
-from app.models.system import SystemStats
-from app.telegram.utils.shared import readable_size
-from app.subscription.share import STATUS_EMOJIS
-
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from html import escape
 
+from aiogram.utils.formatting import html_decoration
+
+from app.models.group import Group
+from app.models.system import SystemStats
+from app.models.user import UserResponse, UserStatus
+from app.subscription.share import STATUS_EMOJIS
+from app.telegram.utils.shared import readable_size
 
 b = html_decoration.bold
 c = html_decoration.code
@@ -114,7 +113,7 @@ class Message:
         on_hold_timeout = user.on_hold_timeout.strftime("%Y-%m-%d %H:%M") if user.on_hold_timeout else "-"
         on_hold_expire_duration = td(seconds=user.on_hold_expire_duration).days if user.on_hold_expire_duration else "0"
         online_at = bl(user.online_at.strftime("%Y-%m-%d %H:%M:%S")) if user.online_at else "-"
-        admin = ln(user.admin.username, f"tg://user?id={user.admin.telegram_id}")
+        admin = ln(user.admin.username, f"tg://user?id={user.admin.telegram_id}") if user.admin else "-"
         note = bl(escape(user.note)) if user.note else "-"
         emojy_status = Message.status_emoji(user.status)
         groups = ", ".join([g.name for g in groups])

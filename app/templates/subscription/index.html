@@ -87,7 +87,7 @@
                 background: hsl(var(--card));
                 border: 1px solid hsl(var(--border));
                 border-radius: 8px;
-                padding: 20px;
+                padding: 16px;
                 box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                 transition: background-color 0.3s, border-color 0.3s;
             }
@@ -162,7 +162,7 @@
                 background: hsl(var(--muted));
                 border: 1px solid hsl(var(--border));
                 border-radius: 6px;
-                padding: 16px;
+                padding: 12px;
                 margin-bottom: 16px;
                 transition: background-color 0.3s, border-color 0.3s;
             }
@@ -181,20 +181,25 @@
                 background: hsl(var(--card));
                 border: 1px solid hsl(var(--border));
                 border-radius: 6px;
-                padding: 8px;
+                padding: 6px;
                 margin-bottom: 8px;
-                gap: 8px;
+                gap: 6px;
                 transition: background-color 0.3s, border-color 0.3s;
             }
 
             .link-input {
                 flex: 1;
+                min-width: 0;
+                width: 100%;
                 border: none;
                 background: transparent;
                 font-size: 0.8rem;
                 color: hsl(var(--foreground));
                 outline: none;
+                padding: 4px 8px;
                 font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
             .copy-button, .qr-button {
@@ -277,6 +282,18 @@
                 font-weight: 500;
                 color: hsl(var(--muted-foreground));
                 margin-bottom: 8px;
+            }
+
+            .platform-badge {
+                display: inline-block;
+                background: hsl(var(--accent));
+                color: hsl(var(--accent-foreground));
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 500;
+                text-transform: capitalize;
+                margin-top: 4px;
             }
 
             .application-card p {
@@ -571,7 +588,12 @@
                         {% if app.icon_url %}
                         <img src="{{ app.icon_url }}" alt="{{ app.name }}" class="app-icon" />
                         {% endif %}
-                        <h3>{{ app.name }} {% if app.recommended %}(Recommended){% endif %}</h3>
+                        <div style="flex: 1;">
+                            <h3>{{ app.name }} {% if app.recommended %}(Recommended){% endif %}</h3>
+                            {% if app.platform %}
+                            <span class="platform-badge">{{ app.platform.value }}</span>
+                            {% endif %}
+                        </div>
                     </div>
                     {% if app.description["en"] %}
                     <p>{{ app.description["en"] }}</p>

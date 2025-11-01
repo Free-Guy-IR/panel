@@ -171,7 +171,7 @@ async def filter_hosts(hosts: list[SubscriptionInboundData], user_status: UserSt
 
 async def process_host(
     inbound: SubscriptionInboundData, format_variables: dict, inbounds: list[str], proxies: dict
-) -> tuple:
+) -> None | tuple[SubscriptionInboundData, dict]:
     """
     Process host data for subscription generation.
     Now only does random selection and user-specific formatting!
