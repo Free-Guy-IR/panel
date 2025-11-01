@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.4.0
+ * OpenAPI spec version: 1.4.1
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -581,8 +581,6 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -674,6 +672,8 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -1914,10 +1914,6 @@ export type AdminContactInfoSubDomain = string | null
 export type AdminContactInfoDiscordWebhook = string | null
 
 export type AdminContactInfoTelegramId = number | null
-
-export type AdminContactInfoProfileTitle = string | null
-
-export type AdminContactInfoSupportUrl = string | null
 
 /**
  * Base model containing the core admin identification fields.
