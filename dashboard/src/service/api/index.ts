@@ -1911,6 +1911,10 @@ export type AdminContactInfoDiscordWebhook = string | null
 
 export type AdminContactInfoTelegramId = number | null
 
+export type AdminContactInfoProfileTitle = string | null
+
+export type AdminContactInfoSupportUrl = string | null
+
 /**
  * Base model containing the core admin identification fields.
  */
@@ -1919,6 +1923,8 @@ export interface AdminContactInfo {
   telegram_id?: AdminContactInfoTelegramId
   discord_webhook?: AdminContactInfoDiscordWebhook
   sub_domain?: AdminContactInfoSubDomain
+  profile_title?: AdminContactInfoProfileTitle
+  support_url?: AdminContactInfoSupportUrl
 }
 
 /**

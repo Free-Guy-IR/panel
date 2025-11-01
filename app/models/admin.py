@@ -26,6 +26,8 @@ class AdminContactInfo(AdminBase):
     telegram_id: int | None = None
     discord_webhook: str | None = None
     sub_domain: str | None = None
+    profile_title: str | None = None
+    support_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
