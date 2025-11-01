@@ -113,16 +113,30 @@
       "filterTitle": "通知过滤器",
       "filterDescription": "选择应触发通知的事件，以便了解重要的系统活动",
       "types": {
-        "admin": "管理员",
-        "core": "核心",
+        "admin": "管理员们",
+        "core": "核心们",
         "group": "群组",
         "host": "主机",
-        "login": "登录",
+        "login": "登录们",
         "node": "节点",
         "user": "用户",
         "userTemplate": "模板",
-        "daysLeft": "到期",
-        "percentageReached": "使用量"
+        "daysLeft": "到期时间",
+        "percentageReached": "使用限制"
+      },
+      "subPermissions": {
+        "create": "创建",
+        "modify": "修改",
+        "delete": "删除",
+        "resetUsage": "重置使用量",
+        "login": "登录",
+        "modifyHosts": "修改主机",
+        "connect": "连接",
+        "error": "错误",
+        "statusChange": "状态变更",
+        "resetDataUsage": "重置数据使用量",
+        "dataResetByNext": "下次重置数据",
+        "subscriptionRevoked": "订阅已撤销"
       },
       "telegram": {
         "title": "Telegram",

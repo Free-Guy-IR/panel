@@ -134,16 +134,30 @@
       "filterTitle": "Filter Notifications",
       "filterDescription": "Select events that should trigger notifications for important system activities",
       "types": {
-        "admin": "Admin",
-        "core": "Core",
+        "admin": "Admins",
+        "core": "Cores",
         "group": "Groups",
         "host": "Hosts",
-        "login": "Login",
+        "login": "Logins",
         "node": "Nodes",
         "user": "Users",
         "userTemplate": "Templates",
-        "daysLeft": "Expiration",
-        "percentageReached": "Usage"
+        "daysLeft": "Expirations",
+        "percentageReached": "Usage Limits"
+      },
+      "subPermissions": {
+        "create": "Create",
+        "modify": "Modify",
+        "delete": "Delete",
+        "resetUsage": "Reset Usage",
+        "login": "Login",
+        "modifyHosts": "Modify Hosts",
+        "connect": "Connect",
+        "error": "Error",
+        "statusChange": "Status Change",
+        "resetDataUsage": "Reset Data Usage",
+        "dataResetByNext": "Data Reset By Next",
+        "subscriptionRevoked": "Subscription Revoked"
       },
       "telegram": {
         "title": "Telegram",

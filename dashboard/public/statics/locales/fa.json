@@ -39,15 +39,29 @@
       "filterDescription": "رویدادهایی را انتخاب کنید که باید اعلان‌هایی را برای اطلاع‌رسانی از فعالیت‌های مهم سیستم ایجاد کنند",
       "types": {
         "admin": "مدیران",
-        "core": "هسته",
+        "core": "هسته‌ها",
         "group": "گروه‌ها",
         "host": "هاست‌ها",
-        "login": "ورود",
+        "login": "ورود‌ها",
         "node": "گره‌ها",
         "user": "کاربران",
         "userTemplate": "قالب‌ها",
-        "daysLeft": "انقضا",
-        "percentageReached": "مصرف"
+        "daysLeft": "انقضاها",
+        "percentageReached": "محدودیت‌های مصرف"
+      },
+      "subPermissions": {
+        "create": "ایجاد",
+        "modify": "ویرایش",
+        "delete": "حذف",
+        "resetUsage": "بازنشانی مصرف",
+        "login": "ورود",
+        "modifyHosts": "ویرایش هاست‌ها",
+        "connect": "اتصال",
+        "error": "خطا",
+        "statusChange": "تغییر وضعیت",
+        "resetDataUsage": "بازنشانی مصرف داده",
+        "dataResetByNext": "بازنشانی داده در بعدی",
+        "subscriptionRevoked": "لغو اشتراک"
       },
       "telegram": {
         "title": "تلگرام",

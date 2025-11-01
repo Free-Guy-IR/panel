@@ -145,15 +145,29 @@
       "filterDescription": "Выберите события, которые должны вызывать уведомления для информирования о важных системных действиях",
       "types": {
         "admin": "Админы",
-        "core": "Ядро",
+        "core": "Ядра",
         "group": "Группы",
         "host": "Хосты",
-        "login": "Вход",
+        "login": "Входы",
         "node": "Узлы",
         "user": "Пользователи",
         "userTemplate": "Шаблоны",
-        "daysLeft": "Истечение",
-        "percentageReached": "Использование"
+        "daysLeft": "Истечения",
+        "percentageReached": "Использование ограничений"
+      },
+      "subPermissions": {
+        "create": "Создать",
+        "modify": "Изменить",
+        "delete": "Удалить",
+        "resetUsage": "Сбросить использование",
+        "login": "Вход",
+        "modifyHosts": "Изменить хосты",
+        "connect": "Подключить",
+        "error": "Ошибка",
+        "statusChange": "Изменение статуса",
+        "resetDataUsage": "Сбросить использование данных",
+        "dataResetByNext": "Сброс данных при следующем",
+        "subscriptionRevoked": "Подписка отозвана"
       },
       "telegram": {
         "title": "Telegram",
