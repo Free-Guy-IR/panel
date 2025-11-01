@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.3.1
+ * OpenAPI spec version: 1.3.2
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -277,6 +277,16 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
+
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -298,16 +308,6 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
-
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -497,23 +497,6 @@ export type UserTemplateCreateDataLimit = number | null
 
 export type UserTemplateCreateName = string | null
 
-export interface UserTemplateCreate {
-  name?: UserTemplateCreateName
-  /** data_limit can be 0 or greater */
-  data_limit?: UserTemplateCreateDataLimit
-  /** expire_duration can be 0 or greater in seconds */
-  expire_duration?: UserTemplateCreateExpireDuration
-  username_prefix?: UserTemplateCreateUsernamePrefix
-  username_suffix?: UserTemplateCreateUsernameSuffix
-  group_ids: number[]
-  extra_settings?: UserTemplateCreateExtraSettings
-  status?: UserTemplateCreateStatus
-  reset_usages?: UserTemplateCreateResetUsages
-  on_hold_timeout?: UserTemplateCreateOnHoldTimeout
-  data_limit_reset_strategy?: UserDataLimitResetStrategy
-  is_disabled?: UserTemplateCreateIsDisabled
-}
-
 export interface UserSubscriptionUpdateSchema {
   created_at: string
   user_agent: string
@@ -614,6 +597,16 @@ export interface UserResponse {
   admin?: UserResponseAdmin
 }
 
+export interface UserNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  status_change?: boolean
+  reset_data_usage?: boolean
+  data_reset_by_next?: boolean
+  subscription_revoked?: boolean
+}
+
 export type UserModifyStatus = UserStatusModify | null
 
 export type UserModifyNextPlan = NextPlanModel | null
@@ -628,6 +621,8 @@ export type UserModifyOnHoldExpireDuration = number | null
 
 export type UserModifyNote = string | null
 
+export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -636,19 +631,6 @@ export type UserModifyDataLimit = number | null
 export type UserModifyExpire = string | number | null
 
 export type UserModifyProxySettings = ProxyTableInput | null
-
-export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserDataLimitResetStrategy = {
-  no_reset: 'no_reset',
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-} as const
-
-export type UserModifyDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
@@ -663,6 +645,34 @@ export interface UserModify {
   auto_delete_in_days?: UserModifyAutoDeleteInDays
   next_plan?: UserModifyNextPlan
   status?: UserModifyStatus
+}
+
+export type UserDataLimitResetStrategy = (typeof UserDataLimitResetStrategy)[keyof typeof UserDataLimitResetStrategy]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserDataLimitResetStrategy = {
+  no_reset: 'no_reset',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const
+
+export interface UserTemplateCreate {
+  name?: UserTemplateCreateName
+  /** data_limit can be 0 or greater */
+  data_limit?: UserTemplateCreateDataLimit
+  /** expire_duration can be 0 or greater in seconds */
+  expire_duration?: UserTemplateCreateExpireDuration
+  username_prefix?: UserTemplateCreateUsernamePrefix
+  username_suffix?: UserTemplateCreateUsernameSuffix
+  group_ids: number[]
+  extra_settings?: UserTemplateCreateExtraSettings
+  status?: UserTemplateCreateStatus
+  reset_usages?: UserTemplateCreateResetUsages
+  on_hold_timeout?: UserTemplateCreateOnHoldTimeout
+  data_limit_reset_strategy?: UserDataLimitResetStrategy
+  is_disabled?: UserTemplateCreateIsDisabled
 }
 
 export type UserCreateStatus = UserStatusCreate | null
@@ -944,6 +954,8 @@ export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
 
 export type SettingsSchemaOutputNotificationEnable = NotificationEnable | null
 
+export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
+
 export type SettingsSchemaOutputWebhook = Webhook | null
 
 export type SettingsSchemaOutputDiscord = Discord | null
@@ -1096,17 +1108,14 @@ export interface NotificationSettings {
   max_retries: number
 }
 
-export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
-
 export interface NotificationEnable {
-  admin?: boolean
-  core?: boolean
-  group?: boolean
-  host?: boolean
-  login?: boolean
-  node?: boolean
-  user?: boolean
-  user_template?: boolean
+  admin?: AdminNotificationEnable
+  core?: BaseNotificationEnable
+  group?: BaseNotificationEnable
+  host?: HostNotificationEnable
+  node?: NodeNotificationEnable
+  user?: UserNotificationEnable
+  user_template?: BaseNotificationEnable
   days_left?: boolean
   percentage_reached?: boolean
 }
@@ -1207,6 +1216,14 @@ export interface NodeRealtimeStats {
   cpu_usage: number
   incoming_bandwidth_speed: number
   outgoing_bandwidth_speed: number
+}
+
+export interface NodeNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  connect?: boolean
+  error?: boolean
 }
 
 export type NodeModifyStatus = NodeStatus | null
@@ -1364,6 +1381,13 @@ export interface KCPSettings {
   write_buffer_size?: KCPSettingsWriteBufferSize
 }
 
+export interface HostNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  modify_hosts?: boolean
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[]
 }
@@ -1446,19 +1470,15 @@ export interface General {
 
 export type GRPCSettingsInitialWindowsSize = number | null
 
-export type GRPCSettingsPermitWithoutStream = boolean | null
-
 export type GRPCSettingsHealthCheckTimeout = number | null
 
 export type GRPCSettingsIdleTimeout = number | null
 
-export type GRPCSettingsMultiMode = boolean | null
-
 export interface GRPCSettings {
-  multi_mode?: GRPCSettingsMultiMode
+  multi_mode?: boolean
   idle_timeout?: GRPCSettingsIdleTimeout
   health_check_timeout?: GRPCSettingsHealthCheckTimeout
-  permit_without_stream?: GRPCSettingsPermitWithoutStream
+  permit_without_stream?: boolean
   initial_windows_size?: GRPCSettingsInitialWindowsSize
 }
 
@@ -1684,6 +1704,12 @@ export interface BodyAdminTokenApiAdminTokenPost {
   client_secret?: BodyAdminTokenApiAdminTokenPostClientSecret
 }
 
+export interface BaseNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+}
+
 export type BaseHostEchConfigList = string | null
 
 export type BaseHostStatus = UserStatus[] | null
@@ -1770,6 +1796,14 @@ export interface ApplicationInput {
   recommended?: boolean
   platform: Platform
   download_links: DownloadLink[]
+}
+
+export interface AdminNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  reset_usage?: boolean
+  login?: boolean
 }
 
 export type AdminModifySupportUrl = string | null
