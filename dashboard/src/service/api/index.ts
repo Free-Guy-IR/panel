@@ -581,6 +581,8 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -610,6 +612,16 @@ export interface UserResponse {
   online_at?: UserResponseOnlineAt
   subscription_url?: string
   admin?: UserResponseAdmin
+}
+
+export interface UserNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  status_change?: boolean
+  reset_data_usage?: boolean
+  data_reset_by_next?: boolean
+  subscription_revoked?: boolean
 }
 
 export type UserModifyStatus = UserStatusModify | null
@@ -662,8 +674,6 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
-
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -944,6 +954,8 @@ export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
 
 export type SettingsSchemaOutputNotificationEnable = NotificationEnable | null
 
+export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
+
 export type SettingsSchemaOutputWebhook = Webhook | null
 
 export type SettingsSchemaOutputDiscord = Discord | null
@@ -1096,17 +1108,14 @@ export interface NotificationSettings {
   max_retries: number
 }
 
-export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
-
 export interface NotificationEnable {
-  admin?: boolean
-  core?: boolean
-  group?: boolean
-  host?: boolean
-  login?: boolean
-  node?: boolean
-  user?: boolean
-  user_template?: boolean
+  admin?: AdminNotificationEnable
+  core?: BaseNotificationEnable
+  group?: BaseNotificationEnable
+  host?: HostNotificationEnable
+  node?: NodeNotificationEnable
+  user?: UserNotificationEnable
+  user_template?: BaseNotificationEnable
   days_left?: boolean
   percentage_reached?: boolean
 }
@@ -1207,6 +1216,14 @@ export interface NodeRealtimeStats {
   cpu_usage: number
   incoming_bandwidth_speed: number
   outgoing_bandwidth_speed: number
+}
+
+export interface NodeNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  connect?: boolean
+  error?: boolean
 }
 
 export type NodeModifyStatus = NodeStatus | null
@@ -1359,6 +1376,13 @@ export interface KCPSettings {
   congestion?: KCPSettingsCongestion
   read_buffer_size?: KCPSettingsReadBufferSize
   write_buffer_size?: KCPSettingsWriteBufferSize
+}
+
+export interface HostNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  modify_hosts?: boolean
 }
 
 export interface HTTPValidationError {
@@ -1677,6 +1701,12 @@ export interface BodyAdminTokenApiAdminTokenPost {
   client_secret?: BodyAdminTokenApiAdminTokenPostClientSecret
 }
 
+export interface BaseNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+}
+
 export type BaseHostEchConfigList = string | null
 
 export type BaseHostStatus = UserStatus[] | null
@@ -1763,6 +1793,14 @@ export interface ApplicationInput {
   recommended?: boolean
   platform: Platform
   download_links: DownloadLink[]
+}
+
+export interface AdminNotificationEnable {
+  create?: boolean
+  modify?: boolean
+  delete?: boolean
+  reset_usage?: boolean
+  login?: boolean
 }
 
 export type AdminModifySupportUrl = string | null
