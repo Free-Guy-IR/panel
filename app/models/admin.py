@@ -42,8 +42,6 @@ class AdminDetails(AdminContactInfo):
     is_disabled: bool = False
     discord_id: int | None = None
     sub_template: str | None = None
-    profile_title: str | None = None
-    support_url: str | None = None
     lifetime_used_traffic: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
