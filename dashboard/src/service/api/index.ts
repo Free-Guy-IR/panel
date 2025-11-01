@@ -497,6 +497,23 @@ export type UserTemplateCreateDataLimit = number | null
 
 export type UserTemplateCreateName = string | null
 
+export interface UserTemplateCreate {
+  name?: UserTemplateCreateName
+  /** data_limit can be 0 or greater */
+  data_limit?: UserTemplateCreateDataLimit
+  /** expire_duration can be 0 or greater in seconds */
+  expire_duration?: UserTemplateCreateExpireDuration
+  username_prefix?: UserTemplateCreateUsernamePrefix
+  username_suffix?: UserTemplateCreateUsernameSuffix
+  group_ids: number[]
+  extra_settings?: UserTemplateCreateExtraSettings
+  status?: UserTemplateCreateStatus
+  reset_usages?: UserTemplateCreateResetUsages
+  on_hold_timeout?: UserTemplateCreateOnHoldTimeout
+  data_limit_reset_strategy?: UserDataLimitResetStrategy
+  is_disabled?: UserTemplateCreateIsDisabled
+}
+
 export interface UserSubscriptionUpdateSchema {
   created_at: string
   user_agent: string
@@ -563,6 +580,8 @@ export type UserResponseOnHoldTimeout = string | number | null
 export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 /**
  * data_limit can be 0 or greater
@@ -655,23 +674,6 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
-
-export interface UserTemplateCreate {
-  name?: UserTemplateCreateName
-  /** data_limit can be 0 or greater */
-  data_limit?: UserTemplateCreateDataLimit
-  /** expire_duration can be 0 or greater in seconds */
-  expire_duration?: UserTemplateCreateExpireDuration
-  username_prefix?: UserTemplateCreateUsernamePrefix
-  username_suffix?: UserTemplateCreateUsernameSuffix
-  group_ids: number[]
-  extra_settings?: UserTemplateCreateExtraSettings
-  status?: UserTemplateCreateStatus
-  reset_usages?: UserTemplateCreateResetUsages
-  on_hold_timeout?: UserTemplateCreateOnHoldTimeout
-  data_limit_reset_strategy?: UserDataLimitResetStrategy
-  is_disabled?: UserTemplateCreateIsDisabled
-}
 
 export type UserCreateStatus = UserStatusCreate | null
 
