@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.3.2
+ * OpenAPI spec version: 1.4.0
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -581,8 +581,6 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
-
 /**
  * data_limit can be 0 or greater
  */
@@ -674,6 +672,8 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
+
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -1132,6 +1132,13 @@ export interface NoiseSettings {
 
 export type NodeUsageStatsListPeriod = Period | null
 
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
+
 export interface NodeUsageStat {
   uplink: number
   downlink: number
@@ -1139,13 +1146,6 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
-
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -1633,25 +1633,11 @@ export const ConfigFormat = {
   block: 'block',
 } as const
 
-export type ClashMuxSettingsBrutal = Brutal | null
-
 export type ClashMuxSettingsMinStreams = number | null
 
 export type ClashMuxSettingsMaxStreams = number | null
 
 export type ClashMuxSettingsMaxConnections = number | null
-
-export interface ClashMuxSettings {
-  enable?: boolean
-  protocol?: MultiplexProtocol
-  max_connections?: ClashMuxSettingsMaxConnections
-  max_streams?: ClashMuxSettingsMaxStreams
-  min_streams?: ClashMuxSettingsMinStreams
-  padding?: boolean
-  brutal?: ClashMuxSettingsBrutal
-  statistic?: boolean
-  only_tcp?: boolean
-}
 
 export type BulkUsersProxyMethod = ShadowsocksMethods | null
 
@@ -1684,6 +1670,20 @@ export interface Brutal {
   enable?: boolean
   up_mbps: number
   down_mbps: number
+}
+
+export type ClashMuxSettingsBrutal = Brutal | null
+
+export interface ClashMuxSettings {
+  enable?: boolean
+  protocol?: MultiplexProtocol
+  max_connections?: ClashMuxSettingsMaxConnections
+  max_streams?: ClashMuxSettingsMaxStreams
+  min_streams?: ClashMuxSettingsMinStreams
+  padding?: boolean
+  brutal?: ClashMuxSettingsBrutal
+  statistic?: boolean
+  only_tcp?: boolean
 }
 
 export type BodyAdminTokenApiAdminTokenPostClientSecret = string | null
@@ -1719,26 +1719,6 @@ export type BaseHostMuxSettings = MuxSettingsOutput | null
 
 export type BaseHostTransportSettings = TransportSettingsOutput | null
 
-export type BaseHostHttpHeadersAnyOf = { [key: string]: string }
-
-export type BaseHostHttpHeaders = BaseHostHttpHeadersAnyOf | null
-
-export type BaseHostAllowinsecure = boolean | null
-
-export type BaseHostAlpn = ProxyHostALPN[] | null
-
-export type BaseHostPath = string | null
-
-export type BaseHostHost = string[] | null
-
-export type BaseHostSni = string[] | null
-
-export type BaseHostPort = number | null
-
-export type BaseHostInboundTag = string | null
-
-export type BaseHostId = number | null
-
 export interface BaseHost {
   id?: BaseHostId
   remark: string
@@ -1764,6 +1744,26 @@ export interface BaseHost {
   status?: BaseHostStatus
   ech_config_list?: BaseHostEchConfigList
 }
+
+export type BaseHostHttpHeadersAnyOf = { [key: string]: string }
+
+export type BaseHostHttpHeaders = BaseHostHttpHeadersAnyOf | null
+
+export type BaseHostAllowinsecure = boolean | null
+
+export type BaseHostAlpn = ProxyHostALPN[] | null
+
+export type BaseHostPath = string | null
+
+export type BaseHostHost = string[] | null
+
+export type BaseHostSni = string[] | null
+
+export type BaseHostPort = number | null
+
+export type BaseHostInboundTag = string | null
+
+export type BaseHostId = number | null
 
 export type ApplicationOutputDescription = { [key: string]: string }
 
@@ -1836,15 +1836,15 @@ export interface AdminModify {
 
 export type AdminDetailsLifetimeUsedTraffic = number | null
 
-export type AdminDetailsSupportUrl = string | null
-
-export type AdminDetailsProfileTitle = string | null
-
 export type AdminDetailsSubTemplate = string | null
 
 export type AdminDetailsDiscordId = number | null
 
 export type AdminDetailsId = number | null
+
+export type AdminDetailsSupportUrl = string | null
+
+export type AdminDetailsProfileTitle = string | null
 
 export type AdminDetailsSubDomain = string | null
 
@@ -1860,6 +1860,8 @@ export interface AdminDetails {
   telegram_id?: AdminDetailsTelegramId
   discord_webhook?: AdminDetailsDiscordWebhook
   sub_domain?: AdminDetailsSubDomain
+  profile_title?: AdminDetailsProfileTitle
+  support_url?: AdminDetailsSupportUrl
   id?: AdminDetailsId
   is_sudo: boolean
   total_users?: number
@@ -1867,8 +1869,6 @@ export interface AdminDetails {
   is_disabled?: boolean
   discord_id?: AdminDetailsDiscordId
   sub_template?: AdminDetailsSubTemplate
-  profile_title?: AdminDetailsProfileTitle
-  support_url?: AdminDetailsSupportUrl
   lifetime_used_traffic?: AdminDetailsLifetimeUsedTraffic
 }
 
@@ -1905,15 +1905,15 @@ export interface AdminCreate {
   username: string
 }
 
+export type AdminContactInfoSupportUrl = string | null
+
+export type AdminContactInfoProfileTitle = string | null
+
 export type AdminContactInfoSubDomain = string | null
 
 export type AdminContactInfoDiscordWebhook = string | null
 
 export type AdminContactInfoTelegramId = number | null
-
-export type AdminContactInfoProfileTitle = string | null
-
-export type AdminContactInfoSupportUrl = string | null
 
 /**
  * Base model containing the core admin identification fields.
