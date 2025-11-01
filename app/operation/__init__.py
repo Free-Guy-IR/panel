@@ -60,6 +60,9 @@ class BaseOperation:
             if end:
                 end_date = fix_datetime_timezone(end)
 
+            if not end_date:
+                end_date = dt.now(tz.utc)
+
             # Compare dates only after both are set
             if (start_date and end_date) and end_date < start_date:
                 await self.raise_error(message="Start date must be before end date", code=400)
