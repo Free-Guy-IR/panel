@@ -192,7 +192,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminUse
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="-mr-4 max-h-[80dvh] overflow-y-auto px-2 pr-4 sm:max-h-[75dvh]">
-              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 items-end">
+              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 items-stretch">
                 <FormField
                   control={form.control}
                   name="username"
@@ -229,15 +229,18 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminUse
                 <FormField
                   control={form.control}
                   name="passwordConfirm"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('admins.passwordConfirm')}</FormLabel>
-                      <FormControl>
-                        <PasswordInput placeholder={t('admins.enterPasswordConfirm')} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const hasError = !!form.formState.errors.passwordConfirm
+                    return (
+                      <FormItem>
+                        <FormLabel>{t('admins.passwordConfirm')}</FormLabel>
+                        <FormControl>
+                          <PasswordInput placeholder={t('admins.enterPasswordConfirm')} isError={hasError} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
                 />
                 <FormField
                   control={form.control}
@@ -311,7 +314,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminUse
                   control={form.control}
                   name={'profile_title'}
                   render={({ field }) => (
-                    <FormItem className='h-fit'>
+                    <FormItem className="flex flex-col justify-end gap-2 h-full">
                       <div className="flex items-center gap-2">
                         <FormLabel>{t('admins.profile')}</FormLabel>
                         <VariablesPopover />
