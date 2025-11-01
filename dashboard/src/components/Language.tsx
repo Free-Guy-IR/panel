@@ -1,24 +1,18 @@
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useSidebar } from '@/components/ui/sidebar'
+import { SidebarContext } from '@/components/ui/sidebar'
 import { LanguagesIcon } from 'lucide-react'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 
 export const Language: React.FC = () => {
   const { i18n, t } = useTranslation()
   
   // Safely get sidebar state, defaulting to 'expanded' if not available
-  let sidebarState: 'expanded' | 'collapsed' = 'expanded'
-  let isMobile = false
-  try {
-    const { state, isMobile: mobileFlag } = useSidebar()
-    sidebarState = state
-    isMobile = mobileFlag
-  } catch (error) {
-    // useSidebar is not available, use default state
-    console.warn('useSidebar not available in Language component, using default expanded state')
-  }
+  const sidebarContext = useContext(SidebarContext)
+  const sidebarState: 'expanded' | 'collapsed' = sidebarContext?.state ?? 'expanded'
+  const isMobile = sidebarContext?.isMobile ?? false
 
   const changeLanguage = async (lang: string) => {
       await i18n.changeLanguage(lang)
