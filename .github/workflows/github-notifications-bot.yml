@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - next
+      - dev
   pull_request_target:
     types: [opened, closed]
 
