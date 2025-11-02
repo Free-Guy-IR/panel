@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.utils.logger import get_logger
 from config import ALLOWED_ORIGINS, DOCS, SUBSCRIPTION_PATH
@@ -77,6 +78,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
 from app import routers, telegram, jobs  # noqa
 from app.routers import api_router  # noqa
 
