@@ -98,9 +98,11 @@ async def modify_node(
 
 
 @router.post("/{node_id}/reconnect")
-async def reconnect_node(node_id: int, admin: AdminDetails = Depends(check_sudo_admin)):
+async def reconnect_node(
+    node_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
+):
     """Trigger a reconnection for the specified node. Only accessible to sudo admins."""
-    await node_operator.restart_node(node_id=node_id, admin=admin)
+    await node_operator.restart_node(db, node_id, admin)
     return {}
 
 

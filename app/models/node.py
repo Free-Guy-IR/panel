@@ -161,3 +161,15 @@ class NodeResponse(Node):
     message: str | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NodeNotification(BaseModel):
+    """Lightweight node model for sending notifications without database fetch."""
+
+    id: int
+    name: str
+    xray_version: str | None = None
+    node_version: str | None = None
+    message: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)

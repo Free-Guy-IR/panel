@@ -1,7 +1,7 @@
 import copy
 
 from app.notification.client import send_discord_webhook
-from app.models.node import NodeResponse
+from app.models.node import NodeNotification, NodeResponse
 from app.models.settings import NotificationSettings
 from app.settings import notification_settings
 from app.utils.helpers import escape_ds_markdown_list, escape_ds_markdown
@@ -54,7 +54,7 @@ async def remove_node(node: NodeResponse, by: str):
         await send_discord_webhook(data, settings.discord_webhook_url)
 
 
-async def connect_node(node: NodeResponse):
+async def connect_node(node: NodeNotification):
     name = escape_ds_markdown(node.name)
     message = copy.deepcopy(messages.CONNECT_NODE)
     message["description"] = message["description"].format(
@@ -71,7 +71,7 @@ async def connect_node(node: NodeResponse):
         await send_discord_webhook(data, settings.discord_webhook_url)
 
 
-async def error_node(node: NodeResponse):
+async def error_node(node: NodeNotification):
     name, node_message = escape_ds_markdown_list((node.name, node.message))
     message = copy.deepcopy(messages.ERROR_NODE)
     message["description"] = message["description"].format(name=name, error=node_message)

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -1065,7 +1065,7 @@ requires-dist = [
     { name = "jdatetime", specifier = ">=5.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "packaging", specifier = ">=24.2" },
-    { name = "pasarguard-node-bridge", specifier = ">=0.1.0" },
+    { name = "pasarguard-node-bridge", specifier = ">=0.1.1" },
     { name = "passlib", specifier = "==1.7.4" },
     { name = "pip-system-certs", specifier = ">=5.3" },
     { name = "psutil", specifier = "==5.9.4" },
@@ -1101,16 +1101,16 @@ dev = [
 
 [[package]]
 name = "pasarguard-node-bridge"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "grpclib" },
     { name = "httpx" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fd/b5/d51ebf03222237bc942701d3c85b02f71e418f1b061b7138d84615a85366/pasarguard_node_bridge-0.1.0.tar.gz", hash = "sha256:d07554765565c2cbbecc9f27bcb0da2e8fbe2cd553ba52a0ed1db4c34d14ae2e", size = 48571, upload-time = "2025-10-22T11:21:30.763Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/0b/15da4204234a0d7a089f14dd98f9f5ba35dde15ae9f1c5fbb7b874c745ae/pasarguard_node_bridge-0.1.1.tar.gz", hash = "sha256:bdb354e3be8247e04e2a8a6397e25c85ee3af14da5335bc9524de5c75241ada0", size = 48566, upload-time = "2025-11-02T09:27:39.939Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d1/6c/4f332892ca5bb7c4c8f4eb20754af5df46c0c8dc7d8c352e8ff63559c056/pasarguard_node_bridge-0.1.0-py3-none-any.whl", hash = "sha256:2f9cac8594e40c301644e63193f88f916088bdda21fab9044332b17ef61000ec", size = 38281, upload-time = "2025-10-22T11:21:29.566Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/92/e45e889019e28397f033340756977dff10a2b1cae7f4f68c53042de69960/pasarguard_node_bridge-0.1.1-py3-none-any.whl", hash = "sha256:3c1efcf89a983c917057404430cf6c76a5aa7a97285c9730ca27578555fd9e31", size = 38271, upload-time = "2025-11-02T09:27:39.086Z" },
 ]
 
 [[package]]

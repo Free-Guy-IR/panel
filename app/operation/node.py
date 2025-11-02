@@ -8,8 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.core.manager import core_manager
 from app.db import AsyncSession
-from app.db.base import GetDB
 from app.db.crud.node import (
+    bulk_update_node_status,
     clear_usage_data,
     create_node,
     get_node_by_id,
@@ -23,7 +23,7 @@ from app.db.crud.node import (
 from app.db.crud.user import get_user
 from app.db.models import Node, NodeStatus
 from app.models.admin import AdminDetails
-from app.models.node import NodeCreate, NodeModify, NodeResponse, UsageTable
+from app.models.node import NodeCreate, NodeModify, NodeNotification, NodeResponse, UsageTable
 from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
 from app.node import core_users, node_manager
 from app.operation import BaseOperation
@@ -41,93 +41,124 @@ class NodeOperation(BaseOperation):
         return await get_nodes(db=db, core_id=core_id, offset=offset, limit=limit)
 
     @staticmethod
-    async def update_node_status(
+    async def _update_single_node_status(
+        db: AsyncSession,
         node_id: int,
         status: NodeStatus,
-        core_version: str = "",
+        message: str = "",
+        xray_version: str = "",
         node_version: str = "",
-        err: str = "",
-        notify_err: bool = True,
+        send_notification: bool = True,
     ):
-        async with GetDB() as db:
-            db_node = await get_node_by_id(db, node_id)
+        """
+        Update single node status with optional notification.
 
-            if db_node is None:
-                return
-
-            old_status = db_node.status
-
-            if status == NodeStatus.error:
-                logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {err}")
-
-            db_node = await update_node_status(
-                db=db,
-                db_node=db_node,
-                status=status,
-                xray_version=core_version,
-                node_version=node_version,
-                message=err,
-            )
-
-        node_response = NodeResponse.model_validate(db_node)
-        if status is NodeStatus.connected:
-            asyncio.create_task(notification.connect_node(node_response))
-
-        if notify_err and status is NodeStatus.error and old_status is not NodeStatus.error:
-            err = err[: MAX_MESSAGE_LENGTH - 3] + "..."
-            asyncio.create_task(notification.error_node(node_response))
-
-    @staticmethod
-    async def connect_node(node_id: int) -> None:
-        pg_node: PasarGuardNode | None = await node_manager.get_node(node_id)
-        if pg_node is None:
+        Args:
+            db (AsyncSession): Database session to use.
+            node_id (int): ID of the node to update.
+            status (NodeStatus): New status.
+            message (str): Status message (e.g., error details).
+            xray_version (str): Xray version.
+            node_version (str): Node version.
+            send_notification (bool): Whether to send notification.
+        """
+        db_node = await get_node_by_id(db, node_id)
+        if not db_node:
             return
 
-        async with GetDB() as db:
-            db_node = await get_node_by_id(db, node_id)
+        old_status = db_node.status
 
-            if db_node is None:
-                return
+        if status == NodeStatus.error:
+            logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {message}")
 
-            notify_err = True if db_node.status is not NodeStatus.error else False
+        await update_node_status(
+            db=db,
+            db_node=db_node,
+            status=status,
+            message=message,
+            xray_version=xray_version,
+            node_version=node_version,
+        )
 
-            logger.info(f'Connecting to "{db_node.name}" node')
-            await NodeOperation.update_node_status(db_node.id, NodeStatus.connecting)
+        if not send_notification:
+            return
 
-            core = await core_manager.get_core(db_node.core_config_id if db_node.core_config_id else 1)
+        if status == NodeStatus.connected:
+            node_notif = NodeNotification(
+                id=db_node.id,
+                name=db_node.name,
+                xray_version=xray_version,
+                node_version=node_version,
+            )
+            asyncio.create_task(notification.connect_node(node_notif))
+        elif status == NodeStatus.error and old_status != NodeStatus.error:
+            truncated_message = (
+                message[: MAX_MESSAGE_LENGTH - 3] + "..." if len(message) > MAX_MESSAGE_LENGTH else message
+            )
+            node_notif = NodeNotification(
+                id=db_node.id,
+                name=db_node.name,
+                message=truncated_message,
+            )
+            asyncio.create_task(notification.error_node(node_notif))
 
-            try:
-                info = await pg_node.start(
-                    config=core.to_str(),
-                    backend_type=0,
-                    users=await core_users(db=db),
-                    keep_alive=db_node.keep_alive,
-                    exclude_inbounds=core.exclude_inbound_tags,
-                    timeout=10,
-                )
-                await NodeOperation.update_node_status(
-                    node_id=db_node.id,
-                    status=NodeStatus.connected,
-                    core_version=info.core_version,
-                    node_version=info.node_version,
-                )
-                logger.info(
-                    f'Connected to "{db_node.name}" node v{info.node_version}, xray run on v{info.core_version}'
-                )
-            except NodeAPIError as e:
-                if e.code == -4:
-                    return
+    @staticmethod
+    async def connect_node(db_node: Node, users: list) -> dict | None:
+        """
+        Connect to a node and return status result (does NOT update database).
 
-                detail = e.detail
+        Args:
+            db_node (Node): Node object from database.
+            users (list): Pre-fetched core users list.
 
-                if len(detail) > 1024:
-                    detail = detail[:1020] + "..."
-                else:
-                    detail = detail
+        Returns:
+            dict: {node_id, status, message, xray_version, node_version, old_status}
+            None: if connection should be skipped
+        """
+        pg_node: PasarGuardNode | None = await node_manager.get_node(db_node.id)
+        if pg_node is None:
+            return None
 
-                await NodeOperation.update_node_status(
-                    node_id=db_node.id, status=NodeStatus.error, err=detail, notify_err=notify_err
-                )
+        old_status = db_node.status
+        logger.info(f'Connecting to "{db_node.name}" node')
+
+        core = await core_manager.get_core(db_node.core_config_id if db_node.core_config_id else 1)
+
+        try:
+            info = await pg_node.start(
+                config=core.to_str(),
+                backend_type=0,
+                users=users,
+                keep_alive=db_node.keep_alive,
+                exclude_inbounds=core.exclude_inbound_tags,
+                timeout=10,
+            )
+            logger.info(f'Connected to "{db_node.name}" node v{info.node_version}, xray run on v{info.core_version}')
+
+            return {
+                "node_id": db_node.id,
+                "status": NodeStatus.connected,
+                "message": "",
+                "xray_version": info.core_version,
+                "node_version": info.node_version,
+                "old_status": old_status,
+            }
+        except NodeAPIError as e:
+            if e.code == -4:
+                return None
+
+            detail = e.detail[:1020] + "..." if len(e.detail) > 1024 else e.detail
+
+            logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
+
+            return {
+                "node_id": db_node.id,
+                "status": NodeStatus.error,
+                "message": detail,
+                "xray_version": "",
+                "node_version": "",
+                "old_status": old_status,
+            }
 
     async def create_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         await self.get_validated_core_config(db, new_node.core_config_id)
@@ -138,9 +169,9 @@ class NodeOperation(BaseOperation):
 
         try:
             await node_manager.update_node(db_node)
-            asyncio.create_task(self.connect_node(node_id=db_node.id))
+            asyncio.create_task(self.connect_node_wrapper(db, db_node.id))
         except NodeAPIError as e:
-            await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
+            await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
         logger.info(f'New node "{db_node.name}" with id "{db_node.id}" added by admin "{admin.username}"')
 
@@ -167,9 +198,9 @@ class NodeOperation(BaseOperation):
         else:
             try:
                 await node_manager.update_node(db_node)
-                asyncio.create_task(self.connect_node(node_id=db_node.id))
+                asyncio.create_task(self.connect_node_wrapper(db, db_node.id))
             except NodeAPIError as e:
-                await self.update_node_status(db_node.id, NodeStatus.error, err=e.detail)
+                await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
         logger.info(f'Node "{db_node.name}" with id "{db_node.id}" modified by admin "{admin.username}"')
 
@@ -189,22 +220,100 @@ class NodeOperation(BaseOperation):
 
         asyncio.create_task(notification.remove_node(db_node, admin.username))
 
-    async def restart_node(self, node_id: Node, admin: AdminDetails) -> None:
-        asyncio.create_task(self.connect_node(node_id))
+    async def connect_nodes_bulk(
+        self,
+        db: AsyncSession,
+        nodes: list[Node],
+    ) -> None:
+        """
+        Connect multiple nodes and bulk update their statuses.
+
+        Args:
+            db (AsyncSession): Database session.
+            nodes (list[Node]): List of nodes to connect.
+        """
+        if not nodes:
+            return
+
+        # Fetch users ONCE for all nodes
+        users = await core_users(db=db)
+
+        async def connect_single(node: Node) -> dict | None:
+            try:
+                await node_manager.update_node(node)
+            except NodeAPIError as e:
+                return {
+                    "node_id": node.id,
+                    "status": NodeStatus.error,
+                    "message": e.detail,
+                    "xray_version": "",
+                    "node_version": "",
+                    "old_status": node.status,
+                }
+
+            return await self.connect_node(node, users)
+
+        results = await asyncio.gather(*[connect_single(node) for node in nodes])
+
+        # Filter out None results
+        valid_results = [r for r in results if r is not None]
+
+        nodes_dict = {node.id: node for node in nodes}
+
+        notifications_to_send = []
+        for result in valid_results:
+            node = nodes_dict.get(result["node_id"])
+            if not node:
+                continue
+
+            # Create lightweight notification object
+            node_notif = NodeNotification(
+                id=result["node_id"],
+                name=node.name,
+                xray_version=result.get("xray_version"),
+                node_version=result.get("node_version"),
+                message=result.get("message"),
+            )
+
+            notifications_to_send.append(
+                {
+                    "node": node_notif,
+                    "status": result["status"],
+                    "old_status": result["old_status"],
+                }
+            )
+
+        # Bulk update all statuses in ONE query
+        await bulk_update_node_status(db, valid_results)
+
+        # Send notifications using pre-built objects
+        for notif in notifications_to_send:
+            if notif["status"] == NodeStatus.connected:
+                asyncio.create_task(notification.connect_node(notif["node"]))
+            elif notif["status"] == NodeStatus.error and notif["old_status"] != NodeStatus.error:
+                asyncio.create_task(notification.error_node(notif["node"]))
+
+    async def connect_node_wrapper(self, db: AsyncSession, node_id: int) -> None:
+        """
+        Connect single node by wrapping it in a list for bulk operation.
+
+        Args:
+            db (AsyncSession): Database session.
+            node_id (int): ID of the node to connect.
+        """
+        db_node = await get_node_by_id(db, node_id)
+        if db_node is None:
+            return
+
+        await self.connect_nodes_bulk(db, [db_node])
+
+    async def restart_node(self, db: AsyncSession, node_id: Node, admin: AdminDetails) -> None:
+        await self.connect_node_wrapper(db, node_id)
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
     async def restart_all_node(self, db: AsyncSession, admin: AdminDetails, core_id: int | None = None) -> None:
         nodes: list[Node] = await self.get_db_nodes(db, core_id)
-
-        # Semaphore to limit concurrent node restarts to 3 at a time
-        semaphore = asyncio.Semaphore(3)
-
-        async def restart_with_limit(node_id: int):
-            async with semaphore:
-                await NodeOperation.connect_node(node_id)
-
-        await asyncio.gather(*[restart_with_limit(node.id) for node in nodes])
-
+        await self.connect_nodes_bulk(db, nodes)
         logger.info(f'All nodes restarted by admin "{admin.username}"')
 
     async def get_usage(

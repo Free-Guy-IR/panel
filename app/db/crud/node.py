@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, func, select, update, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Node, NodeStat, NodeStatus, NodeUsage, NodeUserUsage
@@ -276,6 +276,49 @@ def _table_model(table: UsageTable):
     if table == UsageTable.node_usages:
         return NodeUsage
     raise ValueError("Invalid table enum")
+
+
+async def bulk_update_node_status(
+    db: AsyncSession,
+    updates: list[dict],
+) -> None:
+    """
+    Update multiple node statuses in a single query using bindparam.
+
+    Args:
+        db (AsyncSession): The database session.
+        updates (list[dict]): List of updates with keys: node_id, status, message, xray_version, node_version.
+
+    Example:
+        updates = [
+            {"node_id": 1, "status": NodeStatus.connected, "message": "", "xray_version": "1.8.0", "node_version": "0.1.0"},
+            {"node_id": 2, "status": NodeStatus.error, "message": "Connection failed", "xray_version": "", "node_version": ""},
+        ]
+    """
+    if not updates:
+        return
+
+    stmt = (
+        update(Node)
+        .where(Node.id == bindparam("node_id"))
+        .values(
+            status=bindparam("status"),
+            message=bindparam("message"),
+            xray_version=bindparam("xray_version"),
+            node_version=bindparam("node_version"),
+            last_status_change=bindparam("now"),
+        )
+    )
+
+    # Add timestamp to each update
+    now = datetime.now(timezone.utc)
+    for upd in updates:
+        upd["now"] = now
+
+    # Execute using connection-level execute (bypasses ORM, allows bindparam with WHERE)
+    conn = await db.connection()
+    await conn.execute(stmt, updates)
+    await db.commit()
 
 
 async def clear_usage_data(

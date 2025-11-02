@@ -5,7 +5,7 @@ from . import telegram as tg
 from . import webhook as wh
 from app.models.host import BaseHost
 from app.models.user_template import UserTemplateResponse
-from app.models.node import NodeResponse
+from app.models.node import NodeNotification, NodeResponse
 from app.models.group import GroupResponse
 from app.models.core import CoreResponse
 from app.models.admin import AdminDetails
@@ -63,12 +63,12 @@ async def remove_node(node: NodeResponse, by: str):
         await asyncio.gather(ds.remove_node(node, by), tg.remove_node(node, by))
 
 
-async def connect_node(node: NodeResponse):
+async def connect_node(node: NodeNotification):
     if (await notification_enable()).node.connect:
         await asyncio.gather(ds.connect_node(node), tg.connect_node(node))
 
 
-async def error_node(node: NodeResponse):
+async def error_node(node: NodeNotification):
     if (await notification_enable()).node.error:
         await asyncio.gather(ds.error_node(node), tg.error_node(node))
 
