@@ -21,6 +21,7 @@ from app.db.models import (
     UserStatus,
     UserSubscriptionUpdate,
     UserUsageResetLogs,
+    users_groups_association,
 )
 from app.models.proxy import ProxyTable
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList
@@ -476,6 +477,19 @@ async def create_user(db: AsyncSession, new_user: UserCreate, groups: list[Group
     return db_user
 
 
+async def _delete_user_dependencies(db: AsyncSession, user_ids: list[int]):
+    """Remove all rows that reference the given user IDs."""
+    if not user_ids:
+        return
+
+    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id.in_(user_ids)))
+    await db.execute(delete(NotificationReminder).where(NotificationReminder.user_id.in_(user_ids)))
+    await db.execute(delete(UserSubscriptionUpdate).where(UserSubscriptionUpdate.user_id.in_(user_ids)))
+    await db.execute(delete(UserUsageResetLogs).where(UserUsageResetLogs.user_id.in_(user_ids)))
+    await db.execute(delete(NextPlan).where(NextPlan.user_id.in_(user_ids)))
+    await db.execute(users_groups_association.delete().where(users_groups_association.c.user_id.in_(user_ids)))
+
+
 async def remove_user(db: AsyncSession, db_user: User) -> User:
     """
     Removes a user from the database.
@@ -487,7 +501,8 @@ async def remove_user(db: AsyncSession, db_user: User) -> User:
     Returns:
         User: Removed user object.
     """
-    await db.delete(db_user)
+    await _delete_user_dependencies(db, [db_user.id])
+    await db.execute(delete(User).where(User.id == db_user.id))
     await db.commit()
     return db_user
 
@@ -498,10 +513,14 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
 
     Args:
         db (AsyncSession): Database session.
-        dbusers (list[User]): List of user objects to be removed.
+        db_users (list[User]): List of user objects to be removed.
     """
-    user_ids = [user.id for user in db_users]
+    if not db_users:
+        return
 
+    user_ids = list({user.id for user in db_users})
+
+    await _delete_user_dependencies(db, user_ids)
     await db.execute(delete(User).where(User.id.in_(user_ids)))
     await db.commit()
 
