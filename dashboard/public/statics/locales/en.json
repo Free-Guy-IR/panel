@@ -1682,10 +1682,13 @@
   },
   "goal": {
     "currentGoal": "Current Goal",
+    "progress": "Progress",
     "of": "of",
     "remaining": "Remaining",
     "contribute": "Contribute",
     "completed": "Completed",
-    "pending": "In Progress"
+    "pending": "In Progress",
+    "githubStarsUnit": "stars",
+    "githubProgress": "Star progress"
   }
 }

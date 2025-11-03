@@ -1661,10 +1661,13 @@
   },
   "goal": {
     "currentGoal": "هدف فعلی",
+    "progress": "پیشرفت",
     "of": "از",
     "remaining": "باقیمانده",
     "contribute": "مشارکت کنید",
     "completed": "تکمیل شده",
-    "pending": "در حال انجام"
+    "pending": "در حال انجام",
+    "githubStarsUnit": "ستاره",
+    "githubProgress": "پیشرفت ستاره‌ها"
   }
 }

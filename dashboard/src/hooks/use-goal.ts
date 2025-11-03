@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { $fetch } from '@/service/http'
 
+type GoalType = 'donation' | 'github_stars' | (string & {})
+
 interface Goal {
   id: number
   name: string
@@ -8,6 +10,9 @@ interface Goal {
   price: number
   paid_amount: number
   status: 'pending' | 'completed' | 'cancelled'
+  type: GoalType
+  repo_owner?: string
+  repo_name?: string
   created_at: string
   updated_at: string
 }

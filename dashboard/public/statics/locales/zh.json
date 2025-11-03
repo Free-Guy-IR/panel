@@ -1703,11 +1703,14 @@
   },
   "goal": {
     "currentGoal": "当前目标",
+    "progress": "进度",
     "of": "共",
     "remaining": "剩余",
     "contribute": "贡献",
     "completed": "已完成",
-    "pending": "进行中"
+    "pending": "进行中",
+    "githubStarsUnit": "星标",
+    "githubProgress": "星标进度"
   },
   "validation": {
     "generic": "{{field}} 无效",

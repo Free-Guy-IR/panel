@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAllGoals } from '@/hooks/use-goal'
-import { Target, TrendingUp, Heart } from 'lucide-react'
+import { Target, TrendingUp, Heart, Star, Github } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -136,12 +136,48 @@ export function GoalProgress() {
   }
 
   const currentGoal = pendingGoals[currentGoalIndex]
-  const progress = Math.min((currentGoal.paid_amount / currentGoal.price) * 100, 100)
-  const remaining = Math.max(currentGoal.price - currentGoal.paid_amount, 0)
+  const isGithubGoal = currentGoal.type === 'github_stars'
+  const unitLabel = isGithubGoal ? t('goal.githubStarsUnit', { defaultValue: 'stars' }) : ''
+  const goalTarget = currentGoal.price || 0
+  const goalCurrent = currentGoal.paid_amount || 0
+  const progress = Math.min(goalTarget > 0 ? (goalCurrent / goalTarget) * 100 : 0, 100)
+  const remaining = Math.max(goalTarget - goalCurrent, 0)
+  const formattedCurrent = isGithubGoal
+    ? `${Math.round(goalCurrent).toLocaleString()} ${unitLabel}`
+    : `$${goalCurrent.toLocaleString()}`
+  const formattedTarget = isGithubGoal
+    ? `${Math.round(goalTarget).toLocaleString()} ${unitLabel}`
+    : `$${goalTarget.toLocaleString()}`
+  const formattedRemaining = isGithubGoal
+    ? `${Math.max(Math.round(remaining), 0).toLocaleString()} ${unitLabel}`
+    : `$${remaining.toLocaleString()}`
+  const progressLabel = isGithubGoal
+    ? t('goal.githubProgress', { defaultValue: 'Star progress' })
+    : t('goal.progress', { defaultValue: 'Progress' })
+  const remainingLabel = t('goal.remaining')
+  const ctaLabel = isGithubGoal
+    ? t('goal.starOnGitHub', { defaultValue: 'Star on GitHub' })
+    : t('goal.contribute')
+  const ctaHref =
+    isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name
+      ? `https://github.com/${currentGoal.repo_owner}/${currentGoal.repo_name}`
+      : 'https://donate.pasarguard.org'
+  const CtaIcon = isGithubGoal ? Star : Target
+  const BadgeIcon = isGithubGoal ? Star : TrendingUp
+  const badgeClasses = isGithubGoal
+    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
+    : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+  const repoInfoAvailable = Boolean(isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name)
+  const repoIdentifier =
+    currentGoal.repo_owner && currentGoal.repo_name
+      ? `${currentGoal.repo_owner}/${currentGoal.repo_name}`
+      : 'owner/repo'
+  const showRemaining = remaining > 0
 
   // Collapsed state (desktop only) - simple donate button with popover
   // On mobile, always use expanded UI since there's no collapsed sidebar concept
   if (state === 'collapsed' && !isMobile) {
+    const SummaryIcon = isGithubGoal ? Star : Heart
     return (
       <div className="mx-2 mb-2">
         <Popover>
@@ -151,48 +187,52 @@ export function GoalProgress() {
               size="icon"
               className="h-8 w-8 rounded-md"
             >
-              <Heart className="h-4 w-4 text-primary" />
+              <SummaryIcon className="h-4 w-4 text-primary" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-4" side="right" align="start">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Heart className="h-4 w-4 text-primary" />
+                <SummaryIcon className="h-4 w-4 text-primary" />
                 <span className="font-semibold text-sm">{currentGoal.name}</span>
               </div>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Progress</span>
+                  <span className="text-muted-foreground">{progressLabel}</span>
                   <span className="font-medium">{progress.toFixed(0)}%</span>
                 </div>
                 <Progress value={progress} className="h-2" />
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-primary">${currentGoal.paid_amount.toLocaleString()}</span>
+                  <span className="font-medium text-primary">{formattedCurrent}</span>
                   <span className="text-muted-foreground">
-                    {t('goal.of')} ${currentGoal.price.toLocaleString()}
+                    {t('goal.of')} {formattedTarget}
                   </span>
                 </div>
               </div>
 
-              {remaining > 0 && (
-                <div className="rounded-md bg-muted/50 px-3 py-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{t('goal.remaining')}</span>
-                    <span className="font-semibold">${remaining.toLocaleString()}</span>
-                  </div>
+              <div className="min-h-[32px]">
+                <div
+                  className={cn(
+                    'flex items-center justify-between rounded-md px-3 py-2 text-xs transition-opacity',
+                    showRemaining ? 'bg-muted/50 opacity-100' : 'opacity-0'
+                  )}
+                  aria-hidden={!showRemaining}
+                >
+                  <span className="text-muted-foreground">{remainingLabel}</span>
+                  <span className="font-semibold">{formattedRemaining}</span>
                 </div>
-              )}
+              </div>
 
               <Button asChild className="w-full">
                 <a
-                  href="https://donate.pasarguard.org"
+                  href={ctaHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2"
                 >
-                  <Target className="h-4 w-4" />
-                  {t('goal.contribute')}
+                  <CtaIcon className="h-4 w-4" />
+                  {ctaLabel}
                 </a>
               </Button>
             </div>
@@ -230,10 +270,22 @@ export function GoalProgress() {
                   {t('goal.currentGoal')} ({currentGoalIndex + 1}/{pendingGoals.length})
                 </span>
                 <span className="line-clamp-1 text-sm font-semibold leading-tight">{currentGoal.name}</span>
+                <div className="mt-1 h-4">
+                  <div
+                    className={cn(
+                      'flex items-center gap-1 text-[11px] text-muted-foreground transition-opacity',
+                      repoInfoAvailable ? 'opacity-100' : 'opacity-0'
+                    )}
+                    aria-hidden={!repoInfoAvailable}
+                  >
+                    <Github className="h-3 w-3" aria-hidden />
+                    <span className="truncate">{repoIdentifier}</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-              <TrendingUp className="h-3 w-3" />
+            <div className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', badgeClasses)}>
+              <BadgeIcon className="h-3 w-3" />
               {progress.toFixed(0)}%
             </div>
           </div>
@@ -242,33 +294,43 @@ export function GoalProgress() {
           <div className="space-y-1">
             <Progress value={progress} className="h-2" />
             <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-primary">${currentGoal.paid_amount.toLocaleString()}</span>
+              <span className="font-medium text-primary">{formattedCurrent}</span>
               <span className="text-muted-foreground">
-                {t('goal.of')} ${currentGoal.price.toLocaleString()}
+                {t('goal.of')} {formattedTarget}
               </span>
             </div>
           </div>
 
           {/* Details */}
-          {currentGoal.detail && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{currentGoal.detail}</p>}
+          <div className="min-h-[38px]">
+            {currentGoal.detail && (
+              <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{currentGoal.detail}</p>
+            )}
+          </div>
 
           {/* Remaining */}
-          {remaining > 0 && (
-            <div className="flex items-center justify-between rounded-md bg-background/50 px-2 py-1.5">
-              <span className="text-xs font-medium text-muted-foreground">{t('goal.remaining')}</span>
-              <span className="text-xs font-semibold text-foreground">${remaining.toLocaleString()}</span>
+          <div className="min-h-[32px]">
+            <div
+              className={cn(
+                'flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-opacity',
+                showRemaining ? 'bg-background/50 opacity-100' : 'opacity-0'
+              )}
+              aria-hidden={!showRemaining}
+            >
+              <span className="font-medium text-muted-foreground">{remainingLabel}</span>
+              <span className="font-semibold text-foreground">{formattedRemaining}</span>
             </div>
-          )}
+          </div>
 
           {/* CTA Button */}
           <a
-            href="https://donate.pasarguard.org"
+            href={ctaHref}
             target="_blank"
             rel="noopener noreferrer"
             className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-md"
           >
-            <Target className="h-3.5 w-3.5" />
-            {t('goal.contribute')}
+            <CtaIcon className="h-3.5 w-3.5" />
+            {ctaLabel}
           </a>
         </div>
       </CardContent>

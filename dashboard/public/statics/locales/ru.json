@@ -1664,11 +1664,14 @@
   },
   "goal": {
     "currentGoal": "Текущая цель",
+    "progress": "Прогресс",
     "of": "из",
     "remaining": "Осталось",
     "contribute": "Поддержать",
     "completed": "Завершено",
-    "pending": "В процессе"
+    "pending": "В процессе",
+    "githubStarsUnit": "звёзд",
+    "githubProgress": "Прогресс по звёздам"
   },
   "validation": {
     "generic": "{{field}} недействительно",
