@@ -1358,8 +1358,6 @@
     "copyMldsa65Verify": "کپی Verify",
     "mldsa65SeedCopied": "Seed در کلیپ‌بورد کپی شد",
     "mldsa65VerifyCopied": "Verify در کلیپ‌بورد کپی شد",
-    "vlessBuilderTitle": "سازنده رمزنگاری VLESS",
-    "vlessBuilderDescription": "پیش از تولید، روش دست‌دهی، رمزنگاری، بلیت‌های ازسرگیری و پدینگ‌ها را تنظیم کنید.",
     "vlessHandshakeLabel": "روش دست‌دهی",
     "vlessHandshakeOptionMlkem768x25519plus": "mlkem768x25519plus",
     "vlessEncryptionLabel": "روش رمزنگاری",

@@ -1439,8 +1439,6 @@
     "copyMldsa65Verify": "Copy Verify Key",
     "mldsa65SeedCopied": "Seed copied to clipboard",
     "mldsa65VerifyCopied": "Verify key copied to clipboard",
-    "vlessBuilderTitle": "VLESS encryption builder",
-    "vlessBuilderDescription": "Adjust handshake, encryption, resume tickets, and padding blocks before generating.",
     "vlessHandshakeLabel": "Handshake method",
     "vlessHandshakeOptionMlkem768x25519plus": "mlkem768x25519plus",
     "vlessEncryptionLabel": "Encryption method",

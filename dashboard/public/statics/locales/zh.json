@@ -1420,8 +1420,6 @@
     "copyMldsa65Verify": "复制 Verify",
     "mldsa65SeedCopied": "Seed 已复制到剪贴板",
     "mldsa65VerifyCopied": "Verify 已复制到剪贴板",
-    "vlessBuilderTitle": "VLESS 加密生成器",
-    "vlessBuilderDescription": "生成前可调整握手方式、加密方式、恢复票证和填充块。",
     "vlessHandshakeLabel": "握手方式",
     "vlessHandshakeOptionMlkem768x25519plus": "mlkem768x25519plus",
     "vlessEncryptionLabel": "加密方式",

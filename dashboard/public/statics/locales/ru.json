@@ -1378,8 +1378,6 @@
     "copyMldsa65Verify": "Копировать Verify",
     "mldsa65SeedCopied": "Seed скопирован в буфер обмена",
     "mldsa65VerifyCopied": "Verify скопирован в буфер обмена",
-    "vlessBuilderTitle": "Конструктор шифрования VLESS",
-    "vlessBuilderDescription": "Настройте рукопожатие, шифрование, билеты возобновления и блоки заполнения перед генерацией.",
     "vlessHandshakeLabel": "Метод рукопожатия",
     "vlessHandshakeOptionMlkem768x25519plus": "mlkem768x25519plus",
     "vlessEncryptionLabel": "Метод шифрования",

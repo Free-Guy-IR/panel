@@ -786,7 +786,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       <Dialog open={isVlessAdvancedModalOpen} onOpenChange={setIsVlessAdvancedModalOpen}>
         <DialogContent className="h-full max-w-full px-2 py-6 sm:h-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg px-2">
               <span className="truncate">{t('coreConfigModal.vlessAdvancedSettings', { defaultValue: 'VLESS Advanced Settings' })}</span>
             </DialogTitle>
           </DialogHeader>
@@ -1027,7 +1027,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
               loadingText={t('coreConfigModal.generatingVLESSEncryption')}
               size="sm"
             >
-              {t('coreConfigModal.generateVLESSEncryption')}
+              {t('coreConfigModal.generateEncryption')}
             </LoaderButton>
           </div>
         </DialogContent>
