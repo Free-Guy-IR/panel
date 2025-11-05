@@ -65,7 +65,7 @@ export default function AdminStatisticsSection({ data }: AdminsStatisticsProps) 
         <Card
           key={stat.label}
           dir={dir}
-          className={cn('group relative w-full animate-fade-in rounded-md transition-all duration-300 hover:shadow-lg')}
+          className={cn('group relative w-full animate-fade-in overflow-hidden rounded-md transition-all duration-500')}
           style={{
             animationDuration: '600ms',
             animationDelay: `${(idx + 1) * 100}ms`,
@@ -79,18 +79,17 @@ export default function AdminStatisticsSection({ data }: AdminsStatisticsProps) 
               'group-hover:opacity-100',
             )}
           />
-          <CardTitle className="relative z-10 flex items-center justify-between gap-x-4 p-5">
+          <CardTitle className="relative z-10 flex items-center justify-between gap-x-4 px-4 py-6">
             <div className="flex items-center gap-x-4">
-              {React.createElement(stat.icon, { className: 'h-6 w-6' })}
+              {React.createElement(stat.icon, { className: 'h-5 w-5' })}
               <span>{stat.label}</span>
             </div>
             <span
               className={cn(
-                'mx-2 text-3xl font-bold transition-all duration-500',
+                'mx-2 text-3xl transition-all duration-500',
                 isIncreased[stat.key] ? 'animate-zoom-out' : ''
               )}
               style={{ animationDuration: '400ms' }}
-              dir="ltr"
             >
               <CountUp end={stat.value} />
             </span>
