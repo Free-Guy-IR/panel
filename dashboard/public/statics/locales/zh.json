@@ -1404,6 +1404,7 @@
     "chooseAuthentication": "选择一种身份验证方法使用，不要混合使用。临时密钥交换无论如何都是 post-quantum 安全的。",
     "x25519Authentication": "X25519，非 post-quantum",
     "mlkem768Authentication": "ML-KEM-768，post-quantum",
+    "generate": "生成",
     "decryption": "解密",
     "encryption": "加密",
     "decryptionCopied": "解密已复制到剪贴板",

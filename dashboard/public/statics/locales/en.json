@@ -1423,6 +1423,7 @@
     "chooseAuthentication": "Choose one authentication to use, do not mix them. Ephemeral key exchange is post-quantum safe anyway.",
     "x25519Authentication": "X25519, not post-quantum",
     "mlkem768Authentication": "ML-KEM-768, post-quantum",
+    "generate": "Generate",
     "decryption": "Decryption",
     "encryption": "Encryption",
     "decryptionCopied": "Decryption copied to clipboard",

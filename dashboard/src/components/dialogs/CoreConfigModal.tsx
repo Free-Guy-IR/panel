@@ -1027,7 +1027,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
               loadingText={t('coreConfigModal.generatingVLESSEncryption')}
               size="sm"
             >
-              {t('coreConfigModal.generateEncryption')}
+              {t('coreConfigModal.generate')}
             </LoaderButton>
           </div>
         </DialogContent>
@@ -1666,7 +1666,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                           <LoaderButton
                             type="button"
                             onClick={viewShortId}
-                            className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
+                            className="h-10 col-span-2 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
                             isLoading={isGeneratingShortId}
                             loadingText={t('coreConfigModal.generatingShortId')}
                           >

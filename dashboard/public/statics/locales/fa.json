@@ -1342,6 +1342,7 @@
     "chooseAuthentication": "یکی از روش‌های احراز هویت را انتخاب کنید، آن‌ها را با هم مخلوط نکنید. تبادل کلید موقت در هر صورت Post-Quantum امن است.",
     "x25519Authentication": "X25519، غیر Post-Quantum",
     "mlkem768Authentication": "ML-KEM-768، Post-Quantum",
+    "generate": "تولید",
     "decryption": "رمزگشایی",
     "encryption": "رمزنگاری",
     "decryptionCopied": "رمزگشایی در کلیپ‌بورد کپی شد",

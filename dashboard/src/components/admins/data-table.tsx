@@ -2,7 +2,7 @@ import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
-import React, { useState, useMemo, useEffect, memo, useCallback } from 'react'
+import React, { useState, useMemo, memo, useCallback } from 'react'
 import { ChevronDown, Edit2, Power, PowerOff, RefreshCw, Trash2, User, UserRound, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AdminDetails } from '@/service/api'

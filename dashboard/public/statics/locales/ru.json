@@ -1362,6 +1362,7 @@
     "chooseAuthentication": "Выберите один метод аутентификации для использования, не смешивайте их. Обмен эфемерными ключами в любом случае Post-Quantum безопасен.",
     "x25519Authentication": "X25519, не Post-Quantum",
     "mlkem768Authentication": "ML-KEM-768, Post-Quantum",
+    "generate": "Сгенерировать",
     "decryption": "Расшифровка",
     "encryption": "Шифрование",
     "decryptionCopied": "Расшифровка скопирована в буфер обмена",
