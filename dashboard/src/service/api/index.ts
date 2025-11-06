@@ -368,19 +368,19 @@ export interface UsersResponse {
 
 export type UserUsageStatsListPeriod = Period | null
 
-export interface UserUsageStatsList {
-  period?: UserUsageStatsListPeriod
-  start: string
-  end: string
-  stats: UserUsageStatsListStats
-}
-
 export interface UserUsageStat {
   total_traffic: number
   period_start: string
 }
 
 export type UserUsageStatsListStats = { [key: string]: UserUsageStat[] }
+
+export interface UserUsageStatsList {
+  period?: UserUsageStatsListPeriod
+  start: string
+  end: string
+  stats: UserUsageStatsListStats
+}
 
 export type UserTemplateResponseIsDisabled = boolean | null
 
@@ -581,6 +581,8 @@ export type UserResponseOnHoldExpireDuration = number | null
 
 export type UserResponseNote = string | null
 
+export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
+
 /**
  * data_limit can be 0 or greater
  */
@@ -672,8 +674,6 @@ export const UserDataLimitResetStrategy = {
   month: 'month',
   year: 'year',
 } as const
-
-export type UserResponseDataLimitResetStrategy = UserDataLimitResetStrategy | null
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -960,7 +960,7 @@ export type SettingsSchemaOutputSubscription = SubscriptionOutput | null
 
 export type SettingsSchemaOutputNotificationEnable = NotificationEnable | null
 
-export type SettingsSchemaOutputNotificationSettings = NotificationSettings | null
+export type SettingsSchemaOutputNotificationSettings = NotificationSettingsOutput | null
 
 export type SettingsSchemaOutputWebhook = Webhook | null
 
@@ -984,7 +984,7 @@ export type SettingsSchemaInputSubscription = SubscriptionInput | null
 
 export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
 
-export type SettingsSchemaInputNotificationSettings = NotificationSettings | null
+export type SettingsSchemaInputNotificationSettings = NotificationSettingsInput | null
 
 export type SettingsSchemaInputWebhook = Webhook | null
 
@@ -1089,27 +1089,48 @@ export const Period = {
   month: 'month',
 } as const
 
-export type NotificationSettingsProxyUrl = string | null
+export type NotificationSettingsOutputProxyUrl = string | null
 
-export type NotificationSettingsDiscordWebhookUrl = string | null
+export type NotificationSettingsOutputDiscordWebhookUrl = string | null
 
-export type NotificationSettingsTelegramTopicId = number | null
+export type NotificationSettingsOutputTelegramTopicId = number | null
 
-export type NotificationSettingsTelegramChannelId = number | null
+export type NotificationSettingsOutputTelegramChatId = number | null
 
-export type NotificationSettingsTelegramAdminId = number | null
+export type NotificationSettingsOutputTelegramApiToken = string | null
 
-export type NotificationSettingsTelegramApiToken = string | null
-
-export interface NotificationSettings {
+export interface NotificationSettingsOutput {
   notify_telegram?: boolean
   notify_discord?: boolean
-  telegram_api_token?: NotificationSettingsTelegramApiToken
-  telegram_admin_id?: NotificationSettingsTelegramAdminId
-  telegram_channel_id?: NotificationSettingsTelegramChannelId
-  telegram_topic_id?: NotificationSettingsTelegramTopicId
-  discord_webhook_url?: NotificationSettingsDiscordWebhookUrl
-  proxy_url?: NotificationSettingsProxyUrl
+  telegram_api_token?: NotificationSettingsOutputTelegramApiToken
+  telegram_chat_id?: NotificationSettingsOutputTelegramChatId
+  telegram_topic_id?: NotificationSettingsOutputTelegramTopicId
+  discord_webhook_url?: NotificationSettingsOutputDiscordWebhookUrl
+  channels?: NotificationChannels
+  proxy_url?: NotificationSettingsOutputProxyUrl
+  /** */
+  max_retries: number
+}
+
+export type NotificationSettingsInputProxyUrl = string | null
+
+export type NotificationSettingsInputDiscordWebhookUrl = string | null
+
+export type NotificationSettingsInputTelegramTopicId = number | null
+
+export type NotificationSettingsInputTelegramChatId = number | null
+
+export type NotificationSettingsInputTelegramApiToken = string | null
+
+export interface NotificationSettingsInput {
+  notify_telegram?: boolean
+  notify_discord?: boolean
+  telegram_api_token?: NotificationSettingsInputTelegramApiToken
+  telegram_chat_id?: NotificationSettingsInputTelegramChatId
+  telegram_topic_id?: NotificationSettingsInputTelegramTopicId
+  discord_webhook_url?: NotificationSettingsInputDiscordWebhookUrl
+  channels?: NotificationChannels
+  proxy_url?: NotificationSettingsInputProxyUrl
   /** */
   max_retries: number
 }
@@ -1126,6 +1147,34 @@ export interface NotificationEnable {
   percentage_reached?: boolean
 }
 
+export type NotificationChannelDiscordWebhookUrl = string | null
+
+export type NotificationChannelTelegramTopicId = number | null
+
+export type NotificationChannelTelegramChatId = number | null
+
+/**
+ * Channel configuration for sending notifications to a specific entity
+ */
+export interface NotificationChannel {
+  telegram_chat_id?: NotificationChannelTelegramChatId
+  telegram_topic_id?: NotificationChannelTelegramTopicId
+  discord_webhook_url?: NotificationChannelDiscordWebhookUrl
+}
+
+/**
+ * Per-object notification channels
+ */
+export interface NotificationChannels {
+  admin?: NotificationChannel
+  core?: NotificationChannel
+  group?: NotificationChannel
+  host?: NotificationChannel
+  node?: NotificationChannel
+  user?: NotificationChannel
+  user_template?: NotificationChannel
+}
+
 export interface NotFound {
   detail?: string
 }
@@ -1138,13 +1187,6 @@ export interface NoiseSettings {
 
 export type NodeUsageStatsListPeriod = Period | null
 
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
-
 export interface NodeUsageStat {
   uplink: number
   downlink: number
@@ -1152,6 +1194,13 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
+
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -1639,11 +1688,25 @@ export const ConfigFormat = {
   block: 'block',
 } as const
 
+export type ClashMuxSettingsBrutal = Brutal | null
+
 export type ClashMuxSettingsMinStreams = number | null
 
 export type ClashMuxSettingsMaxStreams = number | null
 
 export type ClashMuxSettingsMaxConnections = number | null
+
+export interface ClashMuxSettings {
+  enable?: boolean
+  protocol?: MultiplexProtocol
+  max_connections?: ClashMuxSettingsMaxConnections
+  max_streams?: ClashMuxSettingsMaxStreams
+  min_streams?: ClashMuxSettingsMinStreams
+  padding?: boolean
+  brutal?: ClashMuxSettingsBrutal
+  statistic?: boolean
+  only_tcp?: boolean
+}
 
 export type BulkUsersProxyMethod = ShadowsocksMethods | null
 
@@ -1676,20 +1739,6 @@ export interface Brutal {
   enable?: boolean
   up_mbps: number
   down_mbps: number
-}
-
-export type ClashMuxSettingsBrutal = Brutal | null
-
-export interface ClashMuxSettings {
-  enable?: boolean
-  protocol?: MultiplexProtocol
-  max_connections?: ClashMuxSettingsMaxConnections
-  max_streams?: ClashMuxSettingsMaxStreams
-  min_streams?: ClashMuxSettingsMinStreams
-  padding?: boolean
-  brutal?: ClashMuxSettingsBrutal
-  statistic?: boolean
-  only_tcp?: boolean
 }
 
 export type BodyAdminTokenApiAdminTokenPostClientSecret = string | null
@@ -1809,6 +1858,8 @@ export interface AdminNotificationEnable {
   login?: boolean
 }
 
+export type AdminModifyNotificationEnable = UserNotificationEnable | null
+
 export type AdminModifySupportUrl = string | null
 
 export type AdminModifyProfileTitle = string | null
@@ -1838,6 +1889,7 @@ export interface AdminModify {
   sub_domain?: AdminModifySubDomain
   profile_title?: AdminModifyProfileTitle
   support_url?: AdminModifySupportUrl
+  notification_enable?: AdminModifyNotificationEnable
 }
 
 export type AdminDetailsLifetimeUsedTraffic = number | null
@@ -1847,6 +1899,8 @@ export type AdminDetailsSubTemplate = string | null
 export type AdminDetailsDiscordId = number | null
 
 export type AdminDetailsId = number | null
+
+export type AdminDetailsNotificationEnable = UserNotificationEnable | null
 
 export type AdminDetailsSupportUrl = string | null
 
@@ -1868,6 +1922,7 @@ export interface AdminDetails {
   sub_domain?: AdminDetailsSubDomain
   profile_title?: AdminDetailsProfileTitle
   support_url?: AdminDetailsSupportUrl
+  notification_enable?: AdminDetailsNotificationEnable
   id?: AdminDetailsId
   is_sudo: boolean
   total_users?: number
@@ -1877,6 +1932,8 @@ export interface AdminDetails {
   sub_template?: AdminDetailsSubTemplate
   lifetime_used_traffic?: AdminDetailsLifetimeUsedTraffic
 }
+
+export type AdminCreateNotificationEnable = UserNotificationEnable | null
 
 export type AdminCreateSupportUrl = string | null
 
@@ -1908,8 +1965,11 @@ export interface AdminCreate {
   sub_domain?: AdminCreateSubDomain
   profile_title?: AdminCreateProfileTitle
   support_url?: AdminCreateSupportUrl
+  notification_enable?: AdminCreateNotificationEnable
   username: string
 }
+
+export type AdminContactInfoNotificationEnable = UserNotificationEnable | null
 
 export type AdminContactInfoSupportUrl = string | null
 
@@ -1931,6 +1991,7 @@ export interface AdminContactInfo {
   sub_domain?: AdminContactInfoSubDomain
   profile_title?: AdminContactInfoProfileTitle
   support_url?: AdminContactInfoSupportUrl
+  notification_enable?: AdminContactInfoNotificationEnable
 }
 
 /**

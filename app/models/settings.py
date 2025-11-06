@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.proxy import ShadowsocksMethods, XTLSFlows
 
+from .notification_enable import NotificationEnable
 from .validators import DiscordValidator, ProxyValidator, URLValidator
 
 TELEGRAM_TOKEN_PATTERN = r"^\d{8,12}:[A-Za-z0-9_-]{35}$"
@@ -109,6 +110,31 @@ class Webhook(BaseModel):
         return self
 
 
+class NotificationChannel(BaseModel):
+    """Channel configuration for sending notifications to a specific entity"""
+
+    telegram_chat_id: int | None = Field(default=None)
+    telegram_topic_id: int | None = Field(default=None)
+    discord_webhook_url: str | None = Field(default=None)
+
+    @field_validator("discord_webhook_url", mode="before")
+    @classmethod
+    def validate_discord_webhook(cls, value):
+        return DiscordValidator.validate_webhook(value)
+
+
+class NotificationChannels(BaseModel):
+    """Per-object notification channels"""
+
+    admin: NotificationChannel = Field(default_factory=NotificationChannel)
+    core: NotificationChannel = Field(default_factory=NotificationChannel)
+    group: NotificationChannel = Field(default_factory=NotificationChannel)
+    host: NotificationChannel = Field(default_factory=NotificationChannel)
+    node: NotificationChannel = Field(default_factory=NotificationChannel)
+    user: NotificationChannel = Field(default_factory=NotificationChannel)
+    user_template: NotificationChannel = Field(default_factory=NotificationChannel)
+
+
 class NotificationSettings(BaseModel):
     # Define Which Notfication System Work's
     notify_telegram: bool = Field(default=False)
@@ -116,12 +142,16 @@ class NotificationSettings(BaseModel):
 
     # Telegram Settings
     telegram_api_token: str | None = Field(default=None)
-    telegram_admin_id: int | None = Field(default=None)
-    telegram_channel_id: int | None = Field(default=None)
+
+    # Fallback Telegram Channel
+    telegram_chat_id: int | None = Field(default=None)
     telegram_topic_id: int | None = Field(default=None)
 
-    # Discord Settings
+    # Fallback Discord Settings
     discord_webhook_url: str | None = Field(default=None)
+
+    # Per-object notification channels
+    channels: NotificationChannels = Field(default_factory=NotificationChannels)
 
     # Proxy Settings
     proxy_url: str | None = Field(default=None)
@@ -146,50 +176,11 @@ class NotificationSettings(BaseModel):
 
     @model_validator(mode="after")
     def check_notify_telegram_requires_token_and_id(self):
-        if self.notify_telegram and (
-            not self.telegram_api_token or not (self.telegram_channel_id, self.telegram_admin_id)
-        ):
-            raise ValueError("Telegram notification cannot be enabled without token or admin/channel id.")
+        if self.notify_telegram and not self.telegram_api_token:
+            raise ValueError("Telegram notification cannot be enabled without token.")
+        if self.notify_telegram and not self.telegram_chat_id:
+            raise ValueError("Telegram notification cannot be enabled without chat id.")
         return self
-
-
-class BaseNotificationEnable(BaseModel):
-    create: bool = Field(default=True)
-    modify: bool = Field(default=True)
-    delete: bool = Field(default=True)
-
-
-class AdminNotificationEnable(BaseNotificationEnable):
-    reset_usage: bool = Field(default=True)
-    login: bool = Field(default=True)
-
-
-class NodeNotificationEnable(BaseNotificationEnable):
-    connect: bool = Field(default=True)
-    error: bool = Field(default=True)
-
-
-class HostNotificationEnable(BaseNotificationEnable):
-    modify_hosts: bool = Field(default=True)
-
-
-class UserNotificationEnable(BaseNotificationEnable):
-    status_change: bool = Field(default=True)
-    reset_data_usage: bool = Field(default=True)
-    data_reset_by_next: bool = Field(default=True)
-    subscription_revoked: bool = Field(default=True)
-
-
-class NotificationEnable(BaseModel):
-    admin: AdminNotificationEnable = Field(default_factory=AdminNotificationEnable)
-    core: BaseNotificationEnable = Field(default_factory=BaseNotificationEnable)
-    group: BaseNotificationEnable = Field(default_factory=BaseNotificationEnable)
-    host: HostNotificationEnable = Field(default_factory=HostNotificationEnable)
-    node: NodeNotificationEnable = Field(default_factory=NodeNotificationEnable)
-    user: UserNotificationEnable = Field(default_factory=UserNotificationEnable)
-    user_template: BaseNotificationEnable = Field(default_factory=BaseNotificationEnable)
-    days_left: bool = Field(default=True)
-    percentage_reached: bool = Field(default=True)
 
 
 class ConfigFormat(str, Enum):
@@ -264,7 +255,7 @@ class Subscription(BaseModel):
     update_interval: int = Field(default=12)
     support_url: str = Field(default="https://t.me/")
     profile_title: str = Field(default="Subscription")
-    # only supported by v2RayTun and Happ apps 
+    # only supported by v2RayTun and Happ apps
     announce: str = Field(default="", max_length=128)
     announce_url: str = Field(default="")
 

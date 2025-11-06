@@ -3,11 +3,14 @@ import copy
 from app.models.settings import NotificationSettings
 from app.models.user import UserNotificationResponse
 from app.notification.client import send_discord_webhook
+from app.notification.helpers import get_discord_webhook, should_send_admin_notification
 from app.settings import notification_settings
 from app.utils.system import readable_size
 
 from . import colors, messages
 from .utils import escape_md_user
+
+ENTITY = "user"
 
 _status = {
     "active": "**✅ Activated**",
@@ -38,9 +41,11 @@ async def user_status_change(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = _status_color[user.status.value]
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "status_change"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
 
 
 async def create_user(user: UserNotificationResponse, by: str):
@@ -62,9 +67,11 @@ async def create_user(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = colors.GREEN
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "create"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
 
 
 async def modify_user(user: UserNotificationResponse, by: str):
@@ -86,9 +93,11 @@ async def modify_user(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = colors.YELLOW
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "modify"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
 
 
 async def remove_user(user: UserNotificationResponse, by: str):
@@ -103,9 +112,11 @@ async def remove_user(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = colors.RED
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "delete"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
 
 
 async def reset_user_data_usage(user: UserNotificationResponse, by: str):
@@ -123,9 +134,11 @@ async def reset_user_data_usage(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = colors.CYAN
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "reset_data_usage"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
 
 
 async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
@@ -144,9 +157,11 @@ async def user_data_reset_by_next(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = colors.CYAN
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "data_reset_by_next"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
 
 
 async def user_subscription_revoked(user: UserNotificationResponse, by: str):
@@ -161,6 +176,8 @@ async def user_subscription_revoked(user: UserNotificationResponse, by: str):
     data["embeds"][0]["color"] = colors.RED
     settings: NotificationSettings = await notification_settings()
     if settings.notify_discord:
-        await send_discord_webhook(data, settings.discord_webhook_url)
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
     if user.admin and user.admin.discord_webhook:
-        await send_discord_webhook(data, user.admin.discord_webhook)
+        if should_send_admin_notification(user.admin, "subscription_revoked"):
+            await send_discord_webhook(data, user.admin.discord_webhook)
