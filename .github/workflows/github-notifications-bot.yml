@@ -19,7 +19,7 @@ jobs:
         run: |
           # CORRECT HTML ESCAPE FUNCTION — THIS WAS BROKEN BEFORE
           html_escape() {
-            echo "$1" | sed 's/&/\&amp;/g; s/</\</g; s/>/\>/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g'
+            echo "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g'
           }
 
           LOG_BUFFER=""
