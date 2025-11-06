@@ -65,7 +65,7 @@ class NodeCreate(Node):
             return v
         except ValueError:
             # Regex for domain validation
-            if re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$", v):
+            if re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,14}$", v):
                 return v
             raise ValueError("Invalid address format, must be a valid IPv4/IPv6 or domain")
 
