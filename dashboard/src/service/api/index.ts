@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.4.1
+ * OpenAPI spec version: 1.5.0
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -368,19 +368,19 @@ export interface UsersResponse {
 
 export type UserUsageStatsListPeriod = Period | null
 
-export interface UserUsageStat {
-  total_traffic: number
-  period_start: string
-}
-
-export type UserUsageStatsListStats = { [key: string]: UserUsageStat[] }
-
 export interface UserUsageStatsList {
   period?: UserUsageStatsListPeriod
   start: string
   end: string
   stats: UserUsageStatsListStats
 }
+
+export interface UserUsageStat {
+  total_traffic: number
+  period_start: string
+}
+
+export type UserUsageStatsListStats = { [key: string]: UserUsageStat[] }
 
 export type UserTemplateResponseIsDisabled = boolean | null
 
@@ -750,8 +750,6 @@ export interface TransportSettingsOutput {
 
 export type TransportSettingsInputWebsocketSettings = WebSocketSettings | null
 
-export type TransportSettingsInputTcpSettings = TcpSettings | null
-
 export type TransportSettingsInputKcpSettings = KCPSettings | null
 
 export type TransportSettingsInputGrpcSettings = GRPCSettings | null
@@ -803,6 +801,8 @@ export interface TcpSettings {
   request?: TcpSettingsRequest
   response?: TcpSettingsResponse
 }
+
+export type TransportSettingsInputTcpSettings = TcpSettings | null
 
 export type SystemStatsCpuUsage = number | null
 
@@ -1774,6 +1774,26 @@ export type BaseHostMuxSettings = MuxSettingsOutput | null
 
 export type BaseHostTransportSettings = TransportSettingsOutput | null
 
+export type BaseHostHttpHeadersAnyOf = { [key: string]: string }
+
+export type BaseHostHttpHeaders = BaseHostHttpHeadersAnyOf | null
+
+export type BaseHostAllowinsecure = boolean | null
+
+export type BaseHostAlpn = ProxyHostALPN[] | null
+
+export type BaseHostPath = string | null
+
+export type BaseHostHost = string[] | null
+
+export type BaseHostSni = string[] | null
+
+export type BaseHostPort = number | null
+
+export type BaseHostInboundTag = string | null
+
+export type BaseHostId = number | null
+
 export interface BaseHost {
   id?: BaseHostId
   remark: string
@@ -1799,26 +1819,6 @@ export interface BaseHost {
   status?: BaseHostStatus
   ech_config_list?: BaseHostEchConfigList
 }
-
-export type BaseHostHttpHeadersAnyOf = { [key: string]: string }
-
-export type BaseHostHttpHeaders = BaseHostHttpHeadersAnyOf | null
-
-export type BaseHostAllowinsecure = boolean | null
-
-export type BaseHostAlpn = ProxyHostALPN[] | null
-
-export type BaseHostPath = string | null
-
-export type BaseHostHost = string[] | null
-
-export type BaseHostSni = string[] | null
-
-export type BaseHostPort = number | null
-
-export type BaseHostInboundTag = string | null
-
-export type BaseHostId = number | null
 
 export type ApplicationOutputDescription = { [key: string]: string }
 
@@ -1967,31 +1967,6 @@ export interface AdminCreate {
   support_url?: AdminCreateSupportUrl
   notification_enable?: AdminCreateNotificationEnable
   username: string
-}
-
-export type AdminContactInfoNotificationEnable = UserNotificationEnable | null
-
-export type AdminContactInfoSupportUrl = string | null
-
-export type AdminContactInfoProfileTitle = string | null
-
-export type AdminContactInfoSubDomain = string | null
-
-export type AdminContactInfoDiscordWebhook = string | null
-
-export type AdminContactInfoTelegramId = number | null
-
-/**
- * Base model containing the core admin identification fields.
- */
-export interface AdminContactInfo {
-  username: string
-  telegram_id?: AdminContactInfoTelegramId
-  discord_webhook?: AdminContactInfoDiscordWebhook
-  sub_domain?: AdminContactInfoSubDomain
-  profile_title?: AdminContactInfoProfileTitle
-  support_url?: AdminContactInfoSupportUrl
-  notification_enable?: AdminContactInfoNotificationEnable
 }
 
 /**
