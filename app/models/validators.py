@@ -102,6 +102,10 @@ class PasswordValidator:
         if check_username and check_username.lower() in value.lower():
             errors.append("Password cannot contain the username")
 
+        # Check if password contains the duble quote
+        if '"' in value:
+            errors.append('Password cannot contain the double quote (") character')
+
         if errors:
             raise ValueError("; ".join(errors))
         return value
