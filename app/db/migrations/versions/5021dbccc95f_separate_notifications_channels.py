@@ -55,10 +55,11 @@ def upgrade() -> None:
         # Keep topic_id ONLY if we're using channel_id (not admin_id)
         # If using admin_id directly, topic_id doesn't make sense
         new_topic_id = telegram_topic_id if telegram_channel_id else None
+        notify_telegram = old_settings.get("notify_telegram", False) if new_chat_id else False
 
         # Create new settings structure
         new_settings = {
-            "notify_telegram": old_settings.get("notify_telegram", False),
+            "notify_telegram": notify_telegram,
             "notify_discord": old_settings.get("notify_discord", False),
             "telegram_api_token": old_settings.get("telegram_api_token"),
             "telegram_chat_id": new_chat_id,
