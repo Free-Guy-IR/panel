@@ -2,7 +2,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -610,7 +610,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
       <DialogContent className="h-full w-full max-w-2xl sm:max-h-[95dvh] sm:py-4" onOpenAutoFocus={e => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle className={cn(dir === 'rtl' ? 'text-right' : 'text-left')}>{editingHost ? t('editHost.title') : t('hostsDialog.addHost')}</DialogTitle>
+          <DialogTitle className={cn("mt-2",dir === 'rtl' ? 'text-right' : 'text-left')}>{editingHost ? t('editHost.title') : t('hostsDialog.addHost')}</DialogTitle>
+          <DialogDescription className='sr-only'>
+            Modify the host settings below
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

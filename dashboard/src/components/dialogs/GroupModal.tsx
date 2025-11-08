@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -77,6 +77,9 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
       <DialogContent onOpenAutoFocus={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className={cn(dir === 'rtl' && 'text-right')}>{editingGroup ? t('editGroup', { defaultValue: 'Edit Group' }) : t('createGroup')}</DialogTitle>
+          <DialogDescription className='sr-only'>
+            Modify the group settings below
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
