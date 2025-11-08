@@ -1060,6 +1060,7 @@
   "subscriptionClients": {
     "title": "订阅客户端",
     "viewAllClients": "查看客户端",
+    "clients": "客户端",
     "total": "总计：{{count}} 个客户端",
     "showing": "显示最近 {{count}} 次访问",
     "noClients": "未找到订阅客户端",
@@ -1067,6 +1068,25 @@
     "knownClient": "已知",
     "unknown": "未知",
     "error": "加载订阅客户端失败"
+  },
+  "userAllIPs": {
+    "title": "IP 地址 - {{username}}",
+    "description": "查看用户 {{username}} 在所有节点上的所有 IP 地址",
+    "viewAllIPs": "查看所有 IP",
+    "ipAddresses": "IP 地址",
+    "nodeId": "节点 #{{nodeId}}",
+    "totalIPs": "{{count}} 个 IP 地址",
+    "totalIPs_plural": "{{count}} 个 IP 地址",
+    "lastSeen": "最后出现",
+    "refresh": "刷新",
+    "autoRefresh": "自动刷新：每 {{seconds}} 秒",
+    "refreshed": "IP 地址已更新",
+    "refreshFailed": "刷新 IP 地址失败",
+    "userNotFound": "用户 \"{{username}}\" 未找到或当前离线",
+    "errorLoading": "无法加载 IP 地址：{{message}}",
+    "noIPs": "未找到活动的 IP 地址。此用户可能当前未连接到任何节点。",
+    "ipCopied": "IP 地址已复制到剪贴板",
+    "clickToCopy": "点击复制 IP 地址"
   },
   "search": "搜索",
   "status.active": "活跃",

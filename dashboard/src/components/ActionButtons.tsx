@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { UseEditFormValues, UseFormValues } from '@/pages/_dashboard.users'
 import { useActiveNextPlan, useGetCurrentAdmin, useRemoveUser, useResetUserDataUsage, useRevokeUserSubscription, UserResponse } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, Copy, Cpu, EllipsisVertical, ListStart, Pencil, PieChart, QrCode, RefreshCcw, Trash2, User, Users } from 'lucide-react'
+import { Check, Copy, Cpu, EllipsisVertical, ListStart, Network, Pencil, PieChart, QrCode, RefreshCcw, Trash2, User, Users } from 'lucide-react'
 import { FC, useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +17,7 @@ import SetOwnerModal from './dialogs/SetOwnerModal'
 import UsageModal from './dialogs/UsageModal'
 import UserModal from './dialogs/UserModal'
 import { UserSubscriptionClientsModal } from './dialogs/UserSubscriptionClientsModal'
+import UserAllIPsModal from './dialogs/UserAllIPsModal'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 
@@ -42,6 +43,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   const [isSetOwnerModalOpen, setSetOwnerModalOpen] = useState(false)
   const [isActiveNextPlanModalOpen, setIsActiveNextPlanModalOpen] = useState(false)
   const [isSubscriptionClientsModalOpen, setSubscriptionClientsModalOpen] = useState(false)
+  const [isUserAllIPsModalOpen, setUserAllIPsModalOpen] = useState(false)
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -51,14 +53,9 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   const activeNextMutation = useActiveNextPlan()
   const { data: currentAdmin } = useGetCurrentAdmin({
     query: {
-      // Cache for 5 minutes to avoid repeated calls
       staleTime: 5 * 60 * 1000,
-      // Keep in cache for 10 minutes
       gcTime: 10 * 60 * 1000,
-      // Don't refetch on mount if we have cached data
       refetchOnMount: false,
-      // Only refetch on window focus if data is stale
-      refetchOnWindowFocus: false,
     },
   })
 
@@ -456,7 +453,13 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
             {/* Subscription Info */}
             <DropdownMenuItem onClick={() => setSubscriptionClientsModalOpen(true)}>
               <Users className="mr-2 h-4 w-4" />
-              <span>{t('subscriptionClients.viewAllClients', { defaultValue: 'View All Clients' })}</span>
+              <span>{t('subscriptionClients.clients', { defaultValue: 'Clients' })}</span>
+            </DropdownMenuItem>
+
+            {/* View All IPs */}
+            <DropdownMenuItem onClick={() => setUserAllIPsModalOpen(true)}>
+              <Network className="mr-2 h-4 w-4" />
+              <span>{t('userAllIPs.ipAddresses', { defaultValue: 'IP addresses' })}</span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -549,6 +552,9 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
 
       {/* UserSubscriptionClientsModal */}
       <UserSubscriptionClientsModal isOpen={isSubscriptionClientsModalOpen} onOpenChange={setSubscriptionClientsModalOpen} username={user.username} />
+
+      {/* UserAllIPsModal */}
+      <UserAllIPsModal isOpen={isUserAllIPsModalOpen} onOpenChange={setUserAllIPsModalOpen} username={user.username} />
     </div>
   )
 }

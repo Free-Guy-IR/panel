@@ -1080,6 +1080,7 @@
   "subscriptionClients": {
     "title": "Subscription Clients",
     "viewAllClients": "View Clients",
+    "clients": "Clients",
     "total": "Total: {{count}} clients",
     "showing": "Showing last {{count}} accesses",
     "noClients": "No subscription clients found",
@@ -1087,6 +1088,25 @@
     "knownClient": "Known",
     "unknown": "Unknown",
     "error": "Failed to load subscription clients"
+  },
+  "userAllIPs": {
+    "title": "IP Addresses - {{username}}",
+    "description": "View all IP addresses associated with user {{username}} across all nodes",
+    "viewAllIPs": "View All IPs",
+    "ipAddresses": "IP addresses",
+    "nodeId": "Node #{{nodeId}}",
+    "totalIPs": "{{count}} IP address",
+    "totalIPs_plural": "{{count}} IP addresses",
+    "lastSeen": "Last seen",
+    "refresh": "Refresh",
+    "autoRefresh": "Auto-refresh: every {{seconds}} seconds",
+    "refreshed": "IP addresses updated",
+    "refreshFailed": "Failed to refresh IP addresses",
+    "userNotFound": "User \"{{username}}\" not found or currently offline",
+    "errorLoading": "Unable to load IP addresses: {{message}}",
+    "noIPs": "No active IP addresses found. This user may not be currently connected to any nodes.",
+    "ipCopied": "IP address copied to clipboard",
+    "clickToCopy": "Click to copy IP address"
   },
   "search": "Search",
   "status.active": "Active",

@@ -955,6 +955,7 @@
   "subscriptionClients": {
     "title": "کلاینت‌های اشتراک",
     "viewAllClients": "مشاهده کلاینت‌ها",
+    "clients": "کلاینت‌ها",
     "total": "مجموع: {{count}} کلاینت",
     "showing": "نمایش آخرین {{count}} دسترسی",
     "noClients": "هیچ کلاینت اشتراکی یافت نشد",
@@ -962,6 +963,25 @@
     "knownClient": "شناخته شده",
     "unknown": "نامشخص",
     "error": "بارگیری کلاینت‌های اشتراک ناموفق بود"
+  },
+  "userAllIPs": {
+    "title": "آدرس‌های IP - {{username}}",
+    "description": "مشاهده همه آدرس‌های IP مرتبط با کاربر {{username}} در تمام گره‌ها",
+    "viewAllIPs": "مشاهده همه IPها",
+    "ipAddresses": "آدرس‌های IP",
+    "nodeId": "گره #{{nodeId}}",
+    "totalIPs": "{{count}} IP آدرس",
+    "totalIPs_plural": "{{count}} IP آدرس",
+    "lastSeen": "آخرین مشاهده",
+    "refresh": "به‌روزرسانی",
+    "autoRefresh": "به‌روزرسانی خودکار: هر {{seconds}} ثانیه",
+    "refreshed": "آدرس‌های IP به‌روزرسانی شد",
+    "refreshFailed": "به‌روزرسانی آدرس‌های IP ناموفق بود",
+    "userNotFound": "کاربر \"{{username}}\" یافت نشد یا در حال حاضر آفلاین است",
+    "errorLoading": "بارگیری آدرس‌های IP ناموفق بود: {{message}}",
+    "noIPs": "هیچ آدرس IP فعالی یافت نشد. این کاربر ممکن است در حال حاضر به هیچ گره‌ای متصل نباشد.",
+    "ipCopied": "آدرس IP در کلیپ‌بورد کپی شد",
+    "clickToCopy": "کلیک کنید تا آدرس IP کپی شود"
   },
   "search": "جستجو",
   "status.active": "فعال",
