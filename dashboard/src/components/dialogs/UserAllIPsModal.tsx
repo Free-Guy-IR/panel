@@ -310,30 +310,12 @@ export default function UserAllIPsModal({ isOpen, onOpenChange, username }: User
         return
       }
 
-      if (userCloseRef.current) {
-        userCloseRef.current = false
-        onOpenChange(false)
-        return
-      }
+      // Always allow closing - user should be able to close the dialog
+      userCloseRef.current = false
+      onOpenChange(false)
     },
     [onOpenChange],
   )
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    const handleCloseButtonClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (target.closest('[data-radix-dialog-close]') || target.closest('button[aria-label="Close"]')) {
-        userCloseRef.current = true
-      }
-    }
-
-    document.addEventListener('click', handleCloseButtonClick, true)
-    return () => {
-      document.removeEventListener('click', handleCloseButtonClick, true)
-    }
-  }, [isOpen])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
