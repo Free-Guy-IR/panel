@@ -590,21 +590,18 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   // Fetch data for tabs without caching
   const { data: templatesData, isLoading: templatesLoading } = useGetUserTemplates(undefined, {
     query: {
-      staleTime: 0, // No stale time - always fetch fresh data
-      gcTime: 0, // No garbage collection time - no caching
-      refetchOnWindowFocus: false,
+      staleTime: 0,
+      gcTime: 0,
       refetchOnMount: true,
       refetchOnReconnect: false,
     },
   })
 
-  // Fetch general settings each time the modal is opened
   const { data: generalSettings } = useQuery({
     queryKey: getGetGeneralSettingsQueryKey(),
     queryFn: () => getGeneralSettings(),
     enabled: isDialogOpen,
     refetchOnMount: true,
-    refetchOnWindowFocus: true,
   })
 
   // Function to refresh all user-related data

@@ -4,7 +4,7 @@ import AdminStatisticsCard from './admin-statistics-card'
 const DashboardAdminStatistics = ({ currentAdmin, systemStats }: { currentAdmin: AdminDetails | undefined; systemStats: SystemStats | undefined }) => {
   const { data } = useGetAdmins(undefined, {
     query: {
-      refetchInterval: 60000,
+      refetchInterval: false,
     },
   })
 

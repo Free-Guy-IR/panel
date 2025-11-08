@@ -115,9 +115,8 @@ const UsersTable = memo(() => {
     isFetching,
   } = useGetUsers(filters, {
     query: {
-      refetchOnWindowFocus: false,
-      staleTime: 0, // No stale time - always fetch fresh data
-      gcTime: 0, // No garbage collection time - no caching
+      staleTime: 0,
+      gcTime: 0,
       retry: 1,
     },
   })

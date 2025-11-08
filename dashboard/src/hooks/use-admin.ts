@@ -13,19 +13,11 @@ export const useAdmin = () => {
     refetch,
   } = useGetCurrentAdmin({
     query: {
-      // Use initial data from router loader if available
       initialData: initialAdminData,
-      // Only refetch when window regains focus, not on a timer
-      refetchOnWindowFocus: true,
-      // Cache the data for 5 minutes
       staleTime: 5 * 60 * 1000,
-      // Keep the data in cache for 10 minutes
       gcTime: 10 * 60 * 1000,
-      // Don't refetch automatically on mount if we have initial data
       refetchOnMount: !initialAdminData,
-      // Retry failed requests up to 2 times
       retry: 2,
-      // Don't refetch on reconnect if we have fresh data
       refetchOnReconnect: 'always',
     },
   })

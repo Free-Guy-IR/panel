@@ -554,9 +554,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const { data: hosts = [] } = useQuery({
     queryKey: ['getHostsQueryKey'],
     queryFn: () => getHosts(),
-    enabled: isTransportOpen, // Only fetch when transport section is open
-    refetchOnWindowFocus: false,
-    select: data => data.filter(host => host.id != null), // Filter out hosts with null IDs
+    enabled: isTransportOpen,
+    select: data => data.filter(host => host.id != null),
   })
 
   // No automatic refresh when dialog opens - only fetch on specific actions

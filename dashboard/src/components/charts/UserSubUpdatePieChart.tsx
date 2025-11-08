@@ -165,7 +165,6 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
   const { data, isLoading, error } = useGetUsersSubUpdateChart(params, {
     query: {
       refetchInterval: 60_000,
-      refetchOnWindowFocus: false,
     },
   })
 
