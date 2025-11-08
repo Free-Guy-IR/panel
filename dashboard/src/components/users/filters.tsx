@@ -79,11 +79,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   const [search, setSearch] = useState(filters.search || '')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(() => getUsersAutoRefreshIntervalSeconds())
-  const { refetch: queryRefetch } = useGetUsers(filters, {
-    query: {
-      refetchOnWindowFocus: false,
-    },
-  })
+  const { refetch: queryRefetch } = useGetUsers(filters)
   const refetchUsers = useCallback(() => {
     const refetchFn = refetch ?? queryRefetch
     return refetchFn()
@@ -203,9 +199,9 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   }
 
   return (
-    <div dir={dir} className="flex items-center gap-4 py-4">
+    <div dir={dir} className="flex items-center gap-2 py-4 md:gap-4">
       {/* Search Input */}
-      <div className="relative w-full md:w-[calc(100%/3-10px)]">
+      <div className="relative flex-1 min-w-0 md:w-[calc(100%/3-10px)] md:flex-none">
         <SearchIcon className={cn('absolute', dir === 'rtl' ? 'right-2' : 'left-2', 'top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 text-input-placeholder')} />
         <Input placeholder={t('search')} value={search} onChange={handleSearchChange} className="pl-8 pr-10" />
         {search && (
@@ -214,8 +210,8 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
           </button>
         )}
       </div>
-      <div className="flex h-full items-center gap-1">
-        <Button size="icon-md" variant="ghost" className="relative flex items-center gap-2 border" onClick={handleOpenAdvanceSearch}>
+      <div className="flex h-full flex-shrink-0 items-center gap-1">
+        <Button size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10" onClick={handleOpenAdvanceSearch}>
           <Filter className="h-4 w-4" />
           {hasActiveAdvanceFilters() && (
             <Badge variant="destructive" className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full p-0 text-xs">
@@ -226,7 +222,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         {hasActiveAdvanceFilters() && onClearAdvanceSearch && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className={cn('h-8 w-8 p-0', dir === 'rtl' ? 'rounded-r-none border-r-0' : 'rounded-l-none border-l-0')} onClick={onClearAdvanceSearch}>
+              <Button size="sm" variant="outline" className={cn('h-9 w-9 p-0 md:h-8 md:w-8', dir === 'rtl' ? 'rounded-r-none border-r-0' : 'rounded-l-none border-l-0')} onClick={onClearAdvanceSearch}>
                 <X className="h-3 w-3" />
               </Button>
             </PopoverTrigger>
@@ -238,10 +234,10 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
       </div>
       {/* Sort Button */}
       {handleSort && (
-        <div className="flex h-full items-center gap-1">
+        <div className="flex h-full flex-shrink-0 items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon-md" variant="ghost" className="relative flex items-center gap-2 border" aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}>
+              <Button size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10" aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}>
                 <ArrowUpDown className="h-4 w-4" />
                 {filters.sort && filters.sort !== '-created_at' && <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />}
               </Button>
@@ -277,12 +273,12 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         </div>
       )}
       {/* Refresh Button */}
-      <div className="flex h-full items-center gap-0">
+      <div className="flex h-full flex-shrink-0 items-center gap-0">
         <Button
           size="icon-md"
           onClick={handleRefreshClick}
           variant="ghost"
-          className={cn('relative flex items-center gap-2 border', dir === 'rtl' ? 'rounded-l-none border-l-0' : 'rounded-r-none')}
+          className={cn('relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10', dir === 'rtl' ? 'rounded-l-none border-l-0' : 'rounded-r-none')}
           aria-label={t('autoRefresh.refreshNow')}
           title={t('autoRefresh.refreshNow')}
           disabled={isRefreshing}
@@ -295,7 +291,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
             <Button
               size="icon-md"
               variant="ghost"
-              className={cn('relative flex items-center gap-2 border', dir === 'rtl' ? 'rounded-r-none' : 'rounded-l-none border-l-0')}
+              className={cn('relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10', dir === 'rtl' ? 'rounded-r-none' : 'rounded-l-none border-l-0')}
               aria-label={t('autoRefresh.label')}
               title={`${t('autoRefresh.label')} (${autoRefreshShortLabel})`}
             >
