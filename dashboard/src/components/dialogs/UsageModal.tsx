@@ -192,7 +192,7 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
     .filter(key => !key.startsWith('_') && key !== 'time' && key !== '_period_start' && key !== 'usage' && (data[key] || 0) > 0)
     .map(nodeName => ({
       name: nodeName,
-      usage: data[nodeName] || 0
+      usage: data[nodeName] || 0,
     }))
     .sort((a, b) => b.usage - a.usage)
 
@@ -206,55 +206,53 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
   const isUserUsageData = (data.usage !== undefined && activeNodes.length === 0) || (activeNodes.length === 0 && Object.keys(data).includes('usage'))
 
   return (
-    <div className={`min-w-[120px] max-w-[280px] sm:min-w-[140px] sm:max-w-[300px] rounded border border-border bg-background p-1.5 sm:p-2 text-[10px] sm:text-xs shadow ${isRTL ? 'text-right' : 'text-left'} ${isMobile ? 'max-h-[200px] overflow-y-auto' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className={`mb-1 text-[10px] sm:text-xs font-semibold opacity-70 text-center`}>
+    <div
+      className={`min-w-[120px] max-w-[280px] rounded border border-border bg-background p-1.5 text-[10px] shadow sm:min-w-[140px] sm:max-w-[300px] sm:p-2 sm:text-xs ${isRTL ? 'text-right' : 'text-left'} ${isMobile ? 'max-h-[200px] overflow-y-auto' : ''}`}
+      dir={isRTL ? 'rtl' : 'ltr'}
+    >
+      <div className={`mb-1 text-center text-[10px] font-semibold opacity-70 sm:text-xs`}>
         <span dir="ltr" className="inline-block truncate">
           {formattedDate}
         </span>
       </div>
-      <div className={`mb-1.5 text-[10px] flex items-center justify-center gap-1.5 sm:text-xs text-muted-foreground text-center`}>
+      <div className={`mb-1.5 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground sm:text-xs`}>
         <span>{t('statistics.totalUsage', { defaultValue: 'Total' })}: </span>
-        <span dir="ltr" className="inline-block font-mono truncate">
-          {isUserUsageData 
-            ? data.usage.toFixed(2)
-            : nodesToShow.reduce((sum, node) => sum + node.usage, 0).toFixed(2)
-          } GB
+        <span dir="ltr" className="inline-block truncate font-mono">
+          {isUserUsageData ? data.usage.toFixed(2) : nodesToShow.reduce((sum, node) => sum + node.usage, 0).toFixed(2)} GB
         </span>
       </div>
-      
+
       {isUserUsageData ? (
         // User usage data - show simple node label
         <div className={`flex flex-col gap-1`}>
           <div className={`flex items-center gap-1 text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: 'hsl(var(--primary))' }} />
-            <span className="truncate max-w-[60px] sm:max-w-[80px] overflow-hidden text-ellipsis">
-              {t('statistics.allNodes', { defaultValue: 'All Nodes' })}
-            </span>
+            <div className="h-1.5 w-1.5 flex-shrink-0 rounded-full sm:h-2 sm:w-2" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+            <span className="max-w-[60px] overflow-hidden truncate text-ellipsis sm:max-w-[80px]">{t('statistics.allNodes', { defaultValue: 'All Nodes' })}</span>
           </div>
         </div>
       ) : (
         // Node breakdown data
-      <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        {nodesToShow.map(node => (
-          <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
-            <span className={`flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: getNodeColor(node.name) }} />
-              <span className="truncate max-w-[60px] sm:max-w-[80px] overflow-hidden text-ellipsis" title={node.name}>{node.name}</span>
-            </span>
-            <span className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-                <span className="font-mono">
-                  {node.usage.toFixed(2)} GB
+        <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {nodesToShow.map(node => (
+            <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
+              <span className={`flex items-center gap-0.5 text-[10px] font-semibold sm:text-xs ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div className="h-1.5 w-1.5 flex-shrink-0 rounded-full sm:h-2 sm:w-2" style={{ backgroundColor: getNodeColor(node.name) }} />
+                <span className="max-w-[60px] overflow-hidden truncate text-ellipsis sm:max-w-[80px]" title={node.name}>
+                  {node.name}
+                </span>
               </span>
-            </span>
-          </div>
-        ))}
-        {hasMoreNodes && (
-          <div className={`flex items-center justify-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 w-full col-span-full`}>
-            <Info className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-            <span className="text-center">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
-          </div>
-        )}
-      </div>
+              <span className={`flex items-center gap-0.5 text-[9px] text-muted-foreground sm:text-[10px] ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+                <span className="font-mono">{node.usage.toFixed(2)} GB</span>
+              </span>
+            </div>
+          ))}
+          {hasMoreNodes && (
+            <div className={`col-span-full mt-1 flex w-full items-center justify-center gap-0.5 text-[9px] text-muted-foreground sm:text-[10px]`}>
+              <Info className="h-2.5 w-2.5 flex-shrink-0 sm:h-3 sm:w-3" />
+              <span className="text-center">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -412,7 +410,7 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
         end: dateUtils.toDayjs(customRange.to).endOf('day').toISOString(),
       }
     }
-    
+
     // For preset periods, set end time for daily periods to avoid extra bars
     const endTime = backendPeriod === Period.day ? dateUtils.toDayjs(new Date()).endOf('day').toISOString() : undefined
     return {
@@ -430,28 +428,28 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
 
     // If all nodes selected for sudo admins (selectedNodeId is undefined and is_sudo), handle like AllNodesStackedBarChart
     if (selectedNodeId === undefined && is_sudo) {
-    let statsByNode: Record<string, any[]> = {}
-    if (data.stats) {
-      if (typeof data.stats === 'object' && !Array.isArray(data.stats)) {
+      let statsByNode: Record<string, any[]> = {}
+      if (data.stats) {
+        if (typeof data.stats === 'object' && !Array.isArray(data.stats)) {
           // This is the expected format when no node_id is provided
           statsByNode = data.stats
-      } else if (Array.isArray(data.stats)) {
+        } else if (Array.isArray(data.stats)) {
           // fallback: old format - not expected for all nodes
           console.warn('Unexpected array format for all nodes usage')
+        }
       }
-    }
 
-    // Build a map from node id to node name for quick lookup
-    const nodeIdToName = nodeList.reduce(
-      (acc, node) => {
-        acc[node.id] = node.name
-        return acc
-      },
-      {} as Record<string, string>,
-    )
+      // Build a map from node id to node name for quick lookup
+      const nodeIdToName = nodeList.reduce(
+        (acc, node) => {
+          acc[node.id] = node.name
+          return acc
+        },
+        {} as Record<string, string>,
+      )
 
-    // Check if we have data for individual nodes or aggregated data
-    const hasIndividualNodeData = Object.keys(statsByNode).some(key => key !== '-1')
+      // Check if we have data for individual nodes or aggregated data
+      const hasIndividualNodeData = Object.keys(statsByNode).some(key => key !== '-1')
 
       if (!hasIndividualNodeData && statsByNode['-1']) {
         // API returned aggregated data for all nodes combined
@@ -635,7 +633,6 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
     return percent
   }, [processedChartData, selectedNodeId])
 
-
   // Handlers
   const handleCustomRangeChange = useCallback((range: DateRange | undefined) => {
     setCustomRange(range)
@@ -723,11 +720,11 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
                     <BarChart
                       data={processedChartData}
                       margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
-                      onClick={(data) => {
+                      onClick={data => {
                         if (data && data.activePayload && data.activePayload.length > 0 && processedChartData) {
                           const clickedData = data.activePayload[0].payload
-                          const activeNodesCount = Object.keys(clickedData).filter(key =>
-                            !key.startsWith('_') && key !== 'time' && key !== '_period_start' && key !== 'usage' && (clickedData[key] || 0) > 0
+                          const activeNodesCount = Object.keys(clickedData).filter(
+                            key => !key.startsWith('_') && key !== 'time' && key !== '_period_start' && key !== 'usage' && (clickedData[key] || 0) > 0,
                           ).length
                           // Open modal if there are active nodes (regardless of count)
                           if (activeNodesCount > 0) {
@@ -770,11 +767,11 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
                         ))
                       ) : (
                         // Single node selected OR non-sudo admin aggregated data - render single bar
-                      <Bar dataKey="usage" radius={6} cursor="pointer">
-                        {processedChartData.map((_: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={'hsl(var(--primary))'} />
-                        ))}
-                      </Bar>
+                        <Bar dataKey="usage" radius={6} cursor="pointer">
+                          {processedChartData.map((_: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={'hsl(var(--primary))'} />
+                          ))}
+                        </Bar>
                       )}
                     </BarChart>
                   </ResponsiveContainer>

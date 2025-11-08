@@ -154,7 +154,7 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
       name: nodeName,
       usage: data[nodeName] || 0,
       uplink: data[`_uplink_${nodeName}`] || 0,
-      downlink: data[`_downlink_${nodeName}`] || 0
+      downlink: data[`_downlink_${nodeName}`] || 0,
     }))
     .sort((a, b) => b.usage - a.usage)
 
@@ -164,44 +164,47 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
   const hasMoreNodes = activeNodes.length > maxNodesToShow
 
   return (
-    <div className={`min-w-[120px] max-w-[280px] sm:min-w-[140px] sm:max-w-[300px] rounded border border-border bg-background p-1.5 sm:p-2 text-[10px] sm:text-xs shadow ${isRTL ? 'text-right' : 'text-left'} ${isMobile ? 'max-h-[200px] overflow-y-auto' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className={`mb-1 text-[10px] sm:text-xs font-semibold opacity-70 text-center`}>
+    <div
+      className={`min-w-[120px] max-w-[280px] rounded border border-border bg-background p-1.5 text-[10px] shadow sm:min-w-[140px] sm:max-w-[300px] sm:p-2 sm:text-xs ${isRTL ? 'text-right' : 'text-left'} ${isMobile ? 'max-h-[200px] overflow-y-auto' : ''}`}
+      dir={isRTL ? 'rtl' : 'ltr'}
+    >
+      <div className={`mb-1 text-center text-[10px] font-semibold opacity-70 sm:text-xs`}>
         <span dir="ltr" className="inline-block truncate">
           {formattedDate}
         </span>
       </div>
-      <div className={`mb-1.5 text-[10px] flex items-center justify-center gap-1.5 sm:text-xs text-muted-foreground text-center`}>
+      <div className={`mb-1.5 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground sm:text-xs`}>
         <span>{t('statistics.totalUsage', { defaultValue: 'Total' })}: </span>
-        <span dir="ltr" className="inline-block font-mono truncate">
-          {nodesToShow
-            .reduce((sum, node) => sum + node.usage, 0)
-            .toFixed(2)}
+        <span dir="ltr" className="inline-block truncate font-mono">
+          {nodesToShow.reduce((sum, node) => sum + node.usage, 0).toFixed(2)}
           GB
         </span>
       </div>
       <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {nodesToShow.map(node => (
           <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
-            <span className={`flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: getNodeColor(node.name) }} />
-              <span className="truncate max-w-[60px] sm:max-w-[80px] overflow-hidden text-ellipsis" title={node.name}>{node.name}</span>
+            <span className={`flex items-center gap-0.5 text-[10px] font-semibold sm:text-xs ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className="h-1.5 w-1.5 flex-shrink-0 rounded-full sm:h-2 sm:w-2" style={{ backgroundColor: getNodeColor(node.name) }} />
+              <span className="max-w-[60px] overflow-hidden truncate text-ellipsis sm:max-w-[80px]" title={node.name}>
+                {node.name}
+              </span>
             </span>
-            <span className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-              <Upload className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-              <span dir="ltr" className="inline-block font-mono truncate max-w-[40px] sm:max-w-[50px] overflow-hidden text-ellipsis" title={String(formatBytes(node.uplink))}>
+            <span className={`flex items-center gap-0.5 text-[9px] text-muted-foreground sm:text-[10px] ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+              <Upload className="h-2.5 w-2.5 flex-shrink-0 sm:h-3 sm:w-3" />
+              <span dir="ltr" className="inline-block max-w-[40px] overflow-hidden truncate text-ellipsis font-mono sm:max-w-[50px]" title={String(formatBytes(node.uplink))}>
                 {formatBytes(node.uplink)}
               </span>
               <span className={`opacity-60 ${isRTL ? 'mx-0.5' : 'mx-0.5'} text-[8px] sm:text-[10px]`}>|</span>
-              <Download className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-              <span dir="ltr" className="inline-block font-mono truncate max-w-[40px] sm:max-w-[50px] overflow-hidden text-ellipsis" title={String(formatBytes(node.downlink))}>
+              <Download className="h-2.5 w-2.5 flex-shrink-0 sm:h-3 sm:w-3" />
+              <span dir="ltr" className="inline-block max-w-[40px] overflow-hidden truncate text-ellipsis font-mono sm:max-w-[50px]" title={String(formatBytes(node.downlink))}>
                 {formatBytes(node.downlink)}
               </span>
             </span>
           </div>
         ))}
         {hasMoreNodes && (
-          <div className={`flex items-center justify-center gap-0.5 text-[9px] sm:text-[10px] text-muted-foreground mt-1 w-full col-span-full`}>
-            <Info className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+          <div className={`col-span-full mt-1 flex w-full items-center justify-center gap-0.5 text-[9px] text-muted-foreground sm:text-[10px]`}>
+            <Info className="h-2.5 w-2.5 flex-shrink-0 sm:h-3 sm:w-3" />
             <span className="text-center">{t('statistics.clickForMore', { defaultValue: 'Click for more details' })}</span>
           </div>
         )}
@@ -595,12 +598,10 @@ export function AllNodesStackedBarChart() {
                     accessibilityLayer
                     data={chartData}
                     margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
-                    onClick={(data) => {
+                    onClick={data => {
                       if (data && data.activePayload && data.activePayload.length > 0 && chartData) {
                         const clickedData = data.activePayload[0].payload
-                        const activeNodesCount = Object.keys(clickedData).filter(key =>
-                          !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0
-                        ).length
+                        const activeNodesCount = Object.keys(clickedData).filter(key => !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (clickedData[key] || 0) > 0).length
                         // Open modal if there are more nodes than shown in tooltip
                         const maxShown = window.innerWidth < 768 ? 3 : 6
                         if (activeNodesCount > maxShown) {
@@ -638,7 +639,7 @@ export function AllNodesStackedBarChart() {
                         fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
                         radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                         cursor="pointer"
-                        className='rounded-t-xl overflow-hidden'
+                        className="overflow-hidden rounded-t-xl"
                       />
                     ))}
                   </BarChart>
@@ -653,7 +654,7 @@ export function AllNodesStackedBarChart() {
                     {nodeList.map(node => {
                       const itemConfig = chartConfig[node.name]
                       return (
-                        <div dir='ltr' key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
+                        <div dir="ltr" key={node.id} className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
                           <div
                             className="h-2 w-2 shrink-0 rounded-[2px]"
                             style={{

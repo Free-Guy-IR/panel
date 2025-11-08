@@ -47,4 +47,3 @@ export const CountUp = ({ end, duration = 800 }: CountUpProps) => {
 
   return <>{numberWithCommas(count)}</>
 }
-

@@ -136,7 +136,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         search: value,
         offset: 0,
       })
-    }, 300)
+    }, 300),
   )
 
   // Cleanup on unmount
@@ -210,7 +210,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   return (
     <div dir={dir} className="flex items-center gap-2 py-4 md:gap-4">
       {/* Search Input */}
-      <div className="relative flex-1 min-w-0 md:w-[calc(100%/3-10px)] md:flex-none">
+      <div className="relative min-w-0 flex-1 md:w-[calc(100%/3-10px)] md:flex-none">
         <SearchIcon className={cn('absolute', dir === 'rtl' ? 'right-2' : 'left-2', 'top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 text-input-placeholder')} />
         <Input placeholder={t('search')} value={search} onChange={handleSearchChange} className="pl-8 pr-10" />
         {search && (
@@ -246,7 +246,12 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         <div className="flex h-full flex-shrink-0 items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10" aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}>
+              <Button
+                size="icon-md"
+                variant="ghost"
+                className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10"
+                aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}
+              >
                 <ArrowUpDown className="h-4 w-4" />
                 {filters.sort && filters.sort !== '-created_at' && <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />}
               </Button>
@@ -312,11 +317,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
               <span className="text-[9px]">{t('autoRefresh.currentSelection', { value: currentAutoRefreshDescription })}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => void handleRefreshClick()}
-              disabled={isRefreshing}
-              className="flex items-center gap-1.5 px-1.5 py-1 text-[11px]"
-            >
+            <DropdownMenuItem onSelect={() => void handleRefreshClick()} disabled={isRefreshing} className="flex items-center gap-1.5 px-1.5 py-1 text-[11px]">
               <RefreshCw className={cn('h-2.5 w-2.5 flex-shrink-0', isRefreshing && 'animate-spin')} />
               <span className="truncate">{t('autoRefresh.refreshNow')}</span>
               {isRefreshing && <LoaderCircle className="ml-auto h-2.5 w-2.5 animate-spin" />}

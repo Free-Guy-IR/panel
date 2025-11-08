@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 export function ThemeToggle() {
   const { setTheme } = useTheme()
   const { t } = useTranslation()
-  
+
   // Safely get sidebar state, defaulting to 'expanded' if not available
   const sidebarContext = useContext(SidebarContext)
   const sidebarState: 'expanded' | 'collapsed' = sidebarContext?.state ?? 'expanded'
@@ -38,30 +38,15 @@ export function ThemeToggle() {
         <PopoverContent className="w-48 p-2" side="right" align="start">
           <div className="space-y-1">
             <div className="px-2 py-1.5 text-sm font-semibold">{t('theme.title', { defaultValue: 'Theme' })}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => toggleTheme('light')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => toggleTheme('light')}>
               <Sun className="mr-2 h-4 w-4" />
               {t('theme.light')}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => toggleTheme('dark')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => toggleTheme('dark')}>
               <Moon className="mr-2 h-4 w-4" />
               {t('theme.dark')}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => toggleTheme('system')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => toggleTheme('system')}>
               <Monitor className="mr-2 h-4 w-4" />
               {t('theme.system')}
             </Button>

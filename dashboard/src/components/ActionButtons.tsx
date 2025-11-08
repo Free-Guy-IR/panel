@@ -371,12 +371,8 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {subscribeLinks.map(subLink => (
-                  <DropdownMenuItem 
-                    className="justify-start p-0" 
-                    key={subLink.link}
-                    onClick={() => handleCopyOrDownload(subLink)}
-                  >
-                    <span className="flex items-center gap-2 w-full px-2 py-1.5">
+                  <DropdownMenuItem className="justify-start p-0" key={subLink.link} onClick={() => handleCopyOrDownload(subLink)}>
+                    <span className="flex w-full items-center gap-2 px-2 py-1.5">
                       <span className="text-sm">{subLink.icon}</span>
                       <span>{subLink.protocol}</span>
                     </span>

@@ -347,7 +347,7 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
         </DialogHeader>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden min-h-0">
+        <div className="min-h-0 flex-1 overflow-hidden">
           {isLoading && (
             <div className={`flex items-center justify-center py-8 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
               <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin" />
@@ -375,7 +375,7 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
                 </div>
               </div>
 
-              <div className="max-h-[300px] sm:max-h-[400px] overflow-y-auto">
+              <div className="max-h-[300px] overflow-y-auto sm:max-h-[400px]">
                 {subUpdateList.updates && subUpdateList.updates.length > 0 ? (
                   <div className="grid grid-cols-1 gap-4 p-1 sm:grid-cols-2 lg:grid-cols-3">{subUpdateList.updates.map((update, index) => renderClientCard(update, index))}</div>
                 ) : (
@@ -403,28 +403,16 @@ export const UserSubscriptionClientsModal: FC<UserSubscriptionClientsModalProps>
         {/* Pagination Controls */}
         {totalPages > 1 && (
           <div className={`flex items-center justify-between border-t py-3 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrevPage}
-              disabled={!hasPrevPage || isLoading}
-              className={`flex items-center gap-1 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}
-            >
+            <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={!hasPrevPage || isLoading} className={`flex items-center gap-1 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
               <ChevronLeft className="h-4 w-4" />
               {t('previous', { defaultValue: 'Previous' })}
             </Button>
-            
+
             <span className="text-sm text-muted-foreground" dir="ltr">
               {currentPage + 1} / {totalPages}
             </span>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNextPage}
-              disabled={!hasNextPage || isLoading}
-              className={`flex items-center gap-1 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}
-            >
+            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={!hasNextPage || isLoading} className={`flex items-center gap-1 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
               {t('next', { defaultValue: 'Next' })}
               <ChevronRight className="h-4 w-4" />
             </Button>

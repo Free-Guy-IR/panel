@@ -18,10 +18,10 @@ export const clientLoader = async (): Promise<any> => {
 
 export default function DashboardLayout() {
   return (
-    <SidebarProvider className=''>
+    <SidebarProvider className="">
       <RouteGuard>
         <TopLoadingBar />
-        <div className='flex w-full flex-col lg:flex-row'>
+        <div className="flex w-full flex-col lg:flex-row">
           <AppSidebar />
           <SidebarInset>
             <div className="flex min-h-screen w-full flex-col justify-between gap-y-4">

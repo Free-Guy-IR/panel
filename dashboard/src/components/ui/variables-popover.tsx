@@ -16,12 +16,7 @@ interface VariablesPopoverProps {
   sideOffset?: number
 }
 
-export function VariablesPopover({
-  includeProtocolTransport = false,
-  side = 'right',
-  align = 'start',
-  sideOffset = 0,
-}: VariablesPopoverProps) {
+export function VariablesPopover({ includeProtocolTransport = false, side = 'right', align = 'start', sideOffset = 0 }: VariablesPopoverProps) {
   const { t } = useTranslation()
   const { copy } = useClipboard()
 
@@ -32,11 +27,7 @@ export function VariablesPopover({
 
   const VariableItem = ({ variable, translationKey }: { variable: string; translationKey: string }) => (
     <div className="flex min-w-0 items-center gap-1.5">
-      <code
-        className="cursor-pointer shrink-0 rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-        onClick={() => handleCopy(variable)}
-        title={t('copy')}
-      >
+      <code className="shrink-0 cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted" onClick={() => handleCopy(variable)} title={t('copy')}>
         {variable}
       </code>
       <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={t(translationKey)}>
@@ -87,11 +78,7 @@ export function VariablesPopover({
 }
 
 /** Component that renders just the variables list (without popover wrapper) - for use in ArrayInput */
-export function VariablesList({
-  includeProtocolTransport = false,
-}: {
-  includeProtocolTransport?: boolean
-}) {
+export function VariablesList({ includeProtocolTransport = false }: { includeProtocolTransport?: boolean }) {
   const { t } = useTranslation()
   const { copy } = useClipboard()
 
@@ -102,11 +89,7 @@ export function VariablesList({
 
   const VariableItem = ({ variable, translationKey }: { variable: string; translationKey: string }) => (
     <div className="flex min-w-0 items-center gap-1.5">
-      <code
-        className="cursor-pointer shrink-0 rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted"
-        onClick={() => handleCopy(variable)}
-        title={t('copy')}
-      >
+      <code className="shrink-0 cursor-pointer rounded-sm bg-muted/50 px-1.5 py-0.5 text-[11px] transition-colors hover:bg-muted" onClick={() => handleCopy(variable)} title={t('copy')}>
         {variable}
       </code>
       <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={t(translationKey)}>
@@ -139,4 +122,3 @@ export function VariablesList({
     </div>
   )
 }
-

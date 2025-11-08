@@ -136,13 +136,13 @@ function TopLoadingBar({ height = 3, color, shadow = true, className = '' }: Top
     if (!shouldIgnoreRoute(pathname) && ref.current) {
       // Start loading bar on route change with continuous animation
       ref.current.continuousStart()
-      
+
       // Set timeout to complete the loading bar after a longer delay
       // This gives time for the animation to progress and the page to render
       if (maxTimeoutRef.current) {
         clearTimeout(maxTimeoutRef.current)
       }
-      
+
       maxTimeoutRef.current = setTimeout(() => {
         if (ref.current) {
           ref.current.complete()

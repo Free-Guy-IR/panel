@@ -178,7 +178,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
   const [error, setError] = useState<Error | null>(null)
   const [totalUsage, setTotalUsage] = useState('0')
   const [chartKey, setChartKey] = useState(0)
-  
+
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
   const { t } = useTranslation()
@@ -198,7 +198,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
 
   const refreshChartThrottled = useCallback(() => {
     const now = Date.now()
-    
+
     // Simple throttling - only prevent if called within 100ms
     if (now - lastRerenderTime.current < 100) {
       if (rerenderTimeout.current) {
@@ -209,7 +209,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
       }, 100)
       return
     }
-    
+
     // Only refresh if we have data to display
     if (chartData && chartData.length > 0) {
       lastRerenderTime.current = now
@@ -230,9 +230,9 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
 
     // Listen to window resize
     window.addEventListener('resize', handleResize)
-    
+
     // Use ResizeObserver on the chart container
-    const resizeObserver = new ResizeObserver((entries) => {
+    const resizeObserver = new ResizeObserver(entries => {
       for (const entry of entries) {
         if (entry.target === chartContainerRef.current) {
           const { width, height } = entry.contentRect
@@ -242,18 +242,15 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
         }
       }
     })
-    
+
     // Observe the chart container
     if (chartContainerRef.current) {
       resizeObserver.observe(chartContainerRef.current)
     }
 
     // MutationObserver for sidebar state changes - immediate response
-    const mutationObserver = new MutationObserver((mutations) => {
-      const hasSidebarChange = mutations.some(mutation => 
-        mutation.type === 'attributes' && 
-        (mutation.attributeName === 'class' || mutation.attributeName === 'data-state')
-      )
+    const mutationObserver = new MutationObserver(mutations => {
+      const hasSidebarChange = mutations.some(mutation => mutation.type === 'attributes' && (mutation.attributeName === 'class' || mutation.attributeName === 'data-state'))
       if (hasSidebarChange) {
         // Instant response for sidebar changes - no throttling
         refreshChartInstant()
@@ -265,7 +262,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
       attributes: true,
       attributeFilter: ['class', 'data-sidebar-state', 'data-state'],
       childList: false,
-      subtree: false
+      subtree: false,
     })
 
     const sidebar = document.querySelector('[data-sidebar]') || document.querySelector('aside')
@@ -402,7 +399,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
   return (
     <Card>
       <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
-      <div className="flex flex-1 flex-col gap-1 border-b px-4 py-4 sm:flex-row sm:px-6 sm:py-6">
+        <div className="flex flex-1 flex-col gap-1 border-b px-4 py-4 sm:flex-row sm:px-6 sm:py-6">
           <div className="flex flex-1 flex-col justify-center gap-1 px-1 py-1 align-middle">
             <CardTitle className="text-sm sm:text-base">{t('statistics.trafficUsage')}</CardTitle>
             <CardDescription className="text-xs sm:text-sm">{t('statistics.trafficUsageDescription')}</CardDescription>

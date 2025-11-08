@@ -8,16 +8,16 @@ import { useTranslation } from 'react-i18next'
 
 export const Language: React.FC = () => {
   const { i18n, t } = useTranslation()
-  
+
   // Safely get sidebar state, defaulting to 'expanded' if not available
   const sidebarContext = useContext(SidebarContext)
   const sidebarState: 'expanded' | 'collapsed' = sidebarContext?.state ?? 'expanded'
   const isMobile = sidebarContext?.isMobile ?? false
 
   const changeLanguage = async (lang: string) => {
-      await i18n.changeLanguage(lang)
-      document.documentElement.lang = lang
-      document.documentElement.setAttribute('dir', i18n.dir())
+    await i18n.changeLanguage(lang)
+    document.documentElement.lang = lang
+    document.documentElement.setAttribute('dir', i18n.dir())
   }
 
   // Collapsed state (desktop only) - icon with popover
@@ -33,36 +33,16 @@ export const Language: React.FC = () => {
         <PopoverContent className="w-48 p-2" side="right" align="start">
           <div className="space-y-1">
             <div className="px-2 py-1.5 text-sm font-semibold">{t('language.title', { defaultValue: 'Language' })}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => changeLanguage('en')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('en')}>
               English
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => changeLanguage('fa')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('fa')}>
               فارسی
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => changeLanguage('zh')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('zh')}>
               简体中文
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => changeLanguage('ru')}
-            >
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('ru')}>
               Русский
             </Button>
           </div>

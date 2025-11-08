@@ -31,12 +31,9 @@ const createSortButton = (
     console.log('Sorting by column:', column)
     handleSort(column)
   }
-  
+
   return (
-    <button 
-      onClick={handleClick}
-      className="flex w-full items-center gap-1"
-    >
+    <button onClick={handleClick} className="flex w-full items-center gap-1">
       <div className="text-xs">{t(label)}</div>
       {filters.sort && (filters.sort === column || filters.sort === '-' + column) && (
         <ChevronDown size={16} className={`transition-transform duration-300 ${filters.sort === column ? 'rotate-180' : ''} ${filters.sort === '-' + column ? 'rotate-0' : ''} `} />
@@ -50,7 +47,7 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
     accessorKey: 'username',
     header: () => createSortButton('username', 'username', t, handleSort, filters),
     cell: ({ row }) => (
-      <div className="overflow-hidden text-ellipsis whitespace-nowrap font-medium py-1.5">
+      <div className="overflow-hidden text-ellipsis whitespace-nowrap py-1.5 font-medium">
         <div className="flex items-center gap-x-3">
           <div>
             {row.original.is_disabled ? (
@@ -74,7 +71,9 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
       return (
         <div className="flex items-center gap-2 whitespace-nowrap">
           <ChartPie className="hidden h-4 w-4 sm:block" />
-          <span dir="ltr" className="text-xs">{traffic ? formatBytes(traffic) : '0 B'}</span>
+          <span dir="ltr" className="text-xs">
+            {traffic ? formatBytes(traffic) : '0 B'}
+          </span>
         </div>
       )
     },
@@ -86,7 +85,9 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
       const total = row.getValue('lifetime_used_traffic') as number | null
       return (
         <div className="flex items-center gap-2 whitespace-nowrap">
-          <span dir="ltr" className="text-xs">{formatBytes(total || 0)}</span>
+          <span dir="ltr" className="text-xs">
+            {formatBytes(total || 0)}
+          </span>
         </div>
       )
     },

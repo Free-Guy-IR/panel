@@ -30,7 +30,6 @@ const UsersStatistics = () => {
     setPrevData(data)
   }, [data])
 
-
   return (
     <div className="flex flex-col gap-y-4">
       <div className={cn('flex flex-col items-center justify-between gap-x-4 gap-y-4 lg:flex-row', dir === 'rtl' && 'lg:flex-row-reverse')}>

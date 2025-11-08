@@ -84,13 +84,7 @@ export default function AdminStatisticsSection({ data }: AdminsStatisticsProps) 
               {React.createElement(stat.icon, { className: 'h-5 w-5' })}
               <span>{stat.label}</span>
             </div>
-            <span
-              className={cn(
-                'mx-2 text-3xl transition-all duration-500',
-                isIncreased[stat.key] ? 'animate-zoom-out' : ''
-              )}
-              style={{ animationDuration: '400ms' }}
-            >
+            <span className={cn('mx-2 text-3xl transition-all duration-500', isIncreased[stat.key] ? 'animate-zoom-out' : '')} style={{ animationDuration: '400ms' }}>
               <CountUp end={stat.value} />
             </span>
           </CardTitle>

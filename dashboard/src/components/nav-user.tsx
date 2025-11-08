@@ -40,7 +40,6 @@ export function NavUser({
     navigate('/login', { replace: true })
   }
 
-
   // Collapsed state (desktop only) - admin icon with popover
   // On mobile, always use expanded UI since there's no collapsed sidebar concept
   if (state === 'collapsed' && !isMobile) {
@@ -49,11 +48,7 @@ export function NavUser({
         <SidebarMenuItem>
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-md"
-              >
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md">
                 <UserCircle className="h-4 w-4 text-sidebar-foreground" />
               </Button>
             </PopoverTrigger>
@@ -62,7 +57,7 @@ export function NavUser({
                 <div className="flex items-center gap-2">
                   <UserCircle className="h-4 w-4 text-primary" />
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">{username.name}</span>
+                    <span className="text-sm font-semibold">{username.name}</span>
                     {admin && (
                       <Badge variant={admin.is_sudo ? 'secondary' : 'outline'} className="h-4 px-1 py-0 text-[10px]">
                         {admin.is_sudo ? (
@@ -112,12 +107,7 @@ export function NavUser({
                   <Language />
                 </div>
 
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="w-full mt-2"
-                >
+                <Button variant="destructive" size="sm" onClick={handleLogout} className="mt-2 w-full">
                   <LogOut className="mr-2 h-4 w-4" />
                   {t('header.logout')}
                 </Button>

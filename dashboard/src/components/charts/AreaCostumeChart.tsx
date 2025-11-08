@@ -22,16 +22,16 @@ type DataPoint = {
 
 const CustomTooltip = ({ active, payload, period, viewMode }: any) => {
   const { i18n } = useTranslation()
-  
+
   if (active && payload && payload.length) {
     const data = payload[0].payload
     let formattedDate = data.time
-    
+
     if (data._period_start) {
       const d = dateUtils.toDayjs(data._period_start)
       const today = dateUtils.toDayjs(new Date())
       const isToday = d.isSame(today, 'day')
-      
+
       try {
         if (i18n.language === 'fa') {
           if (period === 'day' && isToday) {
@@ -119,7 +119,7 @@ const CustomTooltip = ({ active, payload, period, viewMode }: any) => {
         if (timeParts.length >= 2) {
           now.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), 0)
         }
-        
+
         if (i18n.language === 'fa') {
           formattedDate = now
             .toLocaleString('fa-IR', {
@@ -147,7 +147,7 @@ const CustomTooltip = ({ active, payload, period, viewMode }: any) => {
         formattedDate = data.time
       }
     }
-    
+
     return (
       <div dir="ltr" className="rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur-sm">
         <p className="text-sm font-medium text-muted-foreground">
@@ -208,19 +208,22 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
   const [error, setError] = useState<Error | null>(null)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [viewMode, setViewMode] = useState<'realtime' | 'historical'>('realtime')
-  
+
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
-  const chartConfig = useMemo<ChartConfig>(() => ({
-    cpu: {
-      label: t('statistics.cpuUsage'),
-      color: 'hsl(var(--chart-1))',
-    },
-    ram: {
-      label: t('statistics.ramUsage'),
-      color: 'hsl(var(--chart-2))',
-    },
-  }), [t])
+  const chartConfig = useMemo<ChartConfig>(
+    () => ({
+      cpu: {
+        label: t('statistics.cpuUsage'),
+        color: 'hsl(var(--chart-1))',
+      },
+      ram: {
+        label: t('statistics.ramUsage'),
+        color: 'hsl(var(--chart-2))',
+      },
+    }),
+    [t],
+  )
   const gradientDefs = useMemo(() => {
     const isDark = resolvedTheme === 'dark'
     return {
@@ -469,126 +472,120 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
             className="h-[280px] sm:h-[320px] lg:h-[360px]"
           />
         ) : (
-          <div 
-            ref={chartContainerRef}
-            className="h-[280px] w-full sm:h-[320px] lg:h-[360px] transition-all duration-300 ease-in-out"
-          >
+          <div ref={chartContainerRef} className="h-[280px] w-full transition-all duration-300 ease-in-out sm:h-[320px] lg:h-[360px]">
             <ChartContainer dir="ltr" config={chartConfig} className="h-full w-full">
-              <AreaChart 
-                data={statsHistory} 
-                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-              >
-                  <defs>
-                    <linearGradient id={gradientDefs.cpu.id} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={gradientDefs.cpu.color1} stopOpacity={0.9} />
-                      <stop offset="30%" stopColor={gradientDefs.cpu.color2} stopOpacity={0.4} />
-                      <stop offset="70%" stopColor={gradientDefs.cpu.color3} stopOpacity={0.1} />
-                      <stop offset="100%" stopColor={gradientDefs.cpu.color4} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id={gradientDefs.ram.id} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={gradientDefs.ram.color1} stopOpacity={0.9} />
-                      <stop offset="30%" stopColor={gradientDefs.ram.color2} stopOpacity={0.4} />
-                      <stop offset="70%" stopColor={gradientDefs.ram.color3} stopOpacity={0.1} />
-                      <stop offset="100%" stopColor={gradientDefs.ram.color4} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+              <AreaChart data={statsHistory} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <defs>
+                  <linearGradient id={gradientDefs.cpu.id} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={gradientDefs.cpu.color1} stopOpacity={0.9} />
+                    <stop offset="30%" stopColor={gradientDefs.cpu.color2} stopOpacity={0.4} />
+                    <stop offset="70%" stopColor={gradientDefs.cpu.color3} stopOpacity={0.1} />
+                    <stop offset="100%" stopColor={gradientDefs.cpu.color4} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id={gradientDefs.ram.id} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={gradientDefs.ram.color1} stopOpacity={0.9} />
+                    <stop offset="30%" stopColor={gradientDefs.ram.color2} stopOpacity={0.4} />
+                    <stop offset="70%" stopColor={gradientDefs.ram.color3} stopOpacity={0.1} />
+                    <stop offset="100%" stopColor={gradientDefs.ram.color4} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
 
-                  <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="hsl(var(--border))" opacity={0.1} />
+                <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="hsl(var(--border))" opacity={0.1} />
 
-                  <XAxis
-                    dataKey="time"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={12}
-                    tick={{
-                      fill: 'hsl(var(--muted-foreground))',
-                      fontSize: 10,
-                      fontWeight: 500,
-                    }}
-                    interval="preserveStartEnd"
-                    minTickGap={30}
-                  />
+                <XAxis
+                  dataKey="time"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={12}
+                  tick={{
+                    fill: 'hsl(var(--muted-foreground))',
+                    fontSize: 10,
+                    fontWeight: 500,
+                  }}
+                  interval="preserveStartEnd"
+                  minTickGap={30}
+                />
 
-                  <YAxis
-                    tickLine={false}
-                    tickFormatter={value => `${value.toFixed(0)}%`}
-                    axisLine={false}
-                    tickMargin={2}
-                    domain={[0, 100]}
-                    tick={{
-                      fill: 'hsl(var(--muted-foreground))',
-                      fontSize: 9,
-                      fontWeight: 500,
-                    }}
-                    width={32}
-                  />
+                <YAxis
+                  tickLine={false}
+                  tickFormatter={value => `${value.toFixed(0)}%`}
+                  axisLine={false}
+                  tickMargin={2}
+                  domain={[0, 100]}
+                  tick={{
+                    fill: 'hsl(var(--muted-foreground))',
+                    fontSize: 9,
+                    fontWeight: 500,
+                  }}
+                  width={32}
+                />
 
-                  <Tooltip
-                    content={<CustomTooltip period={viewMode === 'historical' ? getPeriodFromDateRange(dateRange) : Period.hour} viewMode={viewMode} />}
-                    cursor={{
-                      stroke: 'hsl(var(--border))',
-                      strokeWidth: 1,
-                      strokeDasharray: '4 4',
-                      opacity: 0.3,
-                    }}
-                  />
+                <Tooltip
+                  content={<CustomTooltip period={viewMode === 'historical' ? getPeriodFromDateRange(dateRange) : Period.hour} viewMode={viewMode} />}
+                  cursor={{
+                    stroke: 'hsl(var(--border))',
+                    strokeWidth: 1,
+                    strokeDasharray: '4 4',
+                    opacity: 0.3,
+                  }}
+                />
 
-                  <Area
-                    dataKey="cpu"
-                    type="monotone"
-                    fill={`url(#${gradientDefs.cpu.id})`}
-                    stroke={gradientDefs.cpu.color1}
-                    strokeWidth={2}
-                    dot={
-                      viewMode === 'realtime'
-                        ? false
-                        : {
-                            fill: 'white',
-                            stroke: gradientDefs.cpu.color1,
-                            strokeWidth: 2,
-                            r: 3,
-                          }
-                    }
-                    activeDot={{
-                      r: 6,
-                      fill: 'white',
-                      stroke: gradientDefs.cpu.color1,
-                      strokeWidth: 2,
-                    }}
-                    animationDuration={viewMode === 'realtime' ? 800 : 1500}
-                    animationEasing="ease-out"
-                    isAnimationActive={true}
-                    animationBegin={0}
-                  />
+                <Area
+                  dataKey="cpu"
+                  type="monotone"
+                  fill={`url(#${gradientDefs.cpu.id})`}
+                  stroke={gradientDefs.cpu.color1}
+                  strokeWidth={2}
+                  dot={
+                    viewMode === 'realtime'
+                      ? false
+                      : {
+                          fill: 'white',
+                          stroke: gradientDefs.cpu.color1,
+                          strokeWidth: 2,
+                          r: 3,
+                        }
+                  }
+                  activeDot={{
+                    r: 6,
+                    fill: 'white',
+                    stroke: gradientDefs.cpu.color1,
+                    strokeWidth: 2,
+                  }}
+                  animationDuration={viewMode === 'realtime' ? 800 : 1500}
+                  animationEasing="ease-out"
+                  isAnimationActive={true}
+                  animationBegin={0}
+                />
 
-                  <Area
-                    dataKey="ram"
-                    type="monotone"
-                    fill={`url(#${gradientDefs.ram.id})`}
-                    stroke={gradientDefs.ram.color1}
-                    strokeWidth={2}
-                    dot={
-                      viewMode === 'realtime'
-                        ? false
-                        : {
-                            fill: 'white',
-                            stroke: gradientDefs.ram.color1,
-                            strokeWidth: 2,
-                            r: 3,
-                          }
-                    }
-                    activeDot={{
-                      r: 6,
-                      fill: 'white',
-                      stroke: gradientDefs.ram.color1,
-                      strokeWidth: 2,
-                    }}
-                    animationDuration={viewMode === 'realtime' ? 800 : 1500}
-                    animationEasing="ease-out"
-                    isAnimationActive={true}
-                    animationBegin={100}
-                  />
-                </AreaChart>
+                <Area
+                  dataKey="ram"
+                  type="monotone"
+                  fill={`url(#${gradientDefs.ram.id})`}
+                  stroke={gradientDefs.ram.color1}
+                  strokeWidth={2}
+                  dot={
+                    viewMode === 'realtime'
+                      ? false
+                      : {
+                          fill: 'white',
+                          stroke: gradientDefs.ram.color1,
+                          strokeWidth: 2,
+                          r: 3,
+                        }
+                  }
+                  activeDot={{
+                    r: 6,
+                    fill: 'white',
+                    stroke: gradientDefs.ram.color1,
+                    strokeWidth: 2,
+                  }}
+                  animationDuration={viewMode === 'realtime' ? 800 : 1500}
+                  animationEasing="ease-out"
+                  isAnimationActive={true}
+                  animationBegin={100}
+                />
+              </AreaChart>
             </ChartContainer>
           </div>
         )}

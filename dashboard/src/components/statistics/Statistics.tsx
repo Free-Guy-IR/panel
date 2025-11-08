@@ -19,7 +19,7 @@ interface StatisticsProps {
 
 export default function Statistics({ data, isLoading, error, selectedServer, is_sudo }: StatisticsProps) {
   const { t } = useTranslation()
-  
+
   // Add state for chart refresh
   const [chartRefreshKey, setChartRefreshKey] = useState(0)
   const resizeTimeoutRef = useRef<NodeJS.Timeout>()
@@ -57,7 +57,7 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
   // Listen for window resize events
   useEffect(() => {
     window.addEventListener('resize', handleResize)
-    
+
     // Listen for sidebar toggle events
     const handleSidebarToggle = () => {
       setTimeout(() => setChartRefreshKey(k => k + 1), 300) // Wait for animation to complete
@@ -128,12 +128,7 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
           <UserSubUpdatePieChart />
         </div>
         <div className="transform-gpu animate-slide-up" style={{ animationDuration: '500ms', animationDelay: '320ms', animationFillMode: 'both' }}>
-          <AreaCostumeChart 
-            key={chartRefreshKey} 
-            nodeId={selectedNodeId} 
-            currentStats={currentStats} 
-            realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} 
-          />
+          <AreaCostumeChart key={chartRefreshKey} nodeId={selectedNodeId} currentStats={currentStats} realtimeStats={actualSelectedServer === 'master' ? data : nodeStats || undefined} />
         </div>
       </div>
     </div>
@@ -178,4 +173,3 @@ function StatisticsSkeletons({ is_sudo }: { is_sudo: boolean }) {
     </div>
   )
 }
-

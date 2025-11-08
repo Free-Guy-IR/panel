@@ -70,7 +70,7 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
               {nodeName || t('userAllIPs.nodeId', { defaultValue: 'Node #{{nodeId}}', nodeId })}
             </span>
           </CardTitle>
-          <Badge dir={dir} variant="outline" className="text-xs border-0 px-0">
+          <Badge dir={dir} variant="outline" className="border-0 px-0 text-xs">
             {t('userAllIPs.totalIPs', {
               defaultValue: totalIPs === 1 ? '{{count}} IP address' : '{{count}} IP addresses',
               count: totalIPs,
@@ -85,7 +85,7 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
               <div key={ip} className="rounded bg-accent/40 p-2 transition-colors hover:bg-accent/60">
                 <div className="flex flex-col gap-1">
                   <span
-                    className="break-all font-mono text-sm font-medium cursor-pointer hover:text-primary transition-colors"
+                    className="cursor-pointer break-all font-mono text-sm font-medium transition-colors hover:text-primary"
                     dir="ltr"
                     onClick={() => handleCopyIP(ip)}
                     title={t('userAllIPs.clickToCopy', { defaultValue: 'Click to copy IP address' })}
@@ -93,10 +93,8 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
                     {ip}
                   </span>
                   <div dir={dir} className="flex items-center gap-1">
-                    <span className="text-xs text-muted-foreground">
-                      {t('userAllIPs.lastSeen', { defaultValue: 'Last seen' })}:
-                    </span>
-                    <span className="text-xs text-muted-foreground font-mono" dir="ltr">
+                    <span className="text-xs text-muted-foreground">{t('userAllIPs.lastSeen', { defaultValue: 'Last seen' })}:</span>
+                    <span className="font-mono text-xs text-muted-foreground" dir="ltr">
                       {timeString}
                     </span>
                   </div>
@@ -346,9 +344,7 @@ export default function UserAllIPsModal({ isOpen, onOpenChange, username }: User
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={handleRefresh} disabled={refreshing || isLoading} className="flex-1 sm:flex-none">
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-            <span className={cn(dir === 'rtl' ? 'mr-2' : 'ml-2')}>
-              {t('userAllIPs.refresh', { defaultValue: 'Refresh' })}
-            </span>
+            <span className={cn(dir === 'rtl' ? 'mr-2' : 'ml-2')}>{t('userAllIPs.refresh', { defaultValue: 'Refresh' })}</span>
           </Button>
         </div>
 
@@ -361,7 +357,7 @@ export default function UserAllIPsModal({ isOpen, onOpenChange, username }: User
         </div>
 
         {isOpen && (
-          <div className="border-t py-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2 border-t py-2 text-center text-xs text-muted-foreground">
             <Network className="inline h-3 w-3" />
             <span dir={dir}>
               {t('userAllIPs.autoRefresh', {
@@ -375,4 +371,3 @@ export default function UserAllIPsModal({ isOpen, onOpenChange, username }: User
     </Dialog>
   )
 }
-

@@ -349,13 +349,7 @@ const Dashboard = () => {
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
-        <PageHeader
-          title="dashboard"
-          description="dashboardDescription"
-          buttonIcon={Bookmark}
-          buttonText="quickActions.title"
-          onButtonClick={handleOpenQuickActions}
-        />
+        <PageHeader title="dashboard" description="dashboardDescription" buttonIcon={Bookmark} buttonText="quickActions.title" onButtonClick={handleOpenQuickActions} />
         <Separator />
       </div>
 

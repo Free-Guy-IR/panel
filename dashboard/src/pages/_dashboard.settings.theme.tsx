@@ -104,9 +104,8 @@ export default function ThemeSettings() {
 
   return (
     <div className="mt-4 flex flex-col gap-6 pb-8">
-
       {/* Theme Mode Section */}
-      <Card className="border-0 shadow-sm bg-transparent">
+      <Card className="border-0 bg-transparent shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/20">
@@ -169,7 +168,7 @@ export default function ThemeSettings() {
       </Card>
 
       {/* Color Theme Section */}
-      <Card className="border-0 shadow-sm bg-transparent">
+      <Card className="border-0 bg-transparent shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/20">
@@ -224,7 +223,7 @@ export default function ThemeSettings() {
       </Card>
 
       {/* Border Radius Section */}
-      <Card className="border-0 shadow-sm bg-transparent">
+      <Card className="border-0 bg-transparent shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/20">
@@ -270,7 +269,7 @@ export default function ThemeSettings() {
       </Card>
 
       {/* Preview Section */}
-      <Card className="border-0 shadow-sm bg-transparent">
+      <Card className="border-0 bg-transparent shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/20">
@@ -329,7 +328,7 @@ export default function ThemeSettings() {
       </Card>
 
       {/* Reset Section */}
-      <Card className="border-0 shadow-sm bg-transparent">
+      <Card className="border-0 bg-transparent shadow-sm">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div>

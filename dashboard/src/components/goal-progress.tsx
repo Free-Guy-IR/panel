@@ -32,7 +32,7 @@ export function GoalProgress() {
     const interval = setInterval(() => {
       setIsAnimating(true)
       setTimeout(() => {
-        setCurrentGoalIndex((prev) => (prev + 1) % pendingGoals.length)
+        setCurrentGoalIndex(prev => (prev + 1) % pendingGoals.length)
         setIsAnimating(false)
       }, 150)
     }, 8000)
@@ -45,7 +45,7 @@ export function GoalProgress() {
 
     setIsAnimating(true)
     setTimeout(() => {
-      setCurrentGoalIndex((prev) => {
+      setCurrentGoalIndex(prev => {
         if (direction === 'next') {
           return (prev + 1) % pendingGoals.length
         } else {
@@ -142,36 +142,18 @@ export function GoalProgress() {
   const goalCurrent = currentGoal.paid_amount || 0
   const progress = Math.min(goalTarget > 0 ? (goalCurrent / goalTarget) * 100 : 0, 100)
   const remaining = Math.max(goalTarget - goalCurrent, 0)
-  const formattedCurrent = isGithubGoal
-    ? `${Math.round(goalCurrent).toLocaleString()} ${unitLabel}`
-    : `$${goalCurrent.toLocaleString()}`
-  const formattedTarget = isGithubGoal
-    ? `${Math.round(goalTarget).toLocaleString()} ${unitLabel}`
-    : `$${goalTarget.toLocaleString()}`
-  const formattedRemaining = isGithubGoal
-    ? `${Math.max(Math.round(remaining), 0).toLocaleString()} ${unitLabel}`
-    : `$${remaining.toLocaleString()}`
-  const progressLabel = isGithubGoal
-    ? t('goal.githubProgress', { defaultValue: 'Star progress' })
-    : t('goal.progress', { defaultValue: 'Progress' })
+  const formattedCurrent = isGithubGoal ? `${Math.round(goalCurrent).toLocaleString()} ${unitLabel}` : `$${goalCurrent.toLocaleString()}`
+  const formattedTarget = isGithubGoal ? `${Math.round(goalTarget).toLocaleString()} ${unitLabel}` : `$${goalTarget.toLocaleString()}`
+  const formattedRemaining = isGithubGoal ? `${Math.max(Math.round(remaining), 0).toLocaleString()} ${unitLabel}` : `$${remaining.toLocaleString()}`
+  const progressLabel = isGithubGoal ? t('goal.githubProgress', { defaultValue: 'Star progress' }) : t('goal.progress', { defaultValue: 'Progress' })
   const remainingLabel = t('goal.remaining')
-  const ctaLabel = isGithubGoal
-    ? t('donation.starOnGitHub', { defaultValue: 'Star on GitHub' })
-    : t('goal.contribute')
-  const ctaHref =
-    isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name
-      ? `https://github.com/${currentGoal.repo_owner}/${currentGoal.repo_name}`
-      : 'https://donate.pasarguard.org'
+  const ctaLabel = isGithubGoal ? t('donation.starOnGitHub', { defaultValue: 'Star on GitHub' }) : t('goal.contribute')
+  const ctaHref = isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name ? `https://github.com/${currentGoal.repo_owner}/${currentGoal.repo_name}` : 'https://donate.pasarguard.org'
   const CtaIcon = isGithubGoal ? Star : Target
   const BadgeIcon = isGithubGoal ? Star : TrendingUp
-  const badgeClasses = isGithubGoal
-    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
-    : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+  const badgeClasses = isGithubGoal ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
   const repoInfoAvailable = Boolean(isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name)
-  const repoIdentifier =
-    currentGoal.repo_owner && currentGoal.repo_name
-      ? `${currentGoal.repo_owner}/${currentGoal.repo_name}`
-      : 'owner/repo'
+  const repoIdentifier = currentGoal.repo_owner && currentGoal.repo_name ? `${currentGoal.repo_owner}/${currentGoal.repo_name}` : 'owner/repo'
   const showRemaining = remaining > 0
 
   // Collapsed state (desktop only) - simple donate button with popover
@@ -182,11 +164,7 @@ export function GoalProgress() {
       <div className="mx-2 mb-2">
         <Popover>
           <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-md"
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md">
               <SummaryIcon className="h-4 w-4 text-primary" />
             </Button>
           </PopoverTrigger>
@@ -194,9 +172,9 @@ export function GoalProgress() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <SummaryIcon className="h-4 w-4 text-primary" />
-                <span className="font-semibold text-sm">{currentGoal.name}</span>
+                <span className="text-sm font-semibold">{currentGoal.name}</span>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">{progressLabel}</span>
@@ -213,10 +191,7 @@ export function GoalProgress() {
 
               <div className="min-h-[32px]">
                 <div
-                  className={cn(
-                    'flex items-center justify-between rounded-md px-3 py-2 text-xs transition-opacity',
-                    showRemaining ? 'bg-muted/50 opacity-100' : 'opacity-0'
-                  )}
+                  className={cn('flex items-center justify-between rounded-md px-3 py-2 text-xs transition-opacity', showRemaining ? 'bg-muted/50 opacity-100' : 'opacity-0')}
                   aria-hidden={!showRemaining}
                 >
                   <span className="text-muted-foreground">{remainingLabel}</span>
@@ -225,12 +200,7 @@ export function GoalProgress() {
               </div>
 
               <Button asChild className="w-full">
-                <a
-                  href={ctaHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2"
-                >
+                <a href={ctaHref} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2">
                   <CtaIcon className="h-4 w-4" />
                   {ctaLabel}
                 </a>
@@ -245,7 +215,7 @@ export function GoalProgress() {
   // Expanded state - full card
   return (
     <Card
-      className="mx-2 mb-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 cursor-grab active:cursor-grabbing select-none user-select-none"
+      className="user-select-none mx-2 mb-2 cursor-grab select-none border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 active:cursor-grabbing dark:from-primary/10 dark:to-primary/20"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -256,12 +226,7 @@ export function GoalProgress() {
     >
       <CardContent className="p-3">
         {/* Goal Content */}
-        <div
-          className={cn(
-            'space-y-2.5 transition-all duration-300 ease-in-out',
-            isAnimating ? 'opacity-0 transform translate-y-2' : 'opacity-100 transform translate-y-0'
-          )}
-        >
+        <div className={cn('space-y-2.5 transition-all duration-300 ease-in-out', isAnimating ? 'translate-y-2 transform opacity-0' : 'translate-y-0 transform opacity-100')}>
           {/* Header */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -271,13 +236,7 @@ export function GoalProgress() {
                 </span>
                 <span className="line-clamp-1 text-sm font-semibold leading-tight">{currentGoal.name}</span>
                 <div className="mt-1 h-4">
-                  <div
-                    className={cn(
-                      'flex items-center gap-1 text-[11px] text-muted-foreground transition-opacity',
-                      repoInfoAvailable ? 'opacity-100' : 'opacity-0'
-                    )}
-                    aria-hidden={!repoInfoAvailable}
-                  >
+                  <div className={cn('flex items-center gap-1 text-[11px] text-muted-foreground transition-opacity', repoInfoAvailable ? 'opacity-100' : 'opacity-0')} aria-hidden={!repoInfoAvailable}>
                     <Github className="h-3 w-3" aria-hidden />
                     <span className="truncate">{repoIdentifier}</span>
                   </div>
@@ -302,19 +261,12 @@ export function GoalProgress() {
           </div>
 
           {/* Details */}
-          <div className="min-h-[38px]">
-            {currentGoal.detail && (
-              <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{currentGoal.detail}</p>
-            )}
-          </div>
+          <div className="min-h-[38px]">{currentGoal.detail && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{currentGoal.detail}</p>}</div>
 
           {/* Remaining */}
           <div className="min-h-[32px]">
             <div
-              className={cn(
-                'flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-opacity',
-                showRemaining ? 'bg-background/50 opacity-100' : 'opacity-0'
-              )}
+              className={cn('flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-opacity', showRemaining ? 'bg-background/50 opacity-100' : 'opacity-0')}
               aria-hidden={!showRemaining}
             >
               <span className="font-medium text-muted-foreground">{remainingLabel}</span>

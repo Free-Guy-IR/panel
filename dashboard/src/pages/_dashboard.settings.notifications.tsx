@@ -12,7 +12,26 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/
 import { useSettingsContext } from './_dashboard.settings'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { MessageSquare, FileText, Bot, Webhook, ChevronDown, Settings, Users, Shield, Globe, RotateCcw, UserCog, Users2, ListTodo, Share2Icon, LayoutTemplate, Calendar, ArrowUpDown, Megaphone } from 'lucide-react'
+import {
+  MessageSquare,
+  FileText,
+  Bot,
+  Webhook,
+  ChevronDown,
+  Settings,
+  Users,
+  Shield,
+  Globe,
+  RotateCcw,
+  UserCog,
+  Users2,
+  ListTodo,
+  Share2Icon,
+  LayoutTemplate,
+  Calendar,
+  ArrowUpDown,
+  Megaphone,
+} from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
@@ -234,24 +253,27 @@ const channelTargets: Array<{
   translationKey: string
   icon: React.ComponentType<{ className?: string }>
 }> = [
-    { key: 'admin', translationKey: 'admin', icon: UserCog },
-    { key: 'core', translationKey: 'core', icon: Settings },
-    { key: 'group', translationKey: 'group', icon: Users2 },
-    { key: 'host', translationKey: 'host', icon: ListTodo },
-    { key: 'node', translationKey: 'node', icon: Share2Icon },
-    { key: 'user', translationKey: 'user', icon: Users },
-    { key: 'user_template', translationKey: 'userTemplate', icon: LayoutTemplate },
-  ]
+  { key: 'admin', translationKey: 'admin', icon: UserCog },
+  { key: 'core', translationKey: 'core', icon: Settings },
+  { key: 'group', translationKey: 'group', icon: Users2 },
+  { key: 'host', translationKey: 'host', icon: ListTodo },
+  { key: 'node', translationKey: 'node', icon: Share2Icon },
+  { key: 'user', translationKey: 'user', icon: Users },
+  { key: 'user_template', translationKey: 'userTemplate', icon: LayoutTemplate },
+]
 
 const createDefaultChannelValues = (): Record<ChannelTargetKey, NotificationChannelFormState> =>
-  channelTargets.reduce((acc, target) => {
-    acc[target.key] = {
-      telegram_chat_id: undefined,
-      telegram_topic_id: undefined,
-      discord_webhook_url: '',
-    }
-    return acc
-  }, {} as Record<ChannelTargetKey, NotificationChannelFormState>)
+  channelTargets.reduce(
+    (acc, target) => {
+      acc[target.key] = {
+        telegram_chat_id: undefined,
+        telegram_topic_id: undefined,
+        discord_webhook_url: '',
+      }
+      return acc
+    },
+    {} as Record<ChannelTargetKey, NotificationChannelFormState>,
+  )
 
 const populateChannelValues = (channels?: NotificationChannels | null): Record<ChannelTargetKey, NotificationChannelFormState> => {
   const defaults = createDefaultChannelValues()
@@ -381,8 +403,8 @@ export default function NotificationSettings() {
 
     const channelPayload: NotificationChannels = channelTargets.reduce((acc, target) => {
       const channelData = data.notification_settings?.channels?.[target.key]
-      const telegramChatId = telegramEnabled ? channelData?.telegram_chat_id ?? null : null
-      const telegramTopicId = telegramEnabled ? channelData?.telegram_topic_id ?? null : null
+      const telegramChatId = telegramEnabled ? (channelData?.telegram_chat_id ?? null) : null
+      const telegramTopicId = telegramEnabled ? (channelData?.telegram_topic_id ?? null) : null
 
       const rawWebhook = channelData?.discord_webhook_url ?? ''
       const trimmedWebhook = rawWebhook.trim()
@@ -406,22 +428,22 @@ export default function NotificationSettings() {
         // Only include Telegram settings if Telegram is enabled
         ...(telegramEnabled
           ? {
-            telegram_api_token: data.notification_settings?.telegram_api_token || '',
-            telegram_chat_id: data.notification_settings?.telegram_chat_id ?? null,
-            telegram_channel_id: data.notification_settings?.telegram_channel_id ?? null,
-            telegram_topic_id: data.notification_settings?.telegram_topic_id ?? null,
-          }
+              telegram_api_token: data.notification_settings?.telegram_api_token || '',
+              telegram_chat_id: data.notification_settings?.telegram_chat_id ?? null,
+              telegram_channel_id: data.notification_settings?.telegram_channel_id ?? null,
+              telegram_topic_id: data.notification_settings?.telegram_topic_id ?? null,
+            }
           : {
-            telegram_api_token: null,
-            telegram_chat_id: null,
-            telegram_channel_id: null,
-            telegram_topic_id: null,
-          }),
+              telegram_api_token: null,
+              telegram_chat_id: null,
+              telegram_channel_id: null,
+              telegram_topic_id: null,
+            }),
         // Only include Discord settings if Discord is enabled
         ...(discordEnabled
           ? {
-            discord_webhook_url: data.notification_settings?.discord_webhook_url?.trim() || null,
-          }
+              discord_webhook_url: data.notification_settings?.discord_webhook_url?.trim() || null,
+            }
           : { discord_webhook_url: null }),
         // Only include proxy if either Telegram or Discord is enabled AND proxy URL is not empty. If both disabled, clear the proxy.
         ...(telegramEnabled || discordEnabled
@@ -535,23 +557,21 @@ export default function NotificationSettings() {
                       className={cn(
                         'group rounded-md border bg-card transition-all duration-200 ease-in-out',
                         isExpanded && 'border-primary/50 bg-accent/30',
-                        'hover:border-primary/30 hover:bg-accent/20'
+                        'hover:border-primary/30 hover:bg-accent/20',
                       )}
                     >
                       <FormField
                         control={form.control}
                         name={`notification_enable.${config.key}` as any}
                         render={() => {
-                          const isMainEnabled = hasSubPermissions
-                            ? anyEnabled
-                            : (typeof watchedEnableFields?.[config.key] === 'boolean' ? watchedEnableFields[config.key] as boolean : false)
+                          const isMainEnabled = hasSubPermissions ? anyEnabled : typeof watchedEnableFields?.[config.key] === 'boolean' ? (watchedEnableFields[config.key] as boolean) : false
 
                           return (
                             <FormItem>
                               <div className="flex w-full items-center justify-between px-3 py-2.5 transition-colors">
                                 <CollapsibleTrigger asChild disabled={!hasSubPermissions}>
                                   <div
-                                    className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer"
+                                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
                                     onClick={(e: React.MouseEvent) => {
                                       // Prevent any click in the trigger area from affecting the switch
                                       e.stopPropagation()
@@ -561,10 +581,7 @@ export default function NotificationSettings() {
                                     {hasSubPermissions && (
                                       <button
                                         type="button"
-                                        className={cn(
-                                          'shrink-0 text-muted-foreground transition-all duration-200 hover:text-foreground rounded-sm p-1',
-                                          isExpanded && 'rotate-180'
-                                        )}
+                                        className={cn('shrink-0 rounded-sm p-1 text-muted-foreground transition-all duration-200 hover:text-foreground', isExpanded && 'rotate-180')}
                                         onClick={e => {
                                           e.stopPropagation()
                                           const newSet = new Set(expandedPermissions)
@@ -580,10 +597,7 @@ export default function NotificationSettings() {
                                       </button>
                                     )}
                                     <FormLabel
-                                      className={cn(
-                                        "flex-1 truncate text-sm font-medium sm:text-base",
-                                        hasSubPermissions ? "cursor-pointer" : "cursor-pointer"
-                                      )}
+                                      className={cn('flex-1 truncate text-sm font-medium sm:text-base', hasSubPermissions ? 'cursor-pointer' : 'cursor-pointer')}
                                       onClick={(e: React.MouseEvent) => {
                                         // Prevent the form label click from triggering switch toggle
                                         e.preventDefault()
@@ -635,7 +649,7 @@ export default function NotificationSettings() {
                       />
 
                       {hasSubPermissions && (
-                        <CollapsibleContent className="overflow-hidden transition-all duration-200 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                        <CollapsibleContent className="data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden transition-all duration-200 ease-in-out">
                           <div className="space-y-1 border-t bg-muted/30 px-3 py-2">
                             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                               {config.subPermissions?.map(sub => (
@@ -648,15 +662,13 @@ export default function NotificationSettings() {
                                       <FormControl>
                                         <Checkbox
                                           checked={(permissionData as any)?.[sub.key] || false}
-                                          onCheckedChange={(checked) => {
+                                          onCheckedChange={checked => {
                                             field.onChange(checked)
                                           }}
                                           className="h-4 w-4"
                                         />
                                       </FormControl>
-                                      <FormLabel className="cursor-pointer text-xs font-normal leading-none">
-                                        {t(`settings.notifications.subPermissions.${sub.translationKey}`)}
-                                      </FormLabel>
+                                      <FormLabel className="cursor-pointer text-xs font-normal leading-none">{t(`settings.notifications.subPermissions.${sub.translationKey}`)}</FormLabel>
                                     </FormItem>
                                   )}
                                 />
@@ -669,7 +681,6 @@ export default function NotificationSettings() {
                   </Collapsible>
                 )
               })}
-
             </div>
           </div>
 
@@ -709,7 +720,7 @@ export default function NotificationSettings() {
                     name="notification_settings.telegram_api_token"
                     render={({ field }) => (
                       <FormControl>
-                        <PasswordInput {...field} className="h-9 text-xs font-mono sm:text-sm" placeholder="1234567890:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
+                        <PasswordInput {...field} className="h-9 font-mono text-xs sm:text-sm" placeholder="1234567890:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
                       </FormControl>
                     )}
                   />
@@ -859,22 +870,15 @@ export default function NotificationSettings() {
                 <Collapsible open={channelOverridesOpen} onOpenChange={setChannelOverridesOpen}>
                   <div className="space-y-1.5">
                     <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between rounded-md border bg-muted/50 p-2.5 transition-colors hover:bg-muted/70 cursor-pointer">
+                      <div className="flex cursor-pointer items-center justify-between rounded-md border bg-muted/50 p-2.5 transition-colors hover:bg-muted/70">
                         <div className="flex items-center gap-2">
                           <Megaphone className="h-4 w-4" />
-                          <Label className="text-xs font-medium sm:text-sm cursor-pointer text-foreground hover:text-foreground ">
-                            {t('settings.notifications.channels.title')}
-                          </Label>
+                          <Label className="cursor-pointer text-xs font-medium text-foreground hover:text-foreground sm:text-sm">{t('settings.notifications.channels.title')}</Label>
                         </div>
-                        <ChevronDown
-                          className={cn(
-                            'h-4 w-4 text-muted-foreground transition-transform duration-200',
-                            channelOverridesOpen && 'rotate-180'
-                          )}
-                        />
+                        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', channelOverridesOpen && 'rotate-180')} />
                       </div>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="overflow-hidden transition-all duration-200 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down px-1">
+                    <CollapsibleContent className="data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden px-1 transition-all duration-200 ease-in-out">
                       <div className="space-y-3 pt-2">
                         <div className="space-y-1">
                           <p className="text-xs text-muted-foreground">{t('settings.notifications.channels.description')}</p>
@@ -1053,7 +1057,7 @@ export default function NotificationSettings() {
                   name="notification_settings.discord_webhook_url"
                   render={({ field }) => (
                     <FormControl>
-                      <PasswordInput {...field} className="h-9 text-xs font-mono sm:text-sm" placeholder="https://discord.com/api/webhooks/1234567890/ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
+                      <PasswordInput {...field} className="h-9 font-mono text-xs sm:text-sm" placeholder="https://discord.com/api/webhooks/1234567890/ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
                     </FormControl>
                   )}
                 />

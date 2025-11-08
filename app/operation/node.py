@@ -23,7 +23,15 @@ from app.db.crud.node import (
 from app.db.crud.user import get_user
 from app.db.models import Node, NodeStatus
 from app.models.admin import AdminDetails
-from app.models.node import NodeCreate, NodeModify, NodeNotification, NodeResponse, UsageTable, UserIPList, UserIPListAll
+from app.models.node import (
+    NodeCreate,
+    NodeModify,
+    NodeNotification,
+    NodeResponse,
+    UsageTable,
+    UserIPList,
+    UserIPListAll,
+)
 from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
 from app.node import core_users, node_manager
 from app.operation import BaseOperation
@@ -414,9 +422,7 @@ class NodeOperation(BaseOperation):
 
         return {node_id: stats.value}
 
-    async def get_user_ip_list_by_node(
-        self, db: AsyncSession, node_id: Node, username: str
-    ) -> UserIPList:
+    async def get_user_ip_list_by_node(self, db: AsyncSession, node_id: Node, username: str) -> UserIPList:
         db_user = await get_user(db, username=username)
         if db_user is None:
             await self.raise_error(message="User not found", code=404)

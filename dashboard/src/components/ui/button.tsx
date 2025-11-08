@@ -39,14 +39,14 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, isLoading = false, loadingText, children, ...rest }, ref) => {
   const Comp = isLoading ? 'button' : asChild ? Slot : 'button'
-  const content = isLoading
-    ? (
-      <>
-        <LoaderCircleIcon className="h-5 w-5 animate-spin" />
-        {loadingText}
-      </>
-    )
-    : children
+  const content = isLoading ? (
+    <>
+      <LoaderCircleIcon className="h-5 w-5 animate-spin" />
+      {loadingText}
+    </>
+  ) : (
+    children
+  )
   return (
     <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...rest}>
       {content}

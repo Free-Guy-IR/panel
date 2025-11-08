@@ -82,22 +82,20 @@ export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
     <div className="w-full flex-1 space-y-4 pt-4">
       <ScrollArea className="h-[calc(100vh-8rem)]">
         <div dir={dir} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {isLoading ? (
-            [...Array(6)].map((_, i) => (
-              <Card key={i} className="px-4 py-5">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Skeleton className="h-5 w-24 sm:w-32" />
-                    <Skeleton className="h-4 w-20 sm:w-24" />
+          {isLoading
+            ? [...Array(6)].map((_, i) => (
+                <Card key={i} className="px-4 py-5">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-5 w-24 sm:w-32" />
+                      <Skeleton className="h-4 w-20 sm:w-24" />
+                    </div>
+                    <Skeleton className="h-8 w-8 shrink-0" />
                   </div>
-                  <Skeleton className="h-8 w-8 shrink-0" />
-                </div>
-              </Card>
-            ))
-          ) : (
-            groupsData?.groups.map(group => <Group key={group.id} group={group} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)
-          )}
+                </Card>
+              ))
+            : groupsData?.groups.map(group => <Group key={group.id} group={group} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)}
         </div>
       </ScrollArea>
 

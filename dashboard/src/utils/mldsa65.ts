@@ -52,7 +52,7 @@ const loadMlDsa65 = async (): Promise<MlDsaImplementation> => {
       const attemptLoaders: Array<() => Promise<any>> = [
         async () => (await import('@noble/post-quantum/ml-dsa.js')).ml_dsa65,
         async () => (await import('@noble/post-quantum/ml-dsa.js')).default,
-        async () => (await import('@noble/post-quantum/ml-dsa.js')),
+        async () => await import('@noble/post-quantum/ml-dsa.js'),
         async () => (await import('@noble/post-quantum')).ml_dsa65,
         async () => (await import('@noble/post-quantum')).ml_dsa?.ml_dsa65,
         async () => (await import('@noble/post-quantum')).ml_dsa,

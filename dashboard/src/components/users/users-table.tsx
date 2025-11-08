@@ -202,27 +202,30 @@ const UsersTable = memo(() => {
     [filters.sort, isSorting],
   )
 
-  const handleStatusFilter = useCallback((value: any) => {
-    // Sync with advance search form
-    advanceSearchForm.setValue('status', value || '0')
-    
-    // If value is '0' or empty, set status to undefined to remove it from the URL
-    if (value === '0' || value === '') {
-      setFilters(prev => ({
-        ...prev,
-        status: undefined, // Set to undefined so it won't be included in the request
-        offset: 0, // Reset to first page when changing filter
-      }))
-    } else {
-      setFilters(prev => ({
-        ...prev,
-        status: value, // Otherwise set the actual status value
-        offset: 0, // Reset to first page when changing filter
-      }))
-    }
+  const handleStatusFilter = useCallback(
+    (value: any) => {
+      // Sync with advance search form
+      advanceSearchForm.setValue('status', value || '0')
 
-    setCurrentPage(0) // Reset current page
-  }, [advanceSearchForm])
+      // If value is '0' or empty, set status to undefined to remove it from the URL
+      if (value === '0' || value === '') {
+        setFilters(prev => ({
+          ...prev,
+          status: undefined, // Set to undefined so it won't be included in the request
+          offset: 0, // Reset to first page when changing filter
+        }))
+      } else {
+        setFilters(prev => ({
+          ...prev,
+          status: value, // Otherwise set the actual status value
+          offset: 0, // Reset to first page when changing filter
+        }))
+      }
+
+      setCurrentPage(0) // Reset current page
+    },
+    [advanceSearchForm],
+  )
 
   const handleFilterChange = useCallback((newFilters: Partial<typeof filters>) => {
     setFilters(prev => {

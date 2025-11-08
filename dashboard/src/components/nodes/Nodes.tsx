@@ -111,25 +111,23 @@ export default function Nodes() {
           className="mb-12 grid transform-gpu animate-slide-up grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
           style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}
         >
-          {isLoading ? (
-            [...Array(6)].map((_, i) => (
-              <Card key={i} className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-5 w-24 sm:w-32" />
-                    <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
+          {isLoading
+            ? [...Array(6)].map((_, i) => (
+                <Card key={i} className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-24 sm:w-32" />
+                      <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-20 sm:w-24" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 flex-1" />
+                      <Skeleton className="h-8 w-8 shrink-0" />
+                    </div>
                   </div>
-                  <Skeleton className="h-4 w-20 sm:w-24" />
-                  <div className="flex gap-2">
-                    <Skeleton className="h-8 flex-1" />
-                    <Skeleton className="h-8 w-8 shrink-0" />
-                  </div>
-                </div>
-              </Card>
-            ))
-          ) : (
-            nodesData?.map(node => <Node key={node.id} node={node} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)
-          )}
+                </Card>
+              ))
+            : nodesData?.map(node => <Node key={node.id} node={node} onEdit={handleEdit} onToggleStatus={handleToggleStatus} />)}
         </div>
 
         {!isLoading && (!nodesData || nodesData.length === 0) && (

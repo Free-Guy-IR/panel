@@ -227,7 +227,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
 
   const handleSort = (column: string) => {
     const currentSort = filters.sort
-    
+
     if (currentSort === column) {
       // First click: ascending, make it descending
       setFilters(prev => ({ ...prev, sort: '-' + column }))

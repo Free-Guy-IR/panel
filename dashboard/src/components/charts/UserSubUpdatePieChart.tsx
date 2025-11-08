@@ -100,24 +100,19 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   return (
     <div className="rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur-sm">
       <div className="flex items-center gap-2">
-        <div 
-          className="h-3 w-3 rounded-full border border-border/20" 
-          style={{ backgroundColor: fill }}
-        />
+        <div className="h-3 w-3 rounded-full border border-border/20" style={{ backgroundColor: fill }} />
         <span className="text-sm font-medium text-foreground">{agent}</span>
       </div>
-      
+
       <div className="mt-2 space-y-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <Users className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">{t('statistics.subscriptions')}</span>
           </div>
-          <span className="text-sm font-semibold text-foreground font-mono">
-            {numberWithCommas(updates)}
-          </span>
+          <span className="font-mono text-sm font-semibold text-foreground">{numberWithCommas(updates)}</span>
         </div>
-        
+
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-muted-foreground">{t('statistics.percentage')}</span>
           <Badge variant="secondary" className="text-xs font-medium">
@@ -230,7 +225,6 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
     }
   }, [segments, t])
 
-
   const hasData = segments.some(segment => segment.count > 0)
   const total = data?.total ?? 0
   const errorDescription = error && typeof error === 'object' && 'message' in error ? String((error as { message?: string }).message) : undefined
@@ -240,7 +234,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
     <Card>
       <CardHeader className="flex flex-col gap-4 pb-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <CardTitle className='mb-2'>{t('statistics.subscriptionDistribution')}</CardTitle>
+          <CardTitle className="mb-2">{t('statistics.subscriptionDistribution')}</CardTitle>
           <CardDescription>{t('statistics.subscriptionDistributionDescription')}</CardDescription>
         </div>
         <div className="flex w-full flex-col gap-2 lg:max-w-xs">
@@ -290,7 +284,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
                   {numberWithCommas(total)}
                 </p>
               </div>
-              <div className="w-full max-h-64 overflow-y-auto">
+              <div className="max-h-64 w-full overflow-y-auto">
                 <ul className="w-full space-y-3">
                   {segments.map(segment => (
                     <li key={segment.key} className={`flex items-center justify-between gap-4 rounded-md border border-border/40 px-3 py-2 ${dir === 'rtl' ? 'flex-row-reverse' : ''}`}>

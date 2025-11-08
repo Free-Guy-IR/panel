@@ -62,9 +62,7 @@ const DEFAULT_VLESS_HANDSHAKE = 'mlkem768x25519plus'
 const DEFAULT_VLESS_ENCRYPTION = 'native'
 const DEFAULT_VLESS_PADDING = '100-111-1111.75-0-111.50-0-3333'
 const DEFAULT_VLESS_SERVER_TICKET = '600s'
-const VLESS_HANDSHAKE_OPTIONS = [
-  { value: DEFAULT_VLESS_HANDSHAKE, label: 'mlkem768x25519plus', translationKey: 'coreConfigModal.vlessHandshakeOptionMlkem768x25519plus' },
-] as const
+const VLESS_HANDSHAKE_OPTIONS = [{ value: DEFAULT_VLESS_HANDSHAKE, label: 'mlkem768x25519plus', translationKey: 'coreConfigModal.vlessHandshakeOptionMlkem768x25519plus' }] as const
 const VLESS_RESUME_OPTIONS = [
   { value: '0rtt', label: '0rtt', translationKey: 'coreConfigModal.vlessResumeOption0rtt' },
   { value: '1rtt', label: '1rtt', translationKey: 'coreConfigModal.vlessResumeOption1rtt' },
@@ -88,11 +86,11 @@ interface VlessBuilderOptions {
 }
 
 interface DataFieldProps {
-  label: string;
-  value: string;
-  statusColor: string;
-  copiedMessage: string;
-  defaultMessage: string;
+  label: string
+  value: string
+  statusColor: string
+  copiedMessage: string
+  defaultMessage: string
 }
 
 const createDefaultVlessOptions = (): VlessBuilderOptions => ({
@@ -171,7 +169,6 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       return newValue
     })
   }, [editorInstance])
-
 
   const handleEditorValidation = useCallback(
     (markers: any[]) => {
@@ -547,19 +544,19 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                     typeof message === 'string'
                       ? message
                       : t('validation.invalid', {
-                        field: t(`coreConfigModal.${field}`, { defaultValue: field }),
-                        defaultValue: `${field} is invalid`,
-                      }),
+                          field: t(`coreConfigModal.${field}`, { defaultValue: field }),
+                          defaultValue: `${field} is invalid`,
+                        }),
                 })
               }
             })
 
             toast.error(
               firstMessage ||
-              t('validation.invalid', {
-                field: t(`coreConfigModal.${firstField}`, { defaultValue: firstField }),
-                defaultValue: `${firstField} is invalid`,
-              }),
+                t('validation.invalid', {
+                  field: t(`coreConfigModal.${firstField}`, { defaultValue: firstField }),
+                  defaultValue: `${firstField} is invalid`,
+                }),
             )
           } else if (typeof detail === 'string' && !Array.isArray(detail)) {
             toast.error(detail)
@@ -786,16 +783,14 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       <Dialog open={isVlessAdvancedModalOpen} onOpenChange={setIsVlessAdvancedModalOpen}>
         <DialogContent className="h-full max-w-full px-2 py-6 sm:h-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg px-2">
+            <DialogTitle className="flex items-center gap-2 px-2 text-base sm:text-lg">
               <span className="truncate">{t('coreConfigModal.vlessAdvancedSettings', { defaultValue: 'VLESS Advanced Settings' })}</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[calc(100dvh-120px)] px-2 overflow-y-auto space-y-4">
+          <div className="max-h-[calc(100dvh-120px)] space-y-4 overflow-y-auto px-2">
             {/* Variant Selector */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                {t('coreConfigModal.chooseAuthentication')}
-              </Label>
+              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.chooseAuthentication')}</Label>
               <Select value={selectedVlessVariant} onValueChange={handleVlessVariantChange}>
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue />
@@ -820,23 +815,16 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
             {/* Handshake and Encryption Methods */}
             <div className="flex flex-col gap-3 sm:flex-row">
               {/* Handshake Method */}
-              <div className="space-y-2 flex-1 flex flex-col justify-end">
-                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  {t('coreConfigModal.vlessHandshakeLabel')}
-                </Label>
-                <Select
-                  value={vlessOptions.handshakeMethod}
-                  onValueChange={value => setVlessOptions(prev => ({ ...prev, handshakeMethod: value }))}
-                >
+              <div className="flex flex-1 flex-col justify-end space-y-2">
+                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessHandshakeLabel')}</Label>
+                <Select value={vlessOptions.handshakeMethod} onValueChange={value => setVlessOptions(prev => ({ ...prev, handshakeMethod: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {VLESS_HANDSHAKE_OPTIONS.map(option => (
                       <SelectItem key={option.value} value={option.value}>
-                        <span className="truncate">
-                          {t(option.translationKey, { defaultValue: option.label })}
-                        </span>
+                        <span className="truncate">{t(option.translationKey, { defaultValue: option.label })}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -844,11 +832,9 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
               </div>
 
               {/* Encryption Method */}
-              <div className="space-y-2 flex-1 flex flex-col justify-end">
+              <div className="flex flex-1 flex-col justify-end space-y-2">
                 <div className="flex items-center gap-1.5">
-                  <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                    {t('coreConfigModal.vlessEncryptionLabel')}
-                  </Label>
+                  <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessEncryptionLabel')}</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
@@ -866,19 +852,14 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                     </PopoverContent>
                   </Popover>
                 </div>
-                <Select
-                  value={vlessOptions.encryptionMethod}
-                  onValueChange={value => setVlessOptions(prev => ({ ...prev, encryptionMethod: value }))}
-                >
+                <Select value={vlessOptions.encryptionMethod} onValueChange={value => setVlessOptions(prev => ({ ...prev, encryptionMethod: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {VLESS_ENCRYPTION_METHODS.map(method => (
                       <SelectItem key={method.value} value={method.value}>
-                        <span className="truncate">
-                          {t(method.translationKey, { defaultValue: method.label })}
-                        </span>
+                        <span className="truncate">{t(method.translationKey, { defaultValue: method.label })}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -890,35 +871,21 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
             <div className="grid gap-3 sm:grid-cols-2">
               {/* Server Ticket */}
               <div className="space-y-2">
-                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  {t('coreConfigModal.vlessServerTicket')}
-                </Label>
-                <Input
-                  value={vlessOptions.serverTicket}
-                  placeholder="600s or 100-500s"
-                  className="h-9"
-                  onChange={event => setVlessOptions(prev => ({ ...prev, serverTicket: event.target.value }))}
-                />
+                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessServerTicket')}</Label>
+                <Input value={vlessOptions.serverTicket} placeholder="600s or 100-500s" className="h-9" onChange={event => setVlessOptions(prev => ({ ...prev, serverTicket: event.target.value }))} />
               </div>
 
               {/* Client Ticket */}
               <div className="space-y-2">
-                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  {t('coreConfigModal.vlessClientTicket')}
-                </Label>
-                <Select
-                  value={vlessOptions.clientTicket}
-                  onValueChange={value => setVlessOptions(prev => ({ ...prev, clientTicket: value }))}
-                >
+                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessClientTicket')}</Label>
+                <Select value={vlessOptions.clientTicket} onValueChange={value => setVlessOptions(prev => ({ ...prev, clientTicket: value }))}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {VLESS_RESUME_OPTIONS.map(option => (
                       <SelectItem key={option.value} value={option.value}>
-                        <span className="truncate">
-                          {t(option.translationKey, { defaultValue: option.label })}
-                        </span>
+                        <span className="truncate">{t(option.translationKey, { defaultValue: option.label })}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -928,9 +895,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
 
             {/* Padding Configuration */}
             <div className="space-y-3">
-              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                {t('coreConfigModal.padding', { defaultValue: 'Padding' })}
-              </Label>
+              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.padding', { defaultValue: 'Padding' })}</Label>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {/* Server Padding */}
@@ -942,10 +907,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                       onCheckedChange={checked => setVlessOptions(prev => ({ ...prev, includeServerPadding: checked === true }))}
                       className="h-4 w-4"
                     />
-                    <Label
-                      htmlFor="vless-server-padding-modal"
-                      className="cursor-pointer text-xs font-medium"
-                    >
+                    <Label htmlFor="vless-server-padding-modal" className="cursor-pointer text-xs font-medium">
                       {t('coreConfigModal.vlessServerPaddingToggle')}
                     </Label>
                     <Popover>
@@ -979,10 +941,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                       onCheckedChange={checked => setVlessOptions(prev => ({ ...prev, includeClientPadding: checked === true }))}
                       className="h-4 w-4"
                     />
-                    <Label
-                      htmlFor="vless-client-padding-modal"
-                      className="cursor-pointer text-xs font-medium"
-                    >
+                    <Label htmlFor="vless-client-padding-modal" className="cursor-pointer text-xs font-medium">
                       {t('coreConfigModal.vlessClientPaddingToggle')}
                     </Label>
                     <Popover>
@@ -1011,22 +970,10 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
             </div>
           </div>
           <div className="flex justify-end gap-2 px-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsVlessAdvancedModalOpen(false)}
-              size="sm"
-              disabled={isGeneratingVLESSEncryption}
-            >
+            <Button type="button" variant="outline" onClick={() => setIsVlessAdvancedModalOpen(false)} size="sm" disabled={isGeneratingVLESSEncryption}>
               {t('close')}
             </Button>
-            <LoaderButton
-              type="button"
-              onClick={generateVLESSEncryption}
-              isLoading={isGeneratingVLESSEncryption}
-              loadingText={t('coreConfigModal.generatingVLESSEncryption')}
-              size="sm"
-            >
+            <LoaderButton type="button" onClick={generateVLESSEncryption} isLoading={isGeneratingVLESSEncryption} loadingText={t('coreConfigModal.generatingVLESSEncryption')} size="sm">
               {t('coreConfigModal.generate')}
             </LoaderButton>
           </div>
@@ -1037,53 +984,32 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
 
   // Results Dialog Component
   // Reusable components for cleaner code
-  const StatusIndicator = ({ color }: { color: string }) => (
-    <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} aria-hidden="true" />
-  );
+  const StatusIndicator = ({ color }: { color: string }) => <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} aria-hidden="true" />
 
-  const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-    <p className="text-[10px] sm:text-xs font-semibold tracking-wide text-muted-foreground truncate">
-      {children}
-    </p>
-  );
+  const SectionLabel = ({ children }: { children: React.ReactNode }) => <p className="truncate text-[10px] font-semibold tracking-wide text-muted-foreground sm:text-xs">{children}</p>
 
   const CodeBlock = ({ value }: { value: string }) => (
-    <div dir='ltr' className="group relative min-w-0 flex-1 rounded-md border bg-background/80 backdrop-blur-sm">
-      <code className="block w-full overflow-x-auto px-3 py-2.5 text-xs font-mono leading-relaxed whitespace-nowrap">
-        {value}
-      </code>
+    <div dir="ltr" className="group relative min-w-0 flex-1 rounded-md border bg-background/80 backdrop-blur-sm">
+      <code className="block w-full overflow-x-auto whitespace-nowrap px-3 py-2.5 font-mono text-xs leading-relaxed">{value}</code>
     </div>
-  );
+  )
 
-  const DataField = ({
-    label,
-    value,
-    statusColor,
-    copiedMessage,
-    defaultMessage,
-  }: DataFieldProps) => (
+  const DataField = ({ label, value, statusColor, copiedMessage, defaultMessage }: DataFieldProps) => (
     <div className="space-y-1.5 sm:space-y-2">
       <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
         <StatusIndicator color={statusColor} />
         <SectionLabel>{label}</SectionLabel>
       </div>
-      <div dir="ltr" className="flex min-w-0 gap-2 items-start">
+      <div dir="ltr" className="flex min-w-0 items-start gap-2">
         <CodeBlock value={value} />
-        <CopyButton
-          value={value}
-          icon="copy"
-          copiedMessage={copiedMessage}
-          defaultMessage={defaultMessage}
-          className="h-8 w-full shrink-0 text-xs sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
-        />
+        <CopyButton value={value} icon="copy" copiedMessage={copiedMessage} defaultMessage={defaultMessage} className="h-8 w-full shrink-0 text-xs sm:h-9 sm:w-auto sm:px-3 sm:text-sm" />
       </div>
     </div>
-  );
+  )
 
   // Main render function
   const renderResultDialog = () => {
     if (!resultType || !resultData) return null
-
 
     const renderContent = () => {
       switch (resultType) {
@@ -1105,7 +1031,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                 defaultMessage="coreConfigModal.copyPrivateKey"
               />
             </div>
-          );
+          )
 
         case 'shortId':
           return (
@@ -1116,7 +1042,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
               copiedMessage="coreConfigModal.shortIdCopied"
               defaultMessage="coreConfigModal.copyShortId"
             />
-          );
+          )
 
         case 'shadowsocksPassword':
           return (
@@ -1129,7 +1055,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                 defaultMessage="coreConfigModal.copyShadowsocksPassword"
               />
             </div>
-          );
+          )
 
         case 'mldsa65':
           return (
@@ -1139,23 +1065,22 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                 value={resultData.seed || ''}
                 statusColor="bg-blue-500"
                 copiedMessage="coreConfigModal.mldsa65SeedCopied"
-                defaultMessage="coreConfigModal.copyMldsa65Seed" />
+                defaultMessage="coreConfigModal.copyMldsa65Seed"
+              />
               <DataField
                 label={t('coreConfigModal.mldsa65Verify')}
                 value={resultData.verify || ''}
                 statusColor="bg-purple-500"
                 copiedMessage="coreConfigModal.mldsa65VerifyCopied"
-                defaultMessage="coreConfigModal.copyMldsa65Verify" />
+                defaultMessage="coreConfigModal.copyMldsa65Verify"
+              />
             </div>
-          );
+          )
 
         case 'vlessEncryption': {
-          const currentValues =
-            selectedVlessVariant === 'x25519'
-              ? resultData.x25519
-              : resultData.mlkem768;
+          const currentValues = selectedVlessVariant === 'x25519' ? resultData.x25519 : resultData.mlkem768
 
-          if (!currentValues) return null;
+          if (!currentValues) return null
 
           return (
             <div className="space-y-4">
@@ -1174,26 +1099,24 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                 defaultMessage="coreConfigModal.copyEncryption"
               />
             </div>
-          );
+          )
         }
 
         default:
-          return null;
+          return null
       }
     }
 
     return (
       <Dialog open={isResultsDialogOpen} onOpenChange={setIsResultsDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[95vh] overflow-y-auto p-3 sm:p-6">
+        <DialogContent className="max-h-[95vh] w-[95vw] max-w-2xl overflow-y-auto p-3 sm:p-6">
           <DialogHeader className="pb-3">
-            <DialogTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
-              <Sparkles className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-primary shrink-0" />
+            <DialogTitle className="flex items-center gap-1.5 text-sm sm:gap-2 sm:text-base">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary sm:h-5 sm:w-5" />
               <span className="truncate">{t('coreConfigModal.result', { defaultValue: 'Result' })}</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 sm:space-y-4 overflow-y-auto max-h-[70vh] pr-1">
-            {renderContent()}
-          </div>
+          <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1 sm:space-y-4">{renderContent()}</div>
           <DialogFooter className="pt-3 sm:pt-4">
             <div className="flex w-full gap-2 sm:w-auto">
               <Button
@@ -1222,10 +1145,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
               >
                 {t('coreConfigModal.regenerate')}
               </Button>
-              <Button
-                onClick={() => setIsResultsDialogOpen(false)}
-                className="h-8 w-full text-xs sm:h-10 sm:w-auto sm:text-sm"
-              >
+              <Button onClick={() => setIsResultsDialogOpen(false)} className="h-8 w-full text-xs sm:h-10 sm:w-auto sm:text-sm">
                 {t('close')}
               </Button>
             </div>
@@ -1242,7 +1162,9 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
         <DialogContent className="h-full max-w-full px-4 py-6 sm:h-auto sm:max-w-[1000px]" onOpenAutoFocus={e => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle className={cn('text-start text-xl font-semibold', dir === 'rtl' && 'sm:text-right')}>{editingCore ? t('coreConfigModal.editCore') : t('coreConfigModal.addConfig')}</DialogTitle>
+            <DialogTitle className={cn('text-start text-xl font-semibold', dir === 'rtl' && 'sm:text-right')}>
+              {editingCore ? t('coreConfigModal.editCore') : t('coreConfigModal.addConfig')}
+            </DialogTitle>
             <p className={cn('text-start text-sm text-muted-foreground', dir === 'rtl' && 'sm:text-right')}>{t('coreConfigModal.createNewConfig')}</p>
           </DialogHeader>
 
@@ -1266,19 +1188,21 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                   isEditorFullscreen ? 'fixed inset-0 z-[60] flex items-center justify-center' : 'h-[calc(50vh-1rem)] sm:h-[calc(55vh-1rem)] md:h-[600px]',
                                 )}
                                 dir="ltr"
-                                style={isEditorFullscreen ? {
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                } : {
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                }}
+                                style={
+                                  isEditorFullscreen
+                                    ? {
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }
+                                    : {
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                      }
+                                }
                               >
-                                {isEditorFullscreen && (
-                                  <div className="absolute inset-0 bg-background/95 backdrop-blur-sm" onClick={handleToggleFullscreen} />
-                                )}
+                                {isEditorFullscreen && <div className="absolute inset-0 bg-background/95 backdrop-blur-sm" onClick={handleToggleFullscreen} />}
                                 {!isEditorReady && (
                                   <div className="absolute inset-0 z-[70] flex items-center justify-center bg-background/80 backdrop-blur-sm">
                                     <span className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></span>
@@ -1287,20 +1211,13 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
 
                                 {/* Fullscreen Mode */}
                                 {isEditorFullscreen ? (
-                                  <div className="relative z-10 w-full h-full sm:w-full sm:max-w-[95vw] sm:h-auto sm:rounded-lg sm:border sm:shadow-xl bg-background flex flex-col sm:my-8">
+                                  <div className="relative z-10 flex h-full w-full flex-col bg-background sm:my-8 sm:h-auto sm:w-full sm:max-w-[95vw] sm:rounded-lg sm:border sm:shadow-xl">
                                     {/* Header - hidden on mobile, visible on desktop */}
-                                    <div className="hidden sm:flex items-center justify-between border-b bg-background px-3 py-2.5 rounded-t-lg">
+                                    <div className="hidden items-center justify-between rounded-t-lg border-b bg-background px-3 py-2.5 sm:flex">
                                       <div className="flex items-center gap-2">
                                         <span className="text-sm font-medium">Xray Core Configuration</span>
                                       </div>
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8 shrink-0"
-                                        onClick={handleToggleFullscreen}
-                                        aria-label={t('exitFullscreen')}
-                                      >
+                                      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={handleToggleFullscreen} aria-label={t('exitFullscreen')}>
                                         <Minimize2 className="h-4 w-4" />
                                       </Button>
                                     </div>
@@ -1309,7 +1226,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                       type="button"
                                       size="icon"
                                       variant="default"
-                                      className="absolute top-2 right-2 z-20 sm:hidden h-9 w-9 rounded-full shadow-lg"
+                                      className="absolute right-2 top-2 z-20 h-9 w-9 rounded-full shadow-lg sm:hidden"
                                       onClick={handleToggleFullscreen}
                                       aria-label={t('exitFullscreen')}
                                     >
@@ -1392,7 +1309,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                         <Maximize2 className="h-4 w-4" />
                                       </Button>
                                     )}
-                                    <div className="relative flex-1 min-h-0" style={{ minHeight: 0 }}>
+                                    <div className="relative min-h-0 flex-1" style={{ minHeight: 0 }}>
                                       <Editor
                                         height={undefined}
                                         defaultLanguage="json"
@@ -1606,35 +1523,33 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
 
                     <Tabs dir={dir} defaultValue="reality" className="w-full pb-6">
                       {/* Enhanced TabsList with Text Overflow */}
-                      <TabsList dir='ltr' className="grid h-auto w-full grid-cols-3 gap-1 bg-muted/50 p-1">
+                      <TabsList dir="ltr" className="grid h-auto w-full grid-cols-3 gap-1 bg-muted/50 p-1">
                         <TabsTrigger
                           value="reality"
-                          className="text-xs sm:text-sm py-2.5 px-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all min-w-0 truncate font-medium"
+                          className="min-w-0 truncate px-2 py-2.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm sm:text-sm"
                         >
                           Reality
                         </TabsTrigger>
 
                         <TabsTrigger
                           value="shadowsocks"
-                          className="text-xs sm:text-sm py-2.5 px-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all min-w-0 truncate font-medium"
+                          className="min-w-0 truncate px-2 py-2.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm sm:text-sm"
                         >
                           ShadowSocks
                         </TabsTrigger>
 
                         <TabsTrigger
                           value="vless"
-                          className="text-xs sm:text-sm py-2.5 px-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all min-w-0 truncate font-medium"
+                          className="min-w-0 truncate px-2 py-2.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm sm:text-sm"
                         >
                           VLESS
                         </TabsTrigger>
-
-
                       </TabsList>
 
                       {/* ============================================
           Reality TAB
       ============================================ */}
-                      <TabsContent value="reality" className="mt-3 space-y-3 animate-in fade-in-50 duration-300">
+                      <TabsContent value="reality" className="mt-3 space-y-3 duration-300 animate-in fade-in-50">
                         {/* Action Buttons */}
                         <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
                           <LoaderButton
@@ -1666,7 +1581,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                           <LoaderButton
                             type="button"
                             onClick={viewShortId}
-                            className="h-10 col-span-2 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
+                            className="col-span-2 h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
                             isLoading={isGeneratingShortId}
                             loadingText={t('coreConfigModal.generatingShortId')}
                           >
@@ -1676,22 +1591,16 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                             </span>
                           </LoaderButton>
                         </div>
-
                       </TabsContent>
 
                       {/* ============================================
           Shadowsocks TAB
       ============================================ */}
-                      <TabsContent value="shadowsocks" className="mt-3 space-y-3 animate-in fade-in-50 duration-300">
+                      <TabsContent value="shadowsocks" className="mt-3 space-y-3 duration-300 animate-in fade-in-50">
                         {/* Encryption Method Selector */}
                         <div className="space-y-2">
-                          <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
-                            {t('coreConfigModal.shadowsocksEncryptionMethod', { defaultValue: 'Encryption Method' })}
-                          </Label>
-                          <Select
-                            value={selectedEncryptionMethod}
-                            onValueChange={setSelectedEncryptionMethod}
-                          >
+                          <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.shadowsocksEncryptionMethod', { defaultValue: 'Encryption Method' })}</Label>
+                          <Select value={selectedEncryptionMethod} onValueChange={setSelectedEncryptionMethod}>
                             <SelectTrigger className="h-9">
                               <SelectValue />
                             </SelectTrigger>
@@ -1718,20 +1627,14 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                             {t('coreConfigModal.generateShadowsocksPassword')}
                           </span>
                         </LoaderButton>
-
                       </TabsContent>
 
                       {/* ============================================
           VLESS TAB
       ============================================ */}
-                      <TabsContent value="vless" className="mt-3 space-y-3 animate-in fade-in-50 duration-300">
+                      <TabsContent value="vless" className="mt-3 space-y-3 duration-300 animate-in fade-in-50">
                         {/* VLESS Buttons */}
-                        <LoaderButton
-                          type="button"
-                          onClick={viewVLESS}
-                          className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
-                          isLoading={false}
-                        >
+                        <LoaderButton type="button" onClick={viewVLESS} className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11" isLoading={false}>
                           <span className="flex items-center gap-2 truncate">
                             {generatedVLESS && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500 ring-2 ring-green-500/20" />}
                             {t('coreConfigModal.generateVLESSEncryption')}

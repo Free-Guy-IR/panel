@@ -56,9 +56,7 @@ const transformUsageData = (apiData: any, periodOption: any, isNodeUsage: boolea
     }
 
     // Node usage has uplink + downlink, user usage has total_traffic
-    const traffic = isNodeUsage 
-      ? (stat.uplink || 0) + (stat.downlink || 0)
-      : (stat.total_traffic || 0)
+    const traffic = isNodeUsage ? (stat.uplink || 0) + (stat.downlink || 0) : stat.total_traffic || 0
 
     return {
       date: displayLabel,
@@ -224,38 +222,38 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
   }, [periodOption])
 
   // For sudo admins: fetch from nodes, for non-sudo: fetch from users
-  const nodeUsageParams = useMemo(() => ({
-    period: periodOption.period,
-    start: startDate,
-    end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
-  }), [periodOption.period, startDate, endDate])
-
-  const userUsageParams = useMemo(() => ({
-    ...(admin_username ? { admin: [admin_username] } : {}),
-    period: periodOption.period,
-    start: startDate,
-    end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
-  }), [admin_username, periodOption.period, startDate, endDate])
-
-  const { data: nodeData, isLoading: isLoadingNodes } = useGetUsage(
-    nodeUsageParams,
-    {
-      query: {
-        enabled: is_sudo,
-        refetchInterval: 1000 * 60 * 5,
-      },
-    },
+  const nodeUsageParams = useMemo(
+    () => ({
+      period: periodOption.period,
+      start: startDate,
+      end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
+    }),
+    [periodOption.period, startDate, endDate],
   )
 
-  const { data: userData, isLoading: isLoadingUsers } = useGetUsersUsage(
-    userUsageParams,
-    {
-      query: {
-        enabled: !is_sudo,
-        refetchInterval: 1000 * 60 * 5,
-      },
-    },
+  const userUsageParams = useMemo(
+    () => ({
+      ...(admin_username ? { admin: [admin_username] } : {}),
+      period: periodOption.period,
+      start: startDate,
+      end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
+    }),
+    [admin_username, periodOption.period, startDate, endDate],
   )
+
+  const { data: nodeData, isLoading: isLoadingNodes } = useGetUsage(nodeUsageParams, {
+    query: {
+      enabled: is_sudo,
+      refetchInterval: 1000 * 60 * 5,
+    },
+  })
+
+  const { data: userData, isLoading: isLoadingUsers } = useGetUsersUsage(userUsageParams, {
+    query: {
+      enabled: !is_sudo,
+      refetchInterval: 1000 * 60 * 5,
+    },
+  })
 
   const data = is_sudo ? nodeData : userData
   const isLoading = is_sudo ? isLoadingNodes : isLoadingUsers

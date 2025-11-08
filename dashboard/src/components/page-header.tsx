@@ -20,10 +20,10 @@ export default function PageHeader({ title, description, buttonText, onButtonCli
   const { t } = useTranslation()
   const dir = useDirDetection()
   const location = useLocation()
-  
+
   // Generate tutorial URL if not provided
   const docsUrl = tutorialUrl || getDocsUrl(location.pathname)
-  
+
   return (
     <div dir={dir} className="mx-auto flex w-full flex-row items-start justify-between gap-4 px-4 py-4 md:pt-6">
       <div className="flex flex-col gap-y-1">

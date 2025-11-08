@@ -109,30 +109,28 @@ export default function Cores({ isDialogOpen, onOpenChange, cores, onEditCore, o
     <div className="w-full flex-1">
       <ScrollArea dir={dir} className="h-[calc(100vh-8rem)]">
         <div className="grid w-full grid-cols-1 gap-4 pt-6 md:grid-cols-2 lg:grid-cols-3">
-          {isLoading ? (
-            [...Array(6)].map((_, i) => (
-              <Card key={i} className="px-4 py-5">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
-                  <Skeleton className="h-5 w-24 sm:w-32" />
-                  <div className="ml-auto shrink-0">
-                    <Skeleton className="h-8 w-8" />
+          {isLoading
+            ? [...Array(6)].map((_, i) => (
+                <Card key={i} className="px-4 py-5">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
+                    <Skeleton className="h-5 w-24 sm:w-32" />
+                    <div className="ml-auto shrink-0">
+                      <Skeleton className="h-8 w-8" />
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))
-          ) : (
-            (cores || coresData?.cores)?.map((core: CoreResponse) => (
-              <Core
-                key={core.id}
-                core={core}
-                onEdit={onEditCore ? () => onEditCore(core.id) : () => handleEdit(core)}
-                onToggleStatus={handleToggleStatus}
-                onDuplicate={onDuplicateCore ? () => onDuplicateCore(core.id) : undefined}
-                onDelete={onDeleteCore ? () => onDeleteCore(core.name, core.id) : undefined}
-              />
-            ))
-          )}
+                </Card>
+              ))
+            : (cores || coresData?.cores)?.map((core: CoreResponse) => (
+                <Core
+                  key={core.id}
+                  core={core}
+                  onEdit={onEditCore ? () => onEditCore(core.id) : () => handleEdit(core)}
+                  onToggleStatus={handleToggleStatus}
+                  onDuplicate={onDuplicateCore ? () => onDuplicateCore(core.id) : undefined}
+                  onDelete={onDeleteCore ? () => onDeleteCore(core.name, core.id) : undefined}
+                />
+              ))}
         </div>
       </ScrollArea>
 
