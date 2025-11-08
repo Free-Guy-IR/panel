@@ -167,7 +167,7 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
       </div>
 
       {/* Total Traffic / Network Speed (depends on whether it's master or node stats) */}
-      <div className="h-full w-full animate-fade-in" style={{ animationDuration: '600ms', animationDelay: '250ms' }}>
+      <div className="h-full w-full animate-fade-in sm:col-span-2 lg:col-span-1" style={{ animationDuration: '600ms', animationDelay: '250ms' }}>
         <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
           <div
             className={cn(

@@ -39,7 +39,8 @@ export default function Statistics({ data, isLoading, error, selectedServer, is_
   const { data: nodeStats, isLoading: isLoadingNodeStats } = useRealtimeNodeStats(selectedNodeId || 0, {
     query: {
       enabled: is_sudo && !!selectedNodeId, // Only fetch node stats for sudo admins with selected node
-      refetchInterval: 5000, // Update every 5 seconds
+      refetchInterval: 1500, // Update every 1.5 seconds for faster realtime updates
+      staleTime: 1000, // Consider data stale after 1 second
     },
   })
 

@@ -24,8 +24,8 @@ const Statistics = () => {
   const { data, error, isLoading } = useQuery({
     queryKey: getGetSystemStatsQueryKey(),
     queryFn: () => getSystemStats(),
-    refetchInterval: selectedServer === 'master' ? 5000 : false, // Only refetch when master is selected
-    staleTime: 3000, // Consider data stale after 3 seconds
+    refetchInterval: selectedServer === 'master' ? 2000 : false, // Update every 2 seconds for faster realtime updates
+    staleTime: 1000, // Consider data stale after 1 second
     refetchOnWindowFocus: true,
     enabled: selectedServer === 'master', // Only fetch when master is selected
   })

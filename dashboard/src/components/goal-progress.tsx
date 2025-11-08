@@ -156,7 +156,7 @@ export function GoalProgress() {
     : t('goal.progress', { defaultValue: 'Progress' })
   const remainingLabel = t('goal.remaining')
   const ctaLabel = isGithubGoal
-    ? t('goal.starOnGitHub', { defaultValue: 'Star on GitHub' })
+    ? t('donation.starOnGitHub', { defaultValue: 'Star on GitHub' })
     : t('goal.contribute')
   const ctaHref =
     isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name
