@@ -1,7 +1,6 @@
-import { useEffect, useRef, useCallback, useMemo, useState, memo } from 'react'
+import { useEffect, useRef, useMemo, useState, memo } from 'react'
 import { useLocation } from 'react-router'
 import { useTheme } from '@/components/theme-provider'
-import { useTopLoadingBar } from '@/hooks/use-top-loading-bar'
 import LoadingBar from 'react-top-loading-bar'
 
 const shouldIgnoreRoute = (pathname: string): boolean => {
@@ -34,7 +33,6 @@ function TopLoadingBar({ height = 3, color, shadow = true, className = '' }: Top
   const ref = useRef<any>(null)
   const maxTimeoutRef = useRef<NodeJS.Timeout>()
   const { resolvedTheme } = useTheme()
-  const { isLoading, progress } = useTopLoadingBar()
   const location = useLocation()
 
   const [themeKey, setThemeKey] = useState(resolvedTheme)
@@ -124,60 +122,6 @@ function TopLoadingBar({ height = 3, color, shadow = true, className = '' }: Top
     return resolvedTheme === 'dark' ? '#3b82f6' : '#2563eb'
   }, [color, resolvedTheme, themeKey, colorThemeKey])
 
-  const handleLoadingStart = useCallback(() => {
-    if (isLoading && ref.current) {
-      ref.current.continuousStart()
-    }
-  }, [isLoading])
-
-  const handleLoadingComplete = useCallback(() => {
-    if (!isLoading && ref.current) {
-      ref.current.complete()
-    }
-  }, [isLoading])
-
-  const handleProgressUpdate = useCallback(() => {
-    if (progress !== undefined && ref.current) {
-      ref.current.complete(progress)
-    }
-  }, [progress])
-
-  useEffect(() => {
-    if (isLoading && ref.current) {
-      if (maxTimeoutRef.current) {
-        clearTimeout(maxTimeoutRef.current)
-      }
-
-      maxTimeoutRef.current = setTimeout(() => {
-        if (ref.current) {
-          ref.current.complete()
-        }
-        maxTimeoutRef.current = undefined
-      }, 3000)
-    } else if (!isLoading && maxTimeoutRef.current) {
-      clearTimeout(maxTimeoutRef.current)
-      maxTimeoutRef.current = undefined
-    }
-
-    return () => {
-      if (maxTimeoutRef.current) {
-        clearTimeout(maxTimeoutRef.current)
-      }
-    }
-  }, [isLoading])
-
-  useEffect(() => {
-    handleLoadingStart()
-  }, [handleLoadingStart])
-
-  useEffect(() => {
-    handleLoadingComplete()
-  }, [handleLoadingComplete])
-
-  useEffect(() => {
-    handleProgressUpdate()
-  }, [handleProgressUpdate])
-
   useEffect(() => {
     const currentPath = location.pathname + location.search
 
@@ -190,7 +134,27 @@ function TopLoadingBar({ height = 3, color, shadow = true, className = '' }: Top
     lastLocation = currentPath
 
     if (!shouldIgnoreRoute(pathname) && ref.current) {
+      // Start loading bar on route change with continuous animation
       ref.current.continuousStart()
+      
+      // Set timeout to complete the loading bar after a longer delay
+      // This gives time for the animation to progress and the page to render
+      if (maxTimeoutRef.current) {
+        clearTimeout(maxTimeoutRef.current)
+      }
+      
+      maxTimeoutRef.current = setTimeout(() => {
+        if (ref.current) {
+          ref.current.complete()
+        }
+        maxTimeoutRef.current = undefined
+      }, 800)
+    }
+
+    return () => {
+      if (maxTimeoutRef.current) {
+        clearTimeout(maxTimeoutRef.current)
+      }
     }
   }, [pathname, location.search])
 
@@ -210,7 +174,7 @@ function TopLoadingBar({ height = 3, color, shadow = true, className = '' }: Top
       shadow,
       className: `${className} [direction:ltr]`,
       waitingTime: 0,
-      transitionTime: 50,
+      transitionTime: 200,
     }),
     [primaryColor, height, shadow, className],
   )
