@@ -8,13 +8,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
-import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
+import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown, Check } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useGetUsers, UserStatus } from '@/service/api'
 import { RefetchOptions } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { UseFormReturn } from 'react-hook-form'
+import { getUsersAutoRefreshIntervalSeconds, setUsersAutoRefreshIntervalSeconds } from '@/utils/userPreferenceStorage'
 
 // Sort configuration to eliminate duplication
 const sortSections = [
@@ -47,6 +48,14 @@ const sortSections = [
   },
 ] as const
 
+const autoRefreshOptions = [
+  { value: 0, labelKey: 'autoRefresh.off' },
+  { value: 15, labelKey: 'autoRefresh.15Seconds' },
+  { value: 30, labelKey: 'autoRefresh.30Seconds' },
+  { value: 60, labelKey: 'autoRefresh.1Minute' },
+  { value: 300, labelKey: 'autoRefresh.5Minutes' },
+] as const
+
 interface FiltersProps {
   filters: {
     search?: string
@@ -69,8 +78,47 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   const dir = useDirDetection()
   const [search, setSearch] = useState(filters.search || '')
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const userQuery = useGetUsers(filters)
-  const handleRefetch = refetch || userQuery.refetch
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(() => getUsersAutoRefreshIntervalSeconds())
+  const { refetch: queryRefetch } = useGetUsers(filters, {
+    query: {
+      refetchOnWindowFocus: false,
+    },
+  })
+  const refetchUsers = useCallback(() => {
+    const refetchFn = refetch ?? queryRefetch
+    return refetchFn()
+  }, [refetch, queryRefetch])
+  useEffect(() => {
+    const persistedValue = getUsersAutoRefreshIntervalSeconds()
+    setAutoRefreshInterval(prev => (prev === persistedValue ? prev : persistedValue))
+  }, [])
+  useEffect(() => {
+    if (!autoRefreshInterval) return
+    const intervalId = setInterval(() => {
+      refetchUsers()
+    }, autoRefreshInterval * 1000)
+    return () => clearInterval(intervalId)
+  }, [autoRefreshInterval, refetchUsers])
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && autoRefreshInterval > 0) {
+        refetchUsers()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [autoRefreshInterval, refetchUsers])
+  const currentAutoRefreshOption = autoRefreshOptions.find(option => option.value === autoRefreshInterval) ?? autoRefreshOptions[0]
+  const autoRefreshShortLabel =
+    autoRefreshInterval === 0
+      ? t('autoRefresh.offShort')
+      : autoRefreshInterval < 60
+        ? t('autoRefresh.shortSeconds', { count: autoRefreshInterval })
+        : t('autoRefresh.shortMinutes', { count: Math.round(autoRefreshInterval / 60) })
+  const currentAutoRefreshDescription = t(currentAutoRefreshOption.labelKey)
   const onFilterChangeRef = useRef(onFilterChange)
 
   // Keep the ref in sync with the prop
@@ -114,11 +162,16 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   const handleRefreshClick = async () => {
     setIsRefreshing(true)
     try {
-      await handleRefetch()
+      await refetchUsers()
     } finally {
       // Instant response - no delay
       setIsRefreshing(false)
     }
+  }
+
+  const handleAutoRefreshChange = (seconds: number) => {
+    setUsersAutoRefreshIntervalSeconds(seconds)
+    setAutoRefreshInterval(seconds)
   }
 
   const handleOpenAdvanceSearch = () => {
@@ -224,10 +277,62 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         </div>
       )}
       {/* Refresh Button */}
-      <div className="flex h-full items-center gap-2">
-        <Button size="icon-md" onClick={handleRefreshClick} variant="ghost" className="flex items-center gap-2 border" disabled={isRefreshing}>
+      <div className="flex h-full items-center gap-0">
+        <Button
+          size="icon-md"
+          onClick={handleRefreshClick}
+          variant="ghost"
+          className={cn('relative flex items-center gap-2 border', dir === 'rtl' ? 'rounded-l-none border-l-0' : 'rounded-r-none')}
+          aria-label={t('autoRefresh.refreshNow')}
+          title={t('autoRefresh.refreshNow')}
+          disabled={isRefreshing}
+        >
           <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+          {autoRefreshInterval > 0 && <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />}
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon-md"
+              variant="ghost"
+              className={cn('relative flex items-center gap-2 border', dir === 'rtl' ? 'rounded-r-none' : 'rounded-l-none border-l-0')}
+              aria-label={t('autoRefresh.label')}
+              title={`${t('autoRefresh.label')} (${autoRefreshShortLabel})`}
+            >
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52 md:w-56">
+            <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5 text-xs text-muted-foreground md:px-3 md:py-2">
+              <span>{t('autoRefresh.label')}</span>
+              <span className="text-[11px] md:text-xs">{t('autoRefresh.currentSelection', { value: currentAutoRefreshDescription })}</span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => void handleRefreshClick()}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs md:px-3 md:py-2"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5 flex-shrink-0', isRefreshing && 'animate-spin')} />
+              <span className="truncate">{t('autoRefresh.refreshNow')}</span>
+              {isRefreshing && <LoaderCircle className="ml-auto h-3.5 w-3.5 animate-spin" />}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {autoRefreshOptions.map(option => {
+              const isActive = option.value === autoRefreshInterval
+              return (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => handleAutoRefreshChange(option.value)}
+                  className={cn('flex items-center gap-2 whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2', isActive && 'bg-accent')}
+                >
+                  <span>{t(option.labelKey)}</span>
+                  {isActive && <Check className="ml-auto h-3 w-3 flex-shrink-0" />}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )
