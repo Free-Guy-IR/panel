@@ -51,7 +51,7 @@ const sudoTabs: Tab[] = [
 const nonSudoTabs: Tab[] = [{ id: 'theme', label: 'theme.title', icon: Palette, url: '/settings/theme' }]
 
 export default function Settings() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const { admin } = useAdmin()
@@ -202,10 +202,16 @@ export default function Settings() {
     isSaving: is_sudo ? isSaving : false,
   }
 
+  // Generate tutorial URL for the current settings tab
+  const getTutorialUrl = () => {
+    const locale = i18n.language || 'en'
+    return `https://docs.pasarguard.org/${locale}/panel/settings`
+  }
+
   return (
     <SettingsContext.Provider value={settingsContextValue}>
       <div className="flex w-full flex-col items-start gap-0">
-        <PageHeader title={t(`settings.${activeTab}.title`)} description="manageSettings" />
+        <PageHeader title={t(`settings.${activeTab}.title`)} description="manageSettings" tutorialUrl={getTutorialUrl()} />
 
         <div className="relative w-full">
           <div className="flex border-b">

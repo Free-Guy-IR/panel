@@ -27,6 +27,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import PageHeader from '@/components/page-header'
 import { getDefaultUserForm, UseEditFormValues, UseFormValues } from './_dashboard.users'
 // Lazy load CoreConfigModal to prevent Monaco Editor from loading until needed
 const CoreConfigModal = lazy(() => import('@/components/dialogs/CoreConfigModal'))
@@ -348,21 +349,13 @@ const Dashboard = () => {
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="w-full transform-gpu animate-fade-in" style={{ animationDuration: '400ms' }}>
-        <div className="mx-auto flex w-full flex-row items-start justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-4 md:py-4 lg:pt-6">
-          <div className="flex min-w-0 flex-1 flex-col gap-y-1 pr-2 sm:pr-0">
-            <h1 className="truncate text-base font-medium sm:text-lg lg:text-xl">{t('dashboard')}</h1>
-            <span className="whitespace-normal text-xs leading-relaxed text-muted-foreground sm:text-sm">{t('dashboardDescription')}</span>
-          </div>
-          <div className="flex flex-shrink-0 gap-1 sm:gap-2">
-            <Button onClick={handleOpenQuickActions} size="sm" variant="outline" className="hidden text-xs sm:flex sm:text-sm">
-              <Bookmark className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden lg:inline">{t('quickActions.title')}</span>
-            </Button>
-            <Button onClick={handleOpenQuickActions} size="sm" variant="outline" className="p-2 sm:hidden">
-              <Bookmark className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title="dashboard"
+          description="dashboardDescription"
+          buttonIcon={Bookmark}
+          buttonText="quickActions.title"
+          onButtonClick={handleOpenQuickActions}
+        />
         <Separator />
       </div>
 

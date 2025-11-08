@@ -1,5 +1,6 @@
 import PageHeader from '@/components/page-header'
 import PageTransition from '@/components/PageTransition'
+import { getDocsUrl } from '@/utils/docs-url'
 import { Cpu, LucideIcon, Share2, Plus, FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -70,7 +71,7 @@ const Settings = () => {
   return (
     <div className="flex w-full flex-col items-start gap-0">
       <PageTransition isContentTransition={true}>
-        <PageHeader {...getPageHeaderProps()} />
+        <PageHeader {...getPageHeaderProps()} tutorialUrl={getDocsUrl(location.pathname)} />
       </PageTransition>
       <div className="w-full">
         <div className="flex border-b px-4">
