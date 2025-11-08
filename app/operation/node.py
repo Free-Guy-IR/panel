@@ -431,7 +431,7 @@ class NodeOperation(BaseOperation):
         ips = await self._get_node_user_ip_list_safe(node_id, email)
 
         if ips is None:
-            await self.raise_error(message="Node not found or unavailable", code=404)
+            await self.raise_error(message="Node unavailable or user not found", code=404)
 
         return UserIPList(ips=ips)
 
@@ -450,7 +450,7 @@ class NodeOperation(BaseOperation):
         results = {}
         for node_id, task in ip_list_tasks.items():
             if task.exception() or task.result() is None:
-                results[node_id] = None
+                continue
             else:
                 results[node_id] = UserIPList(ips=task.result())
 
@@ -468,8 +468,9 @@ class NodeOperation(BaseOperation):
                 return None
 
             return stats.ips
-        except Exception as e:
-            logger.error(f"Error getting IP list for user {email} on node {node_id}: {e}")
+        except NodeAPIError as e:
+            if e.code != 404:
+                logger.error(f"Error getting IP list for user {email} on node {node_id}: {e}")
             return None
 
     async def sync_node_users(self, db: AsyncSession, node_id: int, flush_users: bool = False) -> NodeResponse:
