@@ -365,8 +365,8 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
           />
           <Tooltip open={copied ? true : undefined}>
             <DropdownMenu>
-              <DropdownMenuTrigger>
-                <TooltipTrigger>
+              <DropdownMenuTrigger asChild>
+                <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost">
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
