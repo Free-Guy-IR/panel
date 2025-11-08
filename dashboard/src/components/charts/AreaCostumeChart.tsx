@@ -1,4 +1,4 @@
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { DateRange } from 'react-day-picker'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -472,16 +472,10 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
             className="h-[280px] w-full sm:h-[320px] lg:h-[360px] transition-all duration-300 ease-in-out"
           >
             <ChartContainer dir="ltr" config={chartConfig} className="h-full w-full">
-              <ResponsiveContainer 
-                key={`responsive-${chartKey}`} // Force re-render when sidebar state changes
-                width="100%" 
-                height="100%"
-                debounce={100} // Enable debouncing for smoother updates
+              <AreaChart 
+                data={statsHistory} 
+                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
               >
-                <AreaChart 
-                  data={statsHistory} 
-                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                >
                   <defs>
                     <linearGradient id={gradientDefs.cpu.id} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={gradientDefs.cpu.color1} stopOpacity={0.9} />
@@ -593,7 +587,6 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
                     animationBegin={100}
                   />
                 </AreaChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
         )}
