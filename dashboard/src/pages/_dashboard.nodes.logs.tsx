@@ -1,5 +1,5 @@
 import { Download as DownloadIcon, Loader2, Pause, Play } from 'lucide-react'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent } from '@/components/ui/card'
 import { useGetNodes } from '@/service/api'
@@ -59,12 +59,19 @@ export default function NodeLogs() {
 
   const { data: nodes = [] } = useGetNodes({})
 
-  // Auto-select first node if available and none is selected
+  // Filter to only show connected nodes
+  const connectedNodes = useMemo(() => nodes.filter(node => node.status === 'connected'), [nodes])
+
+  // Auto-select first connected node if available and none is selected
   useEffect(() => {
-    if (nodes.length > 0 && selectedNode === 0) {
-      setSelectedNode(nodes[0].id)
+    if (connectedNodes.length > 0 && selectedNode === 0) {
+      setSelectedNode(connectedNodes[0].id)
     }
-  }, [nodes, selectedNode])
+    // Reset selection if selected node is no longer connected
+    if (selectedNode !== 0 && !connectedNodes.find(node => node.id === selectedNode)) {
+      setSelectedNode(0)
+    }
+  }, [connectedNodes, selectedNode])
 
   const scrollToBottom = () => {
     if (autoScroll && scrollRef.current) {
@@ -293,12 +300,12 @@ export default function NodeLogs() {
           <Label htmlFor="node-select" className="mb-1 block text-sm">
             {t('nodes.title')}
           </Label>
-          <Select value={selectedNode.toString()} onValueChange={value => handleNodeChange(Number(value))}>
-            <SelectTrigger id="node-select" className="h-9 w-full text-sm sm:w-[250px]">
-              <SelectValue placeholder={t('nodes.selectNode')} />
+          <Select value={selectedNode.toString()} onValueChange={value => handleNodeChange(Number(value))} disabled={connectedNodes.length === 0}>
+            <SelectTrigger id="node-select" className="h-9 w-full text-sm sm:w-[250px]" disabled={connectedNodes.length === 0}>
+              <SelectValue placeholder={connectedNodes.length === 0 ? t('nodes.noNodes') : t('nodes.selectNode')} />
             </SelectTrigger>
             <SelectContent>
-              {nodes.map(node => (
+              {connectedNodes.map(node => (
                 <SelectItem key={node.id} value={node.id.toString()} className="text-sm">
                   {node.name}
                 </SelectItem>
