@@ -32,7 +32,7 @@ async def verify_node_backend_health(node: PasarGuardNode, node_name: str) -> He
         await asyncio.wait_for(node.get_backend_stats(), timeout=10)
         if current_health != Health.HEALTHY:
             await node.set_health(Health.HEALTHY)
-            logger.info(f"[{node_name}] Node health is HEALTHY")
+            logger.debug(f"[{node_name}] Node health is HEALTHY")
         return Health.HEALTHY
     except Exception as e:
         error_type = type(e).__name__
@@ -95,10 +95,10 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
                 db, db_node.id, NodeStatus.error, message="Health check timeout"
             )
         return
-    except NodeAPIError:
+    except NodeAPIError as e:
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(
-                db, db_node.id, NodeStatus.error, message="Get health failed"
+                db, db_node.id, NodeStatus.error, message=e.detail
             )
         return
 

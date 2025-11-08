@@ -281,6 +281,7 @@ class HostManager:
         # Acquire lock only for updating the dict and cache
         async with self._lock:
             for host_id, host_data in prepared_hosts:
+                self._hosts.pop(host_id, None)
                 self._hosts[host_id] = host_data
 
             for host_id in hosts_to_remove:
