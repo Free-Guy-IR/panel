@@ -173,3 +173,15 @@ class NodeNotification(BaseModel):
     message: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserIPList(BaseModel):
+    """User IP list - mapping of IP addresses to connection counts"""
+
+    ips: dict[str, int]  # {ip_address: connection_count}
+
+
+class UserIPListAll(BaseModel):
+    """User IP lists for all nodes"""
+
+    nodes: dict[int, UserIPList | None]  # {node_id: UserIPList | None}

@@ -8,7 +8,7 @@ from PasarGuardNodeBridge import NodeAPIError
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
-from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings, UsageTable
+from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings, UsageTable, UserIPList, UserIPListAll
 from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
@@ -177,6 +177,14 @@ async def realtime_nodes_stats(_: AdminDetails = Depends(check_sudo_admin)):
     return await node_operator.get_nodes_system_stats()
 
 
+@router.get("/online_stats/{username}/ip", response_model=UserIPListAll)
+async def user_online_ip_list_all_nodes(
+    username: str, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
+):
+    """Retrieve user ips from all nodes."""
+    return await node_operator.get_user_ip_list_all_nodes(db=db, username=username)
+
+
 @router.get("/{node_id}/online_stats/{username}", response_model=dict[int, int])
 async def user_online_stats(
     node_id: int, username: str, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
@@ -185,7 +193,7 @@ async def user_online_stats(
     return await node_operator.get_user_online_stats_by_node(db=db, node_id=node_id, username=username)
 
 
-@router.get("/{node_id}/online_stats/{username}/ip", response_model=dict[int, dict[str, int]])
+@router.get("/{node_id}/online_stats/{username}/ip", response_model=UserIPList)
 async def user_online_ip_list(
     node_id: int, username: str, db: AsyncSession = Depends(get_db), _: AdminDetails = Depends(check_sudo_admin)
 ):
