@@ -221,7 +221,6 @@ export function AllNodesStackedBarChart() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedData, setSelectedData] = useState<any>(null)
   const [currentDataIndex, setCurrentDataIndex] = useState(0)
-  const [chartKey, setChartKey] = useState(0)
 
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
@@ -229,61 +228,6 @@ export function AllNodesStackedBarChart() {
   const dir = useDirDetection()
   const { data: nodesData } = useGetNodes(undefined, { query: { enabled: true } })
   const { resolvedTheme } = useTheme()
-
-  // Improved resize handling
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout
-
-    const handleResize = () => {
-      clearTimeout(timeoutId)
-      // Debounce to avoid excessive re-renders
-      timeoutId = setTimeout(() => {
-        setChartKey(prev => prev + 1)
-      }, 150)
-    }
-
-    // Listen to window resize
-    window.addEventListener('resize', handleResize)
-
-    // Use ResizeObserver on the chart container and its parent
-    const resizeObserver = new ResizeObserver(handleResize)
-
-    // Observe the chart container
-    if (chartContainerRef.current) {
-      resizeObserver.observe(chartContainerRef.current)
-    }
-
-    // Observe main content area (catches sidebar changes)
-    const mainContent = document.querySelector('main') || document.querySelector('[role="main"]') || document.getElementById('main-content')
-    if (mainContent) {
-      resizeObserver.observe(mainContent)
-    }
-
-    // Observe body for class/attribute changes (sidebar state)
-    const mutationObserver = new MutationObserver(handleResize)
-    mutationObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['class', 'data-sidebar-state', 'data-state'],
-      childList: false,
-      subtree: false
-    })
-
-    // Also observe the sidebar element itself if it exists
-    const sidebar = document.querySelector('[data-sidebar]') || document.querySelector('aside')
-    if (sidebar) {
-      mutationObserver.observe(sidebar, {
-        attributes: true,
-        attributeFilter: ['class', 'data-state'],
-      })
-    }
-
-    return () => {
-      clearTimeout(timeoutId)
-      window.removeEventListener('resize', handleResize)
-      resizeObserver.disconnect()
-      mutationObserver.disconnect()
-    }
-  }, [])
 
   // Navigation handler for modal
   const handleModalNavigate = (index: number) => {
@@ -637,9 +581,8 @@ export function AllNodesStackedBarChart() {
               className="max-h-[400px] min-h-[200px]"
             />
           ) : (
-            <div className="mx-auto w-full max-w-[70rem]">
+            <div className="mx-auto w-full">
               <ChartContainer
-                key={chartKey}
                 dir={'ltr'}
                 config={chartConfig}
                 className="max-h-[400px] min-h-[200px] w-full"
@@ -695,6 +638,7 @@ export function AllNodesStackedBarChart() {
                         fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(idx % 5) + 1}))`}
                         radius={nodeList.length === 1 ? [4, 4, 4, 4] : idx === 0 ? [0, 0, 4, 4] : idx === nodeList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                         cursor="pointer"
+                        className='rounded-t-xl overflow-hidden'
                       />
                     ))}
                   </BarChart>

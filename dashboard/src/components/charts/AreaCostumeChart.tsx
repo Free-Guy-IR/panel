@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { Clock, History, Cpu, MemoryStick } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import { useTheme } from 'next-themes'
-import { useSidebar } from '@/components/ui/sidebar'
 
 type DataPoint = {
   time: string
@@ -156,13 +155,11 @@ const isNodeRealtimeStats = (stats: SystemStats | NodeRealtimeStats): stats is N
 export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCostumeChartProps) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
-  const { state: sidebarState } = useSidebar()
   const [statsHistory, setStatsHistory] = useState<DataPoint[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [viewMode, setViewMode] = useState<'realtime' | 'historical'>('realtime')
-  const [chartKey, setChartKey] = useState(0) // Force chart refresh
   
   // Add refs for chart container
   const chartContainerRef = useRef<HTMLDivElement>(null)
@@ -206,27 +203,6 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
     setDateRange(undefined)
     setViewMode('realtime')
   }, [nodeId])
-
-  // INSTANT sidebar state change detection - ZERO delay
-  useEffect(() => {
-    if (statsHistory.length > 0) {
-      setChartKey(k => k + 1)
-    }
-  }, [sidebarState, statsHistory.length])
-
-  // INSTANT resize handling - ZERO delay
-  useEffect(() => {
-    const handleResize = () => {
-      if (statsHistory.length > 0) {
-        setChartKey(k => k + 1)
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [statsHistory.length])
 
   // Toggle between real-time and historical view
   const toggleViewMode = () => {
@@ -468,7 +444,6 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
         ) : (
           <div 
             ref={chartContainerRef}
-            key={`chart-container-${chartKey}`} // Force container refresh
             className="h-[280px] w-full sm:h-[320px] lg:h-[360px] transition-all duration-300 ease-in-out"
           >
             <ChartContainer dir="ltr" config={chartConfig} className="h-full w-full">
