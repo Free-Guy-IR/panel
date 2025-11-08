@@ -150,6 +150,15 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
             return sum + (data[key] || 0)
         }, 0)
 
+    // Calculate total uplink and downlink
+    const totalUplink = Object.keys(data)
+        .filter(key => key.startsWith('_uplink_'))
+        .reduce((sum, key) => sum + (data[key] || 0), 0)
+
+    const totalDownlink = Object.keys(data)
+        .filter(key => key.startsWith('_downlink_'))
+        .reduce((sum, key) => sum + (data[key] || 0), 0)
+
     // Get nodes with usage > 0
     const activeNodes = Object.keys(data)
         .filter(key => !key.startsWith('_') && key !== 'time' && key !== '_period_start' && (data[key] || 0) > 0)
@@ -213,6 +222,24 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
                                 {totalUsage.toFixed(2)} GB
                             </Badge>
                         </div>
+
+                        {/* Total Upload/Download */}
+                        {!hideUplinkDownlink && (
+                            <div className={`flex items-center gap-2 sm:gap-3 text-xs ${isRTL ? 'flex-row-reverse justify-end' : 'flex-row justify-start'}`}>
+                                <div className={`flex items-center gap-1`}>
+                                    <Upload className="h-3 w-3 text-green-500" />
+                                    <span dir="ltr" className="font-mono text-muted-foreground">
+                                        {formatBytes(totalUplink)}
+                                    </span>
+                                </div>
+                                <div className={`flex items-center gap-1`}>
+                                    <Download className="h-3 w-3 text-blue-500" />
+                                    <span dir="ltr" className="font-mono text-muted-foreground">
+                                        {formatBytes(totalDownlink)}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Node Statistics */}
                         <div className="space-y-2 sm:space-y-3">
