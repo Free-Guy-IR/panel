@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { debounce } from 'es-toolkit'
-import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown, Check } from 'lucide-react'
+import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown, Check, Clock } from 'lucide-react'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useGetUsers, UserStatus } from '@/service/api'
@@ -24,8 +24,8 @@ const sortSections = [
     icon: User,
     label: 'username',
     items: [
-      { value: 'username', label: 'sort.username.asc' },
       { value: '-username', label: 'sort.username.desc' },
+      { value: 'username', label: 'sort.username.asc' },
     ],
   },
   {
@@ -33,8 +33,8 @@ const sortSections = [
     icon: Calendar,
     label: 'expireDate',
     items: [
-      { value: 'expire', label: 'sort.expire.oldest' },
       { value: '-expire', label: 'sort.expire.newest' },
+      { value: 'expire', label: 'sort.expire.oldest' },
     ],
   },
   {
@@ -42,8 +42,17 @@ const sortSections = [
     icon: ChartPie,
     label: 'dataUsage',
     items: [
-      { value: 'used_traffic', label: 'sort.usage.low' },
       { value: '-used_traffic', label: 'sort.usage.high' },
+      { value: 'used_traffic', label: 'sort.usage.low' },
+    ],
+  },
+  {
+    key: 'onlineAt',
+    icon: Clock,
+    label: 'lastOnline',
+    items: [
+      { value: '-online_at', label: 'sort.online.newest' },
+      { value: 'online_at', label: 'sort.online.oldest' },
     ],
   },
 ] as const
@@ -242,13 +251,13 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
                 {filters.sort && filters.sort !== '-created_at' && <div className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 md:w-56">
+            <DropdownMenuContent align="end" className="w-44">
               {sortSections.map((section, sectionIndex) => (
                 <div key={section.key}>
                   {/* Section Label */}
-                  <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground md:gap-2 md:px-3 md:py-2">
-                    <section.icon className="h-3 w-3" />
-                    <span className="text-xs md:text-sm">{t(section.label)}</span>
+                  <DropdownMenuLabel className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-muted-foreground">
+                    <section.icon className="h-2.5 w-2.5" />
+                    <span className="text-[10px]">{t(section.label)}</span>
                   </DropdownMenuLabel>
 
                   {/* Section Items */}
@@ -256,11 +265,10 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
                     <DropdownMenuItem
                       key={item.value}
                       onClick={() => handleSort && handleSort(item.value, true)}
-                      className={`whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2 ${filters.sort === item.value ? 'bg-accent' : ''}`}
+                      className={`whitespace-nowrap px-1.5 py-1 text-[11px] ${filters.sort === item.value ? 'bg-accent' : ''}`}
                     >
-                      <section.icon className="mr-1.5 h-3 w-3 flex-shrink-0 md:mr-2 md:h-4 md:w-4" />
                       <span className="truncate">{t(item.label)}</span>
-                      {filters.sort === item.value && <ChevronDown className={`ml-auto h-3 w-3 flex-shrink-0 md:h-4 md:w-4 ${item.value.startsWith('-') ? '' : 'rotate-180'}`} />}
+                      {filters.sort === item.value && <ChevronDown className={`ml-auto h-2.5 w-2.5 flex-shrink-0 ${item.value.startsWith('-') ? '' : 'rotate-180'}`} />}
                     </DropdownMenuItem>
                   ))}
 
@@ -298,20 +306,20 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
               <ChevronDown className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 md:w-56">
-            <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5 text-xs text-muted-foreground md:px-3 md:py-2">
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuLabel className="flex flex-col gap-0.5 px-1.5 py-1 text-[10px] text-muted-foreground">
               <span>{t('autoRefresh.label')}</span>
-              <span className="text-[11px] md:text-xs">{t('autoRefresh.currentSelection', { value: currentAutoRefreshDescription })}</span>
+              <span className="text-[9px]">{t('autoRefresh.currentSelection', { value: currentAutoRefreshDescription })}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => void handleRefreshClick()}
               disabled={isRefreshing}
-              className="flex items-center gap-2 px-2 py-1.5 text-xs md:px-3 md:py-2"
+              className="flex items-center gap-1.5 px-1.5 py-1 text-[11px]"
             >
-              <RefreshCw className={cn('h-3.5 w-3.5 flex-shrink-0', isRefreshing && 'animate-spin')} />
+              <RefreshCw className={cn('h-2.5 w-2.5 flex-shrink-0', isRefreshing && 'animate-spin')} />
               <span className="truncate">{t('autoRefresh.refreshNow')}</span>
-              {isRefreshing && <LoaderCircle className="ml-auto h-3.5 w-3.5 animate-spin" />}
+              {isRefreshing && <LoaderCircle className="ml-auto h-2.5 w-2.5 animate-spin" />}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {autoRefreshOptions.map(option => {
@@ -320,10 +328,10 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
                 <DropdownMenuItem
                   key={option.value}
                   onSelect={() => handleAutoRefreshChange(option.value)}
-                  className={cn('flex items-center gap-2 whitespace-nowrap px-2 py-1.5 text-xs md:px-3 md:py-2', isActive && 'bg-accent')}
+                  className={cn('flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 text-[11px]', isActive && 'bg-accent')}
                 >
                   <span>{t(option.labelKey)}</span>
-                  {isActive && <Check className="ml-auto h-3 w-3 flex-shrink-0" />}
+                  {isActive && <Check className="ml-auto h-2.5 w-2.5 flex-shrink-0" />}
                 </DropdownMenuItem>
               )
             })}

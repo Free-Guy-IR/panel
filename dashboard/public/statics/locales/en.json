@@ -690,6 +690,7 @@
   "disabled": "disabled",
   "expire": "Expire",
   "expireDate": "Expire Date",
+  "lastOnline": "Last Online",
   "expires": "Expires in {{time}}",
   "expired": "Expired {{time}}",
   "sortOptions": "Sort Options",
@@ -705,6 +706,10 @@
     "usage": {
       "low": "Data Usage (Low to High)",
       "high": "Data Usage (High to Low)"
+    },
+    "online": {
+      "oldest": "Last Online (Oldest First)",
+      "newest": "Last Online (Newest First)"
     }
   },
   "header.donation": "Donation",

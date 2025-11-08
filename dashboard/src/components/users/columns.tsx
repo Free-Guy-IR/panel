@@ -1,4 +1,4 @@
-import { UserResponse } from '@/service/api'
+import { UserResponse, UserStatus } from '@/service/api'
 import { ColumnDef } from '@tanstack/react-table'
 import { ChevronDown } from 'lucide-react'
 import ActionButtons from '../ActionButtons'
@@ -16,8 +16,8 @@ export const setupColumns = ({
 }: {
   t: (key: string) => string
   handleSort: (column: string, fromDropdown?: boolean) => void
-  filters: { sort: string; status?: string }
-  handleStatusFilter: (value: string) => void
+  filters: { sort: string; status?: UserStatus | null; [key: string]: unknown }
+  handleStatusFilter: (value: string | UserStatus) => void
   dir: string
 }): ColumnDef<UserResponse>[] => [
   {
@@ -59,7 +59,7 @@ export const setupColumns = ({
     accessorKey: 'status',
     header: () => (
       <div className="flex items-center">
-        <Select dir={dir as 'ltr' | 'rtl'} onValueChange={handleStatusFilter} value={filters.status || '0'}>
+        <Select dir={dir as 'ltr' | 'rtl'} onValueChange={handleStatusFilter} value={(filters.status as string) || '0'}>
           <SelectTrigger icon={false} className="ring-none w-fit max-w-28 border-none p-0 sm:px-1">
             <span className="px-0 text-xs capitalize">{t('usersTable.status')}</span>
           </SelectTrigger>
