@@ -82,7 +82,7 @@ export default function SystemStatisticsSection({ currentStats }: SystemStatisti
       className={cn(
         'grid h-full w-full gap-3 sm:gap-4 lg:gap-6',
         // Responsive grid: 1 column on mobile, 2 on small tablet, 3 on large tablet and desktop
-        'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+        'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3',
         // Ensure equal height for all cards
         'auto-rows-fr',
       )}
