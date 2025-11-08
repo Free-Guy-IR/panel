@@ -96,37 +96,59 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
             <FormField
               control={form.control}
               name="inbound_tags"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('inboundTags')}</FormLabel>
-                  <div className="space-y-2">
-                    <Command className="mb-3 rounded-md border">
-                      <CommandInput placeholder={t('searchInbounds')} />
-                      <CommandEmpty>{t('noInboundsFound')}</CommandEmpty>
-                      <CommandGroup dir="ltr" className="max-h-40 overflow-auto">
-                        {inbounds?.map(inbound => (
-                          <CommandItem
-                            key={inbound}
-                            onSelect={() => {
-                              const currentTags = field.value || []
-                              const newTags = currentTags.includes(inbound) ? currentTags.filter(tag => tag !== inbound) : [...currentTags, inbound]
-                              field.onChange(newTags)
-                            }}
+              render={({ field }) => {
+                const currentTags = field.value || []
+                const allSelected = inbounds && inbounds.length > 0 && inbounds.every(inbound => currentTags.includes(inbound))
+                const handleSelectAll = () => {
+                  if (allSelected) {
+                    field.onChange([])
+                  } else {
+                    field.onChange(inbounds || [])
+                  }
+                }
+                return (
+                  <FormItem>
+                    <FormLabel>{t('inboundTags')}</FormLabel>
+                    <div className="space-y-2">
+                      {inbounds && inbounds.length > 0 && (
+                        <div className="flex justify-end mb-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleSelectAll}
+                            className="h-7 text-xs"
                           >
-                            <div className={cn('mr-2 h-4 w-4 rounded-sm border', field.value?.includes(inbound) ? 'border-primary bg-primary' : 'border-muted')} />
-                            {inbound}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
+                            {allSelected ? t('deselectAll') : t('selectAll')}
+                          </Button>
+                        </div>
+                      )}
+                      <Command className="mb-3 rounded-md border">
+                        <CommandInput placeholder={t('searchInbounds')} />
+                        <CommandEmpty>{t('noInboundsFound')}</CommandEmpty>
+                        <CommandGroup dir="ltr" className="max-h-40 overflow-auto">
+                          {inbounds?.map(inbound => (
+                            <CommandItem
+                              key={inbound}
+                              onSelect={() => {
+                                const newTags = currentTags.includes(inbound) ? currentTags.filter(tag => tag !== inbound) : [...currentTags, inbound]
+                                field.onChange(newTags)
+                              }}
+                            >
+                              <div className={cn('mr-2 h-4 w-4 rounded-sm border', currentTags.includes(inbound) ? 'border-primary bg-primary' : 'border-muted')} />
+                              {inbound}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
                     <div className="flex flex-wrap gap-2">
-                      {field.value?.map(tag => (
+                      {currentTags.map(tag => (
                         <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                           {tag}
                           <X
                             className="h-3 w-3 cursor-pointer"
                             onClick={() => {
-                              field.onChange(field.value?.filter(t => t !== tag))
+                              field.onChange(currentTags.filter(t => t !== tag))
                             }}
                           />
                         </Badge>
@@ -135,7 +157,8 @@ export default function GroupModal({ isDialogOpen, onOpenChange, form, editingGr
                   </div>
                   <FormMessage />
                 </FormItem>
-              )}
+                )
+              }}
             />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
