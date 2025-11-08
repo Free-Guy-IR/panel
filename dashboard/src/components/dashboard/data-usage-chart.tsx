@@ -3,12 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { ChartConfig, ChartContainer, ChartTooltip } from '../ui/chart'
 import { formatBytes } from '@/utils/formatByte'
 import { useTranslation } from 'react-i18next'
-import { useGetUsersUsage, Period } from '@/service/api'
+import { useGetUsersUsage, useGetUsage, Period } from '@/service/api'
 import { useMemo, useState } from 'react'
 import { SearchXIcon, TrendingUp, TrendingDown } from 'lucide-react'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { dateUtils } from '@/utils/dateFormatter'
 import dayjs from '@/lib/dayjs'
+import { useAdmin } from '@/hooks/use-admin'
 
 interface PeriodOption {
   label: string
@@ -30,7 +31,7 @@ const PERIOD_KEYS = [
   { key: 'all', period: 'day' as Period, allTime: true },
 ]
 
-const transformUsageData = (apiData: any, periodOption: any) => {
+const transformUsageData = (apiData: any, periodOption: any, isNodeUsage: boolean = false) => {
   if (!apiData?.stats || !Array.isArray(apiData.stats)) {
     return []
   }
@@ -54,11 +55,16 @@ const transformUsageData = (apiData: any, periodOption: any) => {
       }
     }
 
+    // Node usage has uplink + downlink, user usage has total_traffic
+    const traffic = isNodeUsage 
+      ? (stat.uplink || 0) + (stat.downlink || 0)
+      : (stat.total_traffic || 0)
+
     return {
       date: displayLabel,
       fullDate: stat.period_start,
       localFullDate: d.toISOString(),
-      traffic: stat.total_traffic || 0,
+      traffic,
     }
   })
 }
@@ -182,6 +188,8 @@ function CustomBarTooltip({ active, payload, period }: TooltipProps<any, any> & 
 
 const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
   const { t, i18n } = useTranslation()
+  const { admin } = useAdmin()
+  const is_sudo = admin?.is_sudo || false
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const PERIOD_OPTIONS: PeriodOption[] = useMemo(
     () => [
@@ -215,19 +223,42 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     return { startDate: start.toISOString(), endDate: now.toISOString() }
   }, [periodOption])
 
-  const { data, isLoading } = useGetUsersUsage(
-    {
-      ...(admin_username ? { admin: [admin_username] } : {}),
-      period: periodOption.period,
-      start: startDate,
-      end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
-    },
+  // For sudo admins: fetch from nodes, for non-sudo: fetch from users
+  const nodeUsageParams = useMemo(() => ({
+    period: periodOption.period,
+    start: startDate,
+    end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
+  }), [periodOption.period, startDate, endDate])
+
+  const userUsageParams = useMemo(() => ({
+    ...(admin_username ? { admin: [admin_username] } : {}),
+    period: periodOption.period,
+    start: startDate,
+    end: dateUtils.toDayjs(endDate).endOf('day').toISOString(),
+  }), [admin_username, periodOption.period, startDate, endDate])
+
+  const { data: nodeData, isLoading: isLoadingNodes } = useGetUsage(
+    nodeUsageParams,
     {
       query: {
+        enabled: is_sudo,
         refetchInterval: 1000 * 60 * 5,
       },
     },
   )
+
+  const { data: userData, isLoading: isLoadingUsers } = useGetUsersUsage(
+    userUsageParams,
+    {
+      query: {
+        enabled: !is_sudo,
+        refetchInterval: 1000 * 60 * 5,
+      },
+    },
+  )
+
+  const data = is_sudo ? nodeData : userData
+  const isLoading = is_sudo ? isLoadingNodes : isLoadingUsers
 
   // Extract correct stats array from grouped or flat API response (like CostumeBarChart)
   let statsArr: any[] = []
@@ -240,7 +271,7 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     }
   }
 
-  const chartData = useMemo(() => transformUsageData({ stats: statsArr }, periodOption), [statsArr, periodOption])
+  const chartData = useMemo(() => transformUsageData({ stats: statsArr }, periodOption, is_sudo), [statsArr, periodOption, is_sudo])
 
   // Calculate trend
   const trend = useMemo(() => {
