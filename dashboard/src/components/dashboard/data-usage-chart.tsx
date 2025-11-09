@@ -221,7 +221,10 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     return { startDate: start.toISOString(), endDate: now.toISOString() }
   }, [periodOption])
 
-  // For sudo admins: fetch from nodes, for non-sudo: fetch from users
+  // For sudo admins: fetch from nodes only when viewing all admins (no admin_username)
+  // For specific admin views or non-sudo admins: fetch from users
+  const shouldUseNodeUsage = is_sudo && !admin_username
+
   const nodeUsageParams = useMemo(
     () => ({
       period: periodOption.period,
@@ -243,20 +246,20 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
 
   const { data: nodeData, isLoading: isLoadingNodes } = useGetUsage(nodeUsageParams, {
     query: {
-      enabled: is_sudo,
+      enabled: shouldUseNodeUsage,
       refetchInterval: 1000 * 60 * 5,
     },
   })
 
   const { data: userData, isLoading: isLoadingUsers } = useGetUsersUsage(userUsageParams, {
     query: {
-      enabled: !is_sudo,
+      enabled: !shouldUseNodeUsage,
       refetchInterval: 1000 * 60 * 5,
     },
   })
 
-  const data = is_sudo ? nodeData : userData
-  const isLoading = is_sudo ? isLoadingNodes : isLoadingUsers
+  const data = shouldUseNodeUsage ? nodeData : userData
+  const isLoading = shouldUseNodeUsage ? isLoadingNodes : isLoadingUsers
 
   // Extract correct stats array from grouped or flat API response (like CostumeBarChart)
   let statsArr: any[] = []
@@ -269,7 +272,7 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     }
   }
 
-  const chartData = useMemo(() => transformUsageData({ stats: statsArr }, periodOption, is_sudo), [statsArr, periodOption, is_sudo])
+  const chartData = useMemo(() => transformUsageData({ stats: statsArr }, periodOption, shouldUseNodeUsage), [statsArr, periodOption, shouldUseNodeUsage])
 
   // Calculate trend
   const trend = useMemo(() => {
