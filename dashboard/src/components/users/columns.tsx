@@ -36,17 +36,17 @@ export const setupColumns = ({
     cell: ({ row }) => {
       return (
         <div className="overflow-hidden text-ellipsis whitespace-nowrap pl-1 font-medium md:pl-2">
-          <div className="flex items-start gap-x-2 px-1 py-1">
-            <div className="flex-shrink-0 pt-1">
+          <div className="flex items-start gap-x-3 px-1 py-1">
+            <div className="pt-1">
               <OnlineBadge lastOnline={row.original.online_at} />
             </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-y-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
+            <div className="flex flex-col gap-y-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
               <span className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium">{row.getValue('username')}</span>
               {row.original.admin?.username && (
                 <span className="flex items-center gap-x-0.5 overflow-hidden text-xs font-normal text-muted-foreground">
                   <span className="hidden sm:block">{t('created')}</span>
                   <span>{t('by')}</span>
-                  <span className="overflow-hidden text-ellipsis whitespace-nowrap text-blue-500">{row.original.admin?.username}</span>
+                  <span className="text-blue-500">{row.original.admin?.username}</span>
                 </span>
               )}
             </div>
@@ -93,7 +93,7 @@ export const setupColumns = ({
       const status: UserResponse['status'] = row.getValue('status')
       const expire = row.original.expire
       return (
-        <div className="flex flex-col gap-y-2 py-1 overflow-hidden">
+        <div className="flex flex-col gap-y-2 py-1">
           <div className="hidden md:block">
             <StatusBadge expiryDate={expire} status={status} showExpiry />
           </div>
@@ -127,10 +127,8 @@ export const setupColumns = ({
     ),
     cell: ({ row }) => (
       <div className="flex items-center justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <UsageSliderCompact total={row.original.data_limit} used={row.original.used_traffic} totalUsedTraffic={row.original.lifetime_used_traffic} status={row.original.status} />
-        </div>
-        <div className="hidden flex-shrink-0 px-2 py-1 md:block">
+        <UsageSliderCompact total={row.original.data_limit} used={row.original.used_traffic} totalUsedTraffic={row.original.lifetime_used_traffic} status={row.original.status} />
+        <div className="hidden w-[200px] px-4 py-1 md:block">
           <ActionButtons user={row.original} />
         </div>
       </div>
