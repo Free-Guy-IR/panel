@@ -86,14 +86,14 @@ UsersSortingOptions = Enum(
         "expire": User.expire.asc(),
         "created_at": User.created_at.asc(),
         "edit_at": User.edit_at.asc(),
-        "online_at": User.online_at.asc(),
+        "online_at": User.online_at.asc().nulls_last(),
         "-username": User.username.desc(),
         "-used_traffic": User.used_traffic.desc(),
         "-data_limit": User.data_limit.desc(),
         "-expire": User.expire.desc(),
         "-created_at": User.created_at.desc(),
         "-edit_at": User.edit_at.desc(),
-        "-online_at": User.online_at.desc(),
+        "-online_at": User.online_at.desc().nulls_last(),
     },
 )
 
