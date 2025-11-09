@@ -452,11 +452,13 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
               <span>{t('subscriptionClients.clients', { defaultValue: 'Clients' })}</span>
             </DropdownMenuItem>
 
-            {/* View All IPs */}
-            <DropdownMenuItem onClick={() => setUserAllIPsModalOpen(true)}>
-              <Network className="mr-2 h-4 w-4" />
-              <span>{t('userAllIPs.ipAddresses', { defaultValue: 'IP addresses' })}</span>
-            </DropdownMenuItem>
+            {/* View All IPs: only for sudo admins */}
+            {currentAdmin?.is_sudo && (
+              <DropdownMenuItem onClick={() => setUserAllIPsModalOpen(true)}>
+                <Network className="mr-2 h-4 w-4" />
+                <span>{t('userAllIPs.ipAddresses', { defaultValue: 'IP addresses' })}</span>
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuSeparator />
 
@@ -549,8 +551,10 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
       {/* UserSubscriptionClientsModal */}
       <UserSubscriptionClientsModal isOpen={isSubscriptionClientsModalOpen} onOpenChange={setSubscriptionClientsModalOpen} username={user.username} />
 
-      {/* UserAllIPsModal */}
-      <UserAllIPsModal isOpen={isUserAllIPsModalOpen} onOpenChange={setUserAllIPsModalOpen} username={user.username} />
+      {/* UserAllIPsModal: only for sudo admins */}
+      {currentAdmin?.is_sudo && (
+        <UserAllIPsModal isOpen={isUserAllIPsModalOpen} onOpenChange={setUserAllIPsModalOpen} username={user.username} />
+      )}
     </div>
   )
 }
