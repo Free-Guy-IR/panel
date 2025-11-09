@@ -451,19 +451,24 @@ class XrayConfiguration(BaseSubscription):
             else:
                 path = self.get_grpc_gun(path)
 
+        user_object = "vnext" if protocol_type in ("vmess", "vless") else "servers"
+
         outbound = {
             "protocol": protocol_type,
             "tag": "proxy",
             "settings": {
-                "vnext" if protocol_type in ("vmess", "vless") else "servers": [
+                user_object: [
                     {
                         "address": address,
                         "port": self._select_port(inbound.port),
-                        "users": [user_settings],
                     }
                 ]
             },
         }
+        if protocol_type in ("vmess", "vless"):
+            outbound["settings"][user_object][0].update({"users": [user_settings]})
+        else:
+            outbound["settings"][user_object][0].update(user_settings)
 
         # Build stream settings
         network_setting = self._apply_transport(network, inbound, path)
