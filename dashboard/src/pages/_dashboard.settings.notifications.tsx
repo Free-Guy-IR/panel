@@ -20,7 +20,6 @@ import {
   ChevronDown,
   Settings,
   Users,
-  Shield,
   Globe,
   RotateCcw,
   UserCog,
@@ -321,7 +320,6 @@ export default function NotificationSettings() {
         notify_discord: false,
         telegram_api_token: '',
         telegram_chat_id: undefined,
-        telegram_channel_id: undefined,
         telegram_topic_id: undefined,
         discord_webhook_url: '',
         proxy_url: '',
@@ -386,7 +384,6 @@ export default function NotificationSettings() {
           notify_discord: settings.notification_settings?.notify_discord || false,
           telegram_api_token: settings.notification_settings?.telegram_api_token || '',
           telegram_chat_id: settings.notification_settings?.telegram_chat_id || undefined,
-          telegram_channel_id: settings.notification_settings?.telegram_channel_id || undefined,
           telegram_topic_id: settings.notification_settings?.telegram_topic_id || undefined,
           discord_webhook_url: settings.notification_settings?.discord_webhook_url || '',
           proxy_url: settings.notification_settings?.proxy_url || '',
@@ -430,13 +427,11 @@ export default function NotificationSettings() {
           ? {
               telegram_api_token: data.notification_settings?.telegram_api_token || '',
               telegram_chat_id: data.notification_settings?.telegram_chat_id ?? null,
-              telegram_channel_id: data.notification_settings?.telegram_channel_id ?? null,
               telegram_topic_id: data.notification_settings?.telegram_topic_id ?? null,
             }
           : {
               telegram_api_token: null,
               telegram_chat_id: null,
-              telegram_channel_id: null,
               telegram_topic_id: null,
             }),
         // Only include Discord settings if Discord is enabled
@@ -486,7 +481,6 @@ export default function NotificationSettings() {
           notify_discord: settings.notification_settings?.notify_discord || false,
           telegram_api_token: settings.notification_settings?.telegram_api_token || '',
           telegram_chat_id: settings.notification_settings?.telegram_chat_id || undefined,
-          telegram_channel_id: settings.notification_settings?.telegram_channel_id || undefined,
           telegram_topic_id: settings.notification_settings?.telegram_topic_id || undefined,
           discord_webhook_url: settings.notification_settings?.discord_webhook_url || '',
           proxy_url: settings.notification_settings?.proxy_url || '',
@@ -726,11 +720,11 @@ export default function NotificationSettings() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5 text-xs font-medium sm:text-sm">
-                      <Shield className="h-3.5 w-3.5" />
-                      {t('settings.notifications.telegram.adminId')}
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {t('settings.notifications.telegram.chatId')}
                     </Label>
                     <FormField
                       control={form.control}
@@ -766,52 +760,6 @@ export default function NotificationSettings() {
                               }}
                               className="h-9 text-xs sm:text-sm"
                               placeholder="123456789"
-                            />
-                          </FormControl>
-                        )
-                      }}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1.5 text-xs font-medium sm:text-sm">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      {t('settings.notifications.telegram.channelId')}
-                    </Label>
-                    <FormField
-                      control={form.control}
-                      name="notification_settings.telegram_channel_id"
-                      render={({ field }) => {
-                        const [inputValue, setInputValue] = useState(field.value?.toString() ?? '')
-
-                        useEffect(() => {
-                          setInputValue(field.value?.toString() ?? '')
-                        }, [field.value])
-
-                        return (
-                          <FormControl>
-                            <Input
-                              type="text"
-                              name={field.name}
-                              ref={field.ref}
-                              value={inputValue}
-                              onChange={e => {
-                                const value = e.target.value
-                                setInputValue(value)
-                                if (value === '') {
-                                  field.onChange(undefined)
-                                } else if (/^-?\d+$/.test(value)) {
-                                  field.onChange(parseInt(value))
-                                }
-                              }}
-                              onBlur={() => {
-                                if (inputValue !== '' && !/^-?\d+$/.test(inputValue)) {
-                                  setInputValue(field.value?.toString() ?? '')
-                                }
-                                field.onBlur()
-                              }}
-                              className="h-9 text-xs sm:text-sm"
-                              placeholder="-1001234567890"
                             />
                           </FormControl>
                         )

@@ -164,7 +164,7 @@
         "title": "Telegram",
         "description": "Configure Telegram notifications for important system activities",
         "apiToken": "Bot API Token",
-        "adminId": "Admin Chat ID",
+        "chatId": "Chat ID",
         "channelId": "Channel ID",
         "topicId": "Topic ID"
       },

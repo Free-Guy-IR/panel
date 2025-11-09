@@ -144,7 +144,7 @@
         "title": "Telegram",
         "description": "配置 Telegram 机器人通知，在您的 Telegram 聊天或频道中接收实时警报",
         "apiToken": "机器人 API 令牌",
-        "adminId": "管理员聊天 ID",
+        "chatId": "聊天 ID",
         "channelId": "频道 ID",
         "topicId": "主题 ID"
       },

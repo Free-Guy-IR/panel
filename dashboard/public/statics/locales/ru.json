@@ -175,7 +175,7 @@
         "title": "Telegram",
         "description": "Настройка уведомлений Telegram-бота для получения оповещений в реальном времени в вашем чате или канале Telegram",
         "apiToken": "API токен бота",
-        "adminId": "ID чата администратора",
+        "chatId": "ID чата",
         "channelId": "ID канала",
         "topicId": "ID темы"
       },
