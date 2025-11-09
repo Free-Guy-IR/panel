@@ -236,7 +236,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   const handleLinksCopy = async (subLink: SubscribeLink) => {
     try {
       const content = await fetchContent(subLink.link)
-      copy(content)
+      await copy(content)
       toast.success(t('usersTable.copied', { defaultValue: 'Copied to clipboard' }))
     } catch (error) {
       console.error('Failed to fetch and copy content:', error)
@@ -247,7 +247,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
 
   const handleUrlCopy = async (url: string) => {
     try {
-      copy(url)
+      await copy(url)
       toast.success(t('usersTable.copied', { defaultValue: 'URL copied to clipboard' }))
     } catch (error) {
       toast.error(t('copyFailed', { defaultValue: 'Failed to copy content' }))

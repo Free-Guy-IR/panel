@@ -32,8 +32,8 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
   const { copy } = useClipboard()
 
   const handleCopyIP = useCallback(
-    (ip: string) => {
-      copy(ip)
+    async (ip: string) => {
+      await copy(ip)
       toast.success(t('userAllIPs.ipCopied', { defaultValue: 'IP address copied to clipboard' }))
     },
     [copy, t],

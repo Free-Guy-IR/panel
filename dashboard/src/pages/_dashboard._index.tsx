@@ -243,9 +243,9 @@ const Dashboard = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/users/'] })
   }
 
-  const handleCreateUserSuccess = (user: UserResponse) => {
+  const handleCreateUserSuccess = async (user: UserResponse) => {
     if (user.subscription_url) {
-      copy(user.subscription_url)
+      await copy(user.subscription_url)
       toast.success(t('userSettings.subscriptionUrlCopied'))
     }
     refreshAllUserData()
