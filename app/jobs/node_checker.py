@@ -54,13 +54,15 @@ async def update_node_connection_status(node_id: int, node: PasarGuardNode):
     """
     try:
         await node.get_backend_stats(timeout=8)
+        xray_version = await node.core_version()
+        node_version = await node.node_version()
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(
                 db,
                 node_id,
                 NodeStatus.connected,
-                xray_version=await node.core_version(),
-                node_version=await node.node_version(),
+                xray_version=xray_version,
+                node_version=node_version,
             )
     except NodeAPIError as e:
         if e.code > -3:
