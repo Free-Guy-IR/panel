@@ -219,33 +219,6 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
     return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   }
 
-  const copyToClipboardIOS = async (content: string): Promise<boolean> => {
-    try {
-      // Try modern clipboard API first
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(content)
-        return true
-      }
-
-      // Fallback: create temporary textarea
-      const textArea = document.createElement('textarea')
-      textArea.value = content
-      textArea.style.position = 'fixed'
-      textArea.style.left = '-999999px'
-      textArea.style.top = '-999999px'
-      document.body.appendChild(textArea)
-      textArea.focus()
-      textArea.select()
-
-      const success = document.execCommand('copy')
-      document.body.removeChild(textArea)
-      return success
-    } catch (error) {
-      console.error('iOS clipboard copy failed:', error)
-      return false
-    }
-  }
-
   const showManualCopyAlert = (content: string, type: 'content' | 'url') => {
     const message =
       type === 'content' ? t('copyFailed', { defaultValue: 'Failed to copy automatically. Please copy manually:' }) : t('downloadFailed', { defaultValue: 'Download blocked. Please copy manually:' })
@@ -263,18 +236,8 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
   const handleLinksCopy = async (subLink: SubscribeLink) => {
     try {
       const content = await fetchContent(subLink.link)
-
-      if (isIOS()) {
-        const success = await copyToClipboardIOS(content)
-        if (success) {
-          toast.success(t('usersTable.copied', { defaultValue: 'Copied to clipboard' }))
-        } else {
-          showManualCopyAlert(content, 'content')
-        }
-      } else {
-        await copy(content)
-        toast.success(t('usersTable.copied', { defaultValue: 'Copied to clipboard' }))
-      }
+      copy(content)
+      toast.success(t('usersTable.copied', { defaultValue: 'Copied to clipboard' }))
     } catch (error) {
       console.error('Failed to fetch and copy content:', error)
       // Fallback: copy the URL instead
@@ -284,17 +247,8 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
 
   const handleUrlCopy = async (url: string) => {
     try {
-      if (isIOS()) {
-        const success = await copyToClipboardIOS(url)
-        if (success) {
-          toast.success(t('usersTable.copied', { defaultValue: 'URL copied to clipboard' }))
-        } else {
-          showManualCopyAlert(url, 'url')
-        }
-      } else {
-        await copy(url)
-        toast.success(t('usersTable.copied', { defaultValue: 'URL copied to clipboard' }))
-      }
+      copy(url)
+      toast.success(t('usersTable.copied', { defaultValue: 'URL copied to clipboard' }))
     } catch (error) {
       toast.error(t('copyFailed', { defaultValue: 'Failed to copy content' }))
     }
