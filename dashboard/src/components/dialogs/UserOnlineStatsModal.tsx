@@ -371,7 +371,7 @@ export default function UserOnlineStatsModal({ isOpen, onOpenChange, nodeId, nod
     } else if (typeof userIPs === 'object' && Object.keys(userIPs).length === 1 && !isNaN(Number(Object.keys(userIPs)[0]))) {
       // If userIPs is an object with a single numeric key, use its value
       const onlyKey = Object.keys(userIPs)[0]
-      const ipMap = userIPs[onlyKey]
+      const ipMap = (userIPs as any)[onlyKey]
       if (typeof ipMap === 'object' && ipMap !== null) {
         Object.entries(ipMap).forEach(([ip, timestamp]) => {
           if (!transformedData[ip]) transformedData[ip] = []
