@@ -70,7 +70,7 @@ async def update_node_connection_status(node_id: int, node: PasarGuardNode):
                 await NodeOperation._update_single_node_status(db, node_id, NodeStatus.error, message=e.detail)
         if e.code > 0:
             async with GetDB() as db:
-                await node_operator.connect_node_wrapper(db, node_id)
+                await node_operator.connect_single_node(db, node_id)
 
 
 async def process_node_health_check(db_node: Node, node: PasarGuardNode):
@@ -86,7 +86,7 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
 
     if node.requires_hard_reset():
         async with GetDB() as db:
-            await node_operator.connect_node_wrapper(db, db_node.id)
+            await node_operator.connect_single_node(db, db_node.id)
         return
 
     try:

@@ -182,7 +182,7 @@ class NodeOperation(BaseOperation):
 
         try:
             await node_manager.update_node(db_node)
-            asyncio.create_task(self.connect_node_wrapper(db, db_node.id))
+            asyncio.create_task(self.connect_single_node(db, db_node.id))
         except NodeAPIError as e:
             await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
@@ -211,7 +211,7 @@ class NodeOperation(BaseOperation):
         else:
             try:
                 await node_manager.update_node(db_node)
-                asyncio.create_task(self.connect_node_wrapper(db, db_node.id))
+                asyncio.create_task(self.connect_single_node(db, db_node.id))
             except NodeAPIError as e:
                 await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
@@ -306,9 +306,12 @@ class NodeOperation(BaseOperation):
             elif notif["status"] == NodeStatus.error and notif["old_status"] != NodeStatus.error:
                 asyncio.create_task(notification.error_node(notif["node"]))
 
-    async def connect_node_wrapper(self, db: AsyncSession, node_id: int) -> None:
+    async def connect_single_node(self, db: AsyncSession, node_id: int) -> None:
         """
-        Connect single node by wrapping it in a list for bulk operation.
+        Connect a single node and update its status (optimized for single-node operations).
+
+        Uses simple UPDATE statement instead of bulk update to avoid deadlock risks
+        and unnecessary complexity.
 
         Args:
             db (AsyncSession): Database session.
@@ -318,10 +321,65 @@ class NodeOperation(BaseOperation):
         if db_node is None:
             return
 
-        await self.connect_nodes_bulk(db, [db_node])
+        # Get core users once
+        users = await core_users(db=db)
+
+        # Update node manager
+        try:
+            await node_manager.update_node(db_node)
+        except NodeAPIError as e:
+            # Update status to error using simple CRUD
+            await update_node_status(
+                db=db,
+                db_node=db_node,
+                status=NodeStatus.error,
+                message=e.detail,
+            )
+
+            # Send error notification
+            node_notif = NodeNotification(
+                id=db_node.id,
+                name=db_node.name,
+                message=e.detail,
+            )
+            asyncio.create_task(notification.error_node(node_notif))
+            return
+
+        # Connect the node
+        result = await NodeOperation.connect_node(db_node, users)
+
+        if not result:
+            return
+
+        # Update status using simple CRUD (NOT bulk!)
+        await update_node_status(
+            db=db,
+            db_node=db_node,
+            status=result["status"],
+            message=result.get("message", ""),
+            xray_version=result.get("xray_version", ""),
+            node_version=result.get("node_version", ""),
+        )
+
+        # Send appropriate notification
+        if result["status"] == NodeStatus.connected:
+            node_notif = NodeNotification(
+                id=db_node.id,
+                name=db_node.name,
+                xray_version=result.get("xray_version"),
+                node_version=result.get("node_version"),
+            )
+            asyncio.create_task(notification.connect_node(node_notif))
+        elif result["status"] == NodeStatus.error and result["old_status"] != NodeStatus.error:
+            node_notif = NodeNotification(
+                id=db_node.id,
+                name=db_node.name,
+                message=result.get("message"),
+            )
+            asyncio.create_task(notification.error_node(node_notif))
 
     async def restart_node(self, db: AsyncSession, node_id: Node, admin: AdminDetails) -> None:
-        await self.connect_node_wrapper(db, node_id)
+        await self.connect_single_node(db, node_id)
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
     async def restart_all_node(self, db: AsyncSession, admin: AdminDetails, core_id: int | None = None) -> None:
