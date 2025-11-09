@@ -1288,6 +1288,7 @@
     "statusChecking": "检查中...",
     "reconnect": "重新连接",
     "reconnecting": "重新连接中...",
+    "reconnectFailed": "重新连接节点失败",
     "sync": "同步",
     "syncing": "同步中...",
     "syncSuccess": "节点同步成功",

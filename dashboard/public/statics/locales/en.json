@@ -1342,6 +1342,7 @@
     "statusChecking": "Checking...",
     "reconnect": "Reconnect",
     "reconnecting": "Reconnecting...",
+    "reconnectFailed": "Failed to reconnect node",
     "sync": "Sync",
     "syncing": "Syncing...",
     "syncSuccess": "Node synchronized successfully",
