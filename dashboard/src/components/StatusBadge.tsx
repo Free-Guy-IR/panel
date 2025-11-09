@@ -59,8 +59,8 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
         )}
       >
         <div className={cn('flex items-center gap-1 sm:px-1', showExpiry && 'px-1')}>
-          {StatusIcon && <StatusIcon className="h-4 w-4 sm:h-3 sm:w-3" />}
-          <span className={cn('hidden text-nowrap text-xs font-medium capitalize sm:block', showExpiry && 'block')}>{userStatus && t(`status.${userStatus}`)}</span>
+          {StatusIcon && <StatusIcon className="h-4 w-4 md:h-3 md:w-3" />}
+          <span className={cn('hidden text-nowrap text-xs font-medium capitalize md:block', showExpiry && 'block')}>{userStatus && t(`status.${userStatus}`)}</span>
         </div>
       </Badge>
       <div className={cn(!dateInfo.time && !dateInfo.status && 'hidden', showExpiry ? 'block' : 'hidden md:block')}>

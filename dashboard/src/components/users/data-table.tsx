@@ -106,7 +106,7 @@ export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, da
 
   return (
     <div className="overflow-hidden rounded-md border">
-      <Table dir={isRTL ? 'rtl' : 'ltr'}>
+      <Table dir={isRTL ? 'rtl' : 'ltr'} className="table-fixed md:table-auto">
         <TableHeader>
           {table.getHeaderGroups().map(headerGroup => (
             <TableRow key={headerGroup.id} className="uppercase">
@@ -116,11 +116,11 @@ export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, da
                   className={cn(
                     'sticky z-10 bg-background text-xs',
                     isRTL && 'text-right',
-                    index === 0 && 'w-[200px] sm:w-[270px] md:w-auto',
-                    index === 1 && 'max-w-[70px] !px-0 md:w-auto',
-                    index === 2 && 'min-w-[100px] px-1 md:w-[450px]',
+                    index === 0 && 'min-w-0 max-w-[40%] md:w-auto',
+                    index === 1 && 'w-[70px] min-w-[70px] !px-0 md:w-auto',
+                    index === 2 && 'min-w-0 flex-1 px-1 md:w-[450px]',
                     index >= 3 && 'hidden md:table-cell',
-                    header.id === 'chevron' && 'table-cell md:hidden',
+                    header.id === 'chevron' && 'table-cell w-10 flex-shrink-0 md:hidden',
                   )}
                 >
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -148,7 +148,7 @@ export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, da
                             index <= 1 && 'max-w-[calc(100vw-50px-32px-100px-48px)] md:py-2',
                             index === 2 && 'w-[120px] !p-0 px-1',
                             index === 3 && 'w-8',
-                            index === 3 && isRTL ? 'pr-0' : index === 3 && !isRTL && 'pl-0',
+                            index === 3 && isRTL ? '!pr-0' : index === 3 && !isRTL && '!pl-0',
                             index >= 4 && 'hidden !p-0 md:table-cell',
                             cell.column.id === 'chevron' && 'table-cell md:hidden',
                             isRTL ? 'pl-1.5 sm:pl-3' : 'pr-1.5 sm:pr-3',
