@@ -1,15 +1,23 @@
 import { useState, useCallback } from 'react'
 
-function copyToClipboard(text: string): boolean {
+async function copyToClipboard(text: string): Promise<boolean> {
+  // Try modern clipboard API first (required for iOS)
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text)
-    return true
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch (err) {
+      console.error('Clipboard API failed:', err)
+      // Fall through to fallback method
+    }
   }
 
+  // Fallback: use execCommand for older browsers
   const input = document.createElement('input')
   input.value = text
   input.style.position = 'fixed'
   input.style.left = '-9999px'
+  input.style.top = '-9999px'
   document.body.appendChild(input)
   input.focus()
   input.select()
@@ -36,12 +44,19 @@ export function useClipboard({ timeout = 1500 } = {}) {
   }
 
   const copy = useCallback(
-    (text: string) => {
-      const success = copyToClipboard(text)
-      if (success) {
-        handleCopyResult(true)
-      } else {
-        setError(new Error('useClipboard: copyToClipboard failed'))
+    async (text: string) => {
+      try {
+        const success = await copyToClipboard(text)
+        if (success) {
+          handleCopyResult(true)
+          setError(null)
+        } else {
+          setError(new Error('useClipboard: copyToClipboard failed'))
+          handleCopyResult(false)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('useClipboard: copyToClipboard failed'))
+        handleCopyResult(false)
       }
     },
     [timeout],

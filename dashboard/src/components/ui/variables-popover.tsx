@@ -20,8 +20,8 @@ export function VariablesPopover({ includeProtocolTransport = false, side = 'rig
   const { t } = useTranslation()
   const { copy } = useClipboard()
 
-  const handleCopy = (text: string) => {
-    copy(text)
+  const handleCopy = async (text: string) => {
+    await copy(text)
     toast.success(t('usersTable.copied'))
   }
 
@@ -82,8 +82,8 @@ export function VariablesList({ includeProtocolTransport = false }: { includePro
   const { t } = useTranslation()
   const { copy } = useClipboard()
 
-  const handleCopy = (text: string) => {
-    copy(text)
+  const handleCopy = async (text: string) => {
+    await copy(text)
     toast.success(t('usersTable.copied'))
   }
 

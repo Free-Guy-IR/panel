@@ -235,9 +235,21 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
 
   const handleLinksCopy = async (subLink: SubscribeLink) => {
     try {
-      const content = await fetchContent(subLink.link)
-      copy(content)
-      toast.success(t('usersTable.copied', { defaultValue: 'Copied to clipboard' }))
+      if (isIOS()) {
+        // iOS: redirect/open in new tab instead of copying
+        const newWindow = window.open(subLink.link, '_blank')
+        if (!newWindow) {
+          const content = await fetchContent(subLink.link)
+          showManualCopyAlert(content, 'url')
+        } else {
+          toast.success(t('downloadSuccess', { defaultValue: 'Configuration opened in new tab' }))
+        }
+      } else {
+        // Non-iOS: copy content as before
+        const content = await fetchContent(subLink.link)
+        await copy(content)
+        toast.success(t('usersTable.copied', { defaultValue: 'Copied to clipboard' }))
+      }
     } catch (error) {
       console.error('Failed to fetch and copy content:', error)
       // Fallback: copy the URL instead
@@ -247,7 +259,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
 
   const handleUrlCopy = async (url: string) => {
     try {
-      copy(url)
+      await copy(url)
       toast.success(t('usersTable.copied', { defaultValue: 'URL copied to clipboard' }))
     } catch (error) {
       toast.error(t('copyFailed', { defaultValue: 'Failed to copy content' }))

@@ -19,10 +19,10 @@ export function CopyButton({ value, className, copiedMessage = 'Copied!', defaul
 
   const { copy, copied } = useClipboard({ timeout: 1500 })
   const handleCopy = useCallback(
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      copy(value)
+      await copy(value)
       onClick?.(e)
     },
     [copy, value, onClick],
