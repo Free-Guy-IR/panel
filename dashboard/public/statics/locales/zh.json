@@ -176,7 +176,6 @@
         "title": "常规设置",
         "description": "配置基本订阅参数",
         "urlPrefix": "URL 前缀",
-        "urlPrefixPlaceholder": "sub",
         "urlPrefixDescription": "添加到所有订阅 URL 的前缀",
         "updateInterval": "更新间隔（小时）",
         "updateIntervalDescription": "订阅自动更新的间隔时间",

@@ -102,7 +102,6 @@
         "title": "تنظیمات عمومی",
         "description": "گزینه‌های پیکربندی پایه اشتراک",
         "urlPrefix": "پیشوند آدرس",
-        "urlPrefixPlaceholder": "sub",
         "urlPrefixDescription": "آدرس پایه برای لینک‌های اشتراک",
         "updateInterval": "فاصله به‌روزرسانی (ساعت)",
         "updateIntervalDescription": "هر چند وقت یکبار کلاینت‌ها باید به‌روزرسانی را بررسی کنند",

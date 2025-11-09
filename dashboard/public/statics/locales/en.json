@@ -196,7 +196,6 @@
         "title": "General Settings",
         "description": "Basic subscription configuration options",
         "urlPrefix": "URL Prefix",
-        "urlPrefixPlaceholder": "sub",
         "urlPrefixDescription": "Base URL for subscription links",
         "updateInterval": "Update Interval (hours)",
         "updateIntervalDescription": "How often clients should check for updates",

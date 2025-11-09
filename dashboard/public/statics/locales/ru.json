@@ -210,7 +210,6 @@
         "title": "Общие настройки",
         "description": "Основные параметры конфигурации подписки",
         "urlPrefix": "Префикс URL",
-        "urlPrefixPlaceholder": "sub",
         "urlPrefixDescription": "Базовый URL для ссылок подписки",
         "updateInterval": "Интервал обновления (часы)",
         "updateIntervalDescription": "Как часто клиенты должны проверять обновления",

@@ -1,26 +1,26 @@
-import { useForm, useFieldArray } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { useTranslation } from 'react-i18next'
-import { useEffect, useState } from 'react'
+import { SortableApplication } from '@/components/apps/sortable-application'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Filter, FileText, Link, Clock, HelpCircle, User, Settings, Code, FileCode2, Sword, Shield, Lock, GripVertical, RotateCcw, Megaphone, ExternalLink } from 'lucide-react'
-import { useSettingsContext } from './_dashboard.settings'
-import { ConfigFormat } from '@/service/api'
-import { toast } from 'sonner'
+import { Switch } from '@/components/ui/switch'
 import { VariablesPopover } from '@/components/ui/variables-popover'
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { SortableApplication } from '@/components/apps/sortable-application'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { ConfigFormat } from '@/service/api'
+import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Clock, Code, ExternalLink, FileCode2, FileText, Filter, GripVertical, HelpCircle, Link, Lock, Megaphone, Plus, RotateCcw, Settings, Shield, Sword, Trash2, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useFieldArray, useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { z } from 'zod'
+import { useSettingsContext } from './_dashboard.settings'
 
 // Enhanced validation schema for subscription settings
 const subscriptionSchema = z.object({
@@ -854,7 +854,7 @@ export default function SubscriptionSettings() {
                       {t('settings.subscriptions.general.urlPrefix')}
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder={t('settings.subscriptions.general.urlPrefixPlaceholder')} {...field} className="font-mono" />
+                      <Input placeholder="https://example.com" {...field} className="font-mono" />
                     </FormControl>
                     <FormDescription className="text-sm text-muted-foreground">{t('settings.subscriptions.general.urlPrefixDescription')}</FormDescription>
                     <FormMessage />
