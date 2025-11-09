@@ -279,7 +279,11 @@ class UserOperation(BaseOperation):
             for opt in opts:
                 try:
                     enum_member = UsersSortingOptions[opt]
-                    sort_list.append(enum_member.value)
+                    value = enum_member.value
+                    if isinstance(value, tuple):
+                        sort_list.extend(value)
+                    else:
+                        sort_list.append(value)
                 except KeyError:
                     await self.raise_error(message=f'"{opt}" is not a valid sort option', code=400)
 
