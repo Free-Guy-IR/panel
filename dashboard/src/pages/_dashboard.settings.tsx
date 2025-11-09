@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { useGetSettings, useModifySettings } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { Bell, Database, ListTodo, LucideIcon, MessageCircle, Palette, Send, Settings as SettingsIcon, Webhook } from 'lucide-react'
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
@@ -134,73 +134,80 @@ export default function Settings() {
   })
 
   // Wrapper function to filter data based on active tab (only for sudo admins)
-  const handleUpdateSettings = (data: any) => {
-    if (!is_sudo) return // No-op for non-sudo admins
+  const handleUpdateSettings = useCallback(
+    (data: any) => {
+      if (!is_sudo) return // No-op for non-sudo admins
 
-    let filteredData: any = {}
+      let filteredData: any = {}
 
-    // Only include data relevant to the active tab
-    switch (activeTab) {
-      case 'notifications':
-        if (data.data) {
-          // If data is already wrapped, use it as is
-          filteredData = data
-        } else {
-          // Wrap notification data in the expected format
-          filteredData = {
-            data: {
-              notification_enable: data.notification_enable,
-              notification_settings: data.notification_settings,
-            },
+      // Only include data relevant to the active tab
+      switch (activeTab) {
+        case 'notifications':
+          if (data.data) {
+            // If data is already wrapped, use it as is
+            filteredData = data
+          } else {
+            // Wrap notification data in the expected format
+            filteredData = {
+              data: {
+                notification_enable: data.notification_enable,
+                notification_settings: data.notification_settings,
+              },
+            }
           }
-        }
-        break
-      case 'subscriptions':
-        if (data.subscription) {
-          // Wrap subscription data in the expected format
-          filteredData = {
-            data: {
-              subscription: data.subscription,
-            },
+          break
+        case 'subscriptions':
+          if (data.subscription) {
+            // Wrap subscription data in the expected format
+            filteredData = {
+              data: {
+                subscription: data.subscription,
+              },
+            }
+          } else {
+            // If data is already wrapped, use it as is
+            filteredData = data
           }
-        } else {
-          // If data is already wrapped, use it as is
-          filteredData = data
-        }
-        break
-      case 'telegram':
-        // Add telegram specific filtering if needed
-        filteredData = { data: data }
-        break
-      case 'discord':
-        // Add discord specific filtering if needed
-        filteredData = { data: data }
-        break
-      case 'webhook':
-        // Add webhook specific filtering if needed
-        filteredData = { data: data }
-        break
-      case 'cleanup':
-        // Add cleanup specific filtering if needed
-        filteredData = { data: data }
-        break
-      case 'theme':
-        // Theme settings are client-side only, no API call needed
-        return
-      default:
-        filteredData = { data: data }
-    }
+          break
+        case 'telegram':
+          // Add telegram specific filtering if needed
+          filteredData = { data: data }
+          break
+        case 'discord':
+          // Add discord specific filtering if needed
+          filteredData = { data: data }
+          break
+        case 'webhook':
+          // Add webhook specific filtering if needed
+          filteredData = { data: data }
+          break
+        case 'cleanup':
+          // Add cleanup specific filtering if needed
+          filteredData = { data: data }
+          break
+        case 'theme':
+          // Theme settings are client-side only, no API call needed
+          return
+        default:
+          filteredData = { data: data }
+      }
 
-    updateSettings(filteredData)
-  }
+      updateSettings(filteredData)
+    },
+    [is_sudo, activeTab, updateSettings],
+  )
 
-  const settingsContextValue: SettingsContextType = {
-    settings: is_sudo ? settings : {}, // Non-sudo admins don't need settings data
-    isLoading: is_sudo ? isLoading : false,
-    error: is_sudo ? error : null,
-    updateSettings: is_sudo ? handleUpdateSettings : () => {}, // No-op for non-sudo admins
-    isSaving: is_sudo ? isSaving : false,
-  }
+  // Memoize context value to ensure stability during HMR
+  const settingsContextValue: SettingsContextType = useMemo(
+    () => ({
+      settings: is_sudo ? (settings || {}) : {}, // Non-sudo admins don't need settings data
+      isLoading: is_sudo ? isLoading : false,
+      error: is_sudo ? error : null,
+      updateSettings: is_sudo ? handleUpdateSettings : () => {}, // No-op for non-sudo admins
+      isSaving: is_sudo ? isSaving : false,
+    }),
+    [is_sudo, settings, isLoading, error, isSaving, handleUpdateSettings],
+  )
 
   // Generate tutorial URL for the current settings tab
   const getTutorialUrl = () => {
@@ -208,6 +215,8 @@ export default function Settings() {
     return `https://docs.pasarguard.org/${locale}/panel/settings`
   }
 
+  // Always render the provider to ensure context is available for child routes
+  // This prevents issues during HMR when components might render before parent is ready
   return (
     <SettingsContext.Provider value={settingsContextValue}>
       <div className="flex w-full flex-col items-start gap-0">

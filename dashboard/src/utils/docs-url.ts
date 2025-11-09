@@ -4,6 +4,7 @@ import i18n from '@/locales/i18n'
 /**
  * Generates a documentation URL for a given page path
  * Format: docs.pasarguard.org/{locale}/panel/{page}
+ * Special case: /nodes routes use docs.pasarguard.org/{locale}/node/
  *
  * @param pagePath - The page path (e.g., '/settings', '/users', '/nodes/cores')
  * @returns The full documentation URL
@@ -13,13 +14,17 @@ export function getDocsUrl(pagePath: string): string {
   // Normalize locale (e.g., 'en-US' -> 'en')
   const normalizedLocale = locale.split('-')[0]
 
+  // Special case: node documentation uses /node/ instead of /panel/nodes
+  if (pagePath.startsWith('/nodes')) {
+    return `${DOCUMENTATION}/${normalizedLocale}/node/`
+  }
+
   // Map route paths to documentation paths
   const pathMap: Record<string, string> = {
     '/': 'dashboard',
     '/users': 'users',
     '/statistics': 'statistics',
     '/hosts': 'hosts',
-    '/nodes': 'nodes',
     '/groups': 'groups',
     '/templates': 'templates',
     '/admins': 'admins',
