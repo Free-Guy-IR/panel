@@ -1,4 +1,4 @@
-from datetime import datetime as dt, timezone as tz
+from datetime import datetime as dt, timedelta as td, timezone as tz
 from enum import IntEnum
 
 from fastapi import HTTPException
@@ -48,7 +48,7 @@ class BaseOperation:
         else:
             raise ValueError(message)
 
-    async def validate_dates(self, start: dt | None, end: dt | None) -> tuple[dt, dt]:
+    async def validate_dates(self, start: dt | None, end: dt | None, set_default_values: bool) -> tuple[dt, dt]:
         """Validate if start and end dates are correct and if end is after start."""
 
         start_date = None
@@ -60,8 +60,11 @@ class BaseOperation:
             if end:
                 end_date = fix_datetime_timezone(end)
 
-            if not end_date:
-                end_date = dt.now(tz.utc)
+            if set_default_values:
+                if not start_date:
+                    start_date = dt.now(tz.utc) - td(days=30)
+                if not end_date:
+                    end_date = dt.now(tz.utc)
 
             # Compare dates only after both are set
             if (start_date and end_date) and end_date < start_date:

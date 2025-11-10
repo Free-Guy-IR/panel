@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime as dt
 from typing import AsyncIterator, Callable
 
-from PasarGuardNodeBridge import PasarGuardNode, NodeAPIError
+from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from sqlalchemy.exc import IntegrityError
 
 from app import notification
@@ -288,13 +288,11 @@ class NodeOperation(BaseOperation):
                 message=result.get("message"),
             )
 
-            notifications_to_send.append(
-                {
-                    "node": node_notif,
-                    "status": result["status"],
-                    "old_status": result["old_status"],
-                }
-            )
+            notifications_to_send.append({
+                "node": node_notif,
+                "status": result["status"],
+                "old_status": result["old_status"],
+            })
 
         # Bulk update all statuses in ONE query
         await bulk_update_node_status(db, valid_results)
@@ -396,7 +394,7 @@ class NodeOperation(BaseOperation):
         node_id: int | None = None,
         group_by_node: bool = False,
     ) -> NodeUsageStatsList:
-        start, end = await self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end, True)
         return await get_nodes_usage(db, start, end, period=period, node_id=node_id, group_by_node=group_by_node)
 
     async def get_logs(self, node_id: Node) -> Callable[[], AsyncIterator[asyncio.Queue]]:
@@ -410,7 +408,7 @@ class NodeOperation(BaseOperation):
     async def get_node_stats_periodic(
         self, db: AsyncSession, node_id: id, start: dt = None, end: dt = None, period: Period = Period.hour
     ) -> NodeStatsList:
-        start, end = await self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end,True)
 
         return await get_node_stats(db, node_id, start, end, period=period)
 

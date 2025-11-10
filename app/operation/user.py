@@ -240,7 +240,7 @@ class UserOperation(BaseOperation):
         node_id: int | None = None,
         group_by_node: bool = False,
     ) -> UserUsageStatsList:
-        start, end = await self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end, True)
         db_user = await self.get_validated_user(db, username, admin)
 
         if not admin.is_sudo:
@@ -320,7 +320,7 @@ class UserOperation(BaseOperation):
         group_by_node: bool = False,
     ) -> UserUsageStatsList:
         """Get all users usage"""
-        start, end = await self.validate_dates(start, end)
+        start, end = await self.validate_dates(start, end, True)
 
         if not admin.is_sudo:
             node_id = None
@@ -357,7 +357,7 @@ class UserOperation(BaseOperation):
         - If both are omitted, returns all expired users
         """
 
-        expired_after, expired_before = await self.validate_dates(expired_after, expired_before)
+        expired_after, expired_before = await self.validate_dates(expired_after, expired_before, False)
         if admin_username:
             admin_id = (await self.get_validated_admin(db, admin_username)).id
         else:
@@ -381,7 +381,7 @@ class UserOperation(BaseOperation):
         - At least one of expired_after or expired_before must be provided
         """
 
-        expired_after, expired_before = await self.validate_dates(expired_after, expired_before)
+        expired_after, expired_before = await self.validate_dates(expired_after, expired_before, False)
 
         if admin_username:
             admin_id = (await self.get_validated_admin(db, admin_username)).id
