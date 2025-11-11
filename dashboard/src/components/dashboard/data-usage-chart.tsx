@@ -1,17 +1,18 @@
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Cell, TooltipProps } from 'recharts'
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, TooltipProps } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../ui/card'
 import { ChartConfig, ChartContainer, ChartTooltip } from '../ui/chart'
 import { formatBytes } from '@/utils/formatByte'
 import { useTranslation } from 'react-i18next'
-import { useGetUsersUsage, useGetUsage, Period } from '@/service/api'
-import { useMemo, useState } from 'react'
+import { useGetUsersUsage, useGetUsage, Period, UserUsageStatsList, NodeUsageStatsList, UserUsageStat, NodeUsageStat } from '@/service/api'
+import { useMemo, useState, useEffect } from 'react'
 import { SearchXIcon, TrendingUp, TrendingDown } from 'lucide-react'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { dateUtils } from '@/utils/dateFormatter'
 import dayjs from '@/lib/dayjs'
 import { useAdmin } from '@/hooks/use-admin'
+import useDirDetection from '@/hooks/use-dir-detection'
 
-interface PeriodOption {
+type PeriodOption = {
   label: string
   value: string
   period: Period
@@ -31,38 +32,89 @@ const PERIOD_KEYS = [
   { key: 'all', period: 'day' as Period, allTime: true },
 ]
 
-const transformUsageData = (apiData: any, periodOption: any, isNodeUsage: boolean = false) => {
+const transformUsageData = (apiData: { stats: (UserUsageStat | NodeUsageStat)[] }, periodOption: PeriodOption, isNodeUsage: boolean = false, locale: string = 'en') => {
   if (!apiData?.stats || !Array.isArray(apiData.stats)) {
     return []
   }
+  const today = dateUtils.toDayjs(new Date())
 
-  return apiData.stats.map((stat: any, index: number, array: any[]) => {
+  return apiData.stats.map((stat: UserUsageStat | NodeUsageStat) => {
     const d = dateUtils.toDayjs(stat.period_start)
-    const isLastItem = index === array.length - 1
+    const isToday = d.isSame(today, 'day')
+    console.log(d.format('HH:mm'), stat.period_start);
+
 
     let displayLabel = ''
     if (periodOption.hours) {
-      if (isLastItem) {
-        displayLabel = 'Today'
+      // For hour periods, use period_start with format date function
+      displayLabel = d.format('HH:mm')
+    } else if (periodOption.period === 'day') {
+      // For day periods, use same logic as CustomBarTooltip but with shorter format
+      if (locale === 'fa') {
+        if (isToday) {
+          // For today, show current time
+          displayLabel = new Date()
+            .toLocaleString('fa-IR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+        } else {
+          // For other days, show date
+          const localDate = new Date(d.year(), d.month(), d.date(), 0, 0, 0)
+          displayLabel = localDate
+            .toLocaleString('fa-IR', {
+              month: '2-digit',
+              day: '2-digit',
+            })
+        }
       } else {
-        displayLabel = d.format('HH:mm')
+        if (isToday) {
+          // For today, show current time
+          displayLabel = new Date()
+            .toLocaleString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+        } else {
+          // For other days, show date
+          const localDate = new Date(d.year(), d.month(), d.date(), 0, 0, 0)
+          displayLabel = localDate
+            .toLocaleString('en-US', {
+              month: '2-digit',
+              day: '2-digit',
+            })
+        }
       }
     } else {
-      if (isLastItem) {
-        displayLabel = 'Today'
+      // For other periods (month, etc.), show date format
+      if (locale === 'fa') {
+        displayLabel = d
+          .toDate()
+          .toLocaleString('fa-IR', {
+            month: '2-digit',
+            day: '2-digit',
+          })
       } else {
-        displayLabel = d.format('MM/DD')
+        displayLabel = d
+          .toDate()
+          .toLocaleString('en-US', {
+            month: '2-digit',
+            day: '2-digit',
+          })
       }
     }
 
-    // Node usage has uplink + downlink, user usage has total_traffic
-    const traffic = isNodeUsage ? (stat.uplink || 0) + (stat.downlink || 0) : stat.total_traffic || 0
+    const traffic = isNodeUsage
+      ? ((stat as NodeUsageStat).uplink || 0) + ((stat as NodeUsageStat).downlink || 0)
+      : ((stat as UserUsageStat).total_traffic || 0)
+    console.log(displayLabel, d);
 
     return {
       date: displayLabel,
-      fullDate: stat.period_start,
-      localFullDate: d.toISOString(),
       traffic,
+      period_start: stat.period_start, // Keep original for tooltip
     }
   })
 }
@@ -74,11 +126,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-function CustomBarTooltip({ active, payload, period }: TooltipProps<any, any> & { period?: string }) {
+function CustomBarTooltip({ active, payload, period }: TooltipProps<number, string> & { period?: Period }) {
   const { t, i18n } = useTranslation()
   if (!active || !payload || !payload.length) return null
   const data = payload[0].payload
-  const d = dateUtils.toDayjs(data.localFullDate || data.fullDate)
+  // Use period_start if available (from transformUsageData), otherwise parse the display label
+  const d = data.period_start ? dateUtils.toDayjs(data.period_start) : dateUtils.toDayjs(data.date)
   const today = dateUtils.toDayjs(new Date())
   const isToday = d.isSame(today, 'day')
 
@@ -177,7 +230,7 @@ function CustomBarTooltip({ active, payload, period }: TooltipProps<any, any> & 
       <div className="flex flex-col gap-0.5 text-xs">
         <div>
           <span className="font-medium text-foreground">{t('statistics.totalUsage', { defaultValue: 'Total Usage' })}:</span>
-          <span className={isRTL ? 'mr-1' : 'ml-1'}>{formatBytes(data.traffic)}</span>
+          <span dir="ltr" className={isRTL ? 'mr-1' : 'ml-1'}>{formatBytes(data.traffic)}</span>
         </div>
       </div>
     </div>
@@ -187,6 +240,7 @@ function CustomBarTooltip({ active, payload, period }: TooltipProps<any, any> & 
 const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
   const { t, i18n } = useTranslation()
   const { admin } = useAdmin()
+  const dir = useDirDetection()
   const is_sudo = admin?.is_sudo || false
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const PERIOD_OPTIONS: PeriodOption[] = useMemo(
@@ -204,25 +258,33 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     [t],
   )
   const [periodOption, setPeriodOption] = useState<PeriodOption>(() => PERIOD_OPTIONS[3])
-
+  
+  // Update periodOption when PERIOD_OPTIONS changes (e.g., language change)
+  useEffect(() => {
+    setPeriodOption(prev => {
+      const currentOption = PERIOD_OPTIONS.find(opt => opt.value === prev.value)
+      return currentOption || prev
+    })
+  }, [PERIOD_OPTIONS])
+  
   const { startDate, endDate } = useMemo(() => {
     const now = dayjs()
     let start: dayjs.Dayjs
     if (periodOption.allTime) {
-      start = dayjs('2000-01-01T00:00:00Z') // Arbitrary early date
+      start = dayjs('2000-01-01T00:00:00Z')
     } else if (periodOption.hours) {
       start = now.subtract(periodOption.hours, 'hour')
     } else if (periodOption.days) {
       const daysToSubtract = periodOption.days === 7 ? 6 : periodOption.days === 3 ? 2 : periodOption.days === 1 ? 0 : periodOption.days
       start = now.subtract(daysToSubtract, 'day').utc().startOf('day')
+    } else if (periodOption.months) {
+      start = now.subtract(periodOption.months, 'month').utc().startOf('day')
     } else {
       start = now
     }
     return { startDate: start.toISOString(), endDate: now.toISOString() }
   }, [periodOption])
 
-  // For sudo admins: fetch from nodes only when viewing all admins (no admin_username)
-  // For specific admin views or non-sudo admins: fetch from users
   const shouldUseNodeUsage = is_sudo && !admin_username
 
   const nodeUsageParams = useMemo(
@@ -258,38 +320,56 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
     },
   })
 
-  const data = shouldUseNodeUsage ? nodeData : userData
+  const data: UserUsageStatsList | NodeUsageStatsList | undefined = shouldUseNodeUsage ? nodeData : userData
   const isLoading = shouldUseNodeUsage ? isLoadingNodes : isLoadingUsers
 
-  // Extract correct stats array from grouped or flat API response (like CostumeBarChart)
-  let statsArr: any[] = []
+  let statsArr: (UserUsageStat | NodeUsageStat)[] = []
   if (data?.stats) {
     if (typeof data.stats === 'object' && !Array.isArray(data.stats)) {
-      // Use '-1' for all, or first key as fallback
-      statsArr = data.stats['-1'] || data.stats[Object.keys(data.stats)[0]] || []
+      const statsObj = data.stats as { [key: string]: (UserUsageStat | NodeUsageStat)[] }
+      statsArr = statsObj['-1'] || statsObj[Object.keys(statsObj)[0]] || []
     } else if (Array.isArray(data.stats)) {
       statsArr = data.stats
     }
   }
 
-  const chartData = useMemo(() => transformUsageData({ stats: statsArr }, periodOption, shouldUseNodeUsage), [statsArr, periodOption, shouldUseNodeUsage])
+  const chartData = useMemo(() => transformUsageData({ stats: statsArr }, periodOption, shouldUseNodeUsage, i18n.language), [statsArr, periodOption, shouldUseNodeUsage, i18n.language])
 
-  // Calculate trend
   const trend = useMemo(() => {
     if (!chartData || chartData.length < 2) return null
-    const last = chartData[chartData.length - 1]?.traffic || 0
-    const prev = chartData[chartData.length - 2]?.traffic || 0
+    const last = (chartData[chartData.length - 1] as { traffic: number })?.traffic || 0
+    const prev = (chartData[chartData.length - 2] as { traffic: number })?.traffic || 0
     if (prev === 0) return null
     const percent = ((last - prev) / prev) * 100
     return percent
   }, [chartData])
+
+  const xAxisInterval = useMemo(() => {
+    // For hours (12h, 24h), show approximately 6-8 labels
+    if (periodOption.hours) {
+      const targetLabels = periodOption.hours === 12 ? 6 : 8
+      return Math.max(1, Math.floor(chartData.length / targetLabels))
+    }
+
+    if (periodOption.months || periodOption.allTime) {
+      const targetLabels = 5;
+      return Math.max(1, Math.floor(chartData.length / targetLabels))
+    }
+
+    if (periodOption.days && periodOption.days > 7) {
+      const targetLabels = periodOption.days === 30 ? 10 : 8
+      return Math.max(1, Math.floor(chartData.length / targetLabels))
+    }
+
+    return 0
+  }, [periodOption.hours, periodOption.months, periodOption.allTime, periodOption.days, chartData.length])
 
   return (
     <Card className="flex h-full flex-col justify-between">
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div>
           <CardTitle>{t('admins.used.traffic', { defaultValue: 'Traffic Usage' })}</CardTitle>
-          <CardDescription>{t('admins.monitor.traffic', { defaultValue: 'Monitor admin traffic usage over time' })}</CardDescription>
+          <CardDescription className='mt-1.5'>{t('admins.monitor.traffic', { defaultValue: 'Monitor admin traffic usage over time' })}</CardDescription>
         </div>
         <Select
           value={periodOption.value}
@@ -298,12 +378,12 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
             if (found) setPeriodOption(found)
           }}
         >
-          <SelectTrigger className={`h-8 w-32 text-xs${i18n.dir() === 'rtl' ? 'text-right' : ''}`} dir={i18n.dir()}>
+          <SelectTrigger className={`h-8 w-32 text-xs${dir === 'rtl' ? 'text-right' : ''}`} dir={dir}>
             <SelectValue>{periodOption.label}</SelectValue>
           </SelectTrigger>
-          <SelectContent dir={i18n.dir()}>
+          <SelectContent dir={dir}>
             {PERIOD_OPTIONS.map(opt => (
-              <SelectItem key={opt.value} value={opt.value} className={i18n.dir() === 'rtl' ? 'text-right' : ''}>
+              <SelectItem key={opt.value} value={opt.value} className={dir === 'rtl' ? 'text-right' : ''}>
                 {opt.label}
               </SelectItem>
             ))}
@@ -339,52 +419,59 @@ const DataUsageChart = ({ admin_username }: { admin_username?: string }) => {
             {t('admins.monitor.no_traffic', { defaultValue: 'No traffic data available' })}
           </div>
         ) : (
-          <ChartContainer config={chartConfig} dir="ltr">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart
-                data={chartData}
-                margin={{ top: 16, right: 8, left: 8, bottom: 8 }}
-                onMouseMove={state => {
-                  if (state.activeTooltipIndex !== activeIndex) {
-                    setActiveIndex(state.activeTooltipIndex !== undefined ? state.activeTooltipIndex : null)
+          <ChartContainer config={chartConfig} dir="ltr" className="h-[320px]">
+            <BarChart
+              data={chartData}
+              margin={{ top: 16, right: 8, left: 8, bottom: 8 }}
+              onMouseMove={state => {
+                if (state.activeTooltipIndex !== activeIndex) {
+                  setActiveIndex(state.activeTooltipIndex !== undefined ? state.activeTooltipIndex : null)
+                }
+              }}
+              onMouseLeave={() => {
+                setActiveIndex(null)
+              }}
+            >
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                tickMargin={10}
+                axisLine={false}
+                angle={0}
+                textAnchor="middle"
+                height={30}
+                interval={xAxisInterval}
+                tickFormatter={(value: string): string => {
+                  // Use the value directly as it's already formatted in transformUsageData
+                  // For the last data point when it's today, check if we need to show "Today"
+                  if (periodOption.days && chartData.length > 0) {
+                    const lastDataPoint = chartData[chartData.length - 1] as { date: string; period_start?: string }
+                    // Check if this tick value matches the last data point's date
+                    if (lastDataPoint && value === lastDataPoint.date) {
+                      const today = dateUtils.toDayjs(new Date())
+                      // Try to get period_start from the data point
+                      const dataPoint = chartData.find((d) => typeof d === 'object' && d !== null && 'date' in d && (d as { date: string }).date === value) as { period_start?: string } | undefined
+                      if (dataPoint?.period_start) {
+                        const pointDate = dateUtils.toDayjs(dataPoint.period_start)
+                        if (pointDate.isSame(today, 'day')) {
+                          return t('today', { defaultValue: 'Today' })
+                        }
+                      }
+                    }
                   }
+
+                  return value || ''
                 }}
-                onMouseLeave={() => {
-                  setActiveIndex(null)
-                }}
-              >
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                  tickFormatter={(_value: string, index: number): string => {
-                    // If this is the last bar, show 'Today' (translated)
-                    if (periodOption.hours && index === chartData.length - 1) {
-                      return i18n.language === 'fa' ? 'امروز' : 'Today'
-                    }
-                    if (periodOption.hours) {
-                      // For hour periods, show only time part for compactness
-                      const timePart = chartData[index]?.date?.split(' ')[1]
-                      return timePart || chartData[index]?.date
-                    }
-                    // For day periods, show date or 'Today' if present
-                    if (chartData[index]?.date === 'Today') {
-                      return i18n.language === 'fa' ? 'امروز' : 'Today'
-                    }
-                    return chartData[index]?.date
-                  }}
-                />
-                <YAxis dataKey={'traffic'} tickLine={false} tickMargin={10} axisLine={false} tickFormatter={val => formatBytes(val, 0, true).toString()} />
-                <ChartTooltip cursor={false} content={<CustomBarTooltip period={periodOption.period} />} />
-                <Bar dataKey="traffic" radius={6} maxBarSize={48}>
-                  {chartData.map((_: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={index === activeIndex ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+              />
+              <YAxis dataKey={'traffic'} tickLine={false} tickMargin={10} axisLine={false} tickFormatter={val => formatBytes(val, 0, true).toString()} />
+              <ChartTooltip cursor={false} content={<CustomBarTooltip period={periodOption.period} />} />
+              <Bar dataKey="traffic" radius={6} maxBarSize={48}>
+                {chartData.map((_, index: number) => (
+                  <Cell key={`cell-${index}`} fill={index === activeIndex ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))'} />
+                ))}
+              </Bar>
+            </BarChart>
           </ChartContainer>
         )}
       </CardContent>
