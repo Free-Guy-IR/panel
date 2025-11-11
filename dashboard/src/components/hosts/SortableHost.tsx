@@ -71,31 +71,45 @@ export default function SortableHost({ host, onEdit, onDuplicate, onDataChanged,
     if (!host.id) return
 
     try {
-      // Send full host data with only is_disabled toggled
+      const { id, ...hostData } = host
+      
+      let transformedMuxSettings = hostData.mux_settings
+      if (hostData.mux_settings?.xray) {
+        transformedMuxSettings = {
+          ...hostData.mux_settings,
+          xray: {
+            enabled: hostData.mux_settings.xray.enabled,
+            concurrency: hostData.mux_settings.xray.concurrency,
+            xudp_concurrency: hostData.mux_settings.xray.xudpConcurrency ?? undefined,
+            xudp_proxy_udp_443: hostData.mux_settings.xray.xudpProxyUDP443 ?? undefined,
+          } as any,
+        }
+      }
+
+      let transformedTransportSettings = hostData.transport_settings
+      if (hostData.transport_settings?.xhttp_settings?.xmux) {
+        transformedTransportSettings = {
+          ...hostData.transport_settings,
+          xhttp_settings: {
+            ...hostData.transport_settings.xhttp_settings,
+            xmux: {
+              max_concurrency: hostData.transport_settings.xhttp_settings.xmux.maxConcurrency ?? undefined,
+              max_connections: hostData.transport_settings.xhttp_settings.xmux.maxConnections ?? undefined,
+              c_max_reuse_times: hostData.transport_settings.xhttp_settings.xmux.cMaxReuseTimes ?? undefined,
+              h_max_reusable_secs: hostData.transport_settings.xhttp_settings.xmux.hMaxReusableSecs ?? undefined,
+              h_max_request_times: hostData.transport_settings.xhttp_settings.xmux.hMaxRequestTimes ?? undefined,
+              h_keep_alive_period: hostData.transport_settings.xhttp_settings.xmux.hKeepAlivePeriod ?? undefined,
+            } as any,
+          },
+        }
+      }
+      
       await modifyHost(host.id, {
-        remark: host.remark || '',
-        address: host.address || [],
-        port: host.port,
-        inbound_tag: host.inbound_tag || '',
-        status: host.status || [],
-        host: host.host || [],
-        sni: host.sni || [],
-        path: host.path || '',
-        security: host.security || 'inbound_default',
-        alpn: !host.alpn || host.alpn.length === 0 ? undefined : host.alpn,
-        fingerprint: host.fingerprint === '' ? undefined : host.fingerprint,
-        allowinsecure: host.allowinsecure || false,
+        ...hostData,
+        mux_settings: transformedMuxSettings as any,
+        transport_settings: transformedTransportSettings as any,
         is_disabled: !host.is_disabled,
-        random_user_agent: host.random_user_agent || false,
-        use_sni_as_host: host.use_sni_as_host || false,
-        priority: host.priority || 0,
-        ech_config_list: host.ech_config_list,
-        fragment_settings: host.fragment_settings,
-        noise_settings: host.noise_settings,
-        mux_settings: host.mux_settings,
-        transport_settings: host.transport_settings as any, // Type cast needed due to Output/Input mismatch
-        http_headers: host.http_headers || {},
-      })
+      } as any)
 
       toast.success(
         t(host.is_disabled ? 'host.enableSuccess' : 'host.disableSuccess', {
