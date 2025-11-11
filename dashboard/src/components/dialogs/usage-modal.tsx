@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { Dialog, DialogContent } from '../ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card'
 import { ChartContainer, ChartTooltip, ChartConfig } from '../ui/chart'
 import { PieChart, TrendingUp, Calendar, Info } from 'lucide-react'
@@ -222,15 +222,7 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
         </span>
       </div>
 
-      {isUserUsageData ? (
-        // User usage data - show simple node label
-        <div className={`flex flex-col gap-1`}>
-          <div className={`flex items-center gap-1 text-[10px] text-muted-foreground ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className="h-1.5 w-1.5 flex-shrink-0 rounded-full sm:h-2 sm:w-2" style={{ backgroundColor: 'hsl(var(--primary))' }} />
-            <span className="max-w-[60px] overflow-hidden truncate text-ellipsis sm:max-w-[80px]">{t('statistics.allNodes', { defaultValue: 'All Nodes' })}</span>
-          </div>
-        </div>
-      ) : (
+      {!isUserUsageData &&(
         // Node breakdown data
         <div className={`grid gap-1 sm:gap-1.5 ${nodesToShow.length > (isMobile ? 2 : 3) ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {nodesToShow.map(node => (
@@ -242,7 +234,7 @@ function CustomBarTooltip({ active, payload, chartConfig, dir, period }: Tooltip
                 </span>
               </span>
               <span className={`flex items-center gap-0.5 text-[9px] text-muted-foreground sm:text-[10px] ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-                <span className="font-mono">{node.usage.toFixed(2)} GB</span>
+                <span dir="ltr" className="font-mono">{node.usage.toFixed(2)} GB</span>
               </span>
             </div>
           ))}
@@ -656,6 +648,10 @@ const UsageModal = ({ open, onClose, username }: UsageModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl p-0.5">
+        <DialogTitle className="sr-only">{t('usersTable.usageChart', { defaultValue: 'Usage Chart' })}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Showing total usage for the selected period
+        </DialogDescription>
         <Card className="w-full border-none shadow-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-center text-lg sm:text-xl">{t('usersTable.usageChart', { defaultValue: 'Usage Chart' })}</CardTitle>
