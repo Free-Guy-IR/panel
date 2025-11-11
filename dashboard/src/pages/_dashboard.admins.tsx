@@ -12,6 +12,7 @@ import type { AdminDetails } from '@/service/api'
 import AdminsStatistics from '@/components/admin-statistics.tsx'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { queryClient } from '@/utils/query-client.ts'
+import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 
 const initialDefaultValues: Partial<AdminFormValues> = {
   username: '',
@@ -50,6 +51,7 @@ export default function AdminsPage() {
   const modifyDisableAllAdminUsers = useDisableAllActiveUsers()
   const modifyActivateAllAdminUsers = useActivateAllDisabledUsers()
   const resetUsageMutation = useResetAdminUsage()
+  const handleError = useDynamicErrorHandler()
   const handleDelete = async (admin: AdminDetails) => {
     try {
       await removeAdminMutation.mutateAsync({
@@ -64,11 +66,11 @@ export default function AdminsPage() {
       // Invalidate nodes queries
       queryClient.invalidateQueries({ queryKey: ['/api/admins'] })
     } catch (error) {
-      toast.error(t('error', { defaultValue: 'Error' }), {
-        description: t('admins.deleteFailed', {
-          name: admin.username,
-          defaultValue: 'Failed to delete node «{{name}}»',
-        }),
+      handleError({
+        error,
+        fields: [],
+        form,
+        contextKey: 'admins',
       })
     }
   }
