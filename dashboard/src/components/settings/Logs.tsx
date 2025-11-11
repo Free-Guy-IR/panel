@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useWebSocket } from 'react-use-websocket/dist/lib/use-websocket'
-import { ReadyState } from 'react-use-websocket'
 import debounce from 'lodash.debounce'
 import { getAuthToken } from '@/utils/authStorage'
-import { useTranslation } from 'react-i18next'
 
 export const MAX_NUMBER_OF_LOGS = 500
 
@@ -11,16 +9,6 @@ const joinPaths = (paths: string[]) => {
   return paths
     .map(path => path.replace(/(^\/+|\/+$)/g, '')) // Remove leading and trailing slashes
     .join('/')
-}
-
-const getStatus = (status: string) => {
-  return {
-    [ReadyState.CONNECTING]: 'connecting',
-    [ReadyState.OPEN]: 'connected',
-    [ReadyState.CLOSING]: 'closed',
-    [ReadyState.CLOSED]: 'closed',
-    [ReadyState.UNINSTANTIATED]: 'closed',
-  }[status]
 }
 
 const getWebsocketUrl = (nodeID: string) => {
@@ -37,7 +25,7 @@ const getWebsocketUrl = (nodeID: string) => {
 
 const Logs = ({ className }: { className?: string }) => {
   const [logs, setLogs] = useState<string[]>([])
-  const [selectedNode, setSelectedNode] = useState<string>('')
+  const [selectedNode] = useState<string>('')
   const logsDiv = useRef<HTMLDivElement | null>(null)
 
   const updateLogs = useCallback(
@@ -52,7 +40,7 @@ const Logs = ({ className }: { className?: string }) => {
     [],
   )
 
-  const { readyState } = useWebSocket(getWebsocketUrl(selectedNode), {
+  useWebSocket(getWebsocketUrl(selectedNode), {
     onMessage: (e: any) => {
       const newLogs = e.data.split('\n').filter((line: string) => line.trim() !== '') // Remove empty lines
       setLogs(prevLogs => {

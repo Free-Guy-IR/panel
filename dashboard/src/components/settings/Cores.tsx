@@ -9,7 +9,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { queryClient } from '@/utils/query-client'
-import { Button } from '@/components/ui/button'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
@@ -55,9 +54,10 @@ export default function Cores({ isDialogOpen, onOpenChange, cores, onEditCore, o
       config: JSON.stringify(core.config, null, 2),
       excluded_inbound_ids: core.exclude_inbound_tags
         ? core.exclude_inbound_tags
+            .join(',')
             .split(',')
-            .map(id => id.trim())
-            .filter(Boolean)
+            .map((id: string) => id.trim())
+            .filter((id: string) => id.trim() !== '')
         : [],
     })
     onOpenChange?.(true)
