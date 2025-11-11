@@ -1,4 +1,4 @@
-import GroupsSelector from '@/components/common/GroupsSelector'
+import GroupsSelector from '@/components/common/groups-selector'
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'

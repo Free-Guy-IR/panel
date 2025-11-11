@@ -11,7 +11,7 @@ import { CalendarIcon, Plus, Minus } from 'lucide-react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { Users2, User, Shield } from 'lucide-react'
-import { SelectorPanel } from '@/components/bulk/SelectorPanel'
+import { SelectorPanel } from '@/components/bulk/selector-panel'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 

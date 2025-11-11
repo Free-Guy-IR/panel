@@ -1,5 +1,5 @@
 import PageHeader from '@/components/page-header'
-import MainContent from '@/components/statistics/Statistics'
+import MainContent from '@/components/statistics/statistics'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getGetSystemStatsQueryKey, getSystemStats, useGetNodes, NodeResponse } from '@/service/api'

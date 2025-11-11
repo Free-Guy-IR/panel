@@ -1,5 +1,5 @@
 import PageHeader from '@/components/page-header'
-import PageTransition from '@/components/PageTransition'
+import PageTransition from '@/components/page-transition'
 import { getDocsUrl } from '@/utils/docs-url'
 import { Cpu, LucideIcon, Share2, Plus, FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'

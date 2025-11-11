@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { queryClient } from '@/utils/query-client'
 import { NodeResponse, useRemoveNode, useSyncNode, reconnectNode } from '@/service/api'
-import UserOnlineStatsDialog from '../dialogs/UserOnlineStatsModal'
+import UserOnlineStatsDialog from '../dialogs/user-online-stats-modal'
 
 interface NodeProps {
   node: NodeResponse

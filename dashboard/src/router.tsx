@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react'
 import { useAdmin } from '@/hooks/use-admin'
 import { getCurrentAdmin } from '@/service/api'
 import { createHashRouter, Navigate, RouteObject } from 'react-router'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/loading-spinner'
 // Replace direct imports with lazy imports for route-level components
 const CoreSettings = lazy(() => import('@/pages/_dashboard.nodes.cores'))
 const ThemePage = lazy(() => import('@/pages/_dashboard.settings.theme'))

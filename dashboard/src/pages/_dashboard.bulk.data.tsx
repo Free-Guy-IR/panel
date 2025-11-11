@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Users2, User, Shield, HardDrive, Plus, Minus } from 'lucide-react'
-import { SelectorPanel } from '@/components/bulk/SelectorPanel'
+import { SelectorPanel } from '@/components/bulk/selector-panel'
 import { formatBytes } from '@/utils/formatByte'
 
 // Helper function to convert GB to bytes

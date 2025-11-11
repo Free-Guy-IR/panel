@@ -1,5 +1,5 @@
-import { Footer } from '@/components/Footer'
-import { Language } from '@/components/Language'
+import { Footer } from '@/components/footer'
+import { Language } from '@/components/language'
 import { useTheme } from '@/components/theme-provider'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'

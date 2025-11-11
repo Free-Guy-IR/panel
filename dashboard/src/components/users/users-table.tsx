@@ -10,9 +10,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import UserModal from '../dialogs/UserModal'
+import UserModal from '../dialogs/user-modal'
 import { PaginationControls } from './filters'
-import AdvanceSearchModal, { AdvanceSearchFormValue } from '@/components/dialogs/AdvanceSearchModal.tsx'
+import AdvanceSearchModal, { AdvanceSearchFormValue } from '@/components/dialogs/advance-search-modal.tsx'
 
 const UsersTable = memo(() => {
   const { t } = useTranslation()

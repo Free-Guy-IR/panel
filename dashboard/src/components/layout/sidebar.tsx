@@ -1,6 +1,6 @@
 import { GithubStar } from '@/components/github-star'
 import { GoalProgress } from '@/components/goal-progress'
-import { Language } from '@/components/Language'
+import { Language } from '@/components/language'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
 import { NavUser } from '@/components/nav-user'

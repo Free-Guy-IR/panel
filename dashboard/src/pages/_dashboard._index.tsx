@@ -1,14 +1,14 @@
 import AdminStatisticsCard from '@/components/dashboard/admin-statistics-card'
-import DashboardStatistics from '@/components/dashboard/DashboardStatistics'
-import AdminModal, { adminFormSchema, AdminFormValues } from '@/components/dialogs/AdminModal'
-import { coreConfigFormSchema, CoreConfigFormValues } from '@/components/dialogs/CoreConfigModal'
-import GroupModal, { groupFormSchema, GroupFormValues } from '@/components/dialogs/GroupModal'
-import HostModal from '@/components/dialogs/HostModal'
-import NodeModal, { nodeFormSchema, NodeFormValues } from '@/components/dialogs/NodeModal'
-import QuickActionsModal from '@/components/dialogs/ShortcutsModal'
-import UserModal from '@/components/dialogs/UserModal'
-import UserTemplateModal, { userTemplateFormSchema, UserTemplatesFromValue } from '@/components/dialogs/UserTemplateModal'
-import { HostFormValues } from '@/components/hosts/Hosts'
+import DashboardStatistics from '@/components/dashboard/dashboard-statistics'
+import AdminModal, { adminFormSchema, AdminFormValues } from '@/components/dialogs/admin-modal'
+import { coreConfigFormSchema, CoreConfigFormValues } from '@/components/dialogs/core-config-modal'
+import GroupModal, { groupFormSchema, GroupFormValues } from '@/components/dialogs/group-modal'
+import HostModal from '@/components/dialogs/host-modal'
+import NodeModal, { nodeFormSchema, NodeFormValues } from '@/components/dialogs/node-modal'
+import QuickActionsModal from '@/components/dialogs/shortcuts-modal'
+import UserModal from '@/components/dialogs/user-modal'
+import UserTemplateModal, { userTemplateFormSchema, UserTemplatesFromValue } from '@/components/dialogs/user-template-modal'
+import { HostFormValues } from '@/components/hosts/hosts'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -30,7 +30,7 @@ import { toast } from 'sonner'
 import PageHeader from '@/components/page-header'
 import { getDefaultUserForm, UseEditFormValues, UseFormValues } from './_dashboard.users'
 // Lazy load CoreConfigModal to prevent Monaco Editor from loading until needed
-const CoreConfigModal = lazy(() => import('@/components/dialogs/CoreConfigModal'))
+const CoreConfigModal = lazy(() => import('@/components/dialogs/core-config-modal'))
 
 const PAGE_SIZE = 20
 

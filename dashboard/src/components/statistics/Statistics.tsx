@@ -2,12 +2,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { NodeRealtimeStats, SystemStats, useGetNodes, useRealtimeNodeStats } from '@/service/api'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CostumeBarChart } from '../charts/CostumeBarChart'
-import { EmptyState } from '../charts/EmptyState'
-import UserSubUpdatePieChart from '../charts/UserSubUpdatePieChart'
-import SystemStatisticsSection from './SystemStatisticsSection'
-import { AllNodesStackedBarChart } from '../charts/AllNodesStackedBarChart'
-import { AreaCostumeChart } from '../charts/AreaCostumeChart'
+import { CostumeBarChart } from '../charts/costume-bar-chart'
+import { EmptyState } from '../charts/empty-state'
+import UserSubUpdatePieChart from '../charts/user-sub-update-pie-chart'
+import SystemStatisticsSection from './system-statistics-section'
+import { AllNodesStackedBarChart } from '../charts/all-nodes-stacked-bar-chart'
+import { AreaCostumeChart } from '../charts/area-costume-chart'
 
 interface StatisticsProps {
   data?: SystemStats

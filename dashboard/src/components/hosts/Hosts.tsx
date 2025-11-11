@@ -8,8 +8,8 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
-import HostModal from '../dialogs/HostModal'
-import SortableHost from './SortableHost'
+import HostModal from '../dialogs/host-modal'
+import SortableHost from './sortable-host'
 
 interface Brutal {
   enable?: boolean

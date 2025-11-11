@@ -11,7 +11,7 @@ import { TrendingUp, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Cell, Pie, PieChart } from 'recharts'
-import { ChartEmptyState } from './EmptyState'
+import { ChartEmptyState } from './empty-state'
 
 interface UserSubUpdatePieChartProps {
   username?: string

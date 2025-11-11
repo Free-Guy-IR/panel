@@ -8,12 +8,12 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { getUsage, Period, type NodeUsageStat } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
 import { Skeleton } from '@/components/ui/skeleton'
-import { TimeRangeSelector } from '@/components/common/TimeRangeSelector'
-import { EmptyState } from './EmptyState'
+import { TimeRangeSelector } from '@/components/common/time-range-selector'
+import { EmptyState } from './empty-state'
 import { TrendingUp, Upload, Download, Calendar } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import { TooltipProps } from 'recharts'
-import TimeSelector from './TimeSelector'
+import TimeSelector from './time-selector'
 
 type DataPoint = {
   time: string

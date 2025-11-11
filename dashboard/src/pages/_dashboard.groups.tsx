@@ -1,7 +1,7 @@
 import PageHeader from '@/components/page-header'
 import { Separator } from '@/components/ui/separator'
 import { Plus } from 'lucide-react'
-import Groups from '@/components/groups/Groups'
+import Groups from '@/components/groups/groups'
 import { useState } from 'react'
 
 export default function GroupsPage() {
