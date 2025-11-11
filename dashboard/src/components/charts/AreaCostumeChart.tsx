@@ -117,7 +117,8 @@ const CustomTooltip = ({ active, payload, period, viewMode }: any) => {
         const now = new Date()
         const timeParts = data.time.split(':')
         if (timeParts.length >= 2) {
-          now.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), 0)
+          const seconds = timeParts.length >= 3 ? parseInt(timeParts[2]) : 0
+          now.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), seconds)
         }
 
         if (i18n.language === 'fa') {
@@ -128,6 +129,7 @@ const CustomTooltip = ({ active, payload, period, viewMode }: any) => {
               day: '2-digit',
               hour: '2-digit',
               minute: '2-digit',
+              second: '2-digit',
               hour12: false,
             })
             .replace(',', '')
@@ -139,6 +141,7 @@ const CustomTooltip = ({ active, payload, period, viewMode }: any) => {
               day: '2-digit',
               hour: '2-digit',
               minute: '2-digit',
+              second: '2-digit',
               hour12: false,
             })
             .replace(',', '')
@@ -265,7 +268,7 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats }: AreaCo
 
     try {
       const now = new Date()
-      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
 
       let cpuUsage = 0
       let ramUsage = 0
