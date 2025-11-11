@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { AdminDetails } from '@/service/api'
-import { useGetAdmins } from '@/service/api'
+import { useGetAdmins, useRemoveAllUsers } from '@/service/api'
 import { DataTable } from './data-table'
 import { setupColumns } from './columns'
 import { Filters } from './filters'
@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { getAdminsPerPageLimitSize, setAdminsPerPageLimitSize } from '@/utils/userPreferenceStorage'
+import { toast } from 'sonner'
+import { queryClient } from '@/utils/query-client'
 
 interface AdminFilters {
   sort?: string
@@ -103,6 +105,28 @@ const ResetUsersUsageConfirmationDialog = ({ adminUsername, isOpen, onClose, onC
   )
 }
 
+const RemoveAllUsersConfirmationDialog = ({ adminUsername, isOpen, onClose, onConfirm }: { adminUsername: string; isOpen: boolean; onClose: () => void; onConfirm: () => void }) => {
+  const { t } = useTranslation()
+  const dir = useDirDetection()
+
+  return (
+    <AlertDialog open={isOpen} onOpenChange={onClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader className={cn(dir === 'rtl' && 'sm:text-right')}>
+          <AlertDialogTitle>{t('admins.removeAllUsers')}</AlertDialogTitle>
+          <AlertDialogDescription className="flex items-center gap-2">
+            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('removeAllUsers.prompt', { name: adminUsername }) }} />
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onClose}>{t('cancel')}</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>{t('confirm')}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetUsage }: AdminsTableProps) {
   const { t } = useTranslation()
   const [currentPage, setCurrentPage] = useState(0)
@@ -115,12 +139,15 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [statusToggleDialogOpen, setStatusToggleDialogOpen] = useState(false)
   const [resetUsersUsageDialogOpen, setResetUsersUsageDialogOpen] = useState(false)
+  const [removeAllUsersDialogOpen, setRemoveAllUsersDialogOpen] = useState(false)
   const [adminToDelete, setAdminToDelete] = useState<AdminDetails | null>(null)
   const [adminToToggleStatus, setAdminToToggleStatus] = useState<AdminDetails | null>(null)
   const [adminToReset, setAdminToReset] = useState<string | null>(null)
+  const [adminToRemoveAllUsers, setAdminToRemoveAllUsers] = useState<string | null>(null)
 
   const { data: totalAdmins } = useGetAdmins()
   const { data: adminsData, refetch, isLoading, isFetching } = useGetAdmins(filters)
+  const removeAllUsersMutation = useRemoveAllUsers()
 
   // Update filters when pagination changes
   useEffect(() => {
@@ -171,6 +198,37 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
       onResetUsage(adminToReset)
       setResetUsersUsageDialogOpen(false)
       setAdminToReset(null)
+    }
+  }
+
+  const handleRemoveAllUsersClick = (adminUsername: string) => {
+    setAdminToRemoveAllUsers(adminUsername)
+    setRemoveAllUsersDialogOpen(true)
+  }
+
+  const handleConfirmRemoveAllUsers = async () => {
+    if (adminToRemoveAllUsers) {
+      try {
+        await removeAllUsersMutation.mutateAsync({
+          username: adminToRemoveAllUsers,
+        })
+        toast.success(t('success', { defaultValue: 'Success' }), {
+          description: t('admins.removeAllUsersSuccess', {
+            name: adminToRemoveAllUsers,
+            defaultValue: `All users under admin "{name}" have been removed successfully`,
+          }),
+        })
+        queryClient.invalidateQueries({ queryKey: ['/api/admins'] })
+        setRemoveAllUsersDialogOpen(false)
+        setAdminToRemoveAllUsers(null)
+      } catch (error) {
+        toast.error(t('error', { defaultValue: 'Error' }), {
+          description: t('admins.removeAllUsersFailed', {
+            name: adminToRemoveAllUsers,
+            defaultValue: `Failed to remove all users under admin "{name}"`,
+          }),
+        })
+      }
     }
   }
   const handleConfirmDelete = async () => {
@@ -251,6 +309,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
     onDelete: handleDeleteClick,
     toggleStatus: handleStatusToggleClick,
     onResetUsage: handleResetUsersUsageClick,
+    onRemoveAllUsers: handleRemoveAllUsersClick,
   })
 
   return (
@@ -263,6 +322,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
         onDelete={handleDeleteClick}
         onToggleStatus={handleStatusToggleClick}
         onResetUsage={handleResetUsersUsageClick}
+        onRemoveAllUsers={handleRemoveAllUsersClick}
         setStatusToggleDialogOpen={setStatusToggleDialogOpen}
         isLoading={isLoading}
         isFetching={isFetching}
@@ -286,6 +346,14 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
           onConfirm={handleConfirmResetUsersUsage}
           isOpen={resetUsersUsageDialogOpen}
           onClose={() => setResetUsersUsageDialogOpen(false)}
+        />
+      )}
+      {adminToRemoveAllUsers && (
+        <RemoveAllUsersConfirmationDialog
+          adminUsername={adminToRemoveAllUsers}
+          onConfirm={handleConfirmRemoveAllUsers}
+          isOpen={removeAllUsersDialogOpen}
+          onClose={() => setRemoveAllUsersDialogOpen(false)}
         />
       )}
     </div>

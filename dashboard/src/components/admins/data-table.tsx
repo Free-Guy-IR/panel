@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 import React, { useState, useMemo, memo, useCallback } from 'react'
-import { ChevronDown, Edit2, Power, PowerOff, RefreshCw, Trash2, User, UserRound, LoaderCircle } from 'lucide-react'
+import { ChevronDown, Edit2, Power, PowerOff, RefreshCw, Trash2, User, UserRound, UserX, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AdminDetails } from '@/service/api'
 import { useTranslation } from 'react-i18next'
@@ -19,6 +19,7 @@ interface DataTableProps<TData extends AdminDetails> {
   onToggleStatus: (admin: AdminDetails) => void
   setStatusToggleDialogOpen: (isOpen: boolean) => void
   onResetUsage: (adminUsername: string) => void
+  onRemoveAllUsers?: (adminUsername: string) => void
   isLoading?: boolean
   isFetching?: boolean
 }
@@ -30,12 +31,14 @@ const ExpandedRowContent = memo(
     onDelete,
     onToggleStatus,
     onResetUsage,
+    onRemoveAllUsers,
   }: {
     row: AdminDetails
     onEdit: (admin: AdminDetails) => void
     onDelete: (admin: AdminDetails) => void
     onToggleStatus: (admin: AdminDetails) => void
     onResetUsage: (adminUsername: string) => void
+    onRemoveAllUsers?: (adminUsername: string) => void
   }) => {
     const { t } = useTranslation()
     const isMobile = useIsMobile()
@@ -71,6 +74,11 @@ const ExpandedRowContent = memo(
           <Button variant="ghost" size="icon" onClick={() => onResetUsage(row.username)} title={t('admins.resetUsersUsage')}>
             <RefreshCw className="h-4 w-4" />
           </Button>
+          {onRemoveAllUsers && (
+            <Button variant="ghost" size="icon" onClick={() => onRemoveAllUsers(row.username)} title={t('admins.removeAllUsers')}>
+              <UserX className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={() => onDelete(row)} title={t('delete')}>
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -80,7 +88,7 @@ const ExpandedRowContent = memo(
   },
 )
 
-export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, onDelete, onToggleStatus, onResetUsage, isLoading = false, isFetching = false }: DataTableProps<TData>) {
+export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, onDelete, onToggleStatus, onResetUsage, onRemoveAllUsers, isLoading = false, isFetching = false }: DataTableProps<TData>) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const { t } = useTranslation()
   const table = useReactTable({
@@ -202,7 +210,7 @@ export function DataTable<TData extends AdminDetails>({ columns, data, onEdit, o
                     {expandedRow === row.id && (
                       <TableRow className="border-b hover:!bg-inherit md:hidden">
                         <TableCell colSpan={columns.length} className="p-0 text-sm">
-                          <ExpandedRowContent row={row.original} onEdit={onEdit} onDelete={onDelete} onToggleStatus={onToggleStatus} onResetUsage={onResetUsage} />
+                          <ExpandedRowContent row={row.original} onEdit={onEdit} onDelete={onDelete} onToggleStatus={onToggleStatus} onResetUsage={onResetUsage} onRemoveAllUsers={onRemoveAllUsers} />
                         </TableCell>
                       </TableRow>
                     )}

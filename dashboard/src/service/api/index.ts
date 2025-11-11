@@ -2556,6 +2556,52 @@ export const useActivateAllDisabledUsers = <
 }
 
 /**
+ * Remove all users under a specific admin.
+ * @summary Remove All Users
+ */
+export const removeAllUsers = (username: string) => {
+  return orvalFetcher<unknown>({ url: `/api/admin/${username}/users`, method: 'DELETE' })
+}
+
+export const getRemoveAllUsersMutationOptions = <
+  TData = Awaited<ReturnType<typeof removeAllUsers>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { username: string }, TContext>
+}) => {
+  const mutationKey = ['removeAllUsers']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeAllUsers>>, { username: string }> = props => {
+    const { username } = props ?? {}
+
+    return removeAllUsers(username)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { username: string }, TContext>
+}
+
+export type RemoveAllUsersMutationResult = NonNullable<Awaited<ReturnType<typeof removeAllUsers>>>
+
+export type RemoveAllUsersMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Remove All Users
+ */
+export const useRemoveAllUsers = <TData = Awaited<ReturnType<typeof removeAllUsers>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { username: string }, TContext>
+}): UseMutationResult<TData, TError, { username: string }, TContext> => {
+  const mutationOptions = getRemoveAllUsersMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
  * Resets usage of admin.
  * @summary Reset Admin Usage
  */

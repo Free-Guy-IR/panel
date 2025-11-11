@@ -464,6 +464,9 @@
     "resetUsersUsage": "ریست مصرف کاربران توسط ادمین",
     "resetUsageSuccess": "مصرف کاربر «{{name}}» با موفقیت توسط ادمین ریست شد",
     "resetUsageFailed": "ریست مصرف کاربر «{{name}}» توسط ادمین ناموفق بود",
+    "removeAllUsers": "حذف همه کاربران",
+    "removeAllUsersSuccess": "همه کاربران تحت مدیریت ادمین «{{name}}» با موفقیت حذف شدند",
+    "removeAllUsersFailed": "حذف همه کاربران تحت مدیریت ادمین «{{name}}» ناموفق بود",
     "reset": "ریست مصرف",
     "discordId": "شناسه دیسکورد",
     "lifetime.used.traffic": "مجموع کل",
@@ -487,6 +490,7 @@
     "comingSoon": "به زودی"
   },
   "resetUsersUsage.prompt": "آیا مطمئن هستید که می‌خواهید مصرف کاربر ادمین <b>{{name}}</b> را ریست کنید؟",
+  "removeAllUsers.prompt": "آیا مطمئن هستید که می‌خواهید همه کاربران تحت مدیریت ادمین <b>{{name}}</b> را حذف کنید؟ این عمل قابل بازگشت نیست.",
   "admin.disable": "غیر فعالسازی مدیر",
   "admin.enable": "فعالسازی مدیر",
   "deleteAdmin.prompt": "آیا مطمئن هستید که می‌خواهید مدیر <b>{{name}}</b> را حذف کنید؟",

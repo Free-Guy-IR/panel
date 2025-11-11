@@ -1,6 +1,6 @@
 import { AdminDetails } from '@/service/api'
 import { ColumnDef } from '@tanstack/react-table'
-import { ChartPie, ChevronDown, MoreVertical, Pen, Power, PowerOff, RefreshCw, Trash2, User } from 'lucide-react'
+import { ChartPie, ChevronDown, MoreVertical, Pen, Power, PowerOff, RefreshCw, Trash2, User, UserX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu.tsx'
 import { formatBytes } from '@/utils/formatByte.ts'
@@ -14,6 +14,7 @@ interface ColumnSetupProps {
   onDelete: (admin: AdminDetails) => void
   toggleStatus: (admin: AdminDetails) => void
   onResetUsage: (adminUsername: string) => void
+  onRemoveAllUsers: (adminUsername: string) => void
 }
 
 const createSortButton = (
@@ -42,7 +43,7 @@ const createSortButton = (
   )
 }
 
-export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleStatus, onResetUsage }: ColumnSetupProps): ColumnDef<AdminDetails>[] => [
+export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleStatus, onResetUsage, onRemoveAllUsers }: ColumnSetupProps): ColumnDef<AdminDetails>[] => [
   {
     accessorKey: 'username',
     header: () => createSortButton('username', 'username', t, handleSort, filters),
@@ -156,6 +157,17 @@ export const setupColumns = ({ t, handleSort, filters, onEdit, onDelete, toggleS
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               {t('admins.reset')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive"
+              onSelect={e => {
+                e.preventDefault()
+                e.stopPropagation()
+                onRemoveAllUsers(row.original.username)
+              }}
+            >
+              <UserX className="mr-2 h-4 w-4" />
+              {t('admins.removeAllUsers')}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive"

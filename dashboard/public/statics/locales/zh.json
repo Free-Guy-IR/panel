@@ -574,6 +574,9 @@
     "resetUsersUsage": "管理员重置用户使用情况",
     "resetUsageSuccess": "管理员已成功重置用户「{{name}}」的使用情况",
     "resetUsageFailed": "管理员重置用户「{{name}}」的使用情况失败",
+    "removeAllUsers": "删除所有用户",
+    "removeAllUsersSuccess": "管理员「{{name}}」下的所有用户已成功删除",
+    "removeAllUsersFailed": "删除管理员「{{name}}」下的所有用户失败",
     "reset": "重置使用情况",
     "discordId": "Discord ID",
     "lifetime.used.traffic": "总计",
@@ -597,6 +600,7 @@
     "comingSoon": "即将推出"
   },
   "resetUsersUsage.prompt": "你确定要重置管理员用户<b>{{name}}</b>的使用情况吗？",
+  "removeAllUsers.prompt": "你确定要删除管理员<b>{{name}}</b>下的所有用户吗？此操作无法撤销。",
   "admin.disable": "管理员已禁用",
   "admin.enable": "管理员已启用",
   "deleteAdmin.prompt": "您确定要删除管理员<b>{{name}}</b>吗？",

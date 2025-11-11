@@ -575,6 +575,9 @@
     "resetUsersUsage": "Admin Reset Users Usage",
     "resetUsageSuccess": "Admin «{{name}}» user usage has been reset successfully",
     "resetUsageFailed": "Failed to reset admin «{{name}}» user usage",
+    "removeAllUsers": "Remove All Users",
+    "removeAllUsersSuccess": "All users under admin «{{name}}» have been removed successfully",
+    "removeAllUsersFailed": "Failed to remove all users under admin «{{name}}»",
     "reset": "Reset usage",
     "discordId": "Discord ID",
     "lifetime.used.traffic": "Total",
@@ -598,6 +601,7 @@
     "comingSoon": "Coming Soon"
   },
   "resetUsersUsage.prompt": "Are you sure you want to reset the <b>{{name}}</b> admin users usage?",
+  "removeAllUsers.prompt": "Are you sure you want to remove all users under admin <b>{{name}}</b>? This action cannot be undone.",
   "admin.disable": "Disabled Admin",
   "admin.enable": "Enabled Admin",
   "deleteAdmin.prompt": "Are you sure you want to remove the <b>{{name}}</b> admin?",
