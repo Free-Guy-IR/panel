@@ -14,11 +14,12 @@ from app.db.crud.admin import (
     update_admin,
 )
 from app.db.crud.bulk import activate_all_disabled_users, disable_all_active_users
-from app.db.crud.user import get_users
+from app.db.crud.user import get_users, remove_users
 from app.db.models import Admin as DBAdmin
 from app.models.admin import AdminCreate, AdminDetails, AdminModify
 from app.node import node_manager
 from app.operation import BaseOperation, OperatorType
+from app.operation.user import UserOperation
 from app.utils.logger import get_logger
 
 logger = get_logger("admin-operation")
@@ -125,6 +126,32 @@ class AdminOperation(BaseOperation):
         await node_manager.update_users(users)
 
         logger.info(f'Admin "{username}" users has been activated by admin "{admin.username}"')
+
+    async def remove_all_users(self, db: AsyncSession, username: str, admin: AdminDetails) -> int:
+        """Delete all users that belong to the specified admin."""
+        db_admin = await self.get_validated_admin(db, username=username)
+        target_username = db_admin.username
+
+        if self.operator_type != OperatorType.CLI and db_admin.is_sudo:
+            await self.raise_error(message="You're not allowed to delete sudo admin users.", code=403)
+
+        users = await get_users(db, admin=db_admin)
+        if not users:
+            return 0
+
+        user_operation = UserOperation(self.operator_type)
+        serialized_users = [await user_operation.validate_user(user) for user in users]
+
+        await remove_users(db, users)
+
+        for user in serialized_users:
+            await node_manager.remove_user(user)
+            asyncio.create_task(notification.remove_user(user, admin))
+
+        logger.info(
+            f'Admin "{admin.username}" deleted {len(serialized_users)} users belonging to admin "{target_username}"'
+        )
+        return len(serialized_users)
 
     async def reset_admin_usage(self, db: AsyncSession, username: str, admin: AdminDetails) -> AdminDetails:
         db_admin = await self.get_validated_admin(db, username=username)

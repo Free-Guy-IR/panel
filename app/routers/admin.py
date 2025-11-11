@@ -1,6 +1,8 @@
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+
 from app import notification
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminCreate, AdminDetails, AdminModify, Token
@@ -8,6 +10,7 @@ from app.operation import OperatorType
 from app.operation.admin import AdminOperation
 from app.utils import responses
 from app.utils.jwt import create_admin_token
+
 from .authentication import check_sudo_admin, get_current, validate_admin, validate_mini_app_admin
 
 router = APIRouter(tags=["Admin"], prefix="/api/admin", responses={401: responses._401, 403: responses._403})
@@ -145,6 +148,15 @@ async def activate_all_disabled_users(
     """Activate all disabled users under a specific admin"""
     await admin_operator.activate_all_disabled_users(db, username=username, admin=admin)
     return {}
+
+
+@router.delete("/{username}/users", responses={403: responses._403, 404: responses._404})
+async def remove_all_users(
+    username: str, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(check_sudo_admin)
+):
+    """Remove all users under a specific admin."""
+    deleted = await admin_operator.remove_all_users(db, username=username, admin=admin)
+    return {"detail": f"operation has been successfuly done {deleted} users deleted"}
 
 
 @router.post("/{username}/reset", response_model=AdminDetails, responses={404: responses._404})
