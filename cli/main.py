@@ -11,7 +11,7 @@ from typing import Optional
 import typer
 
 from cli import console
-from cli.admin import create_admin, delete_admin, list_admins, modify_admin, reset_admin_usage
+from cli.admin import create_admin, delete_admin, delete_admin_users, list_admins, modify_admin, reset_admin_usage
 from cli.system import show_status
 
 # Initialize Typer app
@@ -37,18 +37,23 @@ def admins(
     create: Optional[str] = typer.Option(None, "--create", "-c", help="Create new admin"),
     sudo: bool = typer.Option(False, "--sudo", "-s", help="Create a sudo admin."),
     delete: Optional[str] = typer.Option(None, "--delete", "-d", help="Delete admin"),
+    delete_users: Optional[str] = typer.Option(
+        None, "--delete-users", "-u", help="Delete all users belonging to an admin"
+    ),
     modify: Optional[str] = typer.Option(None, "--modify", "-m", help="Modify admin"),
     disable: Optional[bool] = typer.Option(None, "--disable", help="Disable or enable the admin account."),
     reset_usage: Optional[str] = typer.Option(None, "--reset-usage", "-r", help="Reset admin usage"),
 ):
     """List & manage admin accounts."""
 
-    if list or not any([create, delete, modify, reset_usage]):
+    if list or not any([create, delete, delete_users, modify, reset_usage]):
         asyncio.run(list_admins())
     elif create:
         asyncio.run(create_admin(create, sudo))
     elif delete:
         asyncio.run(delete_admin(delete))
+    elif delete_users:
+        asyncio.run(delete_admin_users(delete_users))
     elif modify:
         asyncio.run(modify_admin(modify, disable))
     elif reset_usage:

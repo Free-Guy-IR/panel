@@ -27,22 +27,40 @@ SYSTEM_ADMIN = AdminDetails(
 
 class AdminDelete(BaseModal):
     def __init__(
-        self, db: AsyncSession, operation: AdminOperation, username: str, on_close: callable, *args, **kwargs
+        self,
+        db: AsyncSession,
+        operation: AdminOperation,
+        username: str,
+        on_close: callable,
+        user_count: int = 0,
+        *args,
+        **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.db = db
         self.operation = operation
         self.username = username
         self.on_close = on_close
+        self.user_count = user_count
 
     async def on_mount(self) -> None:
         """Ensure the first button is focused."""
-        yes_button = self.query_one("#no")
-        self.set_focus(yes_button)
+        focus_target = "#delete-users" if self.user_count > 0 else "#no"
+        self.set_focus(self.query_one(focus_target))
 
     def compose(self) -> ComposeResult:
         with Container(classes="modal-box-delete"):
-            yield Static("Are you sure about deleting this admin?", classes="title")
+            yield Static(f"Delete admin '{self.username}'?", classes="title")
+            if self.user_count > 0:
+                yield Static(
+                    f"This admin has {self.user_count} users.\nYou must delete them to remove the admin.",
+                    classes="subtitle",
+                )
+                yield Horizontal(
+                    Static("Delete all users:", classes="label"),
+                    Switch(animate=False, id="delete-users"),
+                    classes="switch-container",
+                )
             yield Horizontal(
                 Button("Yes", id="yes", variant="success"),
                 Button("No", id="no", variant="error"),
@@ -52,7 +70,63 @@ class AdminDelete(BaseModal):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "yes":
             try:
+                if self.user_count > 0:
+                    delete_users = self.query_one("#delete-users").value
+                    if delete_users:
+                        await self.operation.remove_all_users(self.db, self.username, SYSTEM_ADMIN)
+                        self.notify("Admin users deleted successfully", severity="success", title="Success")
                 await self.operation.remove_admin(self.db, self.username, SYSTEM_ADMIN)
+                self.on_close()
+            except ValueError as e:
+                self.notify(str(e), severity="error", title="Error")
+        await self.key_escape()
+
+
+class AdminDeleteUsers(BaseModal):
+    def __init__(
+        self,
+        db: AsyncSession,
+        operation: AdminOperation,
+        username: str,
+        on_close: callable,
+        user_count: int = 0,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.db = db
+        self.operation = operation
+        self.username = username
+        self.on_close = on_close
+        self.user_count = user_count
+
+    async def on_mount(self) -> None:
+        confirm_button = self.query_one("#cancel")
+        self.set_focus(confirm_button)
+
+    def compose(self) -> ComposeResult:
+        with Container(classes="modal-box-delete"):
+            yield Static(
+                f"Delete all users belonging to admin '{self.username}'?"
+                f"\nFound {self.user_count} user(s). This action cannot be undone.",
+                classes="title",
+            )
+            yield Horizontal(
+                Button("Delete Users", id="delete", variant="warning"),
+                Button("Cancel", id="cancel", variant="error"),
+                classes="button-container",
+            )
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "delete":
+            try:
+                deleted = await self.operation.remove_all_users(self.db, self.username, SYSTEM_ADMIN)
+                if deleted == 0:
+                    self.notify("No users were deleted (none found)", severity="warning", title="Info")
+                else:
+                    self.notify(
+                        f"{deleted} users deleted for admin '{self.username}'", severity="success", title="Success"
+                    )
                 self.on_close()
             except ValueError as e:
                 self.notify(str(e), severity="error", title="Error")
@@ -396,17 +470,15 @@ class AdminModifyModale(BaseModal):
 
         # Load existing notification preferences (notification_enable is a dict from SQLAlchemy)
         notif = self.admin.notification_enable or {}
-        master_on = any(
-            [
-                notif.get("create", False),
-                notif.get("modify", False),
-                notif.get("delete", False),
-                notif.get("status_change", False),
-                notif.get("reset_data_usage", False),
-                notif.get("data_reset_by_next", False),
-                notif.get("subscription_revoked", False),
-            ]
-        )
+        master_on = any([
+            notif.get("create", False),
+            notif.get("modify", False),
+            notif.get("delete", False),
+            notif.get("status_change", False),
+            notif.get("reset_data_usage", False),
+            notif.get("data_reset_by_next", False),
+            notif.get("subscription_revoked", False),
+        ])
 
         self.query_one("#notif_master").value = master_on
         self.query_one("#notif_create").value = notif.get("create", False)
@@ -549,6 +621,7 @@ class AdminContent(Static):
         ("m", "modify_admin", "Modify admin"),
         ("r", "reset_admin_usage", "Reset admin usage"),
         ("d", "delete_admin", "Delete admin"),
+        ("u", "delete_admin_users", "Delete admin users"),
         ("i", "import_from_env", "Import from env"),
         ("p", "previous_page", "Previous page"),
         ("n", "next_page", "Next page"),
@@ -648,7 +721,20 @@ class AdminContent(Static):
     async def action_delete_admin(self):
         if not self.table.columns:
             return
-        self.app.push_screen(AdminDelete(self.db, self.admin_operator, self.selected_admin, self._refresh_table))
+        admin = await self.admin_operator.get_validated_admin(self.db, username=self.selected_admin)
+        user_count = len(admin.users or [])
+        self.app.push_screen(
+            AdminDelete(self.db, self.admin_operator, self.selected_admin, self._refresh_table, user_count)
+        )
+
+    async def action_delete_admin_users(self):
+        if not self.table.columns:
+            return
+        admin = await self.admin_operator.get_validated_admin(self.db, username=self.selected_admin)
+        user_count = len(admin.users or [])
+        self.app.push_screen(
+            AdminDeleteUsers(self.db, self.admin_operator, self.selected_admin, self._refresh_table, user_count)
+        )
 
     def _refresh_table(self):
         self.run_worker(self.admins_list)

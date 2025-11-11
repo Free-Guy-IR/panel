@@ -117,16 +117,57 @@ class AdminCLI(BaseCLI):
 
         # Check if admin exists
         admins = await admin_op.get_admins(db)
-        if not any(admin.username == username for admin in admins):
+        target_admin = next((admin for admin in admins if admin.username == username), None)
+        if not target_admin:
             self.console.print(f"[red]Admin '{username}' not found[/red]")
             return
 
+        user_count = len(target_admin.users or [])
+
         if typer.confirm(f"Are you sure you want to delete admin '{username}'?"):
+            if user_count > 0:
+                message = (
+                    f"Admin '{username}' owns {user_count} users. Delete all of their users before removing the admin?"
+                )
+                delete_users = typer.confirm(message, default=False)
+                if delete_users:
+                    try:
+                        await admin_op.remove_all_users(db, username, SYSTEM_ADMIN)
+                        self.console.print(f"[green]Deleted {user_count} users belonging to admin '{username}'[/green]")
+                    except Exception as e:
+                        self.console.print(f"[red]Error deleting users: {e}[/red]")
+                        return
+
             try:
                 await admin_op.remove_admin(db, username, SYSTEM_ADMIN)
                 self.console.print(f"[green]Admin '{username}' deleted successfully[/green]")
             except Exception as e:
                 self.console.print(f"[red]Error deleting admin: {e}[/red]")
+
+    async def delete_admin_users(self, db, username: str):
+        """Delete all users belonging to an admin."""
+        admin_op = get_admin_operation()
+
+        admins = await admin_op.get_admins(db)
+        target_admin = next((admin for admin in admins if admin.username == username), None)
+        if not target_admin:
+            self.console.print(f"[red]Admin '{username}' not found[/red]")
+            return
+
+        if not typer.confirm(
+            f"Delete all users belonging to admin '{username}'? This action cannot be undone.", default=False
+        ):
+            self.console.print("[yellow]Operation cancelled[/yellow]")
+            return
+
+        try:
+            deleted = await admin_op.remove_all_users(db, username, SYSTEM_ADMIN)
+            if deleted == 0:
+                self.console.print(f"[yellow]Admin '{username}' has no users to delete[/yellow]")
+            else:
+                self.console.print(f"[green]Deleted {deleted} users belonging to admin '{username}'[/green]")
+        except Exception as e:
+            self.console.print(f"[red]Error deleting users: {e}[/red]")
 
     async def modify_admin(self, db, username: str, disable: bool):
         """Modify an admin account."""
@@ -193,17 +234,15 @@ class AdminCLI(BaseCLI):
             self.console.print("\n[cyan]Notification Preferences:[/cyan]")
             enable_notifications = typer.confirm(
                 "Enable user notifications for this admin?",
-                default=any(
-                    [
-                        current_admin.notification_enable["create"],
-                        current_admin.notification_enable["modify"],
-                        current_admin.notification_enable["delete"],
-                        current_admin.notification_enable["status_change"],
-                        current_admin.notification_enable["reset_data_usage"],
-                        current_admin.notification_enable["data_reset_by_next"],
-                        current_admin.notification_enable["subscription_revoked"],
-                    ]
-                ),
+                default=any([
+                    current_admin.notification_enable["create"],
+                    current_admin.notification_enable["modify"],
+                    current_admin.notification_enable["delete"],
+                    current_admin.notification_enable["status_change"],
+                    current_admin.notification_enable["reset_data_usage"],
+                    current_admin.notification_enable["data_reset_by_next"],
+                    current_admin.notification_enable["subscription_revoked"],
+                ]),
             )
 
             if enable_notifications:
@@ -314,6 +353,15 @@ async def delete_admin(username: str):
     async with GetDB() as db:
         try:
             await admin_cli.delete_admin(db, username)
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+
+async def delete_admin_users(username: str):
+    """Delete all users belonging to an admin."""
+    async with GetDB() as db:
+        try:
+            await admin_cli.delete_admin_users(db, username)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
