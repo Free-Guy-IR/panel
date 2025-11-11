@@ -8,7 +8,7 @@ import NodeModal, { nodeFormSchema, NodeFormValues } from '@/components/dialogs/
 import QuickActionsModal from '@/components/dialogs/shortcuts-modal'
 import UserModal from '@/components/dialogs/user-modal'
 import UserTemplateModal, { userTemplateFormSchema, UserTemplatesFromValue } from '@/components/dialogs/user-template-modal'
-import { HostFormValues } from '@/components/hosts/hosts'
+import { HostFormValues } from '@/components/hosts/hosts-list'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'

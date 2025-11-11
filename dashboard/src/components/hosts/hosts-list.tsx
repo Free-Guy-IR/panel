@@ -427,7 +427,7 @@ const initialDefaultValues: HostFormValues = {
   fragment_settings: undefined,
 }
 
-export interface HostsProps {
+export interface HostsListProps {
   data: BaseHost[]
   isDialogOpen: boolean
   onDialogOpenChange: (open: boolean) => void
@@ -437,7 +437,7 @@ export interface HostsProps {
   setEditingHost: (host: BaseHost | null) => void
 }
 
-export default function Hosts({ data, onAddHost, isDialogOpen, onSubmit, editingHost, setEditingHost }: HostsProps) {
+export default function HostsList({ data, onAddHost, isDialogOpen, onSubmit, editingHost, setEditingHost }: HostsListProps) {
   const [hosts, setHosts] = useState<BaseHost[] | undefined>()
   const [isUpdatingPriorities, setIsUpdatingPriorities] = useState(false)
   const { t } = useTranslation()

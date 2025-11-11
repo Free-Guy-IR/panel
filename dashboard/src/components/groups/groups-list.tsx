@@ -19,12 +19,12 @@ const initialDefaultValues: Partial<GroupFormValues> = {
   is_disabled: false,
 }
 
-interface GroupsProps {
+interface GroupsListProps {
   isDialogOpen: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export default function Groups({ isDialogOpen, onOpenChange }: GroupsProps) {
+export default function GroupsList({ isDialogOpen, onOpenChange }: GroupsListProps) {
   const [editingGroup, setEditingGroup] = useState<GroupResponse | null>(null)
   const { t } = useTranslation()
   const modifyGroupMutation = useModifyGroup()
