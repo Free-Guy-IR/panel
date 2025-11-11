@@ -285,7 +285,7 @@ const UsersTable = memo(() => {
   const handleEditSuccess = () => {
     setEditModalOpen(false)
     setSelectedUser(null)
-    handleManualRefresh()
+    // No need to manually refresh - cache is already updated by the modal
   }
 
   const columns = setupColumns({

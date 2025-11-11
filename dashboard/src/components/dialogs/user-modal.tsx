@@ -26,6 +26,7 @@ import {
   useModifyUser,
   useModifyUserWithTemplate,
   type UserResponse,
+  type UsersResponse,
 } from '@/service/api'
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
@@ -605,16 +606,44 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   })
 
   // Function to refresh all user-related data
-  const refreshUserData = (user: UserResponse) => {
-    // Invalidate relevant queries to trigger fresh fetches
-    queryClient.invalidateQueries({ queryKey: ['/api/users'] })
-    queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
-    queryClient.invalidateQueries({ queryKey: ['getUserStats'] })
-    queryClient.invalidateQueries({ queryKey: ['getInboundStats'] })
-    queryClient.invalidateQueries({ queryKey: ['getUserOnlineStats'] })
+  const refreshUserData = (user: UserResponse, isEdit: boolean = false) => {
+    if (isEdit) {
+      // When editing, update the specific user in the cache without refreshing all users
+      // Get all cached queries for users
+      queryClient.setQueriesData<UsersResponse>(
+        {
+          queryKey: ['/api/users'],
+          exact: false,
+        },
+        (oldData) => {
+          if (!oldData) return oldData
 
-    // Force immediate refetch
-    refetchUsers()
+          // Find and update the user in the users array
+          const updatedUsers = oldData.users.map((u) => (u.username === user.username ? user : u))
+
+          return {
+            ...oldData,
+            users: updatedUsers,
+          }
+        },
+      )
+
+      // Still invalidate usage/stats queries as they may have changed
+      queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
+      queryClient.invalidateQueries({ queryKey: ['getUserStats'] })
+      queryClient.invalidateQueries({ queryKey: ['getInboundStats'] })
+      queryClient.invalidateQueries({ queryKey: ['getUserOnlineStats'] })
+    } else {
+      // When creating, invalidate and refetch all users
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] })
+      queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
+      queryClient.invalidateQueries({ queryKey: ['getUserStats'] })
+      queryClient.invalidateQueries({ queryKey: ['getInboundStats'] })
+      queryClient.invalidateQueries({ queryKey: ['getUserOnlineStats'] })
+
+      // Force immediate refetch
+      refetchUsers()
+    }
 
     // Call the success callback if provided
     if (onSuccessCallback) {
@@ -629,7 +658,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   })
   const modifyUserMutation = useModifyUser({
     mutation: {
-      onSuccess: data => refreshUserData(data),
+      onSuccess: data => refreshUserData(data, true),
     },
   })
   const createUserFromTemplateMutation = useCreateUserFromTemplate({
@@ -641,7 +670,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   // Add the mutation hook at the top with other mutations
   const modifyUserWithTemplateMutation = useModifyUserWithTemplate({
     mutation: {
-      onSuccess: data => refreshUserData(data),
+      onSuccess: data => refreshUserData(data, true),
     },
   })
 

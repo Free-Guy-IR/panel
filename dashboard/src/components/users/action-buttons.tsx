@@ -505,7 +505,18 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user }) => {
       </AlertDialog>
 
       {/* Edit User Modal */}
-      <UserModal isDialogOpen={isEditModalOpen} onOpenChange={setEditModalOpen} form={userForm} editingUser={true} editingUserId={user.id} editingUserData={user} onSuccessCallback={refreshUserData} />
+      <UserModal
+        isDialogOpen={isEditModalOpen}
+        onOpenChange={setEditModalOpen}
+        form={userForm}
+        editingUser={true}
+        editingUserId={user.id}
+        editingUserData={user}
+        onSuccessCallback={() => {
+          // No need to invalidate - cache is already updated by the modal
+          setEditModalOpen(false)
+        }}
+      />
 
       <UsageModal open={isUsageModalOpen} onClose={() => setUsageModalOpen(false)} username={user.username} />
 
