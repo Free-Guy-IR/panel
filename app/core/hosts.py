@@ -9,7 +9,7 @@ from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
 from app.db.models import ProxyHostSecurity
-from app.models.host import BaseHost
+from app.models.host import BaseHost, TransportSettings
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -36,6 +36,9 @@ async def _prepare_subscription_inbound_data(
     protocol = inbound_config["protocol"]
 
     ts = host.transport_settings
+    if isinstance(ts, dict):
+        ts = TransportSettings.model_validate(ts) if ts else None
+    
     network = inbound_config.get("network", "tcp")
     path = host.path or inbound_config.get("path", "")
 
@@ -254,7 +257,9 @@ class HostManager:
             and (ds_host := host.transport_settings.xhttp_settings.download_settings)
         ):
             downstream = await get_host_by_id(db, ds_host)
-            downstream_data: SubscriptionInboundData = await _prepare_subscription_inbound_data(downstream)
+            if downstream:
+                downstream_base = BaseHost.model_validate(downstream)
+                downstream_data: SubscriptionInboundData = await _prepare_subscription_inbound_data(downstream_base)
         subscription_data = await _prepare_subscription_inbound_data(host, downstream_data)
 
         # Return subscription data directly
