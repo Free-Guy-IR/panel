@@ -14,7 +14,7 @@ import { TrendingUp, Upload, Download, Calendar, Info } from 'lucide-react'
 import { dateUtils } from '@/utils/dateFormatter'
 import { TooltipProps } from 'recharts'
 import { useGetNodes, NodeResponse } from '@/service/api'
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from '@/components/common/theme-provider'
 import TimeSelector from './time-selector'
 import NodeStatsModal from '@/components/dialogs/node-stats-modal'
 

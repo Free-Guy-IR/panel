@@ -1,4 +1,4 @@
-import { CopyButton } from '@/components/copy-button'
+import { CopyButton } from '@/components/common/copy-button'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -26,7 +26,7 @@ import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { useTheme } from '../../components/theme-provider'
+import { useTheme } from '@/components/common/theme-provider'
 
 export const coreConfigFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),

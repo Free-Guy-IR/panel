@@ -1,7 +1,7 @@
 import { Heart, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button } from './ui/button'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getAuthToken } from '@/utils/authStorage'
 

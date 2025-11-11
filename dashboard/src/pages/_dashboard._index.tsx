@@ -27,7 +27,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import PageHeader from '@/components/page-header'
+import PageHeader from '@/components/layout/page-header'
 import { getDefaultUserForm, UseEditFormValues, UseFormValues } from './_dashboard.users'
 // Lazy load CoreConfigModal to prevent Monaco Editor from loading until needed
 const CoreConfigModal = lazy(() => import('@/components/dialogs/core-config-modal'))

@@ -1,4 +1,4 @@
-import { Theme, useTheme } from '@/components/theme-provider'
+import { Theme, useTheme } from './theme-provider'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -83,3 +83,4 @@ export function ThemeToggle() {
     </DropdownMenu>
   )
 }
+

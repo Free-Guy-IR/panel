@@ -1,11 +1,11 @@
 import { UserResponse, UserStatus } from '@/service/api'
 import { ColumnDef } from '@tanstack/react-table'
 import { ChevronDown } from 'lucide-react'
-import ActionButtons from '../action-buttons'
-import { OnlineBadge } from '../online-badge'
-import { StatusBadge } from '../status-badge'
+import ActionButtons from './action-buttons'
+import { OnlineBadge } from './online-badge'
+import { StatusBadge } from './status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select'
-import UsageSliderCompact from '../usage-slider-compact'
+import UsageSliderCompact from './usage-slider-compact'
 
 export const setupColumns = ({
   t,

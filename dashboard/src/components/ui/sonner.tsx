@@ -1,4 +1,4 @@
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from '@/components/common/theme-provider'
 import { Toaster as Sonner } from 'sonner'
 import useDirDetection from '@/hooks/use-dir-detection'
 

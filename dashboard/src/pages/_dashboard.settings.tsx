@@ -1,4 +1,4 @@
-import PageHeader from '@/components/page-header'
+import PageHeader from '@/components/layout/page-header'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import { useGetSettings, useModifySettings } from '@/service/api'

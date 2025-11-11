@@ -4,8 +4,8 @@ import { useGetSystemStats } from '@/service/api'
 import { Users, Wifi } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Card, CardTitle } from './ui/card'
-import { CountUp } from './ui/count-up'
+import { Card, CardTitle } from '@/components/ui/card'
+import { CountUp } from '@/components/ui/count-up'
 
 const UsersStatistics = () => {
   const { t } = useTranslation()
@@ -102,3 +102,4 @@ const UsersStatistics = () => {
 }
 
 export default UsersStatistics
+

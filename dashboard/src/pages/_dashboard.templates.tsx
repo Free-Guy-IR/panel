@@ -1,6 +1,6 @@
 import UserTemplate from '../components/templates/user-template'
 import { useGetUserTemplates, useModifyUserTemplate, UserTemplateResponse, ShadowsocksMethods, XTLSFlows } from '@/service/api'
-import PageHeader from '@/components/page-header.tsx'
+import PageHeader from '@/components/layout/page-header'
 import { Plus } from 'lucide-react'
 import { Separator } from '@/components/ui/separator.tsx'
 import { Skeleton } from '@/components/ui/skeleton'

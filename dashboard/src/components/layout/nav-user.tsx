@@ -12,8 +12,8 @@ import { formatBytes } from '@/utils/formatByte'
 import { Badge } from '@/components/ui/badge'
 import { removeAuthToken } from '@/utils/authStorage'
 import { queryClient } from '@/utils/query-client'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { Language } from '@/components/language'
+import { ThemeToggle } from '@/components/common/theme-toggle'
+import { Language } from '@/components/common/language'
 
 export function NavUser({
   username,

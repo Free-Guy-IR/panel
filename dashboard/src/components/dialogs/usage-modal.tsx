@@ -15,7 +15,7 @@ import { dateUtils } from '@/utils/dateFormatter'
 import { TooltipProps } from 'recharts'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from 'recharts'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from '@/components/common/theme-provider'
 import NodeStatsModal from './node-stats-modal'
 
 // Helper function to determine period (copied from AllNodesStackedBarChart and CostumeBarChart)

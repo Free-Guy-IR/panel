@@ -4,7 +4,7 @@ import { ChartPie, ChevronDown, MoreVertical, Pen, Power, PowerOff, RefreshCw, T
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu.tsx'
 import { formatBytes } from '@/utils/formatByte.ts'
-import { AdminStatusBadge } from '@/components/admin-status-badge'
+import { AdminStatusBadge } from './admin-status-badge'
 
 interface ColumnSetupProps {
   t: (key: string) => string

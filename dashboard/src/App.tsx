@@ -1,9 +1,9 @@
-import { ThemeProvider } from '@/components/theme-provider'
+import { ThemeProvider } from '@/components/common/theme-provider'
 import { router } from '@/router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router'
 import { Toaster } from './components/ui/sonner'
-import DonationPopup from './components/donation-popup'
+import DonationPopup from './components/common/donation-popup'
 import './lib/dayjs'
 import { queryClient } from './utils/query-client'
 

@@ -73,3 +73,4 @@ export const StatusBadge: FC<UserStatusProps> = ({ expiryDate = null, status: us
     </div>
   )
 }
+

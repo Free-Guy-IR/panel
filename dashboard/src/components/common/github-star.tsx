@@ -1,4 +1,4 @@
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from './theme-provider'
 import { REPO_URL } from '@/constants/Project'
 import GitHubButton from 'react-github-btn'
 
@@ -17,3 +17,4 @@ export const GithubStar = () => {
     </GitHubButton>
   )
 }
+

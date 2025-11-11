@@ -1,6 +1,6 @@
 import { FC } from 'react'
-import { dateUtils } from '../utils/dateFormatter'
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from './ui/tooltip'
+import { dateUtils } from '@/utils/dateFormatter'
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { useTranslation } from 'react-i18next'
 import dayjs from '@/lib/dayjs'
 
@@ -78,3 +78,4 @@ export const OnlineBadge: FC<UserStatusProps> = ({ lastOnline }) => {
     </TooltipProvider>
   )
 }
+

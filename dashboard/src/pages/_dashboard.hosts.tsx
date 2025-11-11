@@ -1,5 +1,5 @@
 import MainSection, { HostFormValues } from '@/components/hosts/hosts'
-import PageHeader from '@/components/page-header'
+import PageHeader from '@/components/layout/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { BaseHost, createHost, CreateHost, getHosts, modifyHost, MultiplexProtocol, ProxyHostALPN, ProxyHostFingerprint, Xudp } from '@/service/api'

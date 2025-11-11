@@ -2,7 +2,7 @@ import { statusColors } from '@/constants/UserSettings'
 import { cn } from '@/lib/utils'
 import { formatBytes } from '@/utils/formatByte'
 import { useTranslation } from 'react-i18next'
-import { Progress } from './ui/progress'
+import { Progress } from '@/components/ui/progress'
 
 type UsageSliderProps = {
   used: number

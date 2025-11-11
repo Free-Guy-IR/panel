@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useState, memo } from 'react'
 import { useLocation } from 'react-router'
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from '@/components/common/theme-provider'
 import LoadingBar from 'react-top-loading-bar'
 
 const shouldIgnoreRoute = (pathname: string): boolean => {
