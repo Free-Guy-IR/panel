@@ -307,13 +307,21 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
         )}
       </CardContent>
       {leadingSegment && (
-        <CardFooter className="flex-col gap-1 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-            {t('statistics.leadingClientMessage', {
-              client: leadingSegment.name,
-              percentage: leadingSegment.percentage.toFixed(1),
-            })}
-            <TrendingUp className="h-3 w-3" />
+        <CardFooter className="flex-col gap-1.5 pt-4">
+          <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-3 py-2 text-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-primary">
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span>
+                {t('statistics.leadingClientMessage', {
+                  client: leadingSegment.name,
+                  percentage: leadingSegment.percentage.toFixed(1),
+                })}
+              </span>
+            </div>
+            <div 
+              className="ml-auto h-2.5 w-2.5 rounded-full border-2 border-primary/30 shadow-sm" 
+              style={{ backgroundColor: leadingSegment.color }} 
+            />
           </div>
         </CardFooter>
       )}
