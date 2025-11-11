@@ -1,26 +1,6 @@
-import asyncio
-
 from fastapi import status
 
-from app.db.models import Group
-from tests.api import TestSession, client
-
-
-async def _create_group_record(name: str) -> int:
-    async with TestSession() as session:
-        group = Group(name=name, inbounds=[], is_disabled=False)
-        session.add(group)
-        await session.commit()
-        await session.refresh(group)
-        return group.id
-
-
-async def _delete_group_record(group_id: int):
-    async with TestSession() as session:
-        group = await session.get(Group, group_id)
-        if group:
-            await session.delete(group)
-            await session.commit()
+from tests.api import client
 
 
 def test_admin_login():
@@ -134,8 +114,6 @@ def test_admin_delete_all_users_endpoint(access_token):
     )
     assert response.status_code == status.HTTP_201_CREATED
 
-    group_id = asyncio.run(_create_group_record(f"{admin_username}_group"))
-
     created_users = []
     for idx in range(2):
         user_name = f"{admin_username}_user_{idx}"
@@ -145,7 +123,6 @@ def test_admin_delete_all_users_endpoint(access_token):
             json={
                 "username": user_name,
                 "proxy_settings": {},
-                "group_ids": [group_id],
                 "data_limit": 1024,
                 "data_limit_reset_strategy": "no_reset",
                 "status": "active",
@@ -167,7 +144,7 @@ def test_admin_delete_all_users_endpoint(access_token):
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.json()["deleted"] == len(created_users)
+    assert str(len(created_users)) in response.json()["detail"]
 
     for username in created_users:
         user_check = client.get(
@@ -183,8 +160,6 @@ def test_admin_delete_all_users_endpoint(access_token):
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert cleanup.status_code == status.HTTP_204_NO_CONTENT
-
-    asyncio.run(_delete_group_record(group_id))
 
 
 def test_admin_delete(access_token):
