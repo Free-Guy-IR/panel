@@ -1,7 +1,7 @@
 import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -1165,7 +1165,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
             <DialogTitle className={cn('text-start text-xl font-semibold', dir === 'rtl' && 'sm:text-right')}>
               {editingCore ? t('coreConfigModal.editCore') : t('coreConfigModal.addConfig')}
             </DialogTitle>
-            <p className={cn('text-start text-sm text-muted-foreground', dir === 'rtl' && 'sm:text-right')}>{t('coreConfigModal.createNewConfig')}</p>
+            <DialogDescription className="sr-only">{editingCore ? t('coreConfigModal.editConfig', { defaultValue: 'Edit the core configuration' }) : t('coreConfigModal.createNewConfig')}</DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
