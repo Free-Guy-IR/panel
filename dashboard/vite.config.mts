@@ -74,11 +74,13 @@ export default defineConfig({
     svgr(),
     tsconfigPaths(),
     VitePWA({
-      registerType: 'prompt',
-      injectRegister: false, // Disable automatic registration
+      registerType: 'autoUpdate',
+      injectRegister: false,
       workbox: {
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -87,13 +89,12 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
             },
           },
         ],
       },
-      // Remove the manifest configuration entirely - we'll handle it dynamically
     }),
   ],
 })

@@ -1,17 +1,24 @@
-// Service Worker Registration - Simplified
 export function registerSW() {
   if ('serviceWorker' in navigator) {
-    // Get the base URL from Vite's environment
     const baseUrl = import.meta.env.BASE_URL || '/'
 
-    // Register service worker
     navigator.serviceWorker
       .register(`${baseUrl}sw.js`)
       .then(registration => {
-        // Registration successful
+        setInterval(() => {
+          registration.update()
+        }, 60 * 60 * 1000)
+
+        let refreshing = false
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true
+            window.location.reload()
+          }
+        })
       })
       .catch(registrationError => {
-        // Registration failed
+        console.error('Service Worker registration failed:', registrationError)
       })
   }
 }
