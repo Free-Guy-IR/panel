@@ -727,8 +727,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                 )}
               />
 
-              <div className="flex justify-between gap-4">
-                <div className="min-h-[100px] flex-[2]">
+              <div className="flex justify-between gap-4 !mb-4">
+                <div className="flex-[2]">
                   <FormField
                     control={form.control}
                     name="address"
@@ -739,7 +739,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     }}
                   />
                 </div>
-                <div className="min-h-[110px] flex-1">
+                <div className="flex-1">
                   <FormField
                     control={form.control}
                     name="port"

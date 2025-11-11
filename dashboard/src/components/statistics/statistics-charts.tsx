@@ -9,7 +9,7 @@ import SystemStatisticsSection from './system-statistics-section'
 import { AllNodesStackedBarChart } from '../charts/all-nodes-stacked-bar-chart'
 import { AreaCostumeChart } from '../charts/area-costume-chart'
 
-interface StatisticsProps {
+interface StatisticsChartsProps {
   data?: SystemStats
   isLoading: boolean
   error: any
@@ -17,7 +17,7 @@ interface StatisticsProps {
   is_sudo: boolean
 }
 
-export default function Statistics({ data, isLoading, error, selectedServer, is_sudo }: StatisticsProps) {
+export default function StatisticsCharts({ data, isLoading, error, selectedServer, is_sudo }: StatisticsChartsProps) {
   const { t } = useTranslation()
 
   // Add state for chart refresh

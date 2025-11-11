@@ -3,7 +3,6 @@ import { Separator } from '@/components/ui/separator'
 import UsersTable from '@/components/users/users-table'
 import UsersStatistics from '@/components/users/users-statistics'
 import { Plus } from 'lucide-react'
-
 import UserModal from '@/components/dialogs/user-modal'
 import { DEFAULT_SHADOWSOCKS_METHOD } from '@/constants/Proxies'
 import { useQueryClient } from '@tanstack/react-query'
