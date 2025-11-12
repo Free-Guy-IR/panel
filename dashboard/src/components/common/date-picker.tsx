@@ -199,14 +199,8 @@ export function DatePicker({
         selectedDate = new Date(now)
       }
 
-      // Set time based on whether it's today
-      if (selectedDateOnly.getTime() === today.getTime()) {
-        // Set to end of day if today
-        selectedDate.setHours(23, 59, 59)
-      } else {
-        // Set current time for future dates
-        selectedDate.setHours(now.getHours(), now.getMinutes())
-      }
+      // Always use current time (not end of day)
+      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
 
       setInternalDate(selectedDate)
       const value = useUtcTimestamp ? Math.floor(selectedDate.getTime() / 1000) : getLocalISOTime(selectedDate)
@@ -368,15 +362,49 @@ export function DatePicker({
               />
             )}
             {showTime && (
-              <div className="flex items-center gap-4 border-t p-3">
-                <Input
-                  type="time"
-                  value={timeValue}
-                  onChange={handleTimeChange}
-                  className="w-full"
-                  dir="ltr"
-                />
-              </div>
+              <>
+                <div className="hidden lg:flex items-center gap-1.5 flex-wrap border-t p-3">
+                  {[
+                    { label: '7d', days: 7 },
+                    { label: '30d', days: 30 },
+                    { label: '60d', days: 60 },
+                    { label: '90d', days: 90 },
+                    { label: '1y', days: 365 },
+                  ].map(({ label, days }) => {
+                    const handleShortcut = () => {
+                      const targetDate = new Date(now)
+                      targetDate.setDate(now.getDate() + days)
+                      // Use current time instead of end of day
+                      handleDateSelect(targetDate)
+                    }
+                    return (
+                      <Button
+                        key={label}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleShortcut()
+                        }}
+                      >
+                        {label}
+                      </Button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-4 border-t p-3">
+                  <Input
+                    type="time"
+                    value={timeValue}
+                    onChange={handleTimeChange}
+                    className="w-full"
+                    dir="ltr"
+                  />
+                </div>
+              </>
             )}
           </PopoverContent>
         </Popover>

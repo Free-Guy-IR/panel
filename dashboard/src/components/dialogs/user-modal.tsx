@@ -131,34 +131,73 @@ const ExpiryDateField = ({
     [field, handleFieldChange, startTransition, useUtcTimestamp, fieldName],
   )
 
+  const handleShortcut = React.useCallback(
+    (days: number) => {
+      const now = new Date()
+      const targetDate = new Date(now)
+      targetDate.setDate(now.getDate() + days)
+      // Use current time instead of end of day
+      handleDateChange(targetDate)
+    },
+    [handleDateChange],
+  )
+
   const now = new Date()
   const maxDate = new Date(now.getFullYear() + 15, 11, 31)
+
+  const shortcuts = [
+    { label: '7d', days: 7 },
+    { label: '1m', days: 30 },
+    { label: '2m', days: 60 },
+    { label: '3m', days: 90 },
+    { label: '1y', days: 365 },
+  ]
 
   return (
     <FormItem className="flex flex-1 flex-col">
       <FormLabel className='mb-0.5'>{label}</FormLabel>
-      <div className="relative">
-        <DatePicker
-          mode="single"
-          date={displayDate}
-          onDateChange={handleDateChange}
-          showTime={true}
-          useUtcTimestamp={useUtcTimestamp}
-          placeholder={t('userDialog.expireDate', { defaultValue: 'Expire date' })}
-          minDate={now}
-          maxDate={maxDate}
-          open={calendarOpen}
-          onOpenChange={setCalendarOpen}
-          fieldName={fieldName}
-          onFieldChange={handleFieldChange}
-        />
-        {expireInfo && (
-          <p className={cn('absolute top-full text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
-            {expireInfo.time !== '0' && expireInfo.time !== '0s'
-              ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
-              : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
-          </p>
-        )}
+      <div className="space-y-2">
+        <div className="flex lg:hidden items-center gap-1.5 flex-wrap">
+          {shortcuts.map(({ label, days }) => (
+            <Button
+              key={label}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleShortcut(days)
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <div className="relative">
+          <DatePicker
+            mode="single"
+            date={displayDate}
+            onDateChange={handleDateChange}
+            showTime={true}
+            useUtcTimestamp={useUtcTimestamp}
+            placeholder={t('userDialog.expireDate', { defaultValue: 'Expire date' })}
+            minDate={now}
+            maxDate={maxDate}
+            open={calendarOpen}
+            onOpenChange={setCalendarOpen}
+            fieldName={fieldName}
+            onFieldChange={handleFieldChange}
+          />
+          {expireInfo && (
+            <p className={cn('absolute top-full text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
+              {expireInfo.time !== '0' && expireInfo.time !== '0s'
+                ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
+                : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
+            </p>
+          )}
+        </div>
       </div>
       <FormMessage />
     </FormItem>
