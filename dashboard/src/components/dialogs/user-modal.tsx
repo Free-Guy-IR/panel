@@ -65,7 +65,8 @@ const templateModifySchema = z.object({
 // Helper for UUID namespace (for v5)
 const UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
 
-// Add this helper function at the top level
+// Helper function to get local ISO time string with timezone offset
+// This is kept for backward compatibility with normalizeExpire function
 function getLocalISOTime(date: Date): string {
   // Create a properly formatted ISO string with timezone offset
   const tzOffset = -date.getTimezoneOffset()
@@ -90,7 +91,6 @@ function getLocalISOTime(date: Date): string {
 const ExpiryDateField = ({
   field,
   displayDate,
-  usePersianCalendar,
   calendarOpen,
   setCalendarOpen,
   handleFieldChange,
@@ -100,7 +100,6 @@ const ExpiryDateField = ({
 }: {
   field: any
   displayDate: Date | null
-  usePersianCalendar: boolean
   calendarOpen: boolean
   setCalendarOpen: (open: boolean) => void
   handleFieldChange: (field: string, value: any) => void
@@ -116,6 +115,7 @@ const ExpiryDateField = ({
   const handleDateChange = React.useCallback(
     (date: Date | undefined) => {
       if (date) {
+        // Use the same logic as centralized DatePicker
         const value = useUtcTimestamp ? Math.floor(date.getTime() / 1000) : getLocalISOTime(date)
         startTransition(() => {
           field.onChange(value)
@@ -152,36 +152,6 @@ const ExpiryDateField = ({
           onOpenChange={setCalendarOpen}
           fieldName={fieldName}
           onFieldChange={handleFieldChange}
-          formatDate={(date: Date) => {
-            if (usePersianCalendar) {
-              return (
-                date.toLocaleDateString('fa-IR', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                }) +
-                ' ' +
-                date.toLocaleTimeString('fa-IR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })
-              )
-            }
-            return (
-              date.toLocaleDateString('sv-SE', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-              }) +
-              ' ' +
-              date.toLocaleTimeString('sv-SE', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-              })
-            )
-          }}
         />
         {expireInfo && (
           <p className={cn('absolute top-full mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
@@ -302,9 +272,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const [expireCalendarOpen, setExpireCalendarOpen] = useState(false)
   const [onHoldCalendarOpen, setOnHoldCalendarOpen] = useState(false)
-  const { i18n } = useTranslation()
-  const isPersianLocale = i18n.language === 'fa'
-  const [usePersianCalendar, setUsePersianCalendar] = useState(isPersianLocale)
 
   // Reset calendar state when modal opens/closes
   useEffect(() => {
@@ -1145,10 +1112,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     // eslint-disable-next-line
   }, [isDialogOpen, editingUser, generalSettings])
 
-  // Add effect to handle locale changes
-  useEffect(() => {
-    setUsePersianCalendar(i18n.language === 'fa')
-  }, [i18n.language])
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={handleModalOpenChange}>
@@ -1438,7 +1401,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                               <ExpiryDateField
                                 field={field}
                                 displayDate={displayDate}
-                                usePersianCalendar={usePersianCalendar}
                                 calendarOpen={expireCalendarOpen}
                                 setCalendarOpen={setExpireCalendarOpen}
                                 handleFieldChange={handleFieldChange}
@@ -1459,7 +1421,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                         <ExpiryDateField
                           field={field}
                           displayDate={onHoldDisplayDate}
-                          usePersianCalendar={usePersianCalendar}
                           calendarOpen={onHoldCalendarOpen}
                           setCalendarOpen={setOnHoldCalendarOpen}
                           handleFieldChange={handleFieldChange}
