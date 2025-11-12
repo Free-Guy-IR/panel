@@ -2,12 +2,10 @@ import GroupsSelector from '@/components/common/groups-selector'
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
-import { Calendar as PersianCalendar } from '@/components/ui/persian-calendar'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
@@ -15,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { cn } from '@/lib/utils'
+import { DatePicker } from '@/components/common/date-picker'
 import { UseEditFormValues, UseFormValues, userCreateSchema, userEditSchema } from '@/pages/_dashboard.users'
 import {
   getGeneralSettings,
@@ -31,7 +30,7 @@ import {
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes } from '@/utils/formatByte'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarIcon, ChevronDown, Layers, ListStart, Lock, RefreshCcw, Users, X } from 'lucide-react'
+import { ChevronDown, Layers, ListStart, Lock, RefreshCcw, Users } from 'lucide-react'
 import React, { useEffect, useState, useTransition } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -112,26 +111,11 @@ const ExpiryDateField = ({
   const { t } = useTranslation()
   const expireInfo = useRelativeExpiryDate(displayDate ? Math.floor(displayDate.getTime() / 1000) : null)
   const [, startTransition] = useTransition()
+  const dir = useDirDetection()
 
-  const handleDateSelect = React.useCallback(
+  const handleDateChange = React.useCallback(
     (date: Date | undefined) => {
       if (date) {
-        const now = new Date()
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-
-        if (selectedDate < today) {
-          date = new Date(now)
-        }
-
-        if (selectedDate.getTime() === today.getTime()) {
-          // Set to end of day
-          date.setHours(23, 59, 59)
-        } else {
-          // Set current time
-          date.setHours(now.getHours(), now.getMinutes())
-        }
-
         const value = useUtcTimestamp ? Math.floor(date.getTime() / 1000) : getLocalISOTime(date)
         startTransition(() => {
           field.onChange(value)
@@ -143,225 +127,62 @@ const ExpiryDateField = ({
           handleFieldChange(fieldName, undefined)
         })
       }
-      setCalendarOpen(false)
     },
-    [field, handleFieldChange, setCalendarOpen, startTransition, useUtcTimestamp, fieldName],
+    [field, handleFieldChange, startTransition, useUtcTimestamp, fieldName],
   )
 
-  // Update time input handling to work with local time
-  const handleTimeChange = React.useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      if (displayDate && e.target.value) {
-        const [hours, minutes] = e.target.value.split(':')
-        const newDate = new Date(displayDate)
-        newDate.setHours(parseInt(hours), parseInt(minutes))
-
-        const now = new Date()
-        if (newDate.toDateString() === now.toDateString() && newDate < now) {
-          newDate.setTime(now.getTime())
-        }
-
-        const value = useUtcTimestamp ? Math.floor(newDate.getTime() / 1000) : getLocalISOTime(newDate)
-        startTransition(() => {
-          field.onChange(value)
-          handleFieldChange(fieldName, value)
-        })
-      }
-    },
-    [displayDate, field, handleFieldChange, startTransition, useUtcTimestamp, fieldName],
-  )
-
-  // Get current date for comparison
   const now = new Date()
-
-  // Function to check if a date should be disabled
-  const isDateDisabled = React.useCallback(
-    (date: Date) => {
-      // Create a new date object for today at midnight for accurate comparison
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-
-      // Disable if the date is before today
-      if (compareDate < today) {
-        return true
-      }
-
-      // Disable if the year is before current year
-      if (date.getFullYear() < now.getFullYear()) {
-        return true
-      }
-
-      // Disable if the year is more than 15 years in the future
-      if (date.getFullYear() > now.getFullYear() + 15) {
-        return true
-      }
-
-      // For current year, disable past months
-      if (date.getFullYear() === now.getFullYear()) {
-        // If the month is before current month, disable it
-        if (date.getMonth() < now.getMonth()) {
-          return true
-        }
-        // If it's the current month, disable past days
-        if (date.getMonth() === now.getMonth() && compareDate < today) {
-          return true
-        }
-      }
-
-      // Allow all other dates
-      return false
-    },
-    [now],
-  )
-
-  const dir = useDirDetection()
+  const maxDate = new Date(now.getFullYear() + 15, 11, 31)
 
   return (
     <FormItem className="flex flex-1 flex-col">
       <FormLabel>{label}</FormLabel>
       <div className="relative">
-        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-          <PopoverTrigger asChild>
-            <FormControl>
-              <div className="relative w-full">
-                <Button
-                  dir={'ltr'}
-                  variant={'outline'}
-                  className={cn('mt-1 h-fit w-full text-left font-normal', !field.value && 'text-muted-foreground')}
-                  type="button"
-                  onClick={e => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setCalendarOpen(true)
-                  }}
-                >
-                  {displayDate ? (
-                    usePersianCalendar ? (
-                      // Persian format - display in local time
-                      displayDate.toLocaleDateString('fa-IR', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                      }) +
-                      ' ' +
-                      displayDate.toLocaleTimeString('fa-IR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false,
-                      })
-                    ) : (
-                      // Gregorian format - display in local time
-                      displayDate.toLocaleDateString('sv-SE', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                      }) +
-                      ' ' +
-                      displayDate.toLocaleTimeString('sv-SE', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false,
-                      })
-                    )
-                  ) : field.value && !isNaN(Number(field.value)) ? (
-                    String(field.value)
-                  ) : (
-                    <span>{t('userDialog.expireDate', { defaultValue: 'Expire date' })}</span>
-                  )}
-                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                </Button>
-              </div>
-            </FormControl>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-auto p-0"
-            align="start"
-            onInteractOutside={(e: Event) => {
-              e.preventDefault()
-              setCalendarOpen(false)
-            }}
-            onEscapeKeyDown={() => setCalendarOpen(false)}
-          >
-            {usePersianCalendar ? (
-              <PersianCalendar
-                mode="single"
-                selected={displayDate || undefined}
-                onSelect={handleDateSelect}
-                disabled={isDateDisabled}
-                captionLayout="dropdown"
-                defaultMonth={displayDate || now}
-                startMonth={new Date(now.getFullYear(), now.getMonth(), 1)}
-                endMonth={new Date(now.getFullYear() + 15, 11, 31)}
-                formatters={{
-                  formatMonthDropdown: date => date.toLocaleString('fa-IR', { month: 'short' }),
-                }}
-              />
-            ) : (
-              <Calendar
-                mode="single"
-                selected={displayDate || undefined}
-                onSelect={handleDateSelect}
-                disabled={isDateDisabled}
-                captionLayout="dropdown"
-                defaultMonth={displayDate || now}
-                startMonth={new Date(now.getFullYear(), now.getMonth(), 1)}
-                endMonth={new Date(now.getFullYear() + 15, 11, 31)}
-                formatters={{
-                  formatMonthDropdown: date => date.toLocaleString('default', { month: 'short' }),
-                }}
-              />
-            )}
-            <div className="flex items-center gap-4 border-t p-3">
-              <FormControl>
-                <Input
-                  type="time"
-                  value={
-                    displayDate
-                      ? displayDate.toLocaleTimeString('sv-SE', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false,
-                        })
-                      : now.toLocaleTimeString('sv-SE', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false,
-                        })
-                  }
-                  min={
-                    displayDate && displayDate.toDateString() === now.toDateString()
-                      ? now.toLocaleTimeString('sv-SE', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false,
-                        })
-                      : undefined
-                  }
-                  onChange={handleTimeChange}
-                />
-              </FormControl>
-              {displayDate && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={e => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    field.onChange('')
-                    handleFieldChange(fieldName, undefined)
-                    setCalendarOpen(false)
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+        <DatePicker
+          mode="single"
+          date={displayDate}
+          onDateChange={handleDateChange}
+          showTime={true}
+          useUtcTimestamp={useUtcTimestamp}
+          label=""
+          placeholder={t('userDialog.expireDate', { defaultValue: 'Expire date' })}
+          minDate={now}
+          maxDate={maxDate}
+          open={calendarOpen}
+          onOpenChange={setCalendarOpen}
+          fieldName={fieldName}
+          onFieldChange={handleFieldChange}
+          formatDate={(date: Date) => {
+            if (usePersianCalendar) {
+              return (
+                date.toLocaleDateString('fa-IR', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                }) +
+                ' ' +
+                date.toLocaleTimeString('fa-IR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })
+              )
+            }
+            return (
+              date.toLocaleDateString('sv-SE', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              }) +
+              ' ' +
+              date.toLocaleTimeString('sv-SE', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })
+            )
+          }}
+        />
         {expireInfo && (
           <p className={cn('absolute top-full mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
             {expireInfo.time !== '0' && expireInfo.time !== '0s'
