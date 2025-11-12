@@ -12,7 +12,7 @@ from app.operation.node import NodeOperation
 from app.operation import OperatorType
 from app.db.crud.node import get_limited_nodes
 
-from config import JOB_CORE_HEALTH_CHECK_INTERVAL
+from config import JOB_CORE_HEALTH_CHECK_INTERVAL, JOB_CHECK_NODE_LIMITS_INTERVAL
 
 
 node_operator = NodeOperation(operator_type=OperatorType.SYSTEM)
@@ -158,9 +158,6 @@ async def node_health_check():
         check_tasks = [process_node_health_check(db_node, dict_nodes.get(db_node.id)) for db_node in db_nodes]
         await asyncio.gather(*check_tasks, return_exceptions=True)
 
-    # Check for nodes that exceeded data limits
-    await check_node_limits()
-
 
 @on_startup
 async def initialize_nodes():
@@ -175,8 +172,14 @@ async def initialize_nodes():
             await node_operator.connect_nodes_bulk(db, db_nodes)
             logger.info("All nodes' cores have been started.")
 
+    # Schedule node health check job (runs frequently)
     scheduler.add_job(
         node_health_check, "interval", seconds=JOB_CORE_HEALTH_CHECK_INTERVAL, coalesce=True, max_instances=1
+    )
+
+    # Schedule node limits check job (runs less frequently)
+    scheduler.add_job(
+        check_node_limits, "interval", seconds=JOB_CHECK_NODE_LIMITS_INTERVAL, coalesce=True, max_instances=1
     )
 
 
