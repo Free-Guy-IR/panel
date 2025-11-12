@@ -150,6 +150,7 @@ const ExpiryDateField = ({
     { label: '1m', days: 30 },
     { label: '2m', days: 60 },
     { label: '3m', days: 90 },
+    { label: '6m', days: 180 },
     { label: '1y', days: 365 },
   ]
 

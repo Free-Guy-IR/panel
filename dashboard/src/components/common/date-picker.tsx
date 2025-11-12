@@ -366,9 +366,9 @@ export function DatePicker({
                 <div className="hidden lg:flex items-center gap-1.5 flex-wrap border-t p-3">
                   {[
                     { label: '7d', days: 7 },
-                    { label: '30d', days: 30 },
-                    { label: '60d', days: 60 },
-                    { label: '90d', days: 90 },
+                    { label: '1m', days: 30 },
+                    { label: '2m', days: 60 },
+                    { label: '3m', days: 90 },
                     { label: '1y', days: 365 },
                   ].map(({ label, days }) => {
                     const handleShortcut = () => {
