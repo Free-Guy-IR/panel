@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next'
 import { useGetUsers, UserStatus } from '@/service/api'
 import { RefetchOptions } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
-import { UseFormReturn } from 'react-hook-form'
 import { getUsersAutoRefreshIntervalSeconds, setUsersAutoRefreshIntervalSeconds } from '@/utils/userPreferenceStorage'
 
 // Sort configuration to eliminate duplication
@@ -73,16 +72,17 @@ interface FiltersProps {
     sort: string
     status?: UserStatus | null
     load_sub: boolean
+    admin?: string[]
+    group?: number[]
   }
   onFilterChange: (filters: Partial<FiltersProps['filters']>) => void
   refetch?: (options?: RefetchOptions) => Promise<unknown>
   advanceSearchOnOpen: (status: boolean) => void
-  advanceSearchForm?: UseFormReturn<Record<string, unknown>>
   onClearAdvanceSearch?: () => void
   handleSort?: (column: string, fromDropdown?: boolean) => void
 }
 
-export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, advanceSearchForm, onClearAdvanceSearch, handleSort }: FiltersProps) => {
+export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, onClearAdvanceSearch, handleSort }: FiltersProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [search, setSearch] = useState(filters.search || '')
@@ -184,26 +184,24 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   }
 
   // Check if any advance search filters are active
+  // Check the actual filters prop instead of form values, as form gets reset when modal closes
   const hasActiveAdvanceFilters = () => {
-    if (!advanceSearchForm) return false
-    const values = advanceSearchForm.getValues() as Record<string, unknown>
-    const admin = values.admin as string[] | undefined
-    const group = values.group as string[] | undefined
-    const status = values.status as string | undefined
-    return (admin && admin.length > 0) || (group && group.length > 0) || status !== '0'
+    const admin = filters.admin
+    const group = filters.group
+    const status = filters.status
+    return (admin && admin.length > 0) || (group && group.length > 0) || (status !== undefined && status !== null)
   }
 
   // Get the count of active advance filters
+  // Check the actual filters prop instead of form values, as form gets reset when modal closes
   const getActiveFiltersCount = () => {
-    if (!advanceSearchForm) return 0
-    const values = advanceSearchForm.getValues() as Record<string, unknown>
-    const admin = values.admin as string[] | undefined
-    const group = values.group as string[] | undefined
-    const status = values.status as string | undefined
+    const admin = filters.admin
+    const group = filters.group
+    const status = filters.status
     let count = 0
     if (admin && admin.length > 0) count++
     if (group && group.length > 0) count++
-    if (status !== '0') count++
+    if (status !== undefined && status !== null) count++
     return count
   }
 
@@ -223,7 +221,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
         <Button size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10" onClick={handleOpenAdvanceSearch}>
           <Filter className="h-4 w-4" />
           {hasActiveAdvanceFilters() && (
-            <Badge variant="destructive" className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full p-0 text-xs">
+            <Badge variant="default" className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary p-0 text-[10.5px] text-primary-foreground">
               {getActiveFiltersCount()}
             </Badge>
           )}
