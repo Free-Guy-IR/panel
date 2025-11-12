@@ -1077,10 +1077,10 @@
     "offShort": "خاموش",
     "shortSeconds": "{{count}} ث",
     "shortMinutes": "{{count}} د",
+    "5Seconds": "هر ۵ ثانیه",
     "15Seconds": "هر ۱۵ ثانیه",
     "30Seconds": "هر ۳۰ ثانیه",
     "1Minute": "هر ۱ دقیقه",
-    "5Minutes": "هر ۵ دقیقه",
     "refreshNow": "به‌روزرسانی دستی"
   },
   "statistics.system": "سیستم",

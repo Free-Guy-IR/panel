@@ -3,7 +3,7 @@ const NUM_ADMINS_PER_PAGE_LOCAL_STORAGE_KEY = 'pasarguard-num-admins-per-page'
 const NUM_ITEMS_PER_PAGE_DEFAULT = 10
 
 const USERS_AUTO_REFRESH_INTERVAL_KEY = 'pasarguard-users-auto-refresh-interval'
-const DEFAULT_USERS_AUTO_REFRESH_INTERVAL_SECONDS = 0
+const DEFAULT_USERS_AUTO_REFRESH_INTERVAL_SECONDS = 30
 
 // Generic function for any table type
 export const getItemsPerPageLimitSize = (tableType: 'users' | 'admins' = 'users') => {

@@ -1236,10 +1236,10 @@
     "offShort": "Off",
     "shortSeconds": "{{count}}s",
     "shortMinutes": "{{count}}m",
+    "5Seconds": "Every 5 seconds",
     "15Seconds": "Every 15 seconds",
     "30Seconds": "Every 30 seconds",
     "1Minute": "Every minute",
-    "5Minutes": "Every 5 minutes",
     "refreshNow": "Refresh now"
   },
   "statistics.system": "System",

@@ -868,10 +868,10 @@
     "offShort": "Выкл.",
     "shortSeconds": "{{count}} с",
     "shortMinutes": "{{count}} мин",
+    "5Seconds": "Каждые 5 секунд",
     "15Seconds": "Каждые 15 секунд",
     "30Seconds": "Каждые 30 секунд",
     "1Minute": "Каждую минуту",
-    "5Minutes": "Каждые 5 минут",
     "refreshNow": "Обновить сейчас"
   },
   "statistics.system": "Система",

@@ -1184,10 +1184,10 @@
     "offShort": "关",
     "shortSeconds": "{{count}} 秒",
     "shortMinutes": "{{count}} 分",
+    "5Seconds": "每 5 秒",
     "15Seconds": "每 15 秒",
     "30Seconds": "每 30 秒",
     "1Minute": "每 1 分钟",
-    "5Minutes": "每 5 分钟",
     "refreshNow": "立即刷新"
   },
   "statistics.system": "系统",
