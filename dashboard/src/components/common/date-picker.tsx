@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { addDays } from 'date-fns'
-import { Calendar as CalendarIcon } from 'lucide-react'
+import { Calendar as CalendarIcon, X } from 'lucide-react'
 import { DateRange } from 'react-day-picker'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -291,6 +291,17 @@ export function DatePicker({
       ? `${String(displayDate.getHours()).padStart(2, '0')}:${String(displayDate.getMinutes()).padStart(2, '0')}`
       : ''
 
+    const handleClear = React.useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setInternalDate(undefined)
+        onDateChange(undefined)
+        onFieldChange?.(fieldName, undefined)
+      },
+      [onDateChange, onFieldChange, fieldName],
+    )
+
     return (
       <div className={cn('grid gap-2', className)}>
         {label && <label className="text-sm font-medium">{label}</label>}
@@ -303,7 +314,19 @@ export function DatePicker({
               type="button"
             >
               {displayDate ? formatDate(displayDate) : <span>{placeholder || label || t('timeSelector.pickDate')}</span>}
-              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+              <div className="ml-auto flex items-center gap-1">
+                {displayDate && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="rounded-sm opacity-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    aria-label={t('clear', { defaultValue: 'Clear' })}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+                <CalendarIcon className="h-4 w-4 opacity-50" />
+              </div>
             </Button>
           </PopoverTrigger>
           <PopoverContent

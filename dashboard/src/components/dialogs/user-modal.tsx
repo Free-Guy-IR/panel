@@ -136,7 +136,7 @@ const ExpiryDateField = ({
 
   return (
     <FormItem className="flex flex-1 flex-col">
-      <FormLabel>{label}</FormLabel>
+      <FormLabel className='mb-0.5'>{label}</FormLabel>
       <div className="relative">
         <DatePicker
           mode="single"
@@ -144,7 +144,6 @@ const ExpiryDateField = ({
           onDateChange={handleDateChange}
           showTime={true}
           useUtcTimestamp={useUtcTimestamp}
-          label=""
           placeholder={t('userDialog.expireDate', { defaultValue: 'Expire date' })}
           minDate={now}
           maxDate={maxDate}
@@ -154,7 +153,7 @@ const ExpiryDateField = ({
           onFieldChange={handleFieldChange}
         />
         {expireInfo && (
-          <p className={cn('absolute top-full mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
+          <p className={cn('absolute top-full text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
             {expireInfo.time !== '0' && expireInfo.time !== '0s'
               ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
               : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
@@ -282,6 +281,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   }, [isDialogOpen])
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
   const [isFormValid, setIsFormValid] = useState(false)
+  // Ref to store raw input value for data_limit to allow typing decimals
+  const dataLimitInputRef = React.useRef<string>('')
 
   const handleModalOpenChange = React.useCallback(
     (open: boolean) => {
@@ -291,6 +292,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         setIsFormValid(false)
         setActiveTab('groups')
         setSelectedTemplateId(null)
+        dataLimitInputRef.current = ''
       }
       onOpenChange(open)
     },
@@ -1267,35 +1269,84 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           <FormField
                             control={form.control}
                             name="data_limit"
-                            render={({ field }) => (
-                              <FormItem className="h-full flex-1">
-                                <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
-                                    {...field}
-                                    value={field.value ? field.value : ''}
-                                    onChange={e => {
-                                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value)
-                                      if (!isNaN(value) && value >= 0) {
-                                        field.onChange(value)
-                                        handleFieldChange('data_limit', value)
-                                      }
-                                    }}
-                                    onBlur={() => {
-                                      handleFieldChange('data_limit', field.value || 0)
-                                    }}
-                                  />
-                                </FormControl>
-                                {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
-                                  <p className="mt-1 text-xs text-muted-foreground">{formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}</p>
-                                )}
-                                <FormMessage />
-                              </FormItem>
-                            )}
+                            render={({ field }) => {
+                              if (dataLimitInputRef.current === '' && field.value !== null && field.value !== undefined && field.value > 0) {
+                                dataLimitInputRef.current = String(field.value)
+                              } else if ((field.value === null || field.value === undefined) && dataLimitInputRef.current !== '') {
+                                dataLimitInputRef.current = ''
+                              }
+
+                              const displayValue = dataLimitInputRef.current !== '' 
+                                ? dataLimitInputRef.current 
+                                : (field.value !== null && field.value !== undefined && field.value > 0 ? String(field.value) : '')
+
+                              return (
+                                <FormItem className="h-full flex-1 relative">
+                                  <FormLabel>{t('userDialog.dataLimit', { defaultValue: 'Data Limit (GB)' })}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="text"
+                                      inputMode="decimal"
+                                      placeholder={t('userDialog.dataLimit', { defaultValue: 'e.g. 1' })}
+                                      value={displayValue}
+                                      onChange={e => {
+                                        const rawValue = e.target.value.trim()
+                                        
+                                        dataLimitInputRef.current = rawValue
+                                        
+                                        if (rawValue === '') {
+                                          field.onChange(0)
+                                          handleFieldChange('data_limit', 0)
+                                          return
+                                        }
+
+                                        const validNumberPattern = /^-?\d*\.?\d*$/
+                                        if (validNumberPattern.test(rawValue)) {
+                                          if (rawValue.endsWith('.') && rawValue.length > 1) {
+                                            const prevValue = field.value !== null && field.value !== undefined ? field.value : 0
+                                            field.onChange(prevValue)
+                                            handleFieldChange('data_limit', prevValue)
+                                          } else if (rawValue === '.') {
+                                            field.onChange(0)
+                                            handleFieldChange('data_limit', 0)
+                                          } else {
+                                            const numValue = parseFloat(rawValue)
+                                            if (!isNaN(numValue) && numValue >= 0) {
+                                              field.onChange(numValue)
+                                              handleFieldChange('data_limit', numValue)
+                                            }
+                                          }
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        const rawValue = dataLimitInputRef.current.trim()
+                                        if (rawValue === '' || rawValue === '.' || rawValue === '0') {
+                                          dataLimitInputRef.current = ''
+                                          field.onChange(0)
+                                          handleFieldChange('data_limit', 0)
+                                        } else {
+                                          const numValue = parseFloat(rawValue)
+                                          if (!isNaN(numValue) && numValue >= 0) {
+                                            const finalValue = numValue
+                                            dataLimitInputRef.current = finalValue > 0 ? String(finalValue) : ''
+                                            field.onChange(finalValue)
+                                            handleFieldChange('data_limit', finalValue)
+                                          } else {
+                                            dataLimitInputRef.current = ''
+                                            field.onChange(0)
+                                            handleFieldChange('data_limit', 0)
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  </FormControl>
+                                  {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
+                                    <p className="mt-1 text-end right-0 absolute top-full text-xs text-muted-foreground">{formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}</p>
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              )
+                            }}
                           />
                           {form.watch('data_limit') !== undefined && form.watch('data_limit') !== null && Number(form.watch('data_limit')) > 0 && (
                             <FormField
@@ -1386,9 +1437,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                                     />
                                   </FormControl>
                                   <FormMessage />
-                                  {isTouched && isZeroOrEmpty && !hasError && (
-                                    <p className="text-sm text-destructive">{t('validation.required', { field: t('userDialog.onHoldExpireDuration', { defaultValue: 'On Hold Expire Duration' }) })}</p>
-                                  )}
                                 </FormItem>
                               )
                             }}
