@@ -80,7 +80,7 @@ def upgrade() -> None:
     temp_node_status_type.drop(op.get_bind(), checkfirst=False)
 
     # Add columns to nodes table
-    op.add_column('nodes', sa.Column('data_limit', sa.BigInteger(), nullable=True))
+    op.add_column('nodes', sa.Column('data_limit', sa.BigInteger(), nullable=False, server_default=sa.text('0')))
 
     # Rename enum type BEFORE adding the column (PostgreSQL only)
     if bind.dialect.name == "postgresql":
