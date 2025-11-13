@@ -59,9 +59,8 @@ async def error_node(node: NodeNotification):
 
 
 async def limited_node(node: NodeNotification, data_limit: int, used_traffic: int):
-    name = escape_tg_html(node.name)
     data = messages.LIMITED_NODE.format(
-        name=name,
+        name=escape(node.name),
         data_limit=readable_size(data_limit),
         used_traffic=readable_size(used_traffic),
         id=node.id,
