@@ -207,8 +207,8 @@ class NodeOperation(BaseOperation):
         except IntegrityError:
             await self.raise_error(message=f'Node "{db_node.name}" already exists', code=409, db=db)
 
-        if db_node.status is NodeStatus.disabled:
-            await node_manager.remove_node(db_node.id)
+        if db_node.status in (NodeStatus.disabled, NodeStatus.limited):
+            await self.disconnect_single_node(db_node.id)
         else:
             try:
                 await node_manager.update_node(db_node)
@@ -409,6 +409,18 @@ class NodeOperation(BaseOperation):
                 message=result.get("message"),
             )
             asyncio.create_task(notification.error_node(node_notif))
+
+    async def disconnect_single_node(self, node_id: int) -> None:
+        """
+        Disconnect a single node from the node manager (stop it from running).
+
+        Used when a node needs to be stopped (e.g., when limited or disabled).
+
+        Args:
+            node_id (int): ID of the node to disconnect.
+        """
+        await node_manager.remove_node(node_id)
+        logger.info(f'Node "{node_id}" disconnected')
 
     async def restart_node(self, db: AsyncSession, node_id: Node, admin: AdminDetails) -> None:
         await self.connect_single_node(db, node_id)

@@ -133,6 +133,9 @@ async def check_node_limits():
         limited_nodes = await get_limited_nodes(db)
 
         for db_node in limited_nodes:
+            # Disconnect the node first (stop it from running)
+            await node_operator.disconnect_single_node(db_node.id)
+
             # Update status to limited
             await NodeOperation._update_single_node_status(
                 db, db_node.id, NodeStatus.limited, message="Data limit exceeded", send_notification=False

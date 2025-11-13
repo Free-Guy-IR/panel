@@ -90,7 +90,7 @@ async def get_nodes(
             query = query.where(Node.status == status)
 
     if enabled:
-        query = query.where(Node.status != NodeStatus.disabled)
+        query = query.where(Node.status.not_in([NodeStatus.disabled, NodeStatus.limited]))
 
     if core_id:
         query = query.where(Node.core_config_id == core_id)
