@@ -1,19 +1,20 @@
 import asyncio
 import random
 from collections import defaultdict
-from datetime import datetime as dt, timezone as tz, timedelta as td
+from datetime import datetime as dt, timedelta as td, timezone as tz
 from operator import attrgetter
 
-from PasarGuardNodeBridge import PasarGuardNode, NodeAPIError
+from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
 from sqlalchemy import and_, bindparam, insert, select, update
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DatabaseError, OperationalError
 from sqlalchemy.sql.expression import Insert
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app import scheduler
 from app.db import GetDB
+from app.db.base import engine
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.node import node_manager as node_manager
 from app.utils.logger import get_logger
@@ -195,22 +196,20 @@ async def safe_execute(stmt, params=None, max_retries: int = 5):
         params (list[dict], optional): Parameters for the statement
         max_retries (int, optional): Maximum number of retry attempts (default: 5)
     """
+    statement = stmt
+
+    if await get_dialect() == "mysql" and isinstance(stmt, Insert):
+        # MySQL-specific IGNORE prefix - but skip if using ON DUPLICATE KEY UPDATE
+        if not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None:
+            statement = stmt.prefix_with("IGNORE")
     for attempt in range(max_retries):
         try:
-            # Create fresh session for each attempt to release any locks from previous attempts
-            async with GetDB() as db:
-                dialect = db.bind.dialect.name
-
-                # MySQL-specific IGNORE prefix - but skip if using ON DUPLICATE KEY UPDATE
-                if dialect == "mysql" and isinstance(stmt, Insert):
-                    # Check if statement already has ON DUPLICATE KEY UPDATE
-                    if not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None:
-                        stmt = stmt.prefix_with("IGNORE")
-
-                # Use raw connection to avoid ORM bulk update requirements
-                await (await db.connection()).execute(stmt, params)
-                await db.commit()
-                return  # Success - exit function
+            # engine.begin() ensures commit/rollback + connection return on exit
+            async with engine.begin() as conn:
+                if params is None:
+                    await conn.execute(statement)
+                else:
+                    await conn.execute(statement, params)
 
         except (OperationalError, DatabaseError) as err:
             # Session auto-closed by context manager, locks released

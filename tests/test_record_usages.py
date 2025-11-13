@@ -54,13 +54,10 @@ async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.M
 
     assert safe_execute_mock.await_count == 2
     user_call = safe_execute_mock.await_args_list[0]
-    assert user_call.args[1] == [
-        {"pk_uid": 1, "value": 275},
-        {"pk_uid": 2, "value": 100},
-    ]
+    assert user_call.args[1] == expected_users_usage
 
     admin_call = safe_execute_mock.await_args_list[1]
-    assert admin_call.args[1] == [{"pk_admin_id": 99, "value": 555}]
+    assert admin_call.args[1] == [{"admin_id": 99, "value": 555}]
 
     assert record_user_stats_mock.await_count == 2
     expected_record_calls = [
@@ -123,8 +120,8 @@ async def test_record_node_usages_updates_totals(monkeypatch: pytest.MonkeyPatch
     assert safe_execute_mock.await_count == 2
     node_call = safe_execute_mock.await_args_list[0]
     assert node_call.args[1] == [
-        {"pk_id": 1, "up": 10, "down": 7},
-        {"pk_id": 2, "up": 1, "down": 1},
+        {"node_id": 1, "up": 10, "down": 7},
+        {"node_id": 2, "up": 1, "down": 1},
     ]
 
     system_call = safe_execute_mock.await_args_list[1]
