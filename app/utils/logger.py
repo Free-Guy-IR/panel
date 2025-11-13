@@ -10,6 +10,7 @@ from config import (
     ECHO_SQL_QUERIES,
     LOG_BACKUP_COUNT,
     LOG_FILE_PATH,
+    LOG_LEVEL,
     LOG_MAX_BYTES,
     LOG_ROTATION_ENABLED,
     LOG_ROTATION_INTERVAL,
@@ -41,6 +42,9 @@ LOGGING_CONFIG["formatters"]["access"]["fmt"] = (
     '%(levelprefix)s %(asctime)s - %(client_addr)s - "%(request_line)s" %(status_code)s'
 )
 
+LOGGING_CONFIG["loggers"]["uvicorn"]["level"] = LOG_LEVEL
+LOGGING_CONFIG["loggers"]["uvicorn.error"]["level"] = LOG_LEVEL
+LOGGING_CONFIG["loggers"]["uvicorn.access"]["level"] = LOG_LEVEL
 
 if SAVE_LOGS_TO_FILE:
     if LOG_ROTATION_ENABLED:

@@ -70,6 +70,10 @@ LOG_ROTATION_ENABLED = config("LOG_ROTATION_ENABLED", default=False, cast=bool)
 LOG_ROTATION_INTERVAL = config("LOG_ROTATION_INTERVAL", cast=int, default=1)
 LOG_ROTATION_UNIT = config("LOG_ROTATION_UNIT", default="H")
 LOG_MAX_BYTES = config("LOG_MAX_BYTES", cast=int, default=10485760)  # default: 10 MB
+VALID_LOG_LEVELS = ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG")
+LOG_LEVEL = config("LOG_LEVEL", default="INFO").upper()
+if LOG_LEVEL not in VALID_LOG_LEVELS:
+    LOG_LEVEL = "INFO"
 
 # USERNAME: PASSWORD
 SUDOERS = (
