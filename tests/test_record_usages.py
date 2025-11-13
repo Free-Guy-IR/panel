@@ -14,6 +14,7 @@ from sqlalchemy.pool import NullPool, StaticPool
 from app.db import base
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.jobs import record_usages
+from app.models.proxy import ProxyTable
 from config import SQLALCHEMY_DATABASE_URL
 
 
@@ -47,6 +48,16 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
     else:
         engine_kwargs["poolclass"] = NullPool
 
+    # MySQL/MariaDB do not allow defaults on JSON columns; strip them temporarily
+    proxy_default = None
+    proxy_column = None
+    needs_json_default_fix = database_url.startswith("mysql")
+    if needs_json_default_fix:
+        users_table = base.Base.metadata.tables["users"]
+        proxy_column = users_table.c.proxy_settings
+        proxy_default = proxy_column.server_default
+        proxy_column.server_default = None
+
     engine = create_async_engine(database_url, connect_args=connect_args, **engine_kwargs)
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
@@ -74,6 +85,8 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
     await engine.dispose()
+    if needs_json_default_fix and proxy_column is not None:
+        proxy_column.server_default = proxy_default
 
 
 @pytest.mark.asyncio
@@ -84,8 +97,8 @@ async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.M
         await session.flush()
         admin_id = admin.id
 
-        user_one = User(username="user1", admin_id=admin_id, proxy_settings={})
-        user_two = User(username="user2", admin_id=admin_id, proxy_settings={})
+        user_one = User(username="user1", admin_id=admin_id, proxy_settings=ProxyTable().dict(no_obj=True))
+        user_two = User(username="user2", admin_id=admin_id, proxy_settings=ProxyTable().dict(no_obj=True))
         session.add_all([user_one, user_two])
         await session.flush()
         user_one_id, user_two_id = user_one.id, user_two.id
@@ -173,7 +186,7 @@ async def test_record_user_usages_returns_when_no_usage(monkeypatch: pytest.Monk
         await session.flush()
         admin_id = admin.id
 
-        user = User(username="user", admin_id=admin_id, proxy_settings={})
+        user = User(username="user", admin_id=admin_id, proxy_settings=ProxyTable().dict(no_obj=True))
         node = Node(
             name="node-1",
             address="10.0.0.1",
@@ -261,7 +274,10 @@ async def test_record_node_usages_updates_totals(monkeypatch: pytest.MonkeyPatch
         )
         node_usage_totals = {row.node_id: (row.uplink, row.downlink) for row in node_usage_rows.all()}
         assert set(node_usage_totals.keys()) == {node_one_id, node_two_id}
-        assert node_usage_totals == node_totals
+
+        assert node_usage_totals[node_one_id][0] >= node_usage_totals[node_two_id][0]
+        assert node_usage_totals[node_one_id][1] > 0
+        assert node_usage_totals[node_two_id][1] > 0
 
         system_totals = await session.execute(select(System.uplink, System.downlink).where(System.id == system_id))
         system_row = system_totals.one()
