@@ -19,7 +19,6 @@ const initialDefaultValues: Partial<NodeFormValues> = {
   connection_type: NodeConnectionType.grpc,
   server_ca: '',
   keep_alive: 20000,
-  max_logs: 100,
 }
 
 export default function NodesList() {
@@ -57,7 +56,6 @@ export default function NodesList() {
       connection_type: node.connection_type,
       server_ca: node.server_ca,
       keep_alive: node.keep_alive,
-      max_logs: node.max_logs,
     })
     setIsDialogOpen(true)
   }
@@ -78,7 +76,6 @@ export default function NodesList() {
           connection_type: node.connection_type,
           server_ca: node.server_ca,
           keep_alive: node.keep_alive,
-          max_logs: node.max_logs,
           status: newStatus,
         },
       })

@@ -145,10 +145,8 @@ const Dashboard = () => {
       server_ca: '',
       keep_alive: 60,
       keep_alive_unit: 'seconds',
-      max_logs: 1000,
       api_key: '',
       core_config_id: 1,
-      gather_logs: true,
     },
   })
 

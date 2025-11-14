@@ -63,8 +63,6 @@
     "connectionType": "Тип соединения",
     "serverCA": "Сертификат сервера",
     "keepAlive": "Поддержание соединения",
-    "maxLogs": "Максимум логов",
-    "maxLogsPlaceHolder": "Введите максимальное количество логов (в секундах)",
     "status": "Статус",
     "actions": "Действия",
     "connected": "Подключено",
@@ -1214,8 +1212,6 @@
     "portPlaceholder": "Введите порт узла",
     "usageRatio": "Коэффициент использования",
     "usageRatioPlaceholder": "Введите коэффициент использования",
-    "maxLogs": "Максимум логов",
-    "maxLogsPlaceholder": "Введите максимум логов",
     "connectionType": "Тип подключения",
     "keepAlive": "Поддержание соединения",
     "keepAliveDescription": "Установите интервал поддержания соединения",
@@ -1282,8 +1278,6 @@
     "selectDayOfWeek": "Выберите день недели",
     "selectDayOfMonth": "Выберите день месяца",
     "selectDayOfYear": "Выберите день года",
-    "gatherLogs": "Сбор логов",
-    "gatherLogsDescription": "Включить сбор логов с этого узла для мониторинга и отладки",
     "statusMessages": {
       "checkUnavailableForNew": "Проверка статуса недоступна для новых узлов. Сначала создайте узел, чтобы проверить его статус."
     },

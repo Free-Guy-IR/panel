@@ -522,8 +522,6 @@ class Node(Base):
         server_default=NodeConnectionType.grpc.name,
     )
     keep_alive: Mapped[int] = mapped_column(unique=False, default=0)
-    max_logs: Mapped[int] = mapped_column(BigInteger, unique=False, default=1000, server_default=text("1000"))
-    gather_logs: Mapped[bool] = mapped_column(default=True, server_default="1")
 
     @hybrid_property
     def reseted_uplink(self) -> int:

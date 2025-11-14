@@ -36,8 +36,6 @@
     "connectionType": "Connection Type",
     "serverCA": "Server CA",
     "keepAlive": "Keep Alive",
-    "maxLogs": "Max Logs",
-    "maxLogsPlaceHolder": "Enter max logs (in seconds)",
     "status": "Status",
     "actions": "Actions",
     "connected": "Connected",
@@ -1315,8 +1313,6 @@
     "portPlaceholder": "Enter node port",
     "usageRatio": "Usage Ratio",
     "usageRatioPlaceholder": "Enter usage ratio",
-    "maxLogs": "Max Logs",
-    "maxLogsPlaceholder": "Enter max logs",
     "connectionType": "Connection Type",
     "keepAlive": "Keep Alive",
     "keepAliveDescription": "Set the keep alive interval",
@@ -1383,8 +1379,6 @@
     "selectDayOfWeek": "Select day of week",
     "selectDayOfMonth": "Select day of month",
     "selectDayOfYear": "Select day of year",
-    "gatherLogs": "Gather Logs",
-    "gatherLogsDescription": "Enable log collection from this node for monitoring and debugging purposes",
     "statusMessages": {
       "checkUnavailableForNew": "Status check not available for new nodes. Create the node first to check its status."
     },

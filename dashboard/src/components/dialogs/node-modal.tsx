@@ -31,10 +31,8 @@ export const nodeFormSchema = z.object({
   server_ca: z.string().min(1, 'Server CA is required'),
   keep_alive: z.number().min(0, 'Keep alive must be 0 or greater'),
   keep_alive_unit: z.enum(['seconds', 'minutes', 'hours']).default('seconds'),
-  max_logs: z.number().min(1, 'Max logs is required'),
   api_key: z.string().min(1, 'API key is required'),
   core_config_id: z.number().min(1, 'Core configuration is required'),
-  gather_logs: z.boolean().default(true),
   data_limit: z.number().min(0).optional().nullable(),
   data_limit_reset_strategy: z.nativeEnum(DataLimitResetStrategy).optional().nullable(),
   reset_time: z.union([z.null(), z.undefined(), z.number().min(-1)]),
@@ -141,10 +139,8 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
             connection_type: nodeData.connection_type,
             server_ca: nodeData.server_ca,
             keep_alive: nodeData.keep_alive,
-            max_logs: nodeData.max_logs,
             api_key: (nodeData.api_key as string) || '',
             core_config_id: nodeData.core_config_id ?? cores?.cores?.[0]?.id,
-            gather_logs: nodeData.gather_logs ?? true,
             data_limit: dataLimitGB,
             data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
             reset_time: nodeData.reset_time ?? null,
@@ -169,10 +165,8 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         server_ca: '',
         keep_alive: 60,
         keep_alive_unit: 'seconds',
-        max_logs: 1000,
         api_key: '',
         core_config_id: cores?.cores?.[0]?.id,
-        gather_logs: true,
         data_limit: 0,
         data_limit_reset_strategy: DataLimitResetStrategy.no_reset,
         reset_time: -1,
@@ -330,7 +324,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
       onOpenChange(false)
       form.reset()
     } catch (error: any) {
-      const fields = ['name', 'address', 'port', 'core_config_id', 'api_key', 'max_logs', 'keep_alive_unit', 'keep_alive', 'server_ca', 'connection_type', '']
+      const fields = ['name', 'address', 'port', 'core_config_id', 'api_key', 'keep_alive_unit', 'keep_alive', 'server_ca', 'connection_type', '']
       handleError({ error, fields, form, contextKey: 'nodes' })
     }
   }
@@ -584,25 +578,6 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                               )}
                             />
 
-                            <FormField
-                              control={form.control}
-                              name="max_logs"
-                              render={({ field }) => (
-                                <FormItem className="flex-1">
-                                  <FormLabel>{t('nodes.maxLogs')}</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      isError={!!form.formState.errors.max_logs}
-                                      type="number"
-                                      placeholder={t('nodes.maxLogsPlaceholder')}
-                                      {...field}
-                                      onChange={e => field.onChange(parseInt(e.target.value))}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
                           </div>
 
                           <FormField
@@ -699,22 +674,6 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                 </FormItem>
                               )
                             }}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="gather_logs"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                <div className="space-y-0.5">
-                                  <FormLabel className="text-sm">{t('nodeModal.gatherLogs')}</FormLabel>
-                                  <p className="text-xs text-muted-foreground">{t('nodeModal.gatherLogsDescription')}</p>
-                                </div>
-                                <FormControl>
-                                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                </FormControl>
-                              </FormItem>
-                            )}
                           />
 
                           <div className="flex flex-col gap-4">

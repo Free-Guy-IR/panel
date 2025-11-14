@@ -34,8 +34,6 @@
     "connectionType": "连接类型",
     "serverCA": "服务器证书",
     "keepAlive": "保持连接",
-    "maxLogs": "最大日志数",
-    "maxLogsPlaceHolder": "输入最大日志数（以秒为单位）",
     "status": "状态",
     "actions": "操作",
     "connected": "已连接",
@@ -1272,8 +1270,6 @@
     "portPlaceholder": "输入节点端口",
     "usageRatio": "使用系数",
     "usageRatioPlaceholder": "输入使用系数",
-    "maxLogs": "最大日志数",
-    "maxLogsPlaceholder": "输入最大日志数",
     "connectionType": "连接类型",
     "keepAlive": "保持连接",
     "keepAliveDescription": "设置保持连接间隔",
@@ -1329,8 +1325,6 @@
     "selectDayOfWeek": "选择星期几",
     "selectDayOfMonth": "选择月份中的日期",
     "selectDayOfYear": "选择年份中的日期",
-    "gatherLogs": "收集日志",
-    "gatherLogsDescription": "启用从此节点收集日志以进行监控和调试",
     "statusMessages": {
       "checkUnavailableForNew": "新节点无法进行状态检查。请先创建节点，然后检查其状态。"
     },

@@ -1260,11 +1260,8 @@ export interface NodeResponse {
   connection_type: NodeConnectionType
   server_ca: string
   keep_alive: number
-  /** */
-  max_logs?: number
   core_config_id: NodeResponseCoreConfigId
   api_key: NodeResponseApiKey
-  gather_logs?: boolean
   data_limit?: NodeResponseDataLimit
   data_limit_reset_strategy?: DataLimitResetStrategy
   reset_time?: number
@@ -1306,13 +1303,9 @@ export type NodeModifyDataLimitResetStrategy = DataLimitResetStrategy | null
 
 export type NodeModifyDataLimit = number | null
 
-export type NodeModifyGatherLogs = boolean | null
-
 export type NodeModifyApiKey = string | null
 
 export type NodeModifyCoreConfigId = number | null
-
-export type NodeModifyMaxLogs = number | null
 
 export type NodeModifyKeepAlive = number | null
 
@@ -1336,10 +1329,8 @@ export interface NodeModify {
   connection_type?: NodeModifyConnectionType
   server_ca?: NodeModifyServerCa
   keep_alive?: NodeModifyKeepAlive
-  max_logs?: NodeModifyMaxLogs
   core_config_id?: NodeModifyCoreConfigId
   api_key?: NodeModifyApiKey
-  gather_logs?: NodeModifyGatherLogs
   data_limit?: NodeModifyDataLimit
   data_limit_reset_strategy?: NodeModifyDataLimitResetStrategy
   reset_time?: NodeModifyResetTime
@@ -1365,11 +1356,8 @@ export interface NodeCreate {
   connection_type: NodeConnectionType
   server_ca: string
   keep_alive: number
-  /** */
-  max_logs?: number
   core_config_id: number
   api_key: string
-  gather_logs?: boolean
   data_limit?: NodeCreateDataLimit
   data_limit_reset_strategy?: DataLimitResetStrategy
   reset_time?: number

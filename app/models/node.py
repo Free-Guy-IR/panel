@@ -35,10 +35,8 @@ class Node(BaseModel):
     connection_type: NodeConnectionType
     server_ca: str
     keep_alive: int
-    max_logs: int = Field(gt=0, default=1000)
     core_config_id: int
     api_key: str
-    gather_logs: bool = Field(default=True)
     data_limit: int = Field(default=0)
     data_limit_reset_strategy: DataLimitResetStrategy = Field(default=DataLimitResetStrategy.no_reset)
     reset_time: int = Field(default=-1)
@@ -55,10 +53,8 @@ class NodeCreate(Node):
                 "server_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
                 "connection_type": "grpc",
                 "keep_alive": 60,
-                "max_logs": 1000,
                 "core_config_id": 1,
                 "api_key": "valid uuid",
-                "gather_logs": True,
             }
         }
     )
@@ -160,10 +156,8 @@ class NodeModify(NodeCreate):
     server_ca: str | None = Field(default=None)
     connection_type: NodeConnectionType | None = Field(default=None)
     keep_alive: int | None = Field(default=None)
-    max_logs: int | None = Field(default=None)
     core_config_id: int | None = Field(default=None)
     api_key: str | None = Field(default=None)
-    gather_logs: bool | None = Field(default=None)
     data_limit: int | None = None
     data_limit_reset_strategy: DataLimitResetStrategy | None = None
     reset_time: int | None = None
@@ -179,10 +173,8 @@ class NodeModify(NodeCreate):
                 "connection_type": "grpc",
                 "server_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
                 "keep_alive": 60,
-                "max_logs": 1000,
                 "core_config_id": 1,
                 "api_key": "valid uuid",
-                "gather_logs": True,
             }
         }
     )

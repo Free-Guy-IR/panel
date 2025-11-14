@@ -1155,8 +1155,6 @@
     "portPlaceholder": "پورت گره را وارد کنید",
     "usageRatio": "نسبت استفاده",
     "usageRatioPlaceholder": "نسبت استفاده را وارد کنید",
-    "maxLogs": "حداکثر لاگ‌ها",
-    "maxLogsPlaceholder": "حداکثر لاگ‌ها را وارد کنید",
     "connectionType": "نوع اتصال",
     "keepAlive": "نگهداری اتصال",
     "keepAliveDescription": "تنظیم فاصله نگهداری اتصال",
@@ -1223,8 +1221,6 @@
     "selectDayOfWeek": "روز هفته را انتخاب کنید",
     "selectDayOfMonth": "روز ماه را انتخاب کنید",
     "selectDayOfYear": "روز سال را انتخاب کنید",
-    "gatherLogs": "جمع‌آوری لاگ‌ها",
-    "gatherLogsDescription": "فعال‌سازی جمع‌آوری لاگ‌ها از این گره برای نظارت و عیب‌یابی",
     "statusMessages": {
       "checkUnavailableForNew": "بررسی وضعیت برای گره‌های جدید در دسترس نیست. ابتدا گره را ایجاد کنید تا بتوانید وضعیت آن را بررسی کنید."
     },
@@ -1263,8 +1259,6 @@
     "connectionType": "نوع اتصال",
     "serverCA": "گواهی سرور",
     "keepAlive": "حفظ اتصال",
-    "maxLogs": "حداکثر لاگ‌ها",
-    "maxLogsPlaceHolder": "حداکثر لاگ‌ها را وارد کنید (ثانیه)",
     "status": "وضعیت",
     "actions": "عملیات",
     "connected": "متصل",
