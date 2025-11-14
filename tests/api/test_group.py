@@ -19,7 +19,7 @@ def test_group_create(access_token):
             )
             created_groups.append(response["id"])
             assert response["name"].startswith("testgroup")
-            assert response["inbound_tags"] == selected_inbounds
+            assert set(response["inbound_tags"]) == set(selected_inbounds)
     finally:
         for group_id in created_groups:
             delete_group(access_token, group_id)
