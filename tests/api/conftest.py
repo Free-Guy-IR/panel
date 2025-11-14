@@ -127,6 +127,303 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch):
                 "clash_meta": True,
                 "outline": True,
             },
+            "applications": [
+                {
+                    "name": "Streisand",
+                    "icon_url": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/1e/29/e0/1e29e04f-273b-9186-5f12-9bbe48c0fce2/AppIcon-0-0-1x_U007epad-0-0-0-1-0-85-220.png/460x0w.webp",
+                    "import_url": "streisand://import/{url}",
+                    "description": {
+                        "en": "Flexible proxy client with rule-based setup, multiple protocols, and custom DNS. Supports VLESS(Reality), VMess, Trojan, Shadowsocks, Socks, SSH, Hysteria(V2), TUIC, Wireguard.",
+                        "fa": "کلاینت پراکسی انعطاف‌پذیر با قوانین، پشتیبانی از پروتکل‌های متعدد و DNS سفارشی. پشتیبانی از VLESS(Reality)، VMess، Trojan، Shadowsocks، Socks، SSH، Hysteria(V2)، TUIC، WireGuard.",
+                        "ru": "Гибкий прокси‑клиент с правилами, поддержкой множества протоколов и кастомным DNS. Поддерживаются VLESS(Reality), VMess, Trojan, Shadowsocks, Socks, SSH, Hysteria(V2), TUIC, Wireguard.",
+                        "zh": "灵活的代理客户端，支持基于规则的配置、多种协议以及自定义 DNS。支持 VLESS(Reality)、VMess、Trojan、Shadowsocks、Socks、SSH、Hysteria(V2)、TUIC、Wireguard。",
+                    },
+                    "recommended": True,
+                    "platform": "ios",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://apps.apple.com/us/app/streisand/id6450534064",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://apps.apple.com/us/app/streisand/id6450534064",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://apps.apple.com/us/app/streisand/id6450534064",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://apps.apple.com/us/app/streisand/id6450534064",
+                            "language": "zh",
+                        },
+                    ],
+                },
+                {
+                    "name": "SingBox",
+                    "icon_url": "https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/dev-next/docs/assets/icon.svg",
+                    "import_url": "sing-box://import-remote-profile?url={url}",
+                    "description": {
+                        "en": "A client that provides a platform for routing traffic securely.",
+                        "fa": "Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.",
+                        "ru": "Клиент, обеспечивающий безопасную маршрутизацию трафика.",
+                        "zh": "提供安全流量路由的平台客户端。",
+                    },
+                    "recommended": False,
+                    "platform": "ios",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://apps.apple.com/us/app/sing-box-vt/id6673731168",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://apps.apple.com/us/app/sing-box-vt/id6673731168",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://apps.apple.com/us/app/sing-box-vt/id6673731168",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://apps.apple.com/us/app/sing-box-vt/id6673731168",
+                            "language": "zh",
+                        },
+                    ],
+                },
+                {
+                    "name": "Shadowrocket",
+                    "icon_url": "https://shadowlaunch.com/static/icon.png",
+                    "import_url": "",
+                    "description": {
+                        "en": "A rule-based proxy utility client for iOS.",
+                        "fa": "Shadowrocket یک ابزار پروکسی قانون‌محور برای iOS است.",
+                        "ru": "Прокси‑клиент для iOS с маршрутизацией по правилам.",
+                        "zh": "基于规则的 iOS 代理工具客户端。",
+                    },
+                    "recommended": False,
+                    "platform": "ios",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://apps.apple.com/us/app/shadowrocket/id932747118",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://apps.apple.com/us/app/shadowrocket/id932747118",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://apps.apple.com/us/app/shadowrocket/id932747118",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://apps.apple.com/us/app/shadowrocket/id932747118",
+                            "language": "zh",
+                        },
+                    ],
+                },
+                {
+                    "name": "V2rayNG",
+                    "icon_url": "https://raw.githubusercontent.com/2dust/v2rayNG/refs/heads/master/V2rayNG/app/src/main/ic_launcher-web.png",
+                    "import_url": "v2rayng://install-config?url={url}",
+                    "description": {
+                        "en": "A V2Ray client for Android devices.",
+                        "fa": "V2rayNG یک کلاینت V2Ray برای دستگاه‌های اندرویدی است.",
+                        "ru": "Клиент V2Ray для устройств Android.",
+                        "zh": "适用于 Android 设备的 V2Ray 客户端。",
+                    },
+                    "recommended": True,
+                    "platform": "android",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://github.com/2dust/v2rayNG/releases/latest",
+                            "language": "en",
+                        },
+                        {"name": "دانلود", "url": "https://github.com/2dust/v2rayNG/releases/latest", "language": "fa"},
+                        {
+                            "name": "Скачать",
+                            "url": "https://github.com/2dust/v2rayNG/releases/latest",
+                            "language": "ru",
+                        },
+                        {"name": "下载", "url": "https://github.com/2dust/v2rayNG/releases/latest", "language": "zh"},
+                    ],
+                },
+                {
+                    "name": "SingBox",
+                    "icon_url": "https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/dev-next/docs/assets/icon.svg",
+                    "import_url": "sing-box://import-remote-profile?url={url}",
+                    "description": {
+                        "en": "A client that provides a platform for routing traffic securely.",
+                        "fa": "Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.",
+                        "ru": "Клиент, обеспечивающий безопасную маршрутизацию трафика.",
+                        "zh": "提供安全流量路由的平台客户端。",
+                    },
+                    "recommended": False,
+                    "platform": "android",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://play.google.com/store/apps/details?id=io.nekohasekai.sfa&hl=en",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://play.google.com/store/apps/details?id=io.nekohasekai.sfa&hl=en",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://play.google.com/store/apps/details?id=io.nekohasekai.sfa&hl=en",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://play.google.com/store/apps/details?id=io.nekohasekai.sfa&hl=en",
+                            "language": "zh",
+                        },
+                    ],
+                },
+                {
+                    "name": "V2rayN",
+                    "icon_url": "https://raw.githubusercontent.com/2dust/v2rayN/refs/heads/master/v2rayN/v2rayN.Desktop/v2rayN.png",
+                    "import_url": "",
+                    "description": {
+                        "en": "A Windows V2Ray client with GUI support.",
+                        "fa": "v2rayN یک کلاینت V2Ray برای ویندوز با پشتیبانی از رابط کاربری است.",
+                        "ru": "V2Ray клиент для Windows с графическим интерфейсом.",
+                        "zh": "带有图形界面的 Windows V2Ray 客户端。",
+                    },
+                    "recommended": True,
+                    "platform": "windows",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://github.com/2dust/v2rayN/releases/latest",
+                            "language": "en",
+                        },
+                        {"name": "دانلود", "url": "https://github.com/2dust/v2rayN/releases/latest", "language": "fa"},
+                        {"name": "Скачать", "url": "https://github.com/2dust/v2rayN/releases/latest", "language": "ru"},
+                        {"name": "下载", "url": "https://github.com/2dust/v2rayN/releases/latest", "language": "zh"},
+                    ],
+                },
+                {
+                    "name": "FlClash",
+                    "icon_url": "https://raw.githubusercontent.com/chen08209/FlClash/refs/heads/main/assets/images/icon.png",
+                    "import_url": "",
+                    "description": {
+                        "en": "A cross-platform GUI client for clash core.",
+                        "fa": "Flclash یک کلاینت GUI چندسکویی برای clash core است.",
+                        "ru": "Кроссплатформенный GUI-клиент для clash core.",
+                        "zh": "跨平台 clash core 图形界面客户端。",
+                    },
+                    "recommended": False,
+                    "platform": "windows",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "zh",
+                        },
+                    ],
+                },
+                {
+                    "name": "FlClash",
+                    "icon_url": "https://raw.githubusercontent.com/chen08209/FlClash/refs/heads/main/assets/images/icon.png",
+                    "import_url": "",
+                    "description": {
+                        "en": "A cross-platform GUI client for clash core.",
+                        "fa": "Flclash یک کلاینت GUI چندسکویی برای clash core است.",
+                        "ru": "Кроссплатформенный GUI-клиент для clash core.",
+                        "zh": "跨平台 clash core 图形界面客户端。",
+                    },
+                    "recommended": True,
+                    "platform": "linux",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://github.com/chen08209/FlClash/releases/latest",
+                            "language": "zh",
+                        },
+                    ],
+                },
+                {
+                    "name": "SingBox",
+                    "icon_url": "https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/dev-next/docs/assets/icon.svg",
+                    "import_url": "sing-box://import-remote-profile?url={url}",
+                    "description": {
+                        "en": "A client that provides a platform for routing traffic securely.",
+                        "fa": "Sing-box یک کلاینت برای مسیریابی امن ترافیک فراهم می‌کند.",
+                        "ru": "Клиент, обеспечивающий безопасную маршрутизацию трафика.",
+                        "zh": "提供安全流量路由的平台客户端。",
+                    },
+                    "recommended": False,
+                    "platform": "linux",
+                    "download_links": [
+                        {
+                            "name": "Download",
+                            "url": "https://github.com/SagerNet/sing-box/releases/latest",
+                            "language": "en",
+                        },
+                        {
+                            "name": "دانلود",
+                            "url": "https://github.com/SagerNet/sing-box/releases/latest",
+                            "language": "fa",
+                        },
+                        {
+                            "name": "Скачать",
+                            "url": "https://github.com/SagerNet/sing-box/releases/latest",
+                            "language": "ru",
+                        },
+                        {
+                            "name": "下载",
+                            "url": "https://github.com/SagerNet/sing-box/releases/latest",
+                            "language": "zh",
+                        },
+                    ],
+                },
+            ],
         },
         "general": {"default_flow": "", "default_method": "chacha20-ietf-poly1305"},
     }

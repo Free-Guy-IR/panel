@@ -5,12 +5,12 @@ from fastapi import status
 from tests.api import client
 from tests.api.helpers import (
     create_core,
-    delete_core,
     create_group,
-    delete_group,
     create_user,
-    delete_user,
     create_user_template,
+    delete_core,
+    delete_group,
+    delete_user,
     delete_user_template,
     unique_name,
 )
@@ -122,6 +122,8 @@ def test_user_subscriptions(access_token):
     user_subscription_formats = [
         "",
         "info",
+        "usage",
+        "apps",
         "sing_box",
         "clash_meta",
         "clash",

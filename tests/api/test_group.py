@@ -1,3 +1,5 @@
+import random
+
 from fastapi import status
 
 from tests.api import client
@@ -13,7 +15,8 @@ def test_group_create(access_token):
     created_groups = []
     try:
         for _ in range(3):
-            selected_inbounds = inbounds[: min(3, len(inbounds))]
+            k = min(3, len(inbounds))
+            selected_inbounds = random.sample(inbounds, k=k) if k else inbounds
             response = create_group(
                 access_token, name=unique_name("testgroup"), inbound_tags=selected_inbounds
             )

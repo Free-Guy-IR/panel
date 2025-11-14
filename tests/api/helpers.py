@@ -112,7 +112,7 @@ def create_group(access_token: str, *, name: str | None = None, inbound_tags: It
         tags = get_inbounds(access_token)
     payload = {
         "name": name or unique_name("group"),
-        "inbound_tags": tags[: min(3, len(tags))],
+        "inbound_tags": tags,
     }
     response = client.post("/api/group", headers=auth_headers(access_token), json=payload)
     assert response.status_code == status.HTTP_201_CREATED
