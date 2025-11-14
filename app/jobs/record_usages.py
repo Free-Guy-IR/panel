@@ -198,10 +198,13 @@ async def safe_execute(stmt, params=None, max_retries: int = 5):
     """
     statement = stmt
 
-    if await get_dialect() == "mysql" and isinstance(stmt, Insert):
+    # Get dialect once before retry loop to avoid repeated DB calls
+    dialect = await get_dialect()
+    if dialect == "mysql" and isinstance(stmt, Insert):
         # MySQL-specific IGNORE prefix - but skip if using ON DUPLICATE KEY UPDATE
         if not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None:
             statement = stmt.prefix_with("IGNORE")
+
     for attempt in range(max_retries):
         try:
             # engine.begin() ensures commit/rollback + connection return on exit
@@ -210,6 +213,7 @@ async def safe_execute(stmt, params=None, max_retries: int = 5):
                     await conn.execute(statement)
                 else:
                     await conn.execute(statement, params)
+                return
 
         except (OperationalError, DatabaseError) as err:
             # Session auto-closed by context manager, locks released
