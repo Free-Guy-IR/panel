@@ -26,6 +26,7 @@ const UsersTable = memo(() => {
   const [isAdvanceSearchOpen, setIsAdvanceSearchOpen] = useState(false)
   const [isSorting, setIsSorting] = useState(false)
   const isFirstLoadRef = useRef(true)
+  const isAutoRefreshingRef = useRef(false)
   const { admin } = useAdmin()
   const isSudo = admin?.is_sudo || false
 
@@ -152,6 +153,13 @@ const UsersTable = memo(() => {
     }
   }, [usersData])
 
+  // Reset auto refresh flag when fetching completes
+  useEffect(() => {
+    if (!isFetching && isAutoRefreshingRef.current) {
+      isAutoRefreshingRef.current = false
+    }
+  }, [isFetching])
+
   // Remove automatic refetch on filter change to prevent lag
   // Filters will trigger new queries automatically
 
@@ -257,9 +265,20 @@ const UsersTable = memo(() => {
   }, [])
 
   const handleManualRefresh = async () => {
+    // Mark as manual refresh (not auto refresh)
+    isAutoRefreshingRef.current = false
     // Invalidate queries to ensure fresh data
     queryClient.invalidateQueries({ queryKey: ['getUsers'] })
     // Then refetch
+    return refetch()
+  }
+
+  const handleAutoRefresh = async () => {
+    // Mark as auto refresh
+    isAutoRefreshingRef.current = true
+    // Invalidate queries to ensure fresh data
+    queryClient.invalidateQueries({ queryKey: ['getUsers'] })
+    // Then refetch - flag will be reset by useEffect when isFetching becomes false
     return refetch()
   }
 
@@ -331,6 +350,7 @@ const UsersTable = memo(() => {
         onFilterChange={handleFilterChange}
         advanceSearchOnOpen={setIsAdvanceSearchOpen}
         refetch={handleManualRefresh}
+        autoRefetch={handleAutoRefresh}
         handleSort={handleSort}
         onClearAdvanceSearch={() => {
           advanceSearchForm.reset({
@@ -350,7 +370,7 @@ const UsersTable = memo(() => {
           setCurrentPage(0)
         }}
       />
-      <DataTable columns={columns} data={usersData?.users || []} isLoading={showLoadingSpinner} isFetching={isFetching && !isFirstLoadRef.current} onEdit={handleEdit} />
+      <DataTable columns={columns} data={usersData?.users || []} isLoading={showLoadingSpinner} isFetching={isFetching && !isFirstLoadRef.current && !isAutoRefreshingRef.current} onEdit={handleEdit} />
       <PaginationControls
         currentPage={currentPage}
         totalPages={totalPages}

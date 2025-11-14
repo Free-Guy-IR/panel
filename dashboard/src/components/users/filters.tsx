@@ -77,31 +77,33 @@ interface FiltersProps {
   }
   onFilterChange: (filters: Partial<FiltersProps['filters']>) => void
   refetch?: (options?: RefetchOptions) => Promise<unknown>
+  autoRefetch?: (options?: RefetchOptions) => Promise<unknown>
   advanceSearchOnOpen: (status: boolean) => void
   onClearAdvanceSearch?: () => void
   handleSort?: (column: string, fromDropdown?: boolean) => void
 }
 
-export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen, onClearAdvanceSearch, handleSort }: FiltersProps) => {
+export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advanceSearchOnOpen, onClearAdvanceSearch, handleSort }: FiltersProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [search, setSearch] = useState(filters.search || '')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(() => getUsersAutoRefreshIntervalSeconds())
   const { refetch: queryRefetch } = useGetUsers(filters)
-  const refetchUsers = useCallback(async (showLoading = false) => {
+  const refetchUsers = useCallback(async (showLoading = false, isAutoRefresh = false) => {
     if (showLoading) {
       setIsRefreshing(true)
     }
     try {
-      const refetchFn = refetch ?? queryRefetch
+      // Use autoRefetch for auto refresh, otherwise use manual refetch
+      const refetchFn = isAutoRefresh ? (autoRefetch ?? queryRefetch) : (refetch ?? queryRefetch)
       await refetchFn()
     } finally {
       if (showLoading) {
         setIsRefreshing(false)
       }
     }
-  }, [refetch, queryRefetch])
+  }, [refetch, autoRefetch, queryRefetch])
   useEffect(() => {
     const persistedValue = getUsersAutoRefreshIntervalSeconds()
     setAutoRefreshInterval(prev => (prev === persistedValue ? prev : persistedValue))
@@ -109,7 +111,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
   useEffect(() => {
     if (!autoRefreshInterval) return
     const intervalId = setInterval(() => {
-      refetchUsers(true) // Show loading spinner on auto refresh
+      refetchUsers(true, true) // Show loading spinner on auto refresh, mark as auto refresh
     }, autoRefreshInterval * 1000)
     return () => clearInterval(intervalId)
   }, [autoRefreshInterval, refetchUsers])
@@ -117,7 +119,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
     if (typeof document === 'undefined') return
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && autoRefreshInterval > 0) {
-        refetchUsers(true) // Show loading spinner on visibility change refresh
+        refetchUsers(true, true) // Show loading spinner on visibility change refresh, mark as auto refresh
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -174,7 +176,7 @@ export const Filters = ({ filters, onFilterChange, refetch, advanceSearchOnOpen,
 
   // Handle refresh with loading state
   const handleRefreshClick = async () => {
-    await refetchUsers(true) // Show loading spinner on manual refresh
+    await refetchUsers(true, false) // Show loading spinner on manual refresh, mark as manual refresh
   }
 
   const handleAutoRefreshChange = (seconds: number) => {
