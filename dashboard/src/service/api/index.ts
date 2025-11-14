@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 1.6.1
+ * OpenAPI spec version: 1.7.0
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -112,9 +112,13 @@ export type ReconnectAllNodeParams = {
 }
 
 export type GetNodesParams = {
-  backend_id?: number | null
-  offset?: number
-  limit?: number
+  core_id?: number | null
+  offset?: number | null
+  limit?: number | null
+  status?: NodeStatus[] | null
+  enabled?: boolean
+  ids?: number[] | null
+  search?: string | null
 }
 
 export type GetUsageParams = {
@@ -177,6 +181,13 @@ export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
 
+export interface XrayMuxSettingsOutput {
+  enabled?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
+
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
 export type XrayMuxSettingsInputConcurrency = number | null
@@ -205,13 +216,6 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
-
-export interface XrayMuxSettingsOutput {
-  enabled?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
 
 export type XTLSFlows = (typeof XTLSFlows)[keyof typeof XTLSFlows]
 
@@ -275,6 +279,16 @@ export type XHttpSettingsOutputXPaddingBytes = string | null
 
 export type XHttpSettingsOutputNoGrpcHeader = boolean | null
 
+export interface XHttpSettingsOutput {
+  mode?: XHttpModes
+  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
+  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
+  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
+  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
+  xmux?: XHttpSettingsOutputXmux
+  download_settings?: XHttpSettingsOutputDownloadSettings
+}
+
 export type XHttpSettingsInputDownloadSettings = number | null
 
 export type XHttpSettingsInputXmux = XMuxSettingsInput | null
@@ -296,16 +310,6 @@ export const XHttpModes = {
   'stream-up': 'stream-up',
   'stream-one': 'stream-one',
 } as const
-
-export interface XHttpSettingsOutput {
-  mode?: XHttpModes
-  no_grpc_header?: XHttpSettingsOutputNoGrpcHeader
-  x_padding_bytes?: XHttpSettingsOutputXPaddingBytes
-  sc_max_each_post_bytes?: XHttpSettingsOutputScMaxEachPostBytes
-  sc_min_posts_interval_ms?: XHttpSettingsOutputScMinPostsIntervalMs
-  xmux?: XHttpSettingsOutputXmux
-  download_settings?: XHttpSettingsOutputDownloadSettings
-}
 
 export interface XHttpSettingsInput {
   mode?: XHttpModes
@@ -1239,13 +1243,15 @@ export interface NodeSettings {
   min_node_version?: string
 }
 
+export type NodeResponseLifetimeDownlink = number | null
+
+export type NodeResponseLifetimeUplink = number | null
+
 export type NodeResponseMessage = string | null
 
 export type NodeResponseNodeVersion = string | null
 
 export type NodeResponseXrayVersion = string | null
-
-export type NodeResponseDataLimit = number | null
 
 export type NodeResponseApiKey = string | null
 
@@ -1262,7 +1268,7 @@ export interface NodeResponse {
   keep_alive: number
   core_config_id: NodeResponseCoreConfigId
   api_key: NodeResponseApiKey
-  data_limit?: NodeResponseDataLimit
+  data_limit?: number
   data_limit_reset_strategy?: DataLimitResetStrategy
   reset_time?: number
   id: number
@@ -1272,8 +1278,8 @@ export interface NodeResponse {
   message: NodeResponseMessage
   uplink?: number
   downlink?: number
-  lifetime_uplink?: number
-  lifetime_downlink?: number
+  lifetime_uplink?: NodeResponseLifetimeUplink
+  lifetime_downlink?: NodeResponseLifetimeDownlink
 }
 
 export interface NodeRealtimeStats {
@@ -1337,8 +1343,6 @@ export interface NodeModify {
   status?: NodeModifyStatus
 }
 
-export type NodeCreateDataLimit = number | null
-
 export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -1358,7 +1362,7 @@ export interface NodeCreate {
   keep_alive: number
   core_config_id: number
   api_key: string
-  data_limit?: NodeCreateDataLimit
+  data_limit?: number
   data_limit_reset_strategy?: DataLimitResetStrategy
   reset_time?: number
 }
