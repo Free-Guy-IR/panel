@@ -8,6 +8,7 @@ from tests.api.helpers import (
     create_group,
     create_user,
     create_user_template,
+    create_hosts_for_inbounds,
     delete_core,
     delete_group,
     delete_user,
@@ -134,10 +135,10 @@ def test_user_subscriptions(access_token):
     ]
 
     core, groups = setup_groups(access_token, 1)
-    group_ids = [group["id"] for group in groups]
+    hosts = create_hosts_for_inbounds(access_token)
     user = create_user(
         access_token,
-        group_ids=group_ids,
+        group_ids=[group["id"] for group in groups],
         payload={"username": unique_name("test_user_subscriptions")},
     )
     try:
@@ -147,6 +148,8 @@ def test_user_subscriptions(access_token):
             assert response.status_code == status.HTTP_200_OK
     finally:
         delete_user(access_token, user["username"])
+        for host in hosts:
+            client.delete(f"/api/host/{host['id']}", headers={"Authorization": f"Bearer {access_token}"})
         cleanup_groups(access_token, core, groups)
 
 
@@ -301,7 +304,6 @@ def test_user_delete(access_token):
         )
         assert response.status_code == status.HTTP_204_NO_CONTENT
     finally:
-        delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)
 
 

@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Iterable
 from uuid import uuid4
 
 from fastapi import status
-from sqlalchemy import select
 
-from tests.api import TestSession, client
+from tests.api import client
 from tests.api.sample_data import XRAY_CONFIG
-
-from app.db.models import Admin, User, CoreConfig, Group, UserTemplate
 
 
 def unique_name(prefix: str) -> str:
@@ -21,7 +17,9 @@ def auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
-def create_admin(access_token: str, *, username: str | None = None, password: str | None = None, is_sudo: bool = False) -> dict:
+def create_admin(
+    access_token: str, *, username: str | None = None, password: str | None = None, is_sudo: bool = False
+) -> dict:
     username = username or unique_name("admin")
     password = password or f"TestAdmin#{uuid4().hex[:8]}"
     response = client.post(
@@ -37,18 +35,7 @@ def create_admin(access_token: str, *, username: str | None = None, password: st
 
 def delete_admin(access_token: str, username: str) -> None:
     response = client.delete(f"/api/admin/{username}", headers=auth_headers(access_token))
-    if response.status_code in {status.HTTP_204_NO_CONTENT, status.HTTP_404_NOT_FOUND}:
-        return
-
-    async def _force_remove():
-        async with TestSession() as session:
-            result = await session.execute(select(Admin).where(Admin.username == username))
-            db_admin = result.scalar_one_or_none()
-            if db_admin:
-                await session.delete(db_admin)
-                await session.commit()
-
-    asyncio.run(_force_remove())
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 def create_core(
@@ -72,21 +59,8 @@ def create_core(
 
 def delete_core(access_token: str, core_id: int) -> None:
     response = client.delete(f"/api/core/{core_id}", headers=auth_headers(access_token))
-    if response.status_code in {
-        status.HTTP_204_NO_CONTENT,
-        status.HTTP_403_FORBIDDEN,  # default core cannot be deleted
-        status.HTTP_404_NOT_FOUND,
-    }:
-        return
-
-    async def _force_remove():
-        async with TestSession() as session:
-            db_core = await session.get(CoreConfig, core_id)
-            if db_core:
-                await session.delete(db_core)
-                await session.commit()
-
-    asyncio.run(_force_remove())
+   
+    assert response.status_code in (status.HTTP_204_NO_CONTENT, status.HTTP_403_FORBIDDEN)
 
 
 def get_inbounds(access_token: str) -> list[str]:
@@ -106,6 +80,24 @@ def get_inbounds(access_token: str) -> list[str]:
     raise AssertionError(f"Unexpected response from /api/inbounds: {response.status_code} {response.text}")
 
 
+def create_hosts_for_inbounds(access_token: str, *, address: list[str] | None = None, port: int = 443) -> list[dict]:
+    inbounds = get_inbounds(access_token)
+    hosts: list[dict] = []
+    for idx, inbound in enumerate(inbounds):
+        payload = {
+            "remark": unique_name(f"host_{idx}"),
+            "address": address or ["127.0.0.1"],
+            "port": port,
+            "sni": [f"test_host_{idx}.example.com"],
+            "inbound_tag": inbound,
+            "priority": idx + 1,
+        }
+        response = client.post("/api/host", headers=auth_headers(access_token), json=payload)
+        assert response.status_code == status.HTTP_201_CREATED
+        hosts.append(response.json())
+    return hosts
+
+
 def create_group(access_token: str, *, name: str | None = None, inbound_tags: Iterable[str] | None = None) -> dict:
     tags = list(inbound_tags or [])
     if not tags:
@@ -121,17 +113,7 @@ def create_group(access_token: str, *, name: str | None = None, inbound_tags: It
 
 def delete_group(access_token: str, group_id: int) -> None:
     response = client.delete(f"/api/group/{group_id}", headers=auth_headers(access_token))
-    if response.status_code in {status.HTTP_204_NO_CONTENT, status.HTTP_404_NOT_FOUND}:
-        return
-
-    async def _force_remove():
-        async with TestSession() as session:
-            db_group = await session.get(Group, group_id)
-            if db_group:
-                await session.delete(db_group)
-                await session.commit()
-
-    asyncio.run(_force_remove())
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 def create_user(
@@ -159,18 +141,7 @@ def create_user(
 
 def delete_user(access_token: str, username: str) -> None:
     response = client.delete(f"/api/user/{username}", headers=auth_headers(access_token))
-    if response.status_code in {status.HTTP_204_NO_CONTENT, status.HTTP_404_NOT_FOUND}:
-        return
-
-    async def _force_remove():
-        async with TestSession() as session:
-            result = await session.execute(select(User).where(User.username == username))
-            db_user = result.scalar_one_or_none()
-            if db_user:
-                await session.delete(db_user)
-                await session.commit()
-
-    asyncio.run(_force_remove())
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 def create_user_template(
@@ -200,14 +171,4 @@ def create_user_template(
 
 def delete_user_template(access_token: str, template_id: int) -> None:
     response = client.delete(f"/api/user_template/{template_id}", headers=auth_headers(access_token))
-    if response.status_code in {status.HTTP_204_NO_CONTENT, status.HTTP_404_NOT_FOUND}:
-        return
-
-    async def _force_remove():
-        async with TestSession() as session:
-            db_template = await session.get(UserTemplate, template_id)
-            if db_template:
-                await session.delete(db_template)
-                await session.commit()
-
-    asyncio.run(_force_remove())
+    assert response.status_code == status.HTTP_204_NO_CONTENT
