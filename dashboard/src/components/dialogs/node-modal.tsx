@@ -20,6 +20,7 @@ import { LoaderButton } from '../ui/loader-button'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { formatBytes, gbToBytes } from '@/utils/formatByte'
+import { LoadingSpinner } from '@/components/common/loading-spinner'
 
 export const nodeFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -64,6 +65,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
   const [autoCheck, setAutoCheck] = useState(false)
   const [showErrorDetails, setShowErrorDetails] = useState(false)
   const [debouncedValues, setDebouncedValues] = useState<NodeFormValues | null>(null)
+  const [isFetchingNodeData, setIsFetchingNodeData] = useState(false)
   // Ref to store raw input value for data_limit to allow typing decimals
   const dataLimitInputRef = React.useRef<string>('')
 
@@ -74,6 +76,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
       setErrorDetails(null)
       setAutoCheck(true)
       dataLimitInputRef.current = ''
+      setIsFetchingNodeData(false)
     }
   }, [isDialogOpen])
 
@@ -109,6 +112,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
   useEffect(() => {
     if (editingNode && editingNodeId) {
       const fetchNodeData = async () => {
+        setIsFetchingNodeData(true)
         try {
           const nodeData = await getNode(editingNodeId)
 
@@ -148,6 +152,8 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         } catch (error) {
           console.error('Error fetching node data:', error)
           toast.error(t('nodes.fetchFailed'))
+        } finally {
+          setIsFetchingNodeData(false)
         }
       }
 
@@ -391,9 +397,19 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
           )}
         </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
-            <div className="-mr-2 max-h-[65dvh] overflow-y-auto px-1 pr-2 sm:-mr-4 sm:max-h-[65dvh] sm:px-2 sm:pr-4">
+        {isFetchingNodeData ? (
+          <div className="flex min-h-[400px] items-center justify-center">
+            <LoadingSpinner size="medium" />
+          </div>
+        ) : (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
+            <div className={cn(
+              "-mr-2 overflow-y-auto px-1 pr-2 sm:-mr-4 sm:px-2 sm:pr-4",
+              showErrorDetails && connectionStatus === 'error' 
+                ? "max-h-[55dvh] sm:max-h-[55dvh]" 
+                : "max-h-[65dvh] sm:max-h-[65dvh]"
+            )}>
               <div className="flex h-full flex-col items-start gap-4 lg:flex-row">
                 <div className="w-full flex-1 space-y-4">
                   <FormField
@@ -1148,6 +1164,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
             </div>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   )
