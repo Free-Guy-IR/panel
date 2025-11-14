@@ -13,7 +13,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.utils.logger import get_logger
 from config import ALLOWED_ORIGINS, DOCS, SUBSCRIPTION_PATH
 
-__version__ = "1.7.0"
+__version__ = "1.7.1"
 
 startup_functions = []
 shutdown_functions = []
