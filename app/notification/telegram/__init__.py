@@ -1,6 +1,6 @@
 from .host import create_host, modify_host, remove_host, modify_hosts
 from .user_template import create_user_template, modify_user_template, remove_user_template
-from .node import create_node, modify_node, remove_node, connect_node, error_node, limited_node
+from .node import create_node, modify_node, remove_node, connect_node, error_node, limited_node, reset_node_usage
 from .group import create_group, modify_group, remove_group
 from .core import create_core, modify_core, remove_core
 from .admin import create_admin, modify_admin, remove_admin, admin_reset_usage, admin_login
@@ -28,6 +28,7 @@ __all__ = [
     "connect_node",
     "error_node",
     "limited_node",
+    "reset_node_usage",
     "create_group",
     "modify_group",
     "remove_group",

@@ -31,7 +31,7 @@ async def verify_node_backend_health(node: PasarGuardNode, node_name: str) -> He
         return current_health
 
     try:
-        await asyncio.wait_for(node.get_backend_stats(), timeout=10)
+        await node.get_backend_stats()
         if current_health != Health.HEALTHY:
             await node.set_health(Health.HEALTHY)
             logger.debug(f"[{node_name}] Node health is HEALTHY")
@@ -55,15 +55,14 @@ async def update_node_connection_status(node_id: int, node: PasarGuardNode):
     Update node connection status by getting backend stats and version info.
     """
     try:
-        await node.get_backend_stats(timeout=8)
-        xray_version = await node.core_version()
-        node_version = await node.node_version()
+        await node.get_backend_stats()
+        node_version, core_version = await node.get_versions()
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(
                 db,
                 node_id,
                 NodeStatus.connected,
-                xray_version=xray_version,
+                xray_version=core_version,
                 node_version=node_version,
             )
     except NodeAPIError as e:
@@ -98,11 +97,9 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
             await NodeOperation._update_single_node_status(
                 db, db_node.id, NodeStatus.error, message="Health check timeout"
             )
-        return
     except NodeAPIError as e:
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
-        return
 
     # Skip nodes that are already healthy and connected
     if health == Health.HEALTHY and db_node.status == NodeStatus.connected:
@@ -111,12 +108,13 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     # Update status for recovering nodes
     if db_node.status in (NodeStatus.connecting, NodeStatus.error) and health == Health.HEALTHY:
         async with GetDB() as db:
+            node_version, core_version = await node.get_versions()
             await NodeOperation._update_single_node_status(
                 db,
                 db_node.id,
                 NodeStatus.connected,
-                xray_version=await node.core_version(),
-                node_version=await node.node_version(),
+                xray_version=await core_version,
+                node_version=await node_version,
             )
         return
 
