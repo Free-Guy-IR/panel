@@ -136,6 +136,7 @@ const UsersTable = memo(() => {
     data: usersData,
     refetch,
     isLoading,
+    isFetching,
   } = useGetUsers(filters, {
     query: {
       staleTime: 0,
@@ -349,7 +350,7 @@ const UsersTable = memo(() => {
           setCurrentPage(0)
         }}
       />
-      <DataTable columns={columns} data={usersData?.users || []} isLoading={showLoadingSpinner} isFetching={false} onEdit={handleEdit} />
+      <DataTable columns={columns} data={usersData?.users || []} isLoading={showLoadingSpinner} isFetching={isFetching && !isFirstLoadRef.current} onEdit={handleEdit} />
       <PaginationControls
         currentPage={currentPage}
         totalPages={totalPages}
