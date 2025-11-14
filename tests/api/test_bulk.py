@@ -1,0 +1,163 @@
+from datetime import datetime as dt
+from fastapi import status
+
+from tests.api import client
+from tests.api.helpers import (
+    create_core,
+    delete_core,
+    create_group,
+    delete_group,
+    create_user,
+    delete_user,
+    unique_name,
+)
+
+
+def setup_groups(access_token: str, count: int = 1):
+    core = create_core(access_token)
+    groups = [create_group(access_token, name=unique_name(f"bulk_group_{idx}")) for idx in range(count)]
+    return core, groups
+
+
+def cleanup(access_token: str, core: dict, groups: list[dict], users: list[dict]):
+    for user in users:
+        delete_user(access_token, user["username"])
+    for group in groups:
+        delete_group(access_token, group["id"])
+    delete_core(access_token, core["id"])
+
+
+def test_add_groups_to_users(access_token):
+    """Test bulk adding groups to users."""
+
+    core, groups = setup_groups(access_token, 2)
+    users = [
+        create_user(access_token, payload={"username": unique_name("bulk_user")})
+        for _ in range(2)
+    ]
+    group_ids = [group["id"] for group in groups]
+    try:
+        response = client.post(
+            "/api/groups/bulk/add",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"group_ids": group_ids},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        for user in users:
+            response = client.get(f"/api/user/{user['username']}", headers={"Authorization": f"Bearer {access_token}"})
+            assert set(response.json()["group_ids"]) == set(group_ids)
+    finally:
+        cleanup(access_token, core, groups, users)
+
+
+def test_remove_groups_from_users(access_token):
+    """Test bulk removing groups from users."""
+    core, groups = setup_groups(access_token, 2)
+    users = [
+        create_user(access_token, payload={"username": unique_name("bulk_user_remove")})
+        for _ in range(2)
+    ]
+    group_ids = [group["id"] for group in groups]
+    try:
+        client.post(
+            "/api/groups/bulk/add",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"group_ids": group_ids},
+        )
+        response = client.post(
+            "/api/groups/bulk/remove",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"group_ids": [group_ids[0]]},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        for user in users:
+            response = client.get(f"/api/user/{user['username']}", headers={"Authorization": f"Bearer {access_token}"})
+            assert set(response.json()["group_ids"]) == {group_ids[1]}
+    finally:
+        cleanup(access_token, core, groups, users)
+
+
+def test_update_users_datalimit(access_token):
+    """Test bulk updating user data limits."""
+    core, groups = setup_groups(access_token, 1)
+    users = [
+        create_user(access_token, group_ids=[groups[0]["id"]], payload={"username": unique_name("user7"), "data_limit": 100}),
+        create_user(access_token, group_ids=[groups[0]["id"]], payload={"username": unique_name("user8"), "data_limit": 200}),
+    ]
+    user_ids = [user["id"] for user in users]
+    try:
+        response = client.post(
+            "/api/users/bulk/data_limit",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "amount": 50,
+                "users": user_ids,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        response = client.get("/api/users", headers={"Authorization": f"Bearer {access_token}"})
+        listed = {u["id"]: u for u in response.json()["users"] if u["id"] in user_ids}
+        assert listed[users[0]["id"]]["data_limit"] == 150
+        assert listed[users[1]["id"]]["data_limit"] == 250
+    finally:
+        cleanup(access_token, core, groups, users)
+
+
+def test_update_users_expire(access_token):
+    """Test bulk updating user expiration dates."""
+    core, groups = setup_groups(access_token, 1)
+    users = [
+        create_user(access_token, group_ids=[groups[0]["id"]], payload={"username": unique_name("user_expire1")}),
+        create_user(access_token, group_ids=[groups[0]["id"]], payload={"username": unique_name("user_expire2")}),
+    ]
+    client.put(
+        f"/api/user/{users[0]['username']}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"expire": "2025-01-01T00:00:00+00:00"},
+    )
+    client.put(
+        f"/api/user/{users[1]['username']}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"expire": "2026-01-01T00:00:00+00:00"},
+    )
+
+    try:
+        response = client.post(
+            "/api/users/bulk/expire",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"amount": 3600},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        response = client.get("/api/users", headers={"Authorization": f"Bearer {access_token}"})
+        listed = {u["username"]: u for u in response.json()["users"] if u["username"] in {users[0]["username"], users[1]["username"]}}
+        assert dt.fromisoformat(listed[users[0]["username"]]["expire"]).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S") == "2025-01-01T01:00:00"
+        assert dt.fromisoformat(listed[users[1]["username"]]["expire"]).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S") == "2026-01-01T01:00:00"
+    finally:
+        cleanup(access_token, core, groups, users)
+
+
+def test_update_users_proxy_settings(access_token):
+    """Test bulk updating user proxy settings."""
+    core, groups = setup_groups(access_token, 1)
+    users = [
+        create_user(access_token, group_ids=[groups[0]["id"]], payload={"username": unique_name("user_proxy1")}),
+        create_user(access_token, group_ids=[groups[0]["id"]], payload={"username": unique_name("user_proxy2")}),
+    ]
+    try:
+        response = client.post(
+            "/api/users/bulk/proxy_settings",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"flow": "xtls-rprx-vision"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        response = client.get("/api/users", headers={"Authorization": f"Bearer {access_token}"})
+        listed = {u["username"]: u for u in response.json()["users"] if u["username"] in {users[0]["username"], users[1]["username"]}}
+        assert listed[users[0]["username"]]["proxy_settings"]["vless"]["flow"] == "xtls-rprx-vision"
+        assert listed[users[1]["username"]]["proxy_settings"]["vless"]["flow"] == "xtls-rprx-vision"
+    finally:
+        cleanup(access_token, core, groups, users)

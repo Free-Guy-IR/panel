@@ -29,7 +29,7 @@ async def create_admin_token(username: str, is_sudo=False) -> str:
 
 async def get_admin_payload(token: str) -> dict | None:
     try:
-        payload = jwt.decode(token, await get_secret_key(), algorithms=["HS256"])
+        payload = jwt.decode(token, await get_secret_key(), algorithms=["HS256"], leeway=5)
         username: str = payload.get("sub")
         access: str = payload.get("access")
         if not username or access not in ("admin", "sudo"):

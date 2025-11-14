@@ -1,6 +1,7 @@
 from fastapi import status
 
 from tests.api import client
+from tests.api.helpers import create_admin, delete_admin, unique_name
 
 
 def test_admin_login():
@@ -31,37 +32,34 @@ def test_get_admin(access_token):
 def test_admin_create(access_token):
     """Test that the admin create route is accessible."""
 
-    username = "testadmincreate"
-    password = "TestAdmincreate#11"
-    response = client.post(
-        url="/api/admin",
-        json={"username": username, "password": password, "is_sudo": False},
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-    assert response.status_code == status.HTTP_201_CREATED
-    assert response.json()["username"] == username
+    username = unique_name("testadmincreate")
+    password = f"TestAdmincreate#{unique_name('pwd').split('_')[-1]}"
+    admin = create_admin(access_token, username=username, password=password)
+    assert admin["username"] == username
+    assert admin["is_sudo"] is False
+    delete_admin(access_token, username)
 
 
-def test_admin_db_login():
+def test_admin_db_login(access_token):
     """Test that the admin db login route is accessible."""
 
-    username = "testadmincreate"
-    password = "TestAdmincreate#11"
+    admin = create_admin(access_token)
     response = client.post(
         url="/api/admin/token",
-        data={"username": username, "password": password, "grant_type": "password"},
+        data={"username": admin["username"], "password": admin["password"], "grant_type": "password"},
     )
     assert response.status_code == status.HTTP_200_OK
     assert "access_token" in response.json()
+    delete_admin(access_token, admin["username"])
 
 
 def test_update_admin(access_token):
     """Test that the admin update route is accessible."""
 
-    username = "testadmincreate"
-    password = "TestAdminupdate#11"
+    admin = create_admin(access_token)
+    password = f"TestAdminupdate#{unique_name('pwd').split('_')[-1]}"
     response = client.put(
-        url=f"/api/admin/{username}",
+        url=f"/api/admin/{admin['username']}",
         json={
             "password": password,
             "is_sudo": False,
@@ -70,53 +68,56 @@ def test_update_admin(access_token):
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.json()["username"] == username
+    assert response.json()["username"] == admin["username"]
     assert response.json()["is_sudo"] is False
     assert response.json()["is_disabled"] is True
+    delete_admin(access_token, admin["username"])
 
 
 def test_get_admins(access_token):
     """Test that the admins get route is accessible."""
 
-    username = "testadmincreate"
+    admin = create_admin(access_token)
     response = client.get(
         url="/api/admins",
         params={"sort": "-created_at"},
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert username in [admin["username"] for admin in response.json()]
+    assert admin["username"] in [record["username"] for record in response.json()]
+    delete_admin(access_token, admin["username"])
 
 
-def test_disable_admin():
+def test_disable_admin(access_token):
     """Test that the admin disable route is accessible."""
 
-    username = "testadmincreate"
-    password = "TestAdminupdate#11"
+    admin = create_admin(access_token)
+    password = admin["password"]
+    disable_response = client.put(
+        url=f"/api/admin/{admin['username']}",
+        json={"password": password, "is_sudo": False, "is_disabled": True},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert disable_response.status_code == status.HTTP_200_OK
+
     response = client.post(
         url="/api/admin/token",
-        data={"username": username, "password": password, "grant_type": "password"},
+        data={"username": admin["username"], "password": password, "grant_type": "password"},
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json()["detail"] == "your account has been disabled"
+    delete_admin(access_token, admin["username"])
 
 
 def test_admin_delete_all_users_endpoint(access_token):
     """Test deleting all users belonging to an admin."""
 
-    admin_username = "testadminbulkdelete"
-    admin_password = "TestAdminBulkdelete#11"
-
-    response = client.post(
-        url="/api/admin",
-        json={"username": admin_username, "password": admin_password, "is_sudo": False},
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-    assert response.status_code == status.HTTP_201_CREATED
+    admin = create_admin(access_token)
+    admin_username = admin["username"]
 
     created_users = []
     for idx in range(2):
-        user_name = f"{admin_username}_user_{idx}"
+        user_name = unique_name(f"{admin_username}_user_{idx}")
         user_response = client.post(
             "/api/user",
             headers={"Authorization": f"Bearer {access_token}"},
@@ -165,9 +166,9 @@ def test_admin_delete_all_users_endpoint(access_token):
 def test_admin_delete(access_token):
     """Test that the admin delete route is accessible."""
 
-    username = "testadmincreate"
+    admin = create_admin(access_token)
     response = client.delete(
-        url=f"/api/admin/{username}",
+        url=f"/api/admin/{admin['username']}",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_204_NO_CONTENT
