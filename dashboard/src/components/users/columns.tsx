@@ -6,6 +6,8 @@ import { OnlineBadge } from './online-badge'
 import { StatusBadge } from './status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select'
 import UsageSliderCompact from './usage-slider-compact'
+import { cn } from '@/lib/utils'
+import useDirDetection from '@/hooks/use-dir-detection'
 
 export const setupColumns = ({
   t,
@@ -114,17 +116,19 @@ export const setupColumns = ({
   },
   {
     id: 'details',
-    header: () => (
+    header: () => {
+      const isRTL = useDirDetection() === 'rtl'
+      return (
       <button className="flex w-full items-center gap-1 px-0 py-3" onClick={() => handleSort('used_traffic')}>
-        <div className="text-xs capitalize">
-          <span className="md:hidden">{t('dataUsage')}</span>
+        <div className={cn("text-xs capitalize", isRTL && "w-full md:w-auto")}>
+          <span className={cn("md:hidden w-full inline-block", isRTL && "text-end")}>{t('dataUsage')}</span>
           <span className="hidden md:block">{t('dataUsage')}</span>
         </div>
         {filters.sort && (filters.sort === 'used_traffic' || filters.sort === '-used_traffic') && (
           <ChevronDown size={16} className={`transition-transform duration-300 ${filters.sort === 'used_traffic' ? 'rotate-180' : ''} ${filters.sort === '-used_traffic' ? 'rotate-0' : ''} `} />
         )}
       </button>
-    ),
+    )},
     cell: ({ row }) => (
       <div className="flex items-center justify-between gap-2">
         <UsageSliderCompact total={row.original.data_limit} used={row.original.used_traffic} totalUsedTraffic={row.original.lifetime_used_traffic} status={row.original.status} />
