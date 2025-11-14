@@ -7,6 +7,7 @@ from sse_starlette.sse import EventSourceResponse
 from PasarGuardNodeBridge import NodeAPIError
 
 from app.db import AsyncSession, get_db
+from app.db.models import NodeStatus
 from app.models.admin import AdminDetails
 from app.models.node import NodeCreate, NodeModify, NodeResponse, NodeSettings, UsageTable, UserIPList, UserIPListAll
 from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
@@ -44,14 +45,28 @@ async def get_usage(
 
 @router.get("s", response_model=list[NodeResponse])
 async def get_nodes(
-    backend_id: int | None = None,
-    offset: int = None,
-    limit: int = None,
+    core_id: int | None = None,
+    offset: int | None = None,
+    limit: int | None = None,
+    status: list[NodeStatus] | None = Query(None),
+    enabled: bool = False,
+    ids: list[int] | None = Query(None),
+    search: str | None = None,
     db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(check_sudo_admin),
 ):
     """Retrieve a list of all nodes. Accessible only to sudo admins."""
-    return await node_operator.get_db_nodes(db=db, core_id=backend_id, offset=offset, limit=limit)
+
+    return await node_operator.get_db_nodes(
+        db=db,
+        core_id=core_id,
+        offset=offset,
+        limit=limit,
+        status=status,
+        enabled=enabled,
+        ids=ids,
+        search=search,
+    )
 
 
 @router.post("s/reconnect")

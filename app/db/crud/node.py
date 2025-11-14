@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from sqlalchemy import and_, case, delete, func, select, update, bindparam
+from sqlalchemy import and_, case, delete, func, select, update, bindparam, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 
@@ -69,14 +69,21 @@ async def get_nodes(
     core_id: int | None = None,
     offset: int | None = None,
     limit: int | None = None,
+    ids: list[int] | None = None,
+    search: str | None = None,
 ) -> list[Node]:
     """
-    Retrieves nodes based on optional status and enabled filters.
+    Retrieves nodes based on optional status, enabled, id, and search filters.
 
     Args:
         db (AsyncSession): The database session.
         status (Optional[Union[app.db.models.NodeStatus, list]]): The status or list of statuses to filter by.
         enabled (bool): If True, excludes disabled nodes.
+        core_id (int | None): Optional core/backend ID filter.
+        offset (int | None): Optional pagination offset.
+        limit (int | None): Optional pagination limit.
+        ids (list[int] | None): Optional list of node IDs to filter by.
+        search (str | None): Optional search term to match node names.
 
     Returns:
         List[Node]: A list of Node objects matching the criteria.
@@ -94,6 +101,15 @@ async def get_nodes(
 
     if core_id:
         query = query.where(Node.core_config_id == core_id)
+
+    if ids:
+        query = query.where(Node.id.in_(ids))
+
+    if search:
+        search_value = search.strip()
+        if search_value:
+            like_expression = f"%{search_value}%"
+            query = query.where(or_(Node.name.ilike(like_expression), Node.api_key.ilike(like_expression)))
 
     if offset:
         query = query.offset(offset)

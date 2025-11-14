@@ -51,8 +51,20 @@ class NodeOperation(BaseOperation):
         offset: int | None = None,
         limit: int | None = None,
         enabled: bool = False,
+        status: NodeStatus | list[NodeStatus] | None = None,
+        ids: list[int] | None = None,
+        search: str | None = None,
     ) -> list[Node]:
-        return await get_nodes(db=db, core_id=core_id, offset=offset, limit=limit, enabled=enabled)
+        return await get_nodes(
+            db=db,
+            core_id=core_id,
+            offset=offset,
+            limit=limit,
+            enabled=enabled,
+            status=status,
+            ids=ids,
+            search=search,
+        )
 
     @staticmethod
     async def _update_single_node_status(
