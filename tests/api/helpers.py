@@ -59,7 +59,7 @@ def create_core(
 
 def delete_core(access_token: str, core_id: int) -> None:
     response = client.delete(f"/api/core/{core_id}", headers=auth_headers(access_token))
-   
+
     assert response.status_code in (status.HTTP_204_NO_CONTENT, status.HTTP_403_FORBIDDEN)
 
 

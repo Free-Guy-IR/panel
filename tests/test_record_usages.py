@@ -269,9 +269,7 @@ async def test_record_node_usages_updates_totals(monkeypatch: pytest.MonkeyPatch
         assert node_totals[node_one_id][0] > node_totals[node_two_id][0]
         assert node_totals[node_two_id][1] > 0
 
-        node_usage_rows = await session.execute(
-            select(NodeUsage.node_id, NodeUsage.uplink, NodeUsage.downlink)
-        )
+        node_usage_rows = await session.execute(select(NodeUsage.node_id, NodeUsage.uplink, NodeUsage.downlink))
         node_usage_totals = {row.node_id: (row.uplink, row.downlink) for row in node_usage_rows.all()}
         assert set(node_usage_totals.keys()) == {node_one_id, node_two_id}
 

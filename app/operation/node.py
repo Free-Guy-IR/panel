@@ -157,7 +157,6 @@ class NodeOperation(BaseOperation):
                 users=users,
                 keep_alive=db_node.keep_alive,
                 exclude_inbounds=core.exclude_inbound_tags,
-                timeout=10,
             )
             logger.info(f'Connected to "{db_node.name}" node v{info.node_version}, xray run on v{info.core_version}')
 
@@ -296,6 +295,9 @@ class NodeOperation(BaseOperation):
         users = await core_users(db=db)
 
         async def connect_single(node: Node) -> dict | None:
+            if node is None or node.status in (NodeStatus.disabled, NodeStatus.limited):
+                return
+
             try:
                 await node_manager.update_node(node)
             except NodeAPIError as e:
@@ -362,7 +364,7 @@ class NodeOperation(BaseOperation):
             node_id (int): ID of the node to connect.
         """
         db_node = await get_node_by_id(db, node_id)
-        if db_node is None:
+        if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
             return
 
         # Get core users once

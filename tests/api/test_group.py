@@ -17,9 +17,7 @@ def test_group_create(access_token):
         for _ in range(3):
             k = min(3, len(inbounds))
             selected_inbounds = random.sample(inbounds, k=k) if k else inbounds
-            response = create_group(
-                access_token, name=unique_name("testgroup"), inbound_tags=selected_inbounds
-            )
+            response = create_group(access_token, name=unique_name("testgroup"), inbound_tags=selected_inbounds)
             created_groups.append(response["id"])
             assert response["name"].startswith("testgroup")
             assert set(response["inbound_tags"]) == set(selected_inbounds)

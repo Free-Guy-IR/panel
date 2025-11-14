@@ -85,11 +85,6 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     if node is None:
         return
 
-    if node.requires_hard_reset():
-        async with GetDB() as db:
-            await node_operator.connect_single_node(db, db_node.id)
-        return
-
     try:
         health = await asyncio.wait_for(verify_node_backend_health(node, db_node.name), timeout=15)
     except asyncio.TimeoutError:
@@ -100,6 +95,11 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     except NodeAPIError as e:
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
+
+    if node.requires_hard_reset() or health is None or health in (Health.NOT_CONNECTED, Health.INVALID):
+        async with GetDB() as db:
+            await node_operator.connect_single_node(db, db_node.id)
+        return
 
     # Skip nodes that are already healthy and connected
     if health == Health.HEALTHY and db_node.status == NodeStatus.connected:

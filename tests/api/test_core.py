@@ -5,7 +5,6 @@ from tests.api.helpers import create_core, delete_core
 from tests.api.sample_data import XRAY_CONFIG as xray_config
 
 
-
 def test_core_create(access_token):
     """Test that the core create route is accessible."""
 
