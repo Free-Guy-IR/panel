@@ -1,237 +1,136 @@
-import { ReactNode, useEffect, useState, useRef } from 'react'
+import { ReactNode, useEffect, useState, useRef, memo } from 'react'
 import { useLocation, useNavigationType } from 'react-router'
 import { cn } from '@/lib/utils'
 
 interface PageTransitionProps {
   children: ReactNode
-  duration?: number // in milliseconds
-  delay?: number // in milliseconds
-  isContentTransition?: boolean // Flag to indicate if this is an inner content transition
+  duration?: number
+  delay?: number
+  isContentTransition?: boolean
 }
 
-export default function PageTransition({
+let mobileCache: boolean | null = null
+let motionCache: boolean | null = null
+
+const getMobile = () => {
+  if (typeof window === 'undefined') return false
+  if (mobileCache === null) {
+    mobileCache = window.innerWidth < 768
+    window.addEventListener('resize', () => { mobileCache = window.innerWidth < 768 }, { passive: true })
+  }
+  return mobileCache
+}
+
+const getMotion = () => {
+  if (typeof window === 'undefined') return false
+  if (motionCache === null) {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    motionCache = mq.matches
+    mq.addEventListener('change', (e) => { motionCache = e.matches })
+  }
+  return motionCache
+}
+
+const isTab = (a: string, b: string) =>
+  (a.startsWith('/settings') && b.startsWith('/settings')) || (a.startsWith('/nodes') && b.startsWith('/nodes'))
+
+export default memo(function PageTransition({
   children,
   duration = 300,
   delay = 0,
-  isContentTransition = false, // Default to false for backward compatibility
+  isContentTransition = false,
 }: PageTransitionProps) {
   const location = useLocation()
-  const navigationType = useNavigationType()
+  const navType = useNavigationType()
   const [displayChildren, setDisplayChildren] = useState(children)
-  const [isPageTransitioning, setIsPageTransitioning] = useState(false)
+  const [opacity, setOpacity] = useState(1)
   const [isShaking, setIsShaking] = useState(false)
-  const previousLocationRef = useRef({
-    pathname: location.pathname,
-    search: location.search,
-    hash: location.hash,
-    key: location.key,
-    state: location.state,
-  })
-  const isFirstRenderRef = useRef(true)
-  const hasNavigatedRef = useRef(false)
-  const transitionTimeoutRef = useRef<number | null>(null)
-  const shakeTimeoutRef = useRef<number | null>(null)
+  const prev = useRef({ pathname: location.pathname, hash: location.hash, key: location.key })
+  const first = useRef(true)
+  const timeout = useRef<number | null>(null)
 
-  // Clean up timeouts on unmount
+  useEffect(() => () => { if (timeout.current) clearTimeout(timeout.current) }, [])
+
   useEffect(() => {
-    return () => {
-      if (transitionTimeoutRef.current) {
-        window.clearTimeout(transitionTimeoutRef.current)
-      }
-      if (shakeTimeoutRef.current) {
-        window.clearTimeout(shakeTimeoutRef.current)
-      }
+    if (first.current) {
+      first.current = false
+      prev.current = { pathname: location.pathname, hash: location.hash, key: location.key }
+      return
     }
-  }, [])
 
-  // Update children when they change, but only if not transitioning
-  useEffect(() => {
-    if (!isShaking && !isPageTransitioning) {
+    if (timeout.current) clearTimeout(timeout.current)
+
+    if (navType === 'POP') {
       setDisplayChildren(children)
-    }
-  }, [children, isShaking, isPageTransitioning])
-
-  // For hash router, we need to consider the full URL including the hash
-  const getPathWithHash = () => {
-    return `${location.pathname}${location.hash}`
-  }
-
-  const previousPathWithHash = () => {
-    return `${previousLocationRef.current.pathname}${previousLocationRef.current.hash}`
-  }
-
-  // Detect actual location change for hash router
-  const isSameLocation = () => {
-    // In hash router, the location.key changes for each navigation attempt
-    // even if the URL is the same, so we can use it to detect navigation attempts
-    return getPathWithHash() === previousPathWithHash() && location.key !== previousLocationRef.current.key
-  }
-
-  // Check if we're coming from login page
-  const isComingFromLogin = () => {
-    const prevPath = previousPathWithHash()
-    const currentPath = getPathWithHash()
-    return prevPath.includes('/login') && (currentPath === '/' || currentPath === '/#/')
-  }
-
-  // Check if this is a tab navigation within dashboard sections
-  const isTabNavigation = () => {
-    // Check if navigation is between tabs in settings or nodes sections
-    const currentPath = location.pathname
-    const previousPath = previousLocationRef.current.pathname
-
-    // Check for tab navigation patterns
-    return (
-      // Settings tab navigation
-      (currentPath.startsWith('/settings') && previousPath.startsWith('/settings')) ||
-      // Nodes tab navigation
-      (currentPath.startsWith('/nodes') && previousPath.startsWith('/nodes'))
-    )
-  }
-
-  // Reset location ref without animation
-  const resetLocationRef = () => {
-    previousLocationRef.current = {
-      pathname: location.pathname,
-      search: location.search,
-      hash: location.hash,
-      key: location.key,
-      state: location.state,
-    }
-  }
-
-  // Handle navigation effects
-  useEffect(() => {
-    // Skip on first render
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false
+      setOpacity(1)
+      prev.current = { pathname: location.pathname, hash: location.hash, key: location.key }
       return
     }
 
-    // Clear any existing timeouts
-    if (transitionTimeoutRef.current) {
-      window.clearTimeout(transitionTimeoutRef.current)
-      transitionTimeoutRef.current = null
-    }
-    if (shakeTimeoutRef.current) {
-      window.clearTimeout(shakeTimeoutRef.current)
-      shakeTimeoutRef.current = null
-    }
+    const mobile = getMobile()
+    const noMotion = getMotion()
+    const current = `${location.pathname}${location.hash}`
+    const prevKey = `${prev.current.pathname}${prev.current.hash}`
+    const same = current === prevKey && location.key !== prev.current.key
+    const tabNav = isTab(location.pathname, prev.current.pathname)
 
-    // Skip animations on browser actions like refresh (POP)
-    if (navigationType === 'POP') {
+    if ((tabNav && !isContentTransition) || noMotion) {
       setDisplayChildren(children)
-      resetLocationRef()
+      setOpacity(1)
+      prev.current = { pathname: location.pathname, hash: location.hash, key: location.key }
       return
     }
 
-    // Check if we're navigating to the same location
-    const isSameLocationAttempt = isSameLocation()
+    const ms = isContentTransition && mobile ? 200 : mobile ? 150 : 120
 
-    // Special case: Tab navigation - handle differently based on isContentTransition
-    if (isTabNavigation()) {
-      if (isContentTransition) {
-        // For content inside tabs
-        if (isSameLocationAttempt) {
-          // Same page navigation inside tabs - trigger shake for content
-          setIsShaking(true)
-
-          // Reset shake after animation completes
-          shakeTimeoutRef.current = window.setTimeout(() => {
-            setIsShaking(false)
-          }, duration)
-        } else {
-          // Different tab - use transition
-          setIsPageTransitioning(true)
-
-          transitionTimeoutRef.current = window.setTimeout(() => {
-            setDisplayChildren(children)
-            // Small delay before removing transition class to ensure smooth animation
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setIsPageTransitioning(false)
-              })
-            })
-            resetLocationRef()
-          }, 100) // Shorter transition for better responsiveness
-        }
-      } else {
-        // For the main page wrapper, skip animations
-        setDisplayChildren(children)
-        resetLocationRef()
-      }
-      return
-    }
-
-    // Special case: coming from login - no shake, just fade
-    if (isComingFromLogin()) {
-      // Just do a simple fade transition
-      setIsPageTransitioning(true)
-
-      transitionTimeoutRef.current = window.setTimeout(() => {
-        setDisplayChildren(children)
-        // Small delay before removing transition class
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setIsPageTransitioning(false)
-          })
-        })
-        resetLocationRef()
-        hasNavigatedRef.current = true
-      }, 100)
-
-      return
-    }
-
-    // Same path but different navigation attempt - trigger shake
-    if (isSameLocationAttempt) {
+    if (same) {
       setIsShaking(true)
-
-      // Reset shake after animation completes
-      shakeTimeoutRef.current = window.setTimeout(() => {
+      timeout.current = window.setTimeout(() => {
         setIsShaking(false)
-      }, duration)
-
+        prev.current = { pathname: location.pathname, hash: location.hash, key: location.key }
+      }, Math.min(duration, 200))
       return
     }
 
-    // Different location - fade transition
-    const isRealLocationChange = getPathWithHash() !== previousPathWithHash()
-
-    if (isRealLocationChange) {
-      // Different page navigation - fade transition
-      setIsPageTransitioning(true)
-
-      // Wait for fade-out, then update content
-      transitionTimeoutRef.current = window.setTimeout(() => {
+    if (current !== prevKey) {
+      setOpacity(0)
+      requestAnimationFrame(() => {
         setDisplayChildren(children)
-        // Small delay before removing transition class
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setIsPageTransitioning(false)
-          })
+          setOpacity(1)
+          timeout.current = window.setTimeout(() => {
+            prev.current = { pathname: location.pathname, hash: location.hash, key: location.key }
+          }, ms)
         })
-        resetLocationRef()
-        hasNavigatedRef.current = true
-      }, 100)
+      })
     } else {
-      // Same location but different children - update without transition
       setDisplayChildren(children)
-      resetLocationRef()
+      prev.current = { pathname: location.pathname, hash: location.hash, key: location.key }
     }
-  }, [location, navigationType, children, duration, isContentTransition])
+  }, [location, navType, children, isContentTransition, duration])
+
+  useEffect(() => {
+    if (opacity === 1 && !isShaking) setDisplayChildren(children)
+  }, [children, opacity, isShaking])
+
+  const noMotion = getMotion()
+  const ms = isContentTransition && getMobile() ? 200 : getMobile() ? 150 : 120
 
   return (
     <div
-      className={cn('will-change-opacity w-full will-change-transform', isShaking ? 'animate-telegram-shake' : '', isPageTransitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100')}
+      className={cn('w-full', isShaking && !noMotion && 'animate-telegram-shake')}
       style={{
-        animationDuration: isShaking ? `${duration}ms` : undefined,
-        animationDelay: isShaking && delay > 0 ? `${delay}ms` : undefined,
-        animationFillMode: isShaking ? 'both' : undefined,
-        transition: 'opacity 100ms cubic-bezier(0.4, 0, 0.2, 1), transform 100ms cubic-bezier(0.4, 0, 0.2, 1)',
+        opacity,
+        transform: 'translate3d(0, 0, 0)',
+        ...(isShaking && !noMotion && {
+          animationDuration: `${Math.min(duration, 200)}ms`,
+          ...(delay > 0 && { animationDelay: `${delay}ms` }),
+          animationFillMode: 'both',
+        }),
+        ...(!noMotion && { transition: `opacity ${ms}ms cubic-bezier(0.4, 0, 0.2, 1)` }),
       }}
     >
       {displayChildren}
     </div>
   )
-}
+})
