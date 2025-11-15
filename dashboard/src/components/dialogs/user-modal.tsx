@@ -31,7 +31,7 @@ import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { formatBytes, gbToBytes } from '@/utils/formatByte'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, Layers, ListStart, Lock, RefreshCcw, Users } from 'lucide-react'
-import React, { useEffect, useState, useTransition } from 'react'
+import React, { useEffect, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -109,7 +109,6 @@ const ExpiryDateField = ({
 }) => {
   const { t } = useTranslation()
   const expireInfo = useRelativeExpiryDate(displayDate ? Math.floor(displayDate.getTime() / 1000) : null)
-  const [, startTransition] = useTransition()
   const dir = useDirDetection()
 
   const handleDateChange = React.useCallback(
@@ -117,55 +116,59 @@ const ExpiryDateField = ({
       if (date) {
         // Use the same logic as centralized DatePicker
         const value = useUtcTimestamp ? Math.floor(date.getTime() / 1000) : getLocalISOTime(date)
-        startTransition(() => {
-          field.onChange(value)
-          handleFieldChange(fieldName, value)
-        })
+        field.onChange(value)
+        handleFieldChange(fieldName, value)
       } else {
-        startTransition(() => {
-          field.onChange('')
-          handleFieldChange(fieldName, undefined)
-        })
+        field.onChange('')
+        handleFieldChange(fieldName, undefined)
       }
     },
-    [field, handleFieldChange, startTransition, useUtcTimestamp, fieldName],
+    [field, handleFieldChange, useUtcTimestamp, fieldName],
   )
 
   const handleShortcut = React.useCallback(
     (days: number) => {
-      const now = new Date()
-      const targetDate = new Date(now)
-      targetDate.setDate(now.getDate() + days)
-      // Use current time instead of end of day
+      const baseDate = displayDate || new Date()
+      const targetDate = new Date(baseDate)
+      targetDate.setDate(baseDate.getDate() + days)
+      // Preserve time from base date
       handleDateChange(targetDate)
     },
-    [handleDateChange],
+    [handleDateChange, displayDate],
   )
 
-  const now = new Date()
-  const maxDate = new Date(now.getFullYear() + 15, 11, 31)
+  // Memoize now to start of today to prevent it from changing every second
+  // This ensures minDate only changes once per day, not on every render
+  const now = React.useMemo(() => {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  }, [])
+  
+  const maxDate = React.useMemo(() => {
+    return new Date(now.getFullYear() + 15, 11, 31)
+  }, [now])
 
   const shortcuts = [
-    { label: '7d', days: 7 },
-    { label: '1m', days: 30 },
-    { label: '2m', days: 60 },
-    { label: '3m', days: 90 },
-    { label: '6m', days: 180 },
-    { label: '1y', days: 365 },
+    { label: '+7d', days: 7 },
+    { label: '+1m', days: 30 },
+    { label: '+2m', days: 60 },
+    { label: '+3m', days: 90 },
+    { label: '+6m', days: 180 },
+    { label: '+1y', days: 365 },
   ]
 
   return (
     <FormItem className="flex flex-1 flex-col">
       <FormLabel className='mb-0.5'>{label}</FormLabel>
-      <div className="space-y-2">
-        <div className="flex lg:hidden items-center gap-1.5 flex-wrap">
+      <div className="space-y-2 lg:!mt-0">
+        <div className="flex lg:hidden items-center gap-1 flex-wrap">
           {shortcuts.map(({ label, days }) => (
             <Button
               key={label}
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -191,11 +194,14 @@ const ExpiryDateField = ({
             fieldName={fieldName}
             onFieldChange={handleFieldChange}
           />
-          {expireInfo && (
-            <p className={cn('absolute top-full text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', !expireInfo.time && 'hidden', dir === 'rtl' ? 'right-0' : 'left-0')}>
-              {expireInfo.time !== '0' && expireInfo.time !== '0s'
-                ? t('expires', { time: expireInfo.time, defaultValue: 'Expires in {{time}}' })
-                : t('expired', { time: expireInfo.time, defaultValue: 'Expired in {{time}}' })}
+          {displayDate && expireInfo?.time && (
+            <p className={cn('absolute top-full lg:w-48 lg:text-ellipsis lg:overflow-hidden text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', dir === 'rtl' ? 'right-0' : 'left-0')}>
+              {(() => {
+                const now = new Date()
+                const isExpired = displayDate < now
+                const translationKey = isExpired ? 'expired' : 'expires'
+                return t(translationKey, { time: expireInfo.time, defaultValue: isExpired ? 'Expired {{time}}' : 'Expires in {{time}}' })
+              })()}
             </p>
           )}
         </div>
@@ -391,7 +397,9 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         }
       }
     } else if (typeof value === 'number') {
-      // Handle Unix timestamp (seconds) using the same logic as other components
+      if (value <= 0) {
+        return null
+      }
       try {
         const dayjsDate = dateUtils.toDayjs(value)
         if (dayjsDate.isValid()) {
@@ -556,7 +564,8 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         handleFieldChange('on_hold_expire_duration', defaultDuration)
       }
       // Clear expire field when switching to on_hold status
-      form.setValue('expire', undefined)
+      form.setValue('expire', '')
+      handleFieldChange('expire', undefined)
       form.clearErrors('expire')
     } else {
       // Clear on_hold fields when switching away from on_hold status
@@ -564,6 +573,12 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       form.clearErrors('on_hold_expire_duration')
       form.setValue('on_hold_timeout', undefined)
       form.clearErrors('on_hold_timeout')
+      const currentExpire = form.getValues('expire')
+      if (currentExpire === null || currentExpire === undefined || currentExpire === '' || (typeof currentExpire === 'number' && currentExpire <= 0)) {
+        form.setValue('expire', '')
+        handleFieldChange('expire', undefined)
+        form.clearErrors('expire')
+      }
     }
   }, [status, form, t, handleFieldChange])
 

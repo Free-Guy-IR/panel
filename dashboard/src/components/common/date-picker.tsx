@@ -1,7 +1,7 @@
 'use client'
 
-import * as React from 'react'
 import { addDays } from 'date-fns'
+import { useState, useEffect, useCallback, ChangeEvent, MouseEvent } from 'react'
 import { Calendar as CalendarIcon, X } from 'lucide-react'
 import { DateRange } from 'react-day-picker'
 import { cn } from '@/lib/utils'
@@ -147,9 +147,9 @@ export function DatePicker({
 }: DatePickerProps) {
   const { t, i18n } = useTranslation()
   const isPersianLocale = i18n.language === 'fa'
-  const [internalOpen, setInternalOpen] = React.useState(false)
-  const [internalDate, setInternalDate] = React.useState<Date | undefined>(date || undefined)
-  const [internalRange, setInternalRange] = React.useState<DateRange | undefined>(
+  const [internalOpen, setInternalOpen] = useState(false)
+  const [internalDate, setInternalDate] = useState<Date | undefined>(date || undefined)
+  const [internalRange, setInternalRange] = useState<DateRange | undefined>(
     range || defaultRange || (mode === 'range' ? { from: addDays(new Date(), -7), to: new Date() } : undefined),
   )
 
@@ -163,30 +163,30 @@ export function DatePicker({
   }
 
   // Sync internal state with props
-  React.useEffect(() => {
+  useEffect(() => {
     if (date !== undefined) {
       setInternalDate(date || undefined)
     }
   }, [date])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (range !== undefined) {
       setInternalRange(range)
     }
   }, [range])
 
-  // Propagate initial range for range mode
-  React.useEffect(() => {
+  useEffect(() => {
     if (mode === 'range' && internalRange && onRangeChange) {
       onRangeChange(internalRange)
     }
-  }, []) // Only on mount
+  }, [])
 
-  const handleDateSelect = React.useCallback(
+  const handleDateSelect = useCallback(
     (selectedDate: Date | undefined) => {
       if (!selectedDate) {
         setInternalDate(undefined)
         onDateChange(undefined)
+        onFieldChange?.(fieldName, undefined)
         return
       }
 
@@ -194,27 +194,32 @@ export function DatePicker({
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
 
-      // Ensure date is not in the past (for expiry dates)
       if (minDate === undefined && selectedDateOnly < today) {
         selectedDate = new Date(now)
       }
 
-      // Always use current time (not end of day)
       selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
 
       setInternalDate(selectedDate)
       const value = useUtcTimestamp ? Math.floor(selectedDate.getTime() / 1000) : getLocalISOTime(selectedDate)
       onDateChange(selectedDate)
       onFieldChange?.(fieldName, value)
-
-      // Close popover when day is clicked
-      setIsOpen(false)
+      setTimeout(() => {
+        setIsOpen(false)
+      }, 0)
     },
     [onDateChange, onFieldChange, fieldName, useUtcTimestamp, minDate],
   )
 
-  const handleTimeChange = React.useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDateSelectWrapper = useCallback(
+    (selectedDate: Date | undefined) => {
+      handleDateSelect(selectedDate)
+    },
+    [handleDateSelect],
+  )
+
+  const handleTimeChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
       e.preventDefault()
       e.stopPropagation()
       if (internalDate && e.target.value) {
@@ -236,7 +241,7 @@ export function DatePicker({
     [internalDate, onDateChange, onFieldChange, fieldName, useUtcTimestamp],
   )
 
-  const handleRangeSelect = React.useCallback(
+  const handleRangeSelect = useCallback(
     (selectedRange: DateRange | undefined) => {
       setInternalRange(selectedRange)
       onRangeChange?.(selectedRange)
@@ -249,7 +254,7 @@ export function DatePicker({
     [onRangeChange],
   )
 
-  const formatDate = React.useCallback(
+  const formatDate = useCallback(
     (date: Date) => {
       if (customFormatDate) {
         return customFormatDate(date)
@@ -259,7 +264,7 @@ export function DatePicker({
     [customFormatDate, isPersianLocale, showTime],
   )
 
-  const dateDisabled = React.useCallback(
+  const dateDisabled = useCallback(
     (date: Date) => {
       if (mode === 'range' && disableAfter && date > disableAfter) {
         return true
@@ -285,8 +290,8 @@ export function DatePicker({
       ? `${String(displayDate.getHours()).padStart(2, '0')}:${String(displayDate.getMinutes()).padStart(2, '0')}`
       : ''
 
-    const handleClear = React.useCallback(
-      (e: React.MouseEvent) => {
+    const handleClear = useCallback(
+      (e: MouseEvent<HTMLButtonElement>) => {
         e.preventDefault()
         e.stopPropagation()
         setInternalDate(undefined)
@@ -326,8 +331,7 @@ export function DatePicker({
           <PopoverContent
             className="w-auto p-0"
             align="start"
-            onInteractOutside={(e: Event) => {
-              e.preventDefault()
+            onInteractOutside={() => {
               setIsOpen(false)
             }}
             onEscapeKeyDown={() => setIsOpen(false)}
@@ -336,7 +340,7 @@ export function DatePicker({
               <PersianCalendar
                 mode="single"
                 selected={displayDate || undefined}
-                onSelect={handleDateSelect}
+                onSelect={handleDateSelectWrapper}
                 disabled={dateDisabled}
                 captionLayout="dropdown"
                 defaultMonth={displayDate || now}
@@ -350,7 +354,7 @@ export function DatePicker({
               <Calendar
                 mode="single"
                 selected={displayDate || undefined}
-                onSelect={handleDateSelect}
+                onSelect={handleDateSelectWrapper}
                 disabled={dateDisabled}
                 captionLayout="dropdown"
                 defaultMonth={displayDate || now}
@@ -363,18 +367,19 @@ export function DatePicker({
             )}
             {showTime && (
               <>
-                <div className="hidden lg:flex items-center gap-1.5 flex-wrap border-t p-3">
+                <div className="hidden lg:flex items-center gap-1 flex-wrap border-t p-2">
                   {[
-                    { label: '7d', days: 7 },
-                    { label: '1m', days: 30 },
-                    { label: '2m', days: 60 },
-                    { label: '3m', days: 90 },
-                    { label: '1y', days: 365 },
+                    { label: '+7d', days: 7 },
+                    { label: '+1m', days: 30 },
+                    { label: '+2m', days: 60 },
+                    { label: '+3m', days: 90 },
+                    { label: '+1y', days: 365 },
                   ].map(({ label, days }) => {
                     const handleShortcut = () => {
-                      const targetDate = new Date(now)
-                      targetDate.setDate(now.getDate() + days)
-                      // Use current time instead of end of day
+                      const baseDate = displayDate || now
+                      const targetDate = new Date(baseDate)
+                      targetDate.setDate(baseDate.getDate() + days)
+                      // Preserve time from base date
                       handleDateSelect(targetDate)
                     }
                     return (
@@ -383,7 +388,7 @@ export function DatePicker({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                        className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -400,7 +405,10 @@ export function DatePicker({
                     type="time"
                     value={timeValue}
                     onChange={handleTimeChange}
-                    className="w-full"
+                    className="w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:saturate-100 [&::-webkit-calendar-picker-indicator]:hue-rotate-0"
+                    style={{
+                      colorScheme: 'dark',
+                    }}
                     dir="ltr"
                   />
                 </div>
