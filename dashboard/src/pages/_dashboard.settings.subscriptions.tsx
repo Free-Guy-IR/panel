@@ -293,6 +293,10 @@ const defaultSubscriptionRules: { pattern: string; target: ConfigFormat }[] = [
     target: 'outline',
   },
   {
+    pattern: '^([Vv]2rayNG|[Vv]2rayN|[Ss]treisand|[Hh]app|[Kk]tor\\-client)',
+    target: 'xray',
+  },
+  {
     pattern: '.*',
     target: 'links_base64',
   },
