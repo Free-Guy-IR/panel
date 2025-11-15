@@ -28,9 +28,9 @@ export function SinceLogsFilter({ value, onValueChange, showTimestamp, onTimesta
   ]
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">{t('nodes.logs.sinceLabel')}</span>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">{t('nodes.logs.sinceLabel')}</span>
         <Select value={value} onValueChange={value => onValueChange(value as TimeFilter)}>
           <SelectTrigger className="h-9 w-32">
             <SelectValue />
@@ -45,9 +45,9 @@ export function SinceLogsFilter({ value, onValueChange, showTimestamp, onTimesta
         </Select>
       </div>
       <div className="flex items-center gap-2">
-        <Clock size={14} className="text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">{t('nodes.logs.timestamps')}</span>
-        <Switch checked={showTimestamp} onCheckedChange={onTimestampChange} className="scale-75" />
+        <Clock size={14} className="text-muted-foreground flex-shrink-0" />
+        <span className="text-sm text-muted-foreground whitespace-nowrap">{t('nodes.logs.timestamps')}</span>
+        <Switch checked={showTimestamp} onCheckedChange={onTimestampChange} className="scale-75 flex-shrink-0" />
       </div>
     </div>
   )

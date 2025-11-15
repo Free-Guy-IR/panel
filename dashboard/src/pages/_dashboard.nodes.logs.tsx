@@ -315,25 +315,25 @@ export default function NodeLogs() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-4 sm:items-center">
-            <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               <LineCountFilter value={lines} onValueChange={handleLines} />
 
               <SinceLogsFilter value={since} onValueChange={handleSince} showTimestamp={showTimestamp} onTimestampChange={setShowTimestamp} />
 
               <StatusLogsFilter value={typeFilter} setValue={setTypeFilter} title={t('nodes.logs.filter')} options={priorities} />
 
-              <Input type="search" placeholder={t('nodes.logs.search')} value={search} onChange={handleSearch} className="inline-flex h-9 w-full text-sm placeholder-gray-400 sm:w-auto" />
+              <Input type="search" placeholder={t('nodes.logs.search')} value={search} onChange={handleSearch} className="inline-flex h-9 w-full min-w-[200px] text-sm placeholder-gray-400 sm:w-auto sm:min-w-0" />
             </div>
 
-            <div className={cn('flex gap-2', dir === 'rtl' && 'flex-row-reverse')}>
-              <Button variant="outline" size="sm" className="h-9" onClick={handlePauseResume} title={isPaused ? t('nodes.logs.resume') : t('nodes.logs.pause')}>
-                {isPaused ? <Play className={cn('mr-2 h-4 w-4', dir === 'rtl' && 'ml-2 mr-0')} /> : <Pause className={cn('mr-2 h-4 w-4', dir === 'rtl' && 'ml-2 mr-0')} />}
-                {isPaused ? t('nodes.logs.resume') : t('nodes.logs.pause')}
+            <div className={cn('flex gap-2 w-full sm:w-auto', dir === 'rtl' && 'flex-row-reverse')}>
+              <Button variant="outline" size="sm" className="h-9 flex-1 sm:flex-initial" onClick={handlePauseResume} title={isPaused ? t('nodes.logs.resume') : t('nodes.logs.pause')}>
+                {isPaused ? <Play className={cn('h-4 w-4 sm:mr-2', dir === 'rtl' && 'sm:ml-2 sm:mr-0')} /> : <Pause className={cn('h-4 w-4 sm:mr-2', dir === 'rtl' && 'sm:ml-2 sm:mr-0')} />}
+                <span className="hidden sm:inline">{isPaused ? t('nodes.logs.resume') : t('nodes.logs.pause')}</span>
               </Button>
-              <Button variant="outline" size="sm" className="h-9 w-full sm:w-auto" onClick={handleDownload} disabled={filteredLogs.length === 0}>
-                <DownloadIcon className={cn('mr-2 h-4 w-4', dir === 'rtl' && 'ml-2 mr-0')} />
-                {t('nodes.logs.download')}
+              <Button variant="outline" size="sm" className="h-9 flex-1 sm:flex-initial" onClick={handleDownload} disabled={filteredLogs.length === 0}>
+                <DownloadIcon className={cn('h-4 w-4 sm:mr-2', dir === 'rtl' && 'sm:ml-2 sm:mr-0')} />
+                <span className="hidden sm:inline">{t('nodes.logs.download')}</span>
               </Button>
             </div>
           </div>
@@ -351,8 +351,8 @@ export default function NodeLogs() {
             </Alert>
           )}
           <Card className="bg-background">
-            <CardContent className="p-2">
-              <div ref={scrollRef} onScroll={handleScroll} dir="ltr" className="custom-logs-scrollbar h-[720px] space-y-0 overflow-y-auto rounded bg-background/75">
+            <CardContent className="p-1 sm:p-2">
+              <div ref={scrollRef} onScroll={handleScroll} dir="ltr" className="custom-logs-scrollbar h-[calc(100vh-280px)] min-h-[400px] max-h-[720px] space-y-0 overflow-y-auto overflow-x-hidden rounded bg-background/75 sm:h-[720px] sm:min-h-0">
                 {filteredLogs.length > 0 ? (
                   filteredLogs.map((filteredLog: LogLine, index: number) => <TerminalLine key={index} log={filteredLog} searchTerm={search} noTimestamp={!showTimestamp} />)
                 ) : isLoading ? (
