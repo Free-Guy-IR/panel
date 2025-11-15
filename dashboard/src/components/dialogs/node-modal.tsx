@@ -20,7 +20,6 @@ import { LoaderButton } from '../ui/loader-button'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { formatBytes, gbToBytes } from '@/utils/formatByte'
-import { LoadingSpinner } from '@/components/common/loading-spinner'
 
 export const nodeFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -331,7 +330,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="h-full max-w-full sm:max-w-[90vw] lg:h-auto lg:max-w-[1000px]" onOpenAutoFocus={e => e.preventDefault()}>
+      <DialogContent className="h-full max-w-full sm:max-w-[90vw] lg:h-auto lg:max-w-[1000px] focus:outline-none" onOpenAutoFocus={e => e.preventDefault()}>
         <DialogHeader className="pb-2">
           <DialogTitle className={cn('text-start text-base font-semibold sm:text-lg', dir === 'rtl' && 'sm:text-right')}>{editingNode ? t('editNode.title') : t('nodeModal.title')}</DialogTitle>
           <p className={cn('text-start text-xs text-muted-foreground', dir === 'rtl' && 'sm:text-right')}>{editingNode ? t('nodes.prompt') : t('nodeModal.description')}</p>
@@ -391,18 +390,14 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
           )}
         </div>
 
-        {isFetchingNodeData ? (
-          <div className="flex min-h-[400px] items-center justify-center">
-            <LoadingSpinner size="medium" />
-          </div>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
             <div className={cn(
               "-mr-2 overflow-y-auto px-1 pr-2 sm:-mr-4 sm:px-2 sm:pr-4",
               showErrorDetails && connectionStatus === 'error' 
                 ? "max-h-[55dvh] sm:max-h-[55dvh]" 
-                : "max-h-[65dvh] sm:max-h-[65dvh]"
+                : "max-h-[65dvh] sm:max-h-[65dvh]",
+              isFetchingNodeData && "pointer-events-none blur-sm"
             )}>
               <div className="flex h-full flex-col items-start gap-4 lg:flex-row">
                 <div className="w-full flex-1 space-y-4">
@@ -1123,7 +1118,6 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
             </div>
           </form>
         </Form>
-        )}
       </DialogContent>
     </Dialog>
   )
