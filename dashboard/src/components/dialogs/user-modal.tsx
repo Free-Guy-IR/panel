@@ -1,5 +1,4 @@
 import GroupsSelector from '@/components/common/groups-selector'
-
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -116,11 +115,11 @@ const ExpiryDateField = ({
       if (date) {
         // Use the same logic as centralized DatePicker
         const value = useUtcTimestamp ? Math.floor(date.getTime() / 1000) : getLocalISOTime(date)
-        field.onChange(value)
-        handleFieldChange(fieldName, value)
+          field.onChange(value)
+          handleFieldChange(fieldName, value)
       } else {
-        field.onChange('')
-        handleFieldChange(fieldName, undefined)
+          field.onChange('')
+          handleFieldChange(fieldName, undefined)
       }
     },
     [field, handleFieldChange, useUtcTimestamp, fieldName],
@@ -161,14 +160,14 @@ const ExpiryDateField = ({
     <FormItem className="flex flex-1 flex-col">
       <FormLabel className='mb-0.5'>{label}</FormLabel>
       <div className="space-y-2 lg:!mt-0">
-        <div className="flex lg:hidden items-center gap-1 flex-wrap">
+        <div dir="ltr" className="flex lg:hidden items-center gap-1 flex-wrap">
           {shortcuts.map(({ label, days }) => (
             <Button
               key={label}
               type="button"
               variant="ghost"
               size="sm"
-              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -397,9 +396,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         }
       }
     } else if (typeof value === 'number') {
-      if (value <= 0) {
-        return null
-      }
       try {
         const dayjsDate = dateUtils.toDayjs(value)
         if (dayjsDate.isValid()) {
@@ -564,8 +560,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         handleFieldChange('on_hold_expire_duration', defaultDuration)
       }
       // Clear expire field when switching to on_hold status
-      form.setValue('expire', '')
-      handleFieldChange('expire', undefined)
+      form.setValue('expire', undefined)
       form.clearErrors('expire')
     } else {
       // Clear on_hold fields when switching away from on_hold status
@@ -573,12 +568,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       form.clearErrors('on_hold_expire_duration')
       form.setValue('on_hold_timeout', undefined)
       form.clearErrors('on_hold_timeout')
-      const currentExpire = form.getValues('expire')
-      if (currentExpire === null || currentExpire === undefined || currentExpire === '' || (typeof currentExpire === 'number' && currentExpire <= 0)) {
-        form.setValue('expire', '')
-        handleFieldChange('expire', undefined)
-        form.clearErrors('expire')
-      }
     }
   }, [status, form, t, handleFieldChange])
 

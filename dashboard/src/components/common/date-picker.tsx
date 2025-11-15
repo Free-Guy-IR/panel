@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { useTranslation } from 'react-i18next'
 import { Calendar as PersianCalendar } from '@/components/ui/persian-calendar'
 import { formatDateByLocale, formatDateShort, isDateDisabled } from '@/utils/datePickerUtils'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 export type DatePickerMode = 'single' | 'range'
 
@@ -147,6 +148,7 @@ export function DatePicker({
 }: DatePickerProps) {
   const { t, i18n } = useTranslation()
   const isPersianLocale = i18n.language === 'fa'
+  const isMobile = useIsMobile()
   const [internalOpen, setInternalOpen] = useState(false)
   const [internalDate, setInternalDate] = useState<Date | undefined>(date || undefined)
   const [internalRange, setInternalRange] = useState<DateRange | undefined>(
@@ -198,7 +200,11 @@ export function DatePicker({
         selectedDate = new Date(now)
       }
 
-      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
+      if (internalDate && !showTime) {
+        selectedDate.setHours(internalDate.getHours(), internalDate.getMinutes(), internalDate.getSeconds(), internalDate.getMilliseconds())
+      } else {
+        selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
+      }
 
       setInternalDate(selectedDate)
       const value = useUtcTimestamp ? Math.floor(selectedDate.getTime() / 1000) : getLocalISOTime(selectedDate)
@@ -208,7 +214,7 @@ export function DatePicker({
         setIsOpen(false)
       }, 0)
     },
-    [onDateChange, onFieldChange, fieldName, useUtcTimestamp, minDate],
+    [onDateChange, onFieldChange, fieldName, useUtcTimestamp, minDate, internalDate, showTime],
   )
 
   const handleDateSelectWrapper = useCallback(
@@ -285,7 +291,7 @@ export function DatePicker({
 
   // Single date mode
   if (mode === 'single') {
-    const displayDate = internalDate || (date ? new Date(date) : null)
+    const displayDate = internalDate || (date ? new Date(date) : undefined)
     const timeValue = displayDate
       ? `${String(displayDate.getHours()).padStart(2, '0')}:${String(displayDate.getMinutes()).padStart(2, '0')}`
       : ''
@@ -330,7 +336,8 @@ export function DatePicker({
           </PopoverTrigger>
           <PopoverContent
             className="w-auto p-0"
-            align="start"
+            align="end"
+            side={isMobile ? 'bottom' : 'left'}
             onInteractOutside={() => {
               setIsOpen(false)
             }}
@@ -339,12 +346,12 @@ export function DatePicker({
             {isPersianLocale ? (
               <PersianCalendar
                 mode="single"
-                selected={displayDate || undefined}
+                selected={displayDate}
                 onSelect={handleDateSelectWrapper}
                 disabled={dateDisabled}
                 captionLayout="dropdown"
                 defaultMonth={displayDate || now}
-                startMonth={minDate || new Date(now.getFullYear(), now.getMonth(), 1)}
+                startMonth={minDate || new Date(now.getFullYear(), 0, 1)}
                 endMonth={maxDate || new Date(now.getFullYear() + 15, 11, 31)}
                 formatters={{
                   formatMonthDropdown: date => date.toLocaleString('fa-IR', { month: 'short' }),
@@ -353,12 +360,12 @@ export function DatePicker({
             ) : (
               <Calendar
                 mode="single"
-                selected={displayDate || undefined}
+                selected={displayDate}
                 onSelect={handleDateSelectWrapper}
                 disabled={dateDisabled}
                 captionLayout="dropdown"
                 defaultMonth={displayDate || now}
-                startMonth={minDate || new Date(now.getFullYear(), now.getMonth(), 1)}
+                startMonth={minDate || new Date(now.getFullYear(), 0, 1)}
                 endMonth={maxDate || new Date(now.getFullYear() + 15, 11, 31)}
                 formatters={{
                   formatMonthDropdown: date => date.toLocaleString('default', { month: 'short' }),
@@ -367,7 +374,7 @@ export function DatePicker({
             )}
             {showTime && (
               <>
-                <div className="hidden lg:flex items-center gap-1 flex-wrap border-t p-2">
+                <div dir="ltr" className="hidden lg:flex items-center gap-1 flex-wrap border-t p-2">
                   {[
                     { label: '+7d', days: 7 },
                     { label: '+1m', days: 30 },
@@ -457,7 +464,7 @@ export function DatePicker({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
+        <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4} collisionPadding={8}>
           {isPersianLocale ? (
             <PersianCalendar
               mode="range"
