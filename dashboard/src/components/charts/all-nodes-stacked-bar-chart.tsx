@@ -165,7 +165,7 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
       <div className={`mb-1.5 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground sm:text-xs`}>
         <span>{t('statistics.totalUsage', { defaultValue: 'Total' })}: </span>
         <span dir="ltr" className="inline-block truncate font-mono">
-          {nodesToShow.reduce((sum, node) => sum + node.usage, 0).toFixed(2)}
+          {activeNodes.reduce((sum, node) => sum + node.usage, 0).toFixed(2)}
           GB
         </span>
       </div>

@@ -143,12 +143,6 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
   const canGoLeft = isRTL ? canGoNext : canGoPrevious
   const canGoRight = isRTL ? canGoPrevious : canGoNext
 
-  // Calculate total usage
-  const totalUsage = Object.keys(data).reduce((sum, key) => {
-    if (key.startsWith('_uplink_') || key.startsWith('_downlink_') || key === 'time' || key === '_period_start') return sum
-    return sum + (data[key] || 0)
-  }, 0)
-
   // Calculate total uplink and downlink
   const totalUplink = Object.keys(data)
     .filter(key => key.startsWith('_uplink_'))
@@ -206,7 +200,7 @@ const NodeStatsModal = ({ open, onClose, data, chartConfig, period, allChartData
                 </span>
               </div>
               <Badge dir="ltr" variant="secondary" className="px-2 py-1 font-mono text-xs sm:text-sm">
-                {totalUsage.toFixed(2)} GB
+                {formatBytes(totalUplink + totalDownlink)}
               </Badge>
             </div>
 
