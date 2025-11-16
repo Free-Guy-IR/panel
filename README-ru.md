@@ -136,22 +136,22 @@ PasarGuard — это удобный, многофункциональный и 
 
 **TimescaleDB (Рекомендуется):**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database timescaledb --pre-release
+curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database timescaledb
 ```
 
 **SQLite:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --pre-release
+curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install
 ```
 
 **MySQL:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database mysql --pre-release
+curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database mysql
 ```
 
 **MariaDB:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database mariadb --pre-release
+curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database mariadb
 ```
 
 **PostgreSQL:**
