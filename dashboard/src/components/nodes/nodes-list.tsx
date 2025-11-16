@@ -29,9 +29,9 @@ export default function NodesList() {
 
   const { data: nodesData, isLoading } = useGetNodes(undefined, {
     query: {
-      refetchInterval: 5000, // 5s
-      staleTime: 0, // No stale time - always fetch fresh data
-      gcTime: 0, // No garbage collection time - no caching
+      refetchInterval: isDialogOpen && editingNode ? false : 5000,
+      staleTime: 0,
+      gcTime: 0,
     },
   })
 
@@ -62,7 +62,6 @@ export default function NodesList() {
 
   const handleToggleStatus = async (node: NodeResponse) => {
     try {
-      // Determine the new status: enable if currently disabled, otherwise disable
       const shouldEnable = node.status === 'disabled'
       const newStatus = shouldEnable ? 'connected' : 'disabled'
 
@@ -87,7 +86,6 @@ export default function NodesList() {
         }),
       })
 
-      // Invalidate nodes queries
       queryClient.invalidateQueries({
         queryKey: ['/api/nodes'],
       })
@@ -156,6 +154,7 @@ export default function NodesList() {
           form={form}
           editingNode={!!editingNode}
           editingNodeId={editingNode?.id}
+          initialNodeData={editingNode || undefined}
         />
       </div>
     </div>

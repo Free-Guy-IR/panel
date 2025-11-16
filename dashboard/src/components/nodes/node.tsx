@@ -6,6 +6,7 @@ import { MoreVertical, Pencil, Trash2, Power, Activity, RotateCcw, Wifi, Loader2
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { queryClient } from '@/utils/query-client'
@@ -69,6 +70,7 @@ const ResetUsageAlertDialog = ({ node, isOpen, onClose, onConfirm, isLoading }: 
 
 export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
   const { t } = useTranslation()
+  const dir = useDirDetection()
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [isResetUsageDialogOpen, setResetUsageDialogOpen] = useState(false)
   const [showOnlineStats, setShowOnlineStats] = useState(false)
@@ -97,7 +99,6 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
         }),
       })
       setDeleteDialogOpen(false)
-      // Invalidate nodes queries
       queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
     } catch (error) {
       toast.error(t('error', { defaultValue: 'Error' }), {
@@ -117,7 +118,6 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
         params: { flush_users: false },
       })
       toast.success(t('nodeModal.syncSuccess'))
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
     } catch (error: any) {
       toast.error(
@@ -137,7 +137,6 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
         nodeId: node.id,
       })
       toast.success(t('nodeModal.reconnectSuccess', { defaultValue: 'Node reconnected successfully' }))
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
     } catch (error: any) {
       toast.error(
@@ -162,7 +161,6 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
       })
       toast.success(t('nodeModal.resetUsageSuccess', { defaultValue: 'Node usage reset successfully' }))
       setResetUsageDialogOpen(false)
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
       queryClient.invalidateQueries({ queryKey: [`/api/node/${node.id}`] })
     } catch (error: any) {
@@ -182,12 +180,44 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div dir='ltr' className="flex items-center gap-2">
-              <div
-                className={cn(
-                  'min-h-2 min-w-2 rounded-full',
-                  node.status === 'connected' ? 'bg-green-500' : node.status === 'connecting' ? 'bg-yellow-500' : node.status === 'error' ? 'bg-red-500' : 'bg-gray-500',
-                )}
-              />
+              {node.status === 'error' ? (
+                node.message ? (
+                  <HoverCard openDelay={200} closeDelay={100}>
+                    <HoverCardTrigger asChild>
+                      <div
+                        className={cn(
+                          'min-h-2 min-w-2 rounded-full cursor-help',
+                          'bg-red-500',
+                        )}
+                      />
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-64 p-2" side="top" align="start" sideOffset={5}>
+                      <p dir={dir} className="text-xs font-medium text-destructive mb-1">{t('error', { defaultValue: 'Error' })}</p>
+                      <p className="text-xs text-muted-foreground break-words">{node.message}</p>
+                    </HoverCardContent>
+                  </HoverCard>
+                ) : (
+                  <div
+                    className={cn(
+                      'min-h-2 min-w-2 rounded-full',
+                      'bg-red-500',
+                    )}
+                  />
+                )
+              ) : (
+                <div
+                  className={cn(
+                    'min-h-2 min-w-2 rounded-full',
+                    node.status === 'connected' 
+                      ? 'bg-green-500' 
+                      : node.status === 'connecting' 
+                        ? 'bg-yellow-500' 
+                        : node.status === 'limited'
+                          ? 'bg-orange-500'
+                          : 'bg-gray-500',
+                  )}
+                />
+              )}
               <div className="truncate font-medium">{node.name}</div>
             </div>
             <CardTitle className="flex items-center gap-1 truncate text-sm text-muted-foreground">
@@ -299,7 +329,6 @@ export default function Node({ node, onEdit, onToggleStatus }: NodeProps) {
         isLoading={resettingUsage}
       />
 
-      {/* User Online Stats Dialog */}
       <UserOnlineStatsDialog isOpen={showOnlineStats} onOpenChange={setShowOnlineStats} nodeId={node.id} nodeName={node.name} />
     </>
   )
