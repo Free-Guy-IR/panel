@@ -194,7 +194,7 @@ const ExpiryDateField = ({
             onFieldChange={handleFieldChange}
           />
           {displayDate && expireInfo?.time && (
-            <p className={cn('absolute top-full lg:w-48 lg:text-ellipsis lg:overflow-hidden text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', dir === 'rtl' ? 'right-0' : 'left-0')}>
+            <p className={cn(fieldName !== 'on_hold_timeout' && 'lg:w-48', 'absolute top-full lg:text-ellipsis lg:overflow-hidden text-end right-0 mt-1 whitespace-nowrap text-xs text-muted-foreground', dir === 'rtl' ? 'right-0' : 'left-0')}>
               {(() => {
                 const now = new Date()
                 const isExpired = displayDate < now
