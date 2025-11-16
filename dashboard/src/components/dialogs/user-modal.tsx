@@ -309,19 +309,43 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
     { id: 'groups', label: 'groups', icon: Users },
     { id: 'templates', label: 'templates.title', icon: Layers },
   ]
-  const [nextPlanEnabled, setNextPlanEnabled] = useState(() => {
-    const nextPlan = form.watch('next_plan')
-    return nextPlan !== undefined && nextPlan !== null && Object.keys(nextPlan).length > 0
-  })
+  const [nextPlanEnabled, setNextPlanEnabled] = useState(false)
+  const [nextPlanManuallyDisabled, setNextPlanManuallyDisabled] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const [expireCalendarOpen, setExpireCalendarOpen] = useState(false)
   const [onHoldCalendarOpen, setOnHoldCalendarOpen] = useState(false)
 
-  // Reset calendar state when modal opens/closes
+  const hasNextPlanValues = React.useCallback((nextPlan: any): boolean => {
+    if (!nextPlan || typeof nextPlan !== 'object') return false
+
+    const hasAnyValue = !!(
+      (nextPlan.user_template_id !== undefined && nextPlan.user_template_id !== null) ||
+      (nextPlan.expire !== undefined && nextPlan.expire !== null) ||
+      (nextPlan.data_limit !== undefined && nextPlan.data_limit !== null) ||
+      nextPlan.add_remaining_traffic !== undefined
+    )
+
+    return hasAnyValue
+  }, [])
+
+  const nextPlanValue = React.useMemo(() => ({
+    user_template_id: form.watch('next_plan.user_template_id'),
+    expire: form.watch('next_plan.expire'),
+    data_limit: form.watch('next_plan.data_limit'),
+    add_remaining_traffic: form.watch('next_plan.add_remaining_traffic'),
+  }), [
+    form.watch('next_plan.user_template_id'),
+    form.watch('next_plan.expire'),
+    form.watch('next_plan.data_limit'),
+    form.watch('next_plan.add_remaining_traffic'),
+  ])
+
   useEffect(() => {
     if (!isDialogOpen) {
       setExpireCalendarOpen(false)
       setOnHoldCalendarOpen(false)
+      setNextPlanEnabled(false)
+      setNextPlanManuallyDisabled(false)
     }
   }, [isDialogOpen])
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
@@ -332,16 +356,21 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
   const handleModalOpenChange = React.useCallback(
     (open: boolean) => {
       if (!open) {
-        form.reset()
+        // Only reset form if not editing (for create mode)
+        // When editing, parent component will repopulate the form
+        if (!editingUser) {
+          form.reset()
+        }
         setTouchedFields({})
         setIsFormValid(false)
         setActiveTab('groups')
         setSelectedTemplateId(null)
+        setNextPlanEnabled(false)
         dataLimitInputRef.current = ''
       }
       onOpenChange(open)
     },
-    [form, onOpenChange],
+    [form, onOpenChange, editingUser],
   )
 
   const handleFieldChange = React.useCallback(
@@ -429,6 +458,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       gcTime: 0,
       refetchOnMount: true,
       refetchOnReconnect: false,
+      enabled: isDialogOpen,
     },
   })
 
@@ -569,34 +599,32 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
       form.setValue('on_hold_timeout', undefined)
       form.clearErrors('on_hold_timeout')
     }
-  }, [status, form, t, handleFieldChange])
+  }, [status, form, t, handleFieldChange, touchedFields])
 
   useEffect(() => {
     if (!nextPlanEnabled) {
-      // Clear all next_plan data when disabled
       form.setValue('next_plan', undefined)
       handleFieldChange('next_plan', undefined)
-    } else if (!form.watch('next_plan') || form.watch('next_plan') === null) {
-      form.setValue('next_plan', {})
-      handleFieldChange('next_plan', {})
+    } else {
+      setNextPlanManuallyDisabled(false)
+      const isEmpty = !nextPlanValue.user_template_id && !nextPlanValue.expire && !nextPlanValue.data_limit && nextPlanValue.add_remaining_traffic === undefined
+      if (isEmpty) {
+        form.setValue('next_plan', {})
+        handleFieldChange('next_plan', {})
+      }
     }
-    // eslint-disable-next-line
-  }, [nextPlanEnabled])
+  }, [nextPlanEnabled, nextPlanValue])
 
-  // Sync switch state when next_plan value changes (e.g., when editing a user)
-  // Only sync when the form has data but the switch is off (initial load scenario)
   useEffect(() => {
-    const nextPlan = form.watch('next_plan')
-    const shouldBeEnabled = nextPlan !== undefined && nextPlan !== null && Object.keys(nextPlan).length > 0
+    if (!isDialogOpen || !editingUser || nextPlanManuallyDisabled) return
+    
+    const shouldBeEnabled = hasNextPlanValues(nextPlanValue)
 
-    // Only sync if:
-    // 1. The form has data (shouldBeEnabled is true)
-    // 2. The switch is currently off (nextPlanEnabled is false)
-    // 3. We're not in the middle of a user manually disabling it
     if (shouldBeEnabled && !nextPlanEnabled) {
       setNextPlanEnabled(true)
     }
-  }, [form.watch('next_plan'), nextPlanEnabled])
+    // Don't automatically disable - let user control it via the toggle
+  }, [nextPlanValue, nextPlanEnabled, isDialogOpen, editingUser, hasNextPlanValues, nextPlanManuallyDisabled])
 
   // Helper to convert expire field to needed schema using the same logic as other components
   function normalizeExpire(expire: Date | string | number | null | undefined, useUtcTimestamp: boolean = false): string | number | undefined {
@@ -920,12 +948,6 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
           status: values.status,
         }
 
-        // Remove next_plan.data_limit and next_plan.expire if next_plan.user_template_id is set
-        if (preparedValues.next_plan && preparedValues.next_plan.user_template_id) {
-          delete preparedValues.next_plan.data_limit
-          delete preparedValues.next_plan.expire
-        }
-
         // Check if proxy settings are filled
         const hasProxySettings = values.proxy_settings && Object.values(values.proxy_settings).some(settings => settings && Object.values(settings).some(value => value !== undefined && value !== ''))
 
@@ -950,18 +972,37 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
             }
           : undefined
 
-        // Convert data_limit from GB to bytes
+        let nextPlanData = undefined
+        if (nextPlanEnabled) {
+          const nextPlanFromValues = values.next_plan
+          const hasValues = nextPlanFromValues && hasNextPlanValues(nextPlanFromValues)
+          
+          if (hasValues) {
+            nextPlanData = { ...nextPlanFromValues }
+            
+            if (nextPlanData.user_template_id) {
+              delete nextPlanData.data_limit
+              delete nextPlanData.expire
+            }
+          } else {
+            nextPlanData = {
+              expire: 0,
+              data_limit: 0,
+            }
+          }
+        }
+
         const sendValues = {
           ...preparedValues,
           data_limit: gbToBytes(preparedValues.data_limit as any),
           expire: preparedValues.expire,
-          // Only include proxy_settings if they are filled
           ...(hasProxySettings ? { proxy_settings: cleanedProxySettings } : {}),
-          // Force send undefined when Next Plan is disabled
-          next_plan: nextPlanEnabled ? preparedValues.next_plan : undefined,
         }
 
-        // Remove proxy_settings from the payload if it's empty or undefined
+        if (nextPlanEnabled) {
+          sendValues.next_plan = nextPlanData
+        }
+
         if (!hasProxySettings) {
           delete sendValues.proxy_settings
         }
@@ -1149,8 +1190,7 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
         }
       }
     }
-    // eslint-disable-next-line
-  }, [isDialogOpen, editingUser, generalSettings])
+  }, [isDialogOpen, editingUser, generalSettings, form])
 
 
   return (
@@ -1817,7 +1857,15 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                   {activeTab === 'groups' && editingUser && (
                     <div className="rounded-[--radius] border border-border p-4">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
+                          const newValue = !nextPlanEnabled
+                          setNextPlanEnabled(newValue)
+                          if (!newValue) {
+                            setNextPlanManuallyDisabled(true)
+                          } else {
+                            setNextPlanManuallyDisabled(false)
+                          }
+                        }}>
                           <ListStart className="h-4 w-4" />
                           <div>{t('userDialog.nextPlanTitle', { defaultValue: 'Next Plan' })}</div>
                         </div>
@@ -1825,7 +1873,11 @@ export default function UserModal({ isDialogOpen, onOpenChange, form, editingUse
                           checked={nextPlanEnabled}
                           onCheckedChange={value => {
                             setNextPlanEnabled(value)
-                            // Trigger validation when Next Plan toggle changes
+                            if (!value) {
+                              setNextPlanManuallyDisabled(true)
+                            } else {
+                              setNextPlanManuallyDisabled(false)
+                            }
                             const currentValues = form.getValues()
                             const isValid = validateAllFields(currentValues, touchedFields)
                             setIsFormValid(isValid)

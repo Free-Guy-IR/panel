@@ -3,7 +3,7 @@ import { DataTable } from '@/components/users/data-table'
 import { Filters } from '@/components/users/filters'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { UseEditFormValues } from '@/pages/_dashboard.users'
-import { useGetUsers, UserResponse, UserStatus } from '@/service/api'
+import { useGetUsers, UserResponse, UserStatus, UsersResponse } from '@/service/api'
 import { useAdmin } from '@/hooks/use-admin'
 import { getUsersPerPageLimitSize, setUsersPerPageLimitSize } from '@/utils/userPreferenceStorage'
 import { useQueryClient } from '@tanstack/react-query'
@@ -64,16 +64,15 @@ const UsersTable = memo(() => {
     },
   }) as any
 
-  // Create form for user editing
   const userForm = useForm<UseEditFormValues>({
     defaultValues: {
       username: selectedUser?.username,
       status: selectedUser?.status === 'active' || selectedUser?.status === 'on_hold' || selectedUser?.status === 'disabled' ? selectedUser?.status : 'active',
-      data_limit: selectedUser?.data_limit ? Math.round((Number(selectedUser?.data_limit) / (1024 * 1024 * 1024)) * 100) / 100 : undefined, // Convert bytes to GB
+      data_limit: selectedUser?.data_limit ? Math.round((Number(selectedUser?.data_limit) / (1024 * 1024 * 1024)) * 100) / 100 : undefined,
       expire: selectedUser?.expire,
       note: selectedUser?.note || '',
       data_limit_reset_strategy: selectedUser?.data_limit_reset_strategy || undefined,
-      group_ids: selectedUser?.group_ids || [], // Add group_ids
+      group_ids: selectedUser?.group_ids || [],
       on_hold_expire_duration: selectedUser?.on_hold_expire_duration || undefined,
       on_hold_timeout: selectedUser?.on_hold_timeout || undefined,
       proxy_settings: selectedUser?.proxy_settings || undefined,
@@ -88,13 +87,12 @@ const UsersTable = memo(() => {
     },
   })
 
-  // Update form when selected user changes
   useEffect(() => {
     if (selectedUser) {
       const values: UseEditFormValues = {
         username: selectedUser.username,
         status: selectedUser.status === 'active' || selectedUser.status === 'on_hold' || selectedUser.status === 'disabled' ? selectedUser.status : 'active',
-        data_limit: selectedUser.data_limit ? Math.round((Number(selectedUser.data_limit) / (1024 * 1024 * 1024)) * 100) / 100 : 0, // Convert bytes to GB
+        data_limit: selectedUser.data_limit ? Math.round((Number(selectedUser.data_limit) / (1024 * 1024 * 1024)) * 100) / 100 : 0,
         expire: selectedUser.expire,
         note: selectedUser.note || '',
         data_limit_reset_strategy: selectedUser.data_limit_reset_strategy || undefined,
@@ -115,7 +113,6 @@ const UsersTable = memo(() => {
     }
   }, [selectedUser, userForm])
 
-  // Update filters when pagination changes
   useEffect(() => {
     setFilters(prev => ({
       ...prev,
@@ -124,7 +121,6 @@ const UsersTable = memo(() => {
     }))
   }, [currentPage, itemsPerPage])
 
-  // Sync advance search form with current filters when modal opens
   useEffect(() => {
     if (isAdvanceSearchOpen) {
       advanceSearchForm.setValue('status', filters.status || '0')
@@ -146,73 +142,54 @@ const UsersTable = memo(() => {
     },
   })
 
-  // Track first load completion
   useEffect(() => {
     if (usersData && isFirstLoadRef.current) {
       isFirstLoadRef.current = false
     }
   }, [usersData])
 
-  // Reset auto refresh flag when fetching completes
   useEffect(() => {
     if (!isFetching && isAutoRefreshingRef.current) {
       isAutoRefreshingRef.current = false
     }
   }, [isFetching])
 
-  // Remove automatic refetch on filter change to prevent lag
-  // Filters will trigger new queries automatically
-
   const handleSort = useCallback(
     (column: string, fromDropdown = false) => {
-      // Prevent rapid clicking
       if (isSorting) return
 
       setIsSorting(true)
 
       let newSort: string
 
-      // Clean the column name in case it comes with prefix
       const cleanColumn = column.startsWith('-') ? column.slice(1) : column
 
       if (fromDropdown) {
-        // Dropdown behavior: click to sort, click again to reset
         if (column.startsWith('-')) {
-          // Dropdown descending option clicked
           if (filters.sort === '-' + cleanColumn) {
-            // If already descending, reset to default
             newSort = '-created_at'
           } else {
-            // Set to descending
             newSort = '-' + cleanColumn
           }
         } else {
-          // Dropdown ascending option clicked
           if (filters.sort === cleanColumn) {
-            // If already ascending, reset to default
             newSort = '-created_at'
           } else {
-            // Set to ascending
             newSort = cleanColumn
           }
         }
       } else {
-        // Table column behavior: 3-state cycling (asc → desc → no sort)
         if (filters.sort === cleanColumn) {
-          // If currently ascending, make it descending
           newSort = '-' + cleanColumn
         } else if (filters.sort === '-' + cleanColumn) {
-          // If currently descending, remove sort (third state: no sort)
           newSort = '-created_at'
         } else {
-          // If different column or default, make it ascending
           newSort = cleanColumn
         }
       }
 
       setFilters(prev => ({ ...prev, sort: newSort }))
 
-      // Release the lock after a short delay
       setTimeout(() => setIsSorting(false), 100)
     },
     [filters.sort, isSorting],
@@ -220,25 +197,23 @@ const UsersTable = memo(() => {
 
   const handleStatusFilter = useCallback(
     (value: any) => {
-      // Sync with advance search form
       advanceSearchForm.setValue('status', value || '0')
 
-      // If value is '0' or empty, set status to undefined to remove it from the URL
       if (value === '0' || value === '') {
         setFilters(prev => ({
           ...prev,
-          status: undefined, // Set to undefined so it won't be included in the request
-          offset: 0, // Reset to first page when changing filter
+          status: undefined,
+          offset: 0,
         }))
       } else {
         setFilters(prev => ({
           ...prev,
-          status: value, // Otherwise set the actual status value
-          offset: 0, // Reset to first page when changing filter
+          status: value,
+          offset: 0,
         }))
       }
 
-      setCurrentPage(0) // Reset current page
+      setCurrentPage(0)
     },
     [advanceSearchForm],
   )
@@ -265,20 +240,14 @@ const UsersTable = memo(() => {
   }, [])
 
   const handleManualRefresh = async () => {
-    // Mark as manual refresh (not auto refresh)
     isAutoRefreshingRef.current = false
-    // Invalidate queries to ensure fresh data
     queryClient.invalidateQueries({ queryKey: ['getUsers'] })
-    // Then refetch
     return refetch()
   }
 
   const handleAutoRefresh = async () => {
-    // Mark as auto refresh
     isAutoRefreshingRef.current = true
-    // Invalidate queries to ensure fresh data
     queryClient.invalidateQueries({ queryKey: ['getUsers'] })
-    // Then refetch - flag will be reset by useEffect when isFetching becomes false
     return refetch()
   }
 
@@ -287,32 +256,47 @@ const UsersTable = memo(() => {
 
     setIsChangingPage(true)
     setCurrentPage(newPage)
-
-    // Remove async/await and setTimeout for instant response
     setIsChangingPage(false)
   }
 
   const handleItemsPerPageChange = (value: number) => {
     setIsChangingPage(true)
     setItemsPerPage(value)
-    setCurrentPage(0) // Reset to first page when items per page changes
-
-    // Save to localStorage
+    setCurrentPage(0)
     setUsersPerPageLimitSize(value.toString())
-
-    // Remove async/await and setTimeout for instant response
     setIsChangingPage(false)
   }
 
   const handleEdit = (user: UserResponse) => {
-    setSelectedUser(user)
+    const cachedData = queryClient.getQueriesData<UsersResponse>({
+      queryKey: ['/api/users'],
+      exact: false,
+    })
+    
+    let latestUser = user
+    for (const [, data] of cachedData) {
+      if (data?.users) {
+        const foundUser = data.users.find(u => u.username === user.username)
+        if (foundUser) {
+          latestUser = foundUser
+          break
+        }
+      }
+    }
+    
+    setSelectedUser(latestUser)
     setEditModalOpen(true)
   }
 
-  const handleEditSuccess = () => {
+  const handleEditSuccess = (_updatedUser: UserResponse) => {
     setEditModalOpen(false)
-    setSelectedUser(null)
-    // No need to manually refresh - cache is already updated by the modal
+  }
+
+  const handleEditModalClose = (open: boolean) => {
+    setEditModalOpen(open)
+    if (!open) {
+      setSelectedUser(null)
+    }
   }
 
   const columns = setupColumns({
@@ -329,8 +313,8 @@ const UsersTable = memo(() => {
       admin: values.admin && values.admin.length > 0 ? values.admin : undefined,
       group: values.group && values.group.length > 0 ? values.group : undefined,
       status: values.status && values.status !== '0' ? values.status : undefined,
-      is_protocol: values.is_protocol, // update is_protocol
-      offset: 0, // Reset to first page
+      is_protocol: values.is_protocol,
+      offset: 0,
     }))
     setCurrentPage(0)
     setIsAdvanceSearchOpen(false)
@@ -339,7 +323,6 @@ const UsersTable = memo(() => {
 
   const totalUsers = usersData?.total || 0
   const totalPages = Math.ceil(totalUsers / itemsPerPage)
-  // Only show loading spinner on first load, not on refreshes
   const showLoadingSpinner = isLoading && isFirstLoadRef.current
   const isPageLoading = isChangingPage
 
@@ -383,7 +366,7 @@ const UsersTable = memo(() => {
       {selectedUser && (
         <UserModal
           isDialogOpen={isEditModalOpen}
-          onOpenChange={setEditModalOpen}
+          onOpenChange={handleEditModalClose}
           form={userForm}
           editingUser={true}
           editingUserId={selectedUser.id || undefined}
@@ -396,7 +379,7 @@ const UsersTable = memo(() => {
           isDialogOpen={isAdvanceSearchOpen}
           onOpenChange={open => {
             setIsAdvanceSearchOpen(open)
-            if (!open) advanceSearchForm.reset() // Reset form when closing
+            if (!open) advanceSearchForm.reset()
           }}
           form={advanceSearchForm}
           onSubmit={handleAdvanceSearchSubmit}
