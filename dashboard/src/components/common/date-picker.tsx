@@ -194,13 +194,18 @@ export function DatePicker({
 
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+      let selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
 
       if (minDate === undefined && selectedDateOnly < today) {
         selectedDate = new Date(now)
+        selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
       }
 
-      if (internalDate && !showTime) {
+      const isToday = selectedDateOnly.getTime() === today.getTime()
+
+      if (isToday) {
+        selectedDate.setHours(23, 59, 59, 999)
+      } else if (internalDate && !showTime) {
         selectedDate.setHours(internalDate.getHours(), internalDate.getMinutes(), internalDate.getSeconds(), internalDate.getMilliseconds())
       } else {
         selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
