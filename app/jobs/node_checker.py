@@ -55,8 +55,8 @@ async def update_node_connection_status(node_id: int, node: PasarGuardNode):
     Update node connection status by getting backend stats and version info.
     """
     try:
-        await node.get_backend_stats()
-        node_version, core_version = await node.get_versions()
+        await asyncio.wait_for(node.get_backend_stats(), timeout=20)
+        node_version, core_version = await asyncio.wait_for(node.get_versions(), timeout=20)
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(
                 db,
@@ -65,6 +65,9 @@ async def update_node_connection_status(node_id: int, node: PasarGuardNode):
                 xray_version=core_version,
                 node_version=node_version,
             )
+    except asyncio.TimeoutError:
+        logger.warning(f"Node {node_id} connection status check timed out, will retry on next check")
+        return
     except NodeAPIError as e:
         if e.code > -3:
             async with GetDB() as db:
@@ -86,8 +89,11 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
         return
 
     try:
-        health = await asyncio.wait_for(verify_node_backend_health(node, db_node.name), timeout=15)
+        health = await asyncio.wait_for(verify_node_backend_health(node, db_node.name), timeout=20)
     except asyncio.TimeoutError:
+        if db_node.status == NodeStatus.connected:
+            logger.warning(f"Node {db_node.id} ({db_node.name}) health check timed out but was previously connected, will retry")
+            return
         async with GetDB() as db:
             await NodeOperation._update_single_node_status(
                 db, db_node.id, NodeStatus.error, message="Health check timeout"
@@ -113,8 +119,8 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
                 db,
                 db_node.id,
                 NodeStatus.connected,
-                xray_version=await core_version,
-                node_version=await node_version,
+                xray_version=core_version,
+                node_version=node_version,
             )
         return
 
