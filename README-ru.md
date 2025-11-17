@@ -136,27 +136,32 @@ PasarGuard — это удобный, многофункциональный и 
 
 **TimescaleDB (Рекомендуется):**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database timescaledb
+curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh -o /tmp/pg.sh \
+  && sudo bash /tmp/pg.sh install --database timescaledb
 ```
 
 **SQLite:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install
+curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh -o /tmp/pg.sh \
+  && sudo bash /tmp/pg.sh install
 ```
 
 **MySQL:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database mysql
+curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh -o /tmp/pg.sh \
+  && sudo bash /tmp/pg.sh install --database mysql
 ```
 
 **MariaDB:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database mariadb
+curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh -o /tmp/pg.sh \
+  && sudo bash /tmp/pg.sh install --database mariadb
 ```
 
 **PostgreSQL:**
 ```bash
-curl -sL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh | sudo bash -s -- @ install --database postgresql --pre-release
+curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh -o /tmp/pg.sh \
+  && sudo bash /tmp/pg.sh install --database postgresql --pre-release
 ```
 
 ### 📋 После установки:
