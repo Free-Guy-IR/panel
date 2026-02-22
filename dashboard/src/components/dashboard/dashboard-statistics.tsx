@@ -106,7 +106,7 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
   const activeUsers = Number(systemData.active_users) || 0
   const onlineUsers = Number(systemData.online_users) || 0
   const activeUsersPercent = totalUsers > 0 ? Math.min(Math.max((activeUsers / totalUsers) * 100, 0), 100) : 0
-  const onlineUsersPercent = totalUsers > 0 ? Math.min(Math.max((onlineUsers / totalUsers) * 100, 0), 100) : 0
+  const onlineUsersPercent = activeUsers > 0 ? Math.min(Math.max((onlineUsers / activeUsers) * 100, 0), 100) : 0
 
   return (
     <div
@@ -299,11 +299,6 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
                   <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">{t('statistics.users')}</p>
                 </div>
               </div>
-              {totalUsers > 0 && (
-                <div dir="ltr" className="shrink-0 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground sm:text-sm">
-                  {activeUsersPercent.toFixed(1)}%
-                </div>
-              )}
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 sm:gap-3">
@@ -343,7 +338,7 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
                   <span dir="ltr" className="text-xl font-bold transition-all duration-300 sm:text-2xl lg:text-3xl">
                     {onlineUsers}
                   </span>
-                  {totalUsers > 0 && (
+                  {activeUsers > 0 && (
                     <span dir="ltr" className="whitespace-nowrap rounded-md bg-muted/60 px-1.5 py-1 text-xs font-medium text-muted-foreground sm:px-2">
                       {onlineUsersPercent.toFixed(1)}%
                     </span>
