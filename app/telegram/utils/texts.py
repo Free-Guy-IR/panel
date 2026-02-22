@@ -96,13 +96,15 @@ class Message:
 
     @staticmethod
     def start(stats: SystemStats):
-        memory_percentage = int(stats.mem_used / stats.mem_total * 100)
+        memory_percentage = int(stats.mem_used / stats.mem_total * 100) if stats.mem_total else 0
+        disk_percentage = int(stats.disk_used / stats.disk_total * 100) if stats.disk_total else 0
         return f"""\
 ⚙ {b("PasarGuard Version")}: {c(stats.version)}
 
 📊 {b("CPU Usage")}: {c(stats.cpu_usage)} %
 🎛 {b("CPU Cores")}: {c(stats.cpu_cores)}
 📈 {b("Memory")}: {c(readable_size(stats.mem_used))} / {c(readable_size(stats.mem_total))} ({c(memory_percentage)} %)
+💽 {b("Disk")}: {c(readable_size(stats.disk_used))} / {c(readable_size(stats.disk_total))} ({c(disk_percentage)} %)
 🌐 {b("Total Data Usage")}: {c(readable_size(stats.outgoing_bandwidth + stats.incoming_bandwidth))}
 
 👥 {b("Total Users")}: {c(stats.total_user)}
