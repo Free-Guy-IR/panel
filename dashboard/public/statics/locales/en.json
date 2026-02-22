@@ -1322,6 +1322,7 @@
   "statistics.networkSpeed": "Network Speed",
   "statistics.ramUsage": "RAM Usage",
   "statistics.cpuUsage": "CPU Usage",
+  "statistics.diskUsage": "Disk Usage",
   "statistics.cores": "cores",
   "statistics.realTimeData": "Real-Time Data",
   "statistics.historicalData": "Historical Data",

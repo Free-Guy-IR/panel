@@ -1165,6 +1165,7 @@
   "statistics.networkSpeed": "سرعت شبکه",
   "statistics.ramUsage": "مصرف رم",
   "statistics.cpuUsage": "مصرف پردازنده",
+  "statistics.diskUsage": "مصرف دیسک",
   "statistics.cores": "هسته",
   "statistics.serverSelection": "انتخاب سرور",
   "statistics.selectServerToMonitor": "سروری را برای نظارت بر معیارهای عملکرد انتخاب کنید",

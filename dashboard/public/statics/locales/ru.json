@@ -927,6 +927,7 @@
   "statistics.networkSpeed": "Скорость сети",
   "statistics.ramUsage": "Использование RAM",
   "statistics.cpuUsage": "Использование CPU",
+  "statistics.diskUsage": "Использование диска",
   "statistics.cores": "ядер",
   "arrayInput": {
     "addPlaceholder": "Введите и нажмите Enter для добавления...",

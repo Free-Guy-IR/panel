@@ -212,9 +212,7 @@ const DashboardStatistics = ({ systemData }: { systemData: SystemStats | undefin
                   <HardDrive className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">
-                    {t('statistics.diskUsage', { defaultValue: 'Disk Usage' })}
-                  </p>
+                  <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">{t('statistics.diskUsage')}</p>
                 </div>
               </div>
               <CircularProgress value={diskPercent} size={38} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
