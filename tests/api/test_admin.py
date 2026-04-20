@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 from app.db.crud.admin import get_admin_by_telegram_id
-from app.db.models import Admin, NodeUserUsage
+from app.db.models import Admin, AdminUsageLogs, NodeUserUsage
 from app.models.settings import RunMethod, Telegram
 from app.routers.authentication import validate_mini_app_admin
 from tests.api import TestSession, client
@@ -91,6 +91,69 @@ def test_get_admin(access_token):
     )
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["username"] == username
+
+
+def test_get_admin_uses_aggregate_metrics_without_loading_relationships(access_token, monkeypatch: pytest.MonkeyPatch):
+    admin = create_admin(access_token)
+    admin_token_response = client.post(
+        url="/api/admin/token",
+        data={"username": admin["username"], "password": admin["password"], "grant_type": "password"},
+    )
+    assert admin_token_response.status_code == status.HTTP_200_OK
+    admin_token = admin_token_response.json()["access_token"]
+
+    user = create_user(admin_token, payload={"username": unique_name("admin_metric_user")})
+
+    async def _seed_admin_usage():
+        async with TestSession() as session:
+            result = await session.execute(select(Admin).where(Admin.username == admin["username"]))
+            db_admin = result.scalar_one()
+            db_admin.used_traffic = 12345
+            session.add(AdminUsageLogs(admin_id=db_admin.id, used_traffic_at_reset=6789))
+            await session.commit()
+
+    async def _assert_lightweight_admin_load(_, load_users: bool = True, load_usage_logs: bool = True):
+        assert load_users is False
+        assert load_usage_logs is False
+
+    try:
+        asyncio.run(_seed_admin_usage())
+        with monkeypatch.context() as patch_context:
+            patch_context.setattr("app.db.crud.admin.load_admin_attrs", _assert_lightweight_admin_load)
+            response = client.get(url="/api/admin", headers=auth_headers(admin_token))
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["username"] == admin["username"]
+        assert data["total_users"] == 1
+        assert data["used_traffic"] == 12345
+        assert data["lifetime_used_traffic"] == 19134
+    finally:
+        delete_user(admin_token, user["username"])
+        delete_admin(access_token, admin["username"])
+
+
+def test_protected_routes_use_lightweight_current_admin(access_token, monkeypatch: pytest.MonkeyPatch):
+    admin = create_admin(access_token)
+    admin_token_response = client.post(
+        url="/api/admin/token",
+        data={"username": admin["username"], "password": admin["password"], "grant_type": "password"},
+    )
+    assert admin_token_response.status_code == status.HTTP_200_OK
+    admin_token = admin_token_response.json()["access_token"]
+
+    async def _assert_lightweight_admin_load(_, load_users: bool = True, load_usage_logs: bool = True):
+        assert load_users is False
+        assert load_usage_logs is False
+
+    try:
+        with monkeypatch.context() as patch_context:
+            patch_context.setattr("app.db.crud.admin.load_admin_attrs", _assert_lightweight_admin_load)
+            response = client.get(url="/api/users", headers=auth_headers(admin_token))
+
+        assert response.status_code == status.HTTP_200_OK
+    finally:
+        delete_admin(access_token, admin["username"])
 
 
 def test_admin_create(access_token):
