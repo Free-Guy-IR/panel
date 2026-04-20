@@ -596,6 +596,12 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     () => (xrayTemplateData?.templates ?? []).filter(template => !template.is_default),
     [xrayTemplateData?.templates],
   )
+  const isXrayTemplateSelectDisabled = isLoadingXrayTemplates || xrayTemplates.length === 0
+  const xrayTemplatePlaceholder = isLoadingXrayTemplates
+    ? t('loading', { defaultValue: 'Loading...' })
+    : xrayTemplates.length === 0
+      ? t('clientTemplates.noTemplates')
+      : t('hostsDialog.selectXrayTemplate')
 
   // No automatic refresh when dialog opens - only fetch on specific actions
 
@@ -835,11 +841,11 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                         dir={dir}
                         value={field.value != null ? String(field.value) : ''}
                         onValueChange={value => field.onChange(value ? Number.parseInt(value, 10) : undefined)}
-                        disabled={isLoadingXrayTemplates}
+                        disabled={isXrayTemplateSelectDisabled}
                       >
                         <FormControl>
-                          <SelectTrigger className="py-5">
-                            <SelectValue placeholder={isLoadingXrayTemplates ? t('loading', { defaultValue: 'Loading...' }) : t('hostsDialog.selectXrayTemplate')} />
+                          <SelectTrigger className="py-5" disabled={isXrayTemplateSelectDisabled}>
+                            <SelectValue placeholder={xrayTemplatePlaceholder} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent dir={dir}>
