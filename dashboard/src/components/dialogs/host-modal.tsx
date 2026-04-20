@@ -21,7 +21,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { type HostFormValues } from '@/components/forms/host-form'
+import { hostFormDefaultValues, type HostFormValues } from '@/components/forms/host-form'
 import { LoaderButton } from '../ui/loader-button'
 
 interface HostModalProps {
@@ -564,9 +564,11 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
 
   const handleModalOpenChange = (open: boolean) => {
     if (!open) {
-      // Let the parent component handle the form reset
       setOpenSection(undefined)
       setWireguardOpenSection(undefined)
+      setIsTransportOpen(false)
+      setResolvedHostMode('xray')
+      form.reset(hostFormDefaultValues)
     }
     onOpenChange(open)
   }

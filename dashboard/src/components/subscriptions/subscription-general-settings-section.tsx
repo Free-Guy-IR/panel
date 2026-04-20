@@ -102,7 +102,7 @@ export function SubscriptionGeneralSettingsSection({ form }: SubscriptionGeneral
                   <User className="h-4 w-4" />
                   {t('settings.subscriptions.general.profileTitle')}
                 </FormLabel>
-                <VariablesPopover includeProfileTitle={true} />
+                <VariablesPopover />
               </div>
               <FormControl>
                 <Input placeholder={t('settings.subscriptions.general.profileTitlePlaceholder')} {...field} className="text-xs sm:text-sm" />
