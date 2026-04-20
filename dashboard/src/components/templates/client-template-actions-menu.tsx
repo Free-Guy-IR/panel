@@ -33,7 +33,7 @@ const DeleteAlertDialog = ({
   return (
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent>
-        <AlertDialogHeader className={cn(dir === 'rtl' && 'sm:text-right')}>
+        <AlertDialogHeader>
           <AlertDialogTitle>{t('clientTemplates.deleteTitle', { defaultValue: 'Delete Client Template' })}</AlertDialogTitle>
           <AlertDialogDescription>
             <span
@@ -47,7 +47,7 @@ const DeleteAlertDialog = ({
             />
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className={cn(dir === 'rtl' && 'sm:flex-row-reverse sm:gap-x-2')}>
+        <AlertDialogFooter>
           <AlertDialogCancel onClick={onClose}>{t('cancel')}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm}>
             {t('remove')}
