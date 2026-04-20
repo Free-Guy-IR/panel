@@ -42,7 +42,6 @@ const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'wireguard']
 
 type ActionButtonsModalState = {
   subscribeUrl: string
-  isActionsMenuOpen: boolean
   showSubscriptionModal: boolean
   isDeleteDialogOpen: boolean
   isResetUsageDialogOpen: boolean
@@ -62,7 +61,6 @@ let actionButtonsGlobalStateVersion = 0
 
 const createDefaultModalState = (user: UserResponse): ActionButtonsModalState => ({
   subscribeUrl: user.subscription_url || '',
-  isActionsMenuOpen: false,
   showSubscriptionModal: false,
   isDeleteDialogOpen: false,
   isResetUsageDialogOpen: false,
@@ -185,6 +183,7 @@ const buildUserEditFormValues = (user: UserResponse): UseEditFormValues => ({
 
 const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, renderActions = true }) => {
   const [isEditModalOpen, setEditModalOpen] = useState(false)
+  const [isActionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null)
   const queryClient = useQueryClient()
   const { t } = useTranslation()
@@ -209,7 +208,6 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
 
   const {
     subscribeUrl,
-    isActionsMenuOpen,
     showSubscriptionModal,
     isDeleteDialogOpen,
     isResetUsageDialogOpen,
@@ -222,7 +220,6 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
   } = modalState
 
   const setSubscribeUrl = useCallback((value: string) => setModalState({ subscribeUrl: value }), [setModalState])
-  const setActionsMenuOpen = useCallback((value: boolean) => setModalState({ isActionsMenuOpen: value }), [setModalState])
   const setShowSubscriptionModal = useCallback((value: boolean) => setModalState({ showSubscriptionModal: value }), [setModalState])
   const setDeleteDialogOpen = useCallback((value: boolean) => setModalState({ isDeleteDialogOpen: value }), [setModalState])
   const setResetUsageDialogOpen = useCallback((value: boolean) => setModalState({ isResetUsageDialogOpen: value }), [setModalState])
@@ -565,7 +562,10 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
   }
 
   return (
-    <div onClick={renderActions ? (e => e.stopPropagation()) : undefined}>
+    <div
+      onClick={renderActions ? (e => e.stopPropagation()) : undefined}
+      onPointerDown={renderActions ? (e => e.stopPropagation()) : undefined}
+    >
       {renderActions && (
         <div className="flex items-center justify-end">
           <Button size="icon" variant="ghost" onClick={handleEdit} className="md:hidden">
