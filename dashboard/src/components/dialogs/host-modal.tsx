@@ -43,6 +43,18 @@ const statusOptions = [
   { value: UserStatus.on_hold, label: 'hostsDialog.status.onHold' },
 ] as const
 
+const createHostFormDefaults = (): HostFormValues => ({
+  ...hostFormDefaultValues,
+  address: [],
+  port: undefined,
+  status: [],
+  host: [],
+  sni: [],
+  http_headers: {},
+  alpn: [],
+  verify_peer_cert_by_name: [],
+})
+
 // Memoized Noise Item Component for optimal performance
 interface NoiseItemProps {
   index: number
@@ -459,6 +471,12 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const infoPopoverSide = isMobile ? 'bottom' : dir === 'rtl' ? 'left' : 'right'
   const infoPopoverAlign = isMobile ? 'center' : 'start'
 
+  const resetFormToDefaults = useCallback(() => {
+    form.reset(createHostFormDefaults())
+    form.setValue('port', undefined, { shouldDirty: false, shouldTouch: false, shouldValidate: false })
+    form.clearErrors('port')
+  }, [form])
+
   // Optimized noise settings handlers with useCallback for performance
   const addNoiseSetting = useCallback(() => {
     const currentNoiseSettings = form.getValues('noise_settings.xray') || []
@@ -568,7 +586,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
       setWireguardOpenSection(undefined)
       setIsTransportOpen(false)
       setResolvedHostMode('xray')
-      form.reset(hostFormDefaultValues)
+      resetFormToDefaults()
     }
     onOpenChange(open)
   }
@@ -613,6 +631,12 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     }
     setOpenSection(prevSection => (prevSection === value ? undefined : value))
   }
+
+  useEffect(() => {
+    if (isDialogOpen && !editingHost) {
+      resetFormToDefaults()
+    }
+  }, [editingHost, isDialogOpen, resetFormToDefaults])
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -1006,6 +1030,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             placeholder="443"
                             isError={!!form.formState.errors.port}
                             type="number"
+                            autoComplete="off"
                             {...field}
                             onChange={e => {
                               const val = e.target.value
