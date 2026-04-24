@@ -248,7 +248,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
         )}
       </div>
       <div className="flex h-full flex-shrink-0 items-center gap-1">
-        <Button size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10" onClick={handleOpenAdvanceSearch}>
+        <Button size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center rounded-lg border" onClick={handleOpenAdvanceSearch}>
           <Filter className="h-4 w-4" />
           {hasActiveAdvanceFilters() && (
             <Badge variant="default" className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary p-0 text-[10.5px] text-primary-foreground">
@@ -259,7 +259,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
         {hasActiveAdvanceFilters() && onClearAdvanceSearch && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className={cn('h-9 w-9 p-0 md:h-8 md:w-8', dir === 'rtl' ? 'rounded-r-none border-r-0' : 'rounded-l-none border-l-0')} onClick={onClearAdvanceSearch}>
+              <Button size="sm" variant="outline" className={cn('h-9 w-9 p-0', dir === 'rtl' ? 'rounded-r-none border-r-0' : 'rounded-l-none border-l-0')} onClick={onClearAdvanceSearch}>
                 <X className="h-3 w-3" />
               </Button>
             </PopoverTrigger>
@@ -277,7 +277,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
               <Button
                 size="icon-md"
                 variant="ghost"
-                className="relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10"
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg border"
                 aria-label={t('sortOptions', { defaultValue: 'Sort Options' })}
               >
                 <ArrowUpDown className="h-4 w-4" />
@@ -321,7 +321,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
           onClick={handleRefreshClick}
           variant="ghost"
           className={cn(
-            'relative flex h-9 w-9 items-center justify-center border transition-all duration-200 md:h-10 md:w-10',
+            'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-200',
             dir === 'rtl' ? 'rounded-l-none border-l-0' : 'rounded-r-none',
             (isRefreshing || isFetching) && 'opacity-70',
           )}
@@ -345,7 +345,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
             <Button
               size="icon-md"
               variant="ghost"
-              className={cn('relative flex h-9 w-9 items-center justify-center border md:h-10 md:w-10', dir === 'rtl' ? 'rounded-r-none' : 'rounded-l-none border-l-0')}
+              className={cn('relative flex h-9 w-9 items-center justify-center rounded-lg border', dir === 'rtl' ? 'rounded-r-none' : 'rounded-l-none border-l-0')}
               aria-label={t('autoRefresh.label')}
               title={`${t('autoRefresh.label')} (${autoRefreshShortLabel})`}
             >
