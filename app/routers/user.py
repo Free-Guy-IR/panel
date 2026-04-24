@@ -771,8 +771,8 @@ async def bulk_modify_users_expire(
     - **admins**: Optional list of admin IDs — their users will be targeted
     - **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
     - **group_ids**: Optional list of group IDs to filter users by their group membership
-    - **expired_after**: Optional UTC datetime to filter users who expired after this date (works only if "expired" status is selected)
-    - **expired_before**: Optional UTC datetime to filter users who expired before this date (works only if "expired" status is selected)
+    - **expire_after**: Optional UTC datetime to filter users whose expire date is on or after this date
+    - **expire_before**: Optional UTC datetime to filter users whose expire date is on or before this date
     """
     return await user_operator.bulk_modify_expire(db, bulk_model)
 
@@ -793,8 +793,8 @@ async def bulk_modify_users_datalimit(
     - **admins**: Optional list of admin IDs — their users will be targeted
     - **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
     - **group_ids**: Optional list of group IDs to filter users by their group membership
-    - **expired_after**: Optional UTC datetime to filter users who expired after this date (works only if "expired" status is selected)
-    - **expired_before**: Optional UTC datetime to filter users who expired before this date (works only if "expired" status is selected)
+    - **expire_after**: Optional UTC datetime to filter users whose expire date is on or after this date
+    - **expire_before**: Optional UTC datetime to filter users whose expire date is on or before this date
     """
     return await user_operator.bulk_modify_datalimit(db, bulk_model)
 

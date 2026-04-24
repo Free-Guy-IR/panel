@@ -2046,11 +2046,11 @@
     "applyToProxyDesc": "选择要应用代理设置的分组、用户或管理员",
     "flowMethod": "流: {{flow}} | 方法: {{method}}",
     "expireDate": "到期日期",
-    "expiredFilterAfter": "到期不早于",
+    "expiredFilterAfter": "到期时间不早于",
     "expiredFilterAfterPlaceholder": "选择日期",
-    "expiredFilterBefore": "到期不晚于",
+    "expiredFilterBefore": "到期时间不晚于",
     "expiredFilterBeforePlaceholder": "选择日期",
-    "expiredFilterHint": "可选。当已选择「已过期」状态筛选时，可按账户过期时间进一步缩小范围。",
+    "expiredFilterHint": "可选。按用户到期时间进一步缩小范围。",
     "dataLimit": "数据限制",
     "groupsDesc": "选择要应用的用户组",
     "expireDateDesc": "选择要应用到期日期",
@@ -2202,7 +2202,7 @@
       "createMore": "创建更多用户",
       "strategy": {
         "sequence": "连续 (user1, user2, user3...)",
-        "random": "随机 (user-abc123, user-def456...)"
+        "random": "随机 (a3f9c1d2e4b5, 9a8b7c6d5e4f...)"
       }
     }
   },

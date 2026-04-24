@@ -238,10 +238,10 @@ class BulkUser(BaseModel):
     admins: set[int] = Field(default_factory=set)
     users: set[int] = Field(default_factory=set)
     status: set[UserStatus] = Field(default_factory=set)
-    expired_after: dt | None = Field(default=None)
-    expired_before: dt | None = Field(default=None)
+    expire_after: dt | None = Field(default=None)
+    expire_before: dt | None = Field(default=None)
 
-    @field_validator("expired_after", "expired_before", check_fields=False)
+    @field_validator("expire_after", "expire_before", check_fields=False)
     @classmethod
     def validator_datetime(cls, value):
         if not value:

@@ -2080,11 +2080,11 @@
     "applyToProxyDesc": "Select the groups, users, or admins you want to apply proxy settings to",
     "flowMethod": "Flow: {{flow}} | Method: {{method}}",
     "expireDate": "Expire date",
-    "expiredFilterAfter": "Expired on or after",
+    "expiredFilterAfter": "Expire on or after",
     "expiredFilterAfterPlaceholder": "Pick a date",
-    "expiredFilterBefore": "Expired on or before",
+    "expiredFilterBefore": "Expire on or before",
     "expiredFilterBeforePlaceholder": "Pick a date",
-    "expiredFilterHint": "Optional. When the Expired status filter is selected, narrow results by when the account expired.",
+    "expiredFilterHint": "Optional. Narrow results by the user's expire date.",
     "dataLimit": "Data limit",
     "groupsDesc": "Select groups to apply",
     "expireDateDesc": "Select the expiration date to apply",
@@ -2216,7 +2216,7 @@
       "createMore": "Create More Users",
       "strategy": {
         "sequence": "Sequential (user1, user2, user3...)",
-        "random": "Random (user-abc123, user-def456...)"
+        "random": "Random (a3f9c1d2e4b5, 9a8b7c6d5e4f...)"
       }
     }
   },

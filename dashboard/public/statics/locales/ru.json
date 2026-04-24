@@ -1999,11 +1999,11 @@
     "applyToProxyDesc": "Выберите группы, пользователей или администраторов для применения настроек прокси",
     "flowMethod": "Поток: {{flow}} | Метод: {{method}}",
     "expireDate": "Дата истечения",
-    "expiredFilterAfter": "Истекли не раньше",
+    "expiredFilterAfter": "Истекает не раньше",
     "expiredFilterAfterPlaceholder": "Выберите дату",
-    "expiredFilterBefore": "Истекли не позже",
+    "expiredFilterBefore": "Истекает не позже",
     "expiredFilterBeforePlaceholder": "Выберите дату",
-    "expiredFilterHint": "Необязательно. При выбранном статусе «Истёк» можно сузить выбор по дате истечения срока действия учётной записи.",
+    "expiredFilterHint": "Необязательно. Сузьте выбор по дате истечения пользователя.",
     "dataLimit": "Лимит данных",
     "groupsDesc": "Выберите группы для применения",
     "expireDateDesc": "Выберите дату истечения срока действия для применения",
@@ -2155,7 +2155,7 @@
       "createMore": "Создать больше пользователей",
       "strategy": {
         "sequence": "Последовательный (user1, user2, user3...)",
-        "random": "Случайный (user-abc123, user-def456...)"
+        "random": "Случайный (a3f9c1d2e4b5, 9a8b7c6d5e4f...)"
       }
     }
   },

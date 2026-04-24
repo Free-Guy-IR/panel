@@ -242,9 +242,8 @@ def test_bulk_expire_with_range(access_token):
             headers={"Authorization": f"Bearer {access_token}"},
             json={
                 "amount": 3600,  # Add 1 hour
-                "status": ["expired"],
-                "expired_after": expired_after.isoformat(),
-                "expired_before": expired_before.isoformat(),
+                "expire_after": expired_after.isoformat(),
+                "expire_before": expired_before.isoformat(),
             },
         )
         assert response.status_code == status.HTTP_200_OK
@@ -260,6 +259,63 @@ def test_bulk_expire_with_range(access_token):
         new_expire2 = dt.fromisoformat(resp2.json()["expire"].replace("Z", "+00:00"))
         # Should be exactly expire2 (or very close)
         assert abs((new_expire2 - expire2).total_seconds()) < 1
+
+    finally:
+        delete_user(access_token, user1["username"])
+        delete_user(access_token, user2["username"])
+        delete_group(access_token, group["id"])
+        delete_core(access_token, core["id"])
+
+
+def test_bulk_data_limit_with_expire_range_without_expired_status(access_token):
+    core = create_core(access_token)
+    group = create_group(access_token, name=unique_name("bulk_data_range_group"))
+
+    now = dt.now(tz.utc).replace(microsecond=0)
+    expire1 = now - td(days=2)
+    expire2 = now - td(days=10)
+
+    user1 = create_user(
+        access_token,
+        group_ids=[group["id"]],
+        payload={"username": unique_name("data_range1"), "data_limit": 100},
+    )
+    user2 = create_user(
+        access_token,
+        group_ids=[group["id"]],
+        payload={"username": unique_name("data_range2"), "data_limit": 200},
+    )
+
+    client.put(
+        f"/api/user/{user1['username']}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"expire": expire1.isoformat()},
+    )
+    client.put(
+        f"/api/user/{user2['username']}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"expire": expire2.isoformat()},
+    )
+
+    try:
+        expired_after = now - td(days=3)
+        expired_before = now - td(days=1)
+
+        response = client.post(
+            "/api/users/bulk/data_limit",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "amount": 50,
+                "expire_after": expired_after.isoformat(),
+                "expire_before": expired_before.isoformat(),
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        resp1 = client.get(f"/api/user/{user1['username']}", headers={"Authorization": f"Bearer {access_token}"})
+        resp2 = client.get(f"/api/user/{user2['username']}", headers={"Authorization": f"Bearer {access_token}"})
+        assert resp1.json()["data_limit"] == 150
+        assert resp2.json()["data_limit"] == 200
 
     finally:
         delete_user(access_token, user1["username"])

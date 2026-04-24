@@ -133,24 +133,17 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
     setExpireSeconds(seconds)
   }, [expireAmount, expireUnit])
 
-  useEffect(() => {
-    if (!selectedStatuses.includes('expired')) {
-      setExpiredAfter(undefined)
-      setExpiredBefore(undefined)
-    }
-  }, [selectedStatuses])
-
   const { data: groupsData, isLoading: groupsLoading } = useGetGroupsSimple({ limit: PAGE_SIZE, offset: 0, all: true })
   const { data: usersData, isLoading: usersLoading } = useGetUsersSimple({ limit: PAGE_SIZE, offset: 0, search: debouncedUserSearch || undefined })
   const { data: adminsData, isLoading: adminsLoading } = useGetAdminsSimple({ limit: PAGE_SIZE, offset: 0, search: debouncedAdminSearch || undefined })
 
-  // Backend: expire >= expired_after AND expire <= expired_before. Sending the same midnight for both
+  // Backend: expire >= expire_after AND expire <= expire_before. Sending the same midnight for both
   // would only match that instant; use start/end of local calendar day so one day in both fields is a full day.
-  const expiredStatusDatePayload =
-    (operationType === 'data' || operationType === 'expire') && selectedStatuses.includes('expired')
+  const expireDatePayload =
+    (operationType === 'data' || operationType === 'expire') && (expiredAfter || expiredBefore)
       ? {
-          ...(expiredAfter ? { expired_after: startOfDay(expiredAfter).toISOString() } : {}),
-          ...(expiredBefore ? { expired_before: endOfDay(expiredBefore).toISOString() } : {}),
+          ...(expiredAfter ? { expire_after: startOfDay(expiredAfter).toISOString() } : {}),
+          ...(expiredBefore ? { expire_before: endOfDay(expiredBefore).toISOString() } : {}),
         }
       : {}
 
@@ -295,7 +288,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return {
             ...basePayload,
             ...statusPayload,
-            ...expiredStatusDatePayload,
+            ...expireDatePayload,
             amount: dataOperation === 'subtract' ? -dataLimitBytes! : dataLimitBytes,
             dry_run: false,
           }
@@ -303,7 +296,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return {
             ...basePayload,
             ...statusPayload,
-            ...expiredStatusDatePayload,
+            ...expireDatePayload,
             amount: expireOperation === 'subtract' ? -expireSeconds! : expireSeconds,
             dry_run: false,
           }
@@ -442,7 +435,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return {
             ...basePayload,
             ...statusPayload,
-            ...expiredStatusDatePayload,
+            ...expireDatePayload,
             amount: dataOperation === 'subtract' ? -dataLimitBytes! : dataLimitBytes,
             dry_run: true,
           }
@@ -451,7 +444,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return {
             ...basePayload,
             ...statusPayload,
-            ...expiredStatusDatePayload,
+            ...expireDatePayload,
             amount: expireOperation === 'subtract' ? -expireSeconds! : expireSeconds,
             dry_run: true,
           }
@@ -517,8 +510,10 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
   const hasStatusFilter =
     (operationType === 'data' || operationType === 'expire' || operationType === 'wireguard') && selectedStatuses.length > 0
   const statusTargetCount = hasStatusFilter ? selectedStatuses.length : 0
-  const displayTargetCount = totalTargets + statusTargetCount
-  const isApplyToAll = totalTargets === 0 && !hasStatusFilter
+  const hasExpireDateFilter = (operationType === 'data' || operationType === 'expire') && Boolean(expiredAfter || expiredBefore)
+  const expireDateFilterCount = hasExpireDateFilter ? Number(Boolean(expiredAfter)) + Number(Boolean(expiredBefore)) : 0
+  const displayTargetCount = totalTargets + statusTargetCount + expireDateFilterCount
+  const isApplyToAll = totalTargets === 0 && !hasStatusFilter && !hasExpireDateFilter
 
   const formatTime = (seconds: number) => {
     if (seconds < 60) return `${seconds}s`
@@ -1015,7 +1010,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                   </CardContent>
                 </Card>
               )}
-              {(operationType === 'data' || operationType === 'expire') && selectedStatuses.includes('expired') && (
+              {(operationType === 'data' || operationType === 'expire') && (
                 <Card>
                   <CardContent className="p-3 sm:p-4">
                     <BulkExpiredDateFilters
@@ -1178,7 +1173,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                   )}
 
                   {(operationType === 'data' || operationType === 'expire') &&
-                    selectedStatuses.includes('expired') &&
                     (expiredAfter || expiredBefore) && (
                       <div className="space-y-1.5 text-sm">
                         {expiredAfter && (

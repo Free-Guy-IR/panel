@@ -51,8 +51,8 @@ export const DeleteExpiredUsersTarget = {
 export type DeleteExpiredUsersParams = {
   admin_username?: string | null
   target?: DeleteExpiredUsersTarget
-  expired_after?: string | null
-  expired_before?: string | null
+  expire_after?: string | null
+  expire_before?: string | null
 }
 
 export type GetExpiredUsersTarget = (typeof GetExpiredUsersTarget)[keyof typeof GetExpiredUsersTarget]
@@ -66,8 +66,8 @@ export const GetExpiredUsersTarget = {
 export type GetExpiredUsersParams = {
   admin_username?: string | null
   target?: GetExpiredUsersTarget
-  expired_after?: string | null
-  expired_before?: string | null
+  expire_after?: string | null
+  expire_before?: string | null
 }
 
 export type GetUsersUsageParams = {
@@ -2459,9 +2459,9 @@ export interface BulkUserTemplateSelection {
   ids?: number[]
 }
 
-export type BulkUserExpiredBefore = string | null
+export type BulkUserExpireBefore = string | null
 
-export type BulkUserExpiredAfter = string | null
+export type BulkUserExpireAfter = string | null
 
 export interface BulkUser {
   amount: number
@@ -2470,8 +2470,8 @@ export interface BulkUser {
   admins?: number[]
   users?: number[]
   status?: UserStatus[]
-  expired_after?: BulkUserExpiredAfter
-  expired_before?: BulkUserExpiredBefore
+  expire_after?: BulkUserExpireAfter
+  expire_before?: BulkUserExpireBefore
 }
 
 /**
@@ -10969,8 +10969,8 @@ export const useModifyUserWithTemplateById = <TData = Awaited<ReturnType<typeof 
 - **admins**: Optional list of admin IDs — their users will be targeted
 - **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
 - **group_ids**: Optional list of group IDs to filter users by their group membership
-- **expired_after**: Optional UTC datetime to filter users who expired after this date (works only if "expired" status is selected)
-- **expired_before**: Optional UTC datetime to filter users who expired before this date (works only if "expired" status is selected)
+- **expire_after**: Optional UTC datetime to filter users whose expire date is on or after this date
+- **expire_before**: Optional UTC datetime to filter users whose expire date is on or before this date
  * @summary Bulk sum/sub to expire of users
  */
 export const bulkModifyUsersExpire = (bulkUser: BodyType<BulkUser>, signal?: AbortSignal) => {
@@ -11023,8 +11023,8 @@ export const useBulkModifyUsersExpire = <TData = Awaited<ReturnType<typeof bulkM
 - **admins**: Optional list of admin IDs — their users will be targeted
 - **status**: Optional status to filter users (e.g., "expired", "active"), Empty means no filtering
 - **group_ids**: Optional list of group IDs to filter users by their group membership
-- **expired_after**: Optional UTC datetime to filter users who expired after this date (works only if "expired" status is selected)
-- **expired_before**: Optional UTC datetime to filter users who expired before this date (works only if "expired" status is selected)
+- **expire_after**: Optional UTC datetime to filter users whose expire date is on or after this date
+- **expire_before**: Optional UTC datetime to filter users whose expire date is on or before this date
  * @summary Bulk sum/sub to data limit of users
  */
 export const bulkModifyUsersDatalimit = (bulkUser: BodyType<BulkUser>, signal?: AbortSignal) => {
