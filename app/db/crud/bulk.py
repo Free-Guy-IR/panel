@@ -16,7 +16,7 @@ from app.db.models import (
     users_groups_association,
 )
 from app.models.group import BulkGroup
-from app.models.user import BulkUser, BulkUsersProxy, BulkWireGuardPeerIPs
+from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
 
 from .general import get_datetime_add_expression
 from .user import load_user_attrs
@@ -255,17 +255,15 @@ async def count_bulk_group_scope(db: AsyncSession, bulk_model: BulkGroup) -> int
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
 
-def _create_final_filter(bulk_model: BulkUser | BulkUsersProxy | BulkWireGuardPeerIPs):
+def _create_final_filter(bulk_model: BulkUserFilter):
     """Create a comprehensive SQLAlchemy filter condition from a bulk model."""
     other_conditions = []
-    if hasattr(bulk_model, "status") and bulk_model.status:
+    if bulk_model.status:
         other_conditions.append(User.status.in_([i.value for i in bulk_model.status]))
-    expire_after = getattr(bulk_model, "expire_after", None)
-    expire_before = getattr(bulk_model, "expire_before", None)
-    if expire_after:
-        other_conditions.append(User.expire >= expire_after)
-    if expire_before:
-        other_conditions.append(User.expire <= expire_before)
+    if bulk_model.expire_after:
+        other_conditions.append(User.expire >= bulk_model.expire_after)
+    if bulk_model.expire_before:
+        other_conditions.append(User.expire <= bulk_model.expire_before)
     if bulk_model.admins:
         other_conditions.append(User.admin_id.in_([i for i in bulk_model.admins]))
     if bulk_model.group_ids:
