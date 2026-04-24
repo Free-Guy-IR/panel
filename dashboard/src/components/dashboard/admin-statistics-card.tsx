@@ -2,6 +2,7 @@ import { AdminDetails, SystemStats, useGetSystemStats } from '@/service/api'
 import { UserCog, Users } from 'lucide-react'
 import { Suspense, lazy, useEffect, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Skeleton } from '@/components/ui/skeleton'
 import UserStatisticsCard from './users-statistics-card'
 
 const DataUsageChart = lazy(() => import('./data-usage-chart'))
@@ -10,10 +11,10 @@ function DataUsageChartSkeleton() {
   return (
     <div className="rounded-lg border bg-card/80 p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-20" />
       </div>
-      <div className="mt-4 h-[240px] w-full animate-pulse rounded bg-muted sm:h-[320px]" />
+      <Skeleton className="mt-4 h-[240px] w-full sm:h-[320px]" />
     </div>
   )
 }

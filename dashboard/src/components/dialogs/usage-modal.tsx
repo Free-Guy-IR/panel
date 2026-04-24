@@ -10,6 +10,7 @@ import { DateRange } from 'react-day-picker'
 import { TimeRangeSelector } from '@/components/common/time-range-selector'
 import { Button } from '../ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
+import { Skeleton } from '../ui/skeleton'
 import { TooltipProps, Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, Pie, PieChart as RechartsPieChart } from 'recharts'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useChartViewType } from '@/hooks/use-chart-view-type'
@@ -707,17 +708,15 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
                                 heightClass = isMobile ? 'h-16' : 'h-20'
                               }
                               return (
-                                <div key={i} className="animate-pulse">
-                                  <div className={`w-6 rounded-t-lg bg-muted sm:w-8 ${heightClass}`} />
-                                </div>
+                                <Skeleton key={i} className={`w-6 rounded-t-lg sm:w-8 ${heightClass}`} />
                               )
                             })}
                           </div>
                         </div>
                       </div>
                       <div className="mt-4 flex justify-between px-2">
-                        <div className="h-3 w-12 animate-pulse rounded bg-muted sm:h-4 sm:w-16" />
-                        <div className="h-3 w-12 animate-pulse rounded bg-muted sm:h-4 sm:w-16" />
+                        <Skeleton className="h-3 w-12 sm:h-4 sm:w-16" />
+                        <Skeleton className="h-3 w-12 sm:h-4 sm:w-16" />
                       </div>
                     </div>
                   </div>

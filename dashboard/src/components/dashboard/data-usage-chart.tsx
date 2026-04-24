@@ -7,6 +7,7 @@ import { useGetUsersUsage, useGetUsage, Period, UserUsageStatsList, NodeUsageSta
 import { useMemo, useState, useEffect } from 'react'
 import { SearchXIcon, TrendingUp, TrendingDown } from 'lucide-react'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
+import { Skeleton } from '../ui/skeleton'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useChartViewType } from '@/hooks/use-chart-view-type'
@@ -245,16 +246,14 @@ const DataUsageChart = ({ adminId, adminUsername }: { adminId?: number; adminUse
                   <div className="flex h-full items-end justify-center">
                     <div className="flex h-48 items-end gap-2">
                       {[1, 2, 3, 4, 5, 6, 7].map(i => (
-                        <div key={i} className="animate-pulse">
-                          <div className={`w-8 rounded-t-lg bg-muted ${i === 4 ? 'h-32' : i === 3 || i === 5 ? 'h-24' : i === 2 || i === 6 ? 'h-16' : 'h-20'}`} />
-                        </div>
+                        <Skeleton key={i} className={`w-8 rounded-t-lg ${i === 4 ? 'h-32' : i === 3 || i === 5 ? 'h-24' : i === 2 || i === 6 ? 'h-16' : 'h-20'}`} />
                       ))}
                     </div>
                   </div>
                 </div>
                 <div className="mt-4 flex justify-between">
-                  <div className="h-4 w-16 animate-pulse rounded bg-muted" />
-                  <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-4 w-16" />
                 </div>
               </div>
             </div>
