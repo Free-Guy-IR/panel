@@ -321,8 +321,15 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
             </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[min(90vw,400px)] p-3" align={dir === 'rtl' ? 'end' : 'start'} side="bottom" dir={dir}>
-          <div className="max-h-64 space-y-3 overflow-y-auto">
+        <PopoverContent
+          className="w-[min(90vw,400px)] overflow-hidden p-3"
+          align={dir === 'rtl' ? 'end' : 'start'}
+          side="bottom"
+          dir={dir}
+          onWheel={e => e.stopPropagation()}
+          onTouchMove={e => e.stopPropagation()}
+        >
+          <div className="flex max-h-[min(70dvh,24rem)] min-h-0 flex-col gap-3 overflow-hidden">
             {/* Input for adding new items with submit button */}
             <div className="m-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
@@ -341,11 +348,11 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
 
             {/* Selected items list */}
             {field.value && field.value.length > 0 && (
-              <div dir="ltr" className="space-y-2">
+              <div dir="ltr" className="flex min-h-0 flex-col gap-2">
                 <div dir={dir} className="text-xs font-medium text-muted-foreground">
                   {t('arrayInput.items')} ({field.value.length})
                 </div>
-                <div className="max-h-48 space-y-1 overflow-y-auto">
+                <div className="min-h-0 max-h-[min(50dvh,14rem)] space-y-1 overflow-y-auto overscroll-contain pr-1 touch-pan-y">
                   {field.value.map((item: string, index: number) => (
                     <div key={index} className="group flex min-w-0 items-center gap-2 rounded-md border p-2 transition-colors hover:bg-accent/50" onClick={e => e.stopPropagation()}>
                       {editingIndex === index ? (
