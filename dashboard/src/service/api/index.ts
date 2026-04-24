@@ -51,8 +51,8 @@ export const DeleteExpiredUsersTarget = {
 export type DeleteExpiredUsersParams = {
   admin_username?: string | null
   target?: DeleteExpiredUsersTarget
-  expire_after?: string | null
-  expire_before?: string | null
+  expired_after?: string | null
+  expired_before?: string | null
 }
 
 export type GetExpiredUsersTarget = (typeof GetExpiredUsersTarget)[keyof typeof GetExpiredUsersTarget]
@@ -66,8 +66,8 @@ export const GetExpiredUsersTarget = {
 export type GetExpiredUsersParams = {
   admin_username?: string | null
   target?: GetExpiredUsersTarget
-  expire_after?: string | null
-  expire_before?: string | null
+  expired_after?: string | null
+  expired_before?: string | null
 }
 
 export type GetUsersUsageParams = {
@@ -669,19 +669,19 @@ export const UsernameGenerationStrategy = {
 
 export type UserUsageStatsListPeriod = Period | null
 
-export interface UserUsageStat {
-  total_traffic: number
-  period_start: string
-}
-
-export type UserUsageStatsListStats = { [key: string]: UserUsageStat[] }
-
 export interface UserUsageStatsList {
   period?: UserUsageStatsListPeriod
   start: string
   end: string
   stats: UserUsageStatsListStats
 }
+
+export interface UserUsageStat {
+  total_traffic: number
+  period_start: string
+}
+
+export type UserUsageStatsListStats = { [key: string]: UserUsageStat[] }
 
 export type UserTemplateSimpleName = string | null
 
@@ -991,13 +991,6 @@ export interface UserModify {
   status?: UserModifyStatus
 }
 
-/**
- * User IP lists for all nodes
- */
-export interface UserIPListAll {
-  nodes: UserIPListAllNodes
-}
-
 export type UserIPListIps = { [key: string]: number }
 
 /**
@@ -1008,6 +1001,13 @@ export interface UserIPList {
 }
 
 export type UserIPListAllNodes = { [key: string]: UserIPList | null }
+
+/**
+ * User IP lists for all nodes
+ */
+export interface UserIPListAll {
+  nodes: UserIPListAllNodes
+}
 
 export type UserCreateStatus = UserStatusCreate | null
 
@@ -1084,6 +1084,8 @@ export interface TransportSettingsOutput {
 
 export type TransportSettingsInputWebsocketSettings = WebSocketSettings | null
 
+export type TransportSettingsInputTcpSettings = TcpSettings | null
+
 export type TransportSettingsInputKcpSettings = KCPSettings | null
 
 export type TransportSettingsInputGrpcSettings = GRPCSettings | null
@@ -1135,8 +1137,6 @@ export interface TcpSettings {
   request?: TcpSettingsRequest
   response?: TcpSettingsResponse
 }
-
-export type TransportSettingsInputTcpSettings = TcpSettings | null
 
 export type SystemStatsCpuUsage = number | null
 
@@ -1337,8 +1337,6 @@ export type SettingsSchemaInputGeneral = General | null
 export type SettingsSchemaInputSubscription = SubscriptionInput | null
 
 export type SettingsSchemaInputNotificationEnable = NotificationEnable | null
-
-export type SettingsSchemaInputNotificationSettings = NotificationSettingsInput | null
 
 export type SettingsSchemaInputWebhook = Webhook | null
 
@@ -1549,6 +1547,8 @@ export interface NotificationSettingsInput {
   max_retries: number
 }
 
+export type SettingsSchemaInputNotificationSettings = NotificationSettingsInput | null
+
 export interface NotificationEnable {
   admin?: AdminNotificationEnable
   core?: BaseNotificationEnable
@@ -1559,19 +1559,6 @@ export interface NotificationEnable {
   user_template?: BaseNotificationEnable
   days_left?: boolean
   percentage_reached?: boolean
-}
-
-/**
- * Per-object notification channels
- */
-export interface NotificationChannels {
-  admin?: NotificationChannel
-  core?: NotificationChannel
-  group?: NotificationChannel
-  host?: NotificationChannel
-  node?: NotificationChannel
-  user?: NotificationChannel
-  user_template?: NotificationChannel
 }
 
 export type NotificationChannelDiscordWebhookUrl = string | null
@@ -1589,6 +1576,19 @@ export interface NotificationChannel {
   discord_webhook_url?: NotificationChannelDiscordWebhookUrl
 }
 
+/**
+ * Per-object notification channels
+ */
+export interface NotificationChannels {
+  admin?: NotificationChannel
+  core?: NotificationChannel
+  group?: NotificationChannel
+  host?: NotificationChannel
+  node?: NotificationChannel
+  user?: NotificationChannel
+  user_template?: NotificationChannel
+}
+
 export interface NotFound {
   detail?: string
 }
@@ -1599,27 +1599,12 @@ export interface NoiseSettings {
   xray?: NoiseSettingsXray
 }
 
-/**
- * Response model for lightweight node list.
- */
-export interface NodesSimpleResponse {
-  nodes: NodeSimple[]
-  total: number
-}
-
 export interface NodesResponse {
   nodes: NodeResponse[]
   total: number
 }
 
 export type NodeUsageStatsListPeriod = Period | null
-
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
 
 export interface NodeUsageStat {
   uplink: number
@@ -1628,6 +1613,13 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
+
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -1664,6 +1656,14 @@ export interface NodeSimple {
   id: number
   name: string
   status: NodeStatus
+}
+
+/**
+ * Response model for lightweight node list.
+ */
+export interface NodesSimpleResponse {
+  nodes: NodeSimple[]
+  total: number
 }
 
 export interface NodeSettings {
@@ -1762,8 +1762,6 @@ export type NodeModifyKeepAlive = number | null
 
 export type NodeModifyServerCa = string | null
 
-export type NodeModifyConnectionType = NodeConnectionType | null
-
 export type NodeModifyUsageCoefficient = number | null
 
 export type NodeModifyPort = number | null
@@ -1807,6 +1805,8 @@ export const NodeConnectionType = {
   grpc: 'grpc',
   rest: 'rest',
 } as const
+
+export type NodeModifyConnectionType = NodeConnectionType | null
 
 export interface NodeCreate {
   name: string
@@ -1976,14 +1976,6 @@ export interface HTTPException {
   detail: string
 }
 
-/**
- * Response model for lightweight group list.
- */
-export interface GroupsSimpleResponse {
-  groups: GroupSimple[]
-  total: number
-}
-
 export interface GroupsResponse {
   groups: GroupResponse[]
   total: number
@@ -1995,6 +1987,14 @@ export interface GroupsResponse {
 export interface GroupSimple {
   id: number
   name: string
+}
+
+/**
+ * Response model for lightweight group list.
+ */
+export interface GroupsSimpleResponse {
+  groups: GroupSimple[]
+  total: number
 }
 
 export type GroupResponseInboundTags = string[] | null
@@ -2204,14 +2204,6 @@ export interface CreateHost {
   subscription_templates?: CreateHostSubscriptionTemplates
 }
 
-/**
- * Response model for lightweight core list.
- */
-export interface CoresSimpleResponse {
-  cores: CoreSimple[]
-  total: number
-}
-
 export type CoreType = (typeof CoreType)[keyof typeof CoreType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -2233,6 +2225,19 @@ export interface CoreSimple {
   type?: CoreSimpleType
 }
 
+/**
+ * Response model for lightweight core list.
+ */
+export interface CoresSimpleResponse {
+  cores: CoreSimple[]
+  total: number
+}
+
+export interface CoreResponseList {
+  count: number
+  cores?: CoreResponse[]
+}
+
 export type CoreResponseType = CoreType | null
 
 export type CoreResponseConfig = { [key: string]: unknown }
@@ -2245,11 +2250,6 @@ export interface CoreResponse {
   fallbacks_inbound_tags: string[]
   id: number
   created_at: string
-}
-
-export interface CoreResponseList {
-  count: number
-  cores?: CoreResponse[]
 }
 
 export type CoreCreateFallbacksInboundTags = unknown[] | null
@@ -2289,6 +2289,11 @@ export const ConfigFormat = {
   block: 'block',
 } as const
 
+export interface ClientTemplatesSimpleResponse {
+  templates: ClientTemplateSimple[]
+  total: number
+}
+
 export type ClientTemplateType = (typeof ClientTemplateType)[keyof typeof ClientTemplateType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -2305,11 +2310,6 @@ export interface ClientTemplateSimple {
   name: string
   template_type: ClientTemplateType
   is_default: boolean
-}
-
-export interface ClientTemplatesSimpleResponse {
-  templates: ClientTemplateSimple[]
-  total: number
 }
 
 export interface ClientTemplateResponse {
@@ -2366,17 +2366,23 @@ export interface ClashMuxSettings {
   only_tcp?: boolean
 }
 
+export type BulkWireGuardPeerIPsExpireBefore = string | null
+
+export type BulkWireGuardPeerIPsExpireAfter = string | null
+
 /**
  * Re-seat WireGuard peer IPs (same scoping as BulkUser: users, admins, group_ids, status).
  */
 export interface BulkWireGuardPeerIPs {
-  confirm?: boolean
   dry_run?: boolean
-  replace_all?: boolean
   group_ids?: number[]
   admins?: number[]
   users?: number[]
   status?: UserStatus[]
+  expire_after?: BulkWireGuardPeerIPsExpireAfter
+  expire_before?: BulkWireGuardPeerIPsExpireBefore
+  confirm?: boolean
+  replace_all?: boolean
 }
 
 export interface BulkUsersSetOwner {
@@ -2392,13 +2398,20 @@ export type BulkUsersProxyMethod = ShadowsocksMethods | null
 
 export type BulkUsersProxyFlow = XTLSFlows | null
 
+export type BulkUsersProxyExpireBefore = string | null
+
+export type BulkUsersProxyExpireAfter = string | null
+
 export interface BulkUsersProxy {
-  flow?: BulkUsersProxyFlow
-  method?: BulkUsersProxyMethod
   dry_run?: boolean
   group_ids?: number[]
   admins?: number[]
   users?: number[]
+  status?: UserStatus[]
+  expire_after?: BulkUsersProxyExpireAfter
+  expire_before?: BulkUsersProxyExpireBefore
+  flow?: BulkUsersProxyFlow
+  method?: BulkUsersProxyMethod
 }
 
 /**
@@ -2464,7 +2477,6 @@ export type BulkUserExpireBefore = string | null
 export type BulkUserExpireAfter = string | null
 
 export interface BulkUser {
-  amount: number
   dry_run?: boolean
   group_ids?: number[]
   admins?: number[]
@@ -2472,6 +2484,7 @@ export interface BulkUser {
   status?: UserStatus[]
   expire_after?: BulkUserExpireAfter
   expire_before?: BulkUserExpireBefore
+  amount: number
 }
 
 /**
@@ -9654,6 +9667,76 @@ export const useActiveNextPlanById = <
   const mutationOptions = getActiveNextPlanByIdMutationOptions(options)
 
   return useMutation(mutationOptions)
+}
+
+/**
+ * Get a user's subscription content in the requested format.
+ * @summary Get User Subscription By Id
+ */
+export const getUserSubscriptionById = (userId: number, clientType: ConfigFormat, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/api/user/${userId}/subscription/${clientType}`, method: 'GET', signal })
+}
+
+export const getGetUserSubscriptionByIdQueryKey = (userId: number, clientType: ConfigFormat) => {
+  return [`/api/user/${userId}/subscription/${clientType}`] as const
+}
+
+export const getGetUserSubscriptionByIdQueryOptions = <TData = Awaited<ReturnType<typeof getUserSubscriptionById>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  userId: number,
+  clientType: ConfigFormat,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserSubscriptionByIdQueryKey(userId, clientType)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserSubscriptionById>>> = ({ signal }) => getUserSubscriptionById(userId, clientType, signal)
+
+  return { queryKey, queryFn, enabled: !!(userId && clientType), ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+}
+
+export type GetUserSubscriptionByIdQueryResult = NonNullable<Awaited<ReturnType<typeof getUserSubscriptionById>>>
+export type GetUserSubscriptionByIdQueryError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+export function useGetUserSubscriptionById<TData = Awaited<ReturnType<typeof getUserSubscriptionById>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  userId: number,
+  clientType: ConfigFormat,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUserSubscriptionById<TData = Awaited<ReturnType<typeof getUserSubscriptionById>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  userId: number,
+  clientType: ConfigFormat,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUserSubscriptionById<TData = Awaited<ReturnType<typeof getUserSubscriptionById>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  userId: number,
+  clientType: ConfigFormat,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get User Subscription By Id
+ */
+
+export function useGetUserSubscriptionById<TData = Awaited<ReturnType<typeof getUserSubscriptionById>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  userId: number,
+  clientType: ConfigFormat,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUserSubscriptionById>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetUserSubscriptionByIdQueryOptions(userId, clientType, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
