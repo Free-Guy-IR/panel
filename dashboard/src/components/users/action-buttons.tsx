@@ -24,7 +24,7 @@ import UserAllIPsModal from '@/components/dialogs/user-all-ips-modal'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
-import { buildSubscriptionFormatUrl, fetchSubscriptionBlobFromUrl, fetchSubscriptionContentFromUrl, resolveSubscriptionPublicUrl } from '@/utils/subscription-config'
+import { fetchUserSubscriptionBlob, fetchUserSubscriptionContent, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
 
 type ActionButtonsProps = {
   user: UserResponse
@@ -34,7 +34,7 @@ type ActionButtonsProps = {
 
 export interface SubscribeLink {
   protocol: string
-  link: string
+  format: SubscriptionContentFormat
   icon: React.ComponentType<{ className?: string }>
 }
 
@@ -302,14 +302,14 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     if (!user.subscription_url) return []
 
     return [
-      { protocol: 'links', link: buildSubscriptionFormatUrl(user.subscription_url, 'links'), icon: ListTree },
-      { protocol: 'links (base64)', link: buildSubscriptionFormatUrl(user.subscription_url, 'links_base64'), icon: Code },
-      { protocol: 'xray', link: buildSubscriptionFormatUrl(user.subscription_url, 'xray'), icon: XrayIcon },
-      { protocol: 'wireguard', link: buildSubscriptionFormatUrl(user.subscription_url, 'wireguard'), icon: WireguardIcon },
-      { protocol: 'clash', link: buildSubscriptionFormatUrl(user.subscription_url, 'clash'), icon: Cat },
-      { protocol: 'clash-meta', link: buildSubscriptionFormatUrl(user.subscription_url, 'clash_meta'), icon: MihomoIcon },
-      { protocol: 'outline', link: buildSubscriptionFormatUrl(user.subscription_url, 'outline'), icon: GlobeLock },
-      { protocol: 'sing-box', link: buildSubscriptionFormatUrl(user.subscription_url, 'sing_box'), icon: SingboxIcon },
+      { protocol: 'links', format: 'links', icon: ListTree },
+      { protocol: 'links (base64)', format: 'links_base64', icon: Code },
+      { protocol: 'xray', format: 'xray', icon: XrayIcon },
+      { protocol: 'wireguard', format: 'wireguard', icon: WireguardIcon },
+      { protocol: 'clash', format: 'clash', icon: Cat },
+      { protocol: 'clash-meta', format: 'clash_meta', icon: MihomoIcon },
+      { protocol: 'outline', format: 'outline', icon: GlobeLock },
+      { protocol: 'sing-box', format: 'sing_box', icon: SingboxIcon },
     ]
   }, [user.subscription_url])
 
@@ -453,46 +453,46 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     alert(`${message}\n\n${content}`)
   }
 
-  const fetchContent = (url: string): Promise<string> => fetchSubscriptionContentFromUrl(url)
+  const fetchContent = (format: SubscriptionContentFormat): Promise<string> => fetchUserSubscriptionContent(user.id, format)
 
-  const fetchBlob = (url: string): Promise<Blob> => fetchSubscriptionBlobFromUrl(url)
+  const fetchBlob = (format: SubscriptionContentFormat): Promise<Blob> => fetchUserSubscriptionBlob(user.id, format)
 
-  const fetchAndCacheContent = (link: string): Promise<string> => {
-    const cachedContent = configContentCacheRef.current[link]
+  const fetchAndCacheContent = (format: SubscriptionContentFormat): Promise<string> => {
+    const cachedContent = configContentCacheRef.current[format]
     if (cachedContent !== undefined) {
       return Promise.resolve(cachedContent)
     }
 
-    const pendingRequest = pendingContentFetchRef.current[link]
+    const pendingRequest = pendingContentFetchRef.current[format]
     if (pendingRequest) {
       return pendingRequest
     }
 
-    const request = fetchContent(link)
+    const request = fetchContent(format)
       .then(content => {
-        configContentCacheRef.current[link] = content
+        configContentCacheRef.current[format] = content
         return content
       })
       .finally(() => {
-        delete pendingContentFetchRef.current[link]
+        delete pendingContentFetchRef.current[format]
       })
 
-    pendingContentFetchRef.current[link] = request
+    pendingContentFetchRef.current[format] = request
     return request
   }
 
   const prefetchCopyableConfigs = () => {
-    subscribeLinks.forEach(({ protocol, link }) => {
+    subscribeLinks.forEach(({ protocol, format }) => {
       if (DOWNLOAD_ONLY_PROTOCOLS.includes(protocol)) return
-      void fetchAndCacheContent(link).catch(error => {
+      void fetchAndCacheContent(format).catch(error => {
         console.error('Failed to prefetch config content:', error)
       })
     })
   }
 
-  const handleLinksCopy = async (link: string, type: string) => {
+  const handleLinksCopy = async (format: SubscriptionContentFormat, type: string) => {
     try {
-      const cachedContent = configContentCacheRef.current[link]
+      const cachedContent = configContentCacheRef.current[format]
       if (cachedContent !== undefined) {
         const copiedSuccessfully = await copy(cachedContent)
         if (copiedSuccessfully) {
@@ -504,14 +504,14 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       }
 
       if (requiresSynchronousClipboard()) {
-        void fetchAndCacheContent(link).catch(error => {
+        void fetchAndCacheContent(format).catch(error => {
           console.error('Failed to fetch config content:', error)
         })
         toast.info(t('copyPrepareRetry', { defaultValue: 'Preparing configuration. Tap again to copy.' }))
         return
       }
 
-      const content = await fetchAndCacheContent(link)
+      const content = await fetchAndCacheContent(format)
       const copiedSuccessfully = await copy(content)
       if (copiedSuccessfully) {
         toast.success(`${type} ${t('usersTable.copied', { defaultValue: 'Copied to clipboard' })}`)
@@ -523,20 +523,14 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     }
   }
 
-  const handleConfigDownload = async (link: string, type: string) => {
+  const handleConfigDownload = async (format: SubscriptionContentFormat, type: string) => {
     try {
       if (isIOS()) {
-        // iOS: open in new tab or show content
-        const newWindow = window.open(link, '_blank')
-        if (!newWindow) {
-          const content = await fetchContent(link)
-          showManualCopyAlert(content, 'url')
-        } else {
-          toast.success(t('downloadSuccess', { defaultValue: 'Configuration opened in new tab' }))
-        }
+        const content = await fetchContent(format)
+        showManualCopyAlert(content, 'url')
       } else {
         // Non-iOS: regular download
-        const blob = await fetchBlob(link)
+        const blob = await fetchBlob(format)
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -553,11 +547,11 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     }
   }
 
-  const handleCopyOrDownload = (link: string, type: string) => {
+  const handleCopyOrDownload = (format: SubscriptionContentFormat, type: string) => {
     if (DOWNLOAD_ONLY_PROTOCOLS.includes(type)) {
-      handleConfigDownload(link, type)
+      handleConfigDownload(format, type)
     } else {
-      handleLinksCopy(link, type)
+      handleLinksCopy(format, type)
     }
   }
 
@@ -595,7 +589,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   {subscribeLinks.map((item, index) => (
-                    <DropdownMenuItem dir='ltr' key={index} onClick={() => handleCopyOrDownload(item.link, item.protocol)}>
+                    <DropdownMenuItem dir='ltr' key={index} onClick={() => handleCopyOrDownload(item.format, item.protocol)}>
                       <item.icon className="mr-2 h-4 w-4" />
                       {item.protocol}
                     </DropdownMenuItem>
@@ -711,6 +705,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
           {showSubscriptionModal && subscribeUrl && (
             <SubscriptionModal
               subscribeUrl={subscribeUrl}
+              userId={user.id}
               username={user.username}
               onCloseModal={onCloseSubscriptionModal}
             />

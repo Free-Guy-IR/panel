@@ -1,11 +1,12 @@
 from datetime import datetime as dt
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.db import AsyncSession, get_db
 from app.db.models import UserStatus
 from app.models.admin import AdminDetails
+from app.models.settings import ConfigFormat
 from app.models.stats import Period, UserUsageStatsList
 from app.models.user import (
     BulkUser,
@@ -31,6 +32,7 @@ from app.models.user import (
 )
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
+from app.operation.subscription import SubscriptionOperation
 from app.operation.user import UserOperation
 from app.utils import responses
 
@@ -38,6 +40,7 @@ from .authentication import check_sudo_admin, get_current
 
 user_operator = UserOperation(operator_type=OperatorType.API)
 node_operator = NodeOperation(operator_type=OperatorType.API)
+subscription_operator = SubscriptionOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["User"], prefix="/api/user", responses={401: responses._401})
 
 
@@ -327,6 +330,27 @@ async def get_user_by_username(
 @router.get("/by-id/{user_id}", response_model=UserResponse, responses={403: responses._403, 404: responses._404})
 async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(get_current)):
     return await user_operator.get_user_by_id(db=db, user_id=user_id, admin=admin)
+
+
+@router.get(
+    "/{user_id:int}/subscription/{client_type}",
+    responses={403: responses._403, 404: responses._404},
+)
+async def get_user_subscription_by_id(
+    request: Request,
+    user_id: int,
+    client_type: ConfigFormat,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    """Get a user's subscription content in the requested format."""
+    return await subscription_operator.user_subscription_by_id(
+        db,
+        user_id=user_id,
+        admin=admin,
+        client_type=client_type,
+        request_url=str(request.url),
+    )
 
 
 @router.get(

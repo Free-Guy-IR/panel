@@ -14,7 +14,7 @@ import {
   encodeSubscriptionContentToBase64,
   extractAddressFromConfigUrl,
   extractNameFromConfigUrl,
-  fetchSubscriptionContent,
+  fetchUserSubscriptionContent,
   getWireGuardDownloadPayload,
   prepareSubscriptionContentForCopy,
   resolveSubscriptionQrUrl,
@@ -22,6 +22,7 @@ import {
 
 interface SubscriptionModalProps {
   subscribeUrl: string | null
+  userId: number
   username: string
   onCloseModal: () => void
 }
@@ -43,7 +44,7 @@ interface CopiedConfigState {
 const CONFIGS_PER_PAGE = 5
 const LINKS_FETCH_TIMEOUT_MS = 8000
 
-const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ subscribeUrl, username, onCloseModal }) => {
+const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ subscribeUrl, userId, username, onCloseModal }) => {
   const isOpen = subscribeUrl !== null
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -67,7 +68,7 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ subscribeUrl, user
     setError(null)
 
     try {
-      const text = await fetchSubscriptionContent(subscribeUrl, 'links', LINKS_FETCH_TIMEOUT_MS)
+      const text = await fetchUserSubscriptionContent(userId, 'links', LINKS_FETCH_TIMEOUT_MS)
       const configLines = text.split('\n').filter(line => line.trim() !== '')
 
       setConfigs(
@@ -84,7 +85,7 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ subscribeUrl, user
     } finally {
       setIsLoading(false)
     }
-  }, [subscribeUrl, t])
+  }, [subscribeUrl, userId, t])
 
   useEffect(() => {
     fetchConfigs()
