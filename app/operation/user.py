@@ -39,6 +39,7 @@ from app.db.crud.user import (
     get_users_sub_update_list,
     get_users_subscription_agent_counts,
     modify_user,
+    remove_expired_users,
     remove_user,
     remove_users,
     reset_user_by_next,
@@ -885,10 +886,7 @@ class UserOperation(BaseOperation):
             admin_id = (await self.get_validated_admin(db, admin_username)).id
         else:
             admin_id = None
-        users = await get_expired_users(db, expired_after, expired_before, admin_id, target=target)
-        await remove_users(db, users)
-
-        username_list = [row.username for row in users]
+        username_list = await remove_expired_users(db, expired_after, expired_before, admin_id, target=target)
         await self.remove_users_logger(users=username_list, by=admin.username)
 
         return RemoveUsersResponse(users=username_list, count=len(username_list))
