@@ -84,6 +84,10 @@ install-front: check-bun
 run-migration:
 	@uv run alembic upgrade head 
 
+.PHONY: check-migrations
+check-migrations:
+	@uv run alembic check
+
 # run PasarGuard
 .PHONY: run
 run:

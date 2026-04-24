@@ -33,6 +33,9 @@ jobs:
             - name: Run Alembic Migrations
               run: make run-migration
 
+            - name: Check Migrations
+              run: make check-migrations
+
             - name: Run Tests
               run: make test
 
@@ -68,6 +71,9 @@ jobs:
 
             - name: Run Alembic Migrations
               run: make run-migration
+
+            - name: Check Migrations
+              run: make check-migrations
 
             - name: Run Tests
               run: make test
@@ -143,6 +149,9 @@ jobs:
             - name: Run Alembic Migrations
               run: make run-migration
 
+            - name: Check Migrations
+              run: make check-migrations
+
             - name: Run Tests (multi-worker)
               run: |
                   SCHEDULER_JOBSTORE_URL=sqlite:///./node-scheduler.db ROLE=node uv run python node_worker.py &
@@ -182,6 +191,9 @@ jobs:
 
             - name: Run Alembic Migrations
               run: make run-migration
+
+            - name: Check Migrations
+              run: make check-migrations
 
             - name: Run Tests
               run: make test
@@ -302,6 +314,9 @@ jobs:
 
             - name: Run Alembic Migrations
               run: make run-migration
+
+            - name: Check Migrations
+              run: make check-migrations
 
             - name: Run Tests (multi-worker)
               run: |
