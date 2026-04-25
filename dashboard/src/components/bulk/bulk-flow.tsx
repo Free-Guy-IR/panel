@@ -80,6 +80,12 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
   const [dataLimit, setDataLimit] = useState<number | undefined>(undefined)
   const [dataOperation, setDataOperation] = useState<'add' | 'subtract'>('add')
   const dataLimitInputRef = useRef<string>('')
+  const [dataLimitInput, setDataLimitInput] = useState('')
+
+  const setDataLimitRawInput = (value: string) => {
+    dataLimitInputRef.current = value
+    setDataLimitInput(value)
+  }
 
   const [expireSeconds, setExpireSeconds] = useState<number | undefined>(undefined)
   const [expireUnit, setExpireUnit] = useState<ExpiryUnit>('days')
@@ -390,7 +396,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           setSelectedFlow(undefined)
           setSelectedMethod(undefined)
           setDataLimit(undefined)
-          dataLimitInputRef.current = ''
+          setDataLimitRawInput('')
           setExpireSeconds(undefined)
           setExpireAmount(undefined)
           setSelectedGroups([])
@@ -638,13 +644,13 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                         type="single"
                         value={dataOperation}
                         onValueChange={value => value && setDataOperation(value as 'add' | 'subtract')}
-                        className="w-full rounded-md border p-1 sm:w-auto"
+                        className="h-9 w-full rounded-md border p-0.5 sm:w-auto"
                         defaultValue="add"
                       >
-                        <ToggleGroupItem value="add" aria-label="Add" className="flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
+                        <ToggleGroupItem value="add" aria-label="Add" size="sm" className="h-8 flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
                           <Plus className="h-4 w-4" />
                         </ToggleGroupItem>
-                        <ToggleGroupItem value="subtract" aria-label="Subtract" className="flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
+                        <ToggleGroupItem value="subtract" aria-label="Subtract" size="sm" className="h-8 flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
                           <Minus className="h-4 w-4" />
                         </ToggleGroupItem>
                       </ToggleGroup>
@@ -654,31 +660,28 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                           type="text"
                           inputMode="decimal"
                           placeholder={t('bulk.dataLimitPlaceholder', { defaultValue: 'Enter amount' })}
-                          value={dataLimitInputRef.current !== '' ? dataLimitInputRef.current : dataLimit !== undefined && dataLimit > 0 ? String(dataLimit) : ''}
+                          value={dataLimitInput !== '' ? dataLimitInput : dataLimit !== undefined && dataLimit > 0 ? String(dataLimit) : ''}
                           onChange={e => {
                             const rawValue = e.target.value.trim()
 
+                            setDataLimitRawInput(rawValue)
+
                             if (rawValue === '') {
-                              dataLimitInputRef.current = ''
                               setDataLimit(undefined)
                               return
                             }
 
-                            const validNumberPattern = /^-?(\d*\.?\d*|\.\d*)$/
+                            const validNumberPattern = /^-?\d*\.?\d*$/
                             if (validNumberPattern.test(rawValue)) {
-                              dataLimitInputRef.current = rawValue
-
-                              if (rawValue === '.' || rawValue === '-.' || rawValue === '-') {
-                                setDataLimit(undefined)
-                              } else if (rawValue.endsWith('.') && rawValue.length > 1) {
+                              if (rawValue.endsWith('.') && rawValue.length > 1) {
                                 const prevValue = dataLimit !== undefined ? dataLimit : 0
                                 setDataLimit(prevValue)
+                              } else if (rawValue === '.') {
+                                setDataLimit(undefined)
                               } else {
                                 const numValue = parseFloat(rawValue)
                                 if (!isNaN(numValue) && numValue >= 0) {
                                   setDataLimit(numValue)
-                                } else {
-                                  setDataLimit(undefined)
                                 }
                               }
                             }
@@ -686,16 +689,16 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                           onBlur={() => {
                             const rawValue = dataLimitInputRef.current.trim()
                             if (rawValue === '' || rawValue === '.' || rawValue === '0') {
-                              dataLimitInputRef.current = ''
+                              setDataLimitRawInput('')
                               setDataLimit(undefined)
                             } else {
                               const numValue = parseFloat(rawValue)
                               if (!isNaN(numValue) && numValue >= 0) {
                                 const finalValue = numValue
-                                dataLimitInputRef.current = finalValue > 0 ? String(finalValue) : ''
+                                setDataLimitRawInput(finalValue > 0 ? String(finalValue) : '')
                                 setDataLimit(finalValue > 0 ? finalValue : undefined)
                               } else {
-                                dataLimitInputRef.current = ''
+                                setDataLimitRawInput('')
                                 setDataLimit(undefined)
                               }
                             }
@@ -710,6 +713,11 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                         >
                           GB
                         </span>
+                        {dataLimit !== undefined && dataLimit > 0 && dataLimit < 1 && (
+                          <p dir="ltr" className="absolute right-0 top-full mt-1 text-end text-xs text-muted-foreground">
+                            {formatBytes(Math.round(dataLimit * 1024 * 1024 * 1024))}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -738,13 +746,13 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                         type="single"
                         value={expireOperation}
                         onValueChange={value => value && setExpireOperation(value as 'add' | 'subtract')}
-                        className="w-full rounded-md border p-1 sm:w-auto"
+                        className="h-9 w-full rounded-md border p-0.5 sm:w-auto"
                         defaultValue="add"
                       >
-                        <ToggleGroupItem value="add" aria-label="Add" className="flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
+                        <ToggleGroupItem value="add" aria-label="Add" size="sm" className="h-8 flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
                           <Plus className="h-4 w-4" />
                         </ToggleGroupItem>
-                        <ToggleGroupItem value="subtract" aria-label="Subtract" className="flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
+                        <ToggleGroupItem value="subtract" aria-label="Subtract" size="sm" className="h-8 flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-initial">
                           <Minus className="h-4 w-4" />
                         </ToggleGroupItem>
                       </ToggleGroup>
