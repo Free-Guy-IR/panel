@@ -24,7 +24,7 @@ import UserAllIPsModal from '@/components/dialogs/user-all-ips-modal'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
-import { fetchUserSubscriptionBlob, fetchUserSubscriptionContent, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
+import { buildSubscriptionFormatUrl, fetchSubscriptionBlobFromUrl, fetchUserSubscriptionContent, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
 
 type ActionButtonsProps = {
   user: UserResponse
@@ -455,7 +455,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
 
   const fetchContent = (format: SubscriptionContentFormat): Promise<string> => fetchUserSubscriptionContent(user.id, format)
 
-  const fetchBlob = (format: SubscriptionContentFormat): Promise<Blob> => fetchUserSubscriptionBlob(user.id, format)
+  const fetchBlob = (url: string): Promise<Blob> => fetchSubscriptionBlobFromUrl(url)
 
   const fetchAndCacheContent = (format: SubscriptionContentFormat): Promise<string> => {
     const cachedContent = configContentCacheRef.current[format]
@@ -525,12 +525,19 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
 
   const handleConfigDownload = async (format: SubscriptionContentFormat, type: string) => {
     try {
+      const link = buildSubscriptionFormatUrl(user.subscription_url, format)
       if (isIOS()) {
-        const content = await fetchContent(format)
-        showManualCopyAlert(content, 'url')
+        // iOS: open in new tab or show content
+        const newWindow = window.open(link, '_blank')
+        if (!newWindow) {
+          const content = await fetchContent(format)
+          showManualCopyAlert(content, 'url')
+        } else {
+          toast.success(t('downloadSuccess', { defaultValue: 'Configuration opened in new tab' }))
+        }
       } else {
         // Non-iOS: regular download
-        const blob = await fetchBlob(format)
+        const blob = await fetchBlob(link)
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url

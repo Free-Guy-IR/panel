@@ -94,17 +94,76 @@ export const resolveSubscriptionQrUrl = (subscribeUrl: string | null | undefined
   return value.startsWith('/') ? `${window.location.origin}${value}` : value
 }
 
+const normalizeSubscriptionPath = (url: string) => {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}${parsed.search}${parsed.hash}`
+  } catch {
+    return url.replace(/\/+$/, '')
+  }
+}
+
 export const resolveSubscriptionPublicUrl = (subscribeUrl: string | null | undefined) => resolveSubscriptionQrUrl(subscribeUrl)
+
+export const resolveSubscriptionPanelBaseUrl = (subscribeUrl: string | null | undefined) => {
+  if (!subscribeUrl) return ''
+
+  const value = String(subscribeUrl)
+
+  if (value.startsWith('/')) {
+    return normalizeSubscriptionPath(`${window.location.origin}${value}`)
+  }
+
+  try {
+    const parsed = new URL(value, window.location.origin)
+    return normalizeSubscriptionPath(`${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`)
+  } catch {
+    return normalizeSubscriptionPath(value)
+  }
+}
+
+export const resolveSubscriptionFetchBaseUrl = (subscribeUrl: string | null | undefined) => {
+  return resolveSubscriptionPanelBaseUrl(subscribeUrl)
+}
+
+export const buildSubscriptionFormatUrl = (subscribeUrl: string | null | undefined, format: string) => {
+  const baseUrl = resolveSubscriptionPanelBaseUrl(subscribeUrl)
+  return baseUrl ? `${baseUrl}/${format}` : ''
+}
+
+const fetchSubscriptionResource = async <T>(url: string, parser: (response: Response) => Promise<T>, timeoutMs = 8000) => {
+  if (!url) {
+    throw new Error('Subscription URL is empty')
+  }
+
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    return parser(response)
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export const fetchSubscriptionContentFromUrl = (url: string, timeoutMs = 8000) => fetchSubscriptionResource(url, response => response.text(), timeoutMs)
+
+export const fetchSubscriptionBlobFromUrl = (url: string, timeoutMs = 8000) => fetchSubscriptionResource(url, response => response.blob(), timeoutMs)
+
+export const fetchSubscriptionContent = (subscribeUrl: string, format: SubscriptionContentFormat, timeoutMs = 8000) =>
+  fetchSubscriptionContentFromUrl(buildSubscriptionFormatUrl(subscribeUrl, format), timeoutMs)
 
 export const fetchUserSubscriptionContent = (userId: number, format: SubscriptionContentFormat, timeoutMs = 8000) =>
   $fetch<string, 'text'>(`/api/user/${userId}/subscription/${format}`, {
     responseType: 'text',
-    timeout: timeoutMs,
-  })
-
-export const fetchUserSubscriptionBlob = (userId: number, format: SubscriptionContentFormat, timeoutMs = 8000) =>
-  $fetch<Blob, 'blob'>(`/api/user/${userId}/subscription/${format}`, {
-    responseType: 'blob',
     timeout: timeoutMs,
   })
 
