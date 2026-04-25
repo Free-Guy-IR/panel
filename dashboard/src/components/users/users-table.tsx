@@ -113,7 +113,7 @@ const UsersTable = memo(() => {
         sort: urlParams.sort,
         load_sub: true,
         offset: urlParams.page * urlParams.limit,
-        search: urlParams.search,
+        search: urlParams.isProtocol ? undefined : urlParams.search,
         proxy_id: urlParams.isProtocol && urlParams.search ? urlParams.search : undefined,
         is_protocol: urlParams.isProtocol,
         status: urlParams.status || undefined,
@@ -182,8 +182,6 @@ const UsersTable = memo(() => {
     }
     if (filters.proxy_id) {
       searchParams.set('search', filters.proxy_id)
-      searchParams.set('is_protocol', 'true')
-    } else if (filters.is_protocol) {
       searchParams.set('is_protocol', 'true')
     }
     if (filters.status) {
@@ -280,10 +278,12 @@ const UsersTable = memo(() => {
       advanceSearchForm.setValue('status', filters.status || '0')
       advanceSearchForm.setValue('admin', filters.admin || [])
       advanceSearchForm.setValue('group', filters.group || [])
+      advanceSearchForm.setValue('is_protocol', Boolean(filters.proxy_id || filters.is_protocol))
+      advanceSearchForm.setValue('is_username', !Boolean(filters.proxy_id || filters.is_protocol))
       advanceSearchForm.setValue('show_created_by', showCreatedBy)
       advanceSearchForm.setValue('show_selection_checkbox', showSelectionCheckbox)
     }
-  }, [isAdvanceSearchOpen, filters.status, filters.admin, filters.group, showCreatedBy, showSelectionCheckbox, advanceSearchForm])
+  }, [isAdvanceSearchOpen, filters.status, filters.admin, filters.group, filters.proxy_id, filters.is_protocol, showCreatedBy, showSelectionCheckbox, advanceSearchForm])
 
   const {
     data: usersData,
@@ -317,8 +317,10 @@ const UsersTable = memo(() => {
       if (urlParams.sort !== filters.sort) {
         setFilters(prev => ({ ...prev, sort: urlParams.sort }))
       }
-      if (urlParams.search !== filters.search && urlParams.search !== filters.proxy_id) {
-        if (urlParams.isProtocol) {
+      const currentSearch = filters.proxy_id || filters.search
+      const nextIsProtocol = Boolean(urlParams.isProtocol && urlParams.search)
+      if (urlParams.search !== currentSearch || nextIsProtocol !== filters.is_protocol) {
+        if (nextIsProtocol) {
           setFilters(prev => ({ ...prev, proxy_id: urlParams.search, search: undefined, is_protocol: true }))
         } else {
           setFilters(prev => ({ ...prev, search: urlParams.search, proxy_id: undefined, is_protocol: false }))
@@ -337,7 +339,7 @@ const UsersTable = memo(() => {
 
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [currentPage, itemsPerPage, filters.sort, filters.search, filters.proxy_id, filters.status, filters.admin, filters.group])
+  }, [currentPage, itemsPerPage, filters.sort, filters.search, filters.proxy_id, filters.is_protocol, filters.status, filters.admin, filters.group])
 
   useEffect(() => {
     if (usersData && isFirstLoadRef.current) {
@@ -420,16 +422,20 @@ const UsersTable = memo(() => {
       setFilters(prev => {
         let updated = { ...prev, ...newFilters }
         if ('search' in newFilters) {
+          const nextSearch = newFilters.search?.trim() || undefined
+          const currentSearch = prev.proxy_id || prev.search
+          const nextIsProtocol = nextSearch ? (newFilters.is_protocol ?? prev.is_protocol) : false
           // Only reset offset and page if search actually changed
-          const searchChanged = newFilters.search !== prev.search && newFilters.search !== prev.proxy_id
+          const searchChanged = nextSearch !== currentSearch || nextIsProtocol !== prev.is_protocol
           if (searchChanged) {
-            if (prev.is_protocol) {
-              updated.proxy_id = newFilters.search
+            if (nextIsProtocol) {
+              updated.proxy_id = nextSearch
               updated.search = undefined
             } else {
-              updated.search = newFilters.search
+              updated.search = nextSearch
               updated.proxy_id = undefined
             }
+            updated.is_protocol = nextIsProtocol
             updated.offset = 0
           } else {
             // Preserve current offset if search didn't change
@@ -439,12 +445,15 @@ const UsersTable = memo(() => {
         return updated
       })
 
+      const nextSearch = newFilters.search?.trim() || undefined
+      const currentSearch = filters.proxy_id || filters.search
+      const nextIsProtocol = nextSearch ? (newFilters.is_protocol ?? filters.is_protocol) : false
       // Only reset page if search actually changed
-      if (newFilters.search !== undefined && newFilters.search !== filters.search && newFilters.search !== filters.proxy_id) {
+      if ('search' in newFilters && (nextSearch !== currentSearch || nextIsProtocol !== filters.is_protocol)) {
         setCurrentPage(0)
       }
     },
-    [filters.search, filters.proxy_id],
+    [filters.search, filters.proxy_id, filters.is_protocol],
   )
 
   const handleManualRefresh = async () => {
@@ -702,9 +711,12 @@ const UsersTable = memo(() => {
 
   const handleAdvanceSearchSubmit = async (values: AdvanceSearchFormValue) => {
     if (isAdvanceSearchApplying) return
+    const currentSearch = filters.proxy_id || filters.search
 
     const nextFilters = {
       ...filters,
+      search: values.is_protocol ? undefined : currentSearch,
+      proxy_id: values.is_protocol ? currentSearch : undefined,
       admin: values.admin && values.admin.length > 0 ? values.admin : undefined,
       group: values.group && values.group.length > 0 ? values.group : undefined,
       status: values.status && values.status !== '0' ? values.status : undefined,
@@ -766,6 +778,8 @@ const UsersTable = memo(() => {
       admin: undefined,
       group: undefined,
       status: undefined,
+      is_protocol: false,
+      proxy_id: undefined,
       offset: 0,
     }))
     setCurrentPage(0)
@@ -824,7 +838,7 @@ const UsersTable = memo(() => {
           columns={columns}
           data={usersList}
           isLoading={false}
-          isFetching={isFetching && !isFirstLoadRef.current && !isAutoRefreshingRef.current}
+          isFetching={isPageLoading}
           onEdit={handleEdit}
           onSelectionChange={setSelectedUserIds}
           resetSelectionKey={resetSelectionKey}

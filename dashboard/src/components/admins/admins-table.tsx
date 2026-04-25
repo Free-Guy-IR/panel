@@ -859,7 +859,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
         currentAdminUsername={currentAdmin?.username}
         setStatusToggleDialogOpen={setStatusToggleDialogOpen}
         isLoading={isCurrentlyLoading && isFirstLoadRef.current}
-        isFetching={isFetching && !isFirstLoadRef.current}
+        isFetching={isPageLoading}
       />
       <PaginationControls
         currentPage={currentPage}

@@ -45,7 +45,7 @@ const ExpandedRowContent = memo(({ row }: { row: { original: UserResponse } }) =
   </div>
 ))
 
-export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, data, isLoading = false, onEdit, onSelectionChange, resetSelectionKey = 0 }: DataTableProps<TData, TValue>) => {
+export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, data, isLoading = false, isFetching = false, onEdit, onSelectionChange, resetSelectionKey = 0 }: DataTableProps<TData, TValue>) => {
   const { t } = useTranslation()
   const [expandedRow, setExpandedRow] = useState<number | null>(null)
   /** CSS :hover can stick after closing portaled menus; drive md+ row bg with pointer events instead. */
@@ -110,8 +110,7 @@ export const DataTable = memo(<TData extends UserResponse, TValue>({ columns, da
     [handleRowToggle, onEdit],
   )
 
-  // Keep rows mounted during background fetching so row-level dialogs remain stable.
-  const isLoadingData = isLoading
+  const isLoadingData = isLoading || isFetching
   const loadingRowCount = 10
 
   const getLoadingCellClassName = useCallback(
