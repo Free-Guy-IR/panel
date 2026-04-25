@@ -58,11 +58,9 @@ async def get_admin_payload(token: str) -> dict | None:
 
 
 async def create_subscription_token(user_id: int) -> str:
-    data = "v2," + str(user_id) + "," + str(ceil(time.time()))
+    data = "v3," + str(user_id) + "," + str(ceil(time.time()))
     data_b64_str = b64encode(data.encode("utf-8"), altchars=b"-_").decode("utf-8").rstrip("=")
-    data_b64_sign = b64encode(
-        sha256((data_b64_str + await get_secret_key()).encode("utf-8")).digest(), altchars=b"-_"
-    ).decode("utf-8")[:10]
+    data_b64_sign = sha256((data_b64_str + await get_secret_key()).encode("utf-8")).hexdigest()[:10]
     data_final = data_b64_str + data_b64_sign
     return data_final
 
@@ -99,9 +97,10 @@ async def get_subscription_payload(token: str) -> dict | None:
             u_token_resign = b64encode(
                 sha256((u_token + await get_secret_key()).encode("utf-8")).digest(), altchars=b"-_"
             ).decode("utf-8")[:10]
-            if u_signature == u_token_resign:
+            u_token_hex_resign = sha256((u_token + await get_secret_key()).encode("utf-8")).hexdigest()[:10]
+            if u_signature in (u_token_resign, u_token_hex_resign):
                 parts = u_token_dec_str.split(",")
-                if len(parts) == 3 and parts[0] == "v2":
+                if len(parts) == 3 and parts[0] in ("v2", "v3"):
                     _, u_user_id_str, u_created_at_str = parts
                     try:
                         u_user_id = int(u_user_id_str)

@@ -14,8 +14,9 @@ from fastapi import status
 
 from app.models.settings import ConfigFormat, SubRule
 from app.operation.subscription import SubscriptionOperation
+from app.utils import jwt as jwt_utils
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
-from app.utils.jwt import get_secret_key
+from app.utils.jwt import create_subscription_token, get_secret_key, get_subscription_payload
 from tests.api import client
 from tests.api.helpers import (
     auth_headers,
@@ -59,6 +60,34 @@ def _build_legacy_subscription_token(username: str) -> str:
     secret = asyncio.run(get_secret_key())
     sign = b64encode(sha256((data_b64 + secret).encode("utf-8")).digest(), altchars=b"-_").decode("utf-8")[:10]
     return data_b64 + sign
+
+
+def _build_v2_subscription_token(user_id: int, secret: str) -> str:
+    created_at = str(ceil(time.time()))
+    data = f"v2,{user_id},{created_at}"
+    data_b64 = b64encode(data.encode("utf-8"), altchars=b"-_").decode("utf-8").rstrip("=")
+    sign = b64encode(sha256((data_b64 + secret).encode("utf-8")).digest(), altchars=b"-_").decode("utf-8")[:10]
+    return data_b64 + sign
+
+
+def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_keeps_v2_compatibility(monkeypatch):
+    secret = "test-secret"
+
+    async def fake_get_secret_key():
+        return secret
+
+    monkeypatch.setattr(jwt_utils, "get_secret_key", fake_get_secret_key)
+
+    token = asyncio.run(create_subscription_token(123))
+    assert token[-1].isalnum()
+    assert not token.endswith(("-", "_"))
+
+    payload = asyncio.run(get_subscription_payload(token))
+    assert payload["user_id"] == 123
+
+    old_v2_token = _build_v2_subscription_token(456, secret)
+    old_v2_payload = asyncio.run(get_subscription_payload(old_v2_token))
+    assert old_v2_payload["user_id"] == 456
 
 
 def test_user_create_active(access_token):
