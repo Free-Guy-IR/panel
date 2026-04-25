@@ -138,6 +138,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
   const { search, debouncedSearch, setSearch } = useDebouncedSearch(activeSearchValue, 300)
   const prevDebouncedSearchRef = useRef<string | undefined>(activeSearchValue || undefined)
   const searchResolveIdRef = useRef(0)
+  const ignoreNextDebouncedSearchRef = useRef(false)
 
   useEffect(() => {
     prevDebouncedSearchRef.current = activeSearchValue || undefined
@@ -194,6 +195,12 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
 
   // Update filters when debounced search changes
   useEffect(() => {
+    if (ignoreNextDebouncedSearchRef.current) {
+      ignoreNextDebouncedSearchRef.current = false
+      prevDebouncedSearchRef.current = debouncedSearch
+      return
+    }
+
     // Only update if search actually changed to avoid resetting page on initial load
     if (debouncedSearch !== prevDebouncedSearchRef.current) {
       prevDebouncedSearchRef.current = debouncedSearch
@@ -259,6 +266,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
   // Clear search field
   const clearSearch = () => {
     searchResolveIdRef.current += 1
+    ignoreNextDebouncedSearchRef.current = true
     prevDebouncedSearchRef.current = debouncedSearch
     setSearch('')
     onFilterChange({
