@@ -308,6 +308,7 @@
         "loadedDefaults": "Defaults loaded",
         "resetToDefault": "Reset to default",
         "resetToDefaultSuccess": "Applications reset to defaults",
+        "undo": "Undo",
         "name": "Application Name",
         "namePlaceholder": "Enter application name",
         "platform": "Platform",

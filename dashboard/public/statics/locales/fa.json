@@ -190,6 +190,7 @@
         "loadedDefaults": "پیش‌فرض‌ها بارگذاری شد",
         "resetToDefault": "بازنشانی به پیش‌فرض",
         "resetToDefaultSuccess": "برنامه‌ها به مقادیر پیش‌فرض بازنشانی شدند",
+        "undo": "بازگشت",
         "name": "نام برنامه",
         "namePlaceholder": "نام برنامه را وارد کنید",
         "platform": "پلتفرم",

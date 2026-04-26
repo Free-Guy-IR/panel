@@ -287,6 +287,7 @@
         "loadedDefaults": "默认项已加载",
         "resetToDefault": "重置为默认",
         "resetToDefaultSuccess": "应用程序已重置为默认",
+        "undo": "撤销",
         "name": "应用程序名称",
         "namePlaceholder": "输入应用程序名称",
         "platform": "平台",
