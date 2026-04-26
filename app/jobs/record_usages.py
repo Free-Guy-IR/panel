@@ -23,9 +23,9 @@ from app.node import node_manager
 from app.utils.logger import get_logger
 from config import (
     DISABLE_RECORDING_NODE_USAGE,
-    ROLE,
     JOB_RECORD_NODE_USAGES_INTERVAL,
     JOB_RECORD_USER_USAGES_INTERVAL,
+    ROLE,
 )
 
 logger = get_logger("record-usages")
@@ -33,7 +33,7 @@ logger = get_logger("record-usages")
 # Hard-limit concurrency: Prevent DB lock storms
 # Start with 2-4, adjust based on DB performance
 JOB_SEM = asyncio.Semaphore(3)  # Max 3 concurrent DB write operations
-
+API_SEM = asyncio.Semaphore(10)  # Max 10
 
 # Thread pool executor for I/O-bound node API calls
 # Distributes workload across threads/cores for data collection
@@ -452,7 +452,7 @@ async def get_users_stats(node: PasarGuardNode):
     Get user stats from node using thread pool for CPU-bound processing.
     This distributes the heavy data processing workload across cores.
     """
-    async with JOB_SEM:
+    async with API_SEM:
         try:
             # I/O operation: fetch stats from node (async, non-blocking)
             stats_response = await node.get_stats(stat_type=StatType.UsersStat, reset=True, timeout=30)
@@ -495,7 +495,7 @@ async def get_outbounds_stats(node: PasarGuardNode):
     Get outbounds stats from node using thread pool for CPU-bound processing.
     This distributes the heavy data processing workload across cores.
     """
-    async with JOB_SEM:
+    async with API_SEM:
         try:
             # I/O operation: fetch stats from node (async, non-blocking)
             stats_response = await node.get_stats(stat_type=StatType.Outbounds, reset=True, timeout=10)
