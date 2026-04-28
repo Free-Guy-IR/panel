@@ -1302,6 +1302,7 @@
   "statistics.ramUsage": "مصرف رم",
   "statistics.cpuUsage": "مصرف پردازنده",
   "statistics.diskUsage": "مصرف دیسک",
+  "statistics.uptime": "زمان روشن بودن",
   "statistics.cores": "هسته",
   "statistics.serverSelection": "انتخاب سرور",
   "statistics.selectServerToMonitor": "سروری را برای نظارت بر معیارهای عملکرد انتخاب کنید",

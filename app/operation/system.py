@@ -10,7 +10,7 @@ from app.db.crud.user import count_online_users, get_users_count_by_status
 from app.db.models import UserStatus
 from app.models.admin import AdminDetails
 from app.models.system import InboundSummary, SystemStats
-from app.utils.system import cpu_usage, disk_usage, memory_usage
+from app.utils.system import cpu_usage, disk_usage, get_uptime, memory_usage
 
 from . import BaseOperation
 
@@ -63,6 +63,7 @@ class SystemOperation(BaseOperation):
 
         return SystemStats(
             version=__version__,
+            uptime_seconds=get_uptime(),
             mem_total=mem.total,
             mem_used=mem.used,
             disk_total=disk.total,

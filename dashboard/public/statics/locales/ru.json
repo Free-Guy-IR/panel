@@ -1063,6 +1063,7 @@
   "statistics.ramUsage": "Использование RAM",
   "statistics.cpuUsage": "Использование CPU",
   "statistics.diskUsage": "Использование диска",
+  "statistics.uptime": "Время работы",
   "statistics.cores": "ядер",
   "arrayInput": {
     "addPlaceholder": "Введите и нажмите Enter для добавления...",

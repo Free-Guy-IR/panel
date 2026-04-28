@@ -4,6 +4,7 @@ import math
 import os
 import secrets
 import socket
+import time
 from dataclasses import dataclass
 
 import aiohttp
@@ -57,6 +58,13 @@ def disk_usage(path: str | None = None) -> DiskStat:
         disk = psutil.disk_usage(".")
 
     return DiskStat(total=disk.total, used=disk.used, free=disk.free)
+
+
+def get_uptime() -> int:
+    pid = os.getpid()
+    process = psutil.Process(pid)
+    create_time = process.create_time()
+    return int(time.time() - create_time)
 
 
 def random_password() -> str:

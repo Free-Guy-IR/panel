@@ -1488,6 +1488,7 @@
   "statistics.ramUsage": "RAM Usage",
   "statistics.cpuUsage": "CPU Usage",
   "statistics.diskUsage": "Disk Usage",
+  "statistics.uptime": "Uptime",
   "statistics.cores": "cores",
   "statistics.realTimeData": "Real-Time Data",
   "statistics.historicalData": "Historical Data",
