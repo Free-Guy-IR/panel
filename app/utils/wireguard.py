@@ -7,12 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.manager import core_manager
+from app.db.crud.user import get_all_wireguard_peer_ips_raw
 from app.db.models import CoreConfig, CoreType, User
 from app.models.proxy import ProxyTable
-from app.node.sync import sync_user
+from app.node.sync import sync_users
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
 from app.utils.ip_pool import (
+    WireGuardPeerIPAllocator,
     allocate_and_validate_peer_ips,
+    collect_used_peer_networks_from_proxy_settings_rows,
     peer_ips_outside_global_pool,
 )
 
@@ -186,21 +189,48 @@ async def bulk_reallocate_wireguard_peer_ips(
             "affected_users": n,
         }
 
+    if not to_touch:
+        return {
+            "wireguard_inbound_tags": len(wg_tags),
+            "candidates": 0,
+            "updated": 0,
+            "dry_run": False,
+            "sample_usernames": sample,
+            "affected_users": 0,
+        }
+
+    excluded_user_ids = {user.id for user in to_touch}
+    peer_ip_rows = [
+        {"id": user_id, **data}
+        for user_id, data in (await get_all_wireguard_peer_ips_raw(db)).items()
+        if user_id not in excluded_user_ids
+    ]
+    used_networks = collect_used_peer_networks_from_proxy_settings_rows(peer_ip_rows)
+
     updated = 0
+    allocator = WireGuardPeerIPAllocator(used_networks)
+    updated_users: list[User] = []
     for user in to_touch:
         proxy_settings = ProxyTable.model_validate(user.proxy_settings or {})
         await user.awaitable_attrs.groups
         groups = [g for g in user.groups if not g.is_disabled]
-        proxy_settings.wireguard.peer_ips = []
         try:
-            prepared = await prepare_wireguard_proxy_settings(db, proxy_settings, groups, exclude_user_id=user.id)
+            prepared = await prepare_wireguard_keys_only(db, proxy_settings, groups)
         except ValueError:
             continue
+        peer_ip = allocator.allocate()
+        if peer_ip is None:
+            continue
+        prepared.wireguard.peer_ips = [peer_ip]
         user.proxy_settings = prepared.dict()
-        await db.commit()
-        await db.refresh(user)
-        await sync_user(user)
+        updated_users.append(user)
         updated += 1
+
+    if updated_users:
+        await db.commit()
+        for user in updated_users:
+            await db.refresh(user)
+        await sync_users(updated_users)
 
     return {
         "wireguard_inbound_tags": len(wg_tags),
