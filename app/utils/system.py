@@ -122,7 +122,7 @@ async def _get_public_ipv4_async() -> str | None:
 
 def get_public_ip():
     try:
-        ip = asyncio.run(_get_public_ipv4_async())
+        ip = asyncio.ensure_future(_get_public_ipv4_async())
         if ip:
             return ip
     except RuntimeError:
@@ -173,7 +173,7 @@ async def _get_public_ipv6_async() -> str | None:
 
 def get_public_ipv6():
     try:
-        ip = asyncio.run(_get_public_ipv6_async())
+        ip = asyncio.ensure_future(_get_public_ipv6_async())
         if ip:
             return ip
     except RuntimeError:
