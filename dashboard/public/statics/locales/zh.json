@@ -1763,7 +1763,7 @@
     "selectInbound": "选择入站",
     "inbound": "入站",
     "generateKeyPair": "密钥对",
-    "backendType": "后端类型",
+    "backendType": "类型",
     "generateWireGuardKeyPair": "WireGuard 密钥对",
     "generateShortId": "短 ID",
     "publicKey": "公钥",

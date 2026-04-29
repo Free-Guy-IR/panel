@@ -1802,7 +1802,7 @@
     "inbound": "Inbound",
     "generateKeyPair": "Key Pair",
     "generateShortId": "Short ID",
-    "backendType": "Backend type",
+    "backendType": "Type",
     "generateWireGuardKeyPair": "WireGuard keypair",
     "publicKey": "Public Key",
     "privateKey": "Private Key",

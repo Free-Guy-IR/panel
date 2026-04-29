@@ -1690,7 +1690,7 @@
     "selectInbound": "Выберите входящий",
     "inbound": "Входящий",
     "generateKeyPair": "Пара ключей",
-    "backendType": "Тип бэкенда",
+    "backendType": "Тип",
     "generateWireGuardKeyPair": "Пара ключей WireGuard",
     "generateShortId": "Короткий ID",
     "publicKey": "Публичный ключ",

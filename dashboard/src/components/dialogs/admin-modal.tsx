@@ -25,12 +25,11 @@ interface AdminModalProps {
   isDialogOpen: boolean
   onOpenChange: (open: boolean) => void
   editingAdmin?: boolean
-  editingAdminId?: number
-  editingAdminUserName: string
+  editingAdminId?: number | null
   form: UseFormReturn<AdminFormValuesInput>
 }
 
-export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId, editingAdminUserName, editingAdmin, form }: AdminModalProps) {
+export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId, editingAdmin, form }: AdminModalProps) {
   const { t } = useTranslation()
   const handleError = useDynamicErrorHandler()
   const queryClient = useQueryClient()
@@ -131,9 +130,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
             {editingAdmin ? <Pencil className="h-5 w-5" /> : <UserCog className="h-5 w-5" />}
             <span>{editingAdmin ? t('admins.editAdmin') : t('admins.createAdmin')}</span>
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            {t('admins.description', { defaultValue: 'Configure admin account settings.' })}
-          </DialogDescription>
+          <DialogDescription className="sr-only">{t('admins.description', { defaultValue: 'Configure admin account settings.' })}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" autoComplete="off">
@@ -218,13 +215,13 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
                     <FormItem>
                       <FormLabel>{t('admins.discordId')}</FormLabel>
                       <FormControl>
-                          <Input
-                            type="number"
-                            placeholder={t('admins.discordId')}
-                            autoComplete="off"
-                            onChange={e => {
-                              const value = e.target.value
-                              field.onChange(value ? parseInt(value) : 0)
+                        <Input
+                          type="number"
+                          placeholder={t('admins.discordId')}
+                          autoComplete="off"
+                          onChange={e => {
+                            const value = e.target.value
+                            field.onChange(value ? parseInt(value) : 0)
                           }}
                           value={field.value ? field.value : ''}
                         />

@@ -112,7 +112,6 @@ export default function AdminsPage() {
           defaultValue: `Admin "{name}" has been ${admin.is_disabled ? 'enabled' : 'disabled'} successfully`,
         }),
       })
-
     } catch (error: any) {
       const status = error?.status ?? error?.response?.status
       const backendDetail = error?.data?.detail ?? error?.response?._data?.detail ?? error?.response?.data?.detail
@@ -171,7 +170,6 @@ export default function AdminsPage() {
           defaultValue: `Admin "{name}" user usage has been reset successfully`,
         }),
       })
-
     } catch (error) {
       toast.error(t('error', { defaultValue: 'Error' }), {
         description: t('admins.resetUsageFailed', {
@@ -220,7 +218,6 @@ export default function AdminsPage() {
           form={form}
           editingAdmin={!!editingAdmin}
           editingAdminId={editingAdmin?.id}
-          editingAdminUserName={editingAdmin?.username || ''}
         />
       </div>
     </div>

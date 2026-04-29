@@ -1716,7 +1716,7 @@
     "selectInbound": "ورودی را انتخاب کنید",
     "inbound": "ورودی",
     "generateKeyPair": "جفت کلید",
-    "backendType": "نوع بک‌اند",
+    "backendType": "نوع",
     "generateWireGuardKeyPair": "جفت‌کلید WireGuard",
     "generateShortId": "شناسه کوتاه",
     "publicKey": "کلید عمومی",
