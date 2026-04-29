@@ -2286,6 +2286,7 @@
     "githubProgress": "Star progress"
   },
   "version": {
+    "title": "Version",
     "newVersionAvailable": "New version available!",
     "currentVersion": "Current",
     "latestVersion": "Latest",

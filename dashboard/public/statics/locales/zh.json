@@ -2299,6 +2299,7 @@
     "missingFields": "请填写必填字段：{{fields}}"
   },
   "version": {
+    "title": "版本",
     "newVersionAvailable": "有新版本可用！",
     "currentVersion": "当前版本",
     "latestVersion": "最新版本",

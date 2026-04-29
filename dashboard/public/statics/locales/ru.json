@@ -2244,6 +2244,7 @@
     "missingFields": "Пожалуйста, заполните обязательные поля: {{fields}}"
   },
   "version": {
+    "title": "Версия",
     "newVersionAvailable": "Доступна новая версия!",
     "currentVersion": "Текущая",
     "latestVersion": "Последняя",

@@ -2260,6 +2260,7 @@
     "githubProgress": "پیشرفت ستاره‌ها"
   },
   "version": {
+    "title": "نسخه",
     "newVersionAvailable": "نسخه جدید موجود است!",
     "currentVersion": "نسخه فعلی",
     "latestVersion": "آخرین نسخه",
