@@ -1675,6 +1675,7 @@
     "update": "更新",
     "updating": "更新中...",
     "updateAvailable": "有更新可用",
+    "prerelease": "预发布版本",
     "loadingReleases": "正在加载版本..."
   },
   "theme": {

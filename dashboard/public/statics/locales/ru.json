@@ -1602,6 +1602,7 @@
     "update": "Обновить",
     "updating": "Обновление...",
     "updateAvailable": "Доступно обновление",
+    "prerelease": "Предварительная версия",
     "loadingReleases": "Загрузка релизов..."
   },
   "theme": {

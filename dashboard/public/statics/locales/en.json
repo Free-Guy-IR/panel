@@ -1713,6 +1713,7 @@
     "update": "Update",
     "updating": "Updating...",
     "updateAvailable": "Update Available",
+    "prerelease": "Pre-release",
     "loadingReleases": "Loading releases..."
   },
   "theme": {
