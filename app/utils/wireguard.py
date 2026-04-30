@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from ipaddress import ip_network
 from typing import Iterable
 
 from sqlalchemy import select
@@ -18,6 +19,31 @@ from app.utils.ip_pool import (
     collect_used_peer_networks_from_proxy_settings_rows,
     peer_ips_outside_global_pool,
 )
+
+
+def _normalized_peer_networks(peer_ips: Iterable[str]) -> list[str]:
+    networks: list[str] = []
+    for peer_ip in peer_ips:
+        try:
+            networks.append(str(ip_network(peer_ip, strict=False)))
+        except ValueError:
+            continue
+    return networks
+
+
+def _peer_network_owners_from_rows(rows: Iterable[dict]) -> dict[str, set[int]]:
+    owners: dict[str, set[int]] = {}
+    for row in rows:
+        uid = row.get("id")
+        if uid is None:
+            continue
+        proxy_settings = row.get("proxy_settings") or {}
+        if isinstance(proxy_settings, str):
+            proxy_settings = json.loads(proxy_settings)
+        wireguard_settings = proxy_settings.get("wireguard") or {}
+        for network in _normalized_peer_networks(wireguard_settings.get("peer_ips") or []):
+            owners.setdefault(network, set()).add(uid)
+    return owners
 
 
 async def get_wireguard_tags(tags: Iterable[str]) -> list[str]:
@@ -139,7 +165,7 @@ async def bulk_reallocate_wireguard_peer_ips(
 ) -> dict:
     """
     Re-seat peer_ips for users in WireGuard groups when IPs are outside the current global pool
-    or when replace_all is True. Preserves WireGuard keys. Syncs each updated user to nodes.
+    or duplicated, or when replace_all is True. Preserves WireGuard keys. Syncs each updated user to nodes.
 
     ``target_users`` should be the users allowed by bulk scope (group/admin/user filters).
     """
@@ -155,6 +181,7 @@ async def bulk_reallocate_wireguard_peer_ips(
         }
 
     users = list(target_users)
+    eligible_users: list[tuple[User, list[str]]] = []
     to_touch: list[User] = []
     sample: list[str] = []
 
@@ -163,13 +190,31 @@ async def bulk_reallocate_wireguard_peer_ips(
             continue
         proxy_settings = ProxyTable.model_validate(user.proxy_settings or {})
         peer_ips = list(proxy_settings.wireguard.peer_ips or [])
+        eligible_users.append((user, peer_ips))
 
+    eligible_user_ids = {user.id for user, _ in eligible_users}
+    all_peer_ip_rows = [{"id": user_id, **data} for user_id, data in (await get_all_wireguard_peer_ips_raw(db)).items()]
+    peer_network_owners = _peer_network_owners_from_rows(all_peer_ip_rows)
+    duplicated_user_ids: set[int] = set()
+    for owner_ids in peer_network_owners.values():
+        if len(owner_ids) > 1:
+            target_owner_ids = owner_ids & eligible_user_ids
+            if not target_owner_ids:
+                continue
+            if owner_ids <= eligible_user_ids:
+                duplicated_user_ids.update(sorted(owner_ids)[1:])
+            else:
+                duplicated_user_ids.update(target_owner_ids)
+
+    for user, peer_ips in eligible_users:
         need = False
         if replace_all:
             need = True
         elif not peer_ips:
             need = True
         elif peer_ips_outside_global_pool(peer_ips):
+            need = True
+        elif user.id in duplicated_user_ids:
             need = True
 
         if not need:
@@ -200,11 +245,7 @@ async def bulk_reallocate_wireguard_peer_ips(
         }
 
     excluded_user_ids = {user.id for user in to_touch}
-    peer_ip_rows = [
-        {"id": user_id, **data}
-        for user_id, data in (await get_all_wireguard_peer_ips_raw(db)).items()
-        if user_id not in excluded_user_ids
-    ]
+    peer_ip_rows = [row for row in all_peer_ip_rows if row.get("id") not in excluded_user_ids]
     used_networks = collect_used_peer_networks_from_proxy_settings_rows(peer_ip_rows)
 
     updated = 0

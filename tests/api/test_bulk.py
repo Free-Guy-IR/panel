@@ -5,6 +5,7 @@ from fastapi import status
 from sqlalchemy import select
 
 from app.db.models import User
+from app.utils.crypto import generate_wireguard_keypair
 from tests.api import TestSession
 from tests.api import client
 from tests.api.helpers import (
@@ -43,6 +44,21 @@ def set_user_used_traffic(username: str, used_traffic: int) -> None:
             await session.commit()
 
     asyncio.run(_set_usage())
+
+
+def set_user_wireguard_peer_ips(username: str, peer_ips: list[str]) -> None:
+    async def _set_peer_ips():
+        async with TestSession() as session:
+            result = await session.execute(select(User).where(User.username == username))
+            db_user = result.scalar_one()
+            proxy_settings = dict(db_user.proxy_settings or {})
+            wireguard_settings = dict(proxy_settings.get("wireguard") or {})
+            wireguard_settings["peer_ips"] = peer_ips
+            proxy_settings["wireguard"] = wireguard_settings
+            db_user.proxy_settings = proxy_settings
+            await session.commit()
+
+    asyncio.run(_set_peer_ips())
 
 
 def get_user_sub_revoked_at(username: str):
@@ -570,3 +586,76 @@ def test_bulk_wireguard_reallocate_peer_ips_accepts_status_filter(access_token):
     assert data["dry_run"] is True
     assert "candidates" in data
     assert "affected_users" in data
+
+
+def test_bulk_wireguard_reallocate_peer_ips_repairs_duplicates(access_token):
+    interface_private_key, _ = generate_wireguard_keypair()
+    interface_name = unique_name("wg_bulk_dup")
+    core = create_core(
+        access_token,
+        name=unique_name("wireguard_bulk_dup_core"),
+        config={
+            "interface_name": interface_name,
+            "private_key": interface_private_key,
+            "listen_port": 51820,
+            "address": [],
+        },
+        type="wg",
+        fallbacks=[],
+    )
+    group = create_group(access_token, name=unique_name("wg_bulk_dup_group"), inbound_tags=[interface_name])
+
+    users: list[dict] = []
+    try:
+        first_user = create_user(
+            access_token,
+            group_ids=[group["id"]],
+            payload={"username": unique_name("wg_dup_keep")},
+        )
+        second_user = create_user(
+            access_token,
+            group_ids=[group["id"]],
+            payload={"username": unique_name("wg_dup_realloc")},
+        )
+        users = [first_user, second_user]
+
+        duplicate_peer_ip = first_user["proxy_settings"]["wireguard"]["peer_ips"][0]
+        set_user_wireguard_peer_ips(second_user["username"], [duplicate_peer_ip])
+
+        dry_run_response = client.post(
+            "/api/users/bulk/wireguard/reallocate-peer-ips",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"dry_run": True, "confirm": False, "users": [second_user["id"]]},
+        )
+        assert dry_run_response.status_code == status.HTTP_200_OK
+        assert dry_run_response.json()["candidates"] == 1
+        assert second_user["username"] in dry_run_response.json()["sample_usernames"]
+
+        response = client.post(
+            "/api/users/bulk/wireguard/reallocate-peer-ips",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"confirm": True, "users": [second_user["id"]]},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["updated"] == 1
+
+        first_response = client.get(
+            f"/api/user/{first_user['username']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        second_response = client.get(
+            f"/api/user/{second_user['username']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert first_response.status_code == status.HTTP_200_OK
+        assert second_response.status_code == status.HTTP_200_OK
+
+        first_peer_ips = first_response.json()["proxy_settings"]["wireguard"]["peer_ips"]
+        second_peer_ips = second_response.json()["proxy_settings"]["wireguard"]["peer_ips"]
+        assert first_peer_ips == [duplicate_peer_ip]
+        assert len(second_peer_ips) == 1
+        assert second_peer_ips[0] != duplicate_peer_ip
+        assert second_peer_ips[0].startswith("10.")
+        assert second_peer_ips[0].endswith("/32")
+    finally:
+        cleanup(access_token, core, [group], users)
