@@ -1154,19 +1154,20 @@ class UserOperation(BaseOperation):
         self, db: AsyncSession, body: BulkWireGuardPeerIPs, admin: AdminDetails
     ) -> WireGuardPeerIPsReallocateResponse:
         from sqlalchemy import and_, select
+        from sqlalchemy.orm import selectinload
 
         from app.db.crud.bulk import _create_final_filter
-        from app.db.crud.user import load_user_attrs
+        from app.db.models import Group
         from app.utils.wireguard import bulk_reallocate_wireguard_peer_ips as run_wg_bulk
 
         final_filter = _create_final_filter(body)
         if not admin.is_sudo:
             final_filter = and_(final_filter, User.admin_id == admin.id)
 
-        result = await db.execute(select(User).where(final_filter))
+        result = await db.execute(
+            select(User).options(selectinload(User.groups).selectinload(Group.inbounds)).where(final_filter)
+        )
         users = list(result.scalars().all())
-        for u in users:
-            await load_user_attrs(u, load_usage_logs=False)
 
         out = await run_wg_bulk(db, users, dry_run=body.dry_run, replace_all=body.replace_all)
         return WireGuardPeerIPsReallocateResponse(**out)
