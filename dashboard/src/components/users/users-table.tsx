@@ -129,6 +129,7 @@ const UsersTable = memo(() => {
   const [isChangingPage, setIsChangingPage] = useState(false)
   const [isEditModalOpen, setEditModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null)
+  const clearSelectedUserTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
   const [resetSelectionKey, setResetSelectionKey] = useState(0)
   const [bulkAction, setBulkAction] = useState<'delete' | 'reset' | 'revoke' | 'disable' | 'enable' | 'apply_template' | null>(null)
@@ -661,6 +662,11 @@ const UsersTable = memo(() => {
   }
 
   const handleEdit = (user: UserResponse) => {
+    if (clearSelectedUserTimeoutRef.current) {
+      clearTimeout(clearSelectedUserTimeoutRef.current)
+      clearSelectedUserTimeoutRef.current = null
+    }
+
     const cachedData = queryClient.getQueriesData<UsersResponse>({
       queryKey: ['/api/users'],
       exact: false,
@@ -682,15 +688,36 @@ const UsersTable = memo(() => {
   }
 
   const handleEditSuccess = (_updatedUser: UserResponse) => {
-    setEditModalOpen(false)
+    handleEditModalClose(false)
   }
 
   const handleEditModalClose = (open: boolean) => {
-    setEditModalOpen(open)
-    if (!open) {
-      setSelectedUser(null)
+    if (open) {
+      if (clearSelectedUserTimeoutRef.current) {
+        clearTimeout(clearSelectedUserTimeoutRef.current)
+        clearSelectedUserTimeoutRef.current = null
+      }
+      setEditModalOpen(true)
+      return
     }
+
+    setEditModalOpen(false)
+    if (clearSelectedUserTimeoutRef.current) {
+      clearTimeout(clearSelectedUserTimeoutRef.current)
+    }
+    clearSelectedUserTimeoutRef.current = setTimeout(() => {
+      setSelectedUser(null)
+      clearSelectedUserTimeoutRef.current = null
+    }, 220)
   }
+
+  useEffect(() => {
+    return () => {
+      if (clearSelectedUserTimeoutRef.current) {
+        clearTimeout(clearSelectedUserTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const columns = useMemo(
     () =>
