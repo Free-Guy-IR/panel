@@ -20,16 +20,14 @@ from app.db.models import (
 from app.models.node import NodeCreate, NodeModify, UsageTable
 from app.models.stats import NodeStats, NodeStatsList, NodeUsageStat, NodeUsageStatsList, Period
 
-
 from .general import (
+    MYSQL_FORMATS,
+    SQLITE_FORMATS,
     _build_trunc_expression,
     _get_next_period_boundary,
     attach_timezone_to_period_start,
     to_utc_for_filter,
-    MYSQL_FORMATS,
-    SQLITE_FORMATS,
 )
-
 
 NodeSortingOptionsSimple = Enum(
     "NodeSortingOptionsSimple",
