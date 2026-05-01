@@ -51,7 +51,7 @@ class Node(BaseModel):
     reset_time: int = Field(default=-1)
     default_timeout: int = Field(default=10, ge=3, le=60)
     internal_timeout: int = Field(default=15, ge=3, le=60)
-    proxy_url: str | None = Field(le=256)
+    proxy_url: str | None = Field(default=None, le=256)
 
 
 class NodeCreate(Node):
