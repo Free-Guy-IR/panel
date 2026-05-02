@@ -251,12 +251,11 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
 
   return (
     <Card className="flex flex-1 flex-col pt-2">
-      <CardHeader className="flex flex-col space-y-4 p-4 md:p-6">
+      <CardHeader className="flex flex-col gap-4 p-4 md:p-6">
         <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center gap-x-2">
-              <CardTitle className='mb-1'>{viewMode === 'realtime' ? t('statistics.realTimeData') : t('statistics.historicalData')}</CardTitle>
-            </div>
+          <div>
+            <CardTitle className="mb-1">{viewMode === 'realtime' ? t('statistics.realTimeData') : t('statistics.historicalData')}</CardTitle>
+            <CardDescription>{viewMode === 'realtime' ? t('statistics.realtimeDescription') : t('statistics.historicalDescription')}</CardDescription>
           </div>
 
           {nodeId !== undefined && realtimeAvailable && (
@@ -276,7 +275,6 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
           )}
         </div>
 
-        <CardDescription className="text-sm text-muted-foreground !mt-0">{viewMode === 'realtime' ? t('statistics.realtimeDescription') : t('statistics.historicalDescription')}</CardDescription>
         {realtimeAvailable && (
           <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2 sm:gap-6">
             <div className="flex flex-col items-center space-y-2 rounded-lg bg-muted/50 p-3">
