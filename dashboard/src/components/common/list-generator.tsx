@@ -161,6 +161,7 @@ export function ListGenerator<T>({
   const listTemplateClassName = 'grid [grid-template-columns:var(--list-cols-mobile)] md:[grid-template-columns:var(--list-cols-desktop)]'
   const dir = useDirDetection()
   const gridContent = (showRows || isLoading) && renderGridItem
+  const headerSelectionCheckboxClassName = 'h-3.5 w-3.5 rounded-[3px] border-muted-foreground/40 data-[state=checked]:border-primary'
   const selectionCheckboxClassName =
     'h-3.5 w-3.5 rounded-[3px] border-muted-foreground/40 bg-background data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground'
   const stopSelectionClick = (event: React.SyntheticEvent) => {
@@ -239,8 +240,8 @@ export function ListGenerator<T>({
                 ) : undefined
 
                 const renderedGridItem =
-                  enableGridSelection && React.isValidElement<any>(gridItem)
-                    ? React.cloneElement(gridItem, {
+                  enableGridSelection && React.isValidElement(gridItem)
+                    ? React.cloneElement(gridItem as React.ReactElement<{ selected?: boolean; selectionControl?: React.ReactNode }>, {
                         selected: isSelected,
                         selectionControl,
                       })
@@ -270,7 +271,7 @@ export function ListGenerator<T>({
             <div className="flex items-center justify-center">
               <Checkbox
                 aria-label={t('selectAll', { defaultValue: 'Select all' })}
-                className={selectionCheckboxClassName}
+                className={headerSelectionCheckboxClassName}
                 checked={isAllVisibleSelected || (isSomeVisibleSelected && 'indeterminate')}
                 onCheckedChange={value => handleToggleAllVisibleSelection(!!value)}
                 onClick={stopSelectionClick}

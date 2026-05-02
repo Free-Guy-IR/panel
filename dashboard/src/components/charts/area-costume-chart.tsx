@@ -1,5 +1,5 @@
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, TooltipProps } from 'recharts'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartConfig, ChartContainer } from '@/components/ui/chart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -231,8 +231,8 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
   const error = viewMode === 'historical' ? historicalError : realtimeError
   const historicalXAxisInterval = useMemo(() => getXAxisInterval(periodOption, historicalHistory.length), [periodOption, historicalHistory.length])
 
-  let displayCpuUsage: string | JSX.Element = <Skeleton className="h-5 w-16" />
-  let displayRamUsage: string | JSX.Element = <Skeleton className="h-5 w-16" />
+  let displayCpuUsage: string | ReactNode = <Skeleton className="h-5 w-16" />
+  let displayRamUsage: string | ReactNode = <Skeleton className="h-5 w-16" />
 
   if (currentStats) {
     if (isSystemStats(currentStats) || isNodeRealtimeStats(currentStats)) {
