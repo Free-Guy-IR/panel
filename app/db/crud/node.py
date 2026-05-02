@@ -463,7 +463,9 @@ async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
     db_node.message = None
     db_node.node_version = None
 
-    if db_node.status == NodeStatus.limited and db_node.data_limit > db_node.used_traffic:
+    if db_node.is_limited:
+        db_node.status = NodeStatus.limited
+    elif db_node.status == NodeStatus.limited:
         db_node.status = NodeStatus.connecting
     elif db_node.status not in (NodeStatus.disabled, NodeStatus.limited):
         db_node.status = NodeStatus.connecting
@@ -773,7 +775,7 @@ async def reset_node_usage(db: AsyncSession, db_node: Node) -> Node:
     db_node.uplink = 0
     db_node.downlink = 0
 
-    if db_node.status is NodeStatus.limited:
+    if db_node.status == NodeStatus.limited:
         db_node.status = NodeStatus.connecting
 
     await db.commit()
