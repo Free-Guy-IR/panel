@@ -822,7 +822,9 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                       />
                                     </FormControl>
                                     {field.value !== null && field.value !== undefined && field.value > 0 && field.value < 1 && (
-                                      <p className="absolute right-0 top-full mt-1 text-end text-xs text-muted-foreground">{formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}</p>
+                                      <p dir='ltr' className={cn('absolute w-full right-0 top-full mt-1 text-xs text-muted-foreground', dir === 'rtl' ? 'text-left' : 'text-end')}>
+                                        {formatBytes(Math.round(field.value * 1024 * 1024 * 1024))}
+                                      </p>
                                     )}
                                     <FormMessage />
                                   </FormItem>
@@ -1181,12 +1183,12 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                               name="proxy_url"
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>{t('nodeModal.proxyUrl', { defaultValue: 'Proxy URL' })}</FormLabel>
+                                  <FormLabel>{t('settings.webhook.general.proxyUrl')}</FormLabel>
                                   <FormControl>
                                     <Input
                                       isError={!!form.formState.errors.proxy_url}
                                       type="url"
-                                      placeholder={t('nodeModal.proxyUrlPlaceholder', { defaultValue: 'socks5://127.0.0.1:1080' })}
+                                      placeholder="socks5://127.0.0.1:1080"
                                       {...field}
                                       value={field.value ?? ''}
                                       className="font-mono text-xs sm:text-sm"
