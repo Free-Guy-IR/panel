@@ -112,7 +112,7 @@ class ClashConfiguration(BaseSubscription):
         result = {
             "path": path,
             "host": host,
-            "headers": {**http_headers} if http_headers else None,
+            "headers": {**http_headers} if http_headers else {},
             "v2ray-http-upgrade": is_httpupgrade,
             "v2ray-http-upgrade-fast-open": is_httpupgrade,
             "max-early-data": max_early_data if max_early_data and not is_httpupgrade else None,
