@@ -108,11 +108,14 @@ class ClashConfiguration(BaseSubscription):
             max_early_data = int(max_early_data)
             early_data_header_name = "Sec-WebSocket-Protocol"
 
-        http_headers = config.http_headers or {}
+        http_headers = dict(config.http_headers or {})
+        if host:
+            http_headers = {k: v for k, v in http_headers.items() if k not in ("Host", "host")}
+            http_headers["Host"] = host
+
         result = {
             "path": path,
-            "host": host,
-            "headers": {**http_headers} if http_headers else {},
+            "headers": http_headers,
             "v2ray-http-upgrade": is_httpupgrade,
             "v2ray-http-upgrade-fast-open": is_httpupgrade,
             "max-early-data": max_early_data if max_early_data and not is_httpupgrade else None,
