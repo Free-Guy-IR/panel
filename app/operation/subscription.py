@@ -298,7 +298,6 @@ class SubscriptionOperation(BaseOperation):
                 sub_settings,
                 inline=inline_view,
                 extra_headers={},
-                extension=client_config.get(client_type, {}).get("extension", "") if client_type else "",
             )
             try:
                 response_headers.update(
