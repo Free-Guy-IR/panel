@@ -133,6 +133,7 @@ export function ListGenerator<T>({
   const hasMobileTrailingWidth = mobileDetailsColumns.length > 0
   const isAllVisibleSelected = visibleSelectableRowIds.length > 0 && visibleSelectableRowIds.every(id => selectedRowSet.has(id))
   const isSomeVisibleSelected = !isAllVisibleSelected && visibleSelectableRowIds.some(id => selectedRowSet.has(id))
+  const selectedVisibleRowCount = visibleSelectableRowIds.filter(id => selectedRowSet.has(id)).length
   const mobileTemplateColumns = useMemo(() => {
     const visibleColumns = columns.filter(column => !column.hideOnMobile).map(column => column.width ?? 'minmax(0, 1fr)')
 
@@ -205,9 +206,45 @@ export function ListGenerator<T>({
     onSelectionChange(nextSelectedRowIds)
   }
 
+  const handleGridSelectionToolbarClick = () => {
+    handleToggleAllVisibleSelection(!isAllVisibleSelected)
+  }
+
+  const handleGridSelectionToolbarKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return
+    }
+
+    event.preventDefault()
+    handleGridSelectionToolbarClick()
+  }
+
   if (mode === 'grid') {
     return (
       <div className={cn('flex w-full flex-col gap-2', className)}>
+        {enableSelection && enableGridSelection && visibleSelectableRowIds.length > 0 && (
+          <div
+            role="button"
+            tabIndex={0}
+            className="flex w-full items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={handleGridSelectionToolbarClick}
+            onKeyDown={handleGridSelectionToolbarKeyDown}
+          >
+            <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <Checkbox
+                aria-label={t('selectAll', { defaultValue: 'Select all' })}
+                className={headerSelectionCheckboxClassName}
+                checked={isAllVisibleSelected || (isSomeVisibleSelected && 'indeterminate')}
+                onCheckedChange={value => handleToggleAllVisibleSelection(!!value)}
+                onClick={stopSelectionClick}
+                onPointerDown={stopSelectionClick}
+                onKeyDown={stopSelectionClick}
+              />
+              <span className="truncate">{t('selectAll', { defaultValue: 'Select all' })}</span>
+            </div>
+            <span className="shrink-0 text-xs text-muted-foreground">{selectedVisibleRowCount}/{visibleSelectableRowIds.length}</span>
+          </div>
+        )}
         {gridContent ? (
           <div className={cn('grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3', gridClassName)} style={gridStyle}>
             {isLoading &&
