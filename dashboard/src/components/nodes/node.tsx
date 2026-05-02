@@ -206,8 +206,7 @@ export default function Node({ node, onEdit, onToggleStatus, coresData, selectio
 
             {hasUsageDisplay && (
               <>
-                <Separator className="my-2 opacity-50" />
-                {/* Usage Display */}
+                <Separator className="my-1.5 opacity-50" />
                 <NodeUsageDisplay node={node} />
               </>
             )}
