@@ -189,10 +189,10 @@ async def node_health_check():
         return
     async with GetDB() as db:
         db_nodes, _ = await get_nodes(db=db, enabled=True)
-        dict_nodes = await node_manager.get_nodes()
 
-        check_tasks = [process_node_health_check(db_node, dict_nodes.get(db_node.id)) for db_node in db_nodes]
-        await asyncio.gather(*check_tasks, return_exceptions=True)
+    dict_nodes = await node_manager.get_nodes()
+    check_tasks = [process_node_health_check(db_node, dict_nodes.get(db_node.id)) for db_node in db_nodes]
+    await asyncio.gather(*check_tasks, return_exceptions=True)
 
 
 @on_startup

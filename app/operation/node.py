@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import notification
 from app.core.manager import core_manager
-from app.db import AsyncSession
+from app.db import AsyncSession, GetDB
 from app.db.crud.node import (
     NodeSortingOptionsSimple,
     bulk_reset_node_usage,
@@ -277,6 +277,13 @@ class NodeOperation(BaseOperation):
                 "old_status": old_status,
             }
 
+    async def _connect_single_node_background(self, node_id: int) -> None:
+        try:
+            async with GetDB() as db:
+                await self._connect_single_impl(db, node_id)
+        except Exception as exc:
+            logger.error(f"Background node connection failed for node {node_id}: {exc}")
+
     async def create_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         await self.get_validated_core_config(db, new_node.core_config_id)
         try:
@@ -286,7 +293,7 @@ class NodeOperation(BaseOperation):
 
         try:
             await self._update_node_impl(db_node)
-            asyncio.create_task(self._connect_single_impl(db, db_node.id))
+            asyncio.create_task(self._connect_single_node_background(db_node.id))
         except NodeAPIError as e:
             await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
@@ -312,7 +319,7 @@ class NodeOperation(BaseOperation):
         else:
             try:
                 await self._update_node_impl(db_node)
-                asyncio.create_task(self._connect_single_impl(db, db_node.id))
+                asyncio.create_task(self._connect_single_node_background(db_node.id))
             except NodeAPIError as e:
                 await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
