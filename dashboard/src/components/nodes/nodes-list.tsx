@@ -652,7 +652,7 @@ export default function NodesList() {
               getRowId={node => node.id}
               isLoading={showLoadingSpinner || showPageLoadingSkeletons}
               loadingRows={6}
-              className="gap-1.5"
+              className={viewMode === 'grid' ? 'gap-4' : 'gap-1.5'}
               rowClassName={viewMode === 'list' ? 'py-2' : undefined}
               onRowClick={handleEdit}
               mode={viewMode}
