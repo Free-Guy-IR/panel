@@ -286,6 +286,12 @@ async def get_users(
     admin: Admin | None = None,
     admins: list[str] | None = None,
     reset_strategy: DataLimitResetStrategy | list[DataLimitResetStrategy] | None = None,
+    data_limit_min: int | None = None,
+    data_limit_max: int | None = None,
+    expire_after: datetime | None = None,
+    expire_before: datetime | None = None,
+    no_data_limit: bool = False,
+    no_expire: bool = False,
     return_with_count: bool = False,
     group_ids: list[int] | None = None,
 ) -> list[User] | tuple[list[User], int]:
@@ -303,6 +309,12 @@ async def get_users(
         admin: Admin filter.
         admins: List of admin usernames to filter by.
         reset_strategy: Reset strategy filter (single strategy or list).
+        data_limit_min: Minimum user data limit in bytes.
+        data_limit_max: Maximum user data limit in bytes.
+        expire_after: Include users whose expire date is on or after this datetime.
+        expire_before: Include users whose expire date is on or before this datetime.
+        no_data_limit: Include only users with no data limit set.
+        no_expire: Include only users with no expire date set.
         return_with_count: Whether to return total count.
         group_ids: Filter users by their group IDs.
 
@@ -336,6 +348,20 @@ async def get_users(
             filters.append(User.data_limit_reset_strategy.in_(reset_strategy))
         else:
             filters.append(User.data_limit_reset_strategy == reset_strategy)
+    if no_data_limit:
+        filters.append(or_(User.data_limit.is_(None), User.data_limit == 0))
+    else:
+        if data_limit_min is not None:
+            filters.append(and_(User.data_limit.is_not(None), User.data_limit >= data_limit_min))
+        if data_limit_max is not None:
+            filters.append(and_(User.data_limit.is_not(None), User.data_limit <= data_limit_max))
+    if no_expire:
+        filters.append(User.expire.is_(None))
+    else:
+        if expire_after is not None:
+            filters.append(and_(User.expire.is_not(None), User.expire >= expire_after))
+        if expire_before is not None:
+            filters.append(and_(User.expire.is_not(None), User.expire <= expire_before))
 
     if group_ids:
         filters.append(User.groups.any(Group.id.in_(group_ids)))

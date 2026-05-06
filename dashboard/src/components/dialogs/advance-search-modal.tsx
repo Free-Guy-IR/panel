@@ -2,7 +2,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DatePicker } from '@/components/common/date-picker'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -29,6 +31,8 @@ interface AdvanceSearchModalProps {
 export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, onSubmit, isSudo, isApplying = false }: AdvanceSearchModalProps) {
   const dir = useDirDetection()
   const { t } = useTranslation()
+  const noDataLimitOnly = form.watch('no_data_limit')
+  const noExpireOnly = form.watch('no_expire')
 
   const { data: groupsData } = useGetGroupsSimple({ all: true })
 
@@ -165,6 +169,164 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                           </FormItem>
                         )
                       }}
+                    />
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="data_limit_min"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <FormLabel>{t('advanceSearch.dataLimitMin', { defaultValue: 'Minimum data limit (GB)' })}</FormLabel>
+                            <FormDescription>{t('advanceSearch.dataLimitDescription', { defaultValue: 'Filter users by data-limit range in gigabytes.' })}</FormDescription>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                inputMode="decimal"
+                                placeholder={t('advanceSearch.dataLimitMinPlaceholder', { defaultValue: 'e.g. 10' })}
+                                value={field.value ?? ''}
+                                disabled={isApplying || noDataLimitOnly}
+                                onChange={event => {
+                                  const rawValue = event.target.value
+                                  field.onChange(rawValue === '' ? undefined : Number(rawValue))
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="data_limit_max"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <FormLabel>{t('advanceSearch.dataLimitMax', { defaultValue: 'Maximum data limit (GB)' })}</FormLabel>
+                            <FormDescription>{t('advanceSearch.dataLimitDescription', { defaultValue: 'Filter users by data-limit range in gigabytes.' })}</FormDescription>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                inputMode="decimal"
+                                placeholder={t('advanceSearch.dataLimitMaxPlaceholder', { defaultValue: 'e.g. 100' })}
+                                value={field.value ?? ''}
+                                disabled={isApplying || noDataLimitOnly}
+                                onChange={event => {
+                                  const rawValue = event.target.value
+                                  field.onChange(rawValue === '' ? undefined : Number(rawValue))
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="no_data_limit"
+                      render={({ field }) => (
+                        <FormItem className="flex w-full items-start justify-between gap-4 rounded-md border p-4">
+                          <div className="space-y-1">
+                            <FormLabel>{t('advanceSearch.noDataLimit', { defaultValue: 'Only users with no data limit' })}</FormLabel>
+                            <FormDescription>{t('advanceSearch.noDataLimitDescription', { defaultValue: 'Shows users whose data limit is unlimited.' })}</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              disabled={isApplying}
+                              onCheckedChange={checked => {
+                                field.onChange(checked)
+                                if (checked) {
+                                  form.setValue('data_limit_min', undefined, { shouldDirty: true })
+                                  form.setValue('data_limit_max', undefined, { shouldDirty: true })
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="expire_after"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <FormControl>
+                              <div className={cn((isApplying || noExpireOnly) && 'pointer-events-none opacity-60')}>
+                                <DatePicker
+                                  mode="single"
+                                  date={field.value}
+                                  onDateChange={field.onChange}
+                                  label={t('advanceSearch.expireAfter', { defaultValue: 'Expire after' })}
+                                  placeholder={t('advanceSearch.expireAfterPlaceholder', { defaultValue: 'Select start date' })}
+                                  minDate={new Date('1900-01-01')}
+                                  className="[&_label]:text-sm"
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="expire_before"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <FormControl>
+                              <div className={cn((isApplying || noExpireOnly) && 'pointer-events-none opacity-60')}>
+                                <DatePicker
+                                  mode="single"
+                                  date={field.value}
+                                  onDateChange={field.onChange}
+                                  label={t('advanceSearch.expireBefore', { defaultValue: 'Expire before' })}
+                                  placeholder={t('advanceSearch.expireBeforePlaceholder', { defaultValue: 'Select end date' })}
+                                  minDate={new Date('1900-01-01')}
+                                  className="[&_label]:text-sm"
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="no_expire"
+                      render={({ field }) => (
+                        <FormItem className="flex w-full items-start justify-between gap-4 rounded-md border p-4">
+                          <div className="space-y-1">
+                            <FormLabel>{t('advanceSearch.noExpire', { defaultValue: 'Only users with no expire date' })}</FormLabel>
+                            <FormDescription>{t('advanceSearch.noExpireDescription', { defaultValue: 'Shows users whose account has no expire date.' })}</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              disabled={isApplying}
+                              onCheckedChange={checked => {
+                                field.onChange(checked)
+                                if (checked) {
+                                  form.setValue('expire_after', undefined, { shouldDirty: true })
+                                  form.setValue('expire_before', undefined, { shouldDirty: true })
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
 
                     <FormField

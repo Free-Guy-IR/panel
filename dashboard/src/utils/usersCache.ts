@@ -105,6 +105,49 @@ const matchesUserFilters = (user: UserResponse, params?: GetUsersParams): boolea
     }
   }
 
+  if (params.no_data_limit) {
+    const dataLimit = toNumber(user.data_limit)
+    if (dataLimit !== undefined && dataLimit > 0) {
+      return false
+    }
+  } else {
+    if (params.data_limit_min !== undefined && params.data_limit_min !== null) {
+      const dataLimit = toNumber(user.data_limit)
+      if (dataLimit === undefined || dataLimit < params.data_limit_min) {
+        return false
+      }
+    }
+
+    if (params.data_limit_max !== undefined && params.data_limit_max !== null) {
+      const dataLimit = toNumber(user.data_limit)
+      if (dataLimit === undefined || dataLimit > params.data_limit_max) {
+        return false
+      }
+    }
+  }
+
+  if (params.no_expire) {
+    if (user.expire) {
+      return false
+    }
+  } else {
+    if (params.expire_after) {
+      const expireAt = toTimestamp(user.expire)
+      const expireAfter = toTimestamp(params.expire_after)
+      if (!expireAt || expireAt < expireAfter) {
+        return false
+      }
+    }
+
+    if (params.expire_before) {
+      const expireAt = toTimestamp(user.expire)
+      const expireBefore = toTimestamp(params.expire_before)
+      if (!expireAt || expireAt > expireBefore) {
+        return false
+      }
+    }
+  }
+
   return true
 }
 

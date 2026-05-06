@@ -119,6 +119,12 @@ export type GetUsersParams = {
   status?: UserStatus | null
   sort?: string | null
   proxy_id?: string | null
+  data_limit_min?: number | null
+  data_limit_max?: number | null
+  expire_after?: string | null
+  expire_before?: string | null
+  no_data_limit?: boolean
+  no_expire?: boolean
   load_sub?: boolean
 }
 

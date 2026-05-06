@@ -205,6 +205,158 @@ def test_users_get(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_users_get_filters_by_data_limit_range(access_token):
+    core, groups = setup_groups(access_token, 1)
+    small_limit_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_limit_small"),
+            "data_limit": 1024 * 1024 * 1024,
+        },
+    )
+    large_limit_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_limit_large"),
+            "data_limit": 20 * 1024 * 1024 * 1024,
+        },
+    )
+
+    try:
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={
+                "data_limit_min": 5 * 1024 * 1024 * 1024,
+                "data_limit_max": 25 * 1024 * 1024 * 1024,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert large_limit_user["username"] in listed_usernames
+        assert small_limit_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, small_limit_user["username"])
+        delete_user(access_token, large_limit_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_users_get_filters_by_no_data_limit(access_token):
+    core, groups = setup_groups(access_token, 1)
+    unlimited_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_no_limit"),
+            "data_limit": 0,
+        },
+    )
+    limited_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_with_limit"),
+            "data_limit": 5 * 1024 * 1024 * 1024,
+        },
+    )
+
+    try:
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={"no_data_limit": True},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert unlimited_user["username"] in listed_usernames
+        assert limited_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, unlimited_user["username"])
+        delete_user(access_token, limited_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_users_get_filters_by_expire_date_range(access_token):
+    core, groups = setup_groups(access_token, 1)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    early_expire = now + timedelta(days=5)
+    late_expire = now + timedelta(days=45)
+    early_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_expire_early"),
+            "expire": early_expire.isoformat(),
+        },
+    )
+    late_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_expire_late"),
+            "expire": late_expire.isoformat(),
+        },
+    )
+
+    try:
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={
+                "expire_after": (now + timedelta(days=2)).isoformat(),
+                "expire_before": (now + timedelta(days=10)).isoformat(),
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert early_user["username"] in listed_usernames
+        assert late_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, early_user["username"])
+        delete_user(access_token, late_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_users_get_filters_by_no_expire(access_token):
+    core, groups = setup_groups(access_token, 1)
+    no_expire_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_no_expire"),
+        },
+    )
+    expiring_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_with_expire"),
+            "expire": (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=30)).isoformat(),
+        },
+    )
+
+    try:
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={"no_expire": True},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert no_expire_user["username"] in listed_usernames
+        assert expiring_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, no_expire_user["username"])
+        delete_user(access_token, expiring_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_user_subscriptions(access_token):
     """Test that the user subscriptions route is accessible."""
     user_subscription_formats = [
