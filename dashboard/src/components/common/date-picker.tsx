@@ -92,7 +92,7 @@ interface BaseDatePickerProps {
   popoverAlignDesktop?: DatePickerAlign
   /**
    * When `side` is unset: side on viewports wider than mobile (mobile uses `bottom`).
-   * @default 'left'
+   * @default 'bottom'
    */
   popoverSideDesktop?: DatePickerSide
 }
@@ -175,7 +175,7 @@ export function DatePicker({
   align,
   side,
   popoverAlignDesktop = 'end',
-  popoverSideDesktop = 'left',
+  popoverSideDesktop = 'bottom',
 }: DatePickerProps) {
   const { t, i18n } = useTranslation()
   const dir = useDirDetection()

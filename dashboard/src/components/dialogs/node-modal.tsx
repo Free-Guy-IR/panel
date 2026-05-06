@@ -559,24 +559,25 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                         <FormItem>
                           <FormLabel>{t('nodeModal.apiKey')}</FormLabel>
                           <FormControl>
-                            <div className={cn('flex w-full min-w-0 items-stretch gap-0', dir === 'rtl' && 'flex-row-reverse')}>
+                            <div className={cn('flex w-full min-w-0 items-center gap-2', dir === 'rtl' && 'flex-row-reverse')}>
                               <Input
                                 isError={!!form.formState.errors.api_key}
                                 type="text"
                                 placeholder={t('nodeModal.apiKeyPlaceholder')}
                                 autoComplete="off"
-                                className="min-w-0 rounded-e-none border-e-0 shadow-none focus-visible:z-10"
+                                className="min-w-0"
                                 {...field}
                                 onChange={e => field.onChange(e.target.value)}
                               />
                               <Button
                                 type="button"
-                                variant="outline"
-                                size="sm"
+                                variant="ghost"
+                                size="icon"
                                 onClick={generateUUID}
-                                className="shrink-0 rounded-s-none px-3 focus-visible:z-10"
+                                className="shrink-0"
+                                title={t('nodeModal.generateApiKey', { defaultValue: 'Generate API key' })}
                               >
-                                <RefreshCw className="!h-4 !w-4" aria-hidden />
+                                <RefreshCw className="h-3 w-3" aria-hidden />
                               </Button>
                             </div>
                           </FormControl>

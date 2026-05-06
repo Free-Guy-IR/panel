@@ -2581,7 +2581,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
               {renderUserMetaPanel('mt-4 lg:hidden')}
             </div>
             {/* Cancel/Create buttons - always visible */}
-            <div className="mt-4 flex flex-row items-center justify-end gap-3 overflow-x-auto">
+            <div className="-mx-1 mt-2 flex flex-row items-center justify-end gap-3 overflow-x-auto px-1 py-1 sm:mx-0 sm:px-0 sm:pb-0 sm:pt-2">
               {editingUser && (
                 <DropdownMenu modal={false} open={isActionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                   <DropdownMenuTrigger asChild>
