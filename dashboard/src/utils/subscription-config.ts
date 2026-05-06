@@ -4,6 +4,7 @@ export type SubscriptionContentFormat = 'links' | 'links_base64' | 'xray' | 'wir
 
 const WIREGUARD_PROTOCOL = 'wireguard://'
 const TEXT_FILE_MIME_TYPE = 'text/plain;charset=utf-8'
+const WIREGUARD_CONFIG_MIME_TYPE = 'application/octet-stream'
 
 const safeDecodeURIComponent = (value: string) => {
   try {
@@ -295,6 +296,7 @@ export const getWireGuardDownloadPayload = (value: string) => {
   return {
     content,
     fileName: buildWireGuardDownloadFileName(value),
+    mimeType: WIREGUARD_CONFIG_MIME_TYPE,
   }
 }
 
