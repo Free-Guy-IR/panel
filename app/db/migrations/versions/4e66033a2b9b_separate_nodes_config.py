@@ -44,6 +44,7 @@ migration_settings = MigrationSettings()
 
 
 base_xray = {
+    "policy": {"levels": {"0": {"statsUserOnline": True}}},
     "log": {"loglevel": "warning"},
     "inbounds": [
         {
