@@ -554,7 +554,7 @@ export default function UserTemplateModal({ isDialogOpen, onOpenChange, form, ed
                   control={form.control}
                   name="reset_usages"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="flex flex-row items-center justify-between space-y-0 rounded-lg border p-4">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">
                           {t('templates.resetUsages', {
