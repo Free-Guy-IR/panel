@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from fastapi import status
 
-from app.models.settings import ConfigFormat, SubRule
+from app.models.settings import ConfigFormat, SubRule, Subscription
 from app.operation.subscription import SubscriptionOperation
 from app.utils import jwt as jwt_utils
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
@@ -1107,6 +1107,17 @@ def test_format_rule_response_headers_supports_strings_and_json():
 
     assert headers["x-subheader"] == "Hello alice"
     assert headers["x-json"] == '{"enabled":true,"count":2}'
+
+
+def test_format_announce_supports_dynamic_variables():
+    sub_settings = Subscription(rules=[], announce="Hello {USERNAME}, {DATA_LEFT} left")
+
+    announce = SubscriptionOperation._format_announce(
+        sub_settings,
+        {"USERNAME": "alice", "DATA_LEFT": "1 GB"},
+    )
+
+    assert announce == "Hello alice, 1 GB left"
 
 
 def test_detect_client_rule_matches_user_agent():

@@ -120,6 +120,17 @@ class SubscriptionOperation(BaseOperation):
             return profile_title
 
     @staticmethod
+    def _format_announce(sub_settings: SubSettings, format_variables: dict) -> str:
+        """Format announcement text with dynamic variables, falling back to raw text if needed."""
+        if not sub_settings.announce:
+            return ""
+
+        try:
+            return sub_settings.announce.format_map(format_variables)
+        except (ValueError, KeyError):
+            return sub_settings.announce
+
+    @staticmethod
     def create_response_headers(
         user: UsersResponseWithInbounds,
         request_url: str,
@@ -141,6 +152,7 @@ class SubscriptionOperation(BaseOperation):
         # Format profile title with dynamic variables
         format_variables = setup_format_variables(user)
         formatted_title = SubscriptionOperation._format_profile_title(user, format_variables, sub_settings)
+        formatted_announce = SubscriptionOperation._format_announce(sub_settings, format_variables)
 
         # Prefer admin's support_url over subscription settings
         support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
@@ -155,7 +167,7 @@ class SubscriptionOperation(BaseOperation):
             "profile-title": encode_title(formatted_title),
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
-            "announce": encode_title(sub_settings.announce),
+            "announce": encode_title(formatted_announce),
             "announce-url": sub_settings.announce_url,
         }
         if extra_headers:
@@ -207,10 +219,11 @@ class SubscriptionOperation(BaseOperation):
         """Create response headers for /info endpoint with only support-url, announce, and announce-url."""
         # Prefer admin's support_url over subscription settings
         support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
+        formatted_announce = SubscriptionOperation._format_announce(sub_settings, setup_format_variables(user))
 
         headers = {
             "support-url": support_url,
-            "announce": encode_title(sub_settings.announce),
+            "announce": encode_title(formatted_announce),
             "announce-url": sub_settings.announce_url,
         }
 
@@ -267,6 +280,7 @@ class SubscriptionOperation(BaseOperation):
                 links = conf.splitlines()
 
             format_variables = await self.get_format_variables(user)
+            formatted_announce = self._format_announce(sub_settings, format_variables)
 
             return HTMLResponse(
                 render_template(
@@ -274,7 +288,7 @@ class SubscriptionOperation(BaseOperation):
                     {
                         "user": user,
                         "links": links,
-                        "announce": sub_settings.announce,
+                        "announce": formatted_announce,
                         "announce_url": sub_settings.announce_url,
                         "apps": self._make_apps_import_urls(sub_settings.applications, format_variables),
                     },
