@@ -39,6 +39,7 @@ from .general import (
 from .group import get_groups_by_ids
 
 _USER_AGENT_MAX_LEN = UserSubscriptionUpdate.__table__.columns.user_agent.type.length or 512
+_SUBSCRIPTION_UPDATE_IP_MAX_LEN = UserSubscriptionUpdate.__table__.columns.ip.type.length or 64
 
 
 def _build_user_select_stmt(
@@ -1140,19 +1141,21 @@ async def bulk_revoke_user_sub(db: AsyncSession, users: list[User]) -> list[User
     return users
 
 
-async def user_sub_update(db: AsyncSession, user_id: User, user_agent: str) -> User:
+async def user_sub_update(db: AsyncSession, user_id: int, user_agent: str, ip: str | None = None) -> None:
     """
     Updates the user's subscription details.
 
     Args:
         db (AsyncSession): Database session.
-        user_id (User): The user id whose subscription is to be updated.
+        user_id (int): The user id whose subscription is to be updated.
         user_agent (str): The user agent string.
+        ip (str | None): The client IP address.
 
     """
     # Clamp to column length; some clients send very long strings (e.g. encoded configs) as User-Agent.
     sanitized_user_agent = (user_agent or "")[:_USER_AGENT_MAX_LEN]
-    agent = UserSubscriptionUpdate(user_id=user_id, user_agent=sanitized_user_agent)
+    sanitized_ip = (ip or "")[:_SUBSCRIPTION_UPDATE_IP_MAX_LEN] or None
+    agent = UserSubscriptionUpdate(user_id=user_id, user_agent=sanitized_user_agent, ip=sanitized_ip)
     db.add(agent)
     await db.commit()
 

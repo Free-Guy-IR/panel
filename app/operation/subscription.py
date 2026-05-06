@@ -253,6 +253,7 @@ class SubscriptionOperation(BaseOperation):
         token: str,
         accept_header: str = "",
         user_agent: str = "",
+        ip: str | None = None,
         request_url: str = "",
     ):
         """
@@ -301,7 +302,7 @@ class SubscriptionOperation(BaseOperation):
                 await self.raise_error(message="Client not supported", code=406)
 
             # Update user subscription info
-            await user_sub_update(db, db_user.id, user_agent)
+            await user_sub_update(db, db_user.id, user_agent, ip=ip)
             conf, media_type = await self.fetch_config(user, client_type)
 
             # If disable_sub_template is True and it's a browser request, use inline to view instead of download
@@ -397,7 +398,9 @@ class SubscriptionOperation(BaseOperation):
         db_user = await self.get_validated_user_by_id(db, user_id, admin)
         return await self.user_subscription_by_user(db_user, client_type, request_url)
 
-    async def user_subscription_info(self, db: AsyncSession, token: str) -> tuple[SubscriptionUserResponse, dict]:
+    async def user_subscription_info(
+        self, db: AsyncSession, token: str, ip: str | None = None
+    ) -> tuple[SubscriptionUserResponse, dict]:
         """Retrieves detailed information about the user's subscription."""
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token=token)
@@ -409,6 +412,7 @@ class SubscriptionOperation(BaseOperation):
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
         user_response = SubscriptionUserResponse.model_validate(db_user)
+        user_response.ip = ip
 
         return user_response, response_headers
 

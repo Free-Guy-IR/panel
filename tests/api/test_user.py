@@ -308,13 +308,32 @@ def test_user_sub_update_user_agent(access_token):
     try:
         url = user["subscription_url"]
         user_agent = "v2rayNG/1.9.46 This is PasarGuard Test"
-        client.get(url, headers={"User-Agent": user_agent})
+        ip = "203.0.113.10"
+        client.get(url, headers={"User-Agent": user_agent, "X-Forwarded-For": ip})
         response = client.get(
             f"/api/user/{user['username']}/sub_update",
             headers={"Authorization": f"Bearer {access_token}"},
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["updates"][0]["user_agent"] == user_agent
+        assert response.json()["updates"][0]["ip"] == ip
+    finally:
+        delete_user(access_token, user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_user_subscription_info_returns_request_ip(access_token):
+    core, groups = setup_groups(access_token, 1)
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_subscription_info_ip")},
+    )
+    try:
+        ip = "198.51.100.7"
+        response = client.get(f"{user['subscription_url']}/info", headers={"X-Forwarded-For": ip})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["ip"] == ip
     finally:
         delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)
