@@ -326,6 +326,7 @@ export default function HostsList({ data, onAddHost, isDialogOpen, onSubmit, edi
             mtu: host.wireguard_overrides.mtu ?? undefined,
             reserved: host.wireguard_overrides.reserved ?? '',
             keepalive_seconds: host.wireguard_overrides.keepalive_seconds ?? undefined,
+            dns: host.wireguard_overrides.dns ?? [],
           }
         : undefined,
     }

@@ -213,6 +213,8 @@ class BaseSubscription:
             payload["keepalive"] = inbound.wireguard_keepalive
         if inbound.wireguard_reserved:
             payload["reserved"] = inbound.wireguard_reserved
+        if inbound.wireguard_dns:
+            payload["dns"] = ",".join(inbound.wireguard_dns)
         if inbound.wireguard_pre_shared_key:
             payload["presharedkey"] = inbound.wireguard_pre_shared_key
 
