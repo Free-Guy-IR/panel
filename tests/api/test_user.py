@@ -496,6 +496,59 @@ def test_wireguard_subscription_outputs_are_consistent(access_token):
         delete_core(access_token, core["id"])
 
 
+def test_wireguard_disabled_skips_peer_ip_allocation_and_subscription_outputs(access_token, monkeypatch):
+    monkeypatch.setattr("config.wireguard_settings.enabled", False)
+
+    interface_private_key, _ = generate_wireguard_keypair()
+    interface_name = unique_name("wg_disabled")
+    endpoint = "198.51.100.20"
+
+    core = create_core(
+        access_token,
+        name=unique_name("wireguard_disabled_core"),
+        config={
+            "interface_name": interface_name,
+            "private_key": interface_private_key,
+            "listen_port": 51820,
+            "address": ["10.40.0.1/24"],
+        },
+        type="wg",
+        fallbacks=[],
+    )
+    host_response = client.post(
+        "/api/host",
+        headers=auth_headers(access_token),
+        json={
+            "remark": "Disabled WG {USERNAME}",
+            "address": [endpoint],
+            "port": 51820,
+            "inbound_tag": interface_name,
+            "priority": 1,
+        },
+    )
+    assert host_response.status_code == status.HTTP_201_CREATED
+    host_id = host_response.json()["id"]
+    group = create_group(access_token, name=unique_name("wg_disabled_group"), inbound_tags=[interface_name])
+    user = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("wg_disabled_user")})
+
+    try:
+        assert user["proxy_settings"]["wireguard"]["private_key"]
+        assert user["proxy_settings"]["wireguard"]["public_key"]
+        assert user["proxy_settings"]["wireguard"]["peer_ips"] == []
+
+        links_response = client.get(f"{user['subscription_url']}/links")
+        wireguard_response = client.get(f"{user['subscription_url']}/wireguard")
+
+        assert links_response.status_code == status.HTTP_200_OK
+        assert "wireguard://" not in links_response.text
+        assert wireguard_response.status_code == status.HTTP_406_NOT_ACCEPTABLE
+    finally:
+        delete_user(access_token, user["username"])
+        delete_group(access_token, group["id"])
+        client.delete(f"/api/host/{host_id}", headers=auth_headers(access_token))
+        delete_core(access_token, core["id"])
+
+
 def test_xray_subscription_includes_wireguard_outbound(access_token):
     interface_private_key, _ = generate_wireguard_keypair()
     interface_public_key = get_wireguard_public_key(interface_private_key)
