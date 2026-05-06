@@ -1304,7 +1304,10 @@
     "noClientsDesc": "此用户尚未访问过其订阅",
     "knownClient": "已知",
     "unknown": "未知",
-    "error": "加载订阅客户端失败"
+    "error": "加载订阅客户端失败",
+    "ipAddress": "IP 地址",
+    "copyIp": "点击复制 IP 地址",
+    "ipCopied": "IP 地址已复制到剪贴板"
   },
   "userAllIPs": {
     "title": "IP 地址 - {{username}}",

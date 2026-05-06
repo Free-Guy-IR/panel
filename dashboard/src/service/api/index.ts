@@ -830,6 +830,7 @@ export interface UserTemplateCreate {
 export interface UserSubscriptionUpdateSchema {
   created_at: string
   user_agent: string
+  ip?: string | null
 }
 
 export interface UserSubscriptionUpdateList {

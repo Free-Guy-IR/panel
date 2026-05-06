@@ -1322,7 +1322,10 @@
     "noClientsDesc": "This user has not accessed their subscription yet",
     "knownClient": "Known",
     "unknown": "Unknown",
-    "error": "Failed to load subscription clients"
+    "error": "Failed to load subscription clients",
+    "ipAddress": "IP Address",
+    "copyIp": "Click to copy IP address",
+    "ipCopied": "IP address copied to clipboard"
   },
   "userAllIPs": {
     "title": "IP Addresses - {{username}}",
