@@ -29,7 +29,7 @@ import {
   setUsersShowSelectionCheckbox,
 } from '@/utils/userPreferenceStorage'
 import { bytesToFormGigabytes } from '@/utils/formatByte'
-import { normalizeExpireForEditForm } from '@/utils/userEditDateUtils'
+import { normalizeDatePickerValueForEditForm } from '@/utils/userEditDateUtils'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -223,12 +223,12 @@ const UsersTable = memo(() => {
       username: selectedUser?.username,
       status: selectedUser?.status === 'active' || selectedUser?.status === 'on_hold' || selectedUser?.status === 'disabled' ? selectedUser?.status : 'active',
       data_limit: selectedUser?.data_limit ? bytesToFormGigabytes(Number(selectedUser.data_limit)) : undefined,
-      expire: normalizeExpireForEditForm(selectedUser?.expire),
+      expire: normalizeDatePickerValueForEditForm(selectedUser?.expire),
       note: selectedUser?.note || '',
       data_limit_reset_strategy: selectedUser?.data_limit_reset_strategy || undefined,
       group_ids: selectedUser?.group_ids || [],
       on_hold_expire_duration: selectedUser?.on_hold_expire_duration || undefined,
-      on_hold_timeout: selectedUser?.on_hold_timeout || undefined,
+      on_hold_timeout: normalizeDatePickerValueForEditForm(selectedUser?.on_hold_timeout),
       proxy_settings: selectedUser?.proxy_settings || undefined,
       next_plan: selectedUser?.next_plan
         ? {
@@ -247,12 +247,12 @@ const UsersTable = memo(() => {
         username: selectedUser.username,
         status: selectedUser.status === 'active' || selectedUser.status === 'on_hold' || selectedUser.status === 'disabled' ? selectedUser.status : 'active',
         data_limit: selectedUser.data_limit ? bytesToFormGigabytes(Number(selectedUser.data_limit)) : 0,
-        expire: normalizeExpireForEditForm(selectedUser.expire),
+        expire: normalizeDatePickerValueForEditForm(selectedUser.expire),
         note: selectedUser.note || '',
         data_limit_reset_strategy: selectedUser.data_limit_reset_strategy || undefined,
         group_ids: selectedUser.group_ids || [],
         on_hold_expire_duration: selectedUser.on_hold_expire_duration || undefined,
-        on_hold_timeout: selectedUser.on_hold_timeout || undefined,
+        on_hold_timeout: normalizeDatePickerValueForEditForm(selectedUser.on_hold_timeout),
         proxy_settings: selectedUser.proxy_settings || undefined,
         next_plan: selectedUser.next_plan
           ? {

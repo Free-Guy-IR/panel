@@ -36,7 +36,8 @@ import {
   type UserResponse,
 } from '@/service/api'
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
-import { formatOffsetDateTime, parseDateInput, toDisplayDate, toUnixSeconds } from '@/utils/dateTimeParsing'
+import { normalizeDatePickerValueForSubmit, serializeDatePickerValue, toDatePickerDisplayDate } from '@/utils/datePickerUtils'
+import { parseDateInput } from '@/utils/dateTimeParsing'
 import { bytesToFormGigabytes, formatBytes, gbToBytes } from '@/utils/formatByte'
 import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
 import { generateWireGuardKeyPair, getWireGuardPublicKey } from '@/utils/wireguard'
@@ -58,8 +59,6 @@ interface UserModalProps {
   editingUserData?: any // The user data object when editing
   onSuccessCallback?: (user: UserResponse) => void
 }
-
-const isDate = (v: unknown): v is Date => typeof v === 'object' && v !== null && v instanceof Date
 
 // Add template validation schema
 const templateUserSchema = z.object({
@@ -104,8 +103,7 @@ const ExpiryDateField = ({
   const handleDateChange = React.useCallback(
     (date: Date | undefined) => {
       if (date) {
-        // Use the same logic as centralized DatePicker
-        const value = useUtcTimestamp ? toUnixSeconds(date) : formatOffsetDateTime(date)
+        const value = serializeDatePickerValue(date, { useUtcTimestamp })
         field.onChange(value)
         handleFieldChange(fieldName, value)
       } else {
@@ -395,6 +393,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   const onHoldExpireDurationInputRef = React.useRef<string>('')
   const nextPlanExpireInputRef = React.useRef<string>('')
   const nextPlanDataLimitInputRef = React.useRef<string>('')
+  const previousStatusRef = React.useRef(status)
 
   const handleModalOpenChange = React.useCallback(
     (open: boolean) => {
@@ -459,42 +458,8 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   const onHoldValue = form.watch('on_hold_timeout')
   const dataLimitValue = form.watch('data_limit')
 
-  let displayDate: Date | null = null
-  let onHoldDisplayDate: Date | null = null
-
-  // Handle various formats of expire value using the same logic as OnlineBadge/OnlineStatus
-  const parseDateValue = (value: unknown): Date | null => {
-    if (isDate(value)) {
-      return value
-    } else if (typeof value === 'string') {
-      if (value === '') {
-        return null
-      } else {
-        try {
-          const trimmedValue = value.trim()
-          const dayjsDate = parseDateInput(trimmedValue)
-          if (dayjsDate.isValid()) {
-            return toDisplayDate(trimmedValue)
-          }
-        } catch (error) {
-          // Ignore invalid values and return null.
-        }
-      }
-    } else if (typeof value === 'number') {
-      try {
-        const dayjsDate = parseDateInput(value)
-        if (dayjsDate.isValid()) {
-          return toDisplayDate(value)
-        }
-      } catch (error) {
-        // Ignore invalid values and return null.
-      }
-    }
-    return null
-  }
-
-  displayDate = parseDateValue(expireValue)
-  onHoldDisplayDate = parseDateValue(onHoldValue)
+  const displayDate = toDatePickerDisplayDate(expireValue)
+  const onHoldDisplayDate = toDatePickerDisplayDate(onHoldValue)
 
   // Query client for data refetching
   const queryClient = useQueryClient()
@@ -633,16 +598,25 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   }, [selectedTemplateId, form, t])
 
   useEffect(() => {
+    const previousStatus = previousStatusRef.current
+
     if (status === 'on_hold') {
       form.setValue('expire', undefined)
       form.clearErrors('expire')
     } else {
+      if (previousStatus === 'on_hold') {
+        form.setValue('expire', undefined)
+        form.clearErrors('expire')
+        setExpireCalendarOpen(false)
+      }
       onHoldExpireDurationInputRef.current = ''
       form.setValue('on_hold_expire_duration', undefined)
       form.clearErrors('on_hold_expire_duration')
       form.setValue('on_hold_timeout', undefined)
       form.clearErrors('on_hold_timeout')
     }
+
+    previousStatusRef.current = status
   }, [status, form])
 
   useEffect(() => {
@@ -707,29 +681,6 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
       setNextPlanManuallyDisabled(false)
     }
   }, [isDialogOpen, editingUser, hasNextPlanData, nextPlanManuallyDisabled, form, nextPlanUserTemplateId, nextPlanExpire, nextPlanDataLimit, nextPlanAddRemainingTraffic, editingUserData])
-
-  // Helper to convert expire field to needed schema using the same logic as other components
-  function normalizeExpire(expire: Date | string | number | null | undefined, useUtcTimestamp: boolean = false): string | number | undefined {
-    if (expire === '') return 0
-    if (expire === undefined || expire === null) return undefined
-
-    // For Date objects, convert to appropriate format
-    if (expire instanceof Date) {
-      return useUtcTimestamp ? toUnixSeconds(expire) : formatOffsetDateTime(expire)
-    }
-
-    // For strings and numbers, normalize via centralized parser.
-    try {
-      const dayjsDate = parseDateInput(expire)
-      if (dayjsDate.isValid()) {
-        return useUtcTimestamp ? toUnixSeconds(expire) : formatOffsetDateTime(expire)
-      }
-    } catch (error) {
-      // If dayjs parsing fails, return undefined
-    }
-
-    return undefined
-  }
 
   // Helper to clear group selection
   const clearGroups = () => form.setValue('group_ids', [])
@@ -1017,13 +968,14 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         const preparedValues = {
           ...valuesWithoutNextPlan,
           data_limit: typeof values.data_limit === 'string' ? parseFloat(values.data_limit) : values.data_limit,
-          on_hold_expire_duration: values.on_hold_expire_duration
-            ? typeof values.on_hold_expire_duration === 'string'
-              ? parseFloat(values.on_hold_expire_duration)
-              : values.on_hold_expire_duration
-            : undefined,
-          expire: status === 'on_hold' ? undefined : normalizeExpire(values.expire),
-          on_hold_timeout: status === 'on_hold' ? normalizeExpire(values.on_hold_timeout) : undefined,
+          on_hold_expire_duration:
+            status === 'on_hold' && values.on_hold_expire_duration
+              ? typeof values.on_hold_expire_duration === 'string'
+                ? parseFloat(values.on_hold_expire_duration)
+                : values.on_hold_expire_duration
+              : undefined,
+          expire: status === 'on_hold' ? undefined : normalizeDatePickerValueForSubmit(values.expire),
+          on_hold_timeout: status === 'on_hold' ? normalizeDatePickerValueForSubmit(values.on_hold_timeout) : undefined,
           group_ids: Array.isArray(values.group_ids) ? values.group_ids : [],
           status: values.status,
         }
