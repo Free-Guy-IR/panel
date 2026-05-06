@@ -15,15 +15,6 @@ router = APIRouter(tags=["Subscription"], prefix=f"/{subscription_env_settings.p
 subscription_operator = SubscriptionOperation(operator_type=OperatorType.API)
 
 
-def get_client_ip(request: Request) -> str | None:
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return None
-
-
 @router.get("/{token}/")
 @router.get("/{token}", include_in_schema=False)
 async def user_subscription(
@@ -38,7 +29,7 @@ async def user_subscription(
         token=token,
         accept_header=request.headers.get("Accept", ""),
         user_agent=user_agent,
-        ip=get_client_ip(request),
+        ip=request.client.host if request.client else None,
         request_url=str(request.url),
     )
 
@@ -47,7 +38,7 @@ async def user_subscription(
 async def user_subscription_info(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Retrieves detailed information about the user's subscription."""
     user_data, response_headers = await subscription_operator.user_subscription_info(
-        db, token=token, ip=get_client_ip(request)
+        db, token=token, ip=request.client.host if request.client else None
     )
     return JSONResponse(content=user_data.model_dump(mode="json"), headers=response_headers)
 
