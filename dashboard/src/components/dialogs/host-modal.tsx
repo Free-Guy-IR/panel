@@ -43,6 +43,8 @@ const statusOptions = [
   { value: UserStatus.on_hold, label: 'hostsDialog.status.onHold' },
 ] as const
 
+const XRAY_TEMPLATE_INBOUND_DEFAULT_VALUE = '__xray_template_inbound_default__'
+
 const createHostFormDefaults = (): HostFormValues => ({
   ...hostFormDefaultValues,
   address: [],
@@ -623,12 +625,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     () => (xrayTemplateData?.templates ?? []).filter(template => !template.is_default),
     [xrayTemplateData?.templates],
   )
-  const isXrayTemplateSelectDisabled = isLoadingXrayTemplates || xrayTemplates.length === 0
+  const isXrayTemplateSelectDisabled = isLoadingXrayTemplates
   const xrayTemplatePlaceholder = isLoadingXrayTemplates
     ? t('loading', { defaultValue: 'Loading...' })
-    : xrayTemplates.length === 0
-      ? t('clientTemplates.noTemplates')
-      : t('hostsDialog.selectXrayTemplate')
+    : t('hostsDialog.selectXrayTemplate')
 
   // No automatic refresh when dialog opens - only fetch on specific actions
 
@@ -873,8 +873,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                       </div>
                       <Select
                         dir={dir}
-                        value={field.value != null ? String(field.value) : ''}
-                        onValueChange={value => field.onChange(value ? Number.parseInt(value, 10) : undefined)}
+                        value={field.value != null ? String(field.value) : XRAY_TEMPLATE_INBOUND_DEFAULT_VALUE}
+                        onValueChange={value =>
+                          field.onChange(value === XRAY_TEMPLATE_INBOUND_DEFAULT_VALUE ? undefined : Number.parseInt(value, 10))
+                        }
                         disabled={isXrayTemplateSelectDisabled}
                       >
                         <FormControl>
@@ -892,6 +894,9 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             </SelectItem>
                           ) : (
                             <>
+                              <SelectItem className="cursor-pointer px-4" value={XRAY_TEMPLATE_INBOUND_DEFAULT_VALUE}>
+                                {t('hostsDialog.inboundDefault')}
+                              </SelectItem>
                               {!hasSelectedTemplate && field.value != null ? (
                                 <SelectItem className="px-4" value={String(field.value)}>
                                   {t('hostsDialog.unknownXrayTemplate', { id: field.value })}
