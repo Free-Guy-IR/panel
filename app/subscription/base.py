@@ -219,6 +219,8 @@ class BaseSubscription:
             payload["presharedkey"] = inbound.wireguard_pre_shared_key
 
         payload = self._normalize_and_remove_none_values(payload)
+        uri_payload = dict(payload)
+        uri_payload.pop("dns", None)
 
         return {
             "remark": validated_remark,
@@ -227,6 +229,6 @@ class BaseSubscription:
             "payload": payload,
             "uri": (
                 f"wireguard://{quote(private_key, safe='')}@{address}:{inbound.port}/"
-                f"?{urlencode(payload)}#{quote(validated_remark)}"
+                f"?{urlencode(uri_payload)}#{quote(validated_remark)}"
             ),
         }
