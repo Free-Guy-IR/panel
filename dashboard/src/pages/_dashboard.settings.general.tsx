@@ -24,7 +24,6 @@ const generalSettingsSchema = z.object({
 })
 
 type GeneralSettingsFormInput = z.input<typeof generalSettingsSchema>
-type GeneralSettingsStringField = 'default_flow' | 'default_method'
 
 export default function General() {
   const { t } = useTranslation()
@@ -152,7 +151,7 @@ export default function General() {
     )
   }
 
-  const clearField = (field: GeneralSettingsStringField) => {
+  const clearField = (field: keyof GeneralSettingsFormInput) => {
     return (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
       e.stopPropagation()
@@ -231,7 +230,6 @@ export default function General() {
                 )}
               />
             </div>
-
           </div>
 
           <Separator className="my-3" />

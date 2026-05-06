@@ -22,6 +22,8 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { cn } from '@/lib/utils'
 import {
+  getGeneralSettings,
+  getGetGeneralSettingsQueryKey,
   getGetGroupsSimpleQueryKey,
   useCreateUser,
   useCreateUserFromTemplate,
@@ -39,7 +41,7 @@ import { parseDateInput } from '@/utils/dateTimeParsing'
 import { bytesToFormGigabytes, formatBytes, gbToBytes } from '@/utils/formatByte'
 import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
 import { generateWireGuardKeyPair, getWireGuardPublicKey } from '@/utils/wireguard'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarClock, CalendarPlus, ChevronDown, EllipsisVertical, Info, Layers, Link2Off, ListStart, Lock, Network, PieChart, RefreshCcw, Group, Users, Pencil, UserRoundPlus } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
@@ -491,6 +493,13 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
       },
     },
   )
+
+  const { data: generalSettings } = useQuery({
+    queryKey: getGetGeneralSettingsQueryKey(),
+    queryFn: () => getGeneralSettings(),
+    enabled: isDialogOpen,
+    refetchOnMount: true,
+  })
 
   const syncUserCacheFromApiResponse = (user: UserResponse, options?: { allowInsert?: boolean; notifySuccessCallback?: boolean }) => {
     upsertUserInUsersCache(queryClient, user, { allowInsert: options?.allowInsert ?? false })
