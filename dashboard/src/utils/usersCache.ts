@@ -2,6 +2,7 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import type { GetUsersParams, UserResponse, UsersResponse } from '@/service/api'
 
 const USERS_QUERY_KEY = '/api/users'
+const ONLINE_USERS_WINDOW_MS = 2 * 60 * 1000
 
 const toNumber = (value: unknown): number | undefined => {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -148,6 +149,29 @@ const matchesUserFilters = (user: UserResponse, params?: GetUsersParams): boolea
     }
   }
 
+  if (params.online_after) {
+    const onlineAt = toTimestamp(user.online_at)
+    const onlineAfter = toTimestamp(params.online_after)
+    if (!onlineAt || onlineAt < onlineAfter) {
+      return false
+    }
+  }
+
+  if (params.online_before) {
+    const onlineAt = toTimestamp(user.online_at)
+    const onlineBefore = toTimestamp(params.online_before)
+    if (!onlineAt || onlineAt > onlineBefore) {
+      return false
+    }
+  }
+
+  if (params.online) {
+    const onlineAt = toTimestamp(user.online_at)
+    if (!onlineAt || onlineAt < Date.now() - ONLINE_USERS_WINDOW_MS) {
+      return false
+    }
+  }
+
   return true
 }
 
@@ -158,7 +182,7 @@ const compareBySort = (a: UserResponse, b: UserResponse, sort?: string | null): 
 
   let comparison = 0
 
-  if (field === 'created_at' || field === 'edit_at' || field === 'expire') {
+  if (field === 'created_at' || field === 'edit_at' || field === 'expire' || field === 'online_at') {
     const aValue = toTimestamp(getSortableUserValue(a, field))
     const bValue = toTimestamp(getSortableUserValue(b, field))
     comparison = aValue - bValue

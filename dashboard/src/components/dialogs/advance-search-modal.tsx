@@ -33,6 +33,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
   const { t } = useTranslation()
   const noDataLimitOnly = form.watch('no_data_limit')
   const noExpireOnly = form.watch('no_expire')
+  const onlineOnly = form.watch('online')
 
   const { data: groupsData } = useGetGroupsSimple({ all: true })
 
@@ -320,6 +321,81 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                 if (checked) {
                                   form.setValue('expire_after', undefined, { shouldDirty: true })
                                   form.setValue('expire_before', undefined, { shouldDirty: true })
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="online_after"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <FormControl>
+                              <div className={cn((isApplying || onlineOnly) && 'pointer-events-none opacity-60')}>
+                                <DatePicker
+                                  mode="single"
+                                  date={field.value}
+                                  onDateChange={field.onChange}
+                                  label={t('advanceSearch.onlineAfter', { defaultValue: 'Online after' })}
+                                  placeholder={t('advanceSearch.onlineAfterPlaceholder', { defaultValue: 'Select start date' })}
+                                  minDate={new Date('1900-01-01')}
+                                  className="[&_label]:text-sm"
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="online_before"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <FormControl>
+                              <div className={cn((isApplying || onlineOnly) && 'pointer-events-none opacity-60')}>
+                                <DatePicker
+                                  mode="single"
+                                  date={field.value}
+                                  onDateChange={field.onChange}
+                                  label={t('advanceSearch.onlineBefore', { defaultValue: 'Online before' })}
+                                  placeholder={t('advanceSearch.onlineBeforePlaceholder', { defaultValue: 'Select end date' })}
+                                  minDate={new Date('1900-01-01')}
+                                  className="[&_label]:text-sm"
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="online"
+                      render={({ field }) => (
+                        <FormItem className="flex w-full items-start justify-between gap-4 rounded-md border p-4">
+                          <div className="space-y-1">
+                            <FormLabel>{t('advanceSearch.online', { defaultValue: 'Only online users' })}</FormLabel>
+                            <FormDescription>{t('advanceSearch.onlineDescription', { defaultValue: 'Shows users active in the current online window.' })}</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              disabled={isApplying}
+                              onCheckedChange={checked => {
+                                field.onChange(checked)
+                                if (checked) {
+                                  form.setValue('online_after', undefined, { shouldDirty: true })
+                                  form.setValue('online_before', undefined, { shouldDirty: true })
                                 }
                               }}
                             />

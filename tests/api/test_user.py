@@ -11,13 +11,15 @@ import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from fastapi import status
+from sqlalchemy import update
 
+from app.db.models import User
 from app.models.settings import ConfigFormat, SubRule, Subscription
 from app.operation.subscription import SubscriptionOperation
 from app.utils import jwt as jwt_utils
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
 from app.utils.jwt import create_subscription_token, get_secret_key, get_subscription_payload
-from tests.api import client
+from tests.api import TestSession, client
 from tests.api.helpers import (
     auth_headers,
     create_client_template,
@@ -45,6 +47,15 @@ def cleanup_groups(access_token: str, core: dict, groups: list[dict]):
     for group in groups:
         delete_group(access_token, group["id"])
     delete_core(access_token, core["id"])
+
+
+def set_user_online_at(username: str, online_at: datetime) -> None:
+    async def _set_online_at():
+        async with TestSession() as session:
+            await session.execute(update(User).where(User.username == username).values(online_at=online_at))
+            await session.commit()
+
+    asyncio.run(_set_online_at())
 
 
 def extract_wireguard_config_bodies(response) -> list[str]:
@@ -319,6 +330,93 @@ def test_users_get_filters_by_expire_date_range(access_token):
     finally:
         delete_user(access_token, early_user["username"])
         delete_user(access_token, late_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_users_get_filters_by_online_date_range(access_token):
+    core, groups = setup_groups(access_token, 1)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    recent_online_at = now - timedelta(days=2)
+    old_online_at = now - timedelta(days=20)
+    recent_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_online_recent")},
+    )
+    old_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_online_old")},
+    )
+    never_online_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_online_never")},
+    )
+
+    try:
+        set_user_online_at(recent_user["username"], recent_online_at)
+        set_user_online_at(old_user["username"], old_online_at)
+
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={
+                "online_after": (now - timedelta(days=7)).isoformat(),
+                "online_before": now.isoformat(),
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert recent_user["username"] in listed_usernames
+        assert old_user["username"] not in listed_usernames
+        assert never_online_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, recent_user["username"])
+        delete_user(access_token, old_user["username"])
+        delete_user(access_token, never_online_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_users_get_filters_by_online_users(access_token):
+    core, groups = setup_groups(access_token, 1)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    online_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_online_current")},
+    )
+    offline_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_online_offline")},
+    )
+    never_online_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_online_missing")},
+    )
+
+    try:
+        set_user_online_at(online_user["username"], now - timedelta(seconds=30))
+        set_user_online_at(offline_user["username"], now - timedelta(minutes=5))
+
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={"online": True},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert online_user["username"] in listed_usernames
+        assert offline_user["username"] not in listed_usernames
+        assert never_online_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, online_user["username"])
+        delete_user(access_token, offline_user["username"])
+        delete_user(access_token, never_online_user["username"])
         cleanup_groups(access_token, core, groups)
 
 

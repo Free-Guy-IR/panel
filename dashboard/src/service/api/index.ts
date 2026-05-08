@@ -123,6 +123,9 @@ export type GetUsersParams = {
   data_limit_max?: number | null
   expire_after?: string | null
   expire_before?: string | null
+  online_after?: string | null
+  online_before?: string | null
+  online?: boolean
   no_data_limit?: boolean
   no_expire?: boolean
   load_sub?: boolean

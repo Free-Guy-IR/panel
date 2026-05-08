@@ -100,6 +100,9 @@ interface FiltersProps {
     data_limit_max?: number | null
     expire_after?: string | null
     expire_before?: string | null
+    online_after?: string | null
+    online_before?: string | null
+    online?: boolean
     no_data_limit?: boolean
     no_expire?: boolean
   }
@@ -309,7 +312,8 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
       Boolean(filters.no_data_limit)
     )
     const hasExpireDate = Boolean(filters.expire_after || filters.expire_before || filters.no_expire)
-    return (admin && admin.length > 0) || (group && group.length > 0) || (status !== undefined && status !== null) || hasDataLimit || hasExpireDate
+    const hasOnlineDate = Boolean(filters.online_after || filters.online_before || filters.online)
+    return (admin && admin.length > 0) || (group && group.length > 0) || (status !== undefined && status !== null) || hasDataLimit || hasExpireDate || hasOnlineDate
   }
 
   // Get the count of active advance filters
@@ -324,12 +328,14 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
       Boolean(filters.no_data_limit)
     )
     const hasExpireDate = Boolean(filters.expire_after || filters.expire_before || filters.no_expire)
+    const hasOnlineDate = Boolean(filters.online_after || filters.online_before || filters.online)
     let count = 0
     if (admin && admin.length > 0) count++
     if (group && group.length > 0) count++
     if (status !== undefined && status !== null) count++
     if (hasDataLimit) count++
     if (hasExpireDate) count++
+    if (hasOnlineDate) count++
     return count
   }
 

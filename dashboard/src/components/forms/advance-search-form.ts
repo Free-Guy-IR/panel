@@ -20,6 +20,7 @@ export const advanceSearchFormSchema = z
     show_selection_checkbox: z.boolean().default(false),
     no_data_limit: z.boolean().default(false),
     no_expire: z.boolean().default(false),
+    online: z.boolean().default(false),
     admin: z.array(z.string()).optional(),
     group: z.array(z.number()).optional(),
     status: z.enum(['0', 'active', 'on_hold', 'disabled', 'expired', 'limited']).default('0').optional(),
@@ -27,6 +28,8 @@ export const advanceSearchFormSchema = z
     data_limit_max: optionalNonNegativeNumber,
     expire_after: z.date().optional(),
     expire_before: z.date().optional(),
+    online_after: z.date().optional(),
+    online_before: z.date().optional(),
   })
   .superRefine((values, ctx) => {
     if (
@@ -52,6 +55,18 @@ export const advanceSearchFormSchema = z
         code: z.ZodIssueCode.custom,
         path: ['expire_before'],
         message: 'Expire-after date cannot be later than expire-before date.',
+      })
+    }
+
+    if (
+      values.online_after !== undefined &&
+      values.online_before !== undefined &&
+      values.online_after.getTime() > values.online_before.getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['online_before'],
+        message: 'Online-after date cannot be later than online-before date.',
       })
     }
   })

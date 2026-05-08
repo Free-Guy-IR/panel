@@ -40,6 +40,7 @@ from .group import get_groups_by_ids
 
 _USER_AGENT_MAX_LEN = UserSubscriptionUpdate.__table__.columns.user_agent.type.length or 512
 _SUBSCRIPTION_UPDATE_IP_MAX_LEN = UserSubscriptionUpdate.__table__.columns.ip.type.length or 64
+_ONLINE_USERS_WINDOW = timedelta(minutes=2)
 
 
 def _build_user_select_stmt(
@@ -290,6 +291,9 @@ async def get_users(
     data_limit_max: int | None = None,
     expire_after: datetime | None = None,
     expire_before: datetime | None = None,
+    online_after: datetime | None = None,
+    online_before: datetime | None = None,
+    online: bool = False,
     no_data_limit: bool = False,
     no_expire: bool = False,
     return_with_count: bool = False,
@@ -313,6 +317,9 @@ async def get_users(
         data_limit_max: Maximum user data limit in bytes.
         expire_after: Include users whose expire date is on or after this datetime.
         expire_before: Include users whose expire date is on or before this datetime.
+        online_after: Include users whose last online date is on or after this datetime.
+        online_before: Include users whose last online date is on or before this datetime.
+        online: Include only users who were online within the current online window.
         no_data_limit: Include only users with no data limit set.
         no_expire: Include only users with no expire date set.
         return_with_count: Whether to return total count.
@@ -362,6 +369,12 @@ async def get_users(
             filters.append(and_(User.expire.is_not(None), User.expire >= expire_after))
         if expire_before is not None:
             filters.append(and_(User.expire.is_not(None), User.expire <= expire_before))
+    if online_after is not None:
+        filters.append(and_(User.online_at.is_not(None), User.online_at >= online_after))
+    if online_before is not None:
+        filters.append(and_(User.online_at.is_not(None), User.online_at <= online_before))
+    if online:
+        filters.append(and_(User.online_at.is_not(None), User.online_at >= datetime.now(timezone.utc) - _ONLINE_USERS_WINDOW))
 
     if group_ids:
         filters.append(User.groups.any(Group.id.in_(group_ids)))

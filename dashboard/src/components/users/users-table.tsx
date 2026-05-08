@@ -101,6 +101,9 @@ const parseURLParams = (searchParams: URLSearchParams, defaultItemsPerPage: numb
   const dataLimitMax = parseOptionalPositiveNumber(searchParams.get('data_limit_max'))
   const expireAfter = parseOptionalDateString(searchParams.get('expire_after'))
   const expireBefore = parseOptionalDateString(searchParams.get('expire_before'))
+  const onlineAfter = parseOptionalDateString(searchParams.get('online_after'))
+  const onlineBefore = parseOptionalDateString(searchParams.get('online_before'))
+  const online = parseBooleanFlag(searchParams.get('online'))
   const noDataLimit = parseBooleanFlag(searchParams.get('no_data_limit'))
   const noExpire = parseBooleanFlag(searchParams.get('no_expire'))
 
@@ -117,6 +120,9 @@ const parseURLParams = (searchParams: URLSearchParams, defaultItemsPerPage: numb
     dataLimitMax: noDataLimit ? undefined : dataLimitMax,
     expireAfter: noExpire ? undefined : expireAfter,
     expireBefore: noExpire ? undefined : expireBefore,
+    onlineAfter: online ? undefined : onlineAfter,
+    onlineBefore: online ? undefined : onlineBefore,
+    online,
     noDataLimit,
     noExpire,
   }
@@ -155,6 +161,9 @@ const UsersTable = memo(() => {
         data_limit_max: toOptionalBytesFilter(urlParams.dataLimitMax),
         expire_after: urlParams.expireAfter,
         expire_before: urlParams.expireBefore,
+        online_after: urlParams.onlineAfter,
+        online_before: urlParams.onlineBefore,
+        online: urlParams.online || undefined,
         no_data_limit: urlParams.noDataLimit || undefined,
         no_expire: urlParams.noExpire || undefined,
       },
@@ -195,6 +204,9 @@ const UsersTable = memo(() => {
     data_limit_max?: number | null
     expire_after?: string | null
     expire_before?: string | null
+    online_after?: string | null
+    online_before?: string | null
+    online?: boolean
     no_data_limit?: boolean
     no_expire?: boolean
   }>(initialState.filters)
@@ -251,6 +263,15 @@ const UsersTable = memo(() => {
     if (filters.expire_before) {
       searchParams.set('expire_before', filters.expire_before)
     }
+    if (filters.online_after) {
+      searchParams.set('online_after', filters.online_after)
+    }
+    if (filters.online_before) {
+      searchParams.set('online_before', filters.online_before)
+    }
+    if (filters.online) {
+      searchParams.set('online', 'true')
+    }
     if (filters.no_data_limit) {
       searchParams.set('no_data_limit', 'true')
     }
@@ -258,7 +279,7 @@ const UsersTable = memo(() => {
       searchParams.set('no_expire', 'true')
     }
     updateURLParams(searchParams)
-  }, [currentPage, itemsPerPage, filters.sort, filters.search, filters.proxy_id, filters.is_protocol, filters.status, filters.admin, filters.group, filters.data_limit_min, filters.data_limit_max, filters.expire_after, filters.expire_before, filters.no_data_limit, filters.no_expire])
+  }, [currentPage, itemsPerPage, filters.sort, filters.search, filters.proxy_id, filters.is_protocol, filters.status, filters.admin, filters.group, filters.data_limit_min, filters.data_limit_max, filters.expire_after, filters.expire_before, filters.online_after, filters.online_before, filters.online, filters.no_data_limit, filters.no_expire])
 
   // Initialize advance search form from URL params
   const getInitialAdvanceSearchValues = (): AdvanceSearchFormValue => {
@@ -279,6 +300,9 @@ const UsersTable = memo(() => {
       data_limit_max: urlParams.dataLimitMax,
       expire_after: urlParams.expireAfter ? new Date(urlParams.expireAfter) : undefined,
       expire_before: urlParams.expireBefore ? new Date(urlParams.expireBefore) : undefined,
+      online_after: urlParams.onlineAfter ? new Date(urlParams.onlineAfter) : undefined,
+      online_before: urlParams.onlineBefore ? new Date(urlParams.onlineBefore) : undefined,
+      online: urlParams.online,
     }
   }
 
@@ -358,8 +382,11 @@ const UsersTable = memo(() => {
       advanceSearchForm.setValue('data_limit_max', filters.data_limit_max ? bytesToFormGigabytes(filters.data_limit_max) : undefined)
       advanceSearchForm.setValue('expire_after', filters.expire_after ? new Date(filters.expire_after) : undefined)
       advanceSearchForm.setValue('expire_before', filters.expire_before ? new Date(filters.expire_before) : undefined)
+      advanceSearchForm.setValue('online_after', filters.online_after ? new Date(filters.online_after) : undefined)
+      advanceSearchForm.setValue('online_before', filters.online_before ? new Date(filters.online_before) : undefined)
+      advanceSearchForm.setValue('online', Boolean(filters.online))
     }
-  }, [isAdvanceSearchOpen, filters.status, filters.admin, filters.group, filters.proxy_id, filters.is_protocol, filters.data_limit_min, filters.data_limit_max, filters.expire_after, filters.expire_before, filters.no_data_limit, filters.no_expire, showCreatedBy, showSelectionCheckbox, advanceSearchForm])
+  }, [isAdvanceSearchOpen, filters.status, filters.admin, filters.group, filters.proxy_id, filters.is_protocol, filters.data_limit_min, filters.data_limit_max, filters.expire_after, filters.expire_before, filters.online_after, filters.online_before, filters.online, filters.no_data_limit, filters.no_expire, showCreatedBy, showSelectionCheckbox, advanceSearchForm])
 
   const {
     data: usersData,
@@ -425,6 +452,16 @@ const UsersTable = memo(() => {
       if (urlParams.expireBefore !== filters.expire_before) {
         setFilters(prev => ({ ...prev, expire_before: urlParams.expireBefore }))
       }
+      if (urlParams.onlineAfter !== filters.online_after) {
+        setFilters(prev => ({ ...prev, online_after: urlParams.onlineAfter }))
+      }
+      if (urlParams.onlineBefore !== filters.online_before) {
+        setFilters(prev => ({ ...prev, online_before: urlParams.onlineBefore }))
+      }
+      const nextOnline = urlParams.online || undefined
+      if (nextOnline !== filters.online) {
+        setFilters(prev => ({ ...prev, online: nextOnline }))
+      }
       const nextNoDataLimit = urlParams.noDataLimit || undefined
       if (nextNoDataLimit !== filters.no_data_limit) {
         setFilters(prev => ({ ...prev, no_data_limit: nextNoDataLimit }))
@@ -437,7 +474,7 @@ const UsersTable = memo(() => {
 
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [currentPage, itemsPerPage, filters.sort, filters.search, filters.proxy_id, filters.is_protocol, filters.status, filters.admin, filters.group, filters.data_limit_min, filters.data_limit_max, filters.expire_after, filters.expire_before, filters.no_data_limit, filters.no_expire])
+  }, [currentPage, itemsPerPage, filters.sort, filters.search, filters.proxy_id, filters.is_protocol, filters.status, filters.admin, filters.group, filters.data_limit_min, filters.data_limit_max, filters.expire_after, filters.expire_before, filters.online_after, filters.online_before, filters.online, filters.no_data_limit, filters.no_expire])
 
   useEffect(() => {
     if (usersData && isFirstLoadRef.current) {
@@ -853,6 +890,9 @@ const UsersTable = memo(() => {
       data_limit_max: values.no_data_limit ? undefined : toOptionalBytesFilter(values.data_limit_max),
       expire_after: values.no_expire ? undefined : values.expire_after ? startOfDay(values.expire_after).toISOString() : undefined,
       expire_before: values.no_expire ? undefined : values.expire_before ? endOfDay(values.expire_before).toISOString() : undefined,
+      online: values.online || undefined,
+      online_after: values.online ? undefined : values.online_after ? startOfDay(values.online_after).toISOString() : undefined,
+      online_before: values.online ? undefined : values.online_before ? endOfDay(values.online_before).toISOString() : undefined,
       is_protocol: values.is_protocol,
       offset: 0,
     }
@@ -921,6 +961,7 @@ const UsersTable = memo(() => {
       show_selection_checkbox: showSelectionCheckbox,
       no_data_limit: false,
       no_expire: false,
+      online: false,
       admin: [],
       group: [],
       status: '0',
@@ -928,6 +969,8 @@ const UsersTable = memo(() => {
       data_limit_max: undefined,
       expire_after: undefined,
       expire_before: undefined,
+      online_after: undefined,
+      online_before: undefined,
     })
     setFilters(prev => ({
       ...prev,
@@ -938,6 +981,9 @@ const UsersTable = memo(() => {
       data_limit_max: undefined,
       expire_after: undefined,
       expire_before: undefined,
+      online_after: undefined,
+      online_before: undefined,
+      online: undefined,
       no_data_limit: undefined,
       no_expire: undefined,
       is_protocol: false,
@@ -960,6 +1006,9 @@ const UsersTable = memo(() => {
     filters.data_limit_max ||
     filters.expire_after ||
     filters.expire_before ||
+    filters.online_after ||
+    filters.online_before ||
+    filters.online ||
     filters.no_data_limit ||
     filters.no_expire
   )
