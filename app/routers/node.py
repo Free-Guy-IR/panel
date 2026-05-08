@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime as dt
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from PasarGuardNodeBridge import NodeAPIError
 from sse_starlette.sse import EventSourceResponse
 
@@ -25,7 +25,15 @@ from app.models.node import (
     UserIPList,
     UserIPListAll,
 )
-from app.models.stats import NodeRealtimeStats, NodeStatsList, NodeUsageStatsList, Period
+from app.models.stats import (
+    NodeRealtimeStats,
+    NodeStatsList,
+    NodeUsageStatsList,
+    Period,
+    UserCountMetric,
+    UserCountMetricStatsList,
+    validate_user_count_metric_scope,
+)
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
 from app.utils import responses
@@ -130,6 +138,34 @@ async def get_usage(
     """Retrieve usage statistics for nodes within a specified date range."""
     return await node_operator.get_usage(
         db=db, start=start, end=end, period=period, node_id=node_id, group_by_node=group_by_node
+    )
+
+
+@router.get("/user_counts/{metric}", response_model=UserCountMetricStatsList)
+async def get_user_count_metric(
+    metric: UserCountMetric,
+    db: AsyncSession = Depends(get_db),
+    start: dt | None = Query(None, examples=["2024-01-01T00:00:00+03:30"]),
+    end: dt | None = Query(None, examples=["2024-01-31T23:59:59+03:30"]),
+    period: Period = Period.hour,
+    node_id: int | None = None,
+    group_by_node: bool = False,
+    _: AdminDetails = Depends(check_sudo_admin),
+):
+    """Retrieve one user activity/status count metric from node user usage rows."""
+    try:
+        validate_user_count_metric_scope(metric, node_id=node_id, group_by_node=group_by_node)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return await node_operator.get_user_count_metric(
+        db=db,
+        metric=metric,
+        start=start,
+        end=end,
+        period=period,
+        node_id=node_id,
+        group_by_node=group_by_node,
     )
 
 
