@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
+from config import usage_settings
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
@@ -461,11 +462,15 @@ class UserOperation(BaseOperation):
         db_user: User,
         admin: AdminDetails,
         *,
+        clean_chart_data: bool | None = None,
         emit_status_change_notification: bool = True,
     ):
         old_status = db_user.status
 
-        db_user = await reset_user_data_usage(db=db, db_user=db_user)
+        if clean_chart_data is None:
+            clean_chart_data = usage_settings.reset_user_usage_clean_chart_data
+
+        db_user = await reset_user_data_usage(db=db, db_user=db_user, clean_chart_data=clean_chart_data)
         user = await self.update_user(db_user)
 
         if emit_status_change_notification and user.status != old_status:
@@ -498,7 +503,11 @@ class UserOperation(BaseOperation):
         db_users = await self._get_validated_users_by_ids(db, bulk_users.ids, admin, load_usage_logs=False)
         old_statuses = {user.id: user.status for user in db_users}
 
-        db_users = await bulk_reset_user_data_usage(db, db_users)
+        db_users = await bulk_reset_user_data_usage(
+            db,
+            db_users,
+            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+        )
         await sync_users(db_users)
 
         users = [await self.validate_user(db_user) for db_user in db_users]
@@ -577,14 +586,22 @@ class UserOperation(BaseOperation):
     async def reset_users_data_usage(self, db: AsyncSession, admin: AdminDetails):
         """Reset all users data usage"""
         db_admin = await self.get_validated_admin(db, admin.username)
-        await reset_all_users_data_usage(db=db, admin=db_admin)
+        await reset_all_users_data_usage(
+            db=db,
+            admin=db_admin,
+            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+        )
 
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
             await self.raise_error(message="User doesn't have next plan", code=404)
 
         old_status = db_user.status
-        db_user = await reset_user_by_next(db=db, db_user=db_user)
+        db_user = await reset_user_by_next(
+            db=db,
+            db_user=db_user,
+            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+        )
         user = await self.update_user(db_user)
 
         if user.status != old_status:

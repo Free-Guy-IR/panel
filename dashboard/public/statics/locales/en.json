@@ -1936,7 +1936,7 @@
   "statistics.onlineUsers": "Online Users",
   "statistics.userCountChart": "User Count",
   "statistics.userCountChartDescription": "Online, expired, and limited user activity counts over time",
-  "statistics.userCountChartAccuracyNote": "Resetting user usage or changing user status can make this chart show inaccurate historical data.",
+  "statistics.userCountChartAccuracyNote": "Changing user status can make this chart show inaccurate historical data. Resetting usage only removes chart history when chart-data cleanup is enabled in the environment.",
   "workersHealth.title": "Workers Health",
   "workersHealth.subtitle": "Scheduler and node worker status",
   "workersHealth.live": "Live",

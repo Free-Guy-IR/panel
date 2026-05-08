@@ -164,6 +164,10 @@ class AuthSettings(EnvSettings):
 class UsageSettings(EnvSettings):
     disable_recording_node_usage: bool = Field(default=False, validation_alias="DISABLE_RECORDING_NODE_USAGE")
     enable_recording_nodes_stats: bool = Field(default=False, validation_alias="ENABLE_RECORDING_NODES_STATS")
+    reset_user_usage_clean_chart_data: bool = Field(
+        default=False,
+        validation_alias="RESET_USER_USAGE_CLEAN_CHART_DATA",
+    )
 
 
 class JobSettings(EnvSettings):

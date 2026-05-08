@@ -512,7 +512,8 @@ export function UserCountsChart({ nodeId, isSudo, nodesData = [] }: UserCountsCh
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   {t('statistics.userCountChartAccuracyNote', {
-                    defaultValue: 'Resetting user usage or changing user status can make this chart show inaccurate historical data.',
+                    defaultValue:
+                      'Changing user status can make this chart show inaccurate historical data. Resetting usage only removes chart history when chart-data cleanup is enabled in the environment.',
                   })}
                 </span>
               </p>

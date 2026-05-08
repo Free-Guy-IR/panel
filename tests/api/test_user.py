@@ -12,15 +12,16 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import status
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 
-from app.db.models import User
+from app.db.models import NodeUserUsage, User
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
 from app.models.settings import ConfigFormat, SubRule, Subscription
 from app.operation.subscription import SubscriptionOperation
 from app.utils import jwt as jwt_utils
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
 from app.utils.jwt import create_subscription_token, get_secret_key, get_subscription_payload
+from config import usage_settings
 from tests.api import TestSession, client
 from tests.api.helpers import (
     auth_headers,
@@ -58,6 +59,17 @@ def set_user_online_at(username: str, online_at: datetime) -> None:
             await session.commit()
 
     asyncio.run(_set_online_at())
+
+
+def count_user_chart_rows(user_id: int) -> int:
+    async def _count_rows():
+        async with TestSession() as session:
+            result = await session.execute(
+                select(func.count()).select_from(NodeUserUsage).where(NodeUserUsage.user_id == user_id)
+            )
+            return result.scalar_one()
+
+    return asyncio.run(_count_rows())
 
 
 def extract_wireguard_config_bodies(response) -> list[str]:
@@ -1597,6 +1609,53 @@ def test_reset_user_usage(access_token):
         )
         assert response.status_code == status.HTTP_200_OK
     finally:
+        delete_user(access_token, user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_reset_user_usage_only_cleans_chart_data_when_enabled(access_token):
+    """Test that user reset preserves chart data unless env cleanup is enabled."""
+    core, groups = setup_groups(access_token, 1)
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_reset_chart_data")},
+    )
+
+    async def _add_chart_row():
+        async with TestSession() as session:
+            session.add(
+                NodeUserUsage(
+                    user_id=user["id"],
+                    node_id=None,
+                    created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+                    used_traffic=123,
+                )
+            )
+            await session.commit()
+
+    previous_clean_chart_data = usage_settings.reset_user_usage_clean_chart_data
+    try:
+        usage_settings.reset_user_usage_clean_chart_data = False
+        asyncio.run(_add_chart_row())
+        assert count_user_chart_rows(user["id"]) == 1
+
+        response = client.post(
+            f"/api/user/by-id/{user['id']}/reset",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert count_user_chart_rows(user["id"]) == 1
+
+        usage_settings.reset_user_usage_clean_chart_data = True
+        response = client.post(
+            f"/api/user/by-id/{user['id']}/reset",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert count_user_chart_rows(user["id"]) == 0
+    finally:
+        usage_settings.reset_user_usage_clean_chart_data = previous_clean_chart_data
         delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)
 

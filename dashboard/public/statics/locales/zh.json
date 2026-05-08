@@ -1902,7 +1902,7 @@
   "statistics.onlineUsers": "在线用户",
   "statistics.userCountChart": "用户数量",
   "statistics.userCountChartDescription": "在线、已过期和受限用户活动数量随时间变化",
-  "statistics.userCountChartAccuracyNote": "重置用户用量或更改用户状态可能会使此图表显示不准确的历史数据。",
+  "statistics.userCountChartAccuracyNote": "更改用户状态可能会使此图表显示不准确的历史数据。只有在环境中启用图表数据清理时，重置用量才会删除图表历史。",
   "workersHealth.title": "工作器健康",
   "workersHealth.subtitle": "调度器与节点工作器状态",
   "workersHealth.live": "实时",

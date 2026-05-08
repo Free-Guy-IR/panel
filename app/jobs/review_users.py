@@ -25,7 +25,7 @@ from app.models.user import UserNotificationResponse
 from app.node import node_manager as node_manager
 from app.settings import webhook_settings
 from app.utils.logger import get_logger
-from config import job_settings, runtime_settings
+from config import job_settings, runtime_settings, usage_settings
 
 logger = get_logger("review-users")
 user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
@@ -34,7 +34,11 @@ user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
 async def change_status(db: AsyncSession, db_user: User, status: UserStatus):
     next_plan_activated = bool(db_user.next_plan) and status != UserStatus.active
     if next_plan_activated:
-        db_user = await reset_user_by_next(db, db_user)
+        db_user = await reset_user_by_next(
+            db,
+            db_user,
+            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+        )
 
     user = await user_operator.update_user(db_user)
 
