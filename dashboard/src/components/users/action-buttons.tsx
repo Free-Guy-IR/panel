@@ -23,7 +23,7 @@ import { UserSubscriptionClientsModal } from '@/components/dialogs/user-subscrip
 import UserAllIPsModal from '@/components/dialogs/user-all-ips-modal'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
+import { invalidateUserMetricsQueries, removeUserFromUsersCache, upsertUserInUsersCache } from '@/utils/usersCache'
 import { buildSubscriptionFormatUrl, fetchSubscriptionBlobFromUrl, fetchUserSubscriptionContent, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
 
 type ActionButtonsProps = {
@@ -382,11 +382,6 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     pendingContentFetchRef.current = {}
   }, [subscribeLinks])
 
-  // Refresh user data function (only for delete operations)
-  const refreshUserData = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/users'] })
-  }
-
   // Handlers for menu items
   const handleEdit = () => {
     if (clearSelectedUserTimeoutRef.current) {
@@ -495,7 +490,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       await removeUserMutation.mutateAsync({ userId: user.id })
       toast.success(t('usersTable.deleteSuccess', { name: user.username }))
       setDeleteDialogOpen(false)
-      refreshUserData()
+      removeUserFromUsersCache(queryClient, user)
     } catch (error: any) {
       toast.error(t('usersTable.deleteFailed', { name: user.username, error: error?.message || '' }))
     }

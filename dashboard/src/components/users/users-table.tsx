@@ -44,6 +44,7 @@ import type { AdvanceSearchFormValue } from '@/components/forms/advance-search-f
 import { BulkActionItem, BulkActionsBar } from '@/components/users/bulk-actions-bar'
 import { BulkActionAlertDialog } from '@/components/users/bulk-action-alert-dialog'
 import { Card, CardContent } from '@/components/ui/card'
+import { removeUsersFromUsersCache } from '@/utils/usersCache'
 
 // Helper function to get URL search params from hash
 const getSearchParams = (): URLSearchParams => {
@@ -190,10 +191,10 @@ const UsersTable = memo(() => {
     status?: UserStatus | null
     admin?: string[]
     group?: number[]
-    data_limit_min?: number
-    data_limit_max?: number
-    expire_after?: string
-    expire_before?: string
+    data_limit_min?: number | null
+    data_limit_max?: number | null
+    expire_after?: string | null
+    expire_before?: string | null
     no_data_limit?: boolean
     no_expire?: boolean
   }>(initialState.filters)
@@ -587,8 +588,8 @@ const UsersTable = memo(() => {
 
   const deleteMutation = useMutation({
     mutationFn: (ids: number[]) => bulkDeleteUsers({ ids }),
-    onSuccess: response => {
-      invalidateUsers()
+    onSuccess: (response, ids) => {
+      removeUsersFromUsersCache(queryClient, selectedUsers.filter(user => ids.includes(user.id)))
       clearSelection()
       toast.success(t('bulkUserActions.deleteSuccess', { count: response.count }))
     },

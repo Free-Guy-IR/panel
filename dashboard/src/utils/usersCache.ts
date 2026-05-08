@@ -242,6 +242,46 @@ export const upsertUserInUsersCache = (queryClient: QueryClient, user: UserRespo
   })
 }
 
+const removeUsersFromSingleUsersQuery = (oldData: UsersResponse, usersToRemove: UserResponse[], params: GetUsersParams | undefined): UsersResponse | undefined => {
+  const oldUsers = oldData.users ?? []
+  const idsToRemove = new Set(usersToRemove.map(user => user.id))
+  const removedFromPageIds = new Set(oldUsers.filter(user => idsToRemove.has(user.id)).map(user => user.id))
+  const users = oldUsers.filter(user => !idsToRemove.has(user.id))
+  const removedTotalCount = usersToRemove.filter(user => removedFromPageIds.has(user.id) || matchesUserFilters(user, params)).length
+
+  if (users.length === oldUsers.length && removedTotalCount === 0) {
+    return undefined
+  }
+
+  return {
+    ...oldData,
+    users,
+    total: Math.max(0, oldData.total - removedTotalCount),
+  }
+}
+
+export const removeUsersFromUsersCache = (queryClient: QueryClient, usersToRemove: UserResponse[]) => {
+  if (usersToRemove.length === 0) return
+
+  const cachedQueries = queryClient.getQueriesData<UsersResponse>({
+    queryKey: [USERS_QUERY_KEY],
+    exact: false,
+  })
+
+  cachedQueries.forEach(([queryKey, oldData]) => {
+    if (!oldData) return
+    const params = readUsersParamsFromKey(queryKey)
+    const updatedData = removeUsersFromSingleUsersQuery(oldData, usersToRemove, params)
+    if (updatedData) {
+      queryClient.setQueryData(queryKey, updatedData)
+    }
+  })
+}
+
+export const removeUserFromUsersCache = (queryClient: QueryClient, user: UserResponse) => {
+  removeUsersFromUsersCache(queryClient, [user])
+}
+
 export const invalidateUserMetricsQueries = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: ['getUsersUsage'] })
   queryClient.invalidateQueries({ queryKey: ['getUserStats'] })
