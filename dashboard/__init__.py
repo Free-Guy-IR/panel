@@ -1,5 +1,6 @@
 import atexit
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -11,6 +12,25 @@ from config import dashboard_settings, runtime_settings, server_settings
 base_dir = Path(__file__).parent
 build_dir = base_dir / "build"
 statics_dir = build_dir / "statics"
+NO_CACHE_FILENAMES = {"index.html", "404.html", "sw.js", "manifest.webmanifest"}
+HASHED_ASSET_RE = re.compile(r".+-[A-Za-z0-9_-]{6,}\.[A-Za-z0-9]+$")
+
+
+class DashboardStaticFiles(StaticFiles):
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        file_name = Path(full_path).name
+
+        if file_name in NO_CACHE_FILENAMES:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        elif HASHED_ASSET_RE.match(file_name):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers.setdefault("Cache-Control", "public, max-age=3600")
+
+        return response
 
 
 def build_api_interface():
@@ -50,8 +70,8 @@ def run_build(app):
     if runtime_settings.role.runs_panel and not build_dir.is_dir():
         build()
 
-    app.mount(dashboard_settings.path, StaticFiles(directory=build_dir, html=True), name="dashboard")
-    app.mount("/statics/", StaticFiles(directory=statics_dir, html=True), name="statics")
+    app.mount(dashboard_settings.path, DashboardStaticFiles(directory=build_dir, html=True), name="dashboard")
+    app.mount("/statics/", DashboardStaticFiles(directory=statics_dir, html=True), name="statics")
 
 
 def setup_dashboard(app):
