@@ -1,7 +1,7 @@
 from datetime import datetime as dt, timezone as tz
 from typing import Union
 
-import jinja2
+from jinja2 import Environment, FileSystemLoader
 from jinja2.sandbox import SandboxedEnvironment
 
 from config import template_settings
@@ -13,7 +13,7 @@ if template_settings.custom_templates_directory:
     # User's templates have priority over default templates
     template_directories.insert(0, template_settings.custom_templates_directory)
 
-env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_directories))
+env = Environment(loader=FileSystemLoader(template_directories))
 env.filters.update(CUSTOM_FILTERS)
 env.globals["now"] = lambda: dt.now(tz.utc)
 
