@@ -255,6 +255,52 @@ def test_users_get_filters_by_data_limit_range(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_users_get_filters_by_data_limit_max_excludes_no_limit(access_token):
+    core, groups = setup_groups(access_token, 1)
+    small_limit_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_limit_max_small"),
+            "data_limit": 1024 * 1024 * 1024,
+        },
+    )
+    large_limit_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_limit_max_large"),
+            "data_limit": 20 * 1024 * 1024 * 1024,
+        },
+    )
+    unlimited_user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_user_limit_max_unlimited"),
+            "data_limit": 0,
+        },
+    )
+
+    try:
+        response = client.get(
+            "/api/users",
+            headers=auth_headers(access_token),
+            params={"data_limit_max": 5 * 1024 * 1024 * 1024},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        listed_usernames = {user["username"] for user in response.json()["users"]}
+        assert small_limit_user["username"] in listed_usernames
+        assert large_limit_user["username"] not in listed_usernames
+        assert unlimited_user["username"] not in listed_usernames
+    finally:
+        delete_user(access_token, small_limit_user["username"])
+        delete_user(access_token, large_limit_user["username"])
+        delete_user(access_token, unlimited_user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_users_get_filters_by_no_data_limit(access_token):
     core, groups = setup_groups(access_token, 1)
     unlimited_user = create_user(

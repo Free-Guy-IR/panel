@@ -114,14 +114,14 @@ const matchesUserFilters = (user: UserResponse, params?: GetUsersParams): boolea
   } else {
     if (params.data_limit_min !== undefined && params.data_limit_min !== null) {
       const dataLimit = toNumber(user.data_limit)
-      if (dataLimit === undefined || dataLimit < params.data_limit_min) {
+      if (dataLimit === undefined || dataLimit <= 0 || dataLimit < params.data_limit_min) {
         return false
       }
     }
 
     if (params.data_limit_max !== undefined && params.data_limit_max !== null) {
       const dataLimit = toNumber(user.data_limit)
-      if (dataLimit === undefined || dataLimit > params.data_limit_max) {
+      if (dataLimit === undefined || dataLimit <= 0 || dataLimit > params.data_limit_max) {
         return false
       }
     }

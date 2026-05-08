@@ -359,9 +359,9 @@ async def get_users(
         filters.append(or_(User.data_limit.is_(None), User.data_limit == 0))
     else:
         if data_limit_min is not None:
-            filters.append(and_(User.data_limit.is_not(None), User.data_limit >= data_limit_min))
+            filters.append(and_(User.data_limit.is_not(None), User.data_limit > 0, User.data_limit >= data_limit_min))
         if data_limit_max is not None:
-            filters.append(and_(User.data_limit.is_not(None), User.data_limit <= data_limit_max))
+            filters.append(and_(User.data_limit.is_not(None), User.data_limit > 0, User.data_limit <= data_limit_max))
     if no_expire:
         filters.append(User.expire.is_(None))
     else:
