@@ -1,10 +1,10 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DecimalInput } from '@/components/common/decimal-input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DatePicker } from '@/components/common/date-picker'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -56,7 +56,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                 <section className="w-full space-y-4">
                   <div className="space-y-1">
                     <h3 className="text-sm font-semibold">{t('advanceSearch.searchMode', { defaultValue: 'Search mode' })}</h3>
-                    <p className="text-xs text-muted-foreground">{t('advanceSearch.searchModeDescription', { defaultValue: 'Choose how the main search field should be interpreted.' })}</p>
+                    <p className="text-muted-foreground text-xs">{t('advanceSearch.searchModeDescription', { defaultValue: 'Choose how the main search field should be interpreted.' })}</p>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -75,7 +75,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                 form.setValue('is_protocol', false, { shouldDirty: true })
                               }}
                               className={cn(
-                                'flex w-full h-full flex-col items-start justify-between rounded-md border px-4 py-3 text-left transition-colors',
+                                'flex h-full w-full flex-col items-start justify-between rounded-md border px-4 py-3 text-left transition-colors',
                                 field.value ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background hover:border-primary/40 hover:bg-accent/30',
                                 isApplying && 'cursor-not-allowed opacity-60',
                               )}
@@ -84,7 +84,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                 <span className="text-sm font-medium">{t('advanceSearch.byUsername')}</span>
                                 <span className={cn('mt-1 h-2.5 w-2.5 rounded-full', field.value ? 'bg-primary' : 'bg-muted-foreground/25')} />
                               </div>
-                              <p className="text-xs text-muted-foreground text-start">{t('advanceSearch.byUsernameDescription', { defaultValue: 'Search usernames and notes.' })}</p>
+                              <p className="text-muted-foreground text-start text-xs">{t('advanceSearch.byUsernameDescription', { defaultValue: 'Search usernames and notes.' })}</p>
                             </button>
                           </FormControl>
                           <FormMessage />
@@ -107,7 +107,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                 form.setValue('is_username', false, { shouldDirty: true })
                               }}
                               className={cn(
-                                'flex w-full h-full flex-col items-start justify-between rounded-md border px-4 py-3 text-left transition-colors',
+                                'flex h-full w-full flex-col items-start justify-between rounded-md border px-4 py-3 text-left transition-colors',
                                 field.value ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background hover:border-primary/40 hover:bg-accent/30',
                                 isApplying && 'cursor-not-allowed opacity-60',
                               )}
@@ -116,7 +116,9 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                 <span className="text-sm font-medium">{t('advanceSearch.byProtocol')}</span>
                                 <span className={cn('mt-1 h-2.5 w-2.5 rounded-full', field.value ? 'bg-primary' : 'bg-muted-foreground/25')} />
                               </div>
-                              <p className="text-xs text-muted-foreground text-start">{t('advanceSearch.byProtocolDescription', { defaultValue: 'Search protocol details and configuration data.' })}</p>
+                              <p className="text-muted-foreground text-start text-xs">
+                                {t('advanceSearch.byProtocolDescription', { defaultValue: 'Search protocol details and configuration data.' })}
+                              </p>
                             </button>
                           </FormControl>
                           <FormMessage />
@@ -129,7 +131,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                 <section className="w-full space-y-4">
                   <div className="space-y-1">
                     <h3 className="text-sm font-semibold">{t('advanceSearch.filtersSection', { defaultValue: 'Refine results' })}</h3>
-                    <p className="text-xs text-muted-foreground">{t('advanceSearch.filtersSectionDescription', { defaultValue: 'Use one or more filters to narrow the list.' })}</p>
+                    <p className="text-muted-foreground text-xs">{t('advanceSearch.filtersSectionDescription', { defaultValue: 'Use one or more filters to narrow the list.' })}</p>
                   </div>
 
                   <Separator />
@@ -181,18 +183,11 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                             <FormLabel>{t('advanceSearch.dataLimitMin', { defaultValue: 'Minimum data limit (GB)' })}</FormLabel>
                             <FormDescription>{t('advanceSearch.dataLimitDescription', { defaultValue: 'Filter users by data-limit range in gigabytes.' })}</FormDescription>
                             <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="any"
-                                inputMode="decimal"
+                              <DecimalInput
                                 placeholder={t('advanceSearch.dataLimitMinPlaceholder', { defaultValue: 'e.g. 10' })}
-                                value={field.value ?? ''}
+                                value={field.value}
+                                onValueChange={field.onChange}
                                 disabled={isApplying || noDataLimitOnly}
-                                onChange={event => {
-                                  const rawValue = event.target.value
-                                  field.onChange(rawValue === '' ? undefined : Number(rawValue))
-                                }}
                               />
                             </FormControl>
                             <FormMessage />
@@ -208,18 +203,11 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                             <FormLabel>{t('advanceSearch.dataLimitMax', { defaultValue: 'Maximum data limit (GB)' })}</FormLabel>
                             <FormDescription>{t('advanceSearch.dataLimitDescription', { defaultValue: 'Filter users by data-limit range in gigabytes.' })}</FormDescription>
                             <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="any"
-                                inputMode="decimal"
+                              <DecimalInput
                                 placeholder={t('advanceSearch.dataLimitMaxPlaceholder', { defaultValue: 'e.g. 100' })}
-                                value={field.value ?? ''}
+                                value={field.value}
+                                onValueChange={field.onChange}
                                 disabled={isApplying || noDataLimitOnly}
-                                onChange={event => {
-                                  const rawValue = event.target.value
-                                  field.onChange(rawValue === '' ? undefined : Number(rawValue))
-                                }}
                               />
                             </FormControl>
                             <FormMessage />
@@ -431,9 +419,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                               </div>
                               <Accordion type="single" collapsible className="w-full">
                                 <AccordionItem value="group-select" className="border-none [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline">
-                                  <AccordionTrigger className="rounded-md border px-3 py-3 text-sm hover:no-underline">
-                                    {t('advanceSearch.selectGroup')}
-                                  </AccordionTrigger>
+                                  <AccordionTrigger className="rounded-md border px-3 py-3 text-sm hover:no-underline">{t('advanceSearch.selectGroup')}</AccordionTrigger>
                                   <AccordionContent>
                                     <div className="mt-2">
                                       <GroupsSelector control={form.control} name="group" onGroupsChange={field.onChange} disabled={isApplying} />
@@ -475,9 +461,7 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                                 </div>
                                 <Accordion type="single" collapsible className="w-full">
                                   <AccordionItem value="admin-select" className="border-none [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline">
-                                    <AccordionTrigger className="rounded-md border px-3 py-3 text-sm hover:no-underline">
-                                      {t('advanceSearch.selectAdmin')}
-                                    </AccordionTrigger>
+                                    <AccordionTrigger className="rounded-md border px-3 py-3 text-sm hover:no-underline">{t('advanceSearch.selectAdmin')}</AccordionTrigger>
                                     <AccordionContent>
                                       <div className="mt-2">
                                         <AdminsSelector control={form.control} name="admin" onAdminsChange={field.onChange} disabled={isApplying} />
@@ -494,14 +478,14 @@ export default function AdvanceSearchModal({ isDialogOpen, onOpenChange, form, o
                     )}
                   </div>
                 </section>
-                
+
                 <Separator />
 
                 <section className="w-full space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <h3 className="text-sm font-semibold">{t('advanceSearch.displaySection', { defaultValue: 'Table display' })}</h3>
-                      <p className="text-xs text-muted-foreground">{t('advanceSearch.displaySectionDescription', { defaultValue: 'These options only change how the user list is shown.' })}</p>
+                      <p className="text-muted-foreground text-xs">{t('advanceSearch.displaySectionDescription', { defaultValue: 'These options only change how the user list is shown.' })}</p>
                     </div>
                     <Badge variant="outline" className="shrink-0">
                       {t('advanceSearch.uiOnly', { defaultValue: 'UI only' })}
