@@ -10,7 +10,7 @@ import { ShadowsocksMethods, XTLSFlows, useGetGeneralSettings, useReconnectAllNo
 import { queryClient } from '@/utils/query-client'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, RefreshCcw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -39,21 +39,24 @@ export default function General() {
   const [isReconnectAllDialogOpen, setIsReconnectAllDialogOpen] = useState(false)
   const reconnectAllNodeMutation = useReconnectAllNode()
 
+  const generalFormValues = useMemo<GeneralSettingsFormInput>(
+    () =>
+      generalSettings
+        ? {
+            default_flow: generalSettings.default_flow || '',
+            default_method: generalSettings.default_method || DEFAULT_SHADOWSOCKS_METHOD,
+          }
+        : {
+            default_flow: '',
+            default_method: '',
+          },
+    [generalSettings?.default_flow, generalSettings?.default_method],
+  )
+
   const form = useForm<GeneralSettingsFormInput>({
     resolver: zodResolver(generalSettingsSchema),
-    defaultValues: {
-      default_flow: '',
-      default_method: '',
-    },
+    values: generalFormValues,
   })
-
-  useEffect(() => {
-    if (!generalSettings) return
-    form.reset({
-      default_flow: generalSettings.default_flow || '',
-      default_method: generalSettings.default_method || DEFAULT_SHADOWSOCKS_METHOD,
-    })
-  }, [generalSettings, form])
 
   const onSubmit = async (data: GeneralSettingsFormInput) => {
     try {
