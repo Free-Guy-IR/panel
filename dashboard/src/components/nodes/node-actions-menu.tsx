@@ -23,7 +23,6 @@ interface NodeActionsMenuProps {
 }
 
 type NodeActionsMenuState = {
-  isActionsMenuOpen: boolean
   isDeleteDialogOpen: boolean
   isResetUsageDialogOpen: boolean
   showOnlineStats: boolean
@@ -41,7 +40,6 @@ let nodeActionsGlobalStateVersion = 0
 const DIALOG_EXIT_ANIMATION_MS = 220
 
 const createDefaultNodeActionsMenuState = (): NodeActionsMenuState => ({
-  isActionsMenuOpen: false,
   isDeleteDialogOpen: false,
   isResetUsageDialogOpen: false,
   showOnlineStats: false,
@@ -231,9 +229,8 @@ export default function NodeActionsMenu({ node, onEdit, onToggleStatus, coresDat
     [node, node.id],
   )
 
-  const { isActionsMenuOpen, isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showUpdateCoreDialog, showUpdateGeofilesDialog } = menuState
+  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showUpdateCoreDialog, showUpdateGeofilesDialog } = menuState
 
-  const setActionsMenuOpen = useCallback((value: boolean) => setMenuState({ isActionsMenuOpen: value }), [setMenuState])
   const setDeleteDialogOpen = useCallback((value: boolean) => setMenuState({ isDeleteDialogOpen: value }), [setMenuState])
   const setResetUsageDialogOpen = useCallback((value: boolean) => setMenuState({ isResetUsageDialogOpen: value }), [setMenuState])
   const setShowOnlineStats = useCallback((value: boolean) => setMenuState({ showOnlineStats: value }), [setMenuState])
@@ -370,19 +367,13 @@ export default function NodeActionsMenu({ node, onEdit, onToggleStatus, coresDat
     <>
       {renderActions && (
         <div className={className} onClick={e => e.stopPropagation()}>
-          <DropdownMenu modal={false} open={isActionsMenuOpen} onOpenChange={setActionsMenuOpen}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
                 <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-56"
-              onPointerDownOutside={() => setActionsMenuOpen(false)}
-              onInteractOutside={() => setActionsMenuOpen(false)}
-              onEscapeKeyDown={() => setActionsMenuOpen(false)}
-            >
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem
                 onSelect={e => {
                   e.stopPropagation()

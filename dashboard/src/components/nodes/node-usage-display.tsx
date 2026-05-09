@@ -34,7 +34,7 @@ export default function NodeUsageDisplay({ node }: NodeUsageDisplayProps) {
   }
 
   return (
-    <div className={cn('min-w-0 space-y-1', isRTL ? 'text-right' : 'text-left')}>
+    <div className={cn('min-w-0 space-y-1 overflow-x-hidden', isRTL ? 'text-right' : 'text-left')}>
       {!isUnlimited && dataLimit && <Progress value={progressValue} className="h-1" indicatorClassName={getProgressColor()} />}
 
       <div className={cn('flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-4', isRTL ? 'justify-end' : 'justify-start')}>
