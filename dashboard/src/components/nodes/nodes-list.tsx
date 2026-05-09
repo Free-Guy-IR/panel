@@ -111,6 +111,7 @@ export default function NodesList() {
       retry: 1,
       refetchOnMount: true,
       refetchOnWindowFocus: true,
+      placeholderData: previousData => previousData,
     },
   })
 
@@ -695,7 +696,7 @@ export default function NodesList() {
             />
           )}
 
-          {!showLoadingSpinner && !showPageLoadingSkeletons && nodesData.length === 0 && !hasActiveFilters && totalNodes === 0 && (
+          {!showLoadingSpinner && !showPageLoadingSkeletons && !isFetching && nodesData.length === 0 && !hasActiveFilters && totalNodes === 0 && (
             <Card className="mb-12">
               <CardContent className="p-8 text-center">
                 <div className="space-y-4">
@@ -712,7 +713,7 @@ export default function NodesList() {
             </Card>
           )}
 
-          {!showLoadingSpinner && !showPageLoadingSkeletons && nodesData.length === 0 && hasActiveFilters && (
+          {!showLoadingSpinner && !showPageLoadingSkeletons && !isFetching && nodesData.length === 0 && hasActiveFilters && (
             <Card className="mb-12">
               <CardContent className="p-8 text-center">
                 <div className="space-y-4">
