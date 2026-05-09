@@ -676,7 +676,13 @@ class NodeOperation(BaseOperation):
         await node_nats_client.publish("disconnect_node", {"node_id": node_id})
 
     async def _restart_all_nodes_local(self, db: AsyncSession, admin: AdminDetails, core_id: int | None) -> None:
-        nodes, _ = await get_nodes(db, core_id=core_id, enabled=True)
+        nodes, _ = await get_nodes(
+            db,
+            query=NodeListQuery(
+                core_id=core_id,
+                status=[NodeStatus.connected, NodeStatus.connecting, NodeStatus.error],
+            ),
+        )
         await self.connect_nodes_bulk(db, nodes)
 
     async def _restart_all_nodes_remote(self, db: AsyncSession, admin: AdminDetails, core_id: int | None) -> None:

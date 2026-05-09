@@ -5,7 +5,7 @@ from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from app import notification, on_shutdown, on_startup, scheduler
 from app.db import GetDB
 from app.db.models import Node, NodeStatus
-from app.models.node import NodeNotification
+from app.models.node import NodeListQuery, NodeNotification
 from app.node import node_manager
 from app.operation import OperatorType
 from app.db.crud.node import get_limited_nodes, get_nodes
@@ -20,6 +20,7 @@ logger = get_logger("node-checker")
 # Hard-limit concurrency: Prevent DB/API overload during health checks
 # Limits concurrent node health check operations
 NODE_CHECK_SEM = asyncio.Semaphore(5)  # Max 5 concurrent node health checks
+ACTIVE_NODE_STATUSES = [NodeStatus.connected, NodeStatus.connecting, NodeStatus.error]
 
 
 async def verify_node_backend_health(node: PasarGuardNode, node_name: str) -> tuple[Health, int | None, str | None]:
@@ -188,7 +189,7 @@ async def node_health_check():
     if not runtime_settings.role.runs_node:
         return
     async with GetDB() as db:
-        db_nodes, _ = await get_nodes(db=db, enabled=True)
+        db_nodes, _ = await get_nodes(db=db, query=NodeListQuery(status=ACTIVE_NODE_STATUSES))
 
     dict_nodes = await node_manager.get_nodes()
     check_tasks = [process_node_health_check(db_node, dict_nodes.get(db_node.id)) for db_node in db_nodes]
@@ -203,7 +204,7 @@ async def initialize_nodes():
     logger.info("Starting nodes' cores...")
 
     async with GetDB() as db:
-        db_nodes, _ = await get_nodes(db=db, enabled=True)
+        db_nodes, _ = await get_nodes(db=db, query=NodeListQuery(status=ACTIVE_NODE_STATUSES))
 
         if not db_nodes:
             logger.warning("Attention: You have no node, you need to have at least one node")
