@@ -563,7 +563,8 @@
       "cancelSuccess": "更改已取消，原始设置已恢复",
       "defaultFlow": {
         "title": "默认 VLESS 流",
-        "description": "为新 VLESS 用户自动填写流字段"
+        "description": "为新 VLESS 用户自动填写流字段",
+        "none": "无"
       },
       "defaultMethod": {
         "title": "默认 Shadowsocks 加密方式",

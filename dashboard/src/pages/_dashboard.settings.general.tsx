@@ -6,16 +6,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DEFAULT_SHADOWSOCKS_METHOD } from '@/constants/Proxies'
-import { ShadowsocksMethods, XTLSFlows, useReconnectAllNode } from '@/service/api'
+import { ShadowsocksMethods, XTLSFlows, useGetGeneralSettings, useReconnectAllNode } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, RefreshCcw, XIcon } from 'lucide-react'
+import { Loader2, RefreshCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { useSettingsContext } from './_dashboard.settings'
+
+/** Radix Select forbids `SelectItem value=""`; map API empty flow to this UI value. */
+const DEFAULT_FLOW_SELECT_NONE = '__pg_default_flow_none__'
 
 // general settings validation schema
 const generalSettingsSchema = z.object({
@@ -27,7 +30,12 @@ type GeneralSettingsFormInput = z.input<typeof generalSettingsSchema>
 
 export default function General() {
   const { t } = useTranslation()
-  const { settings, isLoading, error, updateSettings, isSaving } = useSettingsContext()
+  const { isLoading, error, updateSettings, isSaving } = useSettingsContext()
+  const {
+    data: generalSettings,
+    isLoading: isGeneralLoading,
+    error: generalError,
+  } = useGetGeneralSettings()
   const [isReconnectAllDialogOpen, setIsReconnectAllDialogOpen] = useState(false)
   const reconnectAllNodeMutation = useReconnectAllNode()
 
@@ -40,11 +48,12 @@ export default function General() {
   })
 
   useEffect(() => {
+    if (!generalSettings) return
     form.reset({
-      default_flow: settings?.general?.default_flow || '',
-      default_method: settings?.general?.default_method || DEFAULT_SHADOWSOCKS_METHOD,
+      default_flow: generalSettings.default_flow || '',
+      default_method: generalSettings.default_method || DEFAULT_SHADOWSOCKS_METHOD,
     })
-  }, [settings])
+  }, [generalSettings, form])
 
   const onSubmit = async (data: GeneralSettingsFormInput) => {
     try {
@@ -64,13 +73,12 @@ export default function General() {
   }
 
   const handleCancel = () => {
-    if (settings?.general) {
-      form.reset({
-        default_flow: '',
-        default_method: DEFAULT_SHADOWSOCKS_METHOD,
-      })
-      toast.success(t('settings.general.cancelSuccess'))
-    }
+    if (!generalSettings) return
+    form.reset({
+      default_flow: generalSettings.default_flow ?? '',
+      default_method: generalSettings.default_method || DEFAULT_SHADOWSOCKS_METHOD,
+    })
+    toast.success(t('settings.general.cancelSuccess'))
   }
 
   const handleReconnectAll = async () => {
@@ -103,8 +111,10 @@ export default function General() {
     }
   }
 
+  const loadError = error || generalError
+
   // TODO: skeleton needs to be improved
-  if (isLoading) {
+  if (isLoading || isGeneralLoading) {
     return (
       <div className="w-full p-4 sm:py-6 lg:py-8">
         <div className="space-y-6 sm:space-y-8 lg:space-y-10">
@@ -140,7 +150,7 @@ export default function General() {
     )
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <div className="flex min-h-[400px] items-center justify-center p-4 sm:py-6 lg:py-8">
         <div className="space-y-3 text-center">
@@ -149,14 +159,6 @@ export default function General() {
         </div>
       </div>
     )
-  }
-
-  const clearField = (field: keyof GeneralSettingsFormInput) => {
-    return (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      form.setValue(field, '')
-    }
   }
 
   return (
@@ -170,28 +172,27 @@ export default function General() {
                 control={form.control}
                 name="default_flow"
                 render={({ field }) => (
-                  <FormItem className="relative space-y-2">
+                  <FormItem className="space-y-2">
                     <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">{t('settings.general.defaultFlow.title')}</FormLabel>
                     <FormControl>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value ? field.value : DEFAULT_FLOW_SELECT_NONE}
+                        onValueChange={v => field.onChange(v === DEFAULT_FLOW_SELECT_NONE ? '' : v)}
+                      >
                         <SelectTrigger className="text-xs sm:text-sm">
                           <SelectValue />
                         </SelectTrigger>
-                        {field.value && (
-                          <Button size="icon" variant="ghost" className="absolute right-8 top-6" onClick={clearField('default_flow')}>
-                            <XIcon />
-                          </Button>
-                        )}
                         <SelectContent>
+                          <SelectItem value={DEFAULT_FLOW_SELECT_NONE} className="text-xs sm:text-sm">
+                            {t('settings.general.defaultFlow.none')}
+                          </SelectItem>
                           {Object.values(XTLSFlows)
-                            .filter(Boolean)
-                            .map(flow => {
-                              return (
-                                <SelectItem value={flow} key={flow} className="text-xs sm:text-sm">
-                                  {flow}
-                                </SelectItem>
-                              )
-                            })}
+                            .filter((flow): flow is Exclude<typeof flow, ''> => flow !== '')
+                            .map(flow => (
+                              <SelectItem value={flow} key={flow} className="text-xs sm:text-sm">
+                                {flow}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </FormControl>

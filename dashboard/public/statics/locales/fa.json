@@ -419,7 +419,8 @@
       "cancelSuccess": "تغییرات لغو شد و تنظیمات اصلی بازیابی شد",
       "defaultFlow": {
         "title": "جریان VLESS پیش‌فرض",
-        "description": "پر کردن خودکار فیلد جریان برای کاربران جدید VLESS"
+        "description": "پر کردن خودکار فیلد جریان برای کاربران جدید VLESS",
+        "none": "بدون"
       },
       "defaultMethod": {
         "title": "روش پیش‌فرض Shadowsocks",

@@ -142,7 +142,8 @@
       "cancelSuccess": "Changes cancelled and original settings restored",
       "defaultFlow": {
         "title": "Default VLESS Flow",
-        "description": "Autofill the flow field for new VLESS users"
+        "description": "Autofill the flow field for new VLESS users",
+        "none": "None"
       },
       "defaultMethod": {
         "title": "Default Shadowsocks Method",
