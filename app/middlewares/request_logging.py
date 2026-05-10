@@ -1,6 +1,7 @@
 import logging
 from time import perf_counter
 
+from h11 import LocalProtocolError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
@@ -16,15 +17,30 @@ class RequestProcessTimeLoggingMiddleware:
 
         start_time = perf_counter()
         status_code = 500
+        connection_closed = False
 
         async def send_wrapper(message: Message) -> None:
-            nonlocal status_code
+            nonlocal status_code, connection_closed
+            if connection_closed:
+                return
+
             if message["type"] == "http.response.start":
                 status_code = int(message.get("status", 500))
-            await send(message)
+
+            try:
+                await send(message)
+            except LocalProtocolError as exc:
+                # Connection has already transitioned to MUST_CLOSE.
+                if "MUST_CLOSE" in str(exc):
+                    connection_closed = True
+                    return
+                raise
 
         try:
             await self.app(scope, receive, send_wrapper)
+        except LocalProtocolError as exc:
+            if "MUST_CLOSE" not in str(exc):
+                raise
         finally:
             process_time_ms = (perf_counter() - start_time) * 1000
             path = scope.get("path", "")
