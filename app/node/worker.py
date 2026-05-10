@@ -11,7 +11,8 @@ from app import on_shutdown, on_startup
 from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.node import get_node_by_id, get_nodes
-from app.models.node import NodeCoreUpdate, NodeGeoFilesUpdate
+from app.db.models import NodeStatus
+from app.models.node import NodeCoreUpdate, NodeGeoFilesUpdate, NodeListQuery
 from app.nats.rpc_service import BaseRpcService
 from app.nats.proto_utils import deserialize_proto_message, deserialize_proto_messages
 from app.node import node_manager
@@ -178,9 +179,15 @@ class NodeWorkerService(BaseRpcService):
         await core_manager._reload_from_cache()
         async with GetDB() as db:
             if node_ids:
-                nodes, _ = await get_nodes(db, ids=node_ids)
+                nodes, _ = await get_nodes(db, query=NodeListQuery(ids=node_ids))
             else:
-                nodes, _ = await get_nodes(db, enabled=True, core_id=core_id)
+                nodes, _ = await get_nodes(
+                    db,
+                    query=NodeListQuery(
+                        core_id=core_id,
+                        status=[NodeStatus.connected, NodeStatus.connecting, NodeStatus.error],
+                    ),
+                )
             await self._node_operator.connect_nodes_bulk(db, nodes)
 
     async def _disconnect_node(self, data: dict):

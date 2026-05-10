@@ -14,6 +14,7 @@ from app.core.xray import XRayConfig
 from app.db import GetDB
 from app.db.crud.core import get_core_configs
 from app.db.models import CoreConfig, CoreType
+from app.models.core import CoreListQuery
 from app.nats import is_nats_enabled
 from app.nats.client import setup_nats_kv
 from app.nats.message import MessageTopic
@@ -206,7 +207,7 @@ class CoreManager:
         if cached_loaded:
             return
 
-        core_configs, _ = await get_core_configs(db)
+        core_configs, _ = await get_core_configs(db, CoreListQuery())
         cores: dict[int, AbstractCore] = {}
         for config in core_configs:
             core_config = self.validate_core(
