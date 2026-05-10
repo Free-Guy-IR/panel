@@ -18,12 +18,12 @@ from app.models.node import (
     NodeListQuery,
     NodeModify,
     NodeResponse,
-    NodeSimpleListQuery,
     NodeSettings,
-    NodeStatsPeriodQuery,
-    NodeUsageQuery,
+    NodeSimpleListQuery,
     NodesResponse,
     NodesSimpleResponse,
+    NodeStatsPeriodQuery,
+    NodeUsageQuery,
     RemoveNodesResponse,
     UsageTable,
     UserIPList,
@@ -37,11 +37,14 @@ from app.models.stats import (
     UserCountMetricStatsList,
     validate_user_count_metric_scope,
 )
+from app.nats.node_rpc import node_nats_client
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
 from app.utils import responses
-from app.nats.node_rpc import node_nats_client
+from app.utils.logger import get_logger
 from config import runtime_settings
+
+from .authentication import check_sudo_admin
 from .dependencies import (
     get_node_clear_usage_query,
     get_node_list_query,
@@ -50,9 +53,8 @@ from .dependencies import (
     get_node_usage_query,
 )
 
-from .authentication import check_sudo_admin
-
 node_operator = NodeOperation(operator_type=OperatorType.API)
+logger = get_logger("node-router")
 router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses._401, 403: responses._403})
 
 
@@ -74,8 +76,8 @@ async def _node_logs_local(node_id: int, request: Request) -> EventSourceRespons
                     yield f"{item}"
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            yield f"Error retrieving logs: {str(e)}\n"
+        except Exception:
+            logger.exception("Failed to stream local node logs", extra={"node_id": node_id})
 
     return EventSourceResponse(event_generator())
 
@@ -109,8 +111,8 @@ async def _node_logs_remote(node_id: int, request: Request) -> EventSourceRespon
                 yield msg.data.decode()
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            yield f"Error retrieving logs: {str(e)}\n"
+        except Exception:
+            logger.exception("Failed to stream remote node logs", extra={"node_id": node_id})
         finally:
             if stop_subject:
                 try:

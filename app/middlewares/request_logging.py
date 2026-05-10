@@ -1,35 +1,45 @@
 import logging
 from time import perf_counter
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
-class RequestProcessTimeLoggingMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, access_logger: logging.Logger):
-        super().__init__(app)
+class RequestProcessTimeLoggingMiddleware:
+    def __init__(self, app: ASGIApp, access_logger: logging.Logger):
+        self.app = app
         self.access_logger = access_logger
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         start_time = perf_counter()
         status_code = 500
 
+        async def send_wrapper(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = int(message.get("status", 500))
+            await send(message)
+
         try:
-            response = await call_next(request)
-            status_code = response.status_code
-            return response
+            await self.app(scope, receive, send_wrapper)
         finally:
             process_time_ms = (perf_counter() - start_time) * 1000
-            path = request.url.path
-            if request.url.query:
-                path = f"{path}?{request.url.query}"
-            http_version = request.scope.get("http_version", "1.1")
-            client_addr = request.client.host if request.client else "-"
+            path = scope.get("path", "")
+            query_bytes = scope.get("query_string", b"")
+            if query_bytes:
+                path = f"{path}?{query_bytes.decode(errors='replace')}"
+            http_version = scope.get("http_version", "1.1")
+            client = scope.get("client")
+            client_addr = client[0] if client else "-"
+            method = scope.get("method", "-")
 
             self.access_logger.info(
                 '%s - "%s %s HTTP/%s" %d',
                 client_addr,
-                request.method,
+                method,
                 path,
                 http_version,
                 status_code,
