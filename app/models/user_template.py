@@ -124,11 +124,13 @@ class UserTemplateSimpleSortOption(str, Enum):
 
 
 class UserTemplateListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
 
 
 class UserTemplateSimpleListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
     search: str | None = None

@@ -164,6 +164,8 @@ async def get_nodes_simple(
     """
     stmt = select(Node.id, Node.name, Node.status)
 
+    if query.ids:
+        stmt = stmt.where(Node.id.in_(query.ids))
     if query.search:
         search_value = query.search.strip()
         if search_value:

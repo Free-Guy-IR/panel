@@ -123,6 +123,8 @@ async def get_hosts(db: AsyncSession, query: HostListQuery | None = None) -> lis
     query = query or HostListQuery()
     stmt = select(ProxyHost).order_by(ProxyHost.priority.asc())
 
+    if query.ids:
+        stmt = stmt.where(ProxyHost.id.in_(query.ids))
     if query.offset:
         stmt = stmt.offset(query.offset)
     if query.limit:

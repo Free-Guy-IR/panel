@@ -107,6 +107,8 @@ async def get_group(db: AsyncSession, query: GroupListQuery) -> tuple[list[Group
             - int: The total count of groups
     """
     groups = select(Group)
+    if query.ids:
+        groups = groups.where(Group.id.in_(query.ids))
 
     count_query = select(func.count()).select_from(groups.subquery())
 
@@ -141,6 +143,8 @@ async def get_groups_simple(
     """
     stmt = select(Group.id, Group.name)
 
+    if query.ids:
+        stmt = stmt.where(Group.id.in_(query.ids))
     if query.search:
         stmt = stmt.where(Group.name.ilike(f"%{query.search}%"))
 

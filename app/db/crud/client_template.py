@@ -95,6 +95,8 @@ async def get_client_templates(
     query: ClientTemplateListQuery,
 ) -> tuple[list[ClientTemplate], int]:
     stmt = select(ClientTemplate)
+    if query.ids:
+        stmt = stmt.where(ClientTemplate.id.in_(query.ids))
     if query.template_type is not None:
         stmt = stmt.where(ClientTemplate.template_type == query.template_type.value)
 
@@ -116,6 +118,8 @@ async def get_client_templates_simple(
 ) -> tuple[list[tuple[int, str, str, bool]], int]:
     stmt = select(ClientTemplate.id, ClientTemplate.name, ClientTemplate.template_type, ClientTemplate.is_default)
 
+    if query.ids:
+        stmt = stmt.where(ClientTemplate.id.in_(query.ids))
     if query.search:
         stmt = stmt.where(ClientTemplate.name.ilike(f"%{query.search.strip()}%"))
 

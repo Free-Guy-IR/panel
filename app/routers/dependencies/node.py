@@ -35,5 +35,5 @@ get_node_list_query = make_query_dependency(
 )
 get_node_simple_list_query = make_query_dependency(
     NodeSimpleListQuery,
-    field_overrides={"sort": query_param(str | None, None)},
+    field_overrides={"ids": Query(None), "sort": query_param(str | None, None)},
 )

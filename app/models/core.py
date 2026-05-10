@@ -112,11 +112,13 @@ class CoreSimpleSortOption(str, Enum):
 
 
 class CoreListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
 
 
 class CoreSimpleListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
     search: str | None = None

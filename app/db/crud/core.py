@@ -111,6 +111,8 @@ async def get_core_configs(db: AsyncSession, query: CoreListQuery) -> tuple[list
             - int: The total count of core configurations
     """
     stmt = select(CoreConfig).order_by(CoreConfig.created_at.asc())
+    if query.ids:
+        stmt = stmt.where(CoreConfig.id.in_(query.ids))
     if query.offset:
         stmt = stmt.offset(query.offset)
     if query.limit:
@@ -140,6 +142,8 @@ async def get_cores_simple(
     """
     stmt = select(CoreConfig.id, CoreConfig.name, CoreConfig.type)
 
+    if query.ids:
+        stmt = stmt.where(CoreConfig.id.in_(query.ids))
     if query.search:
         stmt = stmt.where(CoreConfig.name.ilike(f"%{query.search}%"))
 

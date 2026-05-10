@@ -268,6 +268,10 @@ async def get_admins(
     """
     params = query
     base_query = select(Admin)
+    if params.ids:
+        base_query = base_query.where(Admin.id.in_(params.ids))
+    if params.usernames:
+        base_query = base_query.where(Admin.username.in_(params.usernames))
     if params.username:
         base_query = base_query.where(Admin.username.ilike(f"%{params.username}%"))
 
@@ -385,6 +389,10 @@ async def get_admins_simple(
     """
     stmt = select(Admin.id, Admin.username)
 
+    if query.ids:
+        stmt = stmt.where(Admin.id.in_(query.ids))
+    if query.usernames:
+        stmt = stmt.where(Admin.username.in_(query.usernames))
     if query.search:
         stmt = stmt.where(Admin.username.ilike(f"%{query.search}%"))
 

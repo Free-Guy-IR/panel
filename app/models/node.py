@@ -275,13 +275,14 @@ class NodeListQuery(BaseModel):
     core_id: int | None = None
     offset: int | None = None
     limit: int | None = None
+    ids: list[int] | None = None
     status: NodeStatus | list[NodeStatus] | None = None
     enabled: bool = False
-    ids: list[int] | None = None
     search: str | None = None
 
 
 class NodeSimpleListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
     search: str | None = None

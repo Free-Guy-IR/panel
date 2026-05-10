@@ -125,12 +125,14 @@ class ClientTemplateSimpleSortOption(str, Enum):
 
 
 class ClientTemplateListQuery(BaseModel):
+    ids: list[int] | None = None
     template_type: ClientTemplateType | None = None
     offset: int | None = None
     limit: int | None = None
 
 
 class ClientTemplateSimpleListQuery(BaseModel):
+    ids: list[int] | None = None
     template_type: ClientTemplateType | None = None
     offset: int | None = None
     limit: int | None = None

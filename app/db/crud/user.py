@@ -309,8 +309,12 @@ async def get_users(
     )
 
     filters = []
+    if query.ids:
+        filters.append(User.id.in_(query.ids))
     if query.username:
         filters.append(User.username.in_(query.username))
+    if query.usernames:
+        filters.append(User.username.in_(query.usernames))
     if query.search:
         filters.append(or_(User.username.ilike(f"%{query.search}%"), User.note.ilike(f"%{query.search}%")))
 
@@ -415,6 +419,10 @@ async def get_users_simple(
     stmt = select(User.id, User.username)
 
     filters = []
+    if query.ids:
+        filters.append(User.id.in_(query.ids))
+    if query.usernames:
+        filters.append(User.username.in_(query.usernames))
     if query.search:
         filters.append(User.username.ilike(f"%{query.search}%"))
     if admin:

@@ -155,6 +155,8 @@ async def get_user_templates(db: AsyncSession, query: UserTemplateListQuery) -> 
         List[UserTemplate]: A list of user template objects.
     """
     stmt = select(UserTemplate).order_by(UserTemplate.id.asc())
+    if query.ids:
+        stmt = stmt.where(UserTemplate.id.in_(query.ids))
     if query.offset:
         stmt = stmt.offset(query.offset)
     if query.limit:
@@ -187,6 +189,8 @@ async def get_user_templates_simple(
     """
     stmt = select(UserTemplate.id, UserTemplate.name)
 
+    if query.ids:
+        stmt = stmt.where(UserTemplate.id.in_(query.ids))
     if query.search:
         search_value = query.search.strip()
         if search_value:

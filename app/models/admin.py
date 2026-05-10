@@ -223,6 +223,8 @@ class AdminSimpleSortOption(str, Enum):
 
 
 class AdminListQuery(BaseModel):
+    ids: list[int] | None = None
+    usernames: list[str] | None = None
     username: str | None = None
     offset: int | None = None
     limit: int | None = None
@@ -235,6 +237,8 @@ class AdminListQuery(BaseModel):
 
 
 class AdminSimpleListQuery(BaseModel):
+    ids: list[int] | None = None
+    usernames: list[str] | None = None
     search: str | None = None
     offset: int | None = None
     limit: int | None = None

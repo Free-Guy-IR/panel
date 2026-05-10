@@ -227,7 +227,9 @@ class UserSimpleSortOption(str, Enum):
 class UserListQuery(BaseModel):
     offset: int | None = Field(default=None)
     limit: int | None = Field(default=None)
+    ids: list[int] | None = Field(default=None)
     username: list[str] | None = Field(default=None)
+    usernames: list[str] | None = Field(default=None)
     owner: list[str] | None = Field(default=None, alias="admin")
     admin_ids: list[int] | None = Field(default=None, validation_alias=AliasChoices("admin_ids", "admin_id"))
     group_ids: list[int] | None = Field(default=None, alias="group")
@@ -264,6 +266,8 @@ class UserListQuery(BaseModel):
 
 
 class UserSimpleListQuery(BaseModel):
+    ids: list[int] | None = Field(default=None)
+    usernames: list[str] | None = Field(default=None)
     offset: int | None = Field(default=None)
     limit: int | None = Field(default=None)
     search: str | None = Field(default=None)

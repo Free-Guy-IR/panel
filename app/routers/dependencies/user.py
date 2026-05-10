@@ -8,7 +8,9 @@ from ._common import make_query_dependency, query_param
 get_user_list_query = make_query_dependency(
     UserListQuery,
     field_overrides={
+        "ids": Query(None),
         "username": Query(None),
+        "usernames": Query(None),
         "owner": Query(None, alias="admin"),
         "admin_ids": Query(None, alias="admin_ids"),
         "group_ids": Query(None, alias="group"),
@@ -24,7 +26,11 @@ get_user_list_query = make_query_dependency(
 )
 get_user_simple_list_query = make_query_dependency(
     UserSimpleListQuery,
-    field_overrides={"sort": query_param(str | None, None)},
+    field_overrides={
+        "ids": Query(None),
+        "usernames": Query(None),
+        "sort": query_param(str | None, None),
+    },
 )
 get_user_usage_query = make_query_dependency(
     UserUsageQuery,

@@ -82,11 +82,13 @@ class GroupSimpleSortOption(str, Enum):
 
 
 class GroupListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
 
 
 class GroupSimpleListQuery(BaseModel):
+    ids: list[int] | None = None
     offset: int | None = None
     limit: int | None = None
     search: str | None = None
