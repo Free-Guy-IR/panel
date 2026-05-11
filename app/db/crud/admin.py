@@ -46,7 +46,7 @@ def _build_admin_sort_clause(sort_option: AdminSortOption):
         AdminSortField.used_traffic: Admin.used_traffic,
     }
     column = field_map[sort_option.field]
-    return column.desc() if sort_option.direction == SortDirection.desc else column.asc()
+    return column.desc() if sort_option.value.startswith("-") else column.asc()
 
 
 def _build_admin_simple_sort_clause(sort_option: AdminSimpleSortOption):
@@ -55,7 +55,7 @@ def _build_admin_simple_sort_clause(sort_option: AdminSimpleSortOption):
         AdminSimpleSortField.username: Admin.username,
     }
     column = field_map[sort_option.field]
-    return column.desc() if sort_option.direction == SortDirection.desc else column.asc()
+    return column.desc() if sort_option.value.startswith("-") else column.asc()
 
 
 async def get_admin(
