@@ -39,6 +39,28 @@ type OvalFetcherParams = FetchOptions<'json'> & {
   data?: FetchOptions<'json'>['body']
 }
 export const orvalFetcher = async <T>({ url, method, params, data: body }: OvalFetcherParams): Promise<T> => {
+  if (method === 'GET') {
+    // 1. If we have data in a GET request, it means arguments were shifted or
+    // we manually passed data to rescue dropped parameters.
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      params = { ...params, ...(body as Record<string, unknown>) }
+      body = undefined
+    } else if (body) {
+      // If it's not an object (e.g. just a string or array), we can't easily merge it
+      // unless we know the key. But for the known cases (status), it's usually an object
+      // when passed from the frontend filters.
+    }
+
+    // 2. If 'query' is present in params, check if it looks like React Query options.
+    if (params && 'query' in params) {
+      const queryVal = (params as any).query
+      if (queryVal && typeof queryVal === 'object' && ('staleTime' in queryVal || 'gcTime' in queryVal || 'retry' in queryVal)) {
+        const { query: _query, ...rest } = params as any
+        params = rest
+      }
+    }
+  }
+
   return fetcher(url, {
     method,
     params,

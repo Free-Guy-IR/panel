@@ -3486,7 +3486,7 @@ export const useRemoveAdminById = <TData = Awaited<ReturnType<typeof removeAdmin
  * @summary Get Admins
  */
 export const getAdmins = (adminSortOption: BodyType<AdminSortOption[]>, params?: GetAdminsParams, signal?: AbortSignal) => {
-  return orvalFetcher<AdminsResponse>({ url: `/api/admins`, method: 'GET', headers: { 'Content-Type': 'application/json' }, params, signal })
+  return orvalFetcher<AdminsResponse>({ url: `/api/admins`, method: 'GET', headers: { 'Content-Type': 'application/json' }, data: adminSortOption, params, signal })
 }
 
 export const getGetAdminsQueryKey = (adminSortOption: AdminSortOption[], params?: GetAdminsParams) => {
@@ -10033,7 +10033,7 @@ export function useGetUserSubUpdateListById<TData = Awaited<ReturnType<typeof ge
  * @summary Get Users
  */
 export const getUsers = (getUsersBody: BodyType<GetUsersBody>, params?: GetUsersParams, signal?: AbortSignal) => {
-  return orvalFetcher<UsersResponse>({ url: `/api/users`, method: 'GET', headers: { 'Content-Type': 'application/json' }, params, signal })
+  return orvalFetcher<UsersResponse>({ url: `/api/users`, method: 'GET', headers: { 'Content-Type': 'application/json' }, data: getUsersBody, params, signal })
 }
 
 export const getGetUsersQueryKey = (getUsersBody: GetUsersBody, params?: GetUsersParams) => {
