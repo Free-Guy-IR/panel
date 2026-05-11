@@ -53,6 +53,8 @@ class ServerSettings(EnvSettings):
     ssl_ca_type: str = Field(default="public", validation_alias="UVICORN_SSL_CA_TYPE")
     workers: int = Field(default=1, validation_alias="UVICORN_WORKERS")
     loop: str = Field(default="auto", validation_alias="UVICORN_LOOP")
+    proxy_headers: bool = Field(default=False, validation_alias="UVICORN_PROXY_HEADERS")
+    forwarded_allow_ips: str | list[str] = Field(default="127.0.0.1", validation_alias="UVICORN_FORWARDED_ALLOW_IPS")
 
     @field_validator("ssl_ca_type")
     @classmethod

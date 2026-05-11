@@ -12,20 +12,19 @@ from app.models.admin import (
     AdminListQuery,
     AdminModify,
     AdminSimpleListQuery,
-    Token,
-    AdminUsageQuery,
     AdminsResponse,
     AdminsSimpleResponse,
+    AdminUsageQuery,
     BulkAdminsActionResponse,
     BulkAdminSelection,
     RemoveAdminsResponse,
+    Token,
 )
 from app.models.stats import UserUsageStatsList
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
 from app.utils import responses
 from app.utils.jwt import create_admin_token
-from .dependencies import get_admin_list_query, get_admin_simple_list_query, get_admin_usage_query
 
 from .authentication import (
     check_sudo_admin,
@@ -34,16 +33,14 @@ from .authentication import (
     validate_admin,
     validate_mini_app_admin,
 )
+from .dependencies import get_admin_list_query, get_admin_simple_list_query, get_admin_usage_query
 
 router = APIRouter(tags=["Admin"], prefix="/api/admin", responses={401: responses._401, 403: responses._403})
 admin_operator = AdminOperation(operator_type=OperatorType.API)
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract the client's IP address from the request headers or client."""
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    """Extract the client's IP address from the request."""
     if request.client:
         return request.client.host
     return "Unknown"
