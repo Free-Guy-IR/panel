@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 3.2.0
+ * OpenAPI spec version: 3.2.1
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -124,8 +124,6 @@ export type GetUsersSimpleParams = {
   all?: boolean
 }
 
-export type GetUsersBody = UserStatus | UserStatus[] | null
-
 export type GetUsersParams = {
   offset?: number | null
   limit?: number | null
@@ -136,6 +134,7 @@ export type GetUsersParams = {
   admin_ids?: number[] | null
   group?: number[] | null
   search?: string | null
+  status?: UserStatus | UserStatus[] | null
   sort?: string | null
   proxy_id?: string | null
   data_limit_reset_strategy?: DataLimitResetStrategy | DataLimitResetStrategy[] | null
@@ -347,6 +346,7 @@ export type GetAdminsParams = {
   username?: string | null
   offset?: number | null
   limit?: number | null
+  sort?: string | null
 }
 
 export type Health200 = { [key: string]: unknown }
@@ -367,13 +367,6 @@ export interface XrayNoiseSettings {
 export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
-
-export interface XrayMuxSettingsOutput {
-  enabled?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
 
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
@@ -403,6 +396,13 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
+
+export interface XrayMuxSettingsOutput {
+  enabled?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
 
 export type XTLSFlows = (typeof XTLSFlows)[keyof typeof XTLSFlows]
 
@@ -556,6 +556,18 @@ export type XHttpSettingsInputXPaddingBytes = string | number | null
 
 export type XHttpSettingsInputNoGrpcHeader = boolean | null
 
+export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const XHttpModes = {
+  auto: 'auto',
+  'packet-up': 'packet-up',
+  'stream-up': 'stream-up',
+  'stream-one': 'stream-one',
+} as const
+
+export type XHttpSettingsInputMode = XHttpModes | null
+
 export interface XHttpSettingsInput {
   mode?: XHttpSettingsInputMode
   no_grpc_header?: XHttpSettingsInputNoGrpcHeader
@@ -578,18 +590,6 @@ export interface XHttpSettingsInput {
   xmux?: XHttpSettingsInputXmux
   download_settings?: XHttpSettingsInputDownloadSettings
 }
-
-export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const XHttpModes = {
-  auto: 'auto',
-  'packet-up': 'packet-up',
-  'stream-up': 'stream-up',
-  'stream-one': 'stream-one',
-} as const
-
-export type XHttpSettingsInputMode = XHttpModes | null
 
 export interface WorkersHealth {
   scheduler: WorkerHealth
@@ -1031,13 +1031,6 @@ export interface UserModify {
   status?: UserModifyStatus
 }
 
-/**
- * User IP list - mapping of IP addresses to connection counts
- */
-export interface UserIPList {
-  ips: UserIPListIps
-}
-
 export type UserIPListAllNodes = { [key: string]: UserIPList | null }
 
 /**
@@ -1048,6 +1041,13 @@ export interface UserIPListAll {
 }
 
 export type UserIPListIps = { [key: string]: number }
+
+/**
+ * User IP list - mapping of IP addresses to connection counts
+ */
+export interface UserIPList {
+  ips: UserIPListIps
+}
 
 export type UserCreateStatus = UserStatus | null
 
@@ -1534,6 +1534,31 @@ export type NotificationSettingsTelegramChatId = number | null
 
 export type NotificationSettingsTelegramApiToken = string | null
 
+export interface NotificationEnable {
+  admin?: AdminNotificationEnable
+  core?: BaseNotificationEnable
+  group?: BaseNotificationEnable
+  host?: HostNotificationEnable
+  node?: NodeNotificationEnable
+  user?: UserNotificationEnable
+  user_template?: BaseNotificationEnable
+  days_left?: boolean
+  percentage_reached?: boolean
+}
+
+/**
+ * Per-object notification channels
+ */
+export interface NotificationChannels {
+  admin?: NotificationChannel
+  core?: NotificationChannel
+  group?: NotificationChannel
+  host?: NotificationChannel
+  node?: NotificationChannel
+  user?: NotificationChannel
+  user_template?: NotificationChannel
+}
+
 export interface NotificationSettings {
   notify_telegram?: boolean
   notify_discord?: boolean
@@ -1545,18 +1570,6 @@ export interface NotificationSettings {
   proxy_url?: NotificationSettingsProxyUrl
   /** */
   max_retries: number
-}
-
-export interface NotificationEnable {
-  admin?: AdminNotificationEnable
-  core?: BaseNotificationEnable
-  group?: BaseNotificationEnable
-  host?: HostNotificationEnable
-  node?: NodeNotificationEnable
-  user?: UserNotificationEnable
-  user_template?: BaseNotificationEnable
-  days_left?: boolean
-  percentage_reached?: boolean
 }
 
 export type NotificationChannelDiscordWebhookUrl = string | null
@@ -1572,19 +1585,6 @@ export interface NotificationChannel {
   telegram_chat_id?: NotificationChannelTelegramChatId
   telegram_topic_id?: NotificationChannelTelegramTopicId
   discord_webhook_url?: NotificationChannelDiscordWebhookUrl
-}
-
-/**
- * Per-object notification channels
- */
-export interface NotificationChannels {
-  admin?: NotificationChannel
-  core?: NotificationChannel
-  group?: NotificationChannel
-  host?: NotificationChannel
-  node?: NotificationChannel
-  user?: NotificationChannel
-  user_template?: NotificationChannel
 }
 
 export interface NotFound {
@@ -2160,6 +2160,26 @@ export type CreateHostMuxSettings = MuxSettingsInput | null
 
 export type CreateHostTransportSettings = TransportSettingsInput | null
 
+export type CreateHostHttpHeadersAnyOf = { [key: string]: string }
+
+export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
+
+export type CreateHostAllowinsecure = boolean | null
+
+export type CreateHostAlpn = ProxyHostALPN[] | null
+
+export type CreateHostPath = string | null
+
+export type CreateHostHost = string[] | null
+
+export type CreateHostSni = string[] | null
+
+export type CreateHostPort = number | null
+
+export type CreateHostInboundTag = string | null
+
+export type CreateHostId = number | null
+
 export interface CreateHost {
   id?: CreateHostId
   remark: string
@@ -2191,26 +2211,6 @@ export interface CreateHost {
   wireguard_overrides?: CreateHostWireguardOverrides
   subscription_templates?: CreateHostSubscriptionTemplates
 }
-
-export type CreateHostHttpHeadersAnyOf = { [key: string]: string }
-
-export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
-
-export type CreateHostAllowinsecure = boolean | null
-
-export type CreateHostAlpn = ProxyHostALPN[] | null
-
-export type CreateHostPath = string | null
-
-export type CreateHostHost = string[] | null
-
-export type CreateHostSni = string[] | null
-
-export type CreateHostPort = number | null
-
-export type CreateHostInboundTag = string | null
-
-export type CreateHostId = number | null
 
 /**
  * Response model for lightweight core list.
@@ -2352,6 +2352,12 @@ export interface ClientTemplateCreate {
   template_type: ClientTemplateType
   content: string
   is_default?: boolean
+}
+
+export interface Brutal {
+  enable?: boolean
+  up_mbps: number
+  down_mbps: number
 }
 
 export type ClashMuxSettingsBrutal = Brutal | null
@@ -2577,12 +2583,6 @@ export interface BulkAdminSelection {
   usernames?: string[]
 }
 
-export interface Brutal {
-  enable?: boolean
-  up_mbps: number
-  down_mbps: number
-}
-
 export type BodyAdminTokenApiAdminTokenPostClientSecret = string | null
 
 export type BodyAdminTokenApiAdminTokenPostClientId = string | null
@@ -2704,18 +2704,6 @@ export interface AdminsResponse {
   active: number
   disabled: number
 }
-
-export type AdminSortOption = (typeof AdminSortOption)[keyof typeof AdminSortOption]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const AdminSortOption = {
-  username: 'username',
-  created_at: 'created_at',
-  used_traffic: 'used_traffic',
-  '-username': '-username',
-  '-created_at': '-created_at',
-  '-used_traffic': '-used_traffic',
-} as const
 
 /**
  * Lightweight admin model with only id and username for performance.
@@ -3485,24 +3473,23 @@ export const useRemoveAdminById = <TData = Awaited<ReturnType<typeof removeAdmin
  * Fetch a list of admins with optional filters for pagination and username.
  * @summary Get Admins
  */
-export const getAdmins = (adminSortOption: BodyType<AdminSortOption[]>, params?: GetAdminsParams, signal?: AbortSignal) => {
-  return orvalFetcher<AdminsResponse>({ url: `/api/admins`, method: 'GET', headers: { 'Content-Type': 'application/json' }, data: adminSortOption, params, signal })
+export const getAdmins = (params?: GetAdminsParams, signal?: AbortSignal) => {
+  return orvalFetcher<AdminsResponse>({ url: `/api/admins`, method: 'GET', params, signal })
 }
 
-export const getGetAdminsQueryKey = (adminSortOption: AdminSortOption[], params?: GetAdminsParams) => {
-  return [`/api/admins`, ...(params ? [params] : []), adminSortOption] as const
+export const getGetAdminsQueryKey = (params?: GetAdminsParams) => {
+  return [`/api/admins`, ...(params ? [params] : [])] as const
 }
 
 export const getGetAdminsQueryOptions = <TData = Awaited<ReturnType<typeof getAdmins>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
-  adminSortOption: AdminSortOption[],
   params?: GetAdminsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>> },
 ) => {
   const { query: queryOptions } = options ?? {}
 
-  const queryKey = queryOptions?.queryKey ?? getGetAdminsQueryKey(adminSortOption, params)
+  const queryKey = queryOptions?.queryKey ?? getGetAdminsQueryKey(params)
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdmins>>> = ({ signal }) => getAdmins(adminSortOption, params, signal)
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdmins>>> = ({ signal }) => getAdmins(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -3511,21 +3498,18 @@ export type GetAdminsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdmi
 export type GetAdminsQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
 
 export function useGetAdmins<TData = Awaited<ReturnType<typeof getAdmins>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
-  adminSortOption: AdminSortOption[],
   params: undefined | GetAdminsParams,
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>, 'initialData'>
   },
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetAdmins<TData = Awaited<ReturnType<typeof getAdmins>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
-  adminSortOption: AdminSortOption[],
   params?: GetAdminsParams,
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>> & Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>, 'initialData'>
   },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetAdmins<TData = Awaited<ReturnType<typeof getAdmins>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
-  adminSortOption: AdminSortOption[],
   params?: GetAdminsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -3534,11 +3518,10 @@ export function useGetAdmins<TData = Awaited<ReturnType<typeof getAdmins>>, TErr
  */
 
 export function useGetAdmins<TData = Awaited<ReturnType<typeof getAdmins>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
-  adminSortOption: AdminSortOption[],
   params?: GetAdminsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdmins>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-  const queryOptions = getGetAdminsQueryOptions(adminSortOption, params, options)
+  const queryOptions = getGetAdminsQueryOptions(params, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
@@ -10032,24 +10015,23 @@ export function useGetUserSubUpdateListById<TData = Awaited<ReturnType<typeof ge
  * Get all users
  * @summary Get Users
  */
-export const getUsers = (getUsersBody: BodyType<GetUsersBody>, params?: GetUsersParams, signal?: AbortSignal) => {
-  return orvalFetcher<UsersResponse>({ url: `/api/users`, method: 'GET', headers: { 'Content-Type': 'application/json' }, data: getUsersBody, params, signal })
+export const getUsers = (params?: GetUsersParams, signal?: AbortSignal) => {
+  return orvalFetcher<UsersResponse>({ url: `/api/users`, method: 'GET', params, signal })
 }
 
-export const getGetUsersQueryKey = (getUsersBody: GetUsersBody, params?: GetUsersParams) => {
-  return [`/api/users`, ...(params ? [params] : []), getUsersBody] as const
+export const getGetUsersQueryKey = (params?: GetUsersParams) => {
+  return [`/api/users`, ...(params ? [params] : [])] as const
 }
 
 export const getGetUsersQueryOptions = <TData = Awaited<ReturnType<typeof getUsers>>, TError = ErrorType<HTTPException | Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
-  getUsersBody: GetUsersBody,
   params?: GetUsersParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>> },
 ) => {
   const { query: queryOptions } = options ?? {}
 
-  const queryKey = queryOptions?.queryKey ?? getGetUsersQueryKey(getUsersBody, params)
+  const queryKey = queryOptions?.queryKey ?? getGetUsersQueryKey(params)
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUsers>>> = ({ signal }) => getUsers(getUsersBody, params, signal)
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUsers>>> = ({ signal }) => getUsers(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
@@ -10058,21 +10040,18 @@ export type GetUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getUsers
 export type GetUsersQueryError = ErrorType<HTTPException | Unauthorized | Forbidden | NotFound | HTTPValidationError>
 
 export function useGetUsers<TData = Awaited<ReturnType<typeof getUsers>>, TError = ErrorType<HTTPException | Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
-  getUsersBody: GetUsersBody,
   params: undefined | GetUsersParams,
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>, 'initialData'>
   },
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetUsers<TData = Awaited<ReturnType<typeof getUsers>>, TError = ErrorType<HTTPException | Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
-  getUsersBody: GetUsersBody,
   params?: GetUsersParams,
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>> & Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>, 'initialData'>
   },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetUsers<TData = Awaited<ReturnType<typeof getUsers>>, TError = ErrorType<HTTPException | Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
-  getUsersBody: GetUsersBody,
   params?: GetUsersParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -10081,11 +10060,10 @@ export function useGetUsers<TData = Awaited<ReturnType<typeof getUsers>>, TError
  */
 
 export function useGetUsers<TData = Awaited<ReturnType<typeof getUsers>>, TError = ErrorType<HTTPException | Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
-  getUsersBody: GetUsersBody,
   params?: GetUsersParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsers>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-  const queryOptions = getGetUsersQueryOptions(getUsersBody, params, options)
+  const queryOptions = getGetUsersQueryOptions(params, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 

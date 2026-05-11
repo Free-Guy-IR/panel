@@ -42,13 +42,14 @@ export const orvalFetcher = async <T>({ url, method, params, data: body }: OvalF
   if (method === 'GET') {
     // 1. If we have data in a GET request, it means arguments were shifted or
     // we manually passed data to rescue dropped parameters.
-    if (body && typeof body === 'object' && !Array.isArray(body)) {
-      params = { ...params, ...(body as Record<string, unknown>) }
+    if (body) {
+      if (typeof body === 'object' && !Array.isArray(body)) {
+        params = { ...params, ...(body as Record<string, unknown>) }
+      } else if (Array.isArray(body)) {
+        // Specifically for cases like Admin list where the 'body' is actually a sort array
+        params = { ...params, sort: body.join(',') }
+      }
       body = undefined
-    } else if (body) {
-      // If it's not an object (e.g. just a string or array), we can't easily merge it
-      // unless we know the key. But for the known cases (status), it's usually an object
-      // when passed from the frontend filters.
     }
 
     // 2. If 'query' is present in params, check if it looks like React Query options.
