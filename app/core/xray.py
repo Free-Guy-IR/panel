@@ -9,7 +9,16 @@ from typing import Union
 import commentjson
 
 from app.models.core import CoreType
+from app.models.protocol import ProxyProtocol
 from app.utils.crypto import get_cert_SANs, get_x25519_public_key
+
+
+def _protocols_from_inbounds_by_tag(inbounds_by_tag: dict[str, dict]) -> frozenset[ProxyProtocol]:
+    return frozenset(
+        protocol
+        for inbound in inbounds_by_tag.values()
+        if (protocol := ProxyProtocol.from_value(inbound["protocol"])) is not None
+    )
 
 
 class XRayConfig(dict):
@@ -45,6 +54,7 @@ class XRayConfig(dict):
         self._inbounds = []
         self._inbounds_by_tag = {}
         self._fallbacks_inbound = []
+        self._protocols: frozenset[ProxyProtocol] = frozenset()
 
         # Registery pattern for network handlers, making it easy to add support for new network types in the future
         self.network_handlers = {
@@ -360,6 +370,7 @@ class XRayConfig(dict):
         """Resolve all inbounds and their settings."""
         for inbound in self["inbounds"]:
             self._read_inbound(inbound)
+        self._protocols = _protocols_from_inbounds_by_tag(self._inbounds_by_tag)
 
     def _read_inbound(self, inbound: dict):
         """Read an inbound and its settings."""
@@ -472,6 +483,10 @@ class XRayConfig(dict):
         return self._inbounds
 
     @property
+    def protocols(self) -> frozenset[ProxyProtocol]:
+        return self._protocols
+
+    @property
     def type(self) -> str:
         return self._type
 
@@ -503,6 +518,7 @@ class XRayConfig(dict):
             instance._inbounds = data["inbounds"]
         if "inbounds_by_tag" in data:
             instance._inbounds_by_tag = data["inbounds_by_tag"]
+        instance._protocols = _protocols_from_inbounds_by_tag(instance._inbounds_by_tag)
         return instance
 
     def copy(self):

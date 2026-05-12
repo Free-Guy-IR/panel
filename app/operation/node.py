@@ -209,7 +209,11 @@ class NodeOperation(BaseOperation):
                 users_by_core[core_id] = []
                 continue
 
-            users_by_core[core_id] = await core_users(db=db, inbound_tags=core.inbounds)
+            users_by_core[core_id] = await core_users(
+                db=db,
+                inbound_tags=core.inbounds,
+                allowed_protocols=core.protocols,
+            )
 
         return cores_by_id, users_by_core
 
