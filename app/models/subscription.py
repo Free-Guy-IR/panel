@@ -117,7 +117,9 @@ class XHTTPTransportConfig(BaseTransportConfig):
     seq_key: str | None = Field(None, serialization_alias="seqKey")
     uplink_data_placement: str | None = Field(None, serialization_alias="uplinkDataPlacement")
     uplink_data_key: str | None = Field(None, serialization_alias="uplinkDataKey")
-    uplink_chunk_size: int | None = Field(None, serialization_alias="uplinkChunkSize")
+    uplink_chunk_size: str | int | None = Field(
+        None, serialization_alias="uplinkChunkSize", pattern=r"^\d{1,16}(?:-\d{1,16})?$"
+    )
     xmux: dict[str, Any] | None = Field(None)
     download_settings: SubscriptionInboundData | dict | None = Field(None, serialization_alias="downloadSettings")
     http_headers: dict[str, str] | None = Field(None)

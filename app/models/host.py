@@ -97,7 +97,7 @@ class XHttpSettings(BaseModel):
     seq_key: str | None = Field(default=None)
     uplink_data_placement: str | None = Field(default=None, pattern=r"^$|^(body|cookie|header)$")
     uplink_data_key: str | None = Field(default=None)
-    uplink_chunk_size: int | None = Field(default=None)
+    uplink_chunk_size: str | int | None = Field(default=None, pattern=r"^\d{1,16}(-\d{1,16})?$")
     sc_max_each_post_bytes: str | int | None = Field(default=None, pattern=r"^\d{1,16}(-\d{1,16})?$")
     sc_min_posts_interval_ms: str | int | None = Field(default=None, pattern=r"^\d{1,16}(-\d{1,16})?$")
     xmux: XMuxSettings | None = Field(default=None)
@@ -121,6 +121,7 @@ class XHttpSettings(BaseModel):
         "seq_key",
         "uplink_data_placement",
         "uplink_data_key",
+        "uplink_chunk_size",
         mode="before",
     )
     def _empty_str_to_none(cls, v):
