@@ -197,8 +197,8 @@ class ProxyValidator:
             http://user:pass@host:port
             socks5://user:pass@host:port
         """
-        if value is None:
-            return value
+        if not value:
+            return None
         pattern = (
             r"^(?P<scheme>http|https|socks4|socks5)://"
             r"((?P<user>[^\s:@]+):(?P<pass>[^\s:@]+)@)?"
