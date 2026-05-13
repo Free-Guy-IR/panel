@@ -35,7 +35,6 @@ from app.models.stats import (
 )
 from app.models.user import (
     ExpiredUsersQuery,
-    SortDirection,
     UserCreate,
     UserListQuery,
     UserModify,

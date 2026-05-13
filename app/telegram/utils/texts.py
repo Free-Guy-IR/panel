@@ -4,9 +4,9 @@ from html import escape
 from aiogram.utils.formatting import html_decoration
 
 from app.models.group import Group
+from app.models.status_emojis import STATUS_EMOJIS
 from app.models.system import SystemStats
 from app.models.user import UserResponse, UserStatus
-from app.subscription.share import STATUS_EMOJIS
 from app.telegram.utils.shared import readable_size
 
 b = html_decoration.bold

@@ -20,7 +20,6 @@ from app.models.admin import (
     AdminSimpleSortOption,
     AdminSortField,
     AdminSortOption,
-    SortDirection,
     hash_password,
 )
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList

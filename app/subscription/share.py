@@ -9,10 +9,11 @@ from jdatetime import date as jd
 
 from app.core.hosts import host_manager
 from app.db.models import UserStatus
+from app.models.status_emojis import STATUS_EMOJIS
 from app.models.subscription import SubscriptionInboundData
 from app.models.user import UsersResponseWithInbounds
 from app.subscription.client_templates import subscription_client_templates, subscription_xray_templates
-from app.utils.system import get_public_ip, get_public_ipv6, readable_size
+from app.utils.system import readable_size
 from config import wireguard_settings
 
 from . import (
@@ -25,16 +26,8 @@ from . import (
     XrayConfiguration,
 )
 
-SERVER_IP = get_public_ip()
-SERVER_IPV6 = get_public_ipv6()
-
-STATUS_EMOJIS = {
-    "active": "✅",
-    "expired": "⌛️",
-    "limited": "🪫",
-    "disabled": "❌",
-    "on_hold": "🔌",
-}
+SERVER_IP = "127.0.0.1"
+SERVER_IPV6 = "[::1]"
 
 
 def _build_subscription_config(

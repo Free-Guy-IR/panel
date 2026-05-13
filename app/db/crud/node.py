@@ -23,7 +23,6 @@ from app.models.node import (
     NodeSimpleListQuery,
     NodeSimpleSortField,
     NodeSimpleSortOption,
-    SortDirection,
     UsageTable,
 )
 from app.models.stats import NodeStats, NodeStatsList, NodeUsageStat, NodeUsageStatsList, Period

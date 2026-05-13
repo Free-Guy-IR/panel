@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import NextPlan, UserTemplate, template_group_association
 from app.models.user_template import (
-    SortDirection,
     UserTemplateCreate,
     UserTemplateListQuery,
     UserTemplateModify,
