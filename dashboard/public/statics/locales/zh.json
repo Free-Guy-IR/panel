@@ -2028,15 +2028,16 @@
       "tcpMptcpHint": "客户端；Linux 5.6+。",
       "v6only": "仅 IPv6 监听 (::)",
       "v6onlyHint": "仅 Linux：开启后 :: 只接受 IPv6。",
-      "happyEyeballs": "Happy Eyeballs",
+      "happyEyeballs": "快速 IPv4/IPv6",
       "happyEyeballsHint": "对域名竞速 IPv4/IPv6 连接。需要域名策略不是 AsIs。",
       "hbTryDelayMs": "尝试间隔 (毫秒)",
       "hbPrioritizeIPv6": "优先 IPv6",
       "hbInterleave": "交错 (RFC 8305)",
       "hbMaxConcurrentTry": "最大并发尝试",
-      "customSockopt": "customSockopt (JSON 数组)",
+      "customSockopt": "自定义选项",
       "customSockoptHint": "高级：原始套接字选项。必须是 JSON 对象数组。",
-      "customSockoptInvalid": "customSockopt 必须是有效的 JSON 数组。"
+      "customSockoptInvalid": "customSockopt 必须是有效的 JSON 数组。",
+      "addCustomSockopt": "添加选项"
     },
     "inbound": {
       "add": "添加入站",

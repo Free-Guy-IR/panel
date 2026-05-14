@@ -294,7 +294,7 @@ function OutboundFreedomSettings({ ob, patchOutbound, t }: { ob: Outbound; patch
         </div>
       </div>
 
-      <Accordion type="multiple" className="!mt-0 mb-6 flex w-full flex-col gap-y-6">
+      <Accordion type="multiple" className="!mt-0 flex w-full flex-col gap-y-3">
         <AccordionItem value="fragment" className={OUTBOUND_SUBACCORDION_ITEM_CLASS}>
           <AccordionTrigger>
             <div className="flex flex-wrap items-center gap-2">
@@ -815,7 +815,7 @@ function OutboundDnsSettings({ ob, patchOutbound, t }: { ob: Outbound; patchOutb
         </div>
       </div>
 
-      <Accordion type="multiple" className="!mt-0 mb-6 flex w-full flex-col gap-y-6">
+      <Accordion type="multiple" className="!mt-0 flex w-full flex-col gap-y-3">
         <AccordionItem value="dns-rules" className={OUTBOUND_SUBACCORDION_ITEM_CLASS}>
           <AccordionTrigger>
             <div className="flex flex-wrap items-center gap-2">

@@ -15,7 +15,7 @@ import { TcpHeaderObfuscationForm } from '@/features/core-editor/components/shar
 import { CoreEditorDataTable } from '@/features/core-editor/components/shared/core-editor-data-table'
 import { CoreEditorFormDialog } from '@/features/core-editor/components/shared/core-editor-form-dialog'
 import { JsonCodeEditorPanel } from '@/features/core-editor/components/shared/json-code-editor-panel'
-import { XrayStreamSockoptFields } from '@/features/core-editor/components/shared/xray-stream-sockopt-editor'
+import { pruneSockoptObject, XrayStreamSockoptFields } from '@/features/core-editor/components/shared/xray-stream-sockopt-editor'
 import { inferParityFieldMode, outboundScalarParityFieldPrefersFullGridWidth, outboundSettingToString, parseOutboundSettingValue } from '@/features/core-editor/kit/xray-parity-value'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import { useSectionHeaderAddPulseEffect, type SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
@@ -210,6 +210,29 @@ function getOutboundStreamSettingsRecord(ob: Outbound): Record<string, unknown> 
   return raw as Record<string, unknown>
 }
 
+function outboundSockoptValue(ob: Outbound): Record<string, unknown> | undefined {
+  const streamSettings = getOutboundStreamSettingsRecord(ob)
+  const raw = streamSettings?.sockopt
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? ({ ...raw } as Record<string, unknown>) : undefined
+}
+
+function patchOutboundSockopt(ob: Outbound, patchOutbound: (next: Outbound) => void, next: Record<string, unknown> | undefined) {
+  const base = { ...(ob as Record<string, unknown>) }
+  const streamSettings = { ...(getOutboundStreamSettingsRecord(ob) ?? {}) }
+  const pruned = next === undefined ? undefined : pruneSockoptObject(next)
+  if (pruned === undefined) delete streamSettings.sockopt
+  else streamSettings.sockopt = pruned
+
+  if (Object.keys(streamSettings).length === 0) delete base.streamSettings
+  else base.streamSettings = streamSettings
+  patchOutbound(stripEmptyStreamSettingsFromRecord(base) as Outbound)
+}
+
+function simpleOutboundStreamSettingsForProtocolSwitch(ob: Outbound): Record<string, unknown> | undefined {
+  const sockopt = pruneSockoptObject(outboundSockoptValue(ob))
+  return sockopt ? { sockopt } : undefined
+}
+
 /** Merge into flattened settings, then canonicalize (`vnext` / `servers`) for storage. */
 function patchOutboundWithSettingsMerge(ob: Outbound, patchOutbound: (next: Outbound) => void, mut: (flat: Record<string, unknown>) => Record<string, unknown>) {
   const flat = { ...flattenOutboundSettings(ob) }
@@ -400,9 +423,14 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
     [ob, visibility?.streamSettings],
   )
 
+  const showStandaloneOutboundSockoptAccordion = useMemo(
+    () => Boolean(visibility?.streamSettings) && !!ob && ob.protocol !== 'unmanaged' && OUTBOUND_NO_GENERIC_STREAM_UI.has(ob.protocol),
+    [ob, visibility?.streamSettings],
+  )
+
   const showOutboundStackedAccordions = useMemo(
-    () => !!ob && ob.protocol !== 'unmanaged' && (showOutboundStreamSettingsAccordion || 'mux' in ob || 'proxySettings' in ob),
-    [ob, showOutboundStreamSettingsAccordion],
+    () => !!ob && ob.protocol !== 'unmanaged' && (showOutboundStreamSettingsAccordion || showStandaloneOutboundSockoptAccordion || 'mux' in ob || 'proxySettings' in ob),
+    [ob, showOutboundStreamSettingsAccordion, showStandaloneOutboundSockoptAccordion],
   )
 
   const form = useForm<Record<string, string>>({})
@@ -837,9 +865,9 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
                                     protocol: protocol as 'freedom' | 'blackhole' | 'dns' | (typeof proxyProtocols)[number],
                                     tag: ob.tag,
                                     sendThrough: 'sendThrough' in ob ? ob.sendThrough : undefined,
+                                    streamSettings: isSimpleEnvelope ? simpleOutboundStreamSettingsForProtocolSwitch(ob) : 'streamSettings' in ob ? ob.streamSettings : undefined,
                                     ...(!isSimpleEnvelope
                                       ? {
-                                          streamSettings: 'streamSettings' in ob ? ob.streamSettings : undefined,
                                           mux: 'mux' in ob ? ob.mux : undefined,
                                           proxySettings: 'proxySettings' in ob ? ob.proxySettings : undefined,
                                         }
@@ -911,12 +939,20 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
 
                     {/* ── Stream + mux + chain proxy: stacked accordions (stream hidden for freedom/blackhole/dns — dedicated UIs) ── */}
                     {showOutboundStackedAccordions && (
-                      <Accordion type="multiple" className="!mt-0 mb-6 flex w-full flex-col gap-y-6">
+                      <Accordion type="multiple" className="!mt-0 mb-4 flex w-full flex-col gap-y-3">
                         {showOutboundStreamSettingsAccordion && (
                           <OutboundStreamSettingsAccordion
                             ob={ob}
                             obStreamSettings={obStreamSettings}
                             form={form}
+                            patchOutbound={patchOutbound}
+                            t={t}
+                            dialerProxyTagOptions={outbounds.map(o => o.tag).filter((tag): tag is string => typeof tag === 'string' && tag !== ob.tag)}
+                          />
+                        )}
+                        {showStandaloneOutboundSockoptAccordion && (
+                          <OutboundSockoptAccordion
+                            ob={ob}
                             patchOutbound={patchOutbound}
                             t={t}
                             dialerProxyTagOptions={outbounds.map(o => o.tag).filter((tag): tag is string => typeof tag === 'string' && tag !== ob.tag)}
@@ -1900,6 +1936,39 @@ function OutboundStreamSettingsAccordion({ ob, obStreamSettings, form, patchOutb
 }
 
 // ─── Advanced (Mux + Proxy) Accordion ────────────────────────────────────────
+
+interface OutboundSockoptAccordionProps {
+  ob: Outbound
+  patchOutbound: (next: Outbound) => void
+  t: (key: string, opts?: Record<string, unknown>) => string
+  dialerProxyTagOptions: readonly string[]
+}
+
+function OutboundSockoptAccordion({ ob, patchOutbound, t, dialerProxyTagOptions }: OutboundSockoptAccordionProps) {
+  const sockoptValue = outboundSockoptValue(ob)
+  const sockoptConfigured = pruneSockoptObject(sockoptValue) != null
+
+  return (
+    <AccordionItem value="sockopt" className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline">
+      <AccordionTrigger>
+        <div className="flex flex-wrap items-center gap-2">
+          <SlidersHorizontal className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
+          <span>{t('coreEditor.sockopt.section')}</span>
+          {sockoptConfigured && <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">{t('enabled', { defaultValue: 'on' })}</span>}
+        </div>
+      </AccordionTrigger>
+      <AccordionContent className="px-2 pb-4">
+        <XrayStreamSockoptFields
+          variant="outbound"
+          value={sockoptValue}
+          onChange={next => patchOutboundSockopt(ob, patchOutbound, next)}
+          t={t}
+          dialerProxyTags={dialerProxyTagOptions}
+        />
+      </AccordionContent>
+    </AccordionItem>
+  )
+}
 
 interface OutboundAdvancedAccordionProps {
   ob: Outbound

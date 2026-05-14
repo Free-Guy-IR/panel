@@ -1955,15 +1955,16 @@
       "tcpMptcpHint": "На стороне клиента; Linux 5.6+.",
       "v6only": "Только IPv6 для прослушивания (::)",
       "v6onlyHint": "Только Linux: при включении :: принимает только IPv6.",
-      "happyEyeballs": "Happy Eyeballs",
+      "happyEyeballs": "Быстрый IPv4/IPv6",
       "happyEyeballsHint": "Гонка IPv4/IPv6 для доменов. Нужна стратегия домена не AsIs.",
       "hbTryDelayMs": "Задержка попытки (мс)",
       "hbPrioritizeIPv6": "Приоритет IPv6",
       "hbInterleave": "Чередование (RFC 8305)",
       "hbMaxConcurrentTry": "Макс. одновременных попыток",
-      "customSockopt": "customSockopt (JSON-массив)",
+      "customSockopt": "Свои опции",
       "customSockoptHint": "Для опытных: сырые опции сокета. Должен быть JSON-массив объектов.",
-      "customSockoptInvalid": "customSockopt должен быть корректным JSON-массивом."
+      "customSockoptInvalid": "customSockopt должен быть корректным JSON-массивом.",
+      "addCustomSockopt": "Добавить опцию"
     },
     "inbound": {
       "add": "Добавить входящий",

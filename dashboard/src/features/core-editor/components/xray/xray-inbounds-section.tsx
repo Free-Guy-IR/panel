@@ -706,6 +706,13 @@ function mergeTransportAcrossRebuild(prev: Inbound, next: Inbound): Inbound {
   return { ...next, transport: prev.transport } as Inbound
 }
 
+function mergeStreamAdvancedAcrossRebuild(prev: Inbound, next: Inbound): Inbound {
+  if (next.protocol === 'unmanaged' || next.protocol === 'tun') return next
+  const streamAdvanced = (prev as { streamAdvanced?: unknown }).streamAdvanced
+  if (!streamAdvanced || typeof streamAdvanced !== 'object' || Array.isArray(streamAdvanced)) return next
+  return { ...next, streamAdvanced } as Inbound
+}
+
 const SNIFFING_DEST_OVERRIDE_OPTIONS = ['http', 'tls', 'quic', 'fakedns'] as const
 
 /** Grid for tunnel `portMap` editor rows (index, local port, remote target, actions). */
@@ -1516,6 +1523,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
           rebuilt = mergeShadowsocksInboundStreamFields(nextInbound, rebuilt)
         }
         rebuilt = mergeSecurityAcrossRebuild(nextInbound, rebuilt)
+        rebuilt = mergeStreamAdvancedAcrossRebuild(nextInbound, rebuilt)
         nextInbound = rebuilt
       }
     }
@@ -2651,6 +2659,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                               next = mergeShadowsocksInboundStreamFields(inbound, next)
                             }
                             next = mergeSecurityAcrossRebuild(inbound, next)
+                            next = mergeStreamAdvancedAcrossRebuild(inbound, next)
                             replaceEffectiveInbound(next)
                             if ('transport' in next && next.transport) form.setValue('transport', next.transport.type)
                             if ('security' in next && next.security) form.setValue('security', next.security.type)
@@ -3204,6 +3213,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                             next = mergeShadowsocksInboundStreamFields(inbound, next)
                           }
                           next = mergeTransportAcrossRebuild(inbound, next)
+                          next = mergeStreamAdvancedAcrossRebuild(inbound, next)
 
                           // Clear REALITY security defaults to avoid auto-population
                           if (security === 'reality' && 'security' in next && next.security?.type === 'reality') {
@@ -3768,8 +3778,8 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                     </div>
                   </div>
                 ) : null}
-                {inbound.protocol !== 'hysteria' ? renderSniffingAccordion() : null}
                 {renderInboundSockopt()}
+                {inbound.protocol !== 'hysteria' ? renderSniffingAccordion() : null}
               </div>
             </form>
           </Form>
@@ -4162,8 +4172,8 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                   )}
                 />
 
-                {renderSniffingAccordion()}
                 {renderInboundSockopt()}
+                {renderSniffingAccordion()}
               </div>
             </form>
           </Form>
@@ -4937,8 +4947,8 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                   </>
                 )}
 
-                {renderSniffingAccordion()}
                 {renderInboundSockopt()}
+                {renderSniffingAccordion()}
               </div>
             </form>
           </Form>

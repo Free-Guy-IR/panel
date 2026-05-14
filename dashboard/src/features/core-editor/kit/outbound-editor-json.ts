@@ -1,11 +1,26 @@
 import type { Outbound } from '@pasarguard/xray-config-kit'
 import { deepPruneEmptyJsonObjects } from '@/features/core-editor/kit/xray-parity-value'
 
-/** Deep-prune empty objects; use for `streamSettings`, `mux`, `proxySettings`, etc. (avoid `{}` in JSON / profile). */
+/** Deep-prune empty objects; use for `streamSettings`, `mux`, `proxySettings`, etc. (avoid `{}` in JSON / profile). Preserves sockopt even if empty. */
 export function normalizeOutboundStreamSettings(value: unknown): unknown {
   if (value === undefined || value === null) return undefined
   if (typeof value !== 'object' || Array.isArray(value)) return value
-  return deepPruneEmptyJsonObjects(value as Record<string, unknown>)
+  
+  const obj = value as Record<string, unknown>
+  const sockopt = obj.sockopt
+  const pruned = deepPruneEmptyJsonObjects(obj)
+  
+  // If sockopt existed in the original, preserve it even if empty
+  if (sockopt !== undefined && sockopt !== null && typeof sockopt === 'object' && !Array.isArray(sockopt)) {
+    if (pruned && typeof pruned === 'object' && !Array.isArray(pruned)) {
+      const prunedObj = pruned as Record<string, unknown>
+      prunedObj.sockopt = sockopt
+    } else {
+      return { sockopt }
+    }
+  }
+  
+  return pruned
 }
 
 export function stripEmptyStreamSettingsFromRecord<T extends Record<string, unknown>>(o: T): T {

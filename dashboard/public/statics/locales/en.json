@@ -2067,15 +2067,16 @@
       "tcpMptcpHint": "Client-side; Linux 5.6+.",
       "v6only": "IPv6-only listen (::)",
       "v6onlyHint": "Linux only: :: accepts only IPv6 when enabled.",
-      "happyEyeballs": "Happy Eyeballs",
+      "happyEyeballs": "Fast IPv4/IPv6",
       "happyEyeballsHint": "Race IPv4/IPv6 connects for domains. Requires domain strategy other than AsIs.",
       "hbTryDelayMs": "Try delay (ms)",
       "hbPrioritizeIPv6": "Prioritize IPv6",
       "hbInterleave": "Interleave (RFC 8305)",
       "hbMaxConcurrentTry": "Max concurrent tries",
-      "customSockopt": "customSockopt (JSON array)",
+      "customSockopt": "Custom options",
       "customSockoptHint": "Advanced: raw socket options (Linux / Windows / Darwin). Must be a JSON array of objects.",
-      "customSockoptInvalid": "customSockopt must be valid JSON array."
+      "customSockoptInvalid": "customSockopt must be valid JSON array.",
+      "addCustomSockopt": "Add option"
     },
     "inbound": {
       "keepAtLeastOne": "At least one inbound is required.",

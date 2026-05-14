@@ -1,14 +1,12 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { SlidersHorizontal } from 'lucide-react'
+import { Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
 
 export type SockoptJson = Record<string, unknown>
 
@@ -17,6 +15,9 @@ const DOMAIN_STRATEGIES = ['AsIs', 'UseIP', 'UseIPv6v4', 'UseIPv6', 'UseIPv4v6',
 const ADDRESS_PORT_STRATEGIES = ['none', 'SrvPortOnly', 'SrvAddressOnly', 'SrvPortAndAddress', 'TxtPortOnly', 'TxtAddressOnly', 'TxtPortAndAddress'] as const
 
 const TPROXY_VALUES = ['off', 'redirect', 'tproxy'] as const
+
+const CUSTOM_SOCKOPT_SYSTEMS = ['any', 'linux', 'windows', 'darwin'] as const
+const CUSTOM_SOCKOPT_TYPES = ['int', 'str'] as const
 
 function pruneHappyEyeballs(h: Record<string, unknown>): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {}
@@ -56,6 +57,14 @@ function numOrUndef(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+function stringValue(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+function numberValue(v: unknown): string {
+  return typeof v === 'number' && Number.isFinite(v) ? String(v) : ''
+}
+
 function tcpFastOpenSelectValue(v: unknown): 'default' | 'false' | 'true' | 'number' {
   if (v === undefined) return 'default'
   if (v === false) return 'false'
@@ -84,30 +93,6 @@ export interface XrayStreamSockoptFieldsProps {
 export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerProxyTags = [], showEnableRow = true, className }: XrayStreamSockoptFieldsProps) {
   const cur = useMemo(() => ({ ...(value ?? {}) }) as SockoptJson, [value])
   const [tfoNumber, setTfoNumber] = useState(() => (typeof value?.tcpFastOpen === 'number' && Number.isFinite(value.tcpFastOpen) ? String(value.tcpFastOpen) : ''))
-  const [customSockoptText, setCustomSockoptText] = useState(() => {
-    const c = value?.customSockopt
-    if (Array.isArray(c)) {
-      try {
-        return JSON.stringify(c, null, 2)
-      } catch {
-        return '[]'
-      }
-    }
-    return ''
-  })
-
-  useEffect(() => {
-    const c = value?.customSockopt
-    if (Array.isArray(c)) {
-      try {
-        setCustomSockoptText(JSON.stringify(c, null, 2))
-      } catch {
-        setCustomSockoptText('[]')
-      }
-    } else {
-      setCustomSockoptText('')
-    }
-  }, [value?.customSockopt])
 
   useEffect(() => {
     if (typeof value?.tcpFastOpen === 'number' && Number.isFinite(value.tcpFastOpen)) {
@@ -130,12 +115,34 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
 
   const sockoptConfigured = pruneSockoptObject(value) != null
 
-  const hb = (cur.happyEyeballs && typeof cur.happyEyeballs === 'object' && !Array.isArray(cur.happyEyeballs) ? (cur.happyEyeballs as Record<string, unknown>) : {}) as Record<string, unknown>
-  const happyEnabled = pruneHappyEyeballs(hb) != null
-
   const domainStrategy = typeof cur.domainStrategy === 'string' && (DOMAIN_STRATEGIES as readonly string[]).includes(cur.domainStrategy) ? cur.domainStrategy : 'AsIs'
   const tproxy = typeof cur.tproxy === 'string' && (TPROXY_VALUES as readonly string[]).includes(cur.tproxy) ? cur.tproxy : 'off'
   const addrPort = typeof cur.addressPortStrategy === 'string' && (ADDRESS_PORT_STRATEGIES as readonly string[]).includes(cur.addressPortStrategy) ? cur.addressPortStrategy : 'none'
+  const hb = (cur.happyEyeballs && typeof cur.happyEyeballs === 'object' && !Array.isArray(cur.happyEyeballs) ? (cur.happyEyeballs as Record<string, unknown>) : {}) as Record<string, unknown>
+  const happyEnabled = pruneHappyEyeballs(hb) != null
+  const customSockoptRows = Array.isArray(cur.customSockopt)
+    ? cur.customSockopt.filter((item): item is Record<string, unknown> => item != null && typeof item === 'object' && !Array.isArray(item))
+    : []
+
+  const patchCustomSockopt = (rows: Record<string, unknown>[]) => {
+    const cleaned = rows
+      .map(row => {
+        const next: Record<string, unknown> = {}
+        const system = typeof row.system === 'string' && row.system !== 'any' ? row.system.trim() : ''
+        const type = typeof row.type === 'string' ? row.type.trim() : ''
+        const level = row.level != null ? String(row.level).trim() : ''
+        const opt = row.opt != null ? String(row.opt).trim() : ''
+        const val = row.value != null ? String(row.value).trim() : ''
+        if (system) next.system = system
+        if (type) next.type = type
+        if (level) next.level = level
+        if (opt) next.opt = opt
+        if (val) next.value = val
+        return next
+      })
+      .filter(row => Object.keys(row).length > 0)
+    patch({ customSockopt: cleaned.length > 0 ? cleaned : undefined })
+  }
 
   return (
     <div className={cn('flex flex-col gap-4', className)}>
@@ -143,7 +150,6 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
         <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
           <div>
             <p className="text-sm font-medium">{t('coreEditor.sockopt.enable')}</p>
-            <p className="text-muted-foreground text-xs">{t('coreEditor.sockopt.enableHint')}</p>
           </div>
           <Switch
             checked={sockoptConfigured}
@@ -151,7 +157,6 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
               if (checked) onChange({ domainStrategy: 'AsIs' })
               else {
                 setTfoNumber('')
-                setCustomSockoptText('')
                 onChange(undefined)
               }
             }}
@@ -160,9 +165,9 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
       ) : null}
 
       {sockoptConfigured ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.domainStrategy')}</Label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.domainStrategy')}</Label>
             <Select dir="ltr" value={domainStrategy} onValueChange={v => patch({ domainStrategy: v })}>
               <SelectTrigger className="h-10 w-full min-w-0" dir="ltr">
                 <SelectValue />
@@ -175,11 +180,10 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-[11px]">{t('coreEditor.sockopt.domainStrategyHint')}</p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tproxy')}</Label>
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tproxy')}</Label>
             <Select dir="ltr" value={tproxy} onValueChange={v => patch({ tproxy: v })}>
               <SelectTrigger className="h-10 w-full min-w-0" dir="ltr">
                 <SelectValue />
@@ -194,8 +198,8 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.addressPortStrategy')}</Label>
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.addressPortStrategy')}</Label>
             <Select dir="ltr" value={addrPort} onValueChange={v => patch({ addressPortStrategy: v })}>
               <SelectTrigger className="h-10 w-full min-w-0" dir="ltr">
                 <SelectValue />
@@ -214,15 +218,14 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
             <div className="flex items-center justify-between rounded-lg border px-3 py-2.5 sm:col-span-2">
               <div>
                 <p className="text-sm font-medium">{t('coreEditor.sockopt.acceptProxyProtocol')}</p>
-                <p className="text-muted-foreground text-xs">{t('coreEditor.sockopt.acceptProxyProtocolHint')}</p>
               </div>
               <Switch checked={cur.acceptProxyProtocol === true} onCheckedChange={checked => patch({ acceptProxyProtocol: checked ? true : undefined })} />
             </div>
           ) : null}
 
           {variant === 'outbound' ? (
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.dialerProxy')}</Label>
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label>{t('coreEditor.sockopt.dialerProxy')}</Label>
               {dialerProxyTags.length > 0 ? (
                 <Select
                   dir="ltr"
@@ -246,129 +249,47 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
                   dir="ltr"
                   className="h-10 font-mono text-xs"
                   placeholder={t('coreEditor.sockopt.dialerProxyPlaceholder')}
-                  defaultValue={typeof cur.dialerProxy === 'string' ? cur.dialerProxy : ''}
-                  key={String(cur.dialerProxy ?? '')}
-                  onBlur={e => {
+                  value={stringValue(cur.dialerProxy)}
+                  onChange={e => {
                     const v = e.target.value.trim()
                     patch({ dialerProxy: v === '' ? undefined : v })
                   }}
                 />
               )}
-              <p className="text-muted-foreground text-[11px]">{t('coreEditor.sockopt.dialerProxyHint')}</p>
             </div>
           ) : null}
 
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.mark')}</Label>
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.mark')}</Label>
             <Input
               dir="ltr"
               className="h-10 font-mono text-xs"
               inputMode="numeric"
               placeholder="0"
-              defaultValue={typeof cur.mark === 'number' ? String(cur.mark) : ''}
-              key={`mark-${String(cur.mark ?? '')}`}
-              onBlur={e => {
+              value={numberValue(cur.mark)}
+              onChange={e => {
                 const n = numOrUndef(e.target.value)
                 patch({ mark: n === undefined || n === 0 ? undefined : Math.trunc(n) })
               }}
             />
-            <p className="text-muted-foreground text-[11px]">{t('coreEditor.sockopt.markHint')}</p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.interface')}</Label>
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.interface')}</Label>
             <Input
               dir="ltr"
               className="h-10 font-mono text-xs"
               placeholder="wg0"
-              defaultValue={typeof cur.interface === 'string' ? cur.interface : ''}
-              key={`if-${String(cur.interface ?? '')}`}
-              onBlur={e => {
+              value={stringValue(cur.interface)}
+              onChange={e => {
                 const v = e.target.value.trim()
                 patch({ interface: v === '' ? undefined : v })
               }}
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpCongestion')}</Label>
-            <Input
-              dir="ltr"
-              className="h-10 font-mono text-xs"
-              placeholder="bbr"
-              defaultValue={typeof cur.tcpCongestion === 'string' ? cur.tcpCongestion : ''}
-              key={`cc-${String(cur.tcpCongestion ?? '')}`}
-              onBlur={e => {
-                const v = e.target.value.trim()
-                patch({ tcpCongestion: v === '' ? undefined : v })
-              }}
-            />
-            <p className="text-muted-foreground text-[11px]">{t('coreEditor.sockopt.tcpCongestionHint')}</p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpMaxSeg')}</Label>
-            <Input
-              dir="ltr"
-              className="h-10 font-mono text-xs"
-              inputMode="numeric"
-              defaultValue={typeof cur.tcpMaxSeg === 'number' ? String(cur.tcpMaxSeg) : ''}
-              key={`mss-${String(cur.tcpMaxSeg ?? '')}`}
-              onBlur={e => patch({ tcpMaxSeg: numOrUndef(e.target.value) })}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpUserTimeout')}</Label>
-            <Input
-              dir="ltr"
-              className="h-10 font-mono text-xs"
-              inputMode="numeric"
-              placeholder="ms"
-              defaultValue={typeof cur.tcpUserTimeout === 'number' ? String(cur.tcpUserTimeout) : ''}
-              key={`tut-${String(cur.tcpUserTimeout ?? '')}`}
-              onBlur={e => patch({ tcpUserTimeout: numOrUndef(e.target.value) })}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpKeepAliveIdle')}</Label>
-            <Input
-              dir="ltr"
-              className="h-10 font-mono text-xs"
-              inputMode="numeric"
-              defaultValue={typeof cur.tcpKeepAliveIdle === 'number' ? String(cur.tcpKeepAliveIdle) : ''}
-              key={`kai-${String(cur.tcpKeepAliveIdle ?? '')}`}
-              onBlur={e => patch({ tcpKeepAliveIdle: numOrUndef(e.target.value) })}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpKeepAliveInterval')}</Label>
-            <Input
-              dir="ltr"
-              className="h-10 font-mono text-xs"
-              inputMode="numeric"
-              defaultValue={typeof cur.tcpKeepAliveInterval === 'number' ? String(cur.tcpKeepAliveInterval) : ''}
-              key={`kiv-${String(cur.tcpKeepAliveInterval ?? '')}`}
-              onBlur={e => patch({ tcpKeepAliveInterval: numOrUndef(e.target.value) })}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpWindowClamp')}</Label>
-            <Input
-              dir="ltr"
-              className="h-10 font-mono text-xs"
-              inputMode="numeric"
-              defaultValue={typeof cur.tcpWindowClamp === 'number' ? String(cur.tcpWindowClamp) : ''}
-              key={`twc-${String(cur.tcpWindowClamp ?? '')}`}
-              onBlur={e => patch({ tcpWindowClamp: numOrUndef(e.target.value) })}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-xs font-semibold tracking-wide">{t('coreEditor.sockopt.tcpFastOpen')}</Label>
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpFastOpen')}</Label>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Select
                 dir="ltr"
@@ -384,8 +305,7 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
                     setTfoNumber('')
                     patch({ tcpFastOpen: true })
                   } else {
-                    const n = numOrUndef(tfoNumber)
-                    if (n !== undefined) patch({ tcpFastOpen: n })
+                    patch({ tcpFastOpen: numOrUndef(tfoNumber) ?? 0 })
                   }
                 }}
               >
@@ -404,40 +324,108 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
                   dir="ltr"
                   className="h-10 font-mono text-xs sm:max-w-[10rem]"
                   inputMode="numeric"
+                  placeholder="256"
                   value={tfoNumber}
-                  onChange={e => setTfoNumber(e.target.value)}
-                  onBlur={() => {
-                    const n = numOrUndef(tfoNumber)
-                    patch({ tcpFastOpen: n ?? undefined })
+                  onChange={e => {
+                    const raw = e.target.value
+                    setTfoNumber(raw)
+                    patch({ tcpFastOpen: numOrUndef(raw) ?? 0 })
                   }}
                 />
               ) : null}
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-            <div>
-              <p className="text-sm font-medium">{t('coreEditor.sockopt.tcpMptcp')}</p>
-              <p className="text-muted-foreground text-xs">{t('coreEditor.sockopt.tcpMptcpHint')}</p>
-            </div>
-            <Switch checked={cur.tcpMptcp === true} onCheckedChange={checked => patch({ tcpMptcp: checked ? true : undefined })} />
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpCongestion')}</Label>
+            <Input
+              dir="ltr"
+              className="h-10 font-mono text-xs"
+              placeholder="bbr"
+              value={stringValue(cur.tcpcongestion ?? cur.tcpCongestion)}
+              onChange={e => {
+                const v = e.target.value.trim()
+                patch({ tcpcongestion: v === '' ? undefined : v, tcpCongestion: undefined })
+              }}
+            />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-            <div>
-              <p className="text-sm font-medium">{t('coreEditor.sockopt.v6only')}</p>
-              <p className="text-muted-foreground text-xs">{t('coreEditor.sockopt.v6onlyHint')}</p>
-            </div>
-            <Switch checked={cur.v6only === true} onCheckedChange={checked => patch({ v6only: checked ? true : undefined })} />
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpMaxSeg')}</Label>
+            <Input
+              dir="ltr"
+              className="h-10 font-mono text-xs"
+              inputMode="numeric"
+              placeholder="1440"
+              value={numberValue(cur.tcpMaxSeg)}
+              onChange={e => patch({ tcpMaxSeg: numOrUndef(e.target.value) })}
+            />
           </div>
 
-          <Separator className="sm:col-span-2" />
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpUserTimeout')}</Label>
+            <Input
+              dir="ltr"
+              className="h-10 font-mono text-xs"
+              inputMode="numeric"
+              placeholder="10000"
+              value={numberValue(cur.tcpUserTimeout)}
+              onChange={e => patch({ tcpUserTimeout: numOrUndef(e.target.value) })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpKeepAliveIdle')}</Label>
+            <Input
+              dir="ltr"
+              className="h-10 font-mono text-xs"
+              inputMode="numeric"
+              placeholder="300"
+              value={numberValue(cur.tcpKeepAliveIdle)}
+              onChange={e => patch({ tcpKeepAliveIdle: numOrUndef(e.target.value) })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpKeepAliveInterval')}</Label>
+            <Input
+              dir="ltr"
+              className="h-10 font-mono text-xs"
+              inputMode="numeric"
+              placeholder="45"
+              value={numberValue(cur.tcpKeepAliveInterval)}
+              onChange={e => patch({ tcpKeepAliveInterval: numOrUndef(e.target.value) })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>{t('coreEditor.sockopt.tcpWindowClamp')}</Label>
+            <Input
+              dir="ltr"
+              className="h-10 font-mono text-xs"
+              inputMode="numeric"
+              placeholder="600"
+              value={numberValue(cur.tcpWindowClamp)}
+              onChange={e => patch({ tcpWindowClamp: numOrUndef(e.target.value) })}
+            />
+          </div>
+
           <div className="flex flex-col gap-2 sm:col-span-2">
-            <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium">{t('coreEditor.sockopt.happyEyeballs')}</p>
-                <p className="text-muted-foreground text-xs">{t('coreEditor.sockopt.happyEyeballsHint')}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                <p className="text-sm font-medium">{t('coreEditor.sockopt.tcpMptcp')}</p>
+                <Switch checked={cur.tcpMptcp === true} onCheckedChange={checked => patch({ tcpMptcp: checked ? true : undefined })} />
               </div>
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                <p className="text-sm font-medium">{t('coreEditor.sockopt.v6only')}</p>
+                <Switch checked={(cur.V6Only ?? cur.v6only) === true} onCheckedChange={checked => patch({ V6Only: checked ? true : undefined, v6only: undefined })} />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-md border p-3 sm:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label>{t('coreEditor.sockopt.happyEyeballs')}</Label>
               <Switch
                 checked={happyEnabled}
                 onCheckedChange={checked => {
@@ -447,65 +435,97 @@ export function XrayStreamSockoptFields({ variant, value, onChange, t, dialerPro
               />
             </div>
             {happyEnabled ? (
-              <div className="grid gap-3 rounded-md border border-dashed p-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-muted-foreground text-xs font-semibold">{t('coreEditor.sockopt.hbTryDelayMs')}</Label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <Label>{t('coreEditor.sockopt.hbTryDelayMs')}</Label>
                   <Input
                     dir="ltr"
                     className="h-9 font-mono text-xs"
                     inputMode="numeric"
-                    defaultValue={typeof hb.tryDelayMs === 'number' ? String(hb.tryDelayMs) : '250'}
-                    key={`hbtd-${String(hb.tryDelayMs)}`}
-                    onBlur={e => {
-                      const n = numOrUndef(e.target.value)
-                      patch({
-                        happyEyeballs: {
-                          ...hb,
-                          tryDelayMs: n ?? 250,
-                        },
-                      })
-                    }}
+                    placeholder="250"
+                    value={numberValue(hb.tryDelayMs) || '250'}
+                    onChange={e => patch({ happyEyeballs: { ...hb, tryDelayMs: numOrUndef(e.target.value) ?? 250 } })}
                   />
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border px-2 py-1.5">
+                <div className="flex flex-col gap-2">
+                  <Label>{t('coreEditor.sockopt.hbInterleave')}</Label>
+                  <Input
+                    dir="ltr"
+                    className="h-9 font-mono text-xs"
+                    inputMode="numeric"
+                    placeholder="1"
+                    value={numberValue(hb.interleave) || '1'}
+                    onChange={e => patch({ happyEyeballs: { ...hb, interleave: numOrUndef(e.target.value) ?? 1 } })}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>{t('coreEditor.sockopt.hbMaxConcurrentTry')}</Label>
+                  <Input
+                    dir="ltr"
+                    className="h-9 font-mono text-xs"
+                    inputMode="numeric"
+                    placeholder="4"
+                    value={numberValue(hb.maxConcurrentTry) || '4'}
+                    onChange={e => patch({ happyEyeballs: { ...hb, maxConcurrentTry: numOrUndef(e.target.value) ?? 4 } })}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
                   <span className="text-xs font-medium">{t('coreEditor.sockopt.hbPrioritizeIPv6')}</span>
-                  <Switch
-                    checked={hb.prioritizeIPv6 === true}
-                    onCheckedChange={checked =>
-                      patch({
-                        happyEyeballs: { ...hb, prioritizeIPv6: checked },
-                      })
-                    }
-                  />
+                  <Switch checked={hb.prioritizeIPv6 === true} onCheckedChange={checked => patch({ happyEyeballs: { ...hb, prioritizeIPv6: checked } })} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-muted-foreground text-xs font-semibold">{t('coreEditor.sockopt.hbInterleave')}</Label>
-                  <Input
-                    dir="ltr"
-                    className="h-9 font-mono text-xs"
-                    inputMode="numeric"
-                    defaultValue={typeof hb.interleave === 'number' ? String(hb.interleave) : '1'}
-                    key={`hbi-${String(hb.interleave)}`}
-                    onBlur={e => {
-                      const n = numOrUndef(e.target.value)
-                      patch({ happyEyeballs: { ...hb, interleave: n ?? 1 } })
-                    }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-muted-foreground text-xs font-semibold">{t('coreEditor.sockopt.hbMaxConcurrentTry')}</Label>
-                  <Input
-                    dir="ltr"
-                    className="h-9 font-mono text-xs"
-                    inputMode="numeric"
-                    defaultValue={typeof hb.maxConcurrentTry === 'number' ? String(hb.maxConcurrentTry) : '4'}
-                    key={`hbm-${String(hb.maxConcurrentTry)}`}
-                    onBlur={e => {
-                      const n = numOrUndef(e.target.value)
-                      patch({ happyEyeballs: { ...hb, maxConcurrentTry: n ?? 4 } })
-                    }}
-                  />
-                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-3 rounded-md border p-3 sm:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label>{t('coreEditor.sockopt.customSockopt')}</Label>
+              <Button type="button" size="sm" variant="secondary" className="h-8 gap-1.5" onClick={() => patchCustomSockopt([...customSockoptRows, { system: 'any', type: 'int', level: '6', opt: '', value: '' }])}>
+                <Plus className="h-3.5 w-3.5" />
+                {t('coreEditor.sockopt.addCustomSockopt')}
+              </Button>
+            </div>
+            {customSockoptRows.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {customSockoptRows.map((row, index) => {
+                  const systemValue = typeof row.system === 'string' && (CUSTOM_SOCKOPT_SYSTEMS as readonly string[]).includes(row.system) ? row.system : 'any'
+                  const typeValue = typeof row.type === 'string' && (CUSTOM_SOCKOPT_TYPES as readonly string[]).includes(row.type) ? row.type : 'int'
+                  const updateRow = (patchRow: Record<string, unknown>) => patchCustomSockopt(customSockoptRows.map((r, i) => (i === index ? { ...r, ...patchRow } : r)))
+                  return (
+                    <div key={index} className="grid gap-2 rounded-md border border-dashed p-2 sm:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
+                      <Select dir="ltr" value={systemValue} onValueChange={v => updateRow({ system: v })}>
+                        <SelectTrigger className="h-9 min-w-0" dir="ltr">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent dir="ltr">
+                          {CUSTOM_SOCKOPT_SYSTEMS.map(system => (
+                            <SelectItem key={system} value={system}>
+                              {system}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select dir="ltr" value={typeValue} onValueChange={v => updateRow({ type: v })}>
+                        <SelectTrigger className="h-9 min-w-0" dir="ltr">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent dir="ltr">
+                          {CUSTOM_SOCKOPT_TYPES.map(type => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input dir="ltr" className="h-9 font-mono text-xs" placeholder="6" value={row.level != null ? String(row.level) : ''} onChange={e => updateRow({ level: e.target.value.trim() || undefined })} />
+                      <Input dir="ltr" className="h-9 font-mono text-xs" placeholder="13" value={row.opt != null ? String(row.opt) : ''} onChange={e => updateRow({ opt: e.target.value.trim() || undefined })} />
+                      <Input dir="ltr" className="h-9 font-mono text-xs" placeholder="bbr" value={row.value != null ? String(row.value) : ''} onChange={e => updateRow({ value: e.target.value.trim() || undefined })} />
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => patchCustomSockopt(customSockoptRows.filter((_, i) => i !== index))}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )
+                })}
               </div>
             ) : null}
           </div>

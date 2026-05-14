@@ -14,6 +14,24 @@ function prepareProfileForKit(profile: Profile): Profile {
   return sanitizeProfileInbounds(normalizeProfile(JSON.parse(JSON.stringify(profile)) as Profile))
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function applyInboundSockoptToCompiledConfig(profile: Profile, config: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(config.inbounds)) return config
+  const inbounds = config.inbounds.map((compiledInbound, index) => {
+    if (!isRecord(compiledInbound)) return compiledInbound
+    const profileInbound = profile.inbounds?.[index] as { streamAdvanced?: { sockopt?: unknown } } | undefined
+    const sockopt = profileInbound?.streamAdvanced?.sockopt
+    if (!isRecord(sockopt) || Object.keys(sockopt).length === 0) return compiledInbound
+    const streamSettings = isRecord(compiledInbound.streamSettings) ? { ...compiledInbound.streamSettings } : {}
+    streamSettings.sockopt = sockopt
+    return { ...compiledInbound, streamSettings }
+  })
+  return { ...config, inbounds }
+}
+
 /**
  * Issues from {@link buildXrayConfig} in strict mode when the profile does not compile (schema / semantic / unsafe patches, …).
  */
@@ -30,13 +48,40 @@ export type XrayPersistValidationResult =
 
 export function importRawToProfile(raw: unknown): { profile: Profile; issues: Issue[] } {
   const imported = importXrayConfig(raw)
-  const profile = sanitizeProfileInbounds(normalizeProfile(imported.profile))
+  let profile = sanitizeProfileInbounds(normalizeProfile(imported.profile))
+  
+  // Preserve policy from raw config if it exists
+  if (typeof raw === 'object' && raw !== null && 'policy' in raw) {
+    const policy = (raw as Record<string, unknown>).policy
+    if (policy !== undefined) {
+      const topLevel = {
+        ...(profile.raw?.topLevel ?? {}),
+        policy,
+      }
+      profile = {
+        ...profile,
+        raw: {
+          ...(profile.raw ?? {}),
+          topLevel,
+        },
+      } as Profile
+    }
+  }
+  
   return { profile, issues: [...imported.issues] }
 }
 
 export function profileToPersistedConfig(profile: Profile): Record<string, unknown> {
-  const { config } = buildXrayConfig(prepareProfileForKit(profile), { mode: 'permissive' })
-  return config as Record<string, unknown>
+  const prepared = prepareProfileForKit(profile)
+  const { config } = buildXrayConfig(prepared, { mode: 'permissive' })
+  const result = applyInboundSockoptToCompiledConfig(prepared, config as Record<string, unknown>)
+  
+  // Restore policy from raw.topLevel if it exists
+  if (profile.raw?.topLevel?.policy !== undefined) {
+    result.policy = profile.raw.topLevel.policy
+  }
+  
+  return result
 }
 
 export function validateProfileForSave(profile: Profile) {

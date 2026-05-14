@@ -1981,15 +1981,16 @@
       "tcpMptcpHint": "سمت کلاینت؛ لینوکس ۵.۶+.",
       "v6only": "فقط IPv6 برای گوش دادن (::)",
       "v6onlyHint": "فقط لینوکس: با روشن بودن، :: فقط IPv6 می‌پذیرد.",
-      "happyEyeballs": "Happy Eyeballs",
+      "happyEyeballs": "اتصال سریع IPv4/IPv6",
       "happyEyeballsHint": "مسابقهٔ اتصال IPv4/IPv6 برای دامنه. نیاز به استراتژی دامنه غیر از AsIs دارد.",
       "hbTryDelayMs": "تأخیر تلاش (میلی‌ثانیه)",
       "hbPrioritizeIPv6": "اولویت IPv6",
       "hbInterleave": "درهم‌سازی (RFC 8305)",
       "hbMaxConcurrentTry": "حداکثر تلاش همزمان",
-      "customSockopt": "customSockopt (آرایهٔ JSON)",
+      "customSockopt": "گزینه‌های سفارشی",
       "customSockoptHint": "پیشرفته: گزینه‌های خام سوکت. باید آرایهٔ JSON از آبجکت‌ها باشد.",
-      "customSockoptInvalid": "customSockopt باید آرایهٔ JSON معتبر باشد."
+      "customSockoptInvalid": "customSockopt باید آرایهٔ JSON معتبر باشد.",
+      "addCustomSockopt": "افزودن گزینه"
     },
     "inbound": {
       "add": "افزودن ورودی",
