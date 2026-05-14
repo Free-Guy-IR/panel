@@ -42,6 +42,11 @@ async def user_subscription_info(request: Request, token: str, db: AsyncSession 
     return JSONResponse(content=user_data.model_dump(mode="json"), headers=response_headers)
 
 
+@router.get("/{token}/raw")
+async def user_subscription_raw(token: str, db: AsyncSession = Depends(get_db)):
+    return await subscription_operator.user_subscription_raw(db, token=token)
+
+
 @router.get("/{token}/apps", response_model=list[Application])
 async def user_subscription_apps(token: str, db: AsyncSession = Depends(get_db)):
     """
