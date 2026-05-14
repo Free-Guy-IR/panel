@@ -8,6 +8,7 @@ from app.models.user import SubscriptionUserResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperation
 from config import subscription_env_settings
+
 from .dependencies import get_subscription_usage_query
 
 router = APIRouter(tags=["Subscription"], prefix=f"/{subscription_env_settings.path}")
@@ -43,8 +44,18 @@ async def user_subscription_info(request: Request, token: str, db: AsyncSession 
 
 
 @router.get("/{token}/raw")
-async def user_subscription_raw(token: str, db: AsyncSession = Depends(get_db)):
-    return await subscription_operator.user_subscription_raw(db, token=token)
+async def user_subscription_raw(
+    request: Request,
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    update_user_agent: str = Header(default="", alias="X-Subscription-User-Agent"),
+):
+    return await subscription_operator.user_subscription_raw(
+        db,
+        token=token,
+        update_user_agent=update_user_agent,
+        ip=request.client.host if request.client else None,
+    )
 
 
 @router.get("/{token}/apps", response_model=list[Application])

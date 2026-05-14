@@ -230,9 +230,9 @@ class SubscriptionOperation(BaseOperation):
         # Only include headers that have values
         return {k: v for k, v in headers.items() if v}
 
-    async def fetch_config(self, user: UsersResponseWithInbounds, client_type: ConfigFormat) -> tuple[str, str]:
+    async def fetch_config(self, user: UsersResponseWithInbounds, client_type: ConfigFormat) -> tuple[str | bytes, str]:
         # Get client configuration
-        config = client_config.get(client_type)
+        config = client_config.get(client_type, {})
         sub_settings = await subscription_settings()
         randomize_order = sub_settings.randomize_order
 
@@ -240,8 +240,8 @@ class SubscriptionOperation(BaseOperation):
         return (
             await generate_subscription(
                 user=user,
-                config_format=config["config_format"],
-                as_base64=config["as_base64"],
+                config_format=config.get("config_format", ""),
+                as_base64=config.get("as_base64", ""),
                 randomize_order=randomize_order,
             ),
             config["media_type"],
@@ -386,10 +386,20 @@ class SubscriptionOperation(BaseOperation):
             "apps": self._make_apps_import_urls(sub_settings.applications, format_variables),
         }
 
-    async def user_subscription_raw(self, db: AsyncSession, token: str):
+    async def user_subscription_raw(
+        self,
+        db: AsyncSession,
+        token: str,
+        update_user_agent: str = "",
+        ip: str | None = None,
+    ):
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token)
         user = await self.validated_user(db_user)
+
+        if update_user_agent:
+            await user_sub_update(db, db_user.id, update_user_agent, ip=ip)
+
         links = []
         if sub_settings.allow_browser_config:
             conf, _ = await self.fetch_config(user, ConfigFormat.links)
