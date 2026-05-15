@@ -1,6 +1,6 @@
 import { DEFAULT_XRAY_CORE_CONFIG } from '@/lib/default-xray-core-config'
 import { buildXrayConfig, importXrayConfig, normalizeProfile } from '@pasarguard/xray-config-kit'
-import type { Issue, Profile } from '@pasarguard/xray-config-kit'
+import type { Issue, JsonValue, Profile } from '@pasarguard/xray-config-kit'
 import type { CoreKitValidationIssue } from '@pasarguard/core-kit'
 import { validateCoreConfig } from '@pasarguard/core-kit'
 import { filterCoreKitIssuesHidingInboundClients } from './inbound-clients-issue-filter'
@@ -16,6 +16,51 @@ function prepareProfileForKit(profile: Profile): Profile {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) return true
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return true
+  if (Array.isArray(value)) return value.every(isJsonValue)
+  if (!isRecord(value)) return false
+  return Object.values(value).every(v => v === undefined || isJsonValue(v))
+}
+
+const UNMODELED_TOP_LEVEL_KEYS_TO_PRESERVE = [
+  'policy',
+  'api',
+  'stats',
+  'metrics',
+  'fakeDns',
+  'observatory',
+  'burstObservatory',
+  'reverse',
+  'transport',
+  'geodata',
+  'version',
+] as const
+
+function preserveUnmodeledTopLevelSections(profile: Profile, raw: unknown): Profile {
+  if (!isRecord(raw)) return profile
+
+  const topLevel: Record<string, JsonValue> = { ...(profile.raw?.topLevel ?? {}) }
+  let changed = false
+  for (const key of UNMODELED_TOP_LEVEL_KEYS_TO_PRESERVE) {
+    if (!(key in raw)) continue
+    const value = raw[key]
+    if (value === undefined || !isJsonValue(value)) continue
+    topLevel[key] = value
+    changed = true
+  }
+
+  if (!changed) return profile
+  return {
+    ...profile,
+    raw: {
+      ...(profile.raw ?? {}),
+      topLevel,
+    },
+  } as Profile
 }
 
 function applyInboundSockoptToCompiledConfig(profile: Profile, config: Record<string, unknown>): Record<string, unknown> {
@@ -48,26 +93,11 @@ export type XrayPersistValidationResult =
 
 export function importRawToProfile(raw: unknown): { profile: Profile; issues: Issue[] } {
   const imported = importXrayConfig(raw)
-  let profile = sanitizeProfileInbounds(normalizeProfile(imported.profile))
-  
-  // Preserve policy from raw config if it exists
-  if (typeof raw === 'object' && raw !== null && 'policy' in raw) {
-    const policy = (raw as Record<string, unknown>).policy
-    if (policy !== undefined) {
-      const topLevel = {
-        ...(profile.raw?.topLevel ?? {}),
-        policy,
-      }
-      profile = {
-        ...profile,
-        raw: {
-          ...(profile.raw ?? {}),
-          topLevel,
-        },
-      } as Profile
-    }
-  }
-  
+  const profile = preserveUnmodeledTopLevelSections(
+    sanitizeProfileInbounds(normalizeProfile(imported.profile)),
+    raw,
+  )
+
   return { profile, issues: [...imported.issues] }
 }
 
@@ -75,12 +105,7 @@ export function profileToPersistedConfig(profile: Profile): Record<string, unkno
   const prepared = prepareProfileForKit(profile)
   const { config } = buildXrayConfig(prepared, { mode: 'permissive' })
   const result = applyInboundSockoptToCompiledConfig(prepared, config as Record<string, unknown>)
-  
-  // Restore policy from raw.topLevel if it exists
-  if (profile.raw?.topLevel?.policy !== undefined) {
-    result.policy = profile.raw.topLevel.policy
-  }
-  
+
   return result
 }
 
