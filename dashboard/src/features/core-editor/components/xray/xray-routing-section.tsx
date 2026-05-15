@@ -19,6 +19,7 @@ import { useXrayPersistModifyGuard } from '@/features/core-editor/hooks/use-xray
 import { profileDuplicateTagMessage, profileTagHasDuplicateUsage } from '@/features/core-editor/kit/profile-tag-uniqueness'
 import { remapIndexAfterArrayMove } from '@/features/core-editor/kit/remap-index-after-move'
 import {
+  collectRoutingRuleDialogFormErrors,
   collectRoutingRuleDialogIssues,
   routingRuleDialogHasBlockingErrors,
 } from '@/features/core-editor/kit/routing-rule-dialog-validation'
@@ -393,8 +394,19 @@ export function XrayRoutingSection({ headerAddPulse, headerAddEpoch }: XrayRouti
     finalizeDetailClose()
   }
 
+  const validateRoutingRuleForm = () => {
+    const errors = collectRoutingRuleDialogFormErrors(form.getValues(), t)
+    form.clearErrors()
+    if (errors.length === 0) return true
+    for (const error of errors) {
+      form.setError(error.name, { type: 'validate', message: error.message })
+    }
+    return false
+  }
+
   const commitAddRule = () => {
     if (!draftRule) return
+    if (!validateRoutingRuleForm()) return
     const ruleTagTrim = String(routingRuleAsRecord(draftRule).tag ?? '').trim()
     if (ruleTagTrim && profile && profileTagHasDuplicateUsage(profile, ruleTagTrim)) {
       form.setError('tag', { type: 'validate', message: profileDuplicateTagMessage(t, ruleTagTrim) })
@@ -421,6 +433,7 @@ export function XrayRoutingSection({ headerAddPulse, headerAddEpoch }: XrayRouti
 
   const commitEditRule = () => {
     if (dialogMode !== 'edit' || !rule) return
+    if (!validateRoutingRuleForm()) return
     const ruleTagTrim = String(routingRuleAsRecord(rule).tag ?? '').trim()
     if (ruleTagTrim && profile && profileTagHasDuplicateUsage(profile, ruleTagTrim, { owner: 'routingRule', index: selected })) {
       form.setError('tag', { type: 'validate', message: profileDuplicateTagMessage(t, ruleTagTrim) })

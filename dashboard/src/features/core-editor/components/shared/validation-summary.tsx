@@ -70,7 +70,11 @@ export function ValidationSummary({ items, className }: ValidationSummaryProps) 
 
   return (
     <Alert variant={tone === 'destructive' ? 'destructive' : 'default'} className={cn(className)}>
-      <AlertTitle>{errors.length > 0 ? 'Validation errors' : 'Warnings'}</AlertTitle>
+      <AlertTitle>
+        {errors.length > 0
+          ? t('coreEditor.validationErrors', { defaultValue: 'Validation errors' })
+          : t('coreEditor.validationWarnings', { defaultValue: 'Warnings' })}
+      </AlertTitle>
       <AlertDescription className="space-y-2">
         <ul className="mt-1 list-inside list-disc space-y-1 text-sm">
           {displayed.map((row, idx) => (

@@ -1858,8 +1858,14 @@
   "coreEditor": {
     "nameRequired": "نام الزامی است",
     "fixValidation": "قبل از ذخیره خطاهای اعتبارسنجی را برطرف کنید",
+    "validationErrors": "خطاهای اعتبارسنجی",
+    "validationWarnings": "هشدارها",
     "importWarnings": "یادداشت‌های واردات",
     "loadFailed": "بارگیری این هسته ناموفق بود.",
+    "loading": {
+      "title": "در حال بارگیری ویرایشگر هسته",
+      "description": "در حال آماده‌سازی چیدمان ویرایشگر."
+    },
     "backToList": "بازگشت به فهرست هسته‌ها",
     "invalidId": "شناسهٔ هسته نامعتبر است.",
     "discardTitle": "لغو تغییرات؟",
@@ -1913,7 +1919,18 @@
       "interfaceBlurb": "تنظیمات رابط وایرگارد و مواد کلیدی این هسته.",
       "keysRegenerated": "جفت کلید جدید تولید شد",
       "keysFailed": "تولید کلیدهای ناموفق بود",
-      "regenerateKeys": "تولید مجدد جفت کلید"
+      "regenerateKeys": "تولید مجدد جفت کلید",
+      "generatePreSharedKey": "تولید کلید ازپیش‌اشتراک‌گذاری‌شده",
+      "preSharedKeyGenerated": "کلید ازپیش‌اشتراک‌گذاری‌شده تولید شد",
+      "preSharedKeyFailed": "تولید کلید ازپیش‌اشتراک‌گذاری‌شده ناموفق بود",
+      "fields": {
+        "interfaceName": "نام رابط",
+        "privateKey": "کلید خصوصی",
+        "publicKey": "کلید عمومی",
+        "preSharedKey": "کلید ازپیش‌اشتراک‌گذاری‌شده",
+        "listenPort": "پورت شنود",
+        "address": "آدرس"
+      }
     },
     "field": {
       "tag": "برچسب",
@@ -2017,6 +2034,7 @@
       "domain": "دامنه",
       "domains": "دامنه‌ها",
       "ip": "IP",
+      "port": "پورت",
       "network": "شبکه",
       "sourceip": "IP مبدأ",
       "source": "مبدأ",
@@ -2212,7 +2230,7 @@
       },
       "validation": {
         "protocolInvalid": "یک پروتکل معتبر انتخاب کنید.",
-        "portRange": "پورت باید عدد صحیح بین ۱ و ۶۵۵۳۵ باشد.",
+        "portRange": "پورت باید عدد یا فهرست پورت مانند 443, 1000-2000,444 باشد.",
         "destinationPortRange": "پورت مقصد باید عدد صحیح از ۰ تا ۶۵۵۳۵ باشد.",
         "realityServerNamesRequired": "REALITY حداقل به یک نام سرور نیاز دارد.",
         "realityServerNamesFormat": "نام‌های سرور REALITY باید فهرستی از رشته‌های غیرخالی باشد.",
@@ -2221,6 +2239,8 @@
       "discardDraftTitle": "ورودی جدید را دور بیندازید؟",
       "discardDraftDescription": "این ورودی هنوز در فهرست نیست. بستن بدون افزودن، تغییرات را دور می‌اندازد.",
       "discardDraftAction": "صرف‌نظر",
+      "discardEditTitle": "لغو تغییرات؟",
+      "discardEditDescription": "اگر اکنون ببندید، تغییرات شما روی این ورودی از بین می‌رود.",
       "finishCurrentTitle": "ابتدا ورودی فعلی را تمام کنید",
       "finishCurrentDescription": "آن را به فهرست اضافه کنید، یا دیالوگ را ببندید و پیش‌نویس را دور بیندازید، قبل از شروع ورودی دیگر."
     },
@@ -2237,6 +2257,8 @@
       "discardDraftTitle": "خروجی جدید را دور بیندازید؟",
       "discardDraftDescription": "این خروجی هنوز در فهرست نیست. بستن بدون افزودن، تغییرات را دور می‌اندازد.",
       "discardDraftAction": "صرف‌نظر",
+      "discardEditTitle": "لغو تغییرات؟",
+      "discardEditDescription": "اگر اکنون ببندید، تغییرات شما روی این خروجی از بین می‌رود.",
       "finishCurrentTitle": "ابتدا خروجی فعلی را تمام کنید",
       "finishCurrentDescription": "آن را به فهرست اضافه کنید، یا دیالوگ را ببندید و پیش‌نویس را دور بیندازید، قبل از شروع خروجی دیگر.",
       "freedom": {
@@ -2312,6 +2334,12 @@
       "discardDraftAction": "صرف‌نظر",
       "finishCurrentTitle": "ابتدا قانون فعلی را تمام کنید",
       "finishCurrentDescription": "آن را به فهرست اضافه کنید، یا دیالوگ را ببندید و پیش‌نویس را دور بیندازید، قبل از شروع قانون دیگر.",
+      "validation": {
+        "requiresOutboundOrBalancer": "یک برچسب خروجی یا برچسب متعادل‌کننده تنظیم کنید تا قانون بداند ترافیک را کجا بفرستد.",
+        "unknownOutboundTag": "برچسب خروجی «{{tag}}» در این پروفایل تعریف نشده است.",
+        "unknownBalancerTag": "برچسب متعادل‌کننده «{{tag}}» در routing.balancers تعریف نشده است.",
+        "portRange": "پورت باید عدد یا فهرست پورت مانند 443, 1000-2000,444 باشد."
+      },
       "sectionRoutingAction": "اقدام مسیریابی",
       "routingActionHint": "برای ترافیک منطبق یک مقصد انتخاب کنید. وقتی هر دو تنظیم شوند، outboundTag بر balancerTag اولویت دارد.",
       "sectionMatchConditions": "شرایط تطبیق",

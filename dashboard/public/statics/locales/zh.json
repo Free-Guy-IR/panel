@@ -1905,8 +1905,14 @@
   "coreEditor": {
     "nameRequired": "名称为必填项",
     "fixValidation": "保存前请修复校验错误",
+    "validationErrors": "校验错误",
+    "validationWarnings": "警告",
     "importWarnings": "导入提示",
     "loadFailed": "无法加载此核心。",
+    "loading": {
+      "title": "正在加载核心编辑器",
+      "description": "正在准备编辑器布局。"
+    },
     "backToList": "返回核心列表",
     "invalidId": "核心 ID 无效。",
     "discardTitle": "放弃更改？",
@@ -1960,7 +1966,18 @@
       "interfaceBlurb": "此核心的 WireGuard 接口与密钥设置。",
       "keysRegenerated": "已生成新密钥对",
       "keysFailed": "无法生成密钥",
-      "regenerateKeys": "重新生成密钥对"
+      "regenerateKeys": "重新生成密钥对",
+      "generatePreSharedKey": "生成预共享密钥",
+      "preSharedKeyGenerated": "已生成预共享密钥",
+      "preSharedKeyFailed": "无法生成预共享密钥",
+      "fields": {
+        "interfaceName": "接口名称",
+        "privateKey": "私钥",
+        "publicKey": "公钥",
+        "preSharedKey": "预共享密钥",
+        "listenPort": "监听端口",
+        "address": "地址"
+      }
     },
     "field": {
       "tag": "标签",
@@ -2064,6 +2081,7 @@
       "domain": "域名",
       "domains": "域名列表",
       "ip": "IP",
+      "port": "端口",
       "network": "网络",
       "sourceip": "源 IP",
       "source": "源",
@@ -2259,7 +2277,7 @@
       },
       "validation": {
         "protocolInvalid": "请选择有效协议。",
-        "portRange": "端口必须为 1 至 65535 之间的整数。",
+        "portRange": "端口必须是端口号或端口列表，例如 443, 1000-2000,444。",
         "destinationPortRange": "目标端口必须为 0 至 65535 之间的整数。",
         "realityServerNamesRequired": "REALITY 至少需要填写一个 server name。",
         "realityServerNamesFormat": "REALITY 的 server names 必须为非空字符串的列表。",
@@ -2268,6 +2286,8 @@
       "discardDraftTitle": "放弃新入站？",
       "discardDraftDescription": "此入站尚未加入列表。关闭而不添加将丢弃更改。",
       "discardDraftAction": "放弃",
+      "discardEditTitle": "放弃更改？",
+      "discardEditDescription": "如果现在关闭，对此入站的修改将会丢失。",
       "finishCurrentTitle": "请先完成当前入站",
       "finishCurrentDescription": "请先加入列表，或关闭对话框并丢弃草稿，再开始另一个入站。"
     },
@@ -2284,6 +2304,8 @@
       "discardDraftTitle": "放弃新出站？",
       "discardDraftDescription": "此出站尚未加入列表。关闭而不添加将丢弃更改。",
       "discardDraftAction": "放弃",
+      "discardEditTitle": "放弃更改？",
+      "discardEditDescription": "如果现在关闭，对此出站的修改将会丢失。",
       "finishCurrentTitle": "请先完成当前出站",
       "finishCurrentDescription": "请先加入列表，或关闭对话框并丢弃草稿，再开始另一个出站。",
       "freedom": {
@@ -2359,6 +2381,12 @@
       "discardDraftAction": "放弃",
       "finishCurrentTitle": "请先完成当前规则",
       "finishCurrentDescription": "请先加入列表，或关闭对话框并丢弃草稿，再开始另一条规则。",
+      "validation": {
+        "requiresOutboundOrBalancer": "请设置出站标签或负载均衡器标签，让规则知道流量应发送到哪里。",
+        "unknownOutboundTag": "此配置中未定义出站标签“{{tag}}”。",
+        "unknownBalancerTag": "routing.balancers 中未定义负载均衡器标签“{{tag}}”。",
+        "portRange": "端口必须是端口号或端口列表，例如 443, 1000-2000,444。"
+      },
       "sectionRoutingAction": "路由动作",
       "routingActionHint": "为匹配的流量选择一个目标。当两者都设置时，outboundTag 优先于 balancerTag。",
       "sectionMatchConditions": "匹配条件",

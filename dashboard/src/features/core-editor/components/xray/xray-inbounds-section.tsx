@@ -2354,6 +2354,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           {...field}
                           className="h-10"
                           dir="ltr"
+                          placeholder="0.0.0.0"
                           onChange={e => {
                             const v = e.target.value
                             field.onChange(v)
@@ -2379,6 +2380,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           className="h-10"
                           dir="ltr"
                           isError={!!fieldState.error}
+                          placeholder="443 or 1000-2000,444"
                           onChange={e => {
                             const v = e.target.value
                             field.onChange(v)
@@ -3883,6 +3885,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           {...field}
                           className="h-10"
                           dir="ltr"
+                          placeholder="0.0.0.0"
                           onChange={e => {
                             const v = e.target.value
                             field.onChange(v)
@@ -3907,6 +3910,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           className="h-10"
                           dir="ltr"
                           isError={!!fieldState.error}
+                          placeholder="443 or 1000-2000,444"
                           onChange={e => {
                             const v = e.target.value
                             field.onChange(v)
@@ -4277,6 +4281,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           {...field}
                           className="h-10"
                           dir="ltr"
+                          placeholder="0.0.0.0"
                           onChange={e => {
                             const v = e.target.value
                             field.onChange(v)
@@ -4302,6 +4307,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                             className="h-10"
                             dir="ltr"
                             isError={!!fieldState.error}
+                            placeholder="443 or 1000-2000,444"
                             onChange={e => {
                               const v = e.target.value
                               field.onChange(v)

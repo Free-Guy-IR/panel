@@ -1832,8 +1832,14 @@
   "coreEditor": {
     "nameRequired": "Укажите имя",
     "fixValidation": "Исправьте ошибки проверки перед сохранением",
+    "validationErrors": "Ошибки проверки",
+    "validationWarnings": "Предупреждения",
     "importWarnings": "Замечания импорта",
     "loadFailed": "Не удалось загрузить это ядро.",
+    "loading": {
+      "title": "Загрузка редактора ядра",
+      "description": "Подготовка интерфейса редактора."
+    },
     "backToList": "Назад к списку ядер",
     "invalidId": "Неверный идентификатор ядра.",
     "discardTitle": "Отменить изменения?",
@@ -1887,7 +1893,18 @@
       "interfaceBlurb": "Настройки интерфейса WireGuard и ключи для этого ядра.",
       "keysRegenerated": "Создана новая пара ключей",
       "keysFailed": "Не удалось сгенерировать ключи",
-      "regenerateKeys": "Пересоздать пару ключей"
+      "regenerateKeys": "Пересоздать пару ключей",
+      "generatePreSharedKey": "Сгенерировать предварительный общий ключ",
+      "preSharedKeyGenerated": "Предварительный общий ключ сгенерирован",
+      "preSharedKeyFailed": "Не удалось сгенерировать предварительный общий ключ",
+      "fields": {
+        "interfaceName": "Имя интерфейса",
+        "privateKey": "Приватный ключ",
+        "publicKey": "Публичный ключ",
+        "preSharedKey": "Предварительный общий ключ",
+        "listenPort": "Порт прослушивания",
+        "address": "Адрес"
+      }
     },
     "field": {
       "tag": "Тег",
@@ -1991,6 +2008,7 @@
       "domain": "Домен",
       "domains": "Домены",
       "ip": "IP",
+      "port": "Порт",
       "network": "Сеть",
       "sourceip": "IP источника",
       "source": "Источник",
@@ -2186,7 +2204,7 @@
       },
       "validation": {
         "protocolInvalid": "Выберите допустимый протокол.",
-        "portRange": "Порт должен быть целым числом от 1 до 65535.",
+        "portRange": "Порт должен быть номером или списком портов, например 443, 1000-2000,444.",
         "destinationPortRange": "Порт назначения должен быть целым числом от 0 до 65535.",
         "realityServerNamesRequired": "Для REALITY нужно хотя бы одно имя сервера (server name).",
         "realityServerNamesFormat": "Имена серверов REALITY должны быть списком непустых строк.",
@@ -2195,6 +2213,8 @@
       "discardDraftTitle": "Отменить новый входящий?",
       "discardDraftDescription": "Этот входящий ещё не в списке. Закрытие без добавления отменит изменения.",
       "discardDraftAction": "Отменить",
+      "discardEditTitle": "Отменить изменения?",
+      "discardEditDescription": "Ваши изменения этого входящего будут потеряны, если закрыть окно сейчас.",
       "finishCurrentTitle": "Сначала завершите текущий входящий",
       "finishCurrentDescription": "Добавьте его в список или закройте диалог и отмените черновик перед созданием другого входящего."
     },
@@ -2211,6 +2231,8 @@
       "discardDraftTitle": "Отменить новый исходящий?",
       "discardDraftDescription": "Этот исходящий ещё не в списке. Закрытие без добавления отменит изменения.",
       "discardDraftAction": "Отменить",
+      "discardEditTitle": "Отменить изменения?",
+      "discardEditDescription": "Ваши изменения этого исходящего будут потеряны, если закрыть окно сейчас.",
       "finishCurrentTitle": "Сначала завершите текущий исходящий",
       "finishCurrentDescription": "Добавьте его в список или закройте диалог и отмените черновик перед созданием другого исходящего.",
       "freedom": {
@@ -2286,6 +2308,12 @@
       "discardDraftAction": "Отменить",
       "finishCurrentTitle": "Сначала завершите текущее правило",
       "finishCurrentDescription": "Добавьте его в список или закройте диалог и отмените черновик перед созданием другого правила.",
+      "validation": {
+        "requiresOutboundOrBalancer": "Укажите тег исходящего или тег балансировщика, чтобы правило знало, куда отправлять трафик.",
+        "unknownOutboundTag": "Тег исходящего \"{{tag}}\" не определён в этом профиле.",
+        "unknownBalancerTag": "Тег балансировщика \"{{tag}}\" не определён в routing.balancers.",
+        "portRange": "Порт должен быть номером или списком портов, например 443, 1000-2000,444."
+      },
       "sectionRoutingAction": "Действие маршрутизации",
       "routingActionHint": "Выберите одну цель для совпадающего трафика. Если заданы оба, outboundTag имеет приоритет над balancerTag.",
       "sectionMatchConditions": "Условия совпадения",

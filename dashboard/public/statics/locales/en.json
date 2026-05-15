@@ -1943,8 +1943,14 @@
   "coreEditor": {
     "nameRequired": "Name is required",
     "fixValidation": "Fix validation errors before saving",
+    "validationErrors": "Validation errors",
+    "validationWarnings": "Warnings",
     "importWarnings": "Import notes",
     "loadFailed": "Could not load this core.",
+    "loading": {
+      "title": "Loading core editor",
+      "description": "Preparing the editor layout."
+    },
     "backToList": "Back to cores",
     "invalidId": "Invalid core id.",
     "discardTitle": "Discard changes?",
@@ -1999,7 +2005,18 @@
       "interfaceBlurb": "WireGuard interface settings and key material for this core.",
       "keysRegenerated": "New keypair generated",
       "keysFailed": "Could not generate keys",
-      "regenerateKeys": "Regenerate keypair"
+      "regenerateKeys": "Regenerate keypair",
+      "generatePreSharedKey": "Generate pre-shared key",
+      "preSharedKeyGenerated": "Pre-shared key generated",
+      "preSharedKeyFailed": "Could not generate pre-shared key",
+      "fields": {
+        "interfaceName": "Interface name",
+        "privateKey": "Private key",
+        "publicKey": "Public key",
+        "preSharedKey": "Pre-shared key",
+        "listenPort": "Listen port",
+        "address": "Address"
+      }
     },
     "field": {
       "tag": "Tag",
@@ -2103,6 +2120,7 @@
       "domain": "Domain",
       "domains": "Domains",
       "ip": "IP",
+      "port": "Port",
       "network": "Network",
       "sourceip": "Source IP",
       "source": "Source",
@@ -2299,7 +2317,7 @@
       },
       "validation": {
         "protocolInvalid": "Select a valid protocol.",
-        "portRange": "Port must be a whole number between 1 and 65535.",
+        "portRange": "Port must be a port number or list like 443, 1000-2000,444.",
         "destinationPortRange": "Destination port must be a whole number from 0 to 65535.",
         "realityServerNamesRequired": "REALITY requires at least one server name.",
         "realityServerNamesFormat": "REALITY server names must be a list of non-empty strings.",
@@ -2308,6 +2326,8 @@
       "discardDraftTitle": "Discard new inbound?",
       "discardDraftDescription": "This inbound is not in the list yet. Close without adding it will discard your changes.",
       "discardDraftAction": "Discard",
+      "discardEditTitle": "Discard changes?",
+      "discardEditDescription": "Your modifications to this inbound will be lost if you close now.",
       "finishCurrentTitle": "Finish the current inbound first",
       "finishCurrentDescription": "Add it to the list, or close the dialog and discard the draft, before starting another inbound."
     },
@@ -2325,6 +2345,8 @@
       "discardDraftTitle": "Discard new outbound?",
       "discardDraftDescription": "This outbound is not in the list yet. Closing without adding will discard your changes.",
       "discardDraftAction": "Discard",
+      "discardEditTitle": "Discard changes?",
+      "discardEditDescription": "Your modifications to this outbound will be lost if you close now.",
       "finishCurrentTitle": "Finish the current outbound first",
       "finishCurrentDescription": "Add it to the list, or close the dialog and discard the draft, before starting another outbound.",
       "tabForm": "Form",
@@ -2417,6 +2439,12 @@
       "discardDraftAction": "Discard",
       "finishCurrentTitle": "Finish the current rule first",
       "finishCurrentDescription": "Add it to the list, or close the dialog and discard the draft, before starting another rule.",
+      "validation": {
+        "requiresOutboundOrBalancer": "Set an outbound tag or a balancer tag so the rule knows where to send traffic.",
+        "unknownOutboundTag": "Outbound tag \"{{tag}}\" is not defined on this profile.",
+        "unknownBalancerTag": "Balancer tag \"{{tag}}\" is not defined under routing.balancers.",
+        "portRange": "Port must be a port number or list like 443, 1000-2000,444."
+      },
       "sectionRoutingAction": "Routing Action",
       "routingActionHint": "Choose one target for matched traffic. When both are set, outboundTag takes precedence over balancerTag.",
       "sectionMatchConditions": "Match Conditions",
