@@ -1141,8 +1141,6 @@
     "address": "Address",
     "variables": {
       "title": "Use these variables to make it dynamic",
-      "server_ip": "IP Address of current server",
-      "server_ipv6": "IPv6 of current server",
       "username": "The username of the user",
       "data_usage": "The current data usage of the user",
       "data_left": "Remaining data of the user",

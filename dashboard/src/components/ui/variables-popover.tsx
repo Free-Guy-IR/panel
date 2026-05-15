@@ -56,8 +56,6 @@ export function VariablesPopover({
         </>
       )}
       {includeFormat && <VariableItem variable="{format}" translationKey="hostsDialog.variables.format" />}
-      <VariableItem variable="{SERVER_IP}" translationKey="hostsDialog.variables.server_ip" />
-      <VariableItem variable="{SERVER_IPV6}" translationKey="hostsDialog.variables.server_ipv6" />
       <VariableItem variable="{USERNAME}" translationKey="hostsDialog.variables.username" />
       <VariableItem variable="{DATA_USAGE}" translationKey="hostsDialog.variables.data_usage" />
       <VariableItem variable="{DATA_LEFT}" translationKey="hostsDialog.variables.data_left" />
@@ -133,8 +131,6 @@ export function VariablesList({
         </>
       )}
       {includeFormat && <VariableItem variable="{format}" translationKey="hostsDialog.variables.format" />}
-      <VariableItem variable="{SERVER_IP}" translationKey="hostsDialog.variables.server_ip" />
-      <VariableItem variable="{SERVER_IPV6}" translationKey="hostsDialog.variables.server_ipv6" />
       <VariableItem variable="{USERNAME}" translationKey="hostsDialog.variables.username" />
       <VariableItem variable="{DATA_USAGE}" translationKey="hostsDialog.variables.data_usage" />
       <VariableItem variable="{USAGE_PERCENTAGE}" translationKey="hostsDialog.variables.usage_percentage" />

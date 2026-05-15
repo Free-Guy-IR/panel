@@ -1116,8 +1116,6 @@
     "address": "地址",
     "variables": {
       "title": "使用这些变量使其可以动态替换",
-      "server_ip": "当前服务器的 IP 地址",
-      "server_ipv6": "当前服务器的 IPv6 地址",
       "username": "用户的用户名",
       "data_usage": "用户的当前数据使用量",
       "data_left": "用户的剩余数据",
