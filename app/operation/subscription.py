@@ -335,7 +335,7 @@ class SubscriptionOperation(BaseOperation):
             return HTMLResponse(
                 render_template(
                     template,
-                    self._build_raw_subscription_payload(
+                    self._build_subscription_body_payload(
                         user, links, formatted_announce, sub_settings, format_variables
                     ),
                 )
@@ -432,7 +432,7 @@ class SubscriptionOperation(BaseOperation):
         # Create response headers
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
-    def _build_raw_subscription_payload(
+    def _build_subscription_body_payload(
         self,
         user: UsersResponseWithInbounds,
         links: list[str],
@@ -448,10 +448,27 @@ class SubscriptionOperation(BaseOperation):
             "apps": self._make_apps_import_urls(sub_settings.applications, format_variables),
         }
 
+    def _build_raw_subscription_payload(
+        self,
+        user: UsersResponseWithInbounds,
+        links: list[str],
+        formatted_announce: str,
+        sub_settings: SubSettings,
+        format_variables: dict,
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        return {
+            "body": self._build_subscription_body_payload(
+                user, links, formatted_announce, sub_settings, format_variables
+            ),
+            "headers": headers,
+        }
+
     async def user_subscription_raw(
         self,
         db: AsyncSession,
         token: str,
+        request_url: str = "",
         update_user_agent: str = "",
         ip: str | None = None,
         x_hwid: str | None = None,
@@ -476,7 +493,20 @@ class SubscriptionOperation(BaseOperation):
             links = conf.splitlines()
         format_variables = await self.get_format_variables(user)
         formatted_announce = self._format_announce(sub_settings, format_variables)
-        return self._build_raw_subscription_payload(user, links, formatted_announce, sub_settings, format_variables)
+        response_headers = self.create_response_headers(user, request_url, sub_settings)
+        try:
+            response_headers = self.sanitize_response_headers(response_headers)
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=400)
+
+        return self._build_raw_subscription_payload(
+            user,
+            links,
+            formatted_announce,
+            sub_settings,
+            format_variables,
+            response_headers,
+        )
 
     async def user_subscription_by_user(
         self,

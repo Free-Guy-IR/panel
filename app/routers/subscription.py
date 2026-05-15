@@ -56,6 +56,7 @@ async def user_subscription_raw(
     return await subscription_operator.user_subscription_raw(
         db,
         token=token,
+        request_url=str(request.url),
         update_user_agent=update_user_agent,
         ip=request.client.host if request.client else None,
         **headers.model_dump(),
