@@ -841,11 +841,6 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                 dialogOpen={isDialogOpen}
                                 onFullscreenChange={setIsCodeEditorFullscreen}
                                 embeddedContainerClassName="h-[calc(50vh-1rem)] sm:h-[calc(55vh-1rem)] md:h-[600px]"
-                                fullscreenTitle={
-                                  isXrayBackend
-                                    ? t('coreConfigModal.xrayConfigurationTitle', { defaultValue: 'Xray Core Configuration' })
-                                    : t('coreConfigModal.wireguardConfigurationTitle', { defaultValue: 'WireGuard Core Configuration' })
-                                }
                               />
                             </FormControl>
                             {validation.error && !validation.isValid && <FormMessage>{validation.error}</FormMessage>}
