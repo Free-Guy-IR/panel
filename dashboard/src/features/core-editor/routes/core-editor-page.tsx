@@ -413,11 +413,11 @@ export default function CoreEditorPage() {
           type="button"
           variant="ghost"
           size="icon"
-          className={cn("mt-0.5 shrink-0 sm:mt-0",dir==='rtl' && 'rotate-180')}
+          className={cn('mt-0.5 h-11 w-11 shrink-0 sm:mt-0', dir === 'rtl' && 'rotate-180')}
           onClick={handleBack}
           aria-label={t('back', { defaultValue: 'Back' })}
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex min-w-0 flex-row flex-wrap items-center gap-2 sm:gap-3">

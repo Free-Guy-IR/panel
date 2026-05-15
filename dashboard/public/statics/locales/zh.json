@@ -2308,6 +2308,11 @@
       "discardEditDescription": "如果现在关闭，对此出站的修改将会丢失。",
       "finishCurrentTitle": "请先完成当前出站",
       "finishCurrentDescription": "请先加入列表，或关闭对话框并丢弃草稿，再开始另一个出站。",
+      "tabForm": "表单",
+      "tabJson": "高级",
+      "linkLabel": "从分享链接导入",
+      "linkPlaceholder": "vmess:// vless:// trojan:// ss:// hysteria2:// ...",
+      "linkImportApply": "应用分享链接",
       "freedom": {
         "blurb": "Freedom 按原样转发流量。以下为可选字段；少见结构请用 JSON 标签页编辑。",
         "domainStrategy": "域名策略",

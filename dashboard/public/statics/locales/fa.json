@@ -2261,6 +2261,11 @@
       "discardEditDescription": "اگر اکنون ببندید، تغییرات شما روی این خروجی از بین می‌رود.",
       "finishCurrentTitle": "ابتدا خروجی فعلی را تمام کنید",
       "finishCurrentDescription": "آن را به فهرست اضافه کنید، یا دیالوگ را ببندید و پیش‌نویس را دور بیندازید، قبل از شروع خروجی دیگر.",
+      "tabForm": "فرم",
+      "tabJson": "پیشرفته",
+      "linkLabel": "درون‌ریزی از لینک اشتراک‌گذاری",
+      "linkPlaceholder": "vmess:// vless:// trojan:// ss:// hysteria2:// ...",
+      "linkImportApply": "اعمال لینک اشتراک‌گذاری",
       "freedom": {
         "blurb": "Freedom ترافیک را بدون تغییر هدایت می‌کند. فیلدهای زیر اختیاری‌اند؛ برای اشکال نادر از تب JSON استفاده کنید.",
         "domainStrategy": "استراتژی دامنه",

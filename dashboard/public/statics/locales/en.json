@@ -2350,7 +2350,7 @@
       "finishCurrentTitle": "Finish the current outbound first",
       "finishCurrentDescription": "Add it to the list, or close the dialog and discard the draft, before starting another outbound.",
       "tabForm": "Form",
-      "tabJson": "JSON",
+      "tabJson": "Advanced",
       "linkLabel": "Link",
       "linkPlaceholder": "vmess:// vless:// trojan:// ss:// hysteria2:// …",
       "linkImportApply": "Apply share link",
