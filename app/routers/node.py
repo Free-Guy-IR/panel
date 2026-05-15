@@ -30,6 +30,7 @@ from app.models.node import (
     UserIPListAll,
 )
 from app.models.stats import (
+    NodeOutboundsLatencyResponse,
     NodeRealtimeStats,
     NodeStatsList,
     NodeUsageStatsList,
@@ -319,6 +320,17 @@ async def get_node_stats_periodic(
 async def realtime_node_stats(node_id: int, _: AdminDetails = Depends(check_sudo_admin)):
     """Retrieve node real-time statistics."""
     return await node_operator.get_node_system_stats(node_id=node_id)
+
+
+@router.get("/{node_id}/outbounds_latency", response_model=NodeOutboundsLatencyResponse)
+async def node_outbounds_latency(
+    node_id: int,
+    name: str = "",
+    timeout: int | None = None,
+    _: AdminDetails = Depends(check_sudo_admin),
+):
+    """Retrieve outbound latency for one outbound or all outbounds of a node."""
+    return await node_operator.get_outbounds_latency(node_id=node_id, name=name, timeout=timeout)
 
 
 @router.get("s/realtime_stats", response_model=dict[int, NodeRealtimeStats | None])

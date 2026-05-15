@@ -113,6 +113,20 @@ class NodeRealtimeStats(BaseModel):
     uptime: int
 
 
+class NodeOutboundLatency(BaseModel):
+    name: str
+    alive: bool
+    delay: int
+    link: str
+    last_seen_time: int
+    last_try_time: int
+    source: str
+
+
+class NodeOutboundsLatencyResponse(BaseModel):
+    latencies: list[NodeOutboundLatency]
+
+
 class NodeStats(BaseModel):
     period_start: dt
     mem_usage_percentage: float

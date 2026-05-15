@@ -54,6 +54,7 @@ class NodeWorkerService(BaseRpcService):
 
         self.register_rpc_handler("get_node_system_stats", self._get_node_system_stats)
         self.register_rpc_handler("get_nodes_system_stats", self._get_nodes_system_stats)
+        self.register_rpc_handler("get_outbounds_latency", self._get_outbounds_latency)
         self.register_rpc_handler("get_user_online_stats", self._get_user_online_stats_by_node)
         self.register_rpc_handler("get_user_ip_list", self._get_user_ip_list_by_node)
         self.register_rpc_handler("get_user_ip_list_all", self._get_user_ip_list_all_nodes)
@@ -214,6 +215,18 @@ class NodeWorkerService(BaseRpcService):
     async def _get_nodes_system_stats(self, data: dict = None) -> dict:
         stats = await self._node_operator.get_nodes_system_stats()
         return {node_id: value.model_dump() if value else None for node_id, value in stats.items()}
+
+    async def _get_outbounds_latency(self, data: dict) -> dict:
+        node_id = data.get("node_id")
+        if not node_id:
+            raise RuntimeError("node_id is required")
+
+        latency = await self._node_operator.get_outbounds_latency(
+            node_id=node_id,
+            name=data.get("name", ""),
+            timeout=data.get("timeout"),
+        )
+        return latency.model_dump()
 
     async def _get_user_online_stats_by_node(self, data: dict) -> dict:
         node_id = data.get("node_id")

@@ -51,6 +51,7 @@ from app.models.node import (
     UserIPListAll,
 )
 from app.models.stats import (
+    NodeOutboundsLatencyResponse,
     NodeRealtimeStats,
     NodeStatsList,
     NodeUsageStatsList,
@@ -81,6 +82,7 @@ class NodeOperation(BaseOperation):
             self._sync_node_users_impl = self._sync_node_users_local
             self._get_node_stats_impl = self._get_node_system_stats_local
             self._get_nodes_stats_impl = self._get_nodes_system_stats_local
+            self._get_outbounds_latency_impl = self._get_outbounds_latency_local
             self._get_user_online_stats_impl = self._get_user_online_stats_local
             self._get_user_ip_list_impl = self._get_user_ip_list_local
             self._get_user_ip_list_all_impl = self._get_user_ip_list_all_local
@@ -98,6 +100,7 @@ class NodeOperation(BaseOperation):
             self._sync_node_users_impl = self._sync_node_users_remote
             self._get_node_stats_impl = self._get_node_system_stats_remote
             self._get_nodes_stats_impl = self._get_nodes_system_stats_remote
+            self._get_outbounds_latency_impl = self._get_outbounds_latency_remote
             self._get_user_online_stats_impl = self._get_user_online_stats_remote
             self._get_user_ip_list_impl = self._get_user_ip_list_remote
             self._get_user_ip_list_all_impl = self._get_user_ip_list_all_remote
@@ -483,6 +486,11 @@ class NodeOperation(BaseOperation):
     async def get_nodes_system_stats(self) -> dict[int, NodeRealtimeStats | None]:
         return await self._get_nodes_stats_impl()
 
+    async def get_outbounds_latency(
+        self, node_id: int, name: str = "", timeout: int | None = None
+    ) -> NodeOutboundsLatencyResponse:
+        return await self._get_outbounds_latency_impl(node_id, name, timeout)
+
     async def _get_node_stats_safe(self, node_id: int) -> NodeRealtimeStats | None:
         """Wrapper method that returns None instead of raising exceptions"""
         try:
@@ -773,6 +781,50 @@ class NodeOperation(BaseOperation):
                 int(node_id): (NodeRealtimeStats.model_validate(value) if value else None)
                 for node_id, value in data.items()
             }
+        except RuntimeError as exc:
+            await self.handle_rpc_error(exc)
+
+    async def _get_outbounds_latency_local(
+        self, node_id: int, name: str = "", timeout: int | None = None
+    ) -> NodeOutboundsLatencyResponse:
+        node = await node_manager.get_node(node_id)
+
+        if node is None:
+            await self.raise_error(message="Node not found", code=404)
+
+        try:
+            latency = await node.get_outbounds_latency(name=name, timeout=timeout)
+        except NodeAPIError as e:
+            await self.raise_error(message=e.detail, code=e.code)
+
+        if latency is None:
+            await self.raise_error(message="Latency not found", code=404)
+
+        return NodeOutboundsLatencyResponse(
+            latencies=[
+                {
+                    "name": item.name,
+                    "alive": item.alive,
+                    "delay": item.delay,
+                    "link": item.link,
+                    "last_seen_time": item.last_seen_time,
+                    "last_try_time": item.last_try_time,
+                    "source": item.source,
+                }
+                for item in latency.latencies
+            ]
+        )
+
+    async def _get_outbounds_latency_remote(
+        self, node_id: int, name: str = "", timeout: int | None = None
+    ) -> NodeOutboundsLatencyResponse:
+        try:
+            data = await node_nats_client.request(
+                "get_outbounds_latency",
+                {"node_id": node_id, "name": name, "timeout": timeout},
+                timeout=timeout,
+            )
+            return NodeOutboundsLatencyResponse.model_validate(data)
         except RuntimeError as exc:
             await self.handle_rpc_error(exc)
 
