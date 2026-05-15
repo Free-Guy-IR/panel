@@ -239,6 +239,14 @@
         "randomizeOrder": "Randomize Subscription Order",
         "randomizeOrderDescription": "Shuffle configuration order on each subscription request"
       },
+      "responseHeaders": {
+        "title": "Response Headers",
+        "description": "Custom HTTP headers to include in all subscription responses. Supports template variables.",
+        "addHeader": "Add Header",
+        "headerName": "Header name",
+        "headerValue": "Header value",
+        "noHeaders": "No response headers configured. Add headers to include custom HTTP headers in subscription responses."
+      },
       "rules": {
         "title": "Subscription Rules",
         "description": "Configure client-specific subscription rules and formats",

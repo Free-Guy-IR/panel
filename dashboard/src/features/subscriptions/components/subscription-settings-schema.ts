@@ -42,6 +42,7 @@ export const subscriptionSchema = z.object({
   allow_browser_config: z.boolean().optional(),
   disable_sub_template: z.boolean().optional(),
   randomize_order: z.boolean().optional(),
+  response_headers: z.record(z.string()).optional(),
   rules: z.array(
     z.object({
       pattern: z.string().min(1, 'Pattern is required'),

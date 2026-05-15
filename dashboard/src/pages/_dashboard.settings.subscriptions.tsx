@@ -4,6 +4,7 @@ import { SubscriptionApplicationsSection } from '@/features/subscriptions/compon
 import { SubscriptionFormActions } from '@/features/subscriptions/components/subscription-form-actions'
 import { SubscriptionGeneralSettingsSection } from '@/features/subscriptions/components/subscription-general-settings-section'
 import { SubscriptionManualFormatsSection } from '@/features/subscriptions/components/subscription-manual-formats-section'
+import { SubscriptionResponseHeadersSection } from '@/features/subscriptions/components/subscription-response-headers-section'
 import { SubscriptionRulesSection } from '@/features/subscriptions/components/subscription-rules-section'
 import { SubscriptionSettingsSkeleton } from '@/features/subscriptions/components/subscription-settings-skeleton'
 import {
@@ -41,6 +42,7 @@ export default function SubscriptionSettings() {
       allow_browser_config: true,
       disable_sub_template: false,
       randomize_order: false,
+      response_headers: {},
       rules: [],
       applications: [],
       manual_sub_request: {
@@ -123,6 +125,9 @@ export default function SubscriptionSettings() {
         allow_browser_config: subscriptionData.allow_browser_config ?? true,
         disable_sub_template: subscriptionData.disable_sub_template ?? false,
         randomize_order: subscriptionData.randomize_order ?? false,
+        response_headers: Object.fromEntries(
+          Object.entries(subscriptionData.response_headers || {}).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)]),
+        ),
         rules:
           subscriptionData.rules?.map((rule: ApiSubRule) => ({
             pattern: rule.pattern,
@@ -157,6 +162,12 @@ export default function SubscriptionSettings() {
             .filter(([key, value]) => key && value),
         ),
       }))
+
+      const processedResponseHeaders = Object.fromEntries(
+        Object.entries(data.response_headers || {})
+          .map(([key, value]) => [key.trim(), value.trim()] as const)
+          .filter(([key, value]) => key && value),
+      )
 
       const rawApps = (data.applications || [])
         .map(app => ({
@@ -195,6 +206,7 @@ export default function SubscriptionSettings() {
           profile_title: data.profile_title?.trim() || undefined,
           announce: data.announce?.trim() || undefined,
           announce_url: data.announce_url?.trim() || undefined,
+          response_headers: processedResponseHeaders,
           rules: processedRules,
           applications: processedApplications,
         },
@@ -270,6 +282,9 @@ export default function SubscriptionSettings() {
         allow_browser_config: subscriptionData.allow_browser_config ?? true,
         disable_sub_template: subscriptionData.disable_sub_template ?? false,
         randomize_order: subscriptionData.randomize_order ?? false,
+        response_headers: Object.fromEntries(
+          Object.entries(subscriptionData.response_headers || {}).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)]),
+        ),
         rules:
           subscriptionData.rules?.map((rule: ApiSubRule) => ({
             pattern: rule.pattern,
@@ -347,6 +362,10 @@ export default function SubscriptionSettings() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 p-4 sm:space-y-8 sm:py-6 lg:space-y-10 lg:py-8">
           <SubscriptionGeneralSettingsSection form={form} />
+
+          <Separator className="my-3" />
+
+          <SubscriptionResponseHeadersSection form={form} />
 
           <Separator className="my-3" />
 

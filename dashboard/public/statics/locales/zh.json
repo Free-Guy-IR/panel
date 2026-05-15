@@ -223,6 +223,14 @@
         "randomizeOrder": "随机化订阅顺序",
         "randomizeOrderDescription": "每次请求订阅时，随机打乱配置顺序"
       },
+      "responseHeaders": {
+        "title": "响应头",
+        "description": "在所有订阅响应中包含的自定义 HTTP 头。支持模板变量。",
+        "addHeader": "添加头",
+        "headerName": "头名称",
+        "headerValue": "头值",
+        "noHeaders": "未配置响应头。添加头以在订阅响应中包含自定义 HTTP 头。"
+      },
       "rules": {
         "title": "订阅规则",
         "description": "为特定客户端模式定义自定义规则",

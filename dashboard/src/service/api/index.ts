@@ -1358,6 +1358,7 @@ export interface Subscription {
   /** @maxLength 128 */
   announce?: string
   announce_url?: string
+  response_headers?: Record<string, unknown>
   rules: SubRule[]
   manual_sub_request?: SubFormatEnable
   applications?: Application[]
