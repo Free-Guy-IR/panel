@@ -1938,7 +1938,9 @@
     "keyPairGenerationFailed": "Failed to generate key pair",
     "shortIdGenerationFailed": "Failed to generate short ID",
     "shadowsocksPasswordGenerated": "Password generated successfully",
-    "shadowsocksPasswordGenerationFailed": "Failed to generate password"
+    "shadowsocksPasswordGenerationFailed": "Failed to generate password",
+    "discardChangesTitle": "Discard changes?",
+    "discardChangesDescription": "Your unsaved kernel configuration changes will be lost if you close this editor."
   },
   "coreEditor": {
     "nameRequired": "Name is required",

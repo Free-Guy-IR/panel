@@ -1827,7 +1827,9 @@
     "keyPairGenerationFailed": "Не удалось сгенерировать пару ключей",
     "shortIdGenerationFailed": "Не удалось сгенерировать короткий ID",
     "shadowsocksPasswordGenerated": "Пароль успешно сгенерирован",
-    "shadowsocksPasswordGenerationFailed": "Не удалось сгенерировать пароль"
+    "shadowsocksPasswordGenerationFailed": "Не удалось сгенерировать пароль",
+    "discardChangesTitle": "Отменить изменения?",
+    "discardChangesDescription": "Несохранённые изменения конфигурации ядра будут потеряны, если закрыть редактор."
   },
   "coreEditor": {
     "nameRequired": "Укажите имя",

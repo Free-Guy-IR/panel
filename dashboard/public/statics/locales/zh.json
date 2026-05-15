@@ -1900,7 +1900,9 @@
     "keyPairGenerationFailed": "密钥对生成失败",
     "shortIdGenerationFailed": "短 ID 生成失败",
     "shadowsocksPasswordGenerated": "密码生成成功",
-    "shadowsocksPasswordGenerationFailed": "密码生成失败"
+    "shadowsocksPasswordGenerationFailed": "密码生成失败",
+    "discardChangesTitle": "放弃更改？",
+    "discardChangesDescription": "如果关闭此编辑器，未保存的内核配置更改将会丢失。"
   },
   "coreEditor": {
     "nameRequired": "名称为必填项",

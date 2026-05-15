@@ -1853,7 +1853,9 @@
     "keyPairGenerationFailed": "تولید جفت کلید ناموفق بود",
     "shortIdGenerationFailed": "تولید شناسه کوتاه ناموفق بود",
     "shadowsocksPasswordGenerated": "رمز عبور با موفقیت تولید شد",
-    "shadowsocksPasswordGenerationFailed": "تولید رمز عبور ناموفق بود"
+    "shadowsocksPasswordGenerationFailed": "تولید رمز عبور ناموفق بود",
+    "discardChangesTitle": "لغو تغییرات؟",
+    "discardChangesDescription": "اگر این ویرایشگر را ببندید، تغییرات ذخیره‌نشدهٔ پیکربندی هسته از بین خواهد رفت."
   },
   "coreEditor": {
     "nameRequired": "نام الزامی است",
