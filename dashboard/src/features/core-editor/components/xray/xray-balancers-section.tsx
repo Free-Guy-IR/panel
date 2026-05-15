@@ -10,15 +10,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { StringTagPicker } from '@/components/common/string-tag-picker'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { XrayParityFormControl, isBooleanParityField, type XrayProfileTagOptions } from '@/features/core-editor/components/shared/xray-parity-form-control'
 import { CoreEditorDataTable } from '@/features/core-editor/components/shared/core-editor-data-table'
@@ -39,7 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Eye, Pencil, Plus, SlidersHorizontal } from 'lucide-react'
 
 function defaultRouting(): Routing {
   return { domainStrategy: 'AsIs', rules: [] }
@@ -95,12 +93,6 @@ function uniqueNonEmptyTags(tags: (string | undefined)[] | undefined): string[] 
 
 /** Xray balancer.strategy.type values (see `conf/router` balancing strategy). */
 const BALANCING_STRATEGY_TYPES = ['random', 'roundRobin', 'leastPing', 'leastLoad'] as const
-
-type LeastLoadCostRow = {
-  regexp: boolean
-  match: string
-  value: string
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -168,46 +160,6 @@ function readStringArrayProperty(obj: JsonObject | undefined, key: string): stri
   const value = obj?.[key]
   if (!Array.isArray(value)) return []
   return value.map(item => String(item).trim()).filter(Boolean)
-}
-
-function readStringListSetting(settings: JsonObject | undefined, key: string): string {
-  const value = settings?.[key]
-  return Array.isArray(value) ? value.map(item => String(item)).join('\n') : ''
-}
-
-function parseStringListSetting(raw: string): string[] | undefined {
-  const values = raw
-    .split(/[\n,]+/)
-    .map(item => item.trim())
-    .filter(Boolean)
-  return values.length > 0 ? values : undefined
-}
-
-function readLeastLoadCosts(settings: JsonObject | undefined): LeastLoadCostRow[] {
-  const raw = settings?.costs
-  if (!Array.isArray(raw)) return []
-  return raw
-    .filter(isRecord)
-    .map(item => ({
-      regexp: item.regexp === true,
-      match: typeof item.match === 'string' ? item.match : '',
-      value: typeof item.value === 'number' && Number.isFinite(item.value) ? String(item.value) : '',
-    }))
-}
-
-function costsToJson(rows: LeastLoadCostRow[]): JsonObject[] | undefined {
-  const costs = rows
-    .map(row => {
-      const match = row.match.trim()
-      const value = parseOptionalNumber(row.value)
-      if (!match && value === undefined && row.regexp !== true) return null
-      const cost: Record<string, JsonValue> = { regexp: row.regexp }
-      if (match) cost.match = match
-      if (value !== undefined) cost.value = value
-      return cost as JsonObject
-    })
-    .filter((row): row is JsonObject => row !== null)
-  return costs.length > 0 ? costs : undefined
 }
 
 function defaultObservatory(subjectSelector: string[] = []): JsonObject {
@@ -290,6 +242,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
   const [selectorCommitError, setSelectorCommitError] = useState<string | null>(null)
   const [observationTab, setObservationTab] = useState<ObservationTab>('observatory')
   const [observationDialogOpen, setObservationDialogOpen] = useState(false)
+  const [observationPopoverOpen, setObservationPopoverOpen] = useState(false)
   const balancers = profile?.routing?.balancers ?? []
 
   const b = useMemo(() => {
@@ -429,6 +382,14 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
     [t],
   )
 
+  useEffect(() => {
+    if (!profile || balancers.length === 0 || profileHasObservation(profile)) return
+    updateXrayProfile(p => {
+      if ((p.routing?.balancers ?? []).length === 0 || profileHasObservation(p)) return p
+      return ensureObservationForProfile(p, collectBalancerSelectors(p))
+    })
+  }, [profile, balancers.length, updateXrayProfile])
+
   if (!profile) return null
 
   const finalizeDetailClose = () => {
@@ -519,38 +480,6 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
     updateXrayProfile(p => replaceBalancer(p, selected, { ...b, ...patch }))
   }
 
-  const patchStrategySettings = (patch: Record<string, JsonValue | undefined>) => {
-    if (!b) return
-    const type = b.strategy?.type?.trim() || 'leastLoad'
-    const settings = mutableJsonObject(b.strategy?.settings)
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === undefined) delete settings[key]
-      else settings[key] = value
-    }
-    patchBalancer({
-      strategy: {
-        type,
-        settings: compactJsonObject(settings),
-      },
-    })
-  }
-
-  const patchLeastLoadCost = (index: number, patch: Partial<LeastLoadCostRow>) => {
-    const rows = readLeastLoadCosts(b?.strategy?.settings)
-    rows[index] = { ...(rows[index] ?? { regexp: false, match: '', value: '' }), ...patch }
-    patchStrategySettings({ costs: costsToJson(rows) })
-  }
-
-  const removeLeastLoadCost = (index: number) => {
-    const rows = readLeastLoadCosts(b?.strategy?.settings).filter((_, rowIndex) => rowIndex !== index)
-    patchStrategySettings({ costs: costsToJson(rows) })
-  }
-
-  const addLeastLoadCost = () => {
-    const rows = [...readLeastLoadCosts(b?.strategy?.settings), { regexp: false, match: 'tag', value: '0.5' }]
-    patchStrategySettings({ costs: costsToJson(rows) })
-  }
-
   const observatory = readTopLevelObject(profile, 'observatory')
   const burstObservatory = readTopLevelObject(profile, 'burstObservatory')
   const defaultSubjectSelector = collectBalancerSelectors(profile)
@@ -584,55 +513,120 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
   }
 
   const observationEnabled = observatory !== undefined || burstObservatory !== undefined
-  const hasLeastPingBalancer = useMemo(() => profileHasLeastPingBalancer(profile), [profile])
+  const hasLeastPingBalancer = profileHasLeastPingBalancer(profile)
+  const requiresObservationSource = balancers.length > 0
+  const requiredObservationSourceReason = requiresObservationSource
+    ? t('coreEditor.balancer.observationRequiredWithBalancers', {
+        defaultValue: 'At least one observation source must stay enabled while this profile has balancers.',
+      })
+    : null
+  const observatoryIsRequired = requiresObservationSource && observatory !== undefined && burstObservatory === undefined
+  const burstObservatoryIsRequired = requiresObservationSource && burstObservatory !== undefined && observatory === undefined
   const observatoryDisabledReason = !hasLeastPingBalancer && observatory === undefined
     ? t('coreEditor.balancer.observatoryRequiresLeastPing', {
         defaultValue: 'Observatory needs at least one balancer with the leastPing strategy. Use Burst observatory until then.',
       })
     : null
+  const observatorySwitchDisabledReason = observatoryDisabledReason ?? (observatoryIsRequired ? requiredObservationSourceReason : null)
+  const burstObservatorySwitchDisabledReason = burstObservatoryIsRequired ? requiredObservationSourceReason : null
   const activeObservationTab: ObservationTab =
     observationTab === 'observatory' && observatory === undefined && burstObservatory !== undefined
       ? 'burstObservatory'
       : observationTab === 'burstObservatory' && burstObservatory === undefined && observatory !== undefined
         ? 'observatory'
         : observationTab
+  const observationSourcesSummary = observationEnabled
+    ? t('coreEditor.balancer.observationActiveSummary', {
+        defaultValue: 'Balancer probe sources are configured.',
+      })
+    : t('coreEditor.balancer.observationInactiveSummary', {
+        defaultValue: 'No probe source is configured.',
+      })
+  const observationStatusItems = [
+    {
+      key: 'observatory',
+      label: t('coreEditor.balancer.observatoryShort', { defaultValue: 'Observatory' }),
+      enabled: observatory !== undefined,
+    },
+    {
+      key: 'burst',
+      label: t('coreEditor.balancer.burstShort', { defaultValue: 'Burst' }),
+      enabled: burstObservatory !== undefined,
+    },
+  ]
+  const observationToolbarAction = (
+    <Popover open={observationPopoverOpen} onOpenChange={setObservationPopoverOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-md"
+          className="relative h-9 w-9 rounded-lg shadow-sm"
+          aria-label={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
+          title={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
+        >
+          <Eye className="h-4 w-4" />
+          <span
+            className={cn(
+              'absolute end-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-background',
+              observationEnabled ? 'bg-green-500' : 'bg-muted-foreground/45',
+            )}
+            aria-hidden
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 space-y-3">
+        <div className="space-y-1">
+          <div className="text-sm font-medium">
+            {t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {observationSourcesSummary}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {observationStatusItems.map(item => (
+            <div key={item.key} className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2">
+              <span className="min-w-0 text-xs font-medium">{item.label}</span>
+              <span
+                className={cn(
+                  'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs',
+                  item.enabled
+                    ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-300'
+                    : 'border-border bg-background text-muted-foreground',
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', item.enabled ? 'bg-green-500' : 'bg-muted-foreground/45')} />
+                {item.enabled ? t('enabled', { defaultValue: 'On' }) : t('disabled', { defaultValue: 'Off' })}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full justify-center"
+          onClick={() => {
+            setObservationPopoverOpen(false)
+            setObservationDialogOpen(true)
+          }}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          {t('configure', { defaultValue: 'Configure' })}
+        </Button>
+      </PopoverContent>
+    </Popover>
+  )
 
   return (
     <div className="space-y-6">
-      <div className="min-w-0 flex flex-col gap-3 rounded-md border border-border bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 flex items-center gap-3">
-          <Eye className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <h3 className="text-sm font-medium">
-              {t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
-            </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {observationEnabled
-                ? t('coreEditor.balancer.observationActiveSummary', {
-                    defaultValue: 'Active sources are configured for balancer probes.',
-                  })
-                : t('coreEditor.balancer.observationInactiveSummary', {
-                    defaultValue: 'No probes are configured. Most strategies need at least one source.',
-                  })}
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={observatory ? 'green' : 'outline'} className="h-5">
-            {t('coreEditor.balancer.observatoryShort', { defaultValue: 'Observatory' })}: {observatory ? t('enabled', { defaultValue: 'On' }) : t('disabled', { defaultValue: 'Off' })}
-          </Badge>
-          <Badge variant={burstObservatory ? 'green' : 'outline'} className="h-5">
-            {t('coreEditor.balancer.burstShort', { defaultValue: 'Burst' })}: {burstObservatory ? t('enabled', { defaultValue: 'On' }) : t('disabled', { defaultValue: 'Off' })}
-          </Badge>
-          <Button type="button" variant="outline" size="sm" onClick={() => setObservationDialogOpen(true)}>
-            {t('configure', { defaultValue: 'Configure' })}
-          </Button>
-        </div>
-      </div>
-
       <CoreEditorDataTable
         columns={columns}
         data={balancers}
+        toolbarActions={observationToolbarAction}
         getSearchableText={balancerSearchHaystack}
         searchPlaceholder={t('coreEditor.balancer.searchPlaceholder', {
           defaultValue: 'Search by tag, selector outbounds, strategy…',
@@ -868,381 +862,266 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                   </Select>
                 </div>
 
-                {b.strategy?.type === 'leastLoad' ? (() => {
-                  const settings = b.strategy?.settings
-                  const costs = readLeastLoadCosts(settings)
-                  return (
-                    <div className="min-w-0 space-y-4 rounded-md border border-border bg-muted/10 p-3 sm:col-span-2">
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="min-w-0 space-y-1.5">
-                          <Label className="text-xs font-medium">
-                            {t('coreEditor.balancer.expected', { defaultValue: 'Expected nodes' })}
-                          </Label>
-                          <Input
-                            dir="ltr"
-                            inputMode="numeric"
-                            className="h-9 font-mono text-xs"
-                            placeholder="2"
-                            value={readNumberProperty(settings, 'expected')}
-                            onChange={e => patchStrategySettings({ expected: parseOptionalNumber(e.target.value) })}
-                          />
-                        </div>
-                        <div className="min-w-0 space-y-1.5">
-                          <Label className="text-xs font-medium">
-                            {t('coreEditor.balancer.maxRTT', { defaultValue: 'Max RTT' })}
-                          </Label>
-                          <Input
-                            dir="ltr"
-                            className="h-9 font-mono text-xs"
-                            placeholder="1s"
-                            value={readStringProperty(settings, 'maxRTT')}
-                            onChange={e => patchStrategySettings({ maxRTT: e.target.value.trim() || undefined })}
-                          />
-                        </div>
-                        <div className="min-w-0 space-y-1.5">
-                          <Label className="text-xs font-medium">
-                            {t('coreEditor.balancer.tolerance', { defaultValue: 'Tolerance' })}
-                          </Label>
-                          <Input
-                            dir="ltr"
-                            inputMode="decimal"
-                            className="h-9 font-mono text-xs"
-                            placeholder="0.01"
-                            value={readNumberProperty(settings, 'tolerance')}
-                            onChange={e => patchStrategySettings({ tolerance: parseOptionalNumber(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 space-y-1.5">
-                        <Label className="text-xs font-medium">
-                          {t('coreEditor.balancer.baselines', { defaultValue: 'Baselines' })}
-                        </Label>
-                        <Textarea
-                          dir="ltr"
-                          className="min-h-20 font-mono text-xs"
-                          placeholder="1s"
-                          value={readStringListSetting(settings, 'baselines')}
-                          onChange={e => patchStrategySettings({ baselines: parseStringListSetting(e.target.value) })}
-                        />
-                      </div>
-
-                      <div className="min-w-0 space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <Label className="text-xs font-medium">
-                            {t('coreEditor.balancer.costs', { defaultValue: 'Costs' })}
-                          </Label>
-                          <Button type="button" variant="outline" size="sm" onClick={addLeastLoadCost}>
-                            <Plus className="h-4 w-4" />
-                            {t('coreEditor.balancer.addCost', { defaultValue: 'Add cost' })}
-                          </Button>
-                        </div>
-                        {costs.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">
-                            {t('coreEditor.balancer.noCosts', { defaultValue: 'No outbound weights configured.' })}
-                          </p>
-                        ) : (
-                          <div className="space-y-2">
-                            {costs.map((row, index) => (
-                              <div key={index} className="grid gap-2 rounded-md border border-border/70 bg-background/60 p-2 sm:grid-cols-[auto_minmax(0,1fr)_7rem_auto]">
-                                <div className="flex items-center gap-2">
-                                  <Switch
-                                    checked={row.regexp}
-                                    onCheckedChange={checked => patchLeastLoadCost(index, { regexp: checked })}
-                                  />
-                                  <span className="text-xs text-muted-foreground">
-                                    {t('coreEditor.balancer.regexp', { defaultValue: 'Regexp' })}
-                                  </span>
-                                </div>
-                                <Input
-                                  dir="ltr"
-                                  className="h-9 font-mono text-xs"
-                                  placeholder="tag"
-                                  value={row.match}
-                                  onChange={e => patchLeastLoadCost(index, { match: e.target.value })}
-                                />
-                                <Input
-                                  dir="ltr"
-                                  inputMode="decimal"
-                                  className="h-9 font-mono text-xs"
-                                  placeholder="0.5"
-                                  value={row.value}
-                                  onChange={e => patchLeastLoadCost(index, { value: e.target.value })}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-md"
-                                  aria-label={t('delete', { defaultValue: 'Delete' })}
-                                  onClick={() => removeLeastLoadCost(index)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })() : null}
               </div>
             </form>
           </Form>
         )}
       </CoreEditorFormDialog>
 
-      <Dialog open={observationDialogOpen} onOpenChange={setObservationDialogOpen}>
-        <DialogContent dir={dir} onOpenAutoFocus={e => e.preventDefault()} className="h-auto w-full max-w-2xl gap-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5 shrink-0" />
-              {t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
-            </DialogTitle>
-            <DialogDescription className="text-pretty">
-              {t('coreEditor.balancer.observationSourcesHint', {
-                defaultValue: 'This editor can keep both top-level observation objects when a config uses them. Most setups enable one; leastPing and leastLoad need observation data.',
-              })}
-            </DialogDescription>
-          </DialogHeader>
+      <CoreEditorFormDialog
+        isDialogOpen={observationDialogOpen}
+        onOpenChange={setObservationDialogOpen}
+        leadingIcon={<Eye className="h-5 w-5 shrink-0" />}
+        title={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
+        size="md"
+        inlinePersistValidation={false}
+      >
+        <TooltipProvider delayDuration={200}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3', observatory && 'border-primary/30 bg-primary/5', observatoryDisabledReason && 'opacity-70')}>
+              <div className="min-w-0">
+                <Label className="text-xs font-medium">
+                  {t('coreEditor.balancer.observatory', { defaultValue: 'Observatory' })}
+                </Label>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {t('coreEditor.balancer.observatoryHint', {
+                    defaultValue: 'Fixed-interval background HTTP probes.',
+                  })}
+                </p>
+              </div>
+              {observatorySwitchDisabledReason ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="mt-0.5 shrink-0">
+                      <Switch
+                        checked={observatory !== undefined}
+                        disabled
+                        onCheckedChange={() => {}}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-xs">
+                    {observatorySwitchDisabledReason}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Switch
+                  className="mt-0.5 shrink-0"
+                  checked={observatory !== undefined}
+                  onCheckedChange={checked => {
+                    if (!checked && burstObservatory === undefined && requiresObservationSource) return
+                    setTopLevelObject('observatory', checked ? defaultObservatory(defaultSubjectSelector) : undefined)
+                    if (checked) setObservationTab('observatory')
+                  }}
+                />
+              )}
+            </div>
 
-          <div className="-me-4 max-h-[75dvh] space-y-4 overflow-y-auto overscroll-contain px-2 pe-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <TooltipProvider delayDuration={200}>
-                <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3', observatory && 'border-primary/30 bg-primary/5', observatoryDisabledReason && 'opacity-70')}>
-                  <div className="min-w-0">
-                    <Label className="text-xs font-medium">
-                      {t('coreEditor.balancer.observatory', { defaultValue: 'Observatory' })}
-                    </Label>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      {t('coreEditor.balancer.observatoryHint', {
-                        defaultValue: 'Fixed-interval background HTTP probes.',
-                      })}
-                    </p>
-                  </div>
-                  {observatoryDisabledReason ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="mt-0.5 shrink-0">
-                          <Switch
-                            className=""
-                            checked={false}
-                            disabled
-                            onCheckedChange={() => {}}
-                          />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs text-xs">
-                        {observatoryDisabledReason}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <Switch
-                      className="mt-0.5 shrink-0"
-                      checked={observatory !== undefined}
-                      onCheckedChange={checked => {
-                        setTopLevelObject('observatory', checked ? defaultObservatory(defaultSubjectSelector) : undefined)
-                        if (checked) setObservationTab('observatory')
-                      }}
-                    />
-                  )}
-                </div>
-              </TooltipProvider>
-
-              <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3', burstObservatory && 'border-primary/30 bg-primary/5')}>
-                <div className="min-w-0">
-                  <Label className="text-xs font-medium">
-                    {t('coreEditor.balancer.burstObservatory', { defaultValue: 'Burst observatory' })}
-                  </Label>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {t('coreEditor.balancer.burstObservatoryHint', {
-                      defaultValue: 'Randomized probes configured through pingConfig.',
-                    })}
-                  </p>
-                </div>
+            <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3', burstObservatory && 'border-primary/30 bg-primary/5')}>
+              <div className="min-w-0">
+                <Label className="text-xs font-medium">
+                  {t('coreEditor.balancer.burstObservatory', { defaultValue: 'Burst observatory' })}
+                </Label>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {t('coreEditor.balancer.burstObservatoryHint', {
+                    defaultValue: 'Randomized probes configured through pingConfig.',
+                  })}
+                </p>
+              </div>
+              {burstObservatorySwitchDisabledReason ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="mt-0.5 shrink-0">
+                      <Switch
+                        checked={burstObservatory !== undefined}
+                        disabled
+                        onCheckedChange={() => {}}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-xs">
+                    {burstObservatorySwitchDisabledReason}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
                 <Switch
                   className="mt-0.5 shrink-0"
                   checked={burstObservatory !== undefined}
                   onCheckedChange={checked => {
+                    if (!checked && observatory === undefined && requiresObservationSource) return
                     setTopLevelObject('burstObservatory', checked ? defaultBurstObservatory(defaultSubjectSelector) : undefined)
                     if (checked) setObservationTab('burstObservatory')
                   }}
                 />
-              </div>
+              )}
             </div>
+          </div>
+        </TooltipProvider>
 
-            {observationEnabled ? (
-              <Tabs value={activeObservationTab} onValueChange={value => setObservationTab(value as ObservationTab)} className="min-w-0">
-                <TabsList className="grid w-full grid-cols-2 sm:w-[420px]">
-                  <TabsTrigger value="observatory" disabled={observatory === undefined}>
-                    {t('coreEditor.balancer.observatory', { defaultValue: 'Observatory' })}
-                  </TabsTrigger>
-                  <TabsTrigger value="burstObservatory" disabled={burstObservatory === undefined}>
-                    {t('coreEditor.balancer.burstObservatory', { defaultValue: 'Burst observatory' })}
-                  </TabsTrigger>
-                </TabsList>
+        {observationEnabled ? (
+          <Tabs value={activeObservationTab} onValueChange={value => setObservationTab(value as ObservationTab)} className="min-w-0">
+            <TabsList className="mx-auto grid w-full grid-cols-2 sm:w-[420px]">
+              <TabsTrigger value="observatory" disabled={observatory === undefined}>
+                {t('coreEditor.balancer.observatory', { defaultValue: 'Observatory' })}
+              </TabsTrigger>
+              <TabsTrigger value="burstObservatory" disabled={burstObservatory === undefined}>
+                {t('coreEditor.balancer.burstObservatory', { defaultValue: 'Burst observatory' })}
+              </TabsTrigger>
+            </TabsList>
 
-                {observatory ? (
-                  <TabsContent value="observatory" className="mt-4 space-y-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">
-                        {t('coreEditor.balancer.subjectSelector', { defaultValue: 'Subject selector' })}
-                      </Label>
-                      <StringTagPicker
-                        mode="multi"
-                        options={profileTagOptions.outboundTags}
-                        valueMulti={readStringArrayProperty(observatory, 'subjectSelector')}
-                        onChangeMulti={next => patchTopLevelObject('observatory', { subjectSelector: next })}
-                        placeholder={t('coreEditor.balancer.subjectSelectorPlaceholder', {
-                          defaultValue: 'Select outbound tag prefixes...',
-                        })}
-                        clearAllLabel={t('coreEditor.balancer.clearSelectors', { defaultValue: 'Clear all' })}
-                        addButtonLabel={t('coreEditor.balancer.addOutboundTag', { defaultValue: 'Add tag' })}
+            {observatory ? (
+              <TabsContent value="observatory" className="mt-4 space-y-3">
+                <div className="flex min-w-0 flex-col gap-2.5">
+                  <Label className="text-xs font-medium">
+                    {t('coreEditor.balancer.subjectSelector', { defaultValue: 'Subject selector' })}
+                  </Label>
+                  <StringTagPicker
+                    mode="multi"
+                    options={profileTagOptions.outboundTags}
+                    valueMulti={readStringArrayProperty(observatory, 'subjectSelector')}
+                    onChangeMulti={next => patchTopLevelObject('observatory', { subjectSelector: next })}
+                    placeholder={t('coreEditor.balancer.subjectSelectorPlaceholder', {
+                      defaultValue: 'Select outbound tag prefixes...',
+                    })}
+                    clearAllLabel={t('coreEditor.balancer.clearSelectors', { defaultValue: 'Clear all' })}
+                    addButtonLabel={t('coreEditor.balancer.addOutboundTag', { defaultValue: 'Add tag' })}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex min-w-0 flex-col gap-2.5">
+                    <Label className="text-xs font-medium">probeURL</Label>
+                    <Input
+                      dir="ltr"
+                      className="h-9 font-mono text-xs"
+                      value={readStringProperty(observatory, 'probeURL', 'probeUrl')}
+                      onChange={e => patchTopLevelObject('observatory', { probeURL: e.target.value.trim() || undefined, probeUrl: undefined })}
+                      placeholder="https://www.google.com/generate_204"
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2.5">
+                    <Label className="text-xs font-medium">probeInterval</Label>
+                    <Input
+                      dir="ltr"
+                      className="h-9 font-mono text-xs"
+                      value={readStringProperty(observatory, 'probeInterval')}
+                      onChange={e => patchTopLevelObject('observatory', { probeInterval: e.target.value.trim() || undefined })}
+                      placeholder="10m"
+                    />
+                  </div>
+                  <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2 sm:col-span-2">
+                    <Label className="min-w-0 text-xs font-medium">enableConcurrency</Label>
+                    <Switch
+                      checked={readBooleanProperty(observatory, 'enableConcurrency')}
+                      onCheckedChange={checked => patchTopLevelObject('observatory', { enableConcurrency: checked })}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+            ) : null}
+
+            {burstObservatory ? (() => {
+              const pingConfig = readJsonObject(burstObservatory.pingConfig)
+              return (
+                <TabsContent value="burstObservatory" className="mt-4 space-y-3">
+                  <div className="flex min-w-0 flex-col gap-2.5">
+                    <Label className="text-xs font-medium">
+                      {t('coreEditor.balancer.subjectSelector', { defaultValue: 'Subject selector' })}
+                    </Label>
+                    <StringTagPicker
+                      mode="multi"
+                      options={profileTagOptions.outboundTags}
+                      valueMulti={readStringArrayProperty(burstObservatory, 'subjectSelector')}
+                      onChangeMulti={next => patchTopLevelObject('burstObservatory', { subjectSelector: next })}
+                      placeholder={t('coreEditor.balancer.subjectSelectorPlaceholder', {
+                        defaultValue: 'Select outbound tag prefixes...',
+                      })}
+                      clearAllLabel={t('coreEditor.balancer.clearSelectors', { defaultValue: 'Clear all' })}
+                      addButtonLabel={t('coreEditor.balancer.addOutboundTag', { defaultValue: 'Add tag' })}
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex min-w-0 flex-col gap-2.5 sm:col-span-2">
+                      <Label className="text-xs font-medium">destination</Label>
+                      <Input
+                        dir="ltr"
+                        className="h-9 font-mono text-xs"
+                        value={readStringProperty(pingConfig, 'destination')}
+                        onChange={e => patchBurstPingConfig({ destination: e.target.value.trim() || undefined })}
+                        placeholder="https://connectivitycheck.gstatic.com/generate_204"
                       />
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">probeURL</Label>
-                        <Input
-                          dir="ltr"
-                          className="h-9 font-mono text-xs"
-                          value={readStringProperty(observatory, 'probeURL', 'probeUrl')}
-                          onChange={e => patchTopLevelObject('observatory', { probeURL: e.target.value.trim() || undefined, probeUrl: undefined })}
-                          placeholder="https://www.google.com/generate_204"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">probeInterval</Label>
-                        <Input
-                          dir="ltr"
-                          className="h-9 font-mono text-xs"
-                          value={readStringProperty(observatory, 'probeInterval')}
-                          onChange={e => patchTopLevelObject('observatory', { probeInterval: e.target.value.trim() || undefined })}
-                          placeholder="10m"
-                        />
-                      </div>
-                      <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2 sm:col-span-2">
-                        <Label className="min-w-0 text-xs font-medium">enableConcurrency</Label>
-                        <Switch
-                          checked={readBooleanProperty(observatory, 'enableConcurrency')}
-                          onCheckedChange={checked => patchTopLevelObject('observatory', { enableConcurrency: checked })}
-                        />
-                      </div>
+                    <div className="flex min-w-0 flex-col gap-2.5 sm:col-span-2">
+                      <Label className="text-xs font-medium">connectivity</Label>
+                      <Input
+                        dir="ltr"
+                        className="h-9 font-mono text-xs"
+                        value={readStringProperty(pingConfig, 'connectivity')}
+                        onChange={e => patchBurstPingConfig({ connectivity: e.target.value.trim() })}
+                        placeholder="http://connectivitycheck.platform.hicloud.com/generate_204"
+                      />
                     </div>
-                  </TabsContent>
-                ) : null}
-
-                {burstObservatory ? (() => {
-                  const pingConfig = readJsonObject(burstObservatory.pingConfig)
-                  return (
-                    <TabsContent value="burstObservatory" className="mt-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">
-                          {t('coreEditor.balancer.subjectSelector', { defaultValue: 'Subject selector' })}
-                        </Label>
-                        <StringTagPicker
-                          mode="multi"
-                          options={profileTagOptions.outboundTags}
-                          valueMulti={readStringArrayProperty(burstObservatory, 'subjectSelector')}
-                          onChangeMulti={next => patchTopLevelObject('burstObservatory', { subjectSelector: next })}
-                          placeholder={t('coreEditor.balancer.subjectSelectorPlaceholder', {
-                            defaultValue: 'Select outbound tag prefixes...',
-                          })}
-                          clearAllLabel={t('coreEditor.balancer.clearSelectors', { defaultValue: 'Clear all' })}
-                          addButtonLabel={t('coreEditor.balancer.addOutboundTag', { defaultValue: 'Add tag' })}
-                        />
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <Label className="text-xs font-medium">destination</Label>
-                          <Input
-                            dir="ltr"
-                            className="h-9 font-mono text-xs"
-                            value={readStringProperty(pingConfig, 'destination')}
-                            onChange={e => patchBurstPingConfig({ destination: e.target.value.trim() || undefined })}
-                            placeholder="https://connectivitycheck.gstatic.com/generate_204"
-                          />
-                        </div>
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <Label className="text-xs font-medium">connectivity</Label>
-                          <Input
-                            dir="ltr"
-                            className="h-9 font-mono text-xs"
-                            value={readStringProperty(pingConfig, 'connectivity')}
-                            onChange={e => patchBurstPingConfig({ connectivity: e.target.value.trim() })}
-                            placeholder="http://connectivitycheck.platform.hicloud.com/generate_204"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium">interval</Label>
-                          <Input
-                            dir="ltr"
-                            className="h-9 font-mono text-xs"
-                            value={readStringProperty(pingConfig, 'interval')}
-                            onChange={e => patchBurstPingConfig({ interval: e.target.value.trim() || undefined })}
-                            placeholder="1m"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium">timeout</Label>
-                          <Input
-                            dir="ltr"
-                            className="h-9 font-mono text-xs"
-                            value={readStringProperty(pingConfig, 'timeout')}
-                            onChange={e => patchBurstPingConfig({ timeout: e.target.value.trim() || undefined })}
-                            placeholder="5s"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium">sampling</Label>
-                          <Input
-                            dir="ltr"
-                            inputMode="numeric"
-                            className="h-9 font-mono text-xs"
-                            value={readNumberProperty(pingConfig, 'sampling')}
-                            onChange={e => patchBurstPingConfig({ sampling: parseOptionalNumber(e.target.value) })}
-                            placeholder="10"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium">httpMethod</Label>
-                          <Select
-                            value={readStringProperty(pingConfig, 'httpMethod') || 'HEAD'}
-                            onValueChange={value => patchBurstPingConfig({ httpMethod: value })}
-                          >
-                            <SelectTrigger className="h-9" dir="ltr">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {['HEAD', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].map(method => (
-                                <SelectItem key={method} value={method}>
-                                  {method}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </TabsContent>
-                  )
-                })() : null}
-              </Tabs>
-            ) : (
-              <div className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                {t('coreEditor.balancer.noObservationSources', {
-                  defaultValue: 'Enable an observation source here when using leastPing or leastLoad, or when random/roundRobin should filter unavailable outbounds.',
-                })}
-              </div>
-            )}
+                    <div className="flex min-w-0 flex-col gap-2.5">
+                      <Label className="text-xs font-medium">interval</Label>
+                      <Input
+                        dir="ltr"
+                        className="h-9 font-mono text-xs"
+                        value={readStringProperty(pingConfig, 'interval')}
+                        onChange={e => patchBurstPingConfig({ interval: e.target.value.trim() || undefined })}
+                        placeholder="1m"
+                      />
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-2.5">
+                      <Label className="text-xs font-medium">timeout</Label>
+                      <Input
+                        dir="ltr"
+                        className="h-9 font-mono text-xs"
+                        value={readStringProperty(pingConfig, 'timeout')}
+                        onChange={e => patchBurstPingConfig({ timeout: e.target.value.trim() || undefined })}
+                        placeholder="5s"
+                      />
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-2.5">
+                      <Label className="text-xs font-medium">sampling</Label>
+                      <Input
+                        dir="ltr"
+                        inputMode="numeric"
+                        className="h-9 font-mono text-xs"
+                        value={readNumberProperty(pingConfig, 'sampling')}
+                        onChange={e => patchBurstPingConfig({ sampling: parseOptionalNumber(e.target.value) })}
+                        placeholder="10"
+                      />
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-2.5">
+                      <Label className="text-xs font-medium">httpMethod</Label>
+                      <Select
+                        value={readStringProperty(pingConfig, 'httpMethod') || 'HEAD'}
+                        onValueChange={value => patchBurstPingConfig({ httpMethod: value })}
+                      >
+                        <SelectTrigger className="h-9" dir="ltr">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['HEAD', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].map(method => (
+                            <SelectItem key={method} value={method}>
+                              {method}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </TabsContent>
+              )
+            })() : null}
+          </Tabs>
+        ) : (
+          <div className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+            {t('coreEditor.balancer.noObservationSources', {
+              defaultValue: 'Enable an observation source here when using leastPing or leastLoad, or when random/roundRobin should filter unavailable outbounds.',
+            })}
           </div>
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setObservationDialogOpen(false)}>
-              {t('close', { defaultValue: 'Close' })}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        )}
+      </CoreEditorFormDialog>
 
       <AlertDialog open={discardDraftOpen} onOpenChange={setDiscardDraftOpen}>
         <AlertDialogContent dir={dir}>

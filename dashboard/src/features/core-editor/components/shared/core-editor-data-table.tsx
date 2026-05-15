@@ -120,6 +120,8 @@ export interface CoreEditorDataTableProps<TData> {
   /** Values matched against the search query (substring, case-insensitive). Defaults to JSON.stringify(row). */
   getSearchableText?: (item: TData) => string
   searchPlaceholder?: string
+  /** Optional controls rendered next to the grid/list view toggle. */
+  toolbarActions?: ReactNode
 }
 
 export function CoreEditorDataTable<TData>({
@@ -140,6 +142,7 @@ export function CoreEditorDataTable<TData>({
   sortingDisabled = false,
   getSearchableText,
   searchPlaceholder,
+  toolbarActions,
 }: CoreEditorDataTableProps<TData>) {
   const { t, i18n } = useTranslation()
   const dir = useDirDetection()
@@ -514,7 +517,8 @@ export function CoreEditorDataTable<TData>({
             </button>
           ) : null}
         </div>
-        <div className="flex shrink-0 justify-end sm:justify-start">
+        <div className="flex shrink-0 items-center justify-end gap-2 sm:justify-start">
+          {toolbarActions}
           <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
       </div>
