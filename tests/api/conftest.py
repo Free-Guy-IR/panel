@@ -447,7 +447,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch):
             "min_limit": 1,
             "max_limit": 0,
         },
-        "general": {"default_flow": "", "default_method": "chacha20-ietf-poly1305"},
+        "general": {"default_method": "chacha20-ietf-poly1305"},
     }
     db_settings = Settings(**settings)
 

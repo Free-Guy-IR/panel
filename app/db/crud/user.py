@@ -1070,7 +1070,6 @@ async def bulk_reset_user_data_usage(
 
 def _build_revoked_proxy_settings(db_user: User) -> dict:
     proxy_settings = ProxyTable()
-    proxy_settings.vless.flow = db_user.proxy_settings.get("vless", {}).get("flow", "")
     proxy_settings.shadowsocks.method = db_user.proxy_settings.get("shadowsocks", {}).get(
         "method", "chacha20-ietf-poly1305"
     )
@@ -1118,11 +1117,6 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
 
         if db_user.next_plan.user_template.extra_settings:
             proxy_settings = deepcopy(db_user.proxy_settings)
-            proxy_settings["vless"]["flow"] = (
-                db_user.next_plan.user_template.extra_settings["flow"]
-                if db_user.next_plan.user_template.extra_settings["flow"]
-                else ""
-            )
             proxy_settings["shadowsocks"]["method"] = (
                 db_user.next_plan.user_template.extra_settings["method"]
                 if db_user.next_plan.user_template.extra_settings["method"]
