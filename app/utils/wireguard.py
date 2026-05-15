@@ -17,7 +17,9 @@ from app.utils.ip_pool import (
     WireGuardPeerIPAllocator,
     allocate_and_validate_peer_ips,
     collect_used_peer_networks_from_proxy_settings_rows,
+    get_global_used_networks,
     peer_ips_outside_global_pool,
+    validate_peer_ips_within_global_pool,
 )
 from config import wireguard_settings
 
@@ -138,6 +140,57 @@ async def prepare_wireguard_proxy_settings(
     peer_ips = await allocate_and_validate_peer_ips(db, peer_ips, exclude_user_id=exclude_user_id)
 
     proxy_settings.wireguard.peer_ips = peer_ips
+    return proxy_settings
+
+
+async def build_wireguard_peer_ip_allocator(
+    db: AsyncSession,
+    *,
+    exclude_user_id: int | None = None,
+) -> "WireGuardPeerIPAllocator":
+    """Build a stateful peer-IP allocator pre-loaded with all currently used peer networks.
+
+    Used by bulk-creation flows where many users need IPs allocated within a single
+    transaction; reusing one allocator avoids the duplicate-allocation bug that occurs
+    when each user independently re-reads the database before any of the new users have
+    been committed.
+    """
+    used_networks = await get_global_used_networks(db, exclude_user_id=exclude_user_id)
+    return WireGuardPeerIPAllocator(used_networks)
+
+
+def prepare_wireguard_proxy_settings_with_allocator(
+    proxy_settings: ProxyTable,
+    allocator: "WireGuardPeerIPAllocator",
+) -> ProxyTable:
+    """Prepare WireGuard settings for a single user against a shared allocator.
+
+    Caller is responsible for confirming the user belongs to a WireGuard group and that
+    `wireguard_settings.enabled` is true. Validates any user-supplied peer_ips against
+    the allocator's current blocked set, then either reserves them or allocates a fresh
+    IP. The allocator is mutated to reflect the new reservation.
+    """
+    prepare_wireguard_keys_for_member(proxy_settings)
+
+    peer_ips = list(proxy_settings.wireguard.peer_ips or [])
+
+    if peer_ips:
+        validate_peer_ips_within_global_pool(peer_ips)
+        for peer_ip in peer_ips:
+            if allocator.is_reserved(peer_ip):
+                raise ValueError(f"peer IP '{peer_ip}' is reserved")
+            if allocator.conflicts(peer_ip):
+                raise ValueError(
+                    f"peer IP/network '{peer_ip}' is already in use by an existing user's peer network"
+                )
+            allocator.reserve(peer_ip)
+        proxy_settings.wireguard.peer_ips = peer_ips
+        return proxy_settings
+
+    candidate = allocator.allocate()
+    if candidate is None:
+        raise ValueError("unable to allocate wireguard peer IP")
+    proxy_settings.wireguard.peer_ips = [candidate]
     return proxy_settings
 
 

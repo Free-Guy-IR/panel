@@ -94,11 +94,14 @@ from app.settings import subscription_settings, hwid_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
 from app.utils.wireguard import (
+    build_wireguard_peer_ip_allocator,
     bulk_reallocate_wireguard_peer_ips as run_bulk_reallocate_wireguard_peer_ips,
+    get_wireguard_tags_from_groups,
     prepare_wireguard_keys_only,
     prepare_wireguard_proxy_settings,
+    prepare_wireguard_proxy_settings_with_allocator,
 )
-from config import subscription_env_settings
+from config import subscription_env_settings, wireguard_settings
 
 logger = get_logger("user-operation")
 
@@ -237,12 +240,26 @@ class UserOperation(BaseOperation):
         if not users_to_create:
             return []
 
-        for user_to_create in users_to_create:
-            user_to_create.proxy_settings = await self._prepare_user_proxy_settings(
-                db,
-                groups,
-                user_to_create.proxy_settings,
-            )
+        wireguard_tags = await get_wireguard_tags_from_groups(groups)
+        use_shared_allocator = bool(wireguard_tags) and wireguard_settings.enabled
+
+        if use_shared_allocator:
+            allocator = await build_wireguard_peer_ip_allocator(db)
+            for user_to_create in users_to_create:
+                try:
+                    user_to_create.proxy_settings = prepare_wireguard_proxy_settings_with_allocator(
+                        user_to_create.proxy_settings,
+                        allocator,
+                    )
+                except ValueError as exc:
+                    await self.raise_error(message=str(exc), code=400, db=db)
+        else:
+            for user_to_create in users_to_create:
+                user_to_create.proxy_settings = await self._prepare_user_proxy_settings(
+                    db,
+                    groups,
+                    user_to_create.proxy_settings,
+                )
 
         db_users = await create_users_bulk(db, users_to_create, groups, db_admin)
 
