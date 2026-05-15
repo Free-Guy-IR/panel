@@ -262,6 +262,7 @@ class Subscription(BaseModel):
     # only supported by v2RayTun and Happ apps
     announce: str = Field(default="", max_length=128)
     announce_url: str = Field(default="")
+    response_headers: dict[str, Any] = Field(default_factory=dict)
     # Rules To Seperate Clients And Send Config As Needed
     rules: list[SubRule]
     manual_sub_request: SubFormatEnable = Field(default_factory=SubFormatEnable)

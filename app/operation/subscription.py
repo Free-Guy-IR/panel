@@ -204,6 +204,30 @@ class SubscriptionOperation(BaseOperation):
 
         return headers
 
+    @classmethod
+    def _format_subscription_response_headers(
+        cls, sub_settings: SubSettings, format_variables: dict[str, str | int | float]
+    ) -> dict[str, str]:
+        if not sub_settings.response_headers:
+            return {}
+
+        headers: dict[str, str] = {}
+        for raw_name, raw_value in sub_settings.response_headers.items():
+            header_name = str(raw_name).strip()
+            if not header_name or raw_value is None:
+                continue
+
+            formatted_value = cls._stringify_rule_header_value(raw_value, format_variables)
+            if not formatted_value:
+                continue
+
+            if header_name.lower() in cls._ENCODED_RULE_RESPONSE_HEADERS:
+                formatted_value = encode_title(formatted_value)
+
+            headers[header_name] = formatted_value
+
+        return headers
+
     @staticmethod
     def _stringify_rule_header_value(value: Any, format_variables: dict[str, str | int | float]) -> str:
         if isinstance(value, str):
@@ -363,6 +387,11 @@ class SubscriptionOperation(BaseOperation):
             )
             try:
                 response_headers.update(
+                    self._format_subscription_response_headers(
+                        sub_settings, await self._get_rule_response_header_variables(user, client_type)
+                    )
+                )
+                response_headers.update(
                     self._format_rule_response_headers(
                         matched_rule, await self._get_rule_response_header_variables(user, client_type)
                     )
@@ -424,6 +453,11 @@ class SubscriptionOperation(BaseOperation):
             user, request_url, sub_settings, extension=client_config.get(client_type, {}).get("extension", "")
         )
         try:
+            response_headers.update(
+                self._format_subscription_response_headers(
+                    sub_settings, await self._get_rule_response_header_variables(user, client_type)
+                )
+            )
             response_headers = self.sanitize_response_headers(response_headers)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
@@ -495,6 +529,11 @@ class SubscriptionOperation(BaseOperation):
         formatted_announce = self._format_announce(sub_settings, format_variables)
         response_headers = self.create_response_headers(user, request_url, sub_settings)
         try:
+            response_headers.update(
+                self._format_subscription_response_headers(
+                    sub_settings, await self._get_rule_response_header_variables(user, ConfigFormat.links)
+                )
+            )
             response_headers = self.sanitize_response_headers(response_headers)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
@@ -527,6 +566,11 @@ class SubscriptionOperation(BaseOperation):
             user, request_url, sub_settings, extension=client_config.get(client_type, {}).get("extension", "")
         )
         try:
+            response_headers.update(
+                self._format_subscription_response_headers(
+                    sub_settings, await self._get_rule_response_header_variables(user, client_type)
+                )
+            )
             response_headers = self.sanitize_response_headers(response_headers)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
