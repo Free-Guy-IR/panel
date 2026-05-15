@@ -51,7 +51,7 @@ function CoreEditorLoadingSkeleton({ coreKind }: { coreKind?: 'wg' }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-0" aria-busy="true">
       <CoreCommandMenu />
-      <div className="px-4 pt-3 md:pt-6">
+      <div className="px-4 pt-3 md:pt-6 pb-2 md:pb-0">
         <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-3">
           <Skeleton className="h-10 w-10 shrink-0 rounded-md" />
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">

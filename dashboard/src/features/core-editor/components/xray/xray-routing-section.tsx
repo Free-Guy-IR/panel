@@ -11,7 +11,7 @@ import {
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { XrayParityFormControl, isBooleanParityField, type XrayProfileTagOptions } from '@/features/core-editor/components/shared/xray-parity-form-control'
+import { XrayParityFormControl, isBooleanParityField, transportParityFieldLabel, type XrayProfileTagOptions } from '@/features/core-editor/components/shared/xray-parity-form-control'
 import { CoreEditorDataTable } from '@/features/core-editor/components/shared/core-editor-data-table'
 import { CoreEditorFormDialog } from '@/features/core-editor/components/shared/core-editor-form-dialog'
 import { useSectionHeaderAddPulseEffect, type SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
@@ -468,7 +468,7 @@ export function XrayRoutingSection({ headerAddPulse, headerAddEpoch }: XrayRouti
             )}
           >
             <FormLabel className="text-xs font-medium">
-              {def.go || def.json}
+              {transportParityFieldLabel(def, t)}
             </FormLabel>
             <XrayParityFormControl
               field={def}
@@ -652,7 +652,11 @@ export function XrayRoutingSection({ headerAddPulse, headerAddEpoch }: XrayRouti
                           })}
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                          {sectionKeys.map(k => renderField(k))}
+                          {sectionKeys.map((k, idx) => {
+                            // Force the trailing field of an odd-count grid to span both columns.
+                            const isLastSolo = idx === sectionKeys.length - 1 && sectionKeys.length % 2 === 1
+                            return renderField(k, isLastSolo ? 'full' : undefined)
+                          })}
                         </div>
                       </AccordionContent>
                     </AccordionItem>
