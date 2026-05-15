@@ -1,4 +1,5 @@
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
+import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import type { XrayCoreSection, WgCoreSection } from '@/features/core-editor/state/core-editor-store'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -25,7 +26,7 @@ export function CoreCommandMenu() {
   const kind = useCoreEditorStore(s => s.kind)
   const setActiveSection = useCoreEditorStore(s => s.setActiveSection)
   const discardDraft = useCoreEditorStore(s => s.discardDraft)
-  const dirty = useCoreEditorStore(s => s.dirty)
+  const hasActualChanges = useCoreEditorStore(selectCoreEditorHasActualChanges)
   const syncMonacoFromDraft = useCoreEditorStore(s => s.syncMonacoFromDraft)
 
   useEffect(() => {
@@ -65,7 +66,7 @@ export function CoreCommandMenu() {
         <CommandGroup heading={t('coreEditor.command.actions', { defaultValue: 'Actions' })}>
           <CommandItem
             value="discard"
-            disabled={!dirty}
+            disabled={!hasActualChanges}
             onSelect={() => {
               discardDraft()
               setOpen(false)

@@ -51,23 +51,20 @@ export function StickySaveBar({
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex rounded-md">
+              <span className="relative inline-flex rounded-md">
+                {dirty ? (
+                  <span
+                    className="absolute -end-1 -top-1 z-10 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-background"
+                    aria-hidden
+                  />
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   disabled={!dirty || saving}
                   onClick={onDiscard}
-                  className="gap-2 ps-2.5"
                 >
-                  <span className="relative flex shrink-0 items-center justify-center" aria-hidden>
-                    <span
-                      className={cn(
-                        'size-2 shrink-0 rounded-full ring-2 ring-offset-1 ring-offset-background',
-                        dirty ? 'bg-amber-500 ring-amber-500/30' : 'bg-emerald-600 ring-emerald-500/25 dark:bg-emerald-500',
-                      )}
-                    />
-                  </span>
                   {t('coreEditor.discard', { defaultValue: 'Discard' })}
                 </Button>
               </span>

@@ -15,6 +15,7 @@ import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wiregu
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
 import { validateProfileForPersist } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
+import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import type { WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 import type { CoreKind } from '@pasarguard/core-kit'
@@ -147,7 +148,7 @@ export default function CoreEditorPage() {
   const kind = useCoreEditorStore(s => s.kind)
   const coreName = useCoreEditorStore(s => s.coreName)
   const setCoreName = useCoreEditorStore(s => s.setCoreName)
-  const dirty = useCoreEditorStore(s => s.dirty)
+  const hasActualChanges = useCoreEditorStore(selectCoreEditorHasActualChanges)
   const discardDraft = useCoreEditorStore(s => s.discardDraft)
   const markClean = useCoreEditorStore(s => s.markClean)
   const restartNodes = useCoreEditorStore(s => s.restartNodes)
@@ -201,7 +202,7 @@ export default function CoreEditorPage() {
     }
     if (
       state.hydrated &&
-      !state.dirty &&
+      !selectCoreEditorHasActualChanges(state) &&
       !state.isNew &&
       state.serverHydratedConfigJson !== serverConfigJson
     ) {
@@ -227,12 +228,12 @@ export default function CoreEditorPage() {
   }, [hydrated, kind, wgDraft, xrayProfile, xrayPersistValidationItems])
 
   const handleBack = useCallback(() => {
-    if (dirty) {
+    if (hasActualChanges) {
       setDiscardOpen(true)
       return
     }
     navigate('/nodes/cores')
-  }, [dirty, navigate])
+  }, [hasActualChanges, navigate])
 
   const confirmDiscardAndLeave = useCallback(() => {
     discardDraft()
@@ -554,7 +555,7 @@ export default function CoreEditorPage() {
             )}
           </div>
         }
-        dirty={dirty}
+        dirty={hasActualChanges}
         onSave={handleSave}
         onDiscard={() => discardDraft()}
         saving={saving || createMutation.isPending || modifyMutation.isPending}
