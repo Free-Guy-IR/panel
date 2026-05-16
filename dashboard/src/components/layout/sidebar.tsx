@@ -433,7 +433,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       <div className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
                         <span className={cn(isRTL ? 'text-right' : 'text-left', 'truncate text-sm font-semibold leading-tight')}>{t('pasarguard')}</span>
                         {isSudo && (
-                          <div className="flex min-w-0 flex-col items-start gap-0.5 leading-none">
+                          <div className="flex min-w-0 flex-wrap items-center gap-0.75 leading-none">
                             <span className="max-w-full truncate text-xs leading-none opacity-45">{displayVersion}</span>
                             <div className="max-w-full">
                               <TooltipProvider>
@@ -482,7 +482,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <div className="flex min-w-0 flex-col overflow-hidden">
                       <span className={cn(isRTL ? 'text-right' : 'text-left', 'truncate text-sm font-semibold leading-tight')}>{t('pasarguard')}</span>
                       {isSudo && (
-                        <div className="flex min-w-0 flex-col items-start gap-0.5 leading-none">
+                        <div className="flex min-w-0 flex-wrap items-center gap-0.75 leading-none">
                           <span className="max-w-full truncate text-xs leading-none opacity-45">{displayVersion}</span>
                           <div className="max-w-full">
                             <TooltipProvider>
