@@ -348,7 +348,7 @@ async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db), admin
 
 
 @router.get(
-    "/{user_id:int}/subscription/{client_type}",
+    "/{user_id}/subscription/{client_type}",
     responses={403: responses._403, 404: responses._404},
 )
 async def get_user_subscription_by_id(
