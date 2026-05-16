@@ -2,7 +2,7 @@
   "active": "激活",
   "platform": "平台",
   "dashboard": "仪表板",
-  "master": "所有节点",
+  "master": "总体",
   "dashboardDescription": "PasarGuard 管理仪表板",
   "allStatuses": "所有状态",
   "status": "状态",

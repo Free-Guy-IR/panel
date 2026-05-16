@@ -1,7 +1,7 @@
 {
   "pasarguard": "PasarGuard",
   "dashboard": "Dashboard",
-  "master": "All Nodes",
+  "master": "Overall",
   "dashboardDescription": "PasarGuard Management Dashboard",
   "active": "active",
   "online": "Online",

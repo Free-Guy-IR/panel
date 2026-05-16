@@ -1,7 +1,7 @@
 {
   "pasarguard": "PasarGuard",
   "dashboard": "Панель управления",
-  "master": "Все узлы",
+  "master": "Общее",
   "dashboardDescription": "Панель управления PasarGuard",
   "active": "активный",
   "online": "В сети",
