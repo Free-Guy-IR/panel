@@ -35,7 +35,7 @@ export function StickySaveBar({
   return (
     <div
       className={cn(
-        'sticky bottom-0 z-20 flex flex-col gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-end mb-4',
+        'sticky bottom-0 z-20 flex flex-col gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-end mb-3',
         className,
       )}
     >
