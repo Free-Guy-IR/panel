@@ -184,10 +184,19 @@ function sanitizeSecurityArrays(inbound: Inbound): Inbound {
   return { ...inbound, security: sanitized } as Inbound
 }
 
+function sanitizeWireguardEmptyAddress(inbound: Inbound): Inbound {
+  if (inbound.protocol !== 'wireguard') return inbound
+  const draft = { ...inbound } as Record<string, unknown>
+  if (Array.isArray(draft.address) && draft.address.length === 0) {
+    delete draft.address
+  }
+  return draft as unknown as Inbound
+}
+
 /** Panel policy: never surface client rows in the editor; always persist empty client lists for protocols that use `clients`. */
 export function sanitizeProfileInbounds(profile: Profile): Profile {
   return {
     ...profile,
-    inbounds: profile.inbounds.map(ib => sanitizeSecurityArrays(normalizeTunnelInboundForKit(clearClients(ib)))),
+    inbounds: profile.inbounds.map(ib => sanitizeWireguardEmptyAddress(sanitizeSecurityArrays(normalizeTunnelInboundForKit(clearClients(ib))))),
   }
 }

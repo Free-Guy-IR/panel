@@ -86,7 +86,6 @@ const INBOUND_TLS_BOOLEAN_GRID_KEYS = new Set<string>(['allowInsecure', 'enableS
 
 /** Matches outbound DNS-rules / TLS fallbacks sub-accordion chrome. */
 const INBOUND_SECURITY_SUBACCORDION_ITEM_CLASS = 'rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline'
-const DEFAULT_WIREGUARD_INBOUND_ADDRESS = ['10.0.0.1/128'] as const
 
 function securityFieldName(jsonKey: string): string {
   return `${SECURITY_FIELD_PREFIX}${jsonKey}`
@@ -417,7 +416,7 @@ function applyWireguardEditorCreationDefaults(ib: Inbound): Inbound {
     ...ib,
     secretKey: '',
     publicKey: undefined,
-    address: [...DEFAULT_WIREGUARD_INBOUND_ADDRESS],
+    address: undefined,
     peers: [],
   } as Inbound
 }
@@ -1140,11 +1139,10 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
   const securityFieldOrder = useMemo(() => {
     if (!inboundSecurityType) return []
     const order = getInboundSecurityFieldOrder(caps, inboundSecurityType)
-    const defs = {
+    const defs: Record<string, XrayGeneratedFormField | undefined> = {
       ...(caps.securityFieldDefinitions[inboundSecurityType] ?? {}),
       ...(inboundSecurityType === 'reality' ? { xver: REALITY_XVER_FIELD } : {}),
     }
-    if (!defs) return order
     return [...order].sort((a, b) => {
       const defA = defs[a]
       const defB = defs[b]
@@ -3603,7 +3601,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           const wide = inferParityFieldMode(def) !== 'scalar'
                           const isBoolean = isBooleanParityField(def)
                           const isReality = inboundSecurityType === 'reality'
-                          const securityFieldFullWidth = wide || isBoolean || jsonKey === 'serverName' || jsonKey === 'serverNames'
+                          const securityFieldFullWidth = wide || isBoolean || jsonKey === 'xver' || jsonKey === 'serverName' || jsonKey === 'serverNames'
 
                           return (
                             <Fragment key={jsonKey}>
@@ -4619,7 +4617,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           patchInbound({ address: nextAddresses.length > 0 ? nextAddresses : undefined } as Partial<Inbound>)
                         }}
                         placeholder={t('coreEditor.inbound.wireguard.addressHint', {
-                          defaultValue: 'Example: 10.0.0.1/128',
+                            defaultValue: 'Example: 10.0.0.1/32',
                         })}
                         addPlaceholder={t('coreEditor.inbound.wireguard.addressAddPlaceholder', {
                           defaultValue: 'Add address',
