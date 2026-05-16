@@ -224,6 +224,7 @@ def create_user_template(
     reset_usages: bool = True,
     username_prefix: str | None = None,
     username_suffix: str | None = None,
+    hwid_limit: int | None = None,
 ) -> dict:
     payload = {
         "name": name or unique_name("user_template"),
@@ -239,6 +240,8 @@ def create_user_template(
         payload["username_prefix"] = username_prefix
     if username_suffix is not None:
         payload["username_suffix"] = username_suffix
+    if hwid_limit is not None:
+        payload["hwid_limit"] = hwid_limit
     response = client.post("/api/user_template", headers=auth_headers(access_token), json=payload)
     assert response.status_code == status.HTTP_201_CREATED
     return response.json()
