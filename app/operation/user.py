@@ -262,6 +262,7 @@ class UserOperation(BaseOperation):
                 )
 
         db_users = await create_users_bulk(db, users_to_create, groups, db_admin)
+        await sync_users(db_users)
 
         users_list = []
         for db_user in db_users:
