@@ -251,7 +251,7 @@ export function CoreEditorDataTable<TData>({
 
     return visibleLeaves.map(column => {
         let width: string | undefined
-        if (column.id === 'index') width = '52px'
+        if (column.id === 'index') width = 'max-content'
 
         const hdr = headerGroup.headers.find(h => h.column.id === column.id && !h.isPlaceholder)
 
@@ -262,8 +262,8 @@ export function CoreEditorDataTable<TData>({
           id: column.id,
           width,
           align: 'start' as const,
-          headerClassName: 'truncate',
-          className: 'text-sm py-2',
+          headerClassName: cn('truncate', column.id === 'index' && 'pr-1 md:pr-6 lg:pr-12'),
+          className: cn('text-sm py-2', column.id === 'index' && 'pr-1 md:pr-6 lg:pr-12'),
           skeletonClassName,
           hideOnMobile: !primaryMobileIds.has(column.id),
           header:
