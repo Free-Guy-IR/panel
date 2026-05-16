@@ -507,7 +507,7 @@ export function UserCountsChart({ nodeId, isSudo, nodesData = [] }: UserCountsCh
                 <span>
                   {t('statistics.userCountChartAccuracyNote', {
                     defaultValue:
-                      'Changing user status can make this chart show inaccurate historical data. Resetting usage only removes chart history when chart-data cleanup is enabled in the environment.',
+                      'Status changes can skew history. Usage resets clear chart history only if chart-data cleanup is enabled.',
                   })}
                 </span>
               </p>
