@@ -85,6 +85,7 @@ const INBOUND_TLS_BOOLEAN_GRID_KEYS = new Set<string>(['allowInsecure', 'enableS
 
 /** Matches outbound DNS-rules / TLS fallbacks sub-accordion chrome. */
 const INBOUND_SECURITY_SUBACCORDION_ITEM_CLASS = 'rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline'
+const DEFAULT_WIREGUARD_INBOUND_ADDRESS = ['10.0.0.1/128'] as const
 
 function securityFieldName(jsonKey: string): string {
   return `${SECURITY_FIELD_PREFIX}${jsonKey}`
@@ -403,6 +404,7 @@ function applyWireguardEditorCreationDefaults(ib: Inbound): Inbound {
     ...ib,
     secretKey: '',
     publicKey: undefined,
+    address: [...DEFAULT_WIREGUARD_INBOUND_ADDRESS],
     peers: [],
   } as Inbound
 }
@@ -477,6 +479,13 @@ function wireguardPeersForUi(inbound: Inbound): Array<{ publicKey: string; preSh
       preSharedKey: typeof item.preSharedKey === 'string' && item.preSharedKey.trim() !== '' ? item.preSharedKey : undefined,
       allowedIPs: Array.isArray(item.allowedIPs) ? item.allowedIPs.map(v => String(v).trim()).filter(Boolean) : [],
     }))
+}
+
+function wireguardAddressesForUi(inbound: Inbound): string[] {
+  if (!isWireguardInboundProtocol(inbound.protocol)) return []
+  const raw = (inbound as { address?: unknown }).address
+  if (!Array.isArray(raw)) return []
+  return raw.map(item => String(item).trim()).filter(Boolean)
 }
 
 function generateMixedAccountUsername(length: number = 10): string {
@@ -4584,6 +4593,29 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                         </FormItem>
                       )}
                     />
+
+                    <div className="w-full min-w-0 space-y-1.5">
+                      <FormLabel className="text-sm">{t('coreEditor.inbound.wireguard.address', { defaultValue: 'Server Address' })}</FormLabel>
+                      <StringArrayPopoverInput
+                        value={wireguardAddressesForUi(inbound)}
+                        onChange={nextAddresses => {
+                          if (!isWireguardInboundProtocol(inbound.protocol)) return
+                          patchInbound({ address: nextAddresses.length > 0 ? nextAddresses : undefined } as Partial<Inbound>)
+                        }}
+                        placeholder={t('coreEditor.inbound.wireguard.addressHint', {
+                          defaultValue: 'Example: 10.0.0.1/128',
+                        })}
+                        addPlaceholder={t('coreEditor.inbound.wireguard.addressAddPlaceholder', {
+                          defaultValue: 'Add address',
+                        })}
+                        addButtonLabel={t('coreEditor.inbound.wireguard.addItem', { defaultValue: 'Add' })}
+                        itemsLabel={t('coreEditor.inbound.wireguard.addressItems', { defaultValue: 'Addresses' })}
+                        emptyMessage={t('coreEditor.inbound.wireguard.noAddresses', {
+                          defaultValue: 'No address added.',
+                        })}
+                        className="h-10 w-full max-w-none min-w-0"
+                      />
+                    </div>
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
