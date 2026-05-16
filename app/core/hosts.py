@@ -342,11 +342,15 @@ async def _prepare_subscription_inbound_data(
             random_user_agent=host.random_user_agent,
         )
 
-    # Compute flow_enabled: only for VLESS with specific conditions
+    # Compute flow_enabled: VLESS flow is serialized for TLS/REALITY or for
+    # security=none when the inbound has VLESS encryption.
     header_type = getattr(transport_config, "header_type", "none")
+    flow_security_enabled = tls_value in ("tls", "reality") or (
+        tls_value in ("", "none", None) and encryption not in ("", "none", None)
+    )
     flow_enabled = (
         protocol == "vless"
-        and tls_value in ("tls", "reality")
+        and flow_security_enabled
         and network in ("tcp", "raw", "kcp")
         and header_type != "http"
     )
