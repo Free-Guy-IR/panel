@@ -79,6 +79,7 @@ const OUTBOUND_HIDDEN_SETTINGS_KEYS: Partial<Record<string, ReadonlySet<string>>
   hysteria: new Set(['version']),
   loopback: new Set(['inboundTag']),
   dns: new Set(['network', 'address', 'port', 'userLevel', 'rules']),
+  wireguard: new Set(['secretKey', 'address', 'peers', 'mtu', 'workers', 'reserved', 'domainStrategy', 'DNS', 'kernelMode']),
 }
 
 function outboundHiddenSettingsKeys(protocol: string): ReadonlySet<string> | undefined {

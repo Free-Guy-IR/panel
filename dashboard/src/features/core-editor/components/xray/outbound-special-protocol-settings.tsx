@@ -1,5 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
+import { StringArrayPopoverInput } from '@/components/common/string-array-popover-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -635,6 +636,13 @@ function OutboundFreedomSettings({ ob, patchOutbound, t }: { ob: Outbound; patch
 }
 
 type DnsRuleRow = { action: string; qtype: string; domainText: string }
+type WireGuardPeerRow = {
+  publicKey: string
+  preSharedKey?: string
+  endpoint?: string
+  keepAlive?: number | string
+  allowedIPs: string[]
+}
 
 const DNS_ACTIONS = ['direct', 'hijack', 'drop', 'reject'] as const
 
@@ -940,6 +948,368 @@ function OutboundDnsSettings({ ob, patchOutbound, t }: { ob: Outbound; patchOutb
   )
 }
 
+function OutboundWireGuardSettings({ ob, patchOutbound, t }: { ob: Outbound; patchOutbound: PatchOutbound; t: TFunction }) {
+  const s = readSettings(ob)
+  const secretKey = typeof s.secretKey === 'string' ? s.secretKey : ''
+  const addresses = Array.isArray(s.address) ? s.address.map(v => String(v).trim()).filter(Boolean) : []
+  const mtu = s.mtu !== undefined && s.mtu !== null ? String(s.mtu) : ''
+  const workers = s.workers !== undefined && s.workers !== null ? String(s.workers) : ''
+  const reserved = Array.isArray(s.reserved) ? JSON.stringify(s.reserved) : typeof s.reserved === 'string' ? s.reserved : ''
+  const domainStrategy = typeof s.domainStrategy === 'string' && s.domainStrategy.trim() ? s.domainStrategy : '__default__'
+  const dns = typeof s.DNS === 'string' ? s.DNS : ''
+  const kernelModeValue =
+    typeof s.kernelMode === 'boolean'
+      ? String(s.kernelMode)
+      : '__default__'
+
+  const commitWireGuard = (next: Record<string, unknown>) => {
+    commitSettings(ob, next, patchOutbound)
+  }
+
+  const parseNumberSetting = (value: string): number | undefined => {
+    const trimmed = value.trim()
+    if (trimmed === '') return undefined
+    const n = Number(trimmed)
+    return Number.isFinite(n) ? Math.trunc(n) : undefined
+  }
+
+  const parseReserved = (value: string): string | number[] | undefined => {
+    const trimmed = value.trim()
+    if (trimmed === '') return undefined
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed)
+        if (Array.isArray(parsed) && parsed.every(item => Number.isInteger(item))) return parsed as number[]
+      } catch {
+        /* keep raw string below */
+      }
+    }
+    return value
+  }
+
+  const peers: WireGuardPeerRow[] = Array.isArray(s.peers)
+    ? s.peers.map(item => {
+        const peer = item && typeof item === 'object' && !Array.isArray(item) ? (item as Record<string, unknown>) : {}
+        return {
+          publicKey: typeof peer.publicKey === 'string' ? peer.publicKey : '',
+          preSharedKey: typeof peer.preSharedKey === 'string' && peer.preSharedKey.trim() !== '' ? peer.preSharedKey : undefined,
+          endpoint: typeof peer.endpoint === 'string' && peer.endpoint.trim() !== '' ? peer.endpoint : undefined,
+          keepAlive: peer.keepAlive !== undefined && peer.keepAlive !== null ? String(peer.keepAlive) : undefined,
+          allowedIPs: Array.isArray(peer.allowedIPs) ? peer.allowedIPs.map(v => String(v).trim()).filter(Boolean) : [],
+        }
+      })
+    : []
+
+  const commitPeers = (nextPeers: WireGuardPeerRow[]) => {
+    const next = { ...readSettings(ob) }
+    const cleaned = nextPeers.map(peer => {
+      const row: Record<string, unknown> = {
+        publicKey: peer.publicKey,
+      }
+      if (peer.preSharedKey && peer.preSharedKey.trim()) row.preSharedKey = peer.preSharedKey
+      if (peer.endpoint && peer.endpoint.trim()) row.endpoint = peer.endpoint
+      if (peer.keepAlive !== undefined && String(peer.keepAlive).trim() !== '') {
+        const n = Number(peer.keepAlive)
+        row.keepAlive = Number.isFinite(n) ? Math.trunc(n) : peer.keepAlive
+      }
+      if (peer.allowedIPs.length > 0) row.allowedIPs = peer.allowedIPs
+      return row
+    })
+    if (cleaned.length > 0) next.peers = cleaned
+    else delete next.peers
+    commitWireGuard(next)
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-4">
+      <div className="grid w-full gap-4 sm:grid-cols-2">
+        <div className="flex min-w-0 w-full flex-col gap-2 sm:col-span-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.secretKey', { defaultValue: 'Secret Key' })}</Label>
+          <Input
+            type="password"
+            autoComplete="new-password"
+            dir="ltr"
+            className="h-10 w-full min-w-0 text-xs"
+            value={secretKey}
+            onChange={e => {
+              const v = e.target.value
+              const next = { ...readSettings(ob) }
+              if (!v.trim()) delete next.secretKey
+              else next.secretKey = v
+              commitWireGuard(next)
+            }}
+          />
+        </div>
+
+        <div className="flex min-w-0 w-full flex-col gap-2 sm:col-span-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.address', { defaultValue: 'Server Address' })}</Label>
+          <StringArrayPopoverInput
+            value={addresses}
+            onChange={nextAddresses => {
+              const next = { ...readSettings(ob) }
+              if (nextAddresses.length > 0) next.address = nextAddresses
+              else delete next.address
+              commitWireGuard(next)
+            }}
+            placeholder="172.16.0.2/32"
+            addPlaceholder={t('coreEditor.outbound.wireguard.addressAddPlaceholder', { defaultValue: 'Add address' })}
+            addButtonLabel={t('coreEditor.outbound.wireguard.addItem', { defaultValue: 'Add' })}
+            itemsLabel={t('coreEditor.outbound.wireguard.addressItems', { defaultValue: 'Addresses' })}
+            emptyMessage={t('coreEditor.outbound.wireguard.noAddresses', { defaultValue: 'No address added.' })}
+            className="h-10 w-full max-w-none min-w-0"
+          />
+        </div>
+
+        <div className="flex min-w-0 w-full flex-col gap-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.mtu', { defaultValue: 'MTU' })}</Label>
+          <Input
+            dir="ltr"
+            inputMode="numeric"
+            className="h-10 w-full min-w-0 text-xs"
+            placeholder="1280"
+            value={mtu}
+            onChange={e => {
+              const next = { ...readSettings(ob) }
+              const parsed = parseNumberSetting(e.target.value)
+              if (parsed === undefined) delete next.mtu
+              else next.mtu = parsed
+              commitWireGuard(next)
+            }}
+          />
+        </div>
+
+        <div className="flex min-w-0 w-full flex-col gap-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.workers', { defaultValue: 'Workers' })}</Label>
+          <Input
+            dir="ltr"
+            inputMode="numeric"
+            className="h-10 w-full min-w-0 text-xs"
+            placeholder="2"
+            value={workers}
+            onChange={e => {
+              const next = { ...readSettings(ob) }
+              const parsed = parseNumberSetting(e.target.value)
+              if (parsed === undefined) delete next.workers
+              else next.workers = parsed
+              commitWireGuard(next)
+            }}
+          />
+        </div>
+
+        <div className="flex min-w-0 w-full flex-col gap-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.reserved', { defaultValue: 'Reserved' })}</Label>
+          <Input
+            dir="ltr"
+            className="h-10 w-full min-w-0 text-xs"
+            placeholder="[0,0,0]"
+            value={reserved}
+            onChange={e => {
+              const next = { ...readSettings(ob) }
+              const parsed = parseReserved(e.target.value)
+              if (parsed === undefined) delete next.reserved
+              else next.reserved = parsed
+              commitWireGuard(next)
+            }}
+          />
+        </div>
+
+        <div className="flex min-w-0 w-full flex-col gap-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.domainStrategy', { defaultValue: 'Domain Strategy' })}</Label>
+          <Select
+            dir="ltr"
+            value={domainStrategy}
+            onValueChange={v => {
+              const next = { ...readSettings(ob) }
+              if (v === '__default__') delete next.domainStrategy
+              else next.domainStrategy = v
+              commitWireGuard(next)
+            }}
+          >
+            <SelectTrigger className="h-10 w-full min-w-0" dir="ltr">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent dir="ltr">
+              <SelectItem value="__default__">{t('coreEditor.outbound.wireguard.default', { defaultValue: 'Default' })}</SelectItem>
+              <SelectItem value="ForceIP">ForceIP</SelectItem>
+              <SelectItem value="ForceIPv4">ForceIPv4</SelectItem>
+              <SelectItem value="ForceIPv6">ForceIPv6</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+      <div className="flex min-w-0 w-full flex-col gap-2">
+        <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.dns', { defaultValue: 'DNS' })}</Label>
+        <Input
+          dir="ltr"
+          className="h-10 w-full min-w-0 text-xs"
+          placeholder="1.1.1.1"
+          value={dns}
+          onChange={e => {
+            const v = e.target.value
+            const next = { ...readSettings(ob) }
+            if (!v.trim()) delete next.DNS
+            else next.DNS = v
+            commitWireGuard(next)
+          }}
+        />
+      </div>
+
+      <div className="flex min-w-0 w-full flex-col gap-2">
+        <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.kernelMode', { defaultValue: 'Kernel mode' })}</Label>
+        <Select
+          dir="ltr"
+          value={kernelModeValue}
+          onValueChange={v => {
+            const next = { ...readSettings(ob) }
+            if (v === '__default__') delete next.kernelMode
+            else next.kernelMode = v === 'true'
+            commitWireGuard(next)
+          }}
+        >
+          <SelectTrigger className="h-10 w-full min-w-0" dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            <SelectItem value="__default__">{t('coreEditor.outbound.wireguard.kernelModeDefault', { defaultValue: 'Default' })}</SelectItem>
+            <SelectItem value="true">{t('enabled', { defaultValue: 'Enabled' })}</SelectItem>
+            <SelectItem value="false">{t('disabled', { defaultValue: 'Disabled' })}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs font-medium">{t('coreEditor.outbound.wireguard.peers', { defaultValue: 'Peers' })}</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-9"
+            title={t('coreEditor.outbound.wireguard.addPeer', { defaultValue: 'Add peer' })}
+            aria-label={t('coreEditor.outbound.wireguard.addPeer', { defaultValue: 'Add peer' })}
+            onClick={() => commitPeers([...peers, { publicKey: '', endpoint: '', allowedIPs: ['0.0.0.0/0', '::/0'] }])}
+          >
+            <Plus className="size-4" aria-hidden />
+          </Button>
+        </div>
+
+        <div className="rounded-md border">
+          {peers.length === 0 ? (
+            <div className="text-muted-foreground px-3 py-2 text-xs">
+              {t('coreEditor.outbound.wireguard.noPeers', { defaultValue: 'No peers added.' })}
+            </div>
+          ) : (
+            <div className="divide-y">
+              {peers.map((peer, index) => (
+                <div key={`outbound-wg-peer-${index}`} className="w-full min-w-0 space-y-3 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-xs font-medium">
+                      {t('coreEditor.outbound.wireguard.peerLabel', { defaultValue: 'Peer' })} {index + 1}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive size-8"
+                      title={t('coreEditor.outbound.wireguard.removePeer', { defaultValue: 'Remove peer' })}
+                      aria-label={t('coreEditor.outbound.wireguard.removePeer', { defaultValue: 'Remove peer' })}
+                      onClick={() => commitPeers(peers.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+                      <Label className="text-xs font-medium text-muted-foreground">{t('coreEditor.outbound.wireguard.publicKey', { defaultValue: 'Public Key' })}</Label>
+                      <Input
+                        dir="ltr"
+                        className="h-10 w-full min-w-0 text-xs"
+                        value={peer.publicKey}
+                        onChange={e => {
+                          const next = [...peers]
+                          next[index] = { ...next[index], publicKey: e.target.value }
+                          commitPeers(next)
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+                      <Label className="text-xs font-medium text-muted-foreground">{t('coreEditor.outbound.wireguard.preSharedKey', { defaultValue: 'PreShared Key' })}</Label>
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        dir="ltr"
+                        className="h-10 w-full min-w-0 text-xs"
+                        value={peer.preSharedKey ?? ''}
+                        onChange={e => {
+                          const next = [...peers]
+                          next[index] = { ...next[index], preSharedKey: e.target.value.trim() === '' ? undefined : e.target.value }
+                          commitPeers(next)
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">{t('coreEditor.outbound.wireguard.endpoint', { defaultValue: 'Endpoint' })}</Label>
+                      <Input
+                        dir="ltr"
+                        className="h-10 w-full min-w-0 text-xs"
+                        placeholder="example.com:51820"
+                        value={peer.endpoint ?? ''}
+                        onChange={e => {
+                          const next = [...peers]
+                          next[index] = { ...next[index], endpoint: e.target.value.trim() === '' ? undefined : e.target.value }
+                          commitPeers(next)
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">{t('coreEditor.outbound.wireguard.keepAlive', { defaultValue: 'Keep alive' })}</Label>
+                      <Input
+                        dir="ltr"
+                        inputMode="numeric"
+                        className="h-10 w-full min-w-0 text-xs"
+                        placeholder="25"
+                        value={peer.keepAlive !== undefined ? String(peer.keepAlive) : ''}
+                        onChange={e => {
+                          const next = [...peers]
+                          next[index] = { ...next[index], keepAlive: e.target.value.trim() === '' ? undefined : e.target.value }
+                          commitPeers(next)
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+                      <Label className="text-xs font-medium text-muted-foreground">{t('coreEditor.outbound.wireguard.allowedIPs', { defaultValue: 'Allowed IPs' })}</Label>
+                      <StringArrayPopoverInput
+                        value={peer.allowedIPs}
+                        onChange={nextAllowedIps => {
+                          const next = [...peers]
+                          next[index] = { ...next[index], allowedIPs: nextAllowedIps }
+                          commitPeers(next)
+                        }}
+                        placeholder="0.0.0.0/0"
+                        addPlaceholder={t('coreEditor.outbound.wireguard.allowedIPsAddPlaceholder', { defaultValue: 'Add CIDR' })}
+                        addButtonLabel={t('coreEditor.outbound.wireguard.addItem', { defaultValue: 'Add' })}
+                        itemsLabel={t('coreEditor.outbound.wireguard.allowedIPsItems', { defaultValue: 'Allowed IPs' })}
+                        emptyMessage={t('coreEditor.outbound.wireguard.noAllowedIPs', { defaultValue: 'No CIDR added.' })}
+                        className="h-10 w-full max-w-none min-w-0"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function OutboundLoopbackInboundTagSelect({ ob, patchOutbound, t }: { ob: Outbound; patchOutbound: PatchOutbound; t: TFunction }) {
   const profile = useCoreEditorStore(s => s.xrayProfile)
   const inboundTags = useMemo(() => {
@@ -1082,6 +1452,14 @@ export function OutboundSpecialProtocolSettings({
       <>
         <Separator className="my-1" />
         <OutboundLoopbackInboundTagSelect ob={ob} patchOutbound={patchOutbound} t={t} />
+      </>
+    )
+  }
+  if (ob.protocol === 'wireguard') {
+    return (
+      <>
+        <Separator className="my-1" />
+        <OutboundWireGuardSettings ob={ob} patchOutbound={patchOutbound} t={t} />
       </>
     )
   }
