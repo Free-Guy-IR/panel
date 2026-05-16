@@ -328,18 +328,13 @@ class SubscriptionOperation(BaseOperation):
         """
         Provides a subscription link based on the user agent (Clash, V2Ray, etc.).
         """
-        # Handle HTML request (subscription page)
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token)
         user = await self.validated_user(db_user)
-
-        await self.validate_and_register_hwid(
-            db, db_user.id, db_user.hwid_limit, x_hwid, x_device_os, x_ver_os, x_device_model
-        )
-
         is_browser_request = "text/html" in accept_header
+        is_subscription_page_request = is_browser_request and not sub_settings.disable_sub_template
 
-        if not sub_settings.disable_sub_template and is_browser_request:
+        if is_subscription_page_request:
             template = (
                 db_user.admin.sub_template
                 if db_user.admin and db_user.admin.sub_template
@@ -365,6 +360,9 @@ class SubscriptionOperation(BaseOperation):
                 )
             )
         else:
+            await self.validate_and_register_hwid(
+                db, db_user.id, db_user.hwid_limit, x_hwid, x_device_os, x_ver_os, x_device_model
+            )
             matched_rule = self.detect_client_rule(user_agent, sub_settings.rules)
             client_type = matched_rule.target if matched_rule else None
             if client_type == ConfigFormat.block or not client_type:
