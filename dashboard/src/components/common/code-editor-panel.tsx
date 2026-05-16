@@ -249,7 +249,7 @@ export function CodeEditorPanel({
           which works correctly even when this component is inside another Dialog. */}
       <Dialog open={isEditorFullscreen} onOpenChange={open => { if (!open) handleToggleFullscreen() }}>
         <DialogContent
-          className="flex h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] flex-col gap-0 rounded-none border-none p-0 sm:h-[calc(100vh-4rem)] sm:max-h-[calc(100vh-4rem)] sm:max-w-[95vw] sm:rounded-lg sm:border sm:p-0 [&>button[class*='absolute']]:hidden"
+          className="flex h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] flex-col gap-0 rounded-none border-none p-0 sm:h-[calc(100vh-4rem)] sm:max-h-[calc(100vh-4rem)] sm:max-w-[95vw] sm:rounded-lg sm:border sm:p-0 [&>button[class*='top-6']]:hidden"
           dir="ltr"
           onOpenAutoFocus={e => {
             e.preventDefault()
