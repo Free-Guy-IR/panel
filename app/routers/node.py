@@ -1,7 +1,7 @@
 import asyncio
 from typing import Annotated, AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from PasarGuardNodeBridge import NodeAPIError
 from sse_starlette.sse import EventSourceResponse
 
@@ -36,7 +36,6 @@ from app.models.stats import (
     NodeUsageStatsList,
     UserCountMetric,
     UserCountMetricStatsList,
-    validate_user_count_metric_scope,
 )
 from app.nats.node_rpc import node_nats_client
 from app.operation import OperatorType
@@ -156,11 +155,6 @@ async def get_user_count_metric(
     _: AdminDetails = Depends(check_sudo_admin),
 ):
     """Retrieve one user activity/status count metric from node user usage rows."""
-    try:
-        validate_user_count_metric_scope(metric, node_id=query.node_id, group_by_node=query.group_by_node)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
     return await node_operator.get_user_count_metric(db=db, metric=metric, query=query)
 
 

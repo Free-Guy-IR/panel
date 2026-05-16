@@ -1391,6 +1391,7 @@ async def get_user_count_metric_stats(
 
     query_parts = _build_user_count_query_parts(db, admins, start, end, period, node_id)
     count_expr = _build_user_count_metric_expression(metric).label("count")
+    total_stmt = select(count_expr).select_from(query_parts["from_clause"]).where(and_(*query_parts["conditions"]))
 
     if group_by_node:
         stmt = (
@@ -1413,7 +1414,9 @@ async def get_user_count_metric_stats(
             .order_by(query_parts["trunc_expr"])
         )
 
+    total_result = await db.execute(total_stmt)
     result = await db.execute(stmt)
+    count_during_period = total_result.scalar_one() or 0
 
     stats = {}
     for row in result.mappings():
@@ -1426,7 +1429,14 @@ async def get_user_count_metric_stats(
             stats[node_id_val] = []
         stats[node_id_val].append(UserCountMetricStat(**row_dict))
 
-    return UserCountMetricStatsList(metric=metric, period=period, start=start, end=end, stats=stats)
+    return UserCountMetricStatsList(
+        metric=metric,
+        period=period,
+        start=start,
+        end=end,
+        count_during_period=count_during_period,
+        stats=stats,
+    )
 
 
 def _build_user_count_query_parts(

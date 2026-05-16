@@ -367,13 +367,7 @@ export function UserCountsChart({ nodeId, isSudo, nodesData = [] }: UserCountsCh
       })
   }, [activePeriod, effectiveGroupByNode, groupKeys, i18n.language, metricStatsByGroup, series])
 
-  const singleMetricTotal = useMemo(
-    () =>
-      Object.values(metricStatsByGroup).reduce((sum, statsArray) => {
-        return sum + statsArray.reduce((innerSum, stat) => innerSum + Number(stat.count || 0), 0)
-      }, 0),
-    [metricStatsByGroup],
-  )
+  const singleMetricTotal = useMemo(() => Number(metricCountsData?.count_during_period || 0), [metricCountsData?.count_during_period])
 
   const pieData = useMemo<CountPieDataPoint[]>(() => {
     if (!effectiveGroupByNode || chartData.length === 0) return []

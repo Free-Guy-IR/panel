@@ -79,6 +79,7 @@ class UserCountMetricStat(BaseModel):
 
 class UserCountMetricStatsList(StatList):
     metric: UserCountMetric
+    count_during_period: int
     stats: dict[int, list[UserCountMetricStat]]
 
 
