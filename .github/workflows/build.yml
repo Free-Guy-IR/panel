@@ -33,8 +33,10 @@ jobs:
                   prev_tag=""
 
                   if [ "${CURRENT_IS_PRERELEASE}" != "true" ]; then
-                    prev_tag="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases" \
-                      --jq '[.[][] | select(.draft == false and .prerelease == false and .tag_name != "'"$current_tag"'") | .tag_name][0] // empty')"
+                    prev_tag="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
+                      | jq -rs --arg current_tag "$current_tag" '
+                          [.[][] | select(.draft == false and .prerelease == false and .tag_name != $current_tag) | .tag_name][0] // empty
+                        ')"
                   fi
 
                   if [ -z "$prev_tag" ]; then
