@@ -178,7 +178,7 @@ export function StringArrayPopoverInput({
               variant="default"
               onClick={addItem}
               disabled={!inputValue.trim() || disabled}
-              className="h-8 w-full shrink-0 justify-start px-3 py-1 sm:w-auto sm:justify-center"
+              className="h-8 w-full shrink-0 justify-center px-3 py-1 sm:w-auto"
               title={addButtonLabel}
             >
               <Plus className="h-4 w-4" />
