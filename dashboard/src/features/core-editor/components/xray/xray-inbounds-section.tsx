@@ -762,6 +762,14 @@ function mergeStreamAdvancedAcrossRebuild(prev: Inbound, next: Inbound): Inbound
   return { ...next, streamAdvanced } as Inbound
 }
 
+function mergeClientsAcrossRebuild(prev: Inbound, next: Inbound): Inbound {
+  if (prev.protocol !== next.protocol) return next
+  if (!('clients' in prev) || !('clients' in next)) return next
+  const clients = (prev as { clients?: unknown }).clients
+  if (!Array.isArray(clients)) return next
+  return { ...next, clients } as Inbound
+}
+
 const SNIFFING_DEST_OVERRIDE_OPTIONS = ['http', 'tls', 'quic', 'fakedns'] as const
 
 /** Grid for tunnel `portMap` editor rows (index, local port, remote target, actions). */
@@ -1585,6 +1593,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
         }
         rebuilt = mergeSecurityAcrossRebuild(nextInbound, rebuilt)
         rebuilt = mergeStreamAdvancedAcrossRebuild(nextInbound, rebuilt)
+        rebuilt = mergeClientsAcrossRebuild(nextInbound, rebuilt)
         nextInbound = rebuilt
       }
     }
@@ -2731,6 +2740,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                             }
                             next = mergeSecurityAcrossRebuild(inbound, next)
                             next = mergeStreamAdvancedAcrossRebuild(inbound, next)
+                            next = mergeClientsAcrossRebuild(inbound, next)
                             replaceEffectiveInbound(next)
                             if ('transport' in next && next.transport) form.setValue('transport', next.transport.type)
                             if ('security' in next && next.security) form.setValue('security', next.security.type)
@@ -3285,6 +3295,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           }
                           next = mergeTransportAcrossRebuild(inbound, next)
                           next = mergeStreamAdvancedAcrossRebuild(inbound, next)
+                          next = mergeClientsAcrossRebuild(inbound, next)
 
                           // Clear REALITY security defaults to avoid auto-population
                           if (security === 'reality' && 'security' in next && next.security?.type === 'reality') {

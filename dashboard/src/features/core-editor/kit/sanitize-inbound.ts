@@ -18,24 +18,6 @@ export function normalizeTunnelNetworkForKit(v: unknown): 'tcp' | 'udp' | 'tcp,u
   return 'tcp,udp'
 }
 
-function clearClients(inbound: Inbound): Inbound {
-  if (inbound.protocol === 'unmanaged' || inbound.protocol === 'tun') return inbound
-  if (
-    inbound.protocol === 'http' ||
-    inbound.protocol === 'mixed' ||
-    inbound.protocol === 'socks' ||
-    inbound.protocol === 'dokodemo-door' ||
-    inbound.protocol === 'tunnel' ||
-    inbound.protocol === 'wireguard'
-  ) {
-    return inbound
-  }
-  if ('clients' in inbound) {
-    return { ...inbound, clients: [] } as Inbound
-  }
-  return inbound
-}
-
 function isTunnelLikeInbound(ib: Inbound): boolean {
   return ib.protocol === 'tunnel' || ib.protocol === 'dokodemo-door'
 }
@@ -193,10 +175,10 @@ function sanitizeWireguardEmptyAddress(inbound: Inbound): Inbound {
   return draft as unknown as Inbound
 }
 
-/** Panel policy: never surface client rows in the editor; always persist empty client lists for protocols that use `clients`. */
+/** Normalize editor inbounds before validation/persistence without discarding user-managed client arrays. */
 export function sanitizeProfileInbounds(profile: Profile): Profile {
   return {
     ...profile,
-    inbounds: profile.inbounds.map(ib => sanitizeWireguardEmptyAddress(sanitizeSecurityArrays(normalizeTunnelInboundForKit(clearClients(ib))))),
+    inbounds: profile.inbounds.map(ib => sanitizeWireguardEmptyAddress(sanitizeSecurityArrays(normalizeTunnelInboundForKit(ib)))),
   }
 }
