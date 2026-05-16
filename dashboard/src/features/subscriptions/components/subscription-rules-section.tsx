@@ -94,9 +94,9 @@ export function SubscriptionRulesSection({
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={rulesModifiers} onDragEnd={onDragEnd}>
-          <div dir="ltr" className="min-w-0 overflow-hidden">
+          <div dir="ltr" className="min-w-0 overflow-visible">
             <SortableContext items={ruleFields.map(field => field.id)} strategy={rectSortingStrategy}>
-              <div ref={rulesListRef} className="scrollbar-thin flex max-h-[min(70vh,500px)] min-w-0 touch-pan-y flex-col gap-2 overflow-y-auto overflow-x-hidden py-1 sm:max-h-[500px] sm:gap-2.5 sm:py-1">
+              <div ref={rulesListRef} className="flex min-w-0 touch-pan-y flex-col gap-3 overflow-visible py-1">
                 {ruleFields.map((field, index) => (
                   <SortableSubscriptionRule key={field.id} id={field.id} index={index} onRemove={onRemoveRule} form={form} />
                 ))}
