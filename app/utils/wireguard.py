@@ -180,9 +180,7 @@ def prepare_wireguard_proxy_settings_with_allocator(
             if allocator.is_reserved(peer_ip):
                 raise ValueError(f"peer IP '{peer_ip}' is reserved")
             if allocator.conflicts(peer_ip):
-                raise ValueError(
-                    f"peer IP/network '{peer_ip}' is already in use by an existing user's peer network"
-                )
+                raise ValueError(f"peer IP/network '{peer_ip}' is already in use by an existing user's peer network")
             allocator.reserve(peer_ip)
         proxy_settings.wireguard.peer_ips = peer_ips
         return proxy_settings

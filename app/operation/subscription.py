@@ -6,20 +6,20 @@ from fastapi import Response
 from fastapi.responses import HTMLResponse
 
 from app.db import AsyncSession
-from app.db.crud.user import get_user_usages, user_sub_update
 from app.db.crud.hwid import (
     get_user_hwid_by_value,
     get_user_hwid_count,
     register_user_hwid,
     update_hwid_last_used,
 )
+from app.db.crud.user import get_user_usages, user_sub_update
 from app.db.models import User
 from app.models.admin import AdminDetails
-from app.models.settings import Application, ConfigFormat, SubRule, Subscription as SubSettings, HWIDSettings
+from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
 from app.models.stats import UserUsageStatsList
 from app.models.subscription import SubscriptionUsageQuery
 from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
-from app.settings import subscription_settings, hwid_settings
+from app.settings import hwid_settings, subscription_settings
 from app.subscription.share import encode_title, generate_subscription, setup_format_variables
 from app.templates import render_template
 from config import template_settings, wireguard_settings
@@ -496,28 +496,10 @@ class SubscriptionOperation(BaseOperation):
             "headers": headers,
         }
 
-    async def user_subscription_raw(
-        self,
-        db: AsyncSession,
-        token: str,
-        request_url: str = "",
-        update_user_agent: str = "",
-        ip: str | None = None,
-        x_hwid: str | None = None,
-        x_device_os: str | None = None,
-        x_ver_os: str | None = None,
-        x_device_model: str | None = None,
-    ):
+    async def user_subscription_raw(self, db: AsyncSession, token: str, request_url: str = ""):
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token)
         user = await self.validated_user(db_user)
-
-        await self.validate_and_register_hwid(
-            db, db_user.id, db_user.hwid_limit, x_hwid, x_device_os, x_ver_os, x_device_model
-        )
-
-        if update_user_agent:
-            await user_sub_update(db, db_user.id, update_user_agent, ip=ip, hwid=x_hwid)
 
         links = []
         if sub_settings.allow_browser_config:

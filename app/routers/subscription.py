@@ -46,21 +46,8 @@ async def user_subscription_info(request: Request, token: str, db: AsyncSession 
 
 
 @router.get("/{token}/raw")
-async def user_subscription_raw(
-    request: Request,
-    token: str,
-    db: AsyncSession = Depends(get_db),
-    update_user_agent: str = Header(default="", alias="X-Subscription-User-Agent"),
-    headers=Depends(get_subscription_headers),
-):
-    return await subscription_operator.user_subscription_raw(
-        db,
-        token=token,
-        request_url=str(request.url),
-        update_user_agent=update_user_agent,
-        ip=request.client.host if request.client else None,
-        **headers.model_dump(),
-    )
+async def user_subscription_raw(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+    return await subscription_operator.user_subscription_raw(db, token=token, request_url=str(request.url))
 
 
 @router.get("/{token}/apps", response_model=list[Application])
