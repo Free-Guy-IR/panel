@@ -1,10 +1,55 @@
+import pytest
 from fastapi import status
+from sqlalchemy import select
+
+from app.db.crud.hwid import register_user_hwid, reset_user_hwids
+from app.db.models import UserHWID
+from tests.api import TestSession
 from tests.api import client
 from tests.api.helpers import (
     auth_headers,
     create_user,
     delete_user,
 )
+
+
+@pytest.mark.asyncio
+async def test_register_user_hwid_upserts_existing_row(access_token):
+    user = create_user(access_token)
+
+    try:
+        async with TestSession() as session:
+            await register_user_hwid(session, user["id"], "device-dup", "Android", "14", "Pixel 8")
+            inserted = (
+                await session.execute(
+                    select(UserHWID).where(UserHWID.user_id == user["id"], UserHWID.hwid == "device-dup")
+                )
+            ).scalar_one()
+            first_last_used_at = inserted.last_used_at
+
+        async with TestSession() as session:
+            await register_user_hwid(session, user["id"], "device-dup")
+            updated = (
+                await session.execute(
+                    select(UserHWID).where(UserHWID.user_id == user["id"], UserHWID.hwid == "device-dup")
+                )
+            ).scalar_one()
+            rows = (
+                await session.execute(
+                    select(UserHWID).where(UserHWID.user_id == user["id"], UserHWID.hwid == "device-dup")
+                )
+            ).scalars().all()
+
+        assert len(rows) == 1
+        assert updated.id == inserted.id
+        assert updated.device_os == "Android"
+        assert updated.os_version == "14"
+        assert updated.device_model == "Pixel 8"
+        assert updated.last_used_at >= first_last_used_at
+    finally:
+        async with TestSession() as session:
+            await reset_user_hwids(session, user["id"])
+        delete_user(access_token, user["username"])
 
 
 def test_hwid_workflow(access_token):

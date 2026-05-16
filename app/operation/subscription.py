@@ -10,7 +10,6 @@ from app.db.crud.hwid import (
     get_user_hwid_by_value,
     get_user_hwid_count,
     register_user_hwid,
-    update_hwid_last_used,
 )
 from app.db.crud.user import get_user_usages, user_sub_update
 from app.db.models import User
@@ -298,7 +297,7 @@ class SubscriptionOperation(BaseOperation):
 
         existing_hwid = await get_user_hwid_by_value(db, user_id, x_hwid)
         if existing_hwid:
-            await update_hwid_last_used(db, existing_hwid)
+            await register_user_hwid(db, user_id, x_hwid, x_device_os, x_ver_os, x_device_model)
             return
 
         # It's a new HWID, check limit
