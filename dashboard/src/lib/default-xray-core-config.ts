@@ -32,7 +32,7 @@ export const DEFAULT_XRAY_CORE_CONFIG: Record<string, unknown> = {
     },
   ],
   burstObservatory: {
-    subjectSelector: ['DIRECT', 'BLOCK'],
+    subjectSelector: ['DIRECT'],
     pingConfig: {
       destination: 'https://www.google.com/generate_204',
       connectivity: 'https://www.google.com/generate_204',

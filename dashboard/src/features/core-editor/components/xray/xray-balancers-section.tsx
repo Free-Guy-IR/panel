@@ -188,8 +188,12 @@ function defaultBurstObservatory(subjectSelector: string[] = []): JsonObject {
   }
 }
 
+/** Outbound protocols that should never be auto-included as observation subjects (no useful probe target). */
+const OBSERVATION_EXCLUDED_PROTOCOLS = new Set(['blackhole', 'dns', 'loopback'])
+
 function collectOutboundSelectors(profile: Profile): string[] {
-  return uniqueNonEmptyTags(profile.outbounds?.map(outbound => outbound.tag))
+  const observable = (profile.outbounds ?? []).filter(outbound => !OBSERVATION_EXCLUDED_PROTOCOLS.has(outbound.protocol as string))
+  return uniqueNonEmptyTags(observable.map(outbound => outbound.tag))
 }
 
 function balancerRequiresObservation(balancer: RoutingBalancer | undefined): boolean {
