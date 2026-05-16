@@ -1148,7 +1148,7 @@ export interface UserCountMetricStatsList {
   start: string
   end: string
   metric: UserCountMetric
-  count_during_period: number
+  count_during_period?: number
   stats: UserCountMetricStatsListStats
 }
 
