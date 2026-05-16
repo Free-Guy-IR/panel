@@ -241,19 +241,21 @@ export function XrayAdvancedSection() {
           onValueChange={value => setActiveTab(value as AdvancedTab)}
           className="min-w-0"
         >
-          <TabsList dir={dir} className="grid w-full grid-cols-4 sm:w-auto sm:inline-flex">
-            <TabsTrigger value="all">
-              {t('coreEditor.advanced.tabs.all', { defaultValue: 'All' })}
-            </TabsTrigger>
-            {FILTER_TABS.map(tab => (
-              <TabsTrigger key={tab} value={tab}>
-                {tab === 'inbounds' && t('coreEditor.section.inbounds', { defaultValue: 'Inbounds' })}
-                {tab === 'outbounds' && t('coreEditor.section.outbounds', { defaultValue: 'Outbounds' })}
-                {tab === 'routing' &&
-                  t('coreEditor.advanced.tabs.routingRules', { defaultValue: 'Routing Rules' })}
+          <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsList dir={dir} className="inline-flex h-10 w-auto">
+              <TabsTrigger value="all" className="px-3">
+                {t('coreEditor.advanced.tabs.all', { defaultValue: 'All' })}
               </TabsTrigger>
-            ))}
-          </TabsList>
+              {FILTER_TABS.map(tab => (
+                <TabsTrigger key={tab} value={tab} className="px-3">
+                  {tab === 'inbounds' && t('coreEditor.section.inbounds', { defaultValue: 'Inbounds' })}
+                  {tab === 'outbounds' && t('coreEditor.section.outbounds', { defaultValue: 'Outbounds' })}
+                  {tab === 'routing' &&
+                    t('coreEditor.advanced.tabs.routingRules', { defaultValue: 'Routing Rules' })}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         </Tabs>
       )}
 
