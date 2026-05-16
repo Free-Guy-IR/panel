@@ -26,6 +26,49 @@ function isJsonValue(value: unknown): value is JsonValue {
   return Object.values(value).every(v => v === undefined || isJsonValue(v))
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null
+}
+
+function inboundSettingString(rawInbound: unknown, key: string): string | undefined {
+  const settings = asRecord(asRecord(rawInbound)?.settings)
+  const value = settings?.[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function patchVlessInboundEncryptionFromRaw(profile: Profile, raw: unknown): Profile {
+  if (!isRecord(raw)) return profile
+  const rawInbounds = raw.inbounds
+  if (!Array.isArray(rawInbounds)) return profile
+
+  const inbounds = profile.inbounds.map((inbound, index) => {
+    if (inbound.protocol !== 'vless') return inbound
+    const rawInbound = rawInbounds[index]
+    const encryption = inboundSettingString(rawInbound, 'encryption')
+    if (encryption === undefined) return inbound
+    return { ...inbound, encryption } as typeof inbound
+  })
+
+  return { ...profile, inbounds }
+}
+
+function applyVlessInboundEncryptionToCompiledConfig(profile: Profile, config: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(config.inbounds)) return config
+  const inbounds = config.inbounds.map((compiledInbound, index) => {
+    if (!isRecord(compiledInbound) || compiledInbound.protocol !== 'vless') return compiledInbound
+    const profileInbound = profile.inbounds?.[index]
+    if (profileInbound?.protocol !== 'vless') return compiledInbound
+    const encryption = typeof profileInbound.encryption === 'string' ? profileInbound.encryption : undefined
+    if (encryption === undefined) return compiledInbound
+    const normalizedEncryption = encryption.trim()
+    if (normalizedEncryption === '' || normalizedEncryption === 'none') return compiledInbound
+    const settings = isRecord(compiledInbound.settings) ? { ...compiledInbound.settings } : {}
+    settings.encryption = encryption
+    return { ...compiledInbound, settings }
+  })
+  return { ...config, inbounds }
+}
+
 const UNMODELED_TOP_LEVEL_KEYS_TO_PRESERVE = [
   'policy',
   'api',
@@ -94,7 +137,7 @@ export type XrayPersistValidationResult =
 export function importRawToProfile(raw: unknown): { profile: Profile; issues: Issue[] } {
   const imported = importXrayConfig(raw)
   const profile = preserveUnmodeledTopLevelSections(
-    sanitizeProfileInbounds(normalizeProfile(imported.profile)),
+    patchVlessInboundEncryptionFromRaw(sanitizeProfileInbounds(normalizeProfile(imported.profile)), raw),
     raw,
   )
 
@@ -104,7 +147,10 @@ export function importRawToProfile(raw: unknown): { profile: Profile; issues: Is
 export function profileToPersistedConfig(profile: Profile): Record<string, unknown> {
   const prepared = prepareProfileForKit(profile)
   const { config } = buildXrayConfig(prepared, { mode: 'permissive' })
-  const result = applyInboundSockoptToCompiledConfig(prepared, config as Record<string, unknown>)
+  const result = applyVlessInboundEncryptionToCompiledConfig(
+    prepared,
+    applyInboundSockoptToCompiledConfig(prepared, config as Record<string, unknown>),
+  )
 
   return result
 }
@@ -116,7 +162,7 @@ export function validateProfileForSave(profile: Profile) {
 
 /**
  * Persist validation: strict-mode Xray compile blockers from xray-config-kit plus core-kit checks on permissive JSON
- * (inbound clients noise filtered out).
+ * (inbound clients noise filtered out). Warnings and info-level issues do not block save.
  */
 export function validateProfileForPersist(profile: Profile): XrayPersistValidationResult {
   const strictBlockers = getXrayStrictCompileBlockers(profile)
@@ -124,8 +170,11 @@ export function validateProfileForPersist(profile: Profile): XrayPersistValidati
   const r = validateCoreConfig('xray', config)
   const coreKitIssues = r.ok ? [] : filterCoreKitIssuesHidingInboundClients([...r.issues])
 
-  if (strictBlockers.length > 0 || coreKitIssues.length > 0) {
-    return { ok: false, strictBlockers, coreKitIssues }
+  const blockingStrict = strictBlockers.filter(i => i.severity !== 'warning' && i.severity !== 'info')
+  const blockingCoreKit = coreKitIssues.filter(i => i.severity !== 'warning' && i.severity !== 'info')
+
+  if (blockingStrict.length > 0 || blockingCoreKit.length > 0) {
+    return { ok: false, strictBlockers: blockingStrict, coreKitIssues: blockingCoreKit }
   }
   return { ok: true, config }
 }

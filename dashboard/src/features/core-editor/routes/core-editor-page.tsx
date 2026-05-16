@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CoreCommandMenu } from '@/features/core-editor/components/shared/core-command-menu'
 import { CoreEditorLayout } from '@/features/core-editor/components/shell/core-editor-layout'
 import { CoreSectionTabsPlaceholder } from '@/features/core-editor/components/shell/core-section-sidebar'
-import { ValidationSummary, type ValidationListItem } from '@/features/core-editor/components/shared/validation-summary'
+import { filterValidationListBlockingErrors, ValidationSummary, type ValidationListItem } from '@/features/core-editor/components/shared/validation-summary'
 import type { SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
 import { useXrayPersistValidationItems } from '@/features/core-editor/hooks/use-xray-persist-validation-items'
 import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wireguard-core-editor'
@@ -284,7 +284,8 @@ export default function CoreEditorPage() {
       toast.error(t('coreEditor.nameRequired', { defaultValue: 'Name is required' }))
       return
     }
-    if (preSaveIssues.length > 0) {
+    const blockingPreSaveIssues = filterValidationListBlockingErrors(preSaveIssues)
+    if (blockingPreSaveIssues.length > 0) {
       toast.error(t('coreEditor.fixValidation', { defaultValue: 'Fix validation errors before saving' }))
       return
     }
@@ -382,7 +383,14 @@ export default function CoreEditorPage() {
         }
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
+      const err = e as { data?: { detail?: unknown }; response?: { _data?: { detail?: unknown }; data?: { detail?: unknown } }; message?: string }
+      const detail = err?.data?.detail ?? err?.response?._data?.detail ?? err?.response?.data?.detail
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : detail
+            ? JSON.stringify(detail)
+            : err?.message ?? String(e)
       toast.error(msg)
     } finally {
       setSaving(false)

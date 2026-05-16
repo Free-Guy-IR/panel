@@ -65,15 +65,10 @@ export function validateRealityServerNamesFormRaw(raw: unknown, t: TFunction): s
 }
 
 /** Basics validated like host port/remark: required fields + numeric port range. Dynamic form keys pass through. */
-function allowsPortlessInboundListen(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().startsWith('@')
-}
-
 export function createInboundDialogSchema(caps: Caps, t: TFunction) {
   const allowedProtocols = caps.protocolOrder.filter(p => caps.protocols[p])
   const protocolLabel = t('coreEditor.field.protocol', { defaultValue: 'Protocol' })
   const tagLabel = t('coreEditor.field.tag', { defaultValue: 'Tag' })
-  const portLabel = t('coreEditor.field.port', { defaultValue: 'Port' })
 
   const required = (fieldLabel: string) =>
     t('validation.required', { field: fieldLabel, defaultValue: `${fieldLabel} is required` })
@@ -95,18 +90,9 @@ export function createInboundDialogSchema(caps: Caps, t: TFunction) {
     })
     .passthrough()
     .superRefine((data, ctx) => {
-      const p = typeof data.protocol === 'string' ? data.protocol.trim() : ''
-      if (p === 'tun') return
       const rawPort = typeof data.port === 'string' ? data.port.trim() : ''
-      if (rawPort.length === 0) {
-        if (allowsPortlessInboundListen((data as Record<string, unknown>).listen)) return
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: required(portLabel),
-          path: ['port'],
-        })
-        return
-      }
+      // Inbound port is optional; only validate format when a value is provided.
+      if (rawPort.length === 0) return
       if (!isValidXrayPortList(rawPort)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
