@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button'
 import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -37,7 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { Eye, Pencil, Plus, SlidersHorizontal } from 'lucide-react'
+import { Eye, Pencil, Plus } from 'lucide-react'
 
 function defaultRouting(): Routing {
   return { domainStrategy: 'AsIs', rules: [] }
@@ -111,6 +110,10 @@ function mutableJsonObject(value: JsonObject | undefined): Record<string, JsonVa
   return isRecord(value) ? { ...(value as Record<string, JsonValue | undefined>) } : {}
 }
 
+function cloneJsonObject(value: JsonObject | undefined): JsonObject | undefined {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as JsonObject
+}
+
 function parseOptionalNumber(raw: string): number | undefined {
   const value = raw.trim()
   if (!value) return undefined
@@ -175,8 +178,8 @@ function defaultBurstObservatory(subjectSelector: string[] = []): JsonObject {
   return {
     subjectSelector,
     pingConfig: {
-      destination: 'https://connectivitycheck.gstatic.com/generate_204',
-      connectivity: '',
+      destination: 'https://www.google.com/generate_204',
+      connectivity: 'https://www.google.com/generate_204',
       interval: '1m',
       sampling: 10,
       timeout: '5s',
@@ -185,8 +188,8 @@ function defaultBurstObservatory(subjectSelector: string[] = []): JsonObject {
   }
 }
 
-function collectBalancerSelectors(profile: Profile): string[] {
-  return uniqueNonEmptyTags((profile.routing?.balancers ?? []).flatMap(balancer => balancer.selector ?? []))
+function collectOutboundSelectors(profile: Profile): string[] {
+  return uniqueNonEmptyTags(profile.outbounds?.map(outbound => outbound.tag))
 }
 
 function balancerRequiresObservation(balancer: RoutingBalancer | undefined): boolean {
@@ -213,6 +216,10 @@ function ensureObservationForProfile(profile: Profile, selector: string[]): Prof
 
 type DialogMode = 'add' | 'edit'
 type ObservationTab = 'observatory' | 'burstObservatory'
+type ObservationDraft = {
+  observatory?: JsonObject
+  burstObservatory?: JsonObject
+}
 
 interface XrayBalancersSectionProps {
   headerAddPulse?: SectionHeaderAddPulse
@@ -242,7 +249,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
   const [selectorCommitError, setSelectorCommitError] = useState<string | null>(null)
   const [observationTab, setObservationTab] = useState<ObservationTab>('observatory')
   const [observationDialogOpen, setObservationDialogOpen] = useState(false)
-  const [observationPopoverOpen, setObservationPopoverOpen] = useState(false)
+  const [observationDraft, setObservationDraft] = useState<ObservationDraft | null>(null)
   const balancers = profile?.routing?.balancers ?? []
 
   const b = useMemo(() => {
@@ -383,7 +390,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
     if (!profile || balancers.length === 0 || profileHasObservation(profile)) return
     updateXrayProfile(p => {
       if ((p.routing?.balancers ?? []).length === 0 || profileHasObservation(p)) return p
-      return ensureObservationForProfile(p, collectBalancerSelectors(p))
+      return ensureObservationForProfile(p, collectOutboundSelectors(p))
     })
   }, [profile, balancers.length, updateXrayProfile])
 
@@ -433,7 +440,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
       const nextRow: RoutingBalancer = { ...draftBalancer, tag, selector }
       const nextProfile = { ...p, routing: { ...routing, balancers: [...(routing.balancers ?? []), nextRow] } }
       // Every balancer benefits from observation data; enable a default source if none exists yet.
-      return ensureObservationForProfile(nextProfile, selector)
+      return ensureObservationForProfile(nextProfile, collectOutboundSelectors(nextProfile))
     })
     setSelected(balancers.length)
     finalizeDetailClose()
@@ -459,7 +466,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
       return
     }
     if (balancerRequiresObservation(b)) {
-      updateXrayProfile(p => ensureObservationForProfile(p, b.selector ?? []))
+      updateXrayProfile(p => ensureObservationForProfile(p, collectOutboundSelectors(p)))
     }
     finalizeDetailClose()
   }
@@ -479,37 +486,47 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
 
   const observatory = readTopLevelObject(profile, 'observatory')
   const burstObservatory = readTopLevelObject(profile, 'burstObservatory')
-  const defaultSubjectSelector = collectBalancerSelectors(profile)
+  const defaultSubjectSelector = collectOutboundSelectors(profile)
+  const draftObservatory = observationDraft?.observatory
+  const draftBurstObservatory = observationDraft?.burstObservatory
+
+  const createObservationDraft = (): ObservationDraft => ({
+    observatory: cloneJsonObject(observatory),
+    burstObservatory: cloneJsonObject(burstObservatory),
+  })
 
   const setTopLevelObject = (key: 'observatory' | 'burstObservatory', value: JsonObject | undefined) => {
-    updateXrayProfile(p => setTopLevelValue(p, key, value))
+    setObservationDraft(current => ({ ...(current ?? createObservationDraft()), [key]: cloneJsonObject(value) }))
   }
 
   const patchTopLevelObject = (key: 'observatory' | 'burstObservatory', patch: Record<string, JsonValue | undefined>) => {
-    updateXrayProfile(p => {
-      const current = mutableJsonObject(readTopLevelObject(p, key))
+    setObservationDraft(current => {
+      const draft = current ?? createObservationDraft()
+      const currentObject = mutableJsonObject(draft[key])
       for (const [field, value] of Object.entries(patch)) {
-        if (value === undefined) delete current[field]
-        else current[field] = value
+        if (value === undefined) delete currentObject[field]
+        else currentObject[field] = value
       }
-      return setTopLevelValue(p, key, compactJsonObject(current))
+      return { ...draft, [key]: compactJsonObject(currentObject) }
     })
   }
 
   const patchBurstPingConfig = (patch: Record<string, JsonValue | undefined>) => {
-    updateXrayProfile(p => {
-      const burst = mutableJsonObject(readTopLevelObject(p, 'burstObservatory'))
+    setObservationDraft(current => {
+      const draft = current ?? createObservationDraft()
+      const burst = mutableJsonObject(draft.burstObservatory)
       const pingConfig = mutableJsonObject(readJsonObject(burst.pingConfig))
       for (const [field, value] of Object.entries(patch)) {
         if (value === undefined) delete pingConfig[field]
         else pingConfig[field] = value
       }
       burst.pingConfig = compactJsonObject(pingConfig) ?? {}
-      return setTopLevelValue(p, 'burstObservatory', compactJsonObject(burst))
+      return { ...draft, burstObservatory: compactJsonObject(burst) }
     })
   }
 
   const observationEnabled = observatory !== undefined || burstObservatory !== undefined
+  const draftObservationEnabled = draftObservatory !== undefined || draftBurstObservatory !== undefined
   const hasLeastPingBalancer = profileHasLeastPingBalancer(profile)
   const requiresObservationSource = balancers.length > 0
   const requiredObservationSourceReason = requiresObservationSource
@@ -517,9 +534,9 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
         defaultValue: 'At least one observation source must stay enabled while this profile has balancers.',
       })
     : null
-  const observatoryIsRequired = requiresObservationSource && observatory !== undefined && burstObservatory === undefined
-  const burstObservatoryIsRequired = requiresObservationSource && burstObservatory !== undefined && observatory === undefined
-  const observatoryDisabledReason = !hasLeastPingBalancer && observatory === undefined
+  const observatoryIsRequired = requiresObservationSource && draftObservatory !== undefined && draftBurstObservatory === undefined
+  const burstObservatoryIsRequired = requiresObservationSource && draftBurstObservatory !== undefined && draftObservatory === undefined
+  const observatoryDisabledReason = !hasLeastPingBalancer && draftObservatory === undefined
     ? t('coreEditor.balancer.observatoryRequiresLeastPing', {
         defaultValue: 'Observatory needs at least one balancer with the leastPing strategy. Use Burst observatory until then.',
       })
@@ -527,97 +544,55 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
   const observatorySwitchDisabledReason = observatoryDisabledReason ?? (observatoryIsRequired ? requiredObservationSourceReason : null)
   const burstObservatorySwitchDisabledReason = burstObservatoryIsRequired ? requiredObservationSourceReason : null
   const activeObservationTab: ObservationTab =
-    observationTab === 'observatory' && observatory === undefined && burstObservatory !== undefined
+    observationTab === 'observatory' && draftObservatory === undefined && draftBurstObservatory !== undefined
       ? 'burstObservatory'
-      : observationTab === 'burstObservatory' && burstObservatory === undefined && observatory !== undefined
+      : observationTab === 'burstObservatory' && draftBurstObservatory === undefined && draftObservatory !== undefined
         ? 'observatory'
         : observationTab
-  const observationSourcesSummary = observationEnabled
-    ? t('coreEditor.balancer.observationActiveSummary', {
-        defaultValue: 'Balancer probe sources are configured.',
-      })
-    : t('coreEditor.balancer.observationInactiveSummary', {
-        defaultValue: 'No probe source is configured.',
-      })
-  const observationStatusItems = [
-    {
-      key: 'observatory',
-      label: t('coreEditor.balancer.observatoryShort', { defaultValue: 'Observatory' }),
-      enabled: observatory !== undefined,
-    },
-    {
-      key: 'burst',
-      label: t('coreEditor.balancer.burstShort', { defaultValue: 'Burst' }),
-      enabled: burstObservatory !== undefined,
-    },
-  ]
+
+  const openObservationDialog = () => {
+    setObservationDraft(createObservationDraft())
+    setObservationDialogOpen(true)
+  }
+
+  const handleObservationDialogOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      openObservationDialog()
+      return
+    }
+    setObservationDialogOpen(false)
+    setObservationDraft(null)
+  }
+
+  const commitObservationDraft = () => {
+    if (!observationDraft) return
+    updateXrayProfile(p => {
+      const withObservatory = setTopLevelValue(p, 'observatory', observationDraft.observatory)
+      return setTopLevelValue(withObservatory, 'burstObservatory', observationDraft.burstObservatory)
+    })
+    setObservationDialogOpen(false)
+    setObservationDraft(null)
+  }
+
   const observationToolbarAction = (
-    <Popover open={observationPopoverOpen} onOpenChange={setObservationPopoverOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-md"
-          className="relative h-9 w-9 rounded-lg shadow-sm"
-          aria-label={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
-          title={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
-        >
-          <Eye className="h-4 w-4" />
-          <span
-            className={cn(
-              'absolute end-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-background',
-              observationEnabled ? 'bg-green-500' : 'bg-muted-foreground/45',
-            )}
-            aria-hidden
-          />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent dir={dir} align={dir === 'rtl' ? 'start' : 'end'} className="w-80 space-y-3 text-start">
-        <div className="space-y-1">
-          <div className="text-sm font-medium">
-            {t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {observationSourcesSummary}
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          {observationStatusItems.map(item => (
-            <div key={item.key} className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2">
-              <span className="min-w-0 text-xs font-medium">{item.label}</span>
-              <span
-                className={cn(
-                  'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs',
-                  item.enabled
-                    ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-300'
-                    : 'border-border bg-background text-muted-foreground',
-                )}
-              >
-                <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', item.enabled ? 'bg-green-500' : 'bg-muted-foreground/45')} />
-                {item.enabled
-                  ? t('coreEditor.balancer.observation.enabled', { defaultValue: 'On' })
-                  : t('coreEditor.balancer.observation.disabled', { defaultValue: 'Off' })}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full justify-center"
-          onClick={() => {
-            setObservationPopoverOpen(false)
-            setObservationDialogOpen(true)
-          }}
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-          {t('coreEditor.balancer.observation.configure', { defaultValue: 'Configure' })}
-        </Button>
-      </PopoverContent>
-    </Popover>
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-md"
+      className="relative h-9 w-9 rounded-lg shadow-sm"
+      aria-label={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
+      title={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
+      onClick={openObservationDialog}
+    >
+      <Eye className="h-4 w-4" />
+      <span
+        className={cn(
+          'absolute end-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-background',
+          observationEnabled ? 'bg-green-500' : 'bg-muted-foreground/45',
+        )}
+        aria-hidden
+      />
+    </Button>
   )
 
   return (
@@ -823,7 +798,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                         },
                       })
                       if (dialogMode === 'edit' && (v === 'leastPing' || v === 'leastLoad')) {
-                        updateXrayProfile(p => ensureObservationForProfile(p, b.selector ?? []))
+                        updateXrayProfile(p => ensureObservationForProfile(p, collectOutboundSelectors(p)))
                       }
                     }}
                   >
@@ -871,15 +846,20 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
 
       <CoreEditorFormDialog
         isDialogOpen={observationDialogOpen}
-        onOpenChange={setObservationDialogOpen}
+        onOpenChange={handleObservationDialogOpenChange}
         leadingIcon={<Eye className="h-5 w-5 shrink-0" />}
         title={t('coreEditor.balancer.observationSources', { defaultValue: 'Observation sources' })}
         size="md"
         inlinePersistValidation={false}
+        footerExtra={
+          <Button type="button" className="sm:min-w-[88px]" onClick={commitObservationDraft}>
+            {t('modify')}
+          </Button>
+        }
       >
         <TooltipProvider delayDuration={200}>
           <div className="grid gap-3 text-start sm:grid-cols-2">
-            <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3 text-start', observatory && 'border-primary/30 bg-primary/5', observatoryDisabledReason && 'opacity-70')}>
+            <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3 text-start', draftObservatory && 'border-primary/30 bg-primary/5', observatoryDisabledReason && 'opacity-70')}>
               <div className="min-w-0">
                 <Label className="text-xs font-medium">
                   {t('coreEditor.balancer.observatory', { defaultValue: 'Observatory' })}
@@ -895,7 +875,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                   <TooltipTrigger asChild>
                     <span className="mt-0.5 shrink-0">
                       <Switch
-                        checked={observatory !== undefined}
+                        checked={draftObservatory !== undefined}
                         disabled
                         onCheckedChange={() => {}}
                       />
@@ -908,9 +888,9 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
               ) : (
                 <Switch
                   className="mt-0.5 shrink-0"
-                  checked={observatory !== undefined}
+                  checked={draftObservatory !== undefined}
                   onCheckedChange={checked => {
-                    if (!checked && burstObservatory === undefined && requiresObservationSource) return
+                    if (!checked && draftBurstObservatory === undefined && requiresObservationSource) return
                     setTopLevelObject('observatory', checked ? defaultObservatory(defaultSubjectSelector) : undefined)
                     if (checked) setObservationTab('observatory')
                   }}
@@ -918,7 +898,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
               )}
             </div>
 
-            <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3 text-start', burstObservatory && 'border-primary/30 bg-primary/5')}>
+            <div className={cn('flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-3 text-start', draftBurstObservatory && 'border-primary/30 bg-primary/5')}>
               <div className="min-w-0">
                 <Label className="text-xs font-medium">
                   {t('coreEditor.balancer.burstObservatory', { defaultValue: 'Burst observatory' })}
@@ -934,7 +914,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                   <TooltipTrigger asChild>
                     <span className="mt-0.5 shrink-0">
                       <Switch
-                        checked={burstObservatory !== undefined}
+                        checked={draftBurstObservatory !== undefined}
                         disabled
                         onCheckedChange={() => {}}
                       />
@@ -947,9 +927,9 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
               ) : (
                 <Switch
                   className="mt-0.5 shrink-0"
-                  checked={burstObservatory !== undefined}
+                  checked={draftBurstObservatory !== undefined}
                   onCheckedChange={checked => {
-                    if (!checked && observatory === undefined && requiresObservationSource) return
+                    if (!checked && draftObservatory === undefined && requiresObservationSource) return
                     setTopLevelObject('burstObservatory', checked ? defaultBurstObservatory(defaultSubjectSelector) : undefined)
                     if (checked) setObservationTab('burstObservatory')
                   }}
@@ -959,7 +939,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
           </div>
         </TooltipProvider>
 
-        {observationEnabled ? (
+        {draftObservationEnabled ? (
           <Tabs
             dir={dir}
             value={activeObservationTab}
@@ -967,15 +947,15 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
             className="min-w-0 text-start"
           >
             <TabsList dir={dir} className="mx-auto grid w-full grid-cols-2 sm:w-[420px]">
-              <TabsTrigger value="observatory" disabled={observatory === undefined}>
+              <TabsTrigger value="observatory" disabled={draftObservatory === undefined}>
                 {t('coreEditor.balancer.observatory', { defaultValue: 'Observatory' })}
               </TabsTrigger>
-              <TabsTrigger value="burstObservatory" disabled={burstObservatory === undefined}>
+              <TabsTrigger value="burstObservatory" disabled={draftBurstObservatory === undefined}>
                 {t('coreEditor.balancer.burstObservatory', { defaultValue: 'Burst observatory' })}
               </TabsTrigger>
             </TabsList>
 
-            {observatory ? (
+            {draftObservatory ? (
               <TabsContent value="observatory" className="mt-4 space-y-3 text-start">
                 <div className="flex min-w-0 flex-col gap-2.5">
                   <Label className="text-xs font-medium">
@@ -984,7 +964,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                   <StringTagPicker
                     mode="multi"
                     options={profileTagOptions.outboundTags}
-                    valueMulti={readStringArrayProperty(observatory, 'subjectSelector')}
+                    valueMulti={readStringArrayProperty(draftObservatory, 'subjectSelector')}
                     onChangeMulti={next => patchTopLevelObject('observatory', { subjectSelector: next })}
                     placeholder={t('coreEditor.balancer.subjectSelectorPlaceholder', {
                       defaultValue: 'Select outbound tag prefixes...',
@@ -1001,7 +981,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                     <Input
                       dir="ltr"
                       className="h-9 font-mono text-xs"
-                      value={readStringProperty(observatory, 'probeURL', 'probeUrl')}
+                      value={readStringProperty(draftObservatory, 'probeURL', 'probeUrl')}
                       onChange={e => patchTopLevelObject('observatory', { probeURL: e.target.value.trim() || undefined, probeUrl: undefined })}
                       placeholder="https://www.google.com/generate_204"
                     />
@@ -1013,7 +993,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                     <Input
                       dir="ltr"
                       className="h-9 font-mono text-xs"
-                      value={readStringProperty(observatory, 'probeInterval')}
+                      value={readStringProperty(draftObservatory, 'probeInterval')}
                       onChange={e => patchTopLevelObject('observatory', { probeInterval: e.target.value.trim() || undefined })}
                       placeholder="10m"
                     />
@@ -1023,7 +1003,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                       {t('coreEditor.balancer.observation.enableConcurrency', { defaultValue: 'Enable concurrency' })}
                     </Label>
                     <Switch
-                      checked={readBooleanProperty(observatory, 'enableConcurrency')}
+                      checked={readBooleanProperty(draftObservatory, 'enableConcurrency')}
                       onCheckedChange={checked => patchTopLevelObject('observatory', { enableConcurrency: checked })}
                     />
                   </div>
@@ -1031,8 +1011,8 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
               </TabsContent>
             ) : null}
 
-            {burstObservatory ? (() => {
-              const pingConfig = readJsonObject(burstObservatory.pingConfig)
+            {draftBurstObservatory ? (() => {
+              const pingConfig = readJsonObject(draftBurstObservatory.pingConfig)
               return (
                 <TabsContent value="burstObservatory" className="mt-4 space-y-3 text-start">
                   <div className="flex min-w-0 flex-col gap-2.5">
@@ -1042,7 +1022,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                     <StringTagPicker
                       mode="multi"
                       options={profileTagOptions.outboundTags}
-                      valueMulti={readStringArrayProperty(burstObservatory, 'subjectSelector')}
+                      valueMulti={readStringArrayProperty(draftBurstObservatory, 'subjectSelector')}
                       onChangeMulti={next => patchTopLevelObject('burstObservatory', { subjectSelector: next })}
                       placeholder={t('coreEditor.balancer.subjectSelectorPlaceholder', {
                         defaultValue: 'Select outbound tag prefixes...',
@@ -1061,7 +1041,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                         className="h-9 font-mono text-xs"
                         value={readStringProperty(pingConfig, 'destination')}
                         onChange={e => patchBurstPingConfig({ destination: e.target.value.trim() || undefined })}
-                        placeholder="https://connectivitycheck.gstatic.com/generate_204"
+                        placeholder="https://www.google.com/generate_204"
                       />
                     </div>
                     <div className="flex min-w-0 flex-col gap-2.5 sm:col-span-2">
@@ -1073,7 +1053,7 @@ export function XrayBalancersSection({ headerAddPulse, headerAddEpoch }: XrayBal
                         className="h-9 font-mono text-xs"
                         value={readStringProperty(pingConfig, 'connectivity')}
                         onChange={e => patchBurstPingConfig({ connectivity: e.target.value.trim() })}
-                        placeholder="http://connectivitycheck.platform.hicloud.com/generate_204"
+                        placeholder="https://www.google.com/generate_204"
                       />
                     </div>
                     <div className="flex min-w-0 flex-col gap-2.5">

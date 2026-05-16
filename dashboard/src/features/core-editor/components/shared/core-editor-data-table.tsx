@@ -28,7 +28,7 @@ import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-tabl
 import { cn } from '@/lib/utils'
 import { CoreEditorListItemCard } from '@/features/core-editor/components/shared/core-editor-list-item-card'
 import { CoreEditorSortableGridCard } from '@/features/core-editor/components/shared/core-editor-sortable-grid-card'
-import { CoreEditorRowActionsMenu } from '@/features/core-editor/components/shared/core-editor-row-actions-menu'
+import { CoreEditorRowActionsMenu, type CoreEditorRowAction } from '@/features/core-editor/components/shared/core-editor-row-actions-menu'
 import { Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -122,6 +122,7 @@ export interface CoreEditorDataTableProps<TData> {
   searchPlaceholder?: string
   /** Optional controls rendered next to the grid/list view toggle. */
   toolbarActions?: ReactNode
+  getRowActions?: (row: TData, index: number) => CoreEditorRowAction[]
 }
 
 export function CoreEditorDataTable<TData>({
@@ -143,6 +144,7 @@ export function CoreEditorDataTable<TData>({
   getSearchableText,
   searchPlaceholder,
   toolbarActions,
+  getRowActions,
 }: CoreEditorDataTableProps<TData>) {
   const { t, i18n } = useTranslation()
   const dir = useDirDetection()
@@ -298,13 +300,14 @@ export function CoreEditorDataTable<TData>({
             <CoreEditorRowActionsMenu
               onEdit={() => onRowClick?.(item, originalIdx)}
               onRemove={() => onRemoveRow(originalIdx)}
+              extraActions={getRowActions?.(item, originalIdx)}
               removeDisabled={removeDisabled}
             />
           )
         },
       },
     ]
-  }, [listColumnsSansMenu, displayData, originalIndices, onRowClick, onRemoveRow, removeDisabled])
+  }, [listColumnsSansMenu, displayData, originalIndices, onRowClick, onRemoveRow, getRowActions, removeDisabled])
 
   const empty = emptyLabel ?? t('noResults', { defaultValue: 'No results' })
   const emptyDisplay =
@@ -399,6 +402,7 @@ export function CoreEditorDataTable<TData>({
       <CoreEditorRowActionsMenu
         onEdit={() => onRowClick?.(item, originalIndex)}
         onRemove={() => onRemoveRow(originalIndex)}
+        extraActions={getRowActions?.(item, originalIndex)}
         removeDisabled={removeDisabled}
       />
     )

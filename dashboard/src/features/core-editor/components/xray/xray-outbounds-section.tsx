@@ -15,6 +15,7 @@ import { TcpHeaderObfuscationForm } from '@/features/core-editor/components/shar
 import { CoreEditorDataTable } from '@/features/core-editor/components/shared/core-editor-data-table'
 import { CoreEditorFormDialog } from '@/features/core-editor/components/shared/core-editor-form-dialog'
 import { JsonCodeEditorPanel } from '@/features/core-editor/components/shared/json-code-editor-panel'
+import { OutboundLatencyTestDialog } from '@/features/core-editor/components/xray/outbound-latency-test-dialog'
 import { pruneSockoptObject, XrayStreamSockoptFields } from '@/features/core-editor/components/shared/xray-stream-sockopt-editor'
 import { inferParityFieldMode, outboundScalarParityFieldPrefersFullGridWidth, outboundSettingToString, parseOutboundSettingValue } from '@/features/core-editor/kit/xray-parity-value'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
@@ -37,7 +38,7 @@ import {
   stripSparseOutboundEnvelope,
 } from '@/features/core-editor/kit/outbound-editor-json'
 import { createDefaultOutbound, generateXrayOutboundFromUri, getOutboundFieldVisibility, getOutboundFormCapabilities } from '@pasarguard/xray-config-kit'
-import type { Outbound, Profile } from '@pasarguard/xray-config-kit'
+import type { JsonObject, JsonValue, Outbound, Profile } from '@pasarguard/xray-config-kit'
 import type { XrayGeneratedFormField } from '@pasarguard/xray-config-kit'
 import type { ColumnDef } from '@tanstack/react-table'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -47,7 +48,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
-import { ArrowDownToLine, Cable, KeyRound, Pencil, Plus, RefreshCw, Shield, SlidersHorizontal } from 'lucide-react'
+import { ArrowDownToLine, Cable, Gauge, KeyRound, Pencil, Plus, RefreshCw, Shield, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -188,13 +189,62 @@ function humanizeFieldName(raw: string): string {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function replaceOutbound(profile: Profile, index: number, ob: Outbound): Profile {
-  const list = [...(profile.outbounds ?? [])]
-  list[index] = ob
-  return { ...profile, outbounds: list }
+  return updateOutboundsWithObservationSelectors(profile, outbounds => {
+    const list = [...outbounds]
+    list[index] = ob
+    return list
+  })
 }
 
 function removeOutbound(profile: Profile, index: number): Profile {
-  return { ...profile, outbounds: (profile.outbounds ?? []).filter((_: Outbound, i: number) => i !== index) }
+  return updateOutboundsWithObservationSelectors(profile, outbounds => outbounds.filter((_: Outbound, i: number) => i !== index))
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function uniqueOutboundTags(outbounds: Outbound[] | undefined): string[] {
+  return [...new Set((outbounds ?? []).map(outbound => String(outbound.tag ?? '').trim()).filter(Boolean))]
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.map(item => String(item).trim()).filter(Boolean)
+}
+
+function syncObservationSubjectSelectors(profile: Profile, previousOutbounds: Outbound[] | undefined): Profile {
+  const nextTags = uniqueOutboundTags(profile.outbounds)
+  const previousTags = new Set(uniqueOutboundTags(previousOutbounds))
+  const topLevel = profile.raw?.topLevel
+  let nextTopLevel: Record<string, JsonValue> | undefined
+
+  for (const key of ['observatory', 'burstObservatory'] as const) {
+    const source = topLevel?.[key]
+    if (!isJsonObject(source)) continue
+
+    const current = readStringArray(source.subjectSelector)
+    const preservedCustom = current.filter(selector => !previousTags.has(selector) && !nextTags.includes(selector))
+    const subjectSelector = [...new Set([...current.filter(selector => nextTags.includes(selector)), ...preservedCustom, ...nextTags])]
+
+    nextTopLevel ??= { ...(topLevel ?? {}) }
+    nextTopLevel[key] = { ...source, subjectSelector }
+  }
+
+  if (!nextTopLevel) return profile
+  return {
+    ...profile,
+    raw: {
+      ...(profile.raw ?? {}),
+      topLevel: nextTopLevel,
+    },
+  } as Profile
+}
+
+function updateOutboundsWithObservationSelectors(profile: Profile, mutator: (outbounds: Outbound[]) => Outbound[]): Profile {
+  const previousOutbounds = profile.outbounds ?? []
+  const nextProfile = { ...profile, outbounds: mutator(previousOutbounds) }
+  return syncObservationSubjectSelectors(nextProfile, previousOutbounds)
 }
 
 function outboundSearchHaystack(ob: Outbound): string {
@@ -376,6 +426,7 @@ function FieldRow({ label, children, wide }: { label: string; children: ReactNod
 
 type DialogMode = 'add' | 'edit'
 type OutboundDialogTab = 'form' | 'json'
+type LatencyTestScope = { mode: 'single'; outboundTag: string } | { mode: 'all' }
 
 interface XrayOutboundsSectionProps {
   headerAddPulse?: SectionHeaderAddPulse
@@ -388,6 +439,7 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
   const { t } = useTranslation()
   const dir = useDirDetection()
   const profile = useCoreEditorStore(s => s.xrayProfile)
+  const coreId = useCoreEditorStore(s => s.coreId)
   const updateXrayProfile = useCoreEditorStore(s => s.updateXrayProfile)
   const { assertNoPersistBlockingErrors } = useXrayPersistModifyGuard()
 
@@ -402,10 +454,12 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
   const [outboundDialogTab, setOutboundDialogTab] = useState<OutboundDialogTab>('form')
   const [outboundJsonText, setOutboundJsonText] = useState('')
   const [uriDraft, setUriDraft] = useState('')
+  const [latencyTestScope, setLatencyTestScope] = useState<LatencyTestScope | null>(null)
   /** Bumps when outbound settings shape changes without row identity changing (edit: protocol switch, URI import). */
   const [settingsFormSeed, setSettingsFormSeed] = useState(0)
 
   const outbounds = profile?.outbounds ?? []
+  const hasOutbounds = outbounds.length > 0
 
   const ob = useMemo(() => {
     if (!profile) return undefined
@@ -647,7 +701,7 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
     }
 
     const insertAt = outbounds.length
-    updateXrayProfile(p => ({ ...p, outbounds: [...(p.outbounds ?? []), row] }))
+    updateXrayProfile(p => updateOutboundsWithObservationSelectors(p, current => [...current, row]))
     setSelected(insertAt)
     finalizeDetailClose()
   }
@@ -695,6 +749,23 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
       <CoreEditorDataTable
         columns={columns}
         data={outbounds}
+        toolbarActions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 px-2 sm:px-3"
+            disabled={!hasOutbounds}
+            onClick={() => setLatencyTestScope({ mode: 'all' })}
+            aria-label={t('coreEditor.outbound.latency.testAll', { defaultValue: 'Test all' })}
+            title={t('coreEditor.outbound.latency.testAll', { defaultValue: 'Test all' })}
+          >
+            <Gauge className="h-4 w-4" />
+            <span className="hidden sm:inline">
+              {t('coreEditor.outbound.latency.testAll', { defaultValue: 'Test all' })}
+            </span>
+          </Button>
+        }
         getSearchableText={outboundSearchHaystack}
         getRowId={(_row: Outbound, i: number) => String(i)}
         minRowCount={1}
@@ -721,10 +792,7 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
         }}
         onBulkRemove={indices => {
           const rm = new Set(indices)
-          updateXrayProfile(p => ({
-            ...p,
-            outbounds: (p.outbounds ?? []).filter((_, idx) => !rm.has(idx)),
-          }))
+          updateXrayProfile(p => updateOutboundsWithObservationSelectors(p, current => current.filter((_, idx) => !rm.has(idx))))
           setSelected(0)
         }}
         enableReorder
@@ -732,6 +800,24 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
           updateXrayProfile(p => ({ ...p, outbounds: arrayMove(p.outbounds ?? [], from, to) }))
           setSelected(sel => remapIndexAfterArrayMove(sel, from, to))
         }}
+        getRowActions={row => [
+          {
+            key: 'latency-test',
+            label: t('coreEditor.outbound.latency.menu', { defaultValue: 'Test latency' }),
+            icon: <Gauge className="size-4 shrink-0" />,
+            disabled: !String(row.tag ?? '').trim(),
+            onSelect: () => setLatencyTestScope({ mode: 'single', outboundTag: String(row.tag ?? '') }),
+          },
+        ]}
+      />
+
+      <OutboundLatencyTestDialog
+        open={latencyTestScope !== null}
+        onOpenChange={open => {
+          if (!open) setLatencyTestScope(null)
+        }}
+        scope={latencyTestScope}
+        coreId={coreId}
       />
 
       <CoreEditorFormDialog

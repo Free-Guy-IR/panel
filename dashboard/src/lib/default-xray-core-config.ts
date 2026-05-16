@@ -31,6 +31,17 @@ export const DEFAULT_XRAY_CORE_CONFIG: Record<string, unknown> = {
       tag: 'BLOCK',
     },
   ],
+  burstObservatory: {
+    subjectSelector: ['DIRECT', 'BLOCK'],
+    pingConfig: {
+      destination: 'https://www.google.com/generate_204',
+      connectivity: 'https://www.google.com/generate_204',
+      interval: '1m',
+      sampling: 10,
+      timeout: '5s',
+      httpMethod: 'HEAD',
+    },
+  },
   routing: {
     rules: [
       {

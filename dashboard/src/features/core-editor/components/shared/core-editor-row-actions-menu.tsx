@@ -1,24 +1,28 @@
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useTranslation } from 'react-i18next'
 import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+
+export interface CoreEditorRowAction {
+  key: string
+  label: ReactNode
+  icon?: ReactNode
+  onSelect: () => void
+  disabled?: boolean
+}
 
 export interface CoreEditorRowActionsMenuProps {
   /** Edit opens the detailed editor (same as row click). */
   onEdit: () => void
   onRemove: () => void
+  extraActions?: CoreEditorRowAction[]
   /** When true, delete is shown but not actionable (e.g. minimum list size). */
   removeDisabled?: boolean
   className?: string
 }
 
-export function CoreEditorRowActionsMenu({ onEdit, onRemove, removeDisabled, className }: CoreEditorRowActionsMenuProps) {
+export function CoreEditorRowActionsMenu({ onEdit, onRemove, extraActions = [], removeDisabled, className }: CoreEditorRowActionsMenuProps) {
   const { t } = useTranslation()
 
   const handleEditSelect = (event: Event) => {
@@ -45,6 +49,20 @@ export function CoreEditorRowActionsMenu({ onEdit, onRemove, removeDisabled, cla
             <Pencil className="size-4 shrink-0" />
             {t('edit')}
           </DropdownMenuItem>
+          {extraActions.map(action => (
+            <DropdownMenuItem
+              key={action.key}
+              className="gap-2"
+              disabled={action.disabled}
+              onSelect={event => {
+                event.stopPropagation()
+                if (!action.disabled) action.onSelect()
+              }}
+            >
+              {action.icon}
+              {action.label}
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={removeDisabled}
