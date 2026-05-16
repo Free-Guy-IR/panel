@@ -11,7 +11,7 @@ function isEmptyCompiledConfig(config: unknown): boolean {
 }
 
 function prepareProfileForKit(profile: Profile): Profile {
-  return sanitizeProfileInbounds(normalizeProfile(JSON.parse(JSON.stringify(profile)) as Profile))
+  return stripRealityInboundXverForKit(sanitizeProfileInbounds(normalizeProfile(JSON.parse(JSON.stringify(profile)) as Profile)))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -28,6 +28,12 @@ function isJsonValue(value: unknown): value is JsonValue {
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return isRecord(value) ? value : null
+}
+
+function realityXverValue(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return undefined
+  return n
 }
 
 function inboundSettingString(rawInbound: unknown, key: string): string | undefined {
@@ -52,6 +58,42 @@ function patchVlessInboundEncryptionFromRaw(profile: Profile, raw: unknown): Pro
   return { ...profile, inbounds }
 }
 
+function patchRealityInboundXverFromRaw(profile: Profile, raw: unknown): Profile {
+  if (!isRecord(raw)) return profile
+  const rawInbounds = raw.inbounds
+  if (!Array.isArray(rawInbounds)) return profile
+
+  const inbounds = profile.inbounds.map((inbound, index) => {
+    const security = asRecord((inbound as { security?: unknown }).security)
+    if (security?.type !== 'reality') return inbound
+    const rawInbound = asRecord(rawInbounds[index])
+    const streamSettings = asRecord(rawInbound?.streamSettings)
+    const realitySettings = asRecord(streamSettings?.realitySettings)
+    const xver = realityXverValue(realitySettings?.xver)
+    if (xver === undefined) return inbound
+    return {
+      ...inbound,
+      security: {
+        ...security,
+        xver,
+      },
+    } as unknown as typeof inbound
+  })
+
+  return { ...profile, inbounds }
+}
+
+function stripRealityInboundXverForKit(profile: Profile): Profile {
+  const inbounds = profile.inbounds.map(inbound => {
+    const security = asRecord((inbound as { security?: unknown }).security)
+    if (security?.type !== 'reality' || !Object.prototype.hasOwnProperty.call(security, 'xver')) return inbound
+    const { xver: _xver, ...restSecurity } = security
+    return { ...inbound, security: restSecurity } as unknown as typeof inbound
+  })
+
+  return { ...profile, inbounds }
+}
+
 function applyVlessInboundEncryptionToCompiledConfig(profile: Profile, config: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(config.inbounds)) return config
   const inbounds = config.inbounds.map((compiledInbound, index) => {
@@ -67,6 +109,29 @@ function applyVlessInboundEncryptionToCompiledConfig(profile: Profile, config: R
     return { ...compiledInbound, settings }
   })
   return { ...config, inbounds }
+}
+
+function applyRealityInboundXverToCompiledConfig(profile: Profile, config: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(config.inbounds)) return config
+
+  let changed = false
+  const inbounds = config.inbounds.map((compiledInbound, index) => {
+    if (!isRecord(compiledInbound)) return compiledInbound
+    const profileInbound = profile.inbounds?.[index]
+    const security = asRecord((profileInbound as { security?: unknown } | undefined)?.security)
+    if (security?.type !== 'reality') return compiledInbound
+    const xver = realityXverValue(security.xver)
+    if (xver === undefined) return compiledInbound
+
+    const streamSettings = isRecord(compiledInbound.streamSettings) ? { ...compiledInbound.streamSettings } : {}
+    const realitySettings = isRecord(streamSettings.realitySettings) ? { ...streamSettings.realitySettings } : {}
+    realitySettings.xver = xver
+    streamSettings.realitySettings = realitySettings
+    changed = true
+    return { ...compiledInbound, streamSettings }
+  })
+
+  return changed ? { ...config, inbounds } : config
 }
 
 const UNMODELED_TOP_LEVEL_KEYS_TO_PRESERVE = [
@@ -137,7 +202,10 @@ export type XrayPersistValidationResult =
 export function importRawToProfile(raw: unknown): { profile: Profile; issues: Issue[] } {
   const imported = importXrayConfig(raw)
   const profile = preserveUnmodeledTopLevelSections(
-    patchVlessInboundEncryptionFromRaw(sanitizeProfileInbounds(normalizeProfile(imported.profile)), raw),
+    patchRealityInboundXverFromRaw(
+      patchVlessInboundEncryptionFromRaw(sanitizeProfileInbounds(normalizeProfile(imported.profile)), raw),
+      raw,
+    ),
     raw,
   )
 
@@ -147,9 +215,12 @@ export function importRawToProfile(raw: unknown): { profile: Profile; issues: Is
 export function profileToPersistedConfig(profile: Profile): Record<string, unknown> {
   const prepared = prepareProfileForKit(profile)
   const { config } = buildXrayConfig(prepared, { mode: 'permissive' })
-  const result = applyVlessInboundEncryptionToCompiledConfig(
-    prepared,
-    applyInboundSockoptToCompiledConfig(prepared, config as Record<string, unknown>),
+  const result = applyRealityInboundXverToCompiledConfig(
+    profile,
+    applyVlessInboundEncryptionToCompiledConfig(
+      prepared,
+      applyInboundSockoptToCompiledConfig(prepared, config as Record<string, unknown>),
+    ),
   )
 
   return result

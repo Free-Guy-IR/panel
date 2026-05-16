@@ -18,6 +18,7 @@ export function realityInboundZodTriggerFieldNames(): string[] {
     'sec_shortIds',
     'sec_shortId',
     INBOUND_FORM_FIELD_SEC_TARGET,
+    'sec_xver',
   ]
 }
 
@@ -148,6 +149,20 @@ export function createInboundDialogSchema(caps: Caps, t: TFunction) {
           message: required(targetLabel),
           path: [INBOUND_FORM_FIELD_SEC_TARGET],
         })
+      }
+
+      const xverValue = typeof raw.sec_xver === 'string' ? raw.sec_xver.trim() : ''
+      if (xverValue !== '') {
+        const xver = Number(xverValue)
+        if (!Number.isFinite(xver) || !Number.isInteger(xver) || xver < 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t('coreEditor.inbound.validation.realityXverRange', {
+              defaultValue: 'REALITY xver must be a non-negative whole number.',
+            }),
+            path: ['sec_xver'],
+          })
+        }
       }
     })
     .superRefine((data, ctx) => {

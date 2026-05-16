@@ -43,7 +43,7 @@ import {
   type VlessBuilderOptions,
 } from '@/lib/xray-generation'
 import { createDefaultInbound, createDefaultInboundForProtocol, getInboundFieldVisibility, getInboundFormCapabilities } from '@pasarguard/xray-config-kit'
-import type { Fallback, Inbound, InboundPort, Profile, Security, ShadowsocksMethod, Transport } from '@pasarguard/xray-config-kit'
+import type { Fallback, Inbound, InboundPort, Profile, Security, ShadowsocksMethod, Transport, XrayGeneratedFormField } from '@pasarguard/xray-config-kit'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { Cable, KeyRound, Pencil, Plus, RefreshCcw, RefreshCw, Shield, Trash2 } from 'lucide-react'
@@ -79,6 +79,7 @@ function listenAddressForForm(listen: string | undefined): string {
 
 const SECURITY_FIELD_PREFIX = 'sec_'
 const TRANSPORT_FIELD_PREFIX = 'tr_'
+const REALITY_XVER_FIELD: XrayGeneratedFormField = { json: 'xver', go: 'Xver', type: 'uint64' }
 
 /** Inbound TLS booleans: shown in a 2-column grid after TLS fallbacks (see xray-config-kit `securityFieldOrderByType.tls`). */
 const INBOUND_TLS_BOOLEAN_GRID_KEYS = new Set<string>(['allowInsecure', 'enableSessionResumption', 'disableSystemRoot', 'rejectUnknownSni'])
@@ -220,6 +221,18 @@ function getInboundTransportRecord(inbound: Inbound): Record<string, unknown> | 
 function getInboundSecurityRecord(inbound: Inbound): Record<string, unknown> | null {
   if (!('security' in inbound) || inbound.security?.type === 'none') return null
   return inbound.security as unknown as Record<string, unknown>
+}
+
+type InboundFormCapabilities = ReturnType<typeof getInboundFormCapabilities>
+
+function getInboundSecurityFieldOrder(caps: InboundFormCapabilities, securityType: string): readonly string[] {
+  const order = caps.securityFieldOrderByType[securityType] ?? []
+  if (securityType !== 'reality' || order.includes('xver')) return order
+  return ['xver', ...order]
+}
+
+function getInboundSecurityFieldDefinition(caps: InboundFormCapabilities, securityType: string, key: string): XrayGeneratedFormField | undefined {
+  return caps.securityFieldDefinitions[securityType]?.[key] ?? (securityType === 'reality' && key === 'xver' ? REALITY_XVER_FIELD : undefined)
 }
 
 const VLESS_INBOUND_FLOW_VALUES = ['xtls-rprx-vision'] as const
@@ -940,7 +953,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     const security = getInboundSecurityRecord(row)
     const sniffing = 'sniffing' in row && row.sniffing && typeof row.sniffing === 'object' && !Array.isArray(row.sniffing) ? (row.sniffing as Record<string, unknown>) : null
     const securityType = security?.type
-    const securityOrder = typeof securityType === 'string' ? (caps.securityFieldOrderByType[securityType] ?? []) : []
+    const securityOrder = typeof securityType === 'string' ? getInboundSecurityFieldOrder(caps, securityType) : []
 
     const next: InboundDialogFormValues = {
       protocol: row.protocol,
@@ -997,7 +1010,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     }
 
     for (const key of securityOrder) {
-      const def = caps.securityFieldDefinitions[String(securityType)]?.[key]
+      const def = getInboundSecurityFieldDefinition(caps, String(securityType), key)
       if (def) next[securityFieldName(key)] = outboundSettingToString(security?.[key], def)
     }
 
@@ -1126,8 +1139,11 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
   )
   const securityFieldOrder = useMemo(() => {
     if (!inboundSecurityType) return []
-    const order = caps.securityFieldOrderByType[inboundSecurityType] ?? []
-    const defs = caps.securityFieldDefinitions[inboundSecurityType]
+    const order = getInboundSecurityFieldOrder(caps, inboundSecurityType)
+    const defs = {
+      ...(caps.securityFieldDefinitions[inboundSecurityType] ?? {}),
+      ...(inboundSecurityType === 'reality' ? { xver: REALITY_XVER_FIELD } : {}),
+    }
     if (!defs) return order
     return [...order].sort((a, b) => {
       const defA = defs[a]
@@ -2096,8 +2112,8 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     const security = getInboundSecurityRecord(next)
     const securityType = security?.type
     if (typeof securityType !== 'string') return
-    for (const key of caps.securityFieldOrderByType[securityType] ?? []) {
-      const def = caps.securityFieldDefinitions[securityType]?.[key]
+    for (const key of getInboundSecurityFieldOrder(caps, securityType)) {
+      const def = getInboundSecurityFieldDefinition(caps, securityType, key)
       if (def) form.setValue(securityFieldName(key), outboundSettingToString(security?.[key], def), syncOpts)
     }
   }
@@ -3581,7 +3597,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                           if (inboundSecurityType === 'tls' && (jsonKey === 'echServerKeys' || jsonKey === 'echConfigList' || jsonKey === 'echForceQuery')) {
                             return null
                           }
-                          const def = caps.securityFieldDefinitions[inboundSecurityType]?.[jsonKey]
+                          const def = getInboundSecurityFieldDefinition(caps, inboundSecurityType, jsonKey)
                           if (!def) return null
                           const name = securityFieldName(jsonKey)
                           const wide = inferParityFieldMode(def) !== 'scalar'
