@@ -2647,7 +2647,11 @@
       "autoApplyHint": "有效的 JSON 会在您停止输入后自动合并到草稿。",
       "diffModeHint": "绿色与红色行分别表示相对上次保存版本的增加与删除。",
       "noDiffChanges": "无变更。",
-      "diffFullscreenTitle": "与上次保存的差异"
+      "diffFullscreenTitle": "与上次保存的差异",
+      "tabs": {
+        "all": "全部",
+        "routingRules": "路由规则"
+      }
     },
     "command": {
       "placeholder": "跳转到分区…",

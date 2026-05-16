@@ -2600,7 +2600,11 @@
       "autoApplyHint": "JSON معتبر پس از توقف تایپ به‌طور خودکار در پیش‌نویس ادغام می‌شود.",
       "diffModeHint": "خطوط سبز و قرمز افزودن‌ها و حذف‌ها را نسبت به آخرین نسخهٔ ذخیره‌شده نشان می‌دهند.",
       "noDiffChanges": "بدون تغییر.",
-      "diffFullscreenTitle": "تفاوت با آخرین ذخیره"
+      "diffFullscreenTitle": "تفاوت با آخرین ذخیره",
+      "tabs": {
+        "all": "همه",
+        "routingRules": "قوانین مسیریابی"
+      }
     },
     "command": {
       "placeholder": "پرش به بخش…",

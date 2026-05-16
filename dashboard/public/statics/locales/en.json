@@ -2688,7 +2688,11 @@
       "autoApplyHint": "Valid JSON is merged into the draft automatically after you stop typing.",
       "diffModeHint": "Green and red lines show additions and removals compared to the last saved version.",
       "noDiffChanges": "No changes.",
-      "diffFullscreenTitle": "Diff vs last saved"
+      "diffFullscreenTitle": "Diff vs last saved",
+      "tabs": {
+        "all": "All",
+        "routingRules": "Routing Rules"
+      }
     },
     "command": {
       "placeholder": "Jump to section…",
