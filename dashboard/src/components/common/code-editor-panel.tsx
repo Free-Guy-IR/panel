@@ -263,7 +263,7 @@ export function CodeEditorPanel({
           onPointerDownOutside={e => e.preventDefault()}
           onInteractOutside={e => e.preventDefault()}
         >
-          <div className="hidden shrink-0 items-center justify-between border-b bg-background px-3 py-2.5 sm:flex sm:rounded-t-lg">
+          <div className="hidden shrink-0 items-center justify-end border-b bg-background px-3 py-2.5 sm:flex sm:rounded-t-lg">
             <Button
               type="button"
               size="icon"
