@@ -1,7 +1,7 @@
 from datetime import datetime as dt
 from enum import Enum
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.utils.helpers import ensure_datetime_timezone
 
@@ -79,7 +79,7 @@ class UserCountMetricStat(BaseModel):
 
 class UserCountMetricStatsList(StatList):
     metric: UserCountMetric
-    count_during_period: int
+    count_during_period: int = Field(default=0)
     stats: dict[int, list[UserCountMetricStat]]
 
 
