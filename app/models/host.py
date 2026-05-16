@@ -80,6 +80,20 @@ class XMuxSettings(BaseModel):
     )
     h_keep_alive_period: int | None = Field(None, serialization_alias="hKeepAlivePeriod")
 
+    @field_validator(
+        "max_concurrency",
+        "max_connections",
+        "c_max_reuse_times",
+        "h_max_reusable_secs",
+        "h_max_request_times",
+        mode="before",
+    )
+    @classmethod
+    def normalize_numeric_or_range_fields(cls, value):
+        if isinstance(value, int):
+            return str(value)
+        return value
+
 
 class XHttpSettings(BaseModel):
     mode: XHttpModes | None = Field(default=None)
@@ -108,6 +122,19 @@ class XHttpSettings(BaseModel):
         if v == "":
             return None
         return v
+
+    @field_validator(
+        "x_padding_bytes",
+        "uplink_chunk_size",
+        "sc_max_each_post_bytes",
+        "sc_min_posts_interval_ms",
+        mode="before",
+    )
+    @classmethod
+    def normalize_numeric_or_range_fields(cls, value):
+        if isinstance(value, int):
+            return str(value)
+        return value
 
     @field_validator(
         "x_padding_key",
