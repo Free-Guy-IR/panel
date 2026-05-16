@@ -8,13 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CoreCommandMenu } from '@/features/core-editor/components/shared/core-command-menu'
 import { CoreEditorLayout } from '@/features/core-editor/components/shell/core-editor-layout'
 import { CoreSectionTabsPlaceholder } from '@/features/core-editor/components/shell/core-section-sidebar'
-import { filterValidationListBlockingErrors, ValidationSummary, type ValidationListItem } from '@/features/core-editor/components/shared/validation-summary'
+import { ValidationSummary, type ValidationListItem } from '@/features/core-editor/components/shared/validation-summary'
 import type { SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
 import { useXrayPersistValidationItems } from '@/features/core-editor/hooks/use-xray-persist-validation-items'
 import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wireguard-core-editor'
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
-import { validateProfileForPersist } from '@/features/core-editor/kit/xray-adapter'
-import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
+import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
+import { draftToPersistedConfig, getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import type { WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
@@ -284,21 +284,11 @@ export default function CoreEditorPage() {
       toast.error(t('coreEditor.nameRequired', { defaultValue: 'Name is required' }))
       return
     }
-    const blockingPreSaveIssues = filterValidationListBlockingErrors(preSaveIssues)
-    if (blockingPreSaveIssues.length > 0) {
-      toast.error(t('coreEditor.fixValidation', { defaultValue: 'Fix validation errors before saving' }))
-      return
-    }
     setSaving(true)
     try {
       if (kind === 'wg') {
         if (!wgDraft) return
-        const r = getWireGuardPersistConfig(wgDraft)
-        if (!r.ok) {
-          toast.error(t('coreEditor.fixValidation', { defaultValue: 'Fix validation errors before saving' }))
-          return
-        }
-        const cfg = r.config
+        const cfg = draftToPersistedConfig(wgDraft)
         if (isNew) {
           const res = await createMutation.mutateAsync({
             data: {
@@ -336,18 +326,7 @@ export default function CoreEditorPage() {
       }
 
       if (kind === 'xray' && xrayProfile) {
-        const vr = validateProfileForPersist(xrayProfile)
-        if (!vr.ok) {
-          const n = vr.strictBlockers.length + vr.coreKitIssues.length
-          toast.error(
-            t('coreEditor.validationFailedToast', {
-              count: n,
-              defaultValue: `Fix ${n} validation issue(s) before saving.`,
-            }),
-          )
-          return
-        }
-        const cfg = vr.config
+        const cfg = profileToPersistedConfig(xrayProfile)
         if (isNew) {
           const res = await createMutation.mutateAsync({
             data: {
