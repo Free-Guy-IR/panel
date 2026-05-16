@@ -97,9 +97,9 @@ export function VlessAdvancedGenerationModal({
             <span className="truncate">{t('coreConfigModal.vlessAdvancedSettings', { defaultValue: 'VLESS Advanced Settings' })}</span>
           </DialogTitle>
         </DialogHeader>
-        <div className="-mr-4 max-h-[80dvh] space-y-4 overflow-y-auto px-2 pr-4 sm:max-h-[75dvh]">
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.chooseAuthentication')}</Label>
+        <div className="-mr-4 max-h-[80dvh] space-y-5 overflow-y-auto px-2 pr-4 sm:max-h-[75dvh]">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs">{t('coreConfigModal.chooseAuthentication')}</p>
             <Select value={selectedVariant} onValueChange={handleVariantChange}>
               <SelectTrigger className="h-9 w-full">
                 <SelectValue />
@@ -121,9 +121,9 @@ export function VlessAdvancedGenerationModal({
             </Select>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex flex-1 flex-col justify-end space-y-2">
-              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessHandshakeLabel')}</Label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <Label>{t('coreConfigModal.vlessHandshakeLabel')}</Label>
               <Select value={vlessOptions.handshakeMethod} onValueChange={value => setVlessOptions(prev => ({ ...prev, handshakeMethod: value }))}>
                 <SelectTrigger>
                   <SelectValue />
@@ -138,9 +138,9 @@ export function VlessAdvancedGenerationModal({
               </Select>
             </div>
 
-            <div className="flex flex-1 flex-col justify-end space-y-2">
+            <div className="flex flex-col gap-3">
               <div className="flex items-center gap-1.5">
-                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessEncryptionLabel')}</Label>
+                <Label>{t('coreConfigModal.vlessEncryptionLabel')}</Label>
                 <VlessEncryptionExplanationPopover />
               </div>
               <Select value={vlessOptions.encryptionMethod} onValueChange={value => setVlessOptions(prev => ({ ...prev, encryptionMethod: value }))}>
@@ -158,9 +158,9 @@ export function VlessAdvancedGenerationModal({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessServerTicket')}</Label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <Label>{t('coreConfigModal.vlessServerTicket')}</Label>
               <Input
                 value={vlessOptions.serverTicket}
                 placeholder="600s or 100-500s"
@@ -169,8 +169,8 @@ export function VlessAdvancedGenerationModal({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.vlessClientTicket')}</Label>
+            <div className="flex flex-col gap-3">
+              <Label>{t('coreConfigModal.vlessClientTicket')}</Label>
               <Select value={vlessOptions.clientTicket} onValueChange={value => setVlessOptions(prev => ({ ...prev, clientTicket: value }))}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
@@ -186,11 +186,11 @@ export function VlessAdvancedGenerationModal({
             </div>
           </div>
 
-          <div className="space-y-3">
-            <Label className="text-xs font-semibold tracking-wide text-muted-foreground">{t('coreConfigModal.padding', { defaultValue: 'Padding' })}</Label>
+          <div className="flex flex-col gap-4">
+            <Label>{t('coreConfigModal.padding', { defaultValue: 'Padding' })}</Label>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id={serverPadId}
@@ -223,7 +223,7 @@ export function VlessAdvancedGenerationModal({
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id={clientPadId}
