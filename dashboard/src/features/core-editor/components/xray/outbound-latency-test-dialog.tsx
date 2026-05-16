@@ -212,11 +212,11 @@ export function OutboundLatencyTestDialog({ open, onOpenChange, scope, coreId }:
 
         {!isSingleMode ? (
           <div className="grid overflow-hidden rounded-md border sm:grid-cols-3">
-          <div className="border-b p-3 sm:border-r sm:border-b-0">
+          <div className="border-b p-3 sm:border-e sm:border-b-0">
             <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{t('coreEditor.outbound.latency.total', { defaultValue: 'Total' })}</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{sortedLatencies.length}</div>
           </div>
-          <div className="border-b p-3 sm:border-r sm:border-b-0">
+          <div className="border-b p-3 sm:border-e sm:border-b-0">
             <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{t('coreEditor.outbound.latency.alive', { defaultValue: 'Alive' })}</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">
               {aliveCount}/{sortedLatencies.length || 0}
@@ -224,7 +224,7 @@ export function OutboundLatencyTestDialog({ open, onOpenChange, scope, coreId }:
           </div>
           <div className="p-3">
             <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{t('coreEditor.outbound.latency.average', { defaultValue: 'Average delay' })}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{averageDelay === null ? '-' : `${averageDelay} ms`}</div>
+            <div dir="ltr" className="mt-1 text-lg font-semibold tabular-nums">{averageDelay === null ? '-' : `${averageDelay} ms`}</div>
           </div>
           </div>
         ) : null}
@@ -265,7 +265,7 @@ export function OutboundLatencyTestDialog({ open, onOpenChange, scope, coreId }:
                           </div>
                         ) : null}
                       </div>
-                      <Badge variant="outline" className={cn('w-fit shrink-0 font-mono text-xs', getLatencyClassName(health))}>
+                      <Badge dir="ltr" variant="outline" className={cn('w-fit shrink-0 font-mono text-xs', getLatencyClassName(health))}>
                         {!item.alive || item.delay < 0 ? t('coreEditor.outbound.latency.unreachable', { defaultValue: 'Unreachable' }) : `${item.delay} ms`}
                       </Badge>
                     </div>

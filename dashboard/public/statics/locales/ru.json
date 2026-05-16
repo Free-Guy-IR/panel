@@ -3064,6 +3064,7 @@
   "clearAllFilters": "Очистить все фильтры",
   "activeFilters": "активных",
   "loading": "Загрузка...",
+  "never": "Никогда",
   "all": "Все",
   "hosts.filters.userStatus": "Правила статуса пользователя",
   "hosts.filters.userStatusDescription": "Фильтрует хосты по заданным статусам пользователей (активен, на паузе, ограничен и т.д.).",

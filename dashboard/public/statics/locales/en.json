@@ -924,6 +924,7 @@
   "header.nodeSettings": "Node Settings",
   "header.nodesUsage": "Nodes Usage",
   "loading": "Loading...",
+  "never": "Never",
   "noResults": "No results found",
   "noAdminsFound": "No admins found",
   "emptyState": {
