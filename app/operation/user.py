@@ -4,11 +4,11 @@ import secrets
 import warnings
 from collections import Counter
 from datetime import datetime as dt, timedelta as td, timezone as tz
+
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from config import usage_settings
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
@@ -79,18 +79,18 @@ from app.models.user import (
     UserResponse,
     UserSimple,
     UserSimpleListQuery,
-    UserUsageQuery,
     UsersResponse,
     UsersSimpleResponse,
-    UsersUsageQuery,
     UserSubscriptionUpdateChart,
     UserSubscriptionUpdateChartSegment,
     UserSubscriptionUpdateList,
+    UsersUsageQuery,
+    UserUsageQuery,
     WireGuardPeerIPsReallocateResponse,
 )
 from app.node.sync import remove_user as sync_remove_user, sync_user, sync_users
 from app.operation import BaseOperation, OperatorType
-from app.settings import subscription_settings, hwid_settings
+from app.settings import hwid_settings, subscription_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
 from app.utils.wireguard import (
@@ -101,7 +101,7 @@ from app.utils.wireguard import (
     prepare_wireguard_proxy_settings,
     prepare_wireguard_proxy_settings_with_allocator,
 )
-from config import subscription_env_settings, wireguard_settings
+from config import subscription_env_settings, usage_settings, wireguard_settings
 
 logger = get_logger("user-operation")
 
@@ -343,9 +343,9 @@ class UserOperation(BaseOperation):
 
         return user
 
-    async def _modify_user(
+    async def _prepare_modified_user(
         self, db: AsyncSession, db_user: User, modified_user: UserModify, admin: AdminDetails
-    ) -> UserResponse:
+    ):
         if modified_user.hwid_limit is not None and modified_user.hwid_limit > 0:
             from app.db.crud.hwid import get_user_hwid_count
 
@@ -373,8 +373,6 @@ class UserOperation(BaseOperation):
         if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
             await self.get_validated_user_template(db, modified_user.next_plan.user_template_id)
 
-        old_status = db_user.status
-
         effective_groups = validated_groups if validated_groups is not None else db_user.groups
         current_proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
         current_proxy_settings_data = current_proxy_settings.dict()
@@ -384,7 +382,6 @@ class UserOperation(BaseOperation):
             else ProxyTable.model_validate(current_proxy_settings_data)
         )
 
-        # Check if peer_ips have actually changed to avoid expensive DB scans
         old_peer_ips = set(current_proxy_settings.wireguard.peer_ips or [])
         new_peer_ips = set(proxy_settings_to_prepare.wireguard.peer_ips or [])
         peer_ips_changed = old_peer_ips != new_peer_ips
@@ -398,6 +395,19 @@ class UserOperation(BaseOperation):
         )
         if modified_user.proxy_settings is not None or prepared_proxy_settings.dict() != current_proxy_settings_data:
             modified_user.proxy_settings = prepared_proxy_settings
+
+        return validated_groups
+
+    async def _apply_modified_user(
+        self,
+        db: AsyncSession,
+        db_user: User,
+        modified_user: UserModify,
+        admin: AdminDetails,
+        *,
+        validated_groups=None,
+    ) -> UserNotificationResponse:
+        old_status = db_user.status
 
         db_user = await modify_user(db, db_user, modified_user, groups=validated_groups)
         user = await self.update_user(db_user)
@@ -415,9 +425,15 @@ class UserOperation(BaseOperation):
 
         return user
 
+    async def _modify_user(
+        self, db: AsyncSession, db_user: User, modified_user: UserModify, admin: AdminDetails
+    ) -> UserNotificationResponse:
+        validated_groups = await self._prepare_modified_user(db, db_user, modified_user, admin)
+        return await self._apply_modified_user(db, db_user, modified_user, admin, validated_groups=validated_groups)
+
     async def modify_user(
         self, db: AsyncSession, username: str, modified_user: UserModify, admin: AdminDetails
-    ) -> UserResponse:
+    ) -> UserNotificationResponse:
         warnings.warn(
             "modify_user(username, ...) is deprecated and will be removed in v6.0.0. "
             "Use modify_user_by_id(user_id, ...).",
@@ -990,7 +1006,7 @@ class UserOperation(BaseOperation):
         return user_args
 
     @staticmethod
-    def apply_settings(user_args: UserCreate | UserModify, template: UserTemplate) -> dict:
+    def apply_settings(user_args: UserCreate | UserModify, template: UserTemplate) -> UserCreate | UserModify:
         if template.extra_settings:
             method = template.extra_settings.get("method", None)
 
@@ -1062,6 +1078,7 @@ class UserOperation(BaseOperation):
             await self.raise_error(message=error_messages, code=400)
 
         modify_user = self.apply_settings(modify_user, user_template)
+        validated_groups = await self._prepare_modified_user(db, db_user, modify_user, admin)
 
         if user_template.reset_usages:
             suppress_reset_status_change = (
@@ -1074,7 +1091,7 @@ class UserOperation(BaseOperation):
                 emit_status_change_notification=not suppress_reset_status_change,
             )
 
-        return await self._modify_user(db, db_user, modify_user, admin)
+        return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
 
     async def modify_user_with_template(
         self, db: AsyncSession, username: str, modified_template: ModifyUserByTemplate, admin: AdminDetails
