@@ -268,7 +268,7 @@ class StandardLinks(BaseSubscription):
             "headerType": getattr(inbound.transport_config, "header_type", "none"),
         }
 
-        if inbound.flow_enabled and (flow := inbound.inbound_flow):
+        if flow := inbound.inbound_flow:
             payload["flow"] = flow
 
         self._apply_transport_settings(payload, "vless", inbound, path)

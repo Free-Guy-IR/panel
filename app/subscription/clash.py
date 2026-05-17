@@ -432,7 +432,7 @@ class ClashMetaConfiguration(ClashConfiguration):
         if inbound.encryption != "none":
             node["encryption"] = inbound.encryption
 
-        if inbound.flow_enabled and (flow := inbound.inbound_flow):
+        if flow := inbound.inbound_flow:
             node["flow"] = flow
 
         self._apply_tls(node, inbound.tls_config, "vless")

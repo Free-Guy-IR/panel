@@ -342,19 +342,6 @@ async def _prepare_subscription_inbound_data(
             random_user_agent=host.random_user_agent,
         )
 
-    # Compute flow_enabled: VLESS flow is serialized for TLS/REALITY or for
-    # security=none when the inbound has VLESS encryption.
-    header_type = getattr(transport_config, "header_type", "none")
-    flow_security_enabled = tls_value in ("tls", "reality") or (
-        tls_value in ("", "none", None) and encryption not in ("", "none", None)
-    )
-    flow_enabled = (
-        protocol == "vless"
-        and flow_security_enabled
-        and network in ("tcp", "raw", "kcp")
-        and header_type != "http"
-    )
-
     return SubscriptionInboundData(
         remark=host.remark,
         inbound_tag=host.inbound_tag,
@@ -371,7 +358,6 @@ async def _prepare_subscription_inbound_data(
         encryption=encryption,
         vless_route=host.vless_route,
         inbound_flow=inbound_flow,
-        flow_enabled=flow_enabled,
         random_user_agent=host.random_user_agent,
         use_sni_as_host=host.use_sni_as_host,
         fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
