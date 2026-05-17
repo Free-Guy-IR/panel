@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi import status
 from sqlalchemy import func, select, update
 
+from app.db.crud.hwid import register_user_hwid
 from app.db.models import NodeUserUsage, User
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
 from app.models.settings import ConfigFormat, SubRule, Subscription
@@ -1925,6 +1926,51 @@ def test_modify_user_with_template(access_token):
         assert response.json()["status"] == template["status"]
     finally:
         delete_user(access_token, username)
+        delete_user_template(access_token, template["id"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_modify_user_with_template_does_not_reset_usage_when_hwid_limit_is_invalid(access_token):
+    core, groups = setup_groups(access_token, 1)
+    template = create_user_template(access_token, group_ids=[groups[0]["id"]], hwid_limit=2, reset_usages=True)
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_template_hwid_limit"), "hwid_limit": 3},
+    )
+
+    async def _seed_user_state():
+        async with TestSession() as session:
+            db_user = (await session.execute(select(User).where(User.id == user["id"]))).scalar_one()
+            db_user.used_traffic = 1234
+            await register_user_hwid(session, user["id"], "device-1")
+            await register_user_hwid(session, user["id"], "device-2")
+            await register_user_hwid(session, user["id"], "device-3")
+            await session.refresh(db_user)
+            return db_user.used_traffic
+
+    try:
+        assert asyncio.run(_seed_user_state()) == 1234
+
+        response = client.put(
+            f"/api/user/from_template/{user['username']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"user_template_id": template["id"]},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Cannot lower HWID limit below current device count" in response.json()["detail"]
+
+        async def _get_user_state():
+            async with TestSession() as session:
+                db_user = (await session.execute(select(User).where(User.id == user["id"]))).scalar_one()
+                return db_user.used_traffic, db_user.hwid_limit
+
+        used_traffic, hwid_limit = asyncio.run(_get_user_state())
+        assert used_traffic == 1234
+        assert hwid_limit == 3
+    finally:
+        delete_user(access_token, user["username"])
         delete_user_template(access_token, template["id"])
         cleanup_groups(access_token, core, groups)
 
