@@ -4,6 +4,8 @@ System CLI Module
 Handles system status and information through the command line interface.
 """
 
+from datetime import timedelta
+
 from rich.panel import Panel
 
 from app.db.base import GetDB
@@ -19,10 +21,12 @@ class SystemCLI(BaseCLI):
         system_op = get_system_operation()
         stats = await system_op.get_system_stats(db, SYSTEM_ADMIN)
 
+        uptime_str = str(timedelta(seconds=int(stats.uptime_seconds)))
         status_text = (
             f"[bold]System Statistics[/bold]\n\n"
             f"CPU Usage: [green]{stats.cpu_usage:.1f}%[/green]\n"
             f"Memory Usage: [green]{stats.mem_used / stats.mem_total * 100:.1f}%[/green] "
+            f"Disk Usage: [green]{stats.disk_used / stats.disk_total * 100:.1f}%[/green]\n"
             f"([cyan]{readable_size(stats.mem_used)}[/cyan] / [cyan]{readable_size(stats.mem_total)}[/cyan])\n"
             f"CPU Cores: [magenta]{stats.cpu_cores}[/magenta]\n"
             f"Total Users: [blue]{stats.total_user}[/blue]\n"
@@ -33,7 +37,8 @@ class SystemCLI(BaseCLI):
             f"Expired Users: [red]{stats.expired_users}[/red]\n"
             f"Limited Users: [yellow]{stats.limited_users}[/yellow]\n"
             f"Data Usage (In): [blue]{readable_size(stats.incoming_bandwidth)}[/blue]\n"
-            f"Data Usage (Out): [blue]{readable_size(stats.outgoing_bandwidth)}[/blue]"
+            f"Data Usage (Out): [blue]{readable_size(stats.outgoing_bandwidth)}[/blue]\n"
+            f"Uptime: [green]{uptime_str}[/green]\n"
         )
 
         panel = Panel(
