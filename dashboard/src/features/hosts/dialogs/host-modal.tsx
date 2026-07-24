@@ -1665,6 +1665,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     </AccordionContent>
                   </AccordionItem>
 
+                  {selectedInbound?.protocol !== 'hysteria2' && (
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="transport">
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
@@ -2816,6 +2817,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                       </div>
                     </AccordionContent>
                   </AccordionItem>
+                  )}
                   {renderCamouflageSection()}
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="mux">
                     <AccordionTrigger>
