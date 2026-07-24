@@ -48,6 +48,7 @@ class SingBoxConfiguration(BaseSubscription):
             "trojan": self._build_trojan,
             "shadowsocks": self._build_shadowsocks,
             "hysteria": self._build_hysteria,
+            "hysteria2": self._build_hysteria2,
             "wireguard": self._build_wireguard,
         }
 
@@ -358,6 +359,19 @@ class SingBoxConfiguration(BaseSubscription):
         if inbound.tls_config.tls in ("tls", "reality"):
             config["tls"] = self._apply_tls(inbound.tls_config, inbound.fragment_settings)
 
+        return self._normalize_and_remove_none_values(config)
+
+    def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
+        """Build Hysteria2 (native sing-box core) outbound"""
+        config = {
+            "type": "hysteria2",
+            "tag": remark,
+            "server": address,
+            "server_port": self._select_port(inbound.port),
+            "password": settings["password"],
+        }
+        if inbound.tls_config.tls in ("tls", "reality"):
+            config["tls"] = self._apply_tls(inbound.tls_config, inbound.fragment_settings)
         return self._normalize_and_remove_none_values(config)
 
     def _build_wireguard(
