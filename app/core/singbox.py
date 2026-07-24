@@ -107,6 +107,15 @@ class SingBoxConfig(dict):
             return
 
         tls = inbound.get("tls") or {}
+        obfs = inbound.get("obfs")
+        finalmask = None
+        if isinstance(obfs, dict) and obfs.get("type") == "salamander" and obfs.get("password"):
+            # Shaped to match app.core.hosts._prepare_subscription_inbound_datas
+            # inbound_config.get("finalmask") fallback, and _get_hysteria_data_from_finalmasks
+            # expected input - this makes sing-box Salamander obfuscation flow through the
+            # exact same subscription-link pipeline xrays own hysteria obfs already uses,
+            # with no changes needed to hosts.py itself.
+            finalmask = {"udp": [{"type": "salamander", "settings": {"password": obfs["password"]}}]}
         metadata = {
             "tag": tag,
             "protocol": inbound["type"],
@@ -114,6 +123,7 @@ class SingBoxConfig(dict):
             "tls": "tls",
             "port": inbound.get("listen_port"),
             "sni": tls.get("server_name", ""),
+            "finalmask": finalmask,
         }
 
         self._inbounds.append(tag)

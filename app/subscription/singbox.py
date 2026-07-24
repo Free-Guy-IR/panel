@@ -370,6 +370,9 @@ class SingBoxConfiguration(BaseSubscription):
             "server_port": self._select_port(inbound.port),
             "password": settings["password"],
         }
+        obfs_password, _quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
+        if obfs_password:
+            config["obfs"] = {"type": "salamander", "password": obfs_password}
         if inbound.tls_config.tls in ("tls", "reality"):
             config["tls"] = self._apply_tls(inbound.tls_config, inbound.fragment_settings)
         return self._normalize_and_remove_none_values(config)
