@@ -1,7 +1,13 @@
 import { cn } from '@/lib/utils'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
-import { WG_CORE_SECTION_NAV, XRAY_CORE_SECTION_NAV } from '@/features/core-editor/kit/core-section-nav'
+import { SING_BOX_CORE_SECTION_NAV, WG_CORE_SECTION_NAV, XRAY_CORE_SECTION_NAV } from '@/features/core-editor/kit/core-section-nav'
 import { useTranslation } from 'react-i18next'
+
+function sectionNavForKind(kind: 'xray' | 'wg' | 'singbox') {
+  if (kind === 'wg') return WG_CORE_SECTION_NAV
+  if (kind === 'singbox') return SING_BOX_CORE_SECTION_NAV
+  return XRAY_CORE_SECTION_NAV
+}
 
 /** Horizontal section tabs — same spacing and triggers as `_dashboard.nodes` primary tabs. */
 export function CoreSectionTabs({ className }: { className?: string }) {
@@ -9,7 +15,7 @@ export function CoreSectionTabs({ className }: { className?: string }) {
   const kind = useCoreEditorStore(s => s.kind)
   const active = useCoreEditorStore(s => s.activeSection)
   const setActive = useCoreEditorStore(s => s.setActiveSection)
-  const items = kind === 'wg' ? WG_CORE_SECTION_NAV : XRAY_CORE_SECTION_NAV
+  const items = sectionNavForKind(kind)
 
   return (
     <div className={cn('flex w-full border-b px-4', className)} role="tablist" aria-label={t('coreEditor.section.label', { defaultValue: 'Section' })}>
@@ -47,13 +53,13 @@ export function CoreSectionTabsPlaceholder({
   activeSectionId,
   className,
 }: {
-  kind: 'xray' | 'wg'
-  /** Defaults: inbounds (xray) / interface (wg). */
+  kind: 'xray' | 'wg' | 'singbox'
+  /** Defaults: inbounds (xray/singbox) / interface (wg). */
   activeSectionId?: string
   className?: string
 }) {
   const { t } = useTranslation()
-  const items = kind === 'wg' ? WG_CORE_SECTION_NAV : XRAY_CORE_SECTION_NAV
+  const items = sectionNavForKind(kind)
   const active = activeSectionId ?? (kind === 'wg' ? 'interface' : 'inbounds')
 
   return (

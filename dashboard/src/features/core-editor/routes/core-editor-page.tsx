@@ -13,12 +13,14 @@ import type { SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-sec
 import { useXrayPersistValidationItems } from '@/features/core-editor/hooks/use-xray-persist-validation-items'
 import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wireguard-core-editor'
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
+import { SingBoxCoreEditor } from '@/features/core-editor/components/singbox/singbox-core-editor'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
+import { getSingBoxPersistConfig } from '@/features/core-editor/kit/singbox-adapter'
 import { isSupportedCoreEditorKind } from '@/features/core-editor/kit/core-kind'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
-import type { WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
+import type { SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 import type { CoreKind } from '@pasarguard/core-kit'
 import { getGetCoreConfigQueryKey, useCreateCoreConfig, useGetCoreConfig, useModifyCoreConfig } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
@@ -30,7 +32,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 
-type LoadingCoreKind = 'xray' | 'wg'
+type LoadingCoreKind = 'xray' | 'wg' | 'singbox'
 
 function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: string; description?: string } {
   if (coreKind === 'wg') {
@@ -39,7 +41,7 @@ function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: str
       description: 'coreEditor.sectionDesc.wgInterface',
     }
   }
-  if (coreKind === 'xray') {
+  if (coreKind === 'xray' || coreKind === 'singbox') {
     return {
       title: 'coreEditor.section.inbounds',
       description: 'coreEditor.sectionDesc.inbounds',
@@ -191,6 +193,7 @@ export default function CoreEditorPage() {
   const excludeInboundTags = useCoreEditorStore(s => s.excludeInboundTags)
   const xrayProfile = useCoreEditorStore(s => s.xrayProfile)
   const wgDraft = useCoreEditorStore(s => s.wgDraft)
+  const sbDraft = useCoreEditorStore(s => s.sbDraft)
   const xrayImportWarnings = useCoreEditorStore(s => s.xrayImportWarnings)
   const activeSection = useCoreEditorStore(s => s.activeSection)
 
@@ -216,7 +219,8 @@ export default function CoreEditorPage() {
 
   useEffect(() => {
     if (isNew) {
-      const k = (searchParams.get('kind') as CoreKind | null) === 'wg' ? 'wg' : 'xray'
+      const requested = searchParams.get('kind') as CoreKind | null
+      const k: CoreKind = requested === 'wg' ? 'wg' : requested === 'singbox' ? 'singbox' : 'xray'
       const currentName = useCoreEditorStore.getState().coreName
       initNew(k, currentName)
     }
@@ -226,7 +230,7 @@ export default function CoreEditorPage() {
 
   useEffect(() => {
     if (isNew || !validId || !coreData || serverConfigJson === null) return
-    // Only xray/wg cores are understood here. Loading anything else (e.g. singbox)
+    // xray/wg/singbox cores are understood here. Loading anything else (e.g. mtproto)
     // would silently misparse it and re-save it as an xray core on the next save.
     if (!isSupportedCoreEditorKind(coreData.type)) {
       toast.error(t('coreEditor.unsupportedType.title', { defaultValue: 'Unsupported core type' }), {
@@ -260,9 +264,18 @@ export default function CoreEditorPage() {
         return r.kitIssues.map(issue => ({ source: 'core-kit' as const, issue }))
       }
     }
+    if (kind === 'singbox' && sbDraft) {
+      const r = getSingBoxPersistConfig(sbDraft)
+      if (!r.ok && 'draftIssues' in r) {
+        return (r.draftIssues ?? []).map(issue => ({ source: 'singbox' as const, issue }))
+      }
+      if (!r.ok && 'kitIssues' in r) {
+        return r.kitIssues.map(issue => ({ source: 'core-kit' as const, issue }))
+      }
+    }
     if (kind === 'xray' && xrayProfile) return xrayPersistValidationItems
     return []
-  }, [hydrated, kind, wgDraft, xrayProfile, xrayPersistValidationItems])
+  }, [hydrated, kind, wgDraft, sbDraft, xrayProfile, xrayPersistValidationItems])
 
   const handleBack = useCallback(() => {
     if (hasActualChanges) {
@@ -334,6 +347,52 @@ export default function CoreEditorPage() {
         return
       }
 
+      if (kind === 'singbox') {
+        if (!sbDraft) return
+        const result = getSingBoxPersistConfig(sbDraft)
+        if (!result.ok) {
+          const issues = ('draftIssues' in result ? result.draftIssues : result.kitIssues) ?? []
+          const firstIssue = issues[0]
+          toast.error(firstIssue ? `${firstIssue.path}: ${firstIssue.message}` : t('coreEditor.validationErrors', { defaultValue: 'Validation errors' }))
+          return
+        }
+        const cfg = result.config
+        if (isNew) {
+          const res = await createMutation.mutateAsync({
+            data: {
+              name,
+              type: 'singbox',
+              config: cfg,
+              exclude_inbound_tags: [],
+              fallbacks_inbound_tags: [],
+            },
+          })
+          toast.success(t('coreConfigModal.createSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          navigate(`/nodes/cores/${res.id}`, { replace: true })
+        } else if (validId) {
+          await modifyMutation.mutateAsync({
+            coreId: numericId,
+            data: {
+              name,
+              type: 'singbox',
+              config: cfg,
+              exclude_inbound_tags: [],
+              fallbacks_inbound_tags: [],
+            },
+            params: { restart_nodes: restartNodes },
+          })
+          toast.success(t('coreConfigModal.editSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          queryClient.invalidateQueries({ queryKey: getGetCoreConfigQueryKey(numericId) })
+        }
+        return
+      }
+
       if (kind === 'xray' && xrayProfile) {
         const cfg = profileToPersistedConfig(xrayProfile)
         if (isNew) {
@@ -382,6 +441,7 @@ export default function CoreEditorPage() {
     coreName,
     kind,
     wgDraft,
+    sbDraft,
     xrayProfile,
     preSaveIssues.length,
     isNew,
@@ -429,14 +489,14 @@ export default function CoreEditorPage() {
               aria-invalid={showNameRequired}
             />
             <Select
-              value={kind === 'wg' ? 'wg' : 'xray'}
+              value={kind === 'wg' ? 'wg' : kind === 'singbox' ? 'singbox' : 'xray'}
               onValueChange={value => {
-                const nextKind = value === 'wg' ? 'wg' : 'xray'
+                const nextKind: CoreKind = value === 'wg' ? 'wg' : value === 'singbox' ? 'singbox' : 'xray'
                 if (isNew) {
                   setSearchParams(
                     prev => {
                       const p = new URLSearchParams(prev)
-                      if (nextKind === 'wg') p.set('kind', 'wg')
+                      if (nextKind === 'wg' || nextKind === 'singbox') p.set('kind', nextKind)
                       else p.delete('kind')
                       return p
                     },
@@ -453,10 +513,11 @@ export default function CoreEditorPage() {
               <SelectContent>
                 <SelectItem value="xray">Xray</SelectItem>
                 <SelectItem value="wg">WireGuard</SelectItem>
+                <SelectItem value="singbox">Sing-box</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {kind === 'xray' && xrayImportWarnings.length > 0 && (
+          {(kind === 'xray' || kind === 'singbox') && xrayImportWarnings.length > 0 && (
             <Alert>
               <AlertTitle>{t('coreEditor.importWarnings', { defaultValue: 'Import notes' })}</AlertTitle>
               <AlertDescription>
@@ -480,6 +541,21 @@ export default function CoreEditorPage() {
         interface: {
           title: 'coreEditor.section.interface',
           description: 'coreEditor.sectionDesc.wgInterface',
+        },
+        advanced: {
+          title: 'coreEditor.section.advanced',
+          description: 'coreEditor.sectionDesc.advanced',
+        },
+      }[section]
+    }
+
+    if (kind === 'singbox') {
+      const section = activeSection as SbCoreSection
+      return {
+        inbounds: {
+          title: 'coreEditor.section.inbounds',
+          description: 'coreEditor.sectionDesc.sbInbounds',
+          buttonText: 'coreEditor.inbound.add',
         },
         advanced: {
           title: 'coreEditor.section.advanced',
@@ -558,7 +634,7 @@ export default function CoreEditorPage() {
   if (!hydrated && !isNew && validId) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <CoreEditorLoadingSkeleton coreKind={coreData?.type === 'wg' ? 'wg' : 'xray'} />
+        <CoreEditorLoadingSkeleton coreKind={coreData?.type === 'wg' ? 'wg' : coreData?.type === 'singbox' ? 'singbox' : 'xray'} />
       </div>
     )
   }
@@ -581,7 +657,13 @@ export default function CoreEditorPage() {
         main={
           <div className="space-y-6">
             <ValidationSummary items={preSaveIssues} />
-            {kind === 'wg' ? <WireGuardCoreEditor /> : <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
+            {kind === 'wg' ? (
+              <WireGuardCoreEditor />
+            ) : kind === 'singbox' ? (
+              <SingBoxCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
+            ) : (
+              <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
+            )}
           </div>
         }
         dirty={hasActualChanges}

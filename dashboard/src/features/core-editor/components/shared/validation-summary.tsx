@@ -3,10 +3,15 @@ import { cn } from '@/lib/utils'
 import type { CoreKitValidationIssue } from '@pasarguard/core-kit'
 import type { Issue, Profile } from '@pasarguard/xray-config-kit'
 import type { WireGuardValidationIssue } from '@pasarguard/wireguard-config-kit'
+import type { SingBoxValidationIssue } from '@pasarguard/singbox-config-kit'
 import { useTranslation } from 'react-i18next'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 
-export type ValidationListItem = { source: 'core-kit'; issue: CoreKitValidationIssue } | { source: 'xray'; issue: Issue } | { source: 'wireguard'; issue: WireGuardValidationIssue }
+export type ValidationListItem =
+  | { source: 'core-kit'; issue: CoreKitValidationIssue }
+  | { source: 'xray'; issue: Issue }
+  | { source: 'wireguard'; issue: WireGuardValidationIssue }
+  | { source: 'singbox'; issue: SingBoxValidationIssue }
 
 export function validationListItemPath(item: ValidationListItem): string {
   const p = item.issue.path
@@ -110,6 +115,11 @@ export function ValidationSummary({ items, className }: ValidationSummaryProps) 
                 </>
               )}
               {row.source === 'wireguard' && (
+                <>
+                  {row.issue.path}: {row.issue.message}
+                </>
+              )}
+              {row.source === 'singbox' && (
                 <>
                   {row.issue.path}: {row.issue.message}
                 </>

@@ -161,8 +161,8 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
   const handleRowEdit = (core: CoreResponse) => {
     if (!canUpdate) return
 
-    // The advanced visual editor only understands xray/wg cores today; routing an
-    // unsupported type (e.g. singbox) into it would silently re-save it as xray.
+    // The advanced visual editor understands xray/wg/singbox cores; anything else (e.g.
+    // mtproto) still routes to the raw-JSON modal instead of silently corrupting it.
     if (getCoresListUseConfigModal() || !isSupportedCoreEditorKind(core.type)) {
       openCoreConfigModalForEdit(core)
       return

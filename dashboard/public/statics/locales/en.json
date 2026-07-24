@@ -2294,7 +2294,8 @@
       "routing": "Traffic rules and routing",
       "balancers": "Outbound load balancing setup",
       "dns": "DNS resolver and server config",
-      "bindings": "Inbound tag fallbacks and exclusions"
+      "bindings": "Inbound tag fallbacks and exclusions",
+      "sbInbounds": "Hysteria2 inbound listeners for this sing-box core"
     },
     "wg": {
       "interfaceBlurb": "WireGuard interface settings and key material for this core.",
@@ -2311,6 +2312,36 @@
         "preSharedKey": "Pre-shared key",
         "listenPort": "Listen port",
         "address": "Address"
+      }
+    },
+    "singbox": {
+      "inboundsHint": "Each inbound is a separate Hysteria2 listener on this sing-box core.",
+      "emptyInbounds": "No inbounds yet. Click \"Add inbound\" to create a Hysteria2 listener.",
+      "untitledInbound": "Untitled inbound",
+      "hasErrors": "Needs attention",
+      "fields": {
+        "tag": "Tag",
+        "listen": "Listen address",
+        "listenPort": "Listen port",
+        "masquerade": "Masquerade URL",
+        "upMbps": "Up mbps",
+        "downMbps": "Down mbps",
+        "ignoreClientBandwidth": "Ignore client bandwidth",
+        "ignoreClientBandwidthHint": "Ignore the bandwidth values reported by the client and always use the values above."
+      },
+      "obfs": {
+        "title": "Obfuscation",
+        "enable": "Salamander obfuscation",
+        "password": "Obfuscation password",
+        "generate": "Generate password"
+      },
+      "tls": {
+        "title": "TLS",
+        "alwaysEnabledHint": "Hysteria2 always requires TLS; it cannot be disabled for this inbound.",
+        "serverName": "Server name (SNI)",
+        "alpn": "ALPN",
+        "alpnPlaceholder": "h3",
+        "certificate": "Certificate"
       }
     },
     "field": {
@@ -2500,6 +2531,8 @@
     "inbound": {
       "keepAtLeastOne": "At least one inbound is required.",
       "add": "Add inbound",
+      "remove": "Remove inbound",
+      "randomPort": "Generate random port",
       "addToList": "Add to list",
       "dialogTitleAdd": "Add inbound",
       "dialogTitleEdit": "Edit inbound",

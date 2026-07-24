@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { ArrowDownToLine, ArrowUpFromLine, Braces, Cable, Globe, Link2, Scale, Waypoints } from 'lucide-react'
-import type { WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
+import type { SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 
 export type XraySectionNavItem = {
   id: XrayCoreSection
@@ -11,6 +11,13 @@ export type XraySectionNavItem = {
 
 export type WgSectionNavItem = {
   id: WgCoreSection
+  labelKey: string
+  defaultLabel: string
+  icon: LucideIcon
+}
+
+export type SbSectionNavItem = {
+  id: SbCoreSection
   labelKey: string
   defaultLabel: string
   icon: LucideIcon
@@ -28,5 +35,10 @@ export const XRAY_CORE_SECTION_NAV: XraySectionNavItem[] = [
 
 export const WG_CORE_SECTION_NAV: WgSectionNavItem[] = [
   { id: 'interface', labelKey: 'coreEditor.section.interface', defaultLabel: 'Interface', icon: Cable },
+  { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
+]
+
+export const SING_BOX_CORE_SECTION_NAV: SbSectionNavItem[] = [
+  { id: 'inbounds', labelKey: 'coreEditor.section.inbounds', defaultLabel: 'Inbounds', icon: ArrowDownToLine },
   { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
 ]

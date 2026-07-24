@@ -1,6 +1,7 @@
 import type { CoreEditorStoreState } from '@/features/core-editor/state/core-editor-store'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { draftToPersistedConfig } from '@/features/core-editor/kit/wireguard-adapter'
+import { draftToPersistedConfig as sbDraftToPersistedConfig } from '@/features/core-editor/kit/singbox-adapter'
 
 function stableStringify(value: unknown): string {
   try {
@@ -35,6 +36,10 @@ function currentConfigString(s: CoreEditorStoreState): string {
     const draft = s.wgDraft
     return safeConfigString('wg_current_config', () => draftToPersistedConfig(draft))
   }
+  if (s.kind === 'singbox' && s.sbDraft) {
+    const draft = s.sbDraft
+    return safeConfigString('sb_current_config', () => sbDraftToPersistedConfig(draft))
+  }
   if (s.kind === 'xray' && s.xrayProfile) {
     const profile = s.xrayProfile
     return safeConfigString('xray_current_config', () => profileToPersistedConfig(profile))
@@ -46,6 +51,10 @@ function baselineConfigString(s: CoreEditorStoreState): string {
   if (s.kind === 'wg' && s.wgBaseline) {
     const draft = s.wgBaseline
     return safeConfigString('wg_baseline_config', () => draftToPersistedConfig(draft))
+  }
+  if (s.kind === 'singbox' && s.sbBaseline) {
+    const draft = s.sbBaseline
+    return safeConfigString('sb_baseline_config', () => sbDraftToPersistedConfig(draft))
   }
   if (s.kind === 'xray' && s.xrayBaseline) {
     const profile = s.xrayBaseline

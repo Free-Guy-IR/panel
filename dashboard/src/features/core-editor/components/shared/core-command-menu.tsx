@@ -1,7 +1,7 @@
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
-import type { XrayCoreSection, WgCoreSection } from '@/features/core-editor/state/core-editor-store'
+import type { SbCoreSection, XrayCoreSection, WgCoreSection } from '@/features/core-editor/state/core-editor-store'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -17,6 +17,11 @@ const xraySections: { id: XrayCoreSection; labelKey: string; defaultLabel: strin
 
 const wgSections: { id: WgCoreSection; labelKey: string; defaultLabel: string }[] = [
   { id: 'interface', labelKey: 'coreEditor.section.interface', defaultLabel: 'Interface' },
+  { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced (JSON)' },
+]
+
+const sbSections: { id: SbCoreSection; labelKey: string; defaultLabel: string }[] = [
+  { id: 'inbounds', labelKey: 'coreEditor.section.inbounds', defaultLabel: 'Inbounds' },
   { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced (JSON)' },
 ]
 
@@ -40,10 +45,10 @@ export function CoreCommandMenu() {
     return () => window.removeEventListener('keydown', down)
   }, [])
 
-  const sections = useMemo(() => (kind === 'wg' ? wgSections : xraySections), [kind])
+  const sections = useMemo(() => (kind === 'wg' ? wgSections : kind === 'singbox' ? sbSections : xraySections), [kind])
 
   const go = useCallback(
-    (id: XrayCoreSection | WgCoreSection) => {
+    (id: XrayCoreSection | WgCoreSection | SbCoreSection) => {
       setActiveSection(id)
       setOpen(false)
     },
