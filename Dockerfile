@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     libc6-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 ENV UV_PYTHON_DOWNLOADS=0
