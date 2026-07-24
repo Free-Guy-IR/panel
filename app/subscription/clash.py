@@ -599,6 +599,7 @@ class ClashMetaConfiguration(ClashConfiguration):
             "trojan": self._build_trojan,
             "shadowsocks": self._build_shadowsocks,
             "hysteria": self._build_hysteria,
+            "hysteria2": self._build_hysteria2,
             "wireguard": self._build_wireguard,
         }
 
@@ -697,6 +698,26 @@ class ClashMetaConfiguration(ClashConfiguration):
         node["up"] = quic_params.get("brutalUp")
 
         self._apply_tls(node, inbound.tls_config, "hysteria")
+        self._apply_mux(node, inbound.mux_settings)
+
+        return self._normalize_and_remove_none_values(node)
+
+    def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
+        """Build Hysteria2 (native sing-box core) node for Clash Meta"""
+        node = {
+            "name": remark,
+            "type": "hysteria2",
+            "server": address,
+            "port": inbound.port,
+            "password": settings["password"],
+        }
+
+        obfs_password, _quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
+        if obfs_password:
+            node["obfs"] = "salamander"
+            node["obfs-password"] = obfs_password
+
+        self._apply_tls(node, inbound.tls_config, "hysteria2")
         self._apply_mux(node, inbound.mux_settings)
 
         return self._normalize_and_remove_none_values(node)
