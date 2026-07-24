@@ -243,7 +243,12 @@ class NodeOperation(BaseOperation):
 
         old_status = db_node.status
         logger.info(f'Connecting to "{db_node.name}" node')
-        type = service.BackendType.WIREGUARD if core.type == CoreType.wg else service.BackendType.XRAY
+        if core.type == CoreType.wg:
+            type = service.BackendType.WIREGUARD
+        elif core.type == CoreType.singbox:
+            type = service.BackendType.SING_BOX
+        else:
+            type = service.BackendType.XRAY
 
         try:
             start_kwargs = {

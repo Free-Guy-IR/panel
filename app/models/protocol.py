@@ -8,6 +8,7 @@ class ProxyProtocol(IntEnum):
     shadowsocks = 4
     wireguard = 5
     hysteria = 6
+    hysteria2 = 7
 
     @classmethod
     def from_value(cls, value: str) -> "ProxyProtocol" | None:

@@ -79,6 +79,8 @@ def _serialize_user_for_node(
         proxy_kwargs["wireguard_peer_ips"] = wireguard_settings.get("peer_ips") or []
     if ProxyProtocol.hysteria in allowed_protocols:
         proxy_kwargs["hysteria_auth"] = user_settings.get("hysteria", {}).get("auth")
+    if ProxyProtocol.hysteria2 in allowed_protocols:
+        proxy_kwargs["hysteria2_password"] = user_settings.get("hysteria2", {}).get("password")
 
     return create_user(
         str(id),

@@ -74,3 +74,6 @@ dev = [
     "sqlalchemy-utils>=0.41.2",
     "watchfiles>=1.2.0",
 ]
+
+[tool.uv.sources]
+pasarguard-node-bridge = { path = "../node_bridge_py", editable = true }
