@@ -24,6 +24,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { coreConfigFormDefaultValues, coreConfigFormSchema, type CoreBackendType, type CoreConfigFormValues } from '@/features/nodes/forms/core-config-form'
 import { getCoresListUseConfigModal } from '@/utils/userPreferenceStorage'
+import { isSupportedCoreEditorKind } from '@/features/core-editor/kit/core-kind'
 
 const CoreConfigModal = lazy(() => import('@/features/nodes/dialogs/core-config-modal'))
 
@@ -160,7 +161,9 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
   const handleRowEdit = (core: CoreResponse) => {
     if (!canUpdate) return
 
-    if (getCoresListUseConfigModal()) {
+    // The advanced visual editor only understands xray/wg cores today; routing an
+    // unsupported type (e.g. singbox) into it would silently re-save it as xray.
+    if (getCoresListUseConfigModal() || !isSupportedCoreEditorKind(core.type)) {
       openCoreConfigModalForEdit(core)
       return
     }

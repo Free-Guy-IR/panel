@@ -15,6 +15,7 @@ import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wiregu
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
+import { isSupportedCoreEditorKind } from '@/features/core-editor/kit/core-kind'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import type { WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
@@ -225,6 +226,17 @@ export default function CoreEditorPage() {
 
   useEffect(() => {
     if (isNew || !validId || !coreData || serverConfigJson === null) return
+    // Only xray/wg cores are understood here. Loading anything else (e.g. singbox)
+    // would silently misparse it and re-save it as an xray core on the next save.
+    if (!isSupportedCoreEditorKind(coreData.type)) {
+      toast.error(t('coreEditor.unsupportedType.title', { defaultValue: 'Unsupported core type' }), {
+        description: t('coreEditor.unsupportedType.description', {
+          defaultValue: 'This core type cannot be edited in the advanced editor yet. Use the simple config form instead.',
+        }),
+      })
+      navigate('/nodes', { replace: true })
+      return
+    }
     const state = useCoreEditorStore.getState()
     if (state.coreId !== coreData.id) {
       initFromCore(coreData)
@@ -233,7 +245,7 @@ export default function CoreEditorPage() {
     if (state.hydrated && !selectCoreEditorHasActualChanges(state) && !state.isNew && state.serverHydratedConfigJson !== serverConfigJson) {
       initFromCore(coreData, { preserveNavigation: true })
     }
-  }, [isNew, validId, coreData, serverConfigJson, initFromCore])
+  }, [isNew, validId, coreData, serverConfigJson, initFromCore, navigate, t])
 
   const xrayPersistValidationItems = useXrayPersistValidationItems()
 
