@@ -868,7 +868,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "nats-py", specifier = ">=2.15.0" },
     { name = "packaging", specifier = ">=26.2" },
-    { name = "pasarguard-node-bridge", editable = "../node_bridge_py" },
+    { name = "pasarguard-node-bridge", git = "https://github.com/Free-Guy-IR/node_bridge_py?branch=feature%2Fsingbox-hysteria2" },
     { name = "pip-system-certs", specifier = ">=5.3" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
@@ -902,7 +902,7 @@ dev = [
 [[package]]
 name = "pasarguard-node-bridge"
 version = "0.8.1+singbox"
-source = { editable = "../node_bridge_py" }
+source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?branch=feature%2Fsingbox-hysteria2#1e8f8856d1adabf7fb57c6ab42f2fe106251a143" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-socks" },
@@ -911,19 +911,6 @@ dependencies = [
     { name = "protobuf" },
     { name = "python-socks" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = ">=3.13.5" },
-    { name = "aiohttp-socks", specifier = ">=0.11.0" },
-    { name = "grpclib", specifier = ">=0.4.9" },
-    { name = "packaging", specifier = ">=26.2" },
-    { name = "protobuf", specifier = ">=6.33.6" },
-    { name = "python-socks", extras = ["asyncio"], specifier = ">=2.8.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "grpcio-tools", specifier = ">=1.80.0" }]
 
 [[package]]
 name = "pip"

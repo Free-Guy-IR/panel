@@ -76,4 +76,4 @@ dev = [
 ]
 
 [tool.uv.sources]
-pasarguard-node-bridge = { path = "../node_bridge_py", editable = true }
+pasarguard-node-bridge = { git = "https://github.com/Free-Guy-IR/node_bridge_py", branch = "feature/singbox-hysteria2" }
