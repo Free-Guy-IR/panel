@@ -147,8 +147,18 @@ class SingBoxConfig(dict):
         self._inbounds.append(tag)
         self._inbounds_by_tag[tag] = metadata
 
+    # Keys that exist only for the panels own subscription-link metadata
+    # (finalmask/quicParams sourcing) and are not part of sing-boxs actual
+    # schema - sing-box uses strict JSON decoding and errors out on any
+    # unrecognized inbound field, so these must never reach the wire config.
+    _PANEL_ONLY_INBOUND_KEYS = ("port_hopping_range",)
+
     def to_str(self, **json_kwargs) -> str:
-        return json.dumps(self, **json_kwargs)
+        wire_config = deepcopy(dict(self))
+        for inbound in wire_config.get("inbounds", []):
+            for key in self._PANEL_ONLY_INBOUND_KEYS:
+                inbound.pop(key, None)
+        return json.dumps(wire_config, **json_kwargs)
 
     @property
     def inbounds_by_tag(self) -> dict:
