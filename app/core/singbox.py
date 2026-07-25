@@ -116,6 +116,24 @@ class SingBoxConfig(dict):
             # exact same subscription-link pipeline xrays own hysteria obfs already uses,
             # with no changes needed to hosts.py itself.
             finalmask = {"udp": [{"type": "salamander", "settings": {"password": obfs["password"]}}]}
+
+        # sing-box's hysteria2 inbound has no native port-hopping concept - the range below
+        # is informational only, advertised to clients via mports so hopping-aware clients
+        # can use it, and must be kept in sync with whatever DNAT/redirect rule (if any)
+        # actually forwards that range to this inbounds real listen_port on the node host.
+        up_mbps = inbound.get("up_mbps")
+        down_mbps = inbound.get("down_mbps")
+        hop_ports = inbound.get("port_hopping_range")
+        if up_mbps or down_mbps or hop_ports:
+            quic_params = (finalmask or {}).get("quicParams", {})
+            if up_mbps:
+                quic_params["brutalUp"] = f"{up_mbps} mbps"
+            if down_mbps:
+                quic_params["brutalDown"] = f"{down_mbps} mbps"
+            if hop_ports:
+                quic_params["udpHop"] = {"ports": hop_ports}
+            finalmask = finalmask or {}
+            finalmask["quicParams"] = quic_params
         metadata = {
             "tag": tag,
             "protocol": inbound["type"],

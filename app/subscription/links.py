@@ -338,10 +338,16 @@ class StandardLinks(BaseSubscription):
     def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
         """Build Hysteria2 (sing-box core) link"""
         payload = {}
-        obfs_password, _quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
+        obfs_password, quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
         if obfs_password:
             payload["obfs"] = "salamander"
             payload["obfs-password"] = obfs_password
+        if hop_ports := quic_params.get("udpHop", {}).get("ports"):
+            payload["mports"] = hop_ports
+        if brutal_up := quic_params.get("brutalUp"):
+            payload["up"] = brutal_up
+        if brutal_down := quic_params.get("brutalDown"):
+            payload["down"] = brutal_down
         if inbound.tls_config.tls in ("tls", "reality"):
             self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
         payload = self._normalize_and_remove_none_values(payload)
