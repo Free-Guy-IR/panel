@@ -52,7 +52,6 @@ class XrayConfiguration(BaseSubscription):
             "trojan": self._build_trojan,
             "shadowsocks": self._build_shadowsocks,
             "hysteria": self._build_hysteria,
-            "hysteria2": self._build_hysteria2,
             "wireguard": self._build_wireguard,
         }
 
@@ -497,26 +496,6 @@ class XrayConfiguration(BaseSubscription):
             user_settings={"auth": str(settings["auth"])},
         )
 
-    def _build_hysteria2(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
-        """Build Hysteria2 outbound - returns (main_outbound, extra_outbounds_list)
-
-        Native Hysteria2 (sing-box core), distinct from xray-core's own legacy
-        "hysteria" (v1) transport built above. Only client apps whose bundled
-        "xray" engine has Hysteria2 support merged in can use this entry.
-        """
-        user_settings = {"password": str(settings["password"])}
-
-        obfs_password, _quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
-        if obfs_password:
-            user_settings["obfs"] = {"type": "salamander", "password": obfs_password}
-
-        return self._build_outbound(
-            protocol_type="hysteria2",
-            address=address,
-            inbound=inbound,
-            user_settings=user_settings,
-        )
-
     def _build_wireguard(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
         """Build WireGuard outbound for Xray subscriptions."""
         private_key = settings.get("private_key", "")
@@ -575,7 +554,7 @@ class XrayConfiguration(BaseSubscription):
         network = inbound.network
         path = inbound.transport_config.path
         vnext_protocols = ("vmess", "vless")
-        servers_protocols = ("trojan", "shadowsocks", "hysteria2")
+        servers_protocols = ("trojan", "shadowsocks")
 
         # Process GRPC path
         if network in ("grpc", "gun"):
