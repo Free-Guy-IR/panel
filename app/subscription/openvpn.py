@@ -88,10 +88,19 @@ class OpenVPNConfiguration(BaseSubscription):
             primary["tls_crypt_key"].strip(),
             "</tls-crypt>",
             "",
-            "<auth-user-pass>",
-            primary["username"],
-            primary["password"],
-            "</auth-user-pass>",
+            # Unlike ca/cert/key/tls-crypt, OpenVPN has no inline form for
+            # auth-user-pass - <auth-user-pass>...</auth-user-pass> is not a
+            # real directive and real openvpn (verified against 2.5.11)
+            # rejects it with "option 'auth-user-pass' is not expected to be
+            # inline". A bare `auth-user-pass` (no file argument) makes the
+            # client prompt for the credentials instead; GUI clients
+            # (OpenVPN Connect, Tunnelblick, ...) show this as a login dialog
+            # with a "save password" option, so it's a one-time entry in
+            # practice. Credentials are still included as comments so a user
+            # copy-pasting by hand doesn't need to look them up elsewhere.
+            f"# username: {primary['username']}",
+            f"# password: {primary['password']}",
+            "auth-user-pass",
         ]
 
         return ("\n".join(lines) + "\n").encode()
