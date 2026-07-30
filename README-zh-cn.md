@@ -137,27 +137,27 @@ PasarGuard 是一个用户友好、功能丰富且可靠的代理管理工具。
 
 **TimescaleDB（推荐）：**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
 
 **SQLite：**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install
 ```
 
 **MySQL：**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database mysql
 ```
 
 **MariaDB：**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
 ```
 
 **PostgreSQL：**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
 ```
 
 ### 📋 安装后：
