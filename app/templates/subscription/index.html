@@ -266,6 +266,32 @@
                 background: hsl(var(--success) / 0.9);
             }
 
+            .openvpn-section {
+                margin-bottom: 20px;
+            }
+
+            .openvpn-download-button {
+                background: #f59e0b;
+                color: white;
+                border: none;
+                padding: 10px 18px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 600;
+                font-size: 0.95rem;
+                width: 100%;
+                transition: background-color 0.2s;
+            }
+
+            .openvpn-download-button:hover {
+                background: #d97f06;
+            }
+
+            .openvpn-download-button:disabled {
+                opacity: 0.7;
+                cursor: default;
+            }
+
             .applications-container {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -594,6 +620,17 @@
                 {% endif %}
             </div>
 
+            {% if user.status in ('active','on_hold') and has_openvpn %}
+            <div class="openvpn-section">
+                <button
+                    class="openvpn-download-button"
+                    onclick="downloadOpenVPNConfig(this)"
+                >
+                    Download OpenVPN Config
+                </button>
+            </div>
+            {% endif %}
+
             {% if user.status in ('active','on_hold') %}
             <div class="links-section">
                 <h2>Subscription Links</h2>
@@ -731,6 +768,44 @@
                 setTimeout(function () {
                     button.textContent = "Copy All Links";
                 }, 1500);
+            }
+
+            async function downloadOpenVPNConfig(button) {
+                const originalText = button.textContent;
+                button.disabled = true;
+                button.textContent = "Downloading...";
+
+                try {
+                    const response = await fetch(
+                        window.location.pathname.replace(/\/$/, "") + "/openvpn"
+                    );
+                    if (!response.ok) {
+                        throw new Error("request failed: " + response.status);
+                    }
+
+                    const disposition = response.headers.get("content-disposition") || "";
+                    const match = disposition.match(/filename="?([^"]+)"?/);
+                    const filename = match ? match[1] : "config.ovpn";
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+
+                    button.textContent = "Downloaded!";
+                } catch (err) {
+                    button.textContent = "Download failed";
+                } finally {
+                    setTimeout(function () {
+                        button.textContent = originalText;
+                        button.disabled = false;
+                    }, 2000);
+                }
             }
 
             const qrButtons = document.querySelectorAll(".qr-button");

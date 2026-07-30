@@ -424,12 +424,15 @@ class SubscriptionOperation(BaseOperation):
             )
             is_allow_browser_config = sub_settings.allow_browser_config and not is_hwid_enabled
             links = []
+            has_openvpn = False
             if is_allow_browser_config:
                 conf, media_type = await self.fetch_config(
                     user,
                     ConfigFormat.links,
                 )
                 links = conf.splitlines()
+                ovpn_conf, _ = await self.fetch_config(user, ConfigFormat.openvpn)
+                has_openvpn = bool(ovpn_conf)
 
             format_variables = await self.get_format_variables(user)
             formatted_announce = self._format_announce(sub_settings, format_variables)
@@ -438,7 +441,13 @@ class SubscriptionOperation(BaseOperation):
                 render_template(
                     template,
                     self._build_subscription_body_payload(
-                        user, links, formatted_announce, sub_settings, format_variables, is_hwid_enabled
+                        user,
+                        links,
+                        formatted_announce,
+                        sub_settings,
+                        format_variables,
+                        is_hwid_enabled,
+                        has_openvpn=has_openvpn,
                     ),
                 )
             )
@@ -570,12 +579,14 @@ class SubscriptionOperation(BaseOperation):
         sub_settings: SubSettings,
         format_variables: dict,
         is_hwid_enabled: bool,
+        has_openvpn: bool = False,
     ) -> dict[str, Any]:
         return {
             "user": SubscriptionUserResponse.model_validate(user),
             "links": links,
             "announce": formatted_announce,
             "announce_url": sub_settings.announce_url,
+            "has_openvpn": has_openvpn,
             "apps": self._make_apps_import_urls(
                 sub_settings.applications,
                 format_variables,
