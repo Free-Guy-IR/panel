@@ -2,11 +2,12 @@ import base64
 import random
 import secrets
 from collections import defaultdict
-from datetime import datetime as dt, timedelta, timezone
+from datetime import UTC, datetime as dt, timedelta
 
 from jdatetime import date as jd
 
 from app.core.hosts import host_manager
+from app.db.crud.wireguard import pick_peer_ip_for_inbound
 from app.db.models import UserStatus
 from app.models.status_emojis import STATUS_EMOJIS
 from app.models.subscription import SubscriptionInboundData
@@ -14,7 +15,6 @@ from app.models.user import UsersResponseWithInbounds
 from app.settings import subscription_settings
 from app.subscription.client_templates import subscription_client_templates, subscription_xray_templates
 from app.utils.system import readable_size
-from config import wireguard_settings
 
 from . import (
     ClashConfiguration,
@@ -193,7 +193,7 @@ def setup_format_variables(user: UsersResponseWithInbounds, custom_variables: li
     user_status = user.status
     expire = user.expire
     on_hold_expire_duration = user.on_hold_expire_duration
-    now = dt.now(timezone.utc)
+    now = dt.now(UTC)
 
     admin_username = ""
     if admin_data := user.admin:
@@ -236,8 +236,7 @@ def setup_format_variables(user: UsersResponseWithInbounds, custom_variables: li
         data_left = user.data_limit - user.used_traffic
         usage_Percentage = round((user.used_traffic / user.data_limit) * 100.0, 2)
 
-        if data_left < 0:
-            data_left = 0
+        data_left = max(data_left, 0)
         data_left = readable_size(data_left)
     else:
         data_limit = "∞"
@@ -298,6 +297,10 @@ async def process_host(
     user_id = proxies.get("_user_id")
     if user_id is not None:
         settings["_user_id"] = user_id
+
+    # Each WG interface only gets the user's peer IP from its own subnet.
+    if inbound.protocol == "wireguard":
+        settings["peer_ips"] = pick_peer_ip_for_inbound(inbound.wireguard_local_address, settings.get("peer_ips") or [])
 
     # Update format variables
     format_variables.update({"PROTOCOL": inbound.protocol})
@@ -442,9 +445,6 @@ async def process_inbounds_and_tags(
         return xray_template_overrides.get(template_id)
 
     for host_data in hosts:
-        if host_data.protocol == "wireguard" and not wireguard_settings.enabled:
-            continue
-
         result = await process_host(host_data, format_variables, user.inbounds, proxy_settings, custom_variables)
         if not result:
             continue

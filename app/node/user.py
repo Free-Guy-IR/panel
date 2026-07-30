@@ -57,7 +57,7 @@ async def serialize_user(user: User, allowed_protocols: frozenset[ProxyProtocol]
 def _serialize_user_for_node(
     id: int,
     user_settings: dict,
-    inbounds: list[str] = None,
+    inbounds: list[str] | None = None,
     allowed_protocols: frozenset[ProxyProtocol] | None = None,
     hwid_limit: int | None = None,
 ) -> ProtoUser:

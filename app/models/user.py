@@ -84,12 +84,13 @@ class UserCreate(UserWithValidator):
     @field_validator("group_ids", mode="after")
     @classmethod
     def group_ids_validator(cls, v):
-        return ListValidator.nullable_list(v, "group")
+        return ListValidator.not_null_list(v, "group")
 
 
 class UserModify(UserWithValidator):
     status: UserStatus | None = Field(default=None)
     proxy_settings: ProxyTable | None = Field(default=None)
+    group_ids: list[int] | None = Field(default=None)
 
     @field_validator("status", mode="before", check_fields=False)
     def validate_status(cls, status, values):
@@ -312,9 +313,13 @@ class UsersUsageQuery(UserUsageQuery):
 
 class ExpiredUsersQuery(BaseModel):
     admin_username: str | None = Field(default=None)
-    target: Literal["expired", "limited"] = Field(default="expired")
+    target: Literal["expired", "limited", "on_hold", "disabled"] = Field(default="expired")
     expired_after: dt | None = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
     expired_before: dt | None = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])
+    dry_run: bool = Field(
+        default=False,
+        description="If true, returns users that would be deleted without actually deleting them.",
+    )
 
     @field_validator("expired_after", "expired_before", mode="before")
     @classmethod
@@ -443,26 +448,10 @@ class BulkUsersProxy(BulkUserFilter):
     method: ShadowsocksMethods | None = Field(default=None)
 
 
-class BulkWireGuardPeerIPs(BulkUserFilter):
-    """Re-seat WireGuard peer IPs (same scoping as BulkUser: users, admins, group_ids, status)."""
-
-    confirm: bool = False
-    replace_all: bool = False
-
-
 class BulkOperationDryRunResponse(BaseModel):
     """Preview for bulk user/group operations (no DB writes)."""
 
     dry_run: bool = True
-    affected_users: int
-
-
-class WireGuardPeerIPsReallocateResponse(BaseModel):
-    wireguard_inbound_tags: int
-    candidates: int
-    updated: int
-    dry_run: bool
-    sample_usernames: list[str]
     affected_users: int
 
 
