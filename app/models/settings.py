@@ -199,6 +199,7 @@ class ConfigFormat(str, Enum):
     clash = "clash"
     clash_meta = "clash_meta"
     outline = "outline"
+    openvpn = "openvpn"
     block = "block"
 
 
@@ -217,6 +218,7 @@ class SubFormatEnable(BaseModel):
     clash: bool = Field(default=True)
     clash_meta: bool = Field(default=True)
     outline: bool = Field(default=True)
+    openvpn: bool = Field(default=True)
 
 
 class Platform(StrEnum):

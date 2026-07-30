@@ -232,3 +232,51 @@ class BaseSubscription:
                 f"?{urlencode(uri_payload, quote_via=quote)}#{quote(validated_remark)}"
             ),
         }
+
+    def _build_openvpn_components(
+        self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
+    ) -> dict | None:
+        """Build one <connection> block worth of data for an OpenVPN instance.
+
+        Unlike every proxy-style protocol here, OpenVPN has no share-link URI
+        at all - by design (see app/subscription/openvpn.py), this only ever
+        feeds the downloadable .ovpn file builder. Reads instance config
+        (cipher/auth/dns/PKI) from inbound.finalmask["openvpn"], the same
+        generic per-inbound extra-data channel Hysteria2 obfs/quicParams
+        already use, populated by app.core.openvpn.OpenVPNConfig._read_instance.
+        """
+        user_id = settings.get("_user_id")
+        password = settings.get("password")
+        if user_id is None or not password:
+            return None
+        username = str(user_id)  # matches app.node.user._serialize_user_for_node's str(id) convention
+
+        finalmask = inbound.finalmask
+        if finalmask is None:
+            finalmask_dict = {}
+        elif isinstance(finalmask, dict):
+            finalmask_dict = finalmask
+        else:
+            # FinalMask is a real Pydantic model (extra="allow"), not a plain
+            # dict - model_dump() is what surfaces the "openvpn" extra field
+            # OpenVPNConfig._read_instance attaches, alongside its normal
+            # tcp/udp/quicParams fields.
+            finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
+        ovpn_data = finalmask_dict.get("openvpn", {})
+        ca_cert = ovpn_data.get("ca_cert")
+        tls_crypt_key = ovpn_data.get("tls_crypt_key")
+        if not ca_cert or not tls_crypt_key:
+            return None
+
+        return {
+            "remark": self._remark_validation(remark),
+            "address": address,
+            "port": inbound.port,
+            "protocol": inbound.network,  # udp/tcp, set as the L4 transport by OpenVPNConfig
+            "username": username,
+            "password": password,
+            "cipher": ovpn_data.get("cipher", "AES-256-GCM"),
+            "auth": ovpn_data.get("auth", "SHA256"),
+            "ca_cert": ca_cert,
+            "tls_crypt_key": tls_crypt_key,
+        }

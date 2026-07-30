@@ -42,6 +42,10 @@ class Hysteria2Settings(BaseModel):
     password: str = Field(default_factory=random_password, min_length=1)
 
 
+class OpenVPNSettings(BaseModel):
+    password: str = Field(default_factory=random_password, min_length=1)
+
+
 class WireGuardPeerIPs(BaseModel):
     peer_ips: list[str] = Field(default_factory=list)
 
@@ -110,6 +114,7 @@ class ProxyTable(BaseModel):
     wireguard: WireGuardSettings = Field(default_factory=WireGuardSettings)
     hysteria: HysteriaSettings = Field(default_factory=HysteriaSettings)
     hysteria2: Hysteria2Settings = Field(default_factory=Hysteria2Settings)
+    openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
 
     def dict(self, *, no_obj=True, **kwargs):
         if no_obj:

@@ -902,7 +902,7 @@ dev = [
 [[package]]
 name = "pasarguard-node-bridge"
 version = "0.8.1+singbox"
-source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?branch=feature%2Fsingbox-hysteria2#1e8f8856d1adabf7fb57c6ab42f2fe106251a143" }
+source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?branch=feature%2Fsingbox-hysteria2#0a5b0a09b4c7bb6e4f87ab2db1704a3fa3b2affe" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-socks" },

@@ -247,6 +247,8 @@ class NodeOperation(BaseOperation):
             type = service.BackendType.WIREGUARD
         elif core.type == CoreType.singbox:
             type = service.BackendType.SING_BOX
+        elif core.type == CoreType.openvpn:
+            type = service.BackendType.OPEN_VPN
         else:
             type = service.BackendType.XRAY
 

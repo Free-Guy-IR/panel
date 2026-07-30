@@ -5,6 +5,7 @@ from .singbox import SingBoxConfiguration
 from .outline import OutlineConfiguration
 from .clash import ClashConfiguration, ClashMetaConfiguration
 from .wireguard import WireGuardConfiguration
+from .openvpn import OpenVPNConfiguration
 
 __all__ = [
     "BaseSubscription",
@@ -15,4 +16,5 @@ __all__ = [
     "ClashConfiguration",
     "ClashMetaConfiguration",
     "WireGuardConfiguration",
+    "OpenVPNConfiguration",
 ]
