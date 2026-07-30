@@ -51,7 +51,7 @@ async def serialize_user(user: User, allowed_protocols: frozenset[ProxyProtocol]
         if inbounds is None:
             inbounds = await user.inbounds()
 
-    return _serialize_user_for_node(user.id, user_settings, inbounds, allowed_protocols)
+    return _serialize_user_for_node(user.id, user_settings, inbounds, allowed_protocols, user.hwid_limit)
 
 
 def _serialize_user_for_node(
@@ -59,6 +59,7 @@ def _serialize_user_for_node(
     user_settings: dict,
     inbounds: list[str] = None,
     allowed_protocols: frozenset[ProxyProtocol] | None = None,
+    hwid_limit: int | None = None,
 ) -> ProtoUser:
     allowed_protocols = allowed_protocols or _ALL_PROXY_PROTOCOLS
 
@@ -84,6 +85,10 @@ def _serialize_user_for_node(
     if ProxyProtocol.openvpn in allowed_protocols:
         proxy_kwargs["openvpn_username"] = str(id)
         proxy_kwargs["openvpn_password"] = user_settings.get("openvpn", {}).get("password")
+        # hwid_limit is reused here as a concurrent-connection cap (0/None = unlimited) -
+        # OpenVPN has no device-fingerprint concept, so this is a different semantic
+        # than hwid_limit's original meaning for Xray (distinct devices ever seen).
+        proxy_kwargs["openvpn_max_concurrent_connections"] = hwid_limit or 0
 
     return create_user(
         str(id),
@@ -111,6 +116,7 @@ async def core_users(
         select(
             User.id,
             User.proxy_settings,
+            User.hwid_limit,
             inbound_agg,
         )
         .outerjoin(users_groups_association, User.id == users_groups_association.c.user_id)
@@ -156,6 +162,7 @@ async def core_users(
                     row.proxy_settings,
                     inbound_tags,
                     allowed_protocols,
+                    row.hwid_limit,
                 )
             )
     return bridge_users
@@ -177,6 +184,8 @@ async def serialize_users_for_node(
             else:
                 inbounds_list = loaded_inbounds
 
-        bridge_users.append(_serialize_user_for_node(user.id, user.proxy_settings, inbounds_list, allowed_protocols))
+        bridge_users.append(
+            _serialize_user_for_node(user.id, user.proxy_settings, inbounds_list, allowed_protocols, user.hwid_limit)
+        )
 
     return bridge_users

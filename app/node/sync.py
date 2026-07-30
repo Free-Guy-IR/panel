@@ -155,7 +155,7 @@ async def sync_user(db_user: User) -> None:
 
 
 async def remove_user(user: UserNotificationResponse) -> None:
-    proto_user = _serialize_user_for_node(user.id, user.proxy_settings.dict())
+    proto_user = _serialize_user_for_node(user.id, user.proxy_settings.dict(), hwid_limit=user.hwid_limit)
     asyncio.create_task(_dispatch_user_update(proto_user))
 
 
@@ -163,7 +163,7 @@ async def remove_users(users: list[User]) -> None:
     """Batch-remove users from nodes (serialized without inbounds so nodes drop them)."""
     if not users:
         return
-    proto_users = [_serialize_user_for_node(u.id, u.proxy_settings) for u in users]
+    proto_users = [_serialize_user_for_node(u.id, u.proxy_settings, hwid_limit=u.hwid_limit) for u in users]
     asyncio.create_task(_dispatch_users_update(proto_users))
 
 
