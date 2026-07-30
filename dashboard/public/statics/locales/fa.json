@@ -3024,6 +3024,49 @@
       "other": "سایر",
       "sniLabel": "SNI",
       "sniDiscovered": "کشف‌شده از IP"
+    },
+    "instance": {
+      "add": "افزودن اینستنس"
+    },
+    "openvpn": {
+      "instancesHint": "هر اینستنس یک پروسه‌ی مستقل OpenVPN با پروتکل/پورت جداگانه است.",
+      "keepAtLeastOne": "حداقل یک اینستنس لازم است.",
+      "emptyInstances": "هنوز اینستنسی وجود ندارد. برای ساخت، روی «افزودن اینستنس» کلیک کنید.",
+      "fields": {
+        "tag": "برچسب",
+        "protocol": "پروتکل",
+        "port": "پورت",
+        "network": "شبکه (CIDR)",
+        "cipher": "الگوریتم رمزنگاری",
+        "auth": "الگوریتم Auth",
+        "keepalive": "فاصله‌ی Keepalive",
+        "maxClients": "حداکثر کلاینت",
+        "maxClientsPlaceholder": "نامحدود",
+        "verb": "سطح جزئیات لاگ (verb)",
+        "dnsServers": "سرورهای DNS",
+        "dnsServersPlaceholder": "1.1.1.1",
+        "redirectGateway": "هدایت گیت‌وی (Redirect Gateway)",
+        "redirectGatewayHint": "تمام ترافیک کلاینت از این تونل عبور داده شود.",
+        "duplicateCn": "اجازه‌ی CN تکراری",
+        "duplicateCnHint": "اجازه بده یک کاربر هم‌زمان از چند دستگاه وصل شود."
+      },
+      "pki": {
+        "caCert": "گواهی CA",
+        "serverCert": "گواهی سرور",
+        "serverKey": "کلید سرور",
+        "tlsCryptKey": "کلید ثابت tls-crypt",
+        "generateSuccess": "PKI ساخته شد. برای ذخیره‌ی دائمی، هسته را ذخیره کنید.",
+        "generateFailed": "ساخت PKI ناموفق بود",
+        "statusGenerated": "PKI ساخته شده",
+        "statusMissing": "PKI هنوز ساخته نشده",
+        "badgeReady": "آماده",
+        "badgeMissing": "موجود نیست",
+        "generating": "در حال ساخت…",
+        "regenerate": "بازسازی PKI",
+        "generate": "ساخت PKI",
+        "regenerateConfirmTitle": "PKI بازسازی شود؟",
+        "regenerateConfirmAction": "بازسازی"
+      }
     }
   },
   "settings.cores.title": "هسته‌ها",
