@@ -2323,7 +2323,9 @@
       "dns": "DNS",
       "bindings": "Bindings",
       "advanced": "Advanced",
-      "interface": "Interface"
+      "interface": "Interface",
+      "instances": "Instances",
+      "pki": "PKI"
     },
     "sectionDesc": {
       "wgInterface": "WireGuard interface and keys",
@@ -2334,7 +2336,9 @@
       "balancers": "Outbound load balancing setup",
       "dns": "DNS resolver and server config",
       "bindings": "Inbound tag fallbacks and exclusions",
-      "sbInbounds": "Hysteria2 inbound listeners for this sing-box core"
+      "sbInbounds": "Hysteria2 inbound listeners for this sing-box core",
+      "ovInstances": "Each instance is an independent openvpn process on a distinct protocol/port.",
+      "ovPki": "Server certificate authority, certificate, and key management."
     },
     "wg": {
       "interfaceBlurb": "WireGuard interface settings and key material for this core.",
@@ -3145,6 +3149,9 @@
       "other": "Other",
       "sniLabel": "SNI",
       "sniDiscovered": "discovered from IP"
+    },
+    "instance": {
+      "add": "Add instance"
     }
   },
   "settings.cores.title": "Cores",
