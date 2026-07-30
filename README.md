@@ -15,6 +15,10 @@
 
 ---
 
+> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/PasarGuard/panel), extended with **sing-box (Hysteria2)** and **OpenVPN** as additional core types alongside Xray and WireGuard.
+
+---
+
 <br/>
 <p align="center">
     <a href="https://github.com/PasarGuard/panel/actions/workflows/build.yml" target="_blank">
