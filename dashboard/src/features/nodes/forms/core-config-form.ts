@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const coreBackendTypes = ['xray', 'wg', 'mtproto', 'singbox'] as const
+export const coreBackendTypes = ['xray', 'wg', 'mtproto', 'singbox', 'openvpn'] as const
 export type CoreBackendType = (typeof coreBackendTypes)[number]
 
 export const coreConfigFormSchema = z.object({

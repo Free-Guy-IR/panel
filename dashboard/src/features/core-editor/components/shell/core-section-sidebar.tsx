@@ -1,11 +1,12 @@
 import { cn } from '@/lib/utils'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
-import { SING_BOX_CORE_SECTION_NAV, WG_CORE_SECTION_NAV, XRAY_CORE_SECTION_NAV } from '@/features/core-editor/kit/core-section-nav'
+import { OPENVPN_CORE_SECTION_NAV, SING_BOX_CORE_SECTION_NAV, WG_CORE_SECTION_NAV, XRAY_CORE_SECTION_NAV } from '@/features/core-editor/kit/core-section-nav'
 import { useTranslation } from 'react-i18next'
 
-function sectionNavForKind(kind: 'xray' | 'wg' | 'singbox') {
+function sectionNavForKind(kind: 'xray' | 'wg' | 'singbox' | 'openvpn') {
   if (kind === 'wg') return WG_CORE_SECTION_NAV
   if (kind === 'singbox') return SING_BOX_CORE_SECTION_NAV
+  if (kind === 'openvpn') return OPENVPN_CORE_SECTION_NAV
   return XRAY_CORE_SECTION_NAV
 }
 
@@ -53,14 +54,14 @@ export function CoreSectionTabsPlaceholder({
   activeSectionId,
   className,
 }: {
-  kind: 'xray' | 'wg' | 'singbox'
-  /** Defaults: inbounds (xray/singbox) / interface (wg). */
+  kind: 'xray' | 'wg' | 'singbox' | 'openvpn'
+  /** Defaults: inbounds (xray/singbox) / interface (wg) / instances (openvpn). */
   activeSectionId?: string
   className?: string
 }) {
   const { t } = useTranslation()
   const items = sectionNavForKind(kind)
-  const active = activeSectionId ?? (kind === 'wg' ? 'interface' : 'inbounds')
+  const active = activeSectionId ?? (kind === 'wg' ? 'interface' : kind === 'openvpn' ? 'instances' : 'inbounds')
 
   return (
     <div className={cn('flex w-full border-b px-4', className)} role="presentation" aria-busy="true" aria-label={t('coreEditor.section.label', { defaultValue: 'Section' })}>

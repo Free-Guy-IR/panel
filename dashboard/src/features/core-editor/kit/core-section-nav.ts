@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
-import { ArrowDownToLine, ArrowUpFromLine, Braces, Cable, Globe, Link2, Scale, Waypoints } from 'lucide-react'
-import type { SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
+import { ArrowDownToLine, ArrowUpFromLine, Braces, Cable, Globe, Link2, Scale, ScrollText, ShieldCheck, Waypoints } from 'lucide-react'
+import type { OvCoreSection, SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 
 export type XraySectionNavItem = {
   id: XrayCoreSection
@@ -23,6 +23,13 @@ export type SbSectionNavItem = {
   icon: LucideIcon
 }
 
+export type OvSectionNavItem = {
+  id: OvCoreSection
+  labelKey: string
+  defaultLabel: string
+  icon: LucideIcon
+}
+
 export const XRAY_CORE_SECTION_NAV: XraySectionNavItem[] = [
   { id: 'inbounds', labelKey: 'coreEditor.section.inbounds', defaultLabel: 'Inbounds', icon: ArrowDownToLine },
   { id: 'outbounds', labelKey: 'coreEditor.section.outbounds', defaultLabel: 'Outbounds', icon: ArrowUpFromLine },
@@ -40,5 +47,11 @@ export const WG_CORE_SECTION_NAV: WgSectionNavItem[] = [
 
 export const SING_BOX_CORE_SECTION_NAV: SbSectionNavItem[] = [
   { id: 'inbounds', labelKey: 'coreEditor.section.inbounds', defaultLabel: 'Inbounds', icon: ArrowDownToLine },
+  { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
+]
+
+export const OPENVPN_CORE_SECTION_NAV: OvSectionNavItem[] = [
+  { id: 'instances', labelKey: 'coreEditor.section.instances', defaultLabel: 'Instances', icon: ScrollText },
+  { id: 'pki', labelKey: 'coreEditor.section.pki', defaultLabel: 'PKI', icon: ShieldCheck },
   { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
 ]

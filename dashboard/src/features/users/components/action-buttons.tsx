@@ -6,7 +6,7 @@ import { type UseEditFormValues } from '@/features/users/forms/user-form'
 import { useActiveNextPlanById, useGetCurrentAdmin, useRemoveUserById, useResetUserDataUsageById, useRevokeUserSubscriptionById, UserResponse, UsersResponse } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { Cat, Check, Copy, EllipsisVertical, Fingerprint, GlobeLock, Hash, Link2Off, ListStart, ListTree, Network, Pencil, PieChart, QrCode, RefreshCcw, Trash2, UserCog, Users } from 'lucide-react'
-import { WireguardIcon, XrayIcon, SingboxIcon, MihomoIcon } from '@/components/icons/format-icons'
+import { WireguardIcon, XrayIcon, SingboxIcon, MihomoIcon, OpenvpnIcon } from '@/components/icons/format-icons'
 import { Code } from 'lucide-react'
 import { FC, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useForm } from 'react-hook-form'
@@ -40,7 +40,7 @@ export interface SubscribeLink {
   icon: React.ComponentType<{ className?: string }>
 }
 
-const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'wireguard']
+const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'wireguard', 'openvpn']
 
 type ActionButtonsModalState = {
   subscribeUrl: string
@@ -367,6 +367,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       { protocol: 'clash-meta', format: 'clash_meta', icon: MihomoIcon },
       { protocol: 'outline', format: 'outline', icon: GlobeLock },
       { protocol: 'sing-box', format: 'sing_box', icon: SingboxIcon },
+      { protocol: 'openvpn', format: 'openvpn', icon: OpenvpnIcon },
     ]
   }, [user.subscription_url])
 
@@ -619,7 +620,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        const ext = type === 'wireguard' ? 'zip' : 'yaml'
+        const ext = type === 'wireguard' ? 'zip' : type === 'openvpn' ? 'ovpn' : 'yaml'
         a.download = `${user.username}.${ext}`
         document.body.appendChild(a)
         a.click()

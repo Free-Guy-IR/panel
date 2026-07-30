@@ -2,18 +2,22 @@ import type { CoreKind } from '@pasarguard/core-kit'
 import type { Profile } from '@pasarguard/xray-config-kit'
 import type { WireGuardCoreDraft } from '@pasarguard/wireguard-config-kit'
 import type { SingBoxCoreDraft } from '@pasarguard/singbox-config-kit'
+import type { OpenVPNCoreDraft } from '@pasarguard/openvpn-config-kit'
 import { create } from 'zustand'
 import type { CoreResponse } from '@/service/api'
 import { apiCoreTypeToKind } from '../kit/core-kind'
 import { createNewXrayProfile, importRawToProfile, profileToPersistedConfig } from '../kit/xray-adapter'
 import { createNewWireGuardDraft, draftToPersistedConfig, wireGuardConfigToDraft } from '../kit/wireguard-adapter'
 import { createNewSingBoxDraft, draftToPersistedConfig as sbDraftToPersistedConfig, singBoxConfigToDraft } from '../kit/singbox-adapter'
+import { createNewOpenVPNDraft, draftToPersistedConfig as ovDraftToPersistedConfig, openVPNConfigToDraft } from '../kit/openvpn-adapter'
 
 export type XrayCoreSection = 'bindings' | 'inbounds' | 'outbounds' | 'routing' | 'balancers' | 'dns' | 'advanced'
 
 export type WgCoreSection = 'interface' | 'advanced'
 
 export type SbCoreSection = 'inbounds' | 'advanced'
+
+export type OvCoreSection = 'instances' | 'pki' | 'advanced'
 
 function cloneProfile(p: Profile): Profile {
   return JSON.parse(JSON.stringify(p)) as Profile
@@ -27,6 +31,10 @@ function cloneSb(d: SingBoxCoreDraft): SingBoxCoreDraft {
   return JSON.parse(JSON.stringify(d)) as SingBoxCoreDraft
 }
 
+function cloneOv(d: OpenVPNCoreDraft): OpenVPNCoreDraft {
+  return JSON.parse(JSON.stringify(d)) as OpenVPNCoreDraft
+}
+
 export interface PersistedSnapshot {
   kind: CoreKind
   coreName: string
@@ -35,7 +43,8 @@ export interface PersistedSnapshot {
   xrayProfile: Profile | null
   wgDraft: WireGuardCoreDraft | null
   sbDraft: SingBoxCoreDraft | null
-  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection
+  ovDraft: OpenVPNCoreDraft | null
+  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection
   monacoJson: string
   xrayImportWarnings: string[]
   /** Last `JSON.stringify(core.config)` from the API used to hydrate this draft (clean-state refetch sync). */
@@ -51,6 +60,7 @@ function captureSnapshot(s: CoreEditorStoreState): PersistedSnapshot {
     xrayProfile: s.xrayProfile ? cloneProfile(s.xrayProfile) : null,
     wgDraft: s.wgDraft ? cloneWg(s.wgDraft) : null,
     sbDraft: s.sbDraft ? cloneSb(s.sbDraft) : null,
+    ovDraft: s.ovDraft ? cloneOv(s.ovDraft) : null,
     activeSection: s.activeSection,
     monacoJson: s.monacoJson,
     xrayImportWarnings: [...s.xrayImportWarnings],
@@ -59,11 +69,12 @@ function captureSnapshot(s: CoreEditorStoreState): PersistedSnapshot {
 }
 
 /** Legacy snapshots used `overview`; map to current sections. */
-function normalizePersistedActiveSection(snapshot: PersistedSnapshot): XrayCoreSection | WgCoreSection | SbCoreSection {
+function normalizePersistedActiveSection(snapshot: PersistedSnapshot): XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection {
   const s = snapshot.activeSection as string
   if (snapshot.kind === 'wg' && s === 'overview') return 'interface'
   if (snapshot.kind === 'xray' && s === 'overview') return 'bindings'
   if (snapshot.kind === 'singbox' && s === 'overview') return 'inbounds'
+  if (snapshot.kind === 'openvpn' && s === 'overview') return 'instances'
   return snapshot.activeSection
 }
 
@@ -81,6 +92,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       wgBaseline: cloneWg(d),
       sbDraft: null,
       sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -102,6 +115,31 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       wgBaseline: null,
       sbDraft: d,
       sbBaseline: cloneSb(d),
+      ovDraft: null,
+      ovBaseline: null,
+      activeSection: normalizePersistedActiveSection(snapshot),
+      monacoJson: snapshot.monacoJson,
+      monacoDirty: false,
+      xrayImportWarnings: [...snapshot.xrayImportWarnings],
+      serverHydratedConfigJson: snapshot.serverHydratedConfigJson ?? null,
+      dirty: false,
+    }
+  }
+  if (snapshot.kind === 'openvpn' && snapshot.ovDraft) {
+    const d = cloneOv(snapshot.ovDraft)
+    return {
+      kind: snapshot.kind,
+      coreName: snapshot.coreName,
+      fallbacksInboundTags: [...snapshot.fallbacksInboundTags],
+      excludeInboundTags: [...snapshot.excludeInboundTags],
+      xrayProfile: null,
+      xrayBaseline: null,
+      wgDraft: null,
+      wgBaseline: null,
+      sbDraft: null,
+      sbBaseline: null,
+      ovDraft: d,
+      ovBaseline: cloneOv(d),
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -123,6 +161,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       wgBaseline: null,
       sbDraft: null,
       sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -149,7 +189,9 @@ export interface CoreEditorStoreState {
   wgBaseline: WireGuardCoreDraft | null
   sbDraft: SingBoxCoreDraft | null
   sbBaseline: SingBoxCoreDraft | null
-  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection
+  ovDraft: OpenVPNCoreDraft | null
+  ovBaseline: OpenVPNCoreDraft | null
+  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection
   dirty: boolean
   monacoJson: string
   monacoDirty: boolean
@@ -162,7 +204,7 @@ export interface CoreEditorStoreState {
   initNew: (kind: CoreKind, name?: string) => void
   reset: () => void
   setCoreName: (name: string) => void
-  setActiveSection: (s: XrayCoreSection | WgCoreSection | SbCoreSection) => void
+  setActiveSection: (s: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection) => void
   setRestartNodes: (v: boolean) => void
   setFallbacksInboundTags: (tags: string[]) => void
   setExcludeInboundTags: (tags: string[]) => void
@@ -172,6 +214,8 @@ export interface CoreEditorStoreState {
   updateWgDraft: (updater: (d: WireGuardCoreDraft) => WireGuardCoreDraft) => void
   setSbDraft: (d: SingBoxCoreDraft) => void
   updateSbDraft: (updater: (d: SingBoxCoreDraft) => SingBoxCoreDraft) => void
+  setOvDraft: (d: OpenVPNCoreDraft) => void
+  updateOvDraft: (updater: (d: OpenVPNCoreDraft) => OpenVPNCoreDraft) => void
   markClean: () => void
   discardDraft: () => void
   switchKind: (nextKind: CoreKind) => void
@@ -180,7 +224,12 @@ export interface CoreEditorStoreState {
   applyMonacoJson: () => { ok: true } | { ok: false; error: string }
 }
 
-const defaultSection = (kind: CoreKind): XrayCoreSection | WgCoreSection | SbCoreSection => (kind === 'wg' ? 'interface' : 'inbounds')
+const defaultSection = (kind: CoreKind): XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection => {
+  if (kind === 'wg') return 'interface'
+  if (kind === 'openvpn') return 'instances'
+  if (kind === 'singbox') return 'inbounds'
+  return 'inbounds'
+}
 
 export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   hydrated: false,
@@ -197,6 +246,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   wgBaseline: null,
   sbDraft: null,
   sbBaseline: null,
+  ovDraft: null,
+  ovBaseline: null,
   activeSection: 'inbounds',
   dirty: false,
   monacoJson: '{}',
@@ -233,6 +284,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
           wgBaseline: cloneWg(fallbackDraft),
           sbDraft: null,
           sbBaseline: null,
+          ovDraft: null,
+          ovBaseline: null,
           activeSection: nav.activeSection,
           dirty: false,
           monacoJson: JSON.stringify(core.config, null, 2),
@@ -259,6 +312,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         wgBaseline: cloneWg(draft),
         sbDraft: null,
         sbBaseline: null,
+        ovDraft: null,
+        ovBaseline: null,
         activeSection: nav.activeSection,
         dirty: false,
         monacoJson: JSON.stringify(draftToPersistedConfig(draft), null, 2),
@@ -288,6 +343,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
           wgBaseline: null,
           sbDraft: fallbackDraft,
           sbBaseline: cloneSb(fallbackDraft),
+          ovDraft: null,
+          ovBaseline: null,
           activeSection: nav.activeSection,
           dirty: false,
           monacoJson: JSON.stringify(core.config, null, 2),
@@ -314,9 +371,70 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         wgBaseline: null,
         sbDraft: draft,
         sbBaseline: cloneSb(draft),
+        ovDraft: null,
+        ovBaseline: null,
         activeSection: nav.activeSection,
         dirty: false,
         monacoJson: JSON.stringify(sbDraftToPersistedConfig(draft), null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+        serverHydratedConfigJson: serverJson,
+      })
+      set({ persistedSnapshot: captureSnapshot(get()) })
+      return
+    }
+    if (kind === 'openvpn') {
+      const parsed = openVPNConfigToDraft(core.config)
+      if (!parsed.ok) {
+        const fallbackDraft = createNewOpenVPNDraft()
+        set({
+          hydrated: true,
+          isNew: false,
+          coreId: core.id,
+          coreName: core.name,
+          kind,
+          restartNodes: nav.restartNodes,
+          fallbacksInboundTags: [],
+          excludeInboundTags: [],
+          xrayProfile: null,
+          xrayBaseline: null,
+          wgDraft: null,
+          wgBaseline: null,
+          sbDraft: null,
+          sbBaseline: null,
+          ovDraft: fallbackDraft,
+          ovBaseline: cloneOv(fallbackDraft),
+          activeSection: nav.activeSection,
+          dirty: false,
+          monacoJson: JSON.stringify(core.config, null, 2),
+          monacoDirty: false,
+          xrayImportWarnings: [parsed.message],
+          serverHydratedConfigJson: serverJson,
+        })
+        set({ persistedSnapshot: captureSnapshot(get()) })
+        return
+      }
+      const draft = parsed.draft
+      set({
+        hydrated: true,
+        isNew: false,
+        coreId: core.id,
+        coreName: core.name,
+        kind,
+        restartNodes: nav.restartNodes,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        sbDraft: null,
+        sbBaseline: null,
+        ovDraft: draft,
+        ovBaseline: cloneOv(draft),
+        activeSection: nav.activeSection,
+        dirty: false,
+        monacoJson: JSON.stringify(ovDraftToPersistedConfig(draft), null, 2),
         monacoDirty: false,
         xrayImportWarnings: [],
         serverHydratedConfigJson: serverJson,
@@ -341,6 +459,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       wgBaseline: null,
       sbDraft: null,
       sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
       activeSection: nav.activeSection,
       dirty: false,
       monacoJson: JSON.stringify(profileToPersistedConfig(p), null, 2),
@@ -369,6 +489,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         wgBaseline: cloneWg(draft),
         sbDraft: null,
         sbBaseline: null,
+        ovDraft: null,
+        ovBaseline: null,
         activeSection: defaultSection(kind),
         dirty: false,
         monacoJson: JSON.stringify(draftToPersistedConfig(draft), null, 2),
@@ -396,9 +518,43 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         wgBaseline: null,
         sbDraft: draft,
         sbBaseline: cloneSb(draft),
+        ovDraft: null,
+        ovBaseline: null,
         activeSection: defaultSection(kind),
         dirty: false,
         monacoJson: JSON.stringify(sbDraftToPersistedConfig(draft), null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+        serverHydratedConfigJson: null,
+      })
+      set({ persistedSnapshot: captureSnapshot(get()) })
+      return
+    }
+    if (kind === 'openvpn') {
+      const draft = createNewOpenVPNDraft()
+      set({
+        hydrated: true,
+        isNew: true,
+        coreId: null,
+        coreName: name,
+        kind,
+        restartNodes: true,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        sbDraft: null,
+        sbBaseline: null,
+        ovDraft: draft,
+        ovBaseline: cloneOv(draft),
+        activeSection: defaultSection(kind),
+        dirty: false,
+        // The default draft's pki is empty (server-generated), so a naive serialization would
+        // throw inside draftToPersistedConfig - show the raw instances/pki-stub shape instead
+        // until the admin runs "Generate PKI", mirroring how other kinds seed the JSON tab.
+        monacoJson: JSON.stringify({ instances: draft.instances, pki: { ca_cert: '', server_cert: '', server_key: '', tls_crypt_key: '' } }, null, 2),
         monacoDirty: false,
         xrayImportWarnings: [],
         serverHydratedConfigJson: null,
@@ -422,6 +578,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       wgBaseline: null,
       sbDraft: null,
       sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
       activeSection: defaultSection(kind),
       dirty: false,
       monacoJson: JSON.stringify(profileToPersistedConfig(p), null, 2),
@@ -448,6 +606,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       wgBaseline: null,
       sbDraft: null,
       sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
       activeSection: 'inbounds',
       dirty: false,
       monacoJson: '{}',
@@ -506,12 +666,27 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
     get().syncMonacoFromDraft()
   },
 
+  setOvDraft: ovDraft => {
+    set({ ovDraft, dirty: true })
+    get().syncMonacoFromDraft()
+  },
+
+  updateOvDraft: updater => {
+    const cur = get().ovDraft
+    if (!cur) return
+    const next = updater(cloneOv(cur))
+    set({ ovDraft: next, dirty: true })
+    get().syncMonacoFromDraft()
+  },
+
   markClean: () => {
-    const { kind, xrayProfile, wgDraft, sbDraft } = get()
+    const { kind, xrayProfile, wgDraft, sbDraft, ovDraft } = get()
     if (kind === 'wg' && wgDraft) {
       set({ wgBaseline: cloneWg(wgDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'singbox' && sbDraft) {
       set({ sbBaseline: cloneSb(sbDraft), dirty: false, monacoDirty: false })
+    } else if (kind === 'openvpn' && ovDraft) {
+      set({ ovBaseline: cloneOv(ovDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'xray' && xrayProfile) {
       set({ xrayBaseline: cloneProfile(xrayProfile), dirty: false, monacoDirty: false })
     }
@@ -542,6 +717,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         wgBaseline: cloneWg(draft),
         sbDraft: null,
         sbBaseline: null,
+        ovDraft: null,
+        ovBaseline: null,
         activeSection: defaultSection('wg'),
         dirty: true,
         monacoJson: JSON.stringify(draftToPersistedConfig(draft), null, 2),
@@ -562,9 +739,33 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         wgBaseline: null,
         sbDraft: draft,
         sbBaseline: cloneSb(draft),
+        ovDraft: null,
+        ovBaseline: null,
         activeSection: defaultSection('singbox'),
         dirty: true,
         monacoJson: JSON.stringify(sbDraftToPersistedConfig(draft), null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+      })
+      return
+    }
+    if (nextKind === 'openvpn') {
+      const draft = createNewOpenVPNDraft()
+      set({
+        kind: 'openvpn',
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        sbDraft: null,
+        sbBaseline: null,
+        ovDraft: draft,
+        ovBaseline: cloneOv(draft),
+        activeSection: defaultSection('openvpn'),
+        dirty: true,
+        monacoJson: JSON.stringify({ instances: draft.instances, pki: { ca_cert: '', server_cert: '', server_key: '', tls_crypt_key: '' } }, null, 2),
         monacoDirty: false,
         xrayImportWarnings: [],
       })
@@ -581,6 +782,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       wgBaseline: null,
       sbDraft: null,
       sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
       activeSection: defaultSection('xray'),
       dirty: true,
       monacoJson: JSON.stringify(profileToPersistedConfig(p), null, 2),
@@ -592,17 +795,19 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   setMonacoJson: (monacoJson, opts) => set({ monacoJson, monacoDirty: opts?.dirty ?? true }),
 
   syncMonacoFromDraft: () => {
-    const { kind, xrayProfile, wgDraft, sbDraft } = get()
+    const { kind, xrayProfile, wgDraft, sbDraft, ovDraft } = get()
     try {
       if (kind === 'wg' && wgDraft) {
         set({ monacoJson: JSON.stringify(draftToPersistedConfig(wgDraft), null, 2), monacoDirty: false })
       } else if (kind === 'singbox' && sbDraft) {
         set({ monacoJson: JSON.stringify(sbDraftToPersistedConfig(sbDraft), null, 2), monacoDirty: false })
+      } else if (kind === 'openvpn' && ovDraft) {
+        set({ monacoJson: JSON.stringify(ovDraftToPersistedConfig(ovDraft), null, 2), monacoDirty: false })
       } else if (kind === 'xray' && xrayProfile) {
         set({ monacoJson: JSON.stringify(profileToPersistedConfig(xrayProfile), null, 2), monacoDirty: false })
       }
     } catch {
-      /* keep previous monacoJson */
+      /* keep previous monacoJson (e.g. OpenVPN pki not generated yet) */
     }
   },
 
@@ -624,6 +829,12 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       const r = singBoxConfigToDraft(parsed)
       if (!r.ok) return { ok: false, error: r.message }
       set({ sbDraft: r.draft, dirty: true, monacoDirty: false })
+      return { ok: true }
+    }
+    if (kind === 'openvpn') {
+      const r = openVPNConfigToDraft(parsed)
+      if (!r.ok) return { ok: false, error: r.message }
+      set({ ovDraft: r.draft, dirty: true, monacoDirty: false })
       return { ok: true }
     }
     const { profile, issues } = importRawToProfile(parsed)

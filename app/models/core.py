@@ -147,3 +147,18 @@ class RemoveCoresResponse(BaseModel):
 
     cores: list[str]
     count: int
+
+
+class OpenVPNPKIResponse(BaseModel):
+    """A freshly generated OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
+
+    Returned by POST /api/core/openvpn/generate-pki - see app.core.openvpn.generate_openvpn_pki().
+    Stateless: generation does not read or write any core config, so this response is not tied
+    to a specific core_id and can be requested both while drafting a brand-new OpenVPN core
+    (before it has been created) and when regenerating PKI for an existing one.
+    """
+
+    ca_cert: str
+    server_cert: str
+    server_key: str
+    tls_crypt_key: str

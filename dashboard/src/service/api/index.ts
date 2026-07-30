@@ -1669,6 +1669,16 @@ export interface RemoveCoresResponse {
 }
 
 /**
+ * A freshly generated OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
+ */
+export interface OpenVPNPKIResponse {
+  ca_cert: string
+  server_cert: string
+  server_key: string
+  tls_crypt_key: string
+}
+
+/**
  * Response model for bulk client template deletion
  */
 export interface RemoveClientTemplatesResponse {
@@ -2849,6 +2859,7 @@ export const CoreType = {
   wg: 'wg',
   mtproto: 'mtproto',
   singbox: 'singbox',
+  openvpn: 'openvpn',
 } as const
 
 export type CoreSimpleType = CoreType | null
@@ -7979,6 +7990,61 @@ export const useRestartCore = <TData = Awaited<ReturnType<typeof restartCore>>, 
   mutation?: UseMutationOptions<TData, TError, { coreId: number }, TContext>
 }): UseMutationResult<TData, TError, { coreId: number }, TContext> => {
   const mutationOptions = getRestartCoreMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * Generate a fresh OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
+ *
+ * Stateless - does not read or write any core config, so it is not scoped to a core_id.
+ * The dashboard's OpenVPN core editor calls this both to populate PKI on a brand-new
+ * (not yet created) core draft and to regenerate PKI on an existing one; the caller is
+ * responsible for embedding the result into CoreConfig.config["pki"] before saving.
+ * Regenerating invalidates every previously-downloaded .ovpn file for users on that core,
+ * since the CA and tls-crypt key both change.
+ * @summary Generate Openvpn Pki Bundle
+ */
+export const generateOpenvpnPkiBundle = (signal?: AbortSignal) => {
+  return orvalFetcher<OpenVPNPKIResponse>({ url: `/api/core/openvpn/generate-pki`, method: 'POST', signal })
+}
+
+export const getGenerateOpenvpnPkiBundleMutationOptions = <
+  TData = Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, void, TContext>
+}) => {
+  const mutationKey = ['generateOpenvpnPkiBundle']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>, void> = () => {
+    return generateOpenvpnPkiBundle()
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, void, TContext>
+}
+
+export type GenerateOpenvpnPkiBundleMutationResult = NonNullable<Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>>
+
+export type GenerateOpenvpnPkiBundleMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Generate Openvpn Pki Bundle
+ */
+export const useGenerateOpenvpnPkiBundle = <
+  TData = Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, void, TContext>
+}): UseMutationResult<TData, TError, void, TContext> => {
+  const mutationOptions = getGenerateOpenvpnPkiBundleMutationOptions(options)
 
   return useMutation(mutationOptions)
 }

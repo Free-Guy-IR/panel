@@ -39,6 +39,15 @@ export function SingboxIcon({ className, size = 16, ...props }: SVGProps<SVGSVGE
   )
 }
 
+export function OpenvpnIcon({ className, size = 16, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <path d="M12 2 4 5.5v6c0 5 3.4 8.9 8 10.5 4.6-1.6 8-5.5 8-10.5v-6L12 2Z" />
+      <path d="M9.5 12.5 11 14l3.5-4" />
+    </svg>
+  )
+}
+
 export function MihomoIcon({ className, size = 16, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35" width={size} height={size} fill="currentColor" className={className} {...props}>

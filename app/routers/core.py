@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, status
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
+from app.core.openvpn import generate_openvpn_pki
 from app.models.core import (
     BulkCoreSelection,
     CoreCreate,
     CoreResponse,
     CoreResponseList,
     CoresSimpleResponse,
+    OpenVPNPKIResponse,
     RemoveCoresResponse,
 )
 from app.operation import OperatorType
@@ -109,6 +111,22 @@ async def restart_core(
 
     await node_operator.restart_all_node(db=db, core_id=core_id, admin=admin)
     return {}
+
+
+@router.post("/openvpn/generate-pki", response_model=OpenVPNPKIResponse)
+async def generate_openvpn_pki_bundle(
+    _: AdminDetails = Depends(require_permission("cores", "update")),
+):
+    """Generate a fresh OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
+
+    Stateless - does not read or write any core config, so it is not scoped to a core_id.
+    The dashboard's OpenVPN core editor calls this both to populate PKI on a brand-new
+    (not yet created) core draft and to regenerate PKI on an existing one; the caller is
+    responsible for embedding the result into CoreConfig.config["pki"] before saving.
+    Regenerating invalidates every previously-downloaded .ovpn file for users on that core,
+    since the CA and tls-crypt key both change.
+    """
+    return OpenVPNPKIResponse(**generate_openvpn_pki())
 
 
 @router.post(
