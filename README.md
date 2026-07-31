@@ -166,12 +166,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 
 **📁 Files are located at** `/opt/pasarguard`
 
-**⚙️ Config file:** `/opt/pasarguard/.env` (see [Configuration](#-configuration) for details)
+**⚙️ Config file:** `/opt/pasarguard/.env` (see [Configuration](https://docs.pasarguard.org/en/panel/configuration) for details)
 
 **💾 Data files:** `/var/lib/pasarguard`
 
 **🔒 Important:** Dashboard requires SSL certificate for security
-- Get SSL certificate: [Guide](https://docs.pasarguard.org/en/examples/issue-ssl-certificate)
+- Get SSL certificate: [Guide](https://docs.pasarguard.org/en/learn/ssl-certificate-cli)
 - Access: `https://YOUR_DOMAIN:8000/dashboard/`
 
 **🔗 For testing without domain:** Use SSH port forwarding (see below)

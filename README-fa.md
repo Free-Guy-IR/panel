@@ -69,7 +69,7 @@
 
 -   [📖 بررسی اجمالی](#-بررسی-اجمالی)
     -   [🤔 چرا از پاسارگارد استفاده کنیم؟](#-چرا-از-پاسارگارد-استفاده-کنیم)
-        -   [✨ ویژگی‌ها](#-ویژگیها)
+        -   [✨ ویژگی‌ها](#-ویژگی‌ها)
 -   [🚀 راهنمای نصب](#-راهنمای-نصب)
     -   [🖥️ چند نود روی یک سرور](#️-چند-نود-روی-یک-سرور)
 -   [📚 مستندات](#-مستندات)
@@ -171,12 +171,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 
 **📁 فایل‌ها در مسیر** `/opt/pasarguard` قرار دارند
 
-**⚙️ فایل پیکربندی:** `/opt/pasarguard/.env` (برای جزئیات [پیکربندی](#-پیکربندی) را ببینید)
+**⚙️ فایل پیکربندی:** `/opt/pasarguard/.env` (برای جزئیات [پیکربندی](https://docs.pasarguard.org/fa/panel/configuration) را ببینید)
 
 **💾 فایل‌های داده:** `/var/lib/pasarguard`
 
 **🔒 مهم:** داشبورد برای امنیت نیاز به گواهی SSL دارد
-- دریافت گواهی SSL: [راهنما](https://PasarGuard.github.io/PasarGuard/fa/examples/issue-ssl-certificate)
+- دریافت گواهی SSL: [راهنما](https://docs.pasarguard.org/fa/learn/ssl-certificate-cli)
 - دسترسی: `https://YOUR_DOMAIN:8000/dashboard/`
 
 **🔗 برای تست بدون دامنه:** از SSH port forwarding استفاده کنید (پایین را ببینید)
@@ -235,11 +235,11 @@ node-eu-1 edit-env
 
 **📖 مستندات رسمی** - راهنماهای کامل در دسترس:
 
-🇺🇸 **[English](https://PasarGuard.github.io/PasarGuard)**
+🇺🇸 **[English](https://docs.pasarguard.org/en)**
 
-🇮🇷 **[فارسی](https://PasarGuard.github.io/PasarGuard)**
+🇮🇷 **[فارسی](https://docs.pasarguard.org/fa)**
 
-🇷🇺 **[Русский](https://PasarGuard.github.io/PasarGuard)**
+🇷🇺 **[Русский](https://docs.pasarguard.org/ru)**
 
 </div>
 

@@ -171,12 +171,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 
 **📁 Файлы находятся в** `/opt/pasarguard`
 
-**⚙️ Файл конфигурации:** `/opt/pasarguard/.env` (см. [Конфигурация](#-конфигурация) для деталей)
+**⚙️ Файл конфигурации:** `/opt/pasarguard/.env` (см. [Конфигурация](https://docs.pasarguard.org/ru/panel/configuration) для деталей)
 
 **💾 Файлы данных:** `/var/lib/pasarguard`
 
 **🔒 Важно:** Панель управления требует SSL-сертификат для безопасности
-- Получить SSL-сертификат: [Руководство](https://PasarGuard.github.io/PasarGuard/ru/examples/issue-ssl-certificate)
+- Получить SSL-сертификат: [Руководство](https://docs.pasarguard.org/ru/learn/ssl-certificate-cli)
 - Доступ: `https://YOUR_DOMAIN:8000/dashboard/`
 
 **🔗 Для тестирования без домена:** Используйте SSH port forwarding (см. ниже)
@@ -235,11 +235,11 @@ node-eu-1 edit-env
 
 **📖 Официальная документация** - Полные руководства доступны на:
 
-🇺🇸 **[English](https://PasarGuard.github.io/PasarGuard)**
+🇺🇸 **[English](https://docs.pasarguard.org/en)**
 
-🇮🇷 **[فارسی](https://PasarGuard.github.io/PasarGuard)**
+🇮🇷 **[فارسی](https://docs.pasarguard.org/fa)**
 
-🇷🇺 **[Русский](https://PasarGuard.github.io/PasarGuard)**
+🇷🇺 **[Русский](https://docs.pasarguard.org/ru)**
 
 </div>
 
