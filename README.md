@@ -15,7 +15,7 @@
 
 ---
 
-> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/PasarGuard/panel), extended with **sing-box (Hysteria2)** and **OpenVPN** as additional core types alongside Xray and WireGuard.
+> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/PasarGuard/panel), extended with **sing-box (Hysteria2)**, **OpenVPN**, and **MTProto (Telegram proxy)** as additional core types alongside Xray and WireGuard.
 
 ---
 
@@ -66,6 +66,7 @@
     -   [🤔 Why using PasarGuard?](#-why-using-pasarguard)
         -   [✨ Features](#-features)
 -   [🚀 Installation guide](#-installation-guide)
+    -   [🖥️ Multiple Nodes on One Server](#️-multiple-nodes-on-one-server)
 -   [📚 Documentation](#-documentation)
 -   [💖 Donation](#-donation)
 
@@ -75,7 +76,7 @@
 
 > **What is PasarGuard?**
 
-PasarGuard is a powerful proxy management tool that offers an intuitive and efficient interface for handling hundreds of proxy accounts. Built with Python and React.js it combines performance, scalability, and ease of use to simplify large-scale proxy management. It supports both [Xray-core](https://github.com/XTLS/Xray-core) and [WireGuard](https://www.wireguard.com/) for maximum performance.
+PasarGuard is a powerful proxy management tool that offers an intuitive and efficient interface for handling hundreds of proxy accounts. Built with Python and React.js it combines performance, scalability, and ease of use to simplify large-scale proxy management. It supports [Xray-core](https://github.com/XTLS/Xray-core), [WireGuard](https://www.wireguard.com/), [sing-box (Hysteria2)](https://github.com/SagerNet/sing-box), OpenVPN, and MTProto (Telegram proxy) for maximum performance and flexibility.
 
 ---
 
@@ -97,7 +98,7 @@ PasarGuard is a user-friendly, feature-rich, and reliable proxy management tool.
 - **Multi-Node** support for infrastructure distribution
 
 **🔐 Protocols & Security**
-- Supports **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard** and **Hysteria2**
+- Supports **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**, **OpenVPN** and **MTProto** (Telegram proxy)
 - **TLS** and **REALITY** support
 - **Multi-protocol** for a single user
 
@@ -199,7 +200,27 @@ pasarguard cli generate-temp-key
 pasarguard --help
 ```
 
+---
 
+### 🖥️ Multiple Nodes on One Server
+
+If you want to run several nodes on the same server, install each node with a unique name:
+
+```bash
+sudo bash -c "$(curl -sL https://github.com/Free-Guy-IR/scripts/raw/main/pg-node.sh)" @ install --name node-eu-1
+```
+
+After installation, use that same name as the prefix for management commands:
+
+```bash
+node-eu-1 update
+node-eu-1 edit
+node-eu-1 edit-env
+```
+
+You can run any other subcommand for that same node with the same prefix (`node-eu-1 ...`).
+
+> ⚠️ **Important:** Never reuse ports between nodes. The connection port and every core's inbound/instance ports (Xray, sing-box, OpenVPN, MTProto, ...) attached to each node must be completely unique per node.
 
 # 📚 Documentation
 
