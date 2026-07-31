@@ -318,7 +318,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const [wireguardOpenSection, setWireguardOpenSection] = useState<string | undefined>(undefined)
   const [openvpnOpenSection, setOpenvpnOpenSection] = useState<string | undefined>(undefined)
   const [isTransportOpen, setIsTransportOpen] = useState(false)
-  const [resolvedHostMode, setResolvedHostMode] = useState<'xray' | 'wireguard' | 'openvpn'>('xray')
+  const [resolvedHostMode, setResolvedHostMode] = useState<'xray' | 'wireguard' | 'openvpn' | 'mtproto'>('xray')
   const { t } = useTranslation()
   const dir = useDirDetection()
   const isMobile = useIsMobile()
@@ -690,9 +690,11 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const selectedInbound = useMemo(() => inboundDetails?.find(inbound => inbound.tag === selectedInboundTag), [inboundDetails, selectedInboundTag])
   const isWireGuardInbound = selectedInbound?.protocol === 'wireguard'
   const isOpenVPNInbound = selectedInbound?.protocol === 'openvpn'
+  const isMTProtoInbound = selectedInbound?.protocol === 'mtproto'
   const isInboundModeResolved = !isDialogOpen || !selectedInboundTag || !!selectedInbound || !isLoadingInbounds
   const shouldRenderWireGuardLayout = resolvedHostMode === 'wireguard'
   const shouldRenderOpenVPNLayout = resolvedHostMode === 'openvpn'
+  const shouldRenderMTProtoLayout = resolvedHostMode === 'mtproto'
 
   // Update the hosts query to refetch only when needed (not on dialog open)
   const { data: hosts = [], isLoading: isLoadingHosts } = useQuery({
@@ -735,7 +737,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     }
 
     if (selectedInbound) {
-      setResolvedHostMode(selectedInbound.protocol === 'wireguard' ? 'wireguard' : selectedInbound.protocol === 'openvpn' ? 'openvpn' : 'xray')
+      setResolvedHostMode(
+        selectedInbound.protocol === 'wireguard'
+          ? 'wireguard'
+          : selectedInbound.protocol === 'openvpn'
+            ? 'openvpn'
+            : selectedInbound.protocol === 'mtproto'
+              ? 'mtproto'
+              : 'xray',
+      )
       return
     }
 
@@ -755,6 +765,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     } else if (resolvedHostMode === 'openvpn') {
       setOpenSection(undefined)
       setWireguardOpenSection(undefined)
+    } else if (resolvedHostMode === 'mtproto') {
+      setOpenSection(undefined)
+      setWireguardOpenSection(undefined)
+      setOpenvpnOpenSection(undefined)
     } else {
       setWireguardOpenSection(undefined)
       setOpenvpnOpenSection(undefined)
@@ -857,6 +871,37 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     }
   }, [form, isOpenVPNInbound, selectedInboundTag, editingHost])
 
+  useEffect(() => {
+    if (!isMTProtoInbound) {
+      return
+    }
+
+    // Don't clear fields when editing an existing host
+    if (editingHost) {
+      return
+    }
+
+    form.setValue('host', [], { shouldDirty: true })
+    form.setValue('sni', [], { shouldDirty: true })
+    form.setValue('path', '', { shouldDirty: true })
+    form.setValue('http_headers', {}, { shouldDirty: true })
+    form.setValue('security', 'inbound_default', { shouldDirty: true })
+    form.setValue('alpn', [], { shouldDirty: true })
+    form.setValue('fingerprint', '', { shouldDirty: true })
+    form.setValue('allowinsecure', false, { shouldDirty: true })
+    form.setValue('random_user_agent', false, { shouldDirty: true })
+    form.setValue('use_sni_as_host', false, { shouldDirty: true })
+    form.setValue('vless_route', '', { shouldDirty: true })
+    form.setValue('ech_config_list', undefined, { shouldDirty: true })
+    form.setValue('ech_query_strategy', undefined, { shouldDirty: true })
+    form.setValue('pinned_peer_cert_sha256', undefined, { shouldDirty: true })
+    form.setValue('verify_peer_cert_by_name', [], { shouldDirty: true })
+    form.setValue('fragment_settings', undefined, { shouldDirty: true })
+    form.setValue('noise_settings', undefined, { shouldDirty: true })
+    form.setValue('mux_settings', undefined, { shouldDirty: true })
+    form.setValue('transport_settings', undefined, { shouldDirty: true })
+  }, [form, isMTProtoInbound, selectedInboundTag, editingHost])
+
   const handleOpenvpnAccordionChange = (value: string) => {
     setOpenvpnOpenSection(value || undefined)
   }
@@ -927,6 +972,26 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         }
       } else {
         payload.openvpn_overrides = undefined
+      }
+
+      if (isMTProtoInbound) {
+        payload.host = []
+        payload.sni = []
+        payload.path = ''
+        payload.http_headers = {}
+        payload.security = 'inbound_default'
+        payload.alpn = []
+        payload.fingerprint = ''
+        payload.allowinsecure = false
+        payload.random_user_agent = false
+        payload.use_sni_as_host = false
+        payload.vless_route = ''
+        payload.ech_config_list = undefined
+        payload.ech_query_strategy = undefined
+        payload.pinned_peer_cert_sha256 = undefined
+        payload.verify_peer_cert_by_name = []
+        payload.mux_settings = undefined
+        payload.transport_settings = undefined
       }
 
       // If SingBox fragment is disabled, clear related fields
@@ -1417,6 +1482,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                   </AccordionItem>
                   {renderCamouflageSection()}
                 </Accordion>
+              ) : shouldRenderMTProtoLayout ? (
+                <div className="mb-6 flex items-start gap-2 rounded-sm border px-4 py-4">
+                  <Info className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-muted-foreground text-sm">
+                    {t('hostsDialog.mtproto.noExtraSettings', {
+                      defaultValue: 'MTProto hosts need no additional settings here — the fake-TLS domain and secrets are configured on the core instance and per user.',
+                    })}
+                  </p>
+                </div>
               ) : (
                 <Accordion type="single" collapsible value={openSection} onValueChange={handleAccordionChange} className="!mt-0 mb-6 flex w-full flex-col gap-y-6">
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="network">
