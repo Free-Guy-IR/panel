@@ -23,27 +23,17 @@ def test_render_empty_without_components():
     assert conf.render() == b""
 
 
-def test_render_does_not_use_inline_auth_user_pass():
-    # <auth-user-pass>...</auth-user-pass> is not a real OpenVPN directive -
-    # real openvpn (2.5.11) rejects it with "option 'auth-user-pass' is not
-    # expected to be inline". Only ca/cert/key/tls-crypt support inline PEM
-    # blocks.
-    conf = OpenVPNConfiguration()
-    conf.components.append(_component())
-    rendered = conf.render().decode()
-
-    assert "<auth-user-pass>" not in rendered
-    assert "</auth-user-pass>" not in rendered
-    assert "\nauth-user-pass\n" in rendered or rendered.strip().endswith("auth-user-pass")
-
-
-def test_render_includes_credentials_as_comments():
+def test_render_uses_inline_auth_user_pass():
+    # <auth-user-pass>...</auth-user-pass> is rejected by the classic
+    # openvpn2 CLI, but openvpn3 (OpenVPN Connect - what real, especially
+    # mobile, users actually import this file into) supports it and
+    # connects with zero credential prompts - verified with a live
+    # `openvpn3 session-start` against this exact renderer's output.
     conf = OpenVPNConfiguration()
     conf.components.append(_component(username="7", password="pw"))
     rendered = conf.render().decode()
 
-    assert "# username: 7" in rendered
-    assert "# password: pw" in rendered
+    assert "<auth-user-pass>\n7\npw\n</auth-user-pass>" in rendered
 
 
 def test_render_includes_connection_block_per_matching_instance():

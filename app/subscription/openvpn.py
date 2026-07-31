@@ -88,19 +88,19 @@ class OpenVPNConfiguration(BaseSubscription):
             primary["tls_crypt_key"].strip(),
             "</tls-crypt>",
             "",
-            # Unlike ca/cert/key/tls-crypt, OpenVPN has no inline form for
-            # auth-user-pass - <auth-user-pass>...</auth-user-pass> is not a
-            # real directive and real openvpn (verified against 2.5.11)
-            # rejects it with "option 'auth-user-pass' is not expected to be
-            # inline". A bare `auth-user-pass` (no file argument) makes the
-            # client prompt for the credentials instead; GUI clients
-            # (OpenVPN Connect, Tunnelblick, ...) show this as a login dialog
-            # with a "save password" option, so it's a one-time entry in
-            # practice. Credentials are still included as comments so a user
-            # copy-pasting by hand doesn't need to look them up elsewhere.
-            f"# username: {primary['username']}",
-            f"# password: {primary['password']}",
-            "auth-user-pass",
+            # <auth-user-pass> inline is rejected by the classic openvpn2 CLI
+            # ("option 'auth-user-pass' is not expected to be inline"), but
+            # openvpn3 - the core used by OpenVPN Connect, the client almost
+            # every real user (especially on mobile) actually imports this
+            # file into - does support it and connects with zero prompts,
+            # verified with a live `openvpn3 session-start` against this
+            # exact renderer's output. openvpn2-CLI users are a small
+            # minority for this deployment, so this optimizes for the
+            # zero-touch import experience over openvpn2-CLI compatibility.
+            "<auth-user-pass>",
+            primary["username"],
+            primary["password"],
+            "</auth-user-pass>",
         ]
 
         return ("\n".join(lines) + "\n").encode()
