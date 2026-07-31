@@ -46,6 +46,20 @@ class OpenVPNSettings(BaseModel):
     password: str = Field(default_factory=random_password, min_length=1)
 
 
+class MTProtoSettings(BaseModel):
+    # Deliberately no default_factory here (unlike every other *Settings class
+    # above) - a bare default_factory would silently regenerate a fresh,
+    # never-persisted secret on every read for any user whose stored
+    # proxy_settings predates this field (the exact bug class that broke
+    # Hysteria2 for ~4000 users and was found still-unfixed for OpenVPN during
+    # this feature's research). Secret generation/persistence is instead
+    # handled explicitly by app.utils.mtproto.prepare_mtproto_secret, called
+    # at the same point app.utils.wireguard.prepare_wireguard_keys is -
+    # mirroring WireGuard's private_key/public_key: str | None = None
+    # pattern, the only other protocol in this file that gets this right.
+    secret: str | None = None
+
+
 class WireGuardPeerIPs(BaseModel):
     peer_ips: list[str] = Field(default_factory=list)
 
@@ -115,6 +129,7 @@ class ProxyTable(BaseModel):
     hysteria: HysteriaSettings = Field(default_factory=HysteriaSettings)
     hysteria2: Hysteria2Settings = Field(default_factory=Hysteria2Settings)
     openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
+    mtproto: MTProtoSettings = Field(default_factory=MTProtoSettings)
 
     def dict(self, *, no_obj=True, **kwargs):
         if no_obj:

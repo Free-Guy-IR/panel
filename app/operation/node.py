@@ -249,6 +249,8 @@ class NodeOperation(BaseOperation):
             type = service.BackendType.SING_BOX
         elif core.type == CoreType.openvpn:
             type = service.BackendType.OPEN_VPN
+        elif core.type == CoreType.mtproto:
+            type = service.BackendType.MTPROTO
         else:
             type = service.BackendType.XRAY
 

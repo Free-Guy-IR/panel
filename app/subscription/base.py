@@ -287,3 +287,50 @@ class BaseSubscription:
             "ca_cert": ca_cert,
             "tls_crypt_key": tls_crypt_key,
         }
+
+    def _build_mtproto_components(
+        self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
+    ) -> dict | None:
+        """Build a tg://proxy?... link for one MTProto instance.
+
+        Unlike OpenVPN, MTProto links ARE meant to appear in the standard
+        link aggregator (see app/subscription/links.py's protocol_handlers) -
+        tg:// is itself already a shareable single-URI scheme, no file
+        download needed.
+
+        The stored secret (settings["secret"], from ProxyTable.mtproto.secret)
+        is just the raw 16-byte key, hex-encoded - the client-facing secret
+        Telegram apps expect also embeds the fake-TLS domain (see the mtg
+        fork's mtglib/secret.go Secret.Hex(): 0xee prefix + key bytes + ASCII
+        hostname, all hex-encoded). Built here rather than stored, since the
+        domain is an instance/host-level property, not a per-user one.
+        """
+        user_id = settings.get("_user_id")
+        raw_secret = settings.get("secret")
+        if user_id is None or not raw_secret:
+            return None
+
+        finalmask = inbound.finalmask
+        if finalmask is None:
+            finalmask_dict = {}
+        elif isinstance(finalmask, dict):
+            finalmask_dict = finalmask
+        else:
+            finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
+        mtproto_data = finalmask_dict.get("mtproto", {})
+        fake_tls_domain = mtproto_data.get("fake_tls_domain")
+        if not fake_tls_domain:
+            return None
+
+        full_secret = "ee" + raw_secret + fake_tls_domain.encode("ascii").hex()
+
+        validated_remark = self._remark_validation(remark)
+        self.proxy_remarks.append(validated_remark)
+
+        return {
+            "remark": validated_remark,
+            "address": address,
+            "port": inbound.port,
+            "secret": full_secret,
+            "uri": f"tg://proxy?server={address}&port={inbound.port}&secret={full_secret}",
+        }

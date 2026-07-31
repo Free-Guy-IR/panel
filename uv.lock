@@ -902,7 +902,7 @@ dev = [
 [[package]]
 name = "pasarguard-node-bridge"
 version = "0.8.1+singbox"
-source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?branch=main#1b9c5f3df106f38d79646211a0a659b2625d622a" }
+source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?branch=main#90457a9e4375da36613fd0d6fa451f07c268e6a3" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-socks" },

@@ -109,6 +109,7 @@ from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
+from app.utils.mtproto import prepare_mtproto_secret
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
 from config import subscription_env_settings, usage_settings
@@ -433,12 +434,13 @@ class UserOperation(BaseOperation):
         exclude_user_id: int | None = None,
     ) -> ProxyTable:
         try:
-            return await prepare_wireguard_keys(
+            proxy_settings = await prepare_wireguard_keys(
                 db,
                 proxy_settings,
                 groups,
                 exclude_user_id=exclude_user_id,
             )
+            return await prepare_mtproto_secret(db, proxy_settings, groups)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
 

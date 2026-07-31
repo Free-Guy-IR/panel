@@ -10,6 +10,7 @@ class ProxyProtocol(IntEnum):
     hysteria = 6
     hysteria2 = 7
     openvpn = 8
+    mtproto = 9
 
     @classmethod
     def from_value(cls, value: str) -> ProxyProtocol | None:

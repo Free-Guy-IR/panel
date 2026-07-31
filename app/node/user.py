@@ -89,6 +89,9 @@ def _serialize_user_for_node(
         # OpenVPN has no device-fingerprint concept, so this is a different semantic
         # than hwid_limit's original meaning for Xray (distinct devices ever seen).
         proxy_kwargs["openvpn_max_concurrent_connections"] = hwid_limit or 0
+    if ProxyProtocol.mtproto in allowed_protocols:
+        proxy_kwargs["mtproto_username"] = str(id)
+        proxy_kwargs["mtproto_secret"] = user_settings.get("mtproto", {}).get("secret")
 
     return create_user(
         str(id),

@@ -147,6 +147,26 @@ async def _prepare_subscription_inbound_data(
             else None,
         )
 
+    if protocol == "mtproto":
+        return SubscriptionInboundData(
+            remark=host.remark,
+            inbound_tag=host.inbound_tag,
+            protocol=protocol,
+            address=list(host.address) if host.address else ["{SERVER_IP}"],
+            port=[host.port] if host.port else [inbound_config.get("port")],
+            network=network,
+            tls_config=TLSConfig(),
+            transport_config=TCPTransportConfig(path="", host=[]),
+            mux_settings=None,
+            finalmask=final_mask_settings,
+            finalmask_link=finalmask_link,
+            priority=host.priority,
+            status=list(host.status) if host.status else None,
+            subscription_templates=host.subscription_templates.model_dump(exclude_none=True)
+            if host.subscription_templates
+            else None,
+        )
+
     sni_list = _string_list(host.sni) if host.sni else _string_list(inbound_config.get("sni", []))
     host_list = _string_list(host.host) if host.host else _string_list(inbound_config.get("host", []))
     address_list = _string_list(host.address) if host.address else []
