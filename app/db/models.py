@@ -564,6 +564,7 @@ class ProxyHost(Base, IdMixin):
         StringArray(1000), default_factory=set, unique=False, nullable=True
     )
     wireguard_overrides: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
+    openvpn_overrides: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
     subscription_templates: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
     final_mask_settings: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
 

@@ -490,6 +490,24 @@ class WireGuardHostOverrides(BaseModel):
         return normalized or None
 
 
+class OpenVPNHostOverrides(BaseModel):
+    """Optional per-host DNS override for OpenVPN subscription output.
+
+    If unset (or empty), the CoreConfig instance's own dns_servers (set in
+    the OpenVPN core editor) is used instead - this only lets a specific
+    host push a different DNS than its core's default.
+    """
+
+    dns_servers: list[str] | None = Field(default=None)
+
+    @field_validator("dns_servers", mode="before")
+    @classmethod
+    def empty_list_to_none(cls, value):
+        if not value:
+            return None
+        return value
+
+
 class SubscriptionTemplates(BaseModel):
     xray: int | None = Field(default=None, ge=1)
 
@@ -530,6 +548,7 @@ class BaseHost(BaseModel):
     pinned_peer_cert_sha256: str | None = Field(default=None)
     verify_peer_cert_by_name: set[str] | None = Field(default_factory=set)
     wireguard_overrides: WireGuardHostOverrides | None = None
+    openvpn_overrides: OpenVPNHostOverrides | None = None
     subscription_templates: SubscriptionTemplates | None = None
     final_mask_settings: FinalMask | None = None
 

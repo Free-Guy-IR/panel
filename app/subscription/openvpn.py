@@ -69,6 +69,14 @@ class OpenVPNConfiguration(BaseSubscription):
                 )
             )
 
+        # Client-side dhcp-option DNS lines - independent of whatever the
+        # server itself pushes at connect time, so a client that keeps its
+        # own pulled options (or an admin who wants a specific host to
+        # resolve differently) still gets the right DNS. Sourced from the
+        # primary (highest-priority) host's resolved dns_servers - already
+        # host-override-or-core-default via _build_openvpn_components.
+        dns_lines = [f"dhcp-option DNS {dns}" for dns in primary.get("dns_servers") or []]
+
         lines = [
             "client",
             "dev tun",
@@ -76,6 +84,7 @@ class OpenVPNConfiguration(BaseSubscription):
             "remote-cert-tls server",
             f"cipher {primary['cipher']}",
             f"auth {primary['auth']}",
+            *dns_lines,
             "verb 3",
             "",
             *connection_blocks,

@@ -275,6 +275,9 @@ class SubscriptionInboundData(BaseModel):
     wireguard_reserved: str | None = Field(default=None)
     wireguard_dns: list[str] | None = Field(default=None)
 
+    # OpenVPN specific
+    openvpn_dns_servers: list[str] | None = Field(default=None)
+
     # Flow (from inbound, user can override)
     inbound_flow: str = Field("")
 

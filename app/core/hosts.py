@@ -13,7 +13,7 @@ from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
 from app.db.models import ProxyHostSecurity
-from app.models.host import BaseHost, FinalMask, TransportSettings, WireGuardHostOverrides
+from app.models.host import BaseHost, FinalMask, OpenVPNHostOverrides, TransportSettings, WireGuardHostOverrides
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -114,6 +114,30 @@ async def _prepare_subscription_inbound_data(
             wireguard_dns=dns,
             fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
             noise_settings=host.noise_settings.model_dump() if host.noise_settings else None,
+            finalmask=final_mask_settings,
+            finalmask_link=finalmask_link,
+            priority=host.priority,
+            status=list(host.status) if host.status else None,
+            subscription_templates=host.subscription_templates.model_dump(exclude_none=True)
+            if host.subscription_templates
+            else None,
+        )
+
+    if protocol == "openvpn":
+        ov_over: OpenVPNHostOverrides | None = host.openvpn_overrides
+        openvpn_dns_servers = list(ov_over.dns_servers) if ov_over and ov_over.dns_servers else None
+
+        return SubscriptionInboundData(
+            remark=host.remark,
+            inbound_tag=host.inbound_tag,
+            protocol=protocol,
+            address=list(host.address) if host.address else ["{SERVER_IP}"],
+            port=[host.port] if host.port else [inbound_config.get("port")],
+            network=network,
+            tls_config=TLSConfig(),
+            transport_config=TCPTransportConfig(path="", host=[]),
+            mux_settings=None,
+            openvpn_dns_servers=openvpn_dns_servers,
             finalmask=final_mask_settings,
             finalmask_link=finalmask_link,
             priority=host.priority,

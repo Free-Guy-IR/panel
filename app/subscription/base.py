@@ -268,6 +268,12 @@ class BaseSubscription:
         if not ca_cert or not tls_crypt_key:
             return None
 
+        # Host-level DNS override (set on this specific Host's Network
+        # Settings) takes priority over the CoreConfig instance's own
+        # default dns_servers; falls back to the core default when the host
+        # has none set.
+        dns_servers = inbound.openvpn_dns_servers if inbound.openvpn_dns_servers else ovpn_data.get("dns_servers", [])
+
         return {
             "remark": self._remark_validation(remark),
             "address": address,
@@ -277,6 +283,7 @@ class BaseSubscription:
             "password": password,
             "cipher": ovpn_data.get("cipher", "AES-256-GCM"),
             "auth": ovpn_data.get("auth", "SHA256"),
+            "dns_servers": dns_servers,
             "ca_cert": ca_cert,
             "tls_crypt_key": tls_crypt_key,
         }

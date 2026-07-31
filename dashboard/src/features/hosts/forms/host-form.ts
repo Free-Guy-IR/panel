@@ -95,6 +95,9 @@ export interface HostFormValues {
     keepalive_seconds?: number
     dns?: string[]
   }
+  openvpn_overrides?: {
+    dns_servers?: string[]
+  }
   subscription_templates?: {
     xray?: number
   }
@@ -460,6 +463,11 @@ export const HostFormSchema = z.object({
       reserved: z.string().max(64).optional(),
       keepalive_seconds: z.number().min(0).max(86400).optional(),
       dns: z.array(z.string()).optional(),
+    })
+    .optional(),
+  openvpn_overrides: z
+    .object({
+      dns_servers: z.array(z.string()).optional(),
     })
     .optional(),
   subscription_templates: z

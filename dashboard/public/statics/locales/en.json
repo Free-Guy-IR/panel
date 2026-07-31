@@ -1617,6 +1617,13 @@
       "reserved": "Reserved (e.g. 0,0,0)",
       "dns": "DNS servers",
       "dnsHint": "Leave empty to use system DNS"
+    },
+    "openvpn": {
+      "sectionNetworkOverrides": "Network settings",
+      "dns": "DNS servers",
+      "dnsHint": "Overrides this host's DNS for OpenVPN clients. Leave empty to use the core's default DNS.",
+      "priority": "Connection priority",
+      "priorityHint": "Lower numbers are tried first when the client fails over between OpenVPN hosts in the downloaded file."
     }
   },
   "inbound": "Inbound",
