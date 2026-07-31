@@ -19,6 +19,7 @@
     "@noble/post-quantum": "^0.5.4",
     "@pasarguard/core-kit": "file:../../core-kit",
     "@pasarguard/openvpn-config-kit": "file:../../openvpn-config-kit",
+    "@pasarguard/mtproto-config-kit": "file:../../mtproto-config-kit",
     "@pasarguard/singbox-config-kit": "file:../../singbox-config-kit",
     "@pasarguard/wireguard-config-kit": "file:../../wireguard-config-kit",
     "@pasarguard/xray-config-kit": "^0.3.7",

@@ -15,14 +15,16 @@ import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wiregu
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
 import { SingBoxCoreEditor } from '@/features/core-editor/components/singbox/singbox-core-editor'
 import { OpenVPNCoreEditor } from '@/features/core-editor/components/openvpn/openvpn-core-editor'
+import { MTProtoCoreEditor } from '@/features/core-editor/components/mtproto/mtproto-core-editor'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { getSingBoxPersistConfig } from '@/features/core-editor/kit/singbox-adapter'
 import { getOpenVPNPersistConfig } from '@/features/core-editor/kit/openvpn-adapter'
+import { getMTProtoPersistConfig } from '@/features/core-editor/kit/mtproto-adapter'
 import { isSupportedCoreEditorKind } from '@/features/core-editor/kit/core-kind'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
-import type { OvCoreSection, SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
+import type { MtCoreSection, OvCoreSection, SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 import type { CoreKind } from '@pasarguard/core-kit'
 import { getGetCoreConfigQueryKey, useCreateCoreConfig, useGetCoreConfig, useModifyCoreConfig } from '@/service/api'
 import { queryClient } from '@/utils/query-client'
@@ -34,7 +36,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 
-type LoadingCoreKind = 'xray' | 'wg' | 'singbox' | 'openvpn'
+type LoadingCoreKind = 'xray' | 'wg' | 'singbox' | 'openvpn' | 'mtproto'
 
 function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: string; description?: string } {
   if (coreKind === 'wg') {
@@ -47,6 +49,12 @@ function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: str
     return {
       title: 'coreEditor.section.instances',
       description: 'coreEditor.sectionDesc.ovInstances',
+    }
+  }
+  if (coreKind === 'mtproto') {
+    return {
+      title: 'coreEditor.section.instances',
+      description: 'coreEditor.sectionDesc.mtInstances',
     }
   }
   if (coreKind === 'xray' || coreKind === 'singbox') {
@@ -203,6 +211,7 @@ export default function CoreEditorPage() {
   const wgDraft = useCoreEditorStore(s => s.wgDraft)
   const sbDraft = useCoreEditorStore(s => s.sbDraft)
   const ovDraft = useCoreEditorStore(s => s.ovDraft)
+  const mtDraft = useCoreEditorStore(s => s.mtDraft)
   const xrayImportWarnings = useCoreEditorStore(s => s.xrayImportWarnings)
   const activeSection = useCoreEditorStore(s => s.activeSection)
 
@@ -229,7 +238,7 @@ export default function CoreEditorPage() {
   useEffect(() => {
     if (isNew) {
       const requested = searchParams.get('kind') as CoreKind | null
-      const k: CoreKind = requested === 'wg' ? 'wg' : requested === 'singbox' ? 'singbox' : requested === 'openvpn' ? 'openvpn' : 'xray'
+      const k: CoreKind = requested === 'wg' ? 'wg' : requested === 'singbox' ? 'singbox' : requested === 'openvpn' ? 'openvpn' : requested === 'mtproto' ? 'mtproto' : 'xray'
       const currentName = useCoreEditorStore.getState().coreName
       initNew(k, currentName)
     }
@@ -239,7 +248,7 @@ export default function CoreEditorPage() {
 
   useEffect(() => {
     if (isNew || !validId || !coreData || serverConfigJson === null) return
-    // xray/wg/singbox/openvpn cores are understood here. Loading anything else (e.g. mtproto)
+    // xray/wg/singbox/openvpn/mtproto cores are understood here. Loading anything else
     // would silently misparse it and re-save it as an xray core on the next save.
     if (!isSupportedCoreEditorKind(coreData.type)) {
       toast.error(t('coreEditor.unsupportedType.title', { defaultValue: 'Unsupported core type' }), {
@@ -291,9 +300,18 @@ export default function CoreEditorPage() {
         return r.kitIssues.map(issue => ({ source: 'core-kit' as const, issue }))
       }
     }
+    if (kind === 'mtproto' && mtDraft) {
+      const r = getMTProtoPersistConfig(mtDraft)
+      if (!r.ok && 'draftIssues' in r) {
+        return (r.draftIssues ?? []).map(issue => ({ source: 'mtproto' as const, issue }))
+      }
+      if (!r.ok && 'kitIssues' in r) {
+        return r.kitIssues.map(issue => ({ source: 'core-kit' as const, issue }))
+      }
+    }
     if (kind === 'xray' && xrayProfile) return xrayPersistValidationItems
     return []
-  }, [hydrated, kind, wgDraft, sbDraft, ovDraft, xrayProfile, xrayPersistValidationItems])
+  }, [hydrated, kind, wgDraft, sbDraft, ovDraft, mtDraft, xrayProfile, xrayPersistValidationItems])
 
   const handleBack = useCallback(() => {
     if (hasActualChanges) {
@@ -457,6 +475,52 @@ export default function CoreEditorPage() {
         return
       }
 
+      if (kind === 'mtproto') {
+        if (!mtDraft) return
+        const result = getMTProtoPersistConfig(mtDraft)
+        if (!result.ok) {
+          const issues = ('draftIssues' in result ? result.draftIssues : result.kitIssues) ?? []
+          const firstIssue = issues[0]
+          toast.error(firstIssue ? `${firstIssue.path}: ${firstIssue.message}` : t('coreEditor.validationErrors', { defaultValue: 'Validation errors' }))
+          return
+        }
+        const cfg = result.config
+        if (isNew) {
+          const res = await createMutation.mutateAsync({
+            data: {
+              name,
+              type: 'mtproto',
+              config: cfg,
+              exclude_inbound_tags: [],
+              fallbacks_inbound_tags: [],
+            },
+          })
+          toast.success(t('coreConfigModal.createSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          navigate(`/nodes/cores/${res.id}`, { replace: true })
+        } else if (validId) {
+          await modifyMutation.mutateAsync({
+            coreId: numericId,
+            data: {
+              name,
+              type: 'mtproto',
+              config: cfg,
+              exclude_inbound_tags: [],
+              fallbacks_inbound_tags: [],
+            },
+            params: { restart_nodes: restartNodes },
+          })
+          toast.success(t('coreConfigModal.editSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          queryClient.invalidateQueries({ queryKey: getGetCoreConfigQueryKey(numericId) })
+        }
+        return
+      }
+
       if (kind === 'xray' && xrayProfile) {
         const cfg = profileToPersistedConfig(xrayProfile)
         if (isNew) {
@@ -507,6 +571,7 @@ export default function CoreEditorPage() {
     wgDraft,
     sbDraft,
     ovDraft,
+    mtDraft,
     xrayProfile,
     preSaveIssues.length,
     isNew,
@@ -554,14 +619,14 @@ export default function CoreEditorPage() {
               aria-invalid={showNameRequired}
             />
             <Select
-              value={kind === 'wg' ? 'wg' : kind === 'singbox' ? 'singbox' : kind === 'openvpn' ? 'openvpn' : 'xray'}
+              value={kind === 'wg' ? 'wg' : kind === 'singbox' ? 'singbox' : kind === 'openvpn' ? 'openvpn' : kind === 'mtproto' ? 'mtproto' : 'xray'}
               onValueChange={value => {
-                const nextKind: CoreKind = value === 'wg' ? 'wg' : value === 'singbox' ? 'singbox' : value === 'openvpn' ? 'openvpn' : 'xray'
+                const nextKind: CoreKind = value === 'wg' ? 'wg' : value === 'singbox' ? 'singbox' : value === 'openvpn' ? 'openvpn' : value === 'mtproto' ? 'mtproto' : 'xray'
                 if (isNew) {
                   setSearchParams(
                     prev => {
                       const p = new URLSearchParams(prev)
-                      if (nextKind === 'wg' || nextKind === 'singbox' || nextKind === 'openvpn') p.set('kind', nextKind)
+                      if (nextKind === 'wg' || nextKind === 'singbox' || nextKind === 'openvpn' || nextKind === 'mtproto') p.set('kind', nextKind)
                       else p.delete('kind')
                       return p
                     },
@@ -580,10 +645,11 @@ export default function CoreEditorPage() {
                 <SelectItem value="wg">WireGuard</SelectItem>
                 <SelectItem value="singbox">Sing-box</SelectItem>
                 <SelectItem value="openvpn">OpenVPN</SelectItem>
+                <SelectItem value="mtproto">MTProto</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {(kind === 'xray' || kind === 'singbox' || kind === 'openvpn') && xrayImportWarnings.length > 0 && (
+          {(kind === 'xray' || kind === 'singbox' || kind === 'openvpn' || kind === 'mtproto') && xrayImportWarnings.length > 0 && (
             <Alert>
               <AlertTitle>{t('coreEditor.importWarnings', { defaultValue: 'Import notes' })}</AlertTitle>
               <AlertDescription>
@@ -641,6 +707,21 @@ export default function CoreEditorPage() {
         pki: {
           title: 'coreEditor.section.pki',
           description: 'coreEditor.sectionDesc.ovPki',
+        },
+        advanced: {
+          title: 'coreEditor.section.advanced',
+          description: 'coreEditor.sectionDesc.advanced',
+        },
+      }[section]
+    }
+
+    if (kind === 'mtproto') {
+      const section = activeSection as MtCoreSection
+      return {
+        instances: {
+          title: 'coreEditor.section.instances',
+          description: 'coreEditor.sectionDesc.mtInstances',
+          buttonText: 'coreEditor.instance.add',
         },
         advanced: {
           title: 'coreEditor.section.advanced',
@@ -719,7 +800,9 @@ export default function CoreEditorPage() {
   if (!hydrated && !isNew && validId) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <CoreEditorLoadingSkeleton coreKind={coreData?.type === 'wg' ? 'wg' : coreData?.type === 'singbox' ? 'singbox' : coreData?.type === 'openvpn' ? 'openvpn' : 'xray'} />
+        <CoreEditorLoadingSkeleton
+          coreKind={coreData?.type === 'wg' ? 'wg' : coreData?.type === 'singbox' ? 'singbox' : coreData?.type === 'openvpn' ? 'openvpn' : coreData?.type === 'mtproto' ? 'mtproto' : 'xray'}
+        />
       </div>
     )
   }
@@ -748,6 +831,8 @@ export default function CoreEditorPage() {
               <SingBoxCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
             ) : kind === 'openvpn' ? (
               <OpenVPNCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
+            ) : kind === 'mtproto' ? (
+              <MTProtoCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
             ) : (
               <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
             )}

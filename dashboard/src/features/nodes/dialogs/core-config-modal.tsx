@@ -15,6 +15,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { DEFAULT_XRAY_CORE_CONFIG_JSON } from '@/lib/default-xray-core-config'
 import { DEFAULT_SING_BOX_CORE_CONFIG_JSON } from '@/lib/default-singbox-core-config'
 import { DEFAULT_OPENVPN_CORE_CONFIG_JSON } from '@/lib/default-openvpn-core-config'
+import { DEFAULT_MTPROTO_CORE_CONFIG_JSON } from '@/lib/default-mtproto-core-config'
 import {
   canGenerateShadowsocksPassword,
   createWireGuardCoreConfigJson,
@@ -259,6 +260,8 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
         defaultTemplate = DEFAULT_SING_BOX_CORE_CONFIG_JSON
       } else if (nextBackendType === 'openvpn') {
         defaultTemplate = DEFAULT_OPENVPN_CORE_CONFIG_JSON
+      } else if (nextBackendType === 'mtproto') {
+        defaultTemplate = DEFAULT_MTPROTO_CORE_CONFIG_JSON
       } else {
         defaultTemplate = DEFAULT_XRAY_CORE_CONFIG_JSON
       }
@@ -918,6 +921,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                 <SelectItem value="wg">WireGuard</SelectItem>
                                 <SelectItem value="singbox">Sing-box</SelectItem>
                                 <SelectItem value="openvpn">OpenVPN</SelectItem>
+                                <SelectItem value="mtproto">MTProto</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormControl>
