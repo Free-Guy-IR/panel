@@ -3,6 +3,7 @@ import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapte
 import { draftToPersistedConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { draftToPersistedConfig as sbDraftToPersistedConfig } from '@/features/core-editor/kit/singbox-adapter'
 import { draftToPersistedConfig as ovDraftToPersistedConfig } from '@/features/core-editor/kit/openvpn-adapter'
+import { draftToPersistedConfig as mtDraftToPersistedConfig } from '@/features/core-editor/kit/mtproto-adapter'
 
 function stableStringify(value: unknown): string {
   try {
@@ -45,6 +46,10 @@ function currentConfigString(s: CoreEditorStoreState): string {
     const draft = s.ovDraft
     return safeConfigString('ov_current_config', () => ovDraftToPersistedConfig(draft))
   }
+  if (s.kind === 'mtproto' && s.mtDraft) {
+    const draft = s.mtDraft
+    return safeConfigString('mt_current_config', () => mtDraftToPersistedConfig(draft))
+  }
   if (s.kind === 'xray' && s.xrayProfile) {
     const profile = s.xrayProfile
     return safeConfigString('xray_current_config', () => profileToPersistedConfig(profile))
@@ -64,6 +69,10 @@ function baselineConfigString(s: CoreEditorStoreState): string {
   if (s.kind === 'openvpn' && s.ovBaseline) {
     const draft = s.ovBaseline
     return safeConfigString('ov_baseline_config', () => ovDraftToPersistedConfig(draft))
+  }
+  if (s.kind === 'mtproto' && s.mtBaseline) {
+    const draft = s.mtBaseline
+    return safeConfigString('mt_baseline_config', () => mtDraftToPersistedConfig(draft))
   }
   if (s.kind === 'xray' && s.xrayBaseline) {
     const profile = s.xrayBaseline
