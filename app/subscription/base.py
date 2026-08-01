@@ -332,5 +332,5 @@ class BaseSubscription:
             "address": address,
             "port": inbound.port,
             "secret": full_secret,
-            "uri": f"tg://proxy?server={address}&port={inbound.port}&secret={full_secret}",
+            "uri": f"tg://proxy?server={address}&port={inbound.port}&secret={full_secret}#{quote(validated_remark)}",
         }
