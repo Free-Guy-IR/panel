@@ -16,6 +16,7 @@ from app.db.crud.bulk import (
     count_bulk_datalimit_targets,
     count_bulk_expire_targets,
     count_bulk_proxy_targets,
+    get_users_for_mtproto_activation,
     reset_all_users_data_usage,
     update_users_datalimit,
     update_users_expire,
@@ -66,6 +67,7 @@ from app.models.stats import (
 from app.models.user import (
     BulkOperationDryRunResponse,
     BulkUser,
+    BulkUserFilter,
     BulkUsersActionResponse,
     BulkUsersApplyTemplate,
     BulkUsersCreateResponse,
@@ -1926,6 +1928,53 @@ class UserOperation(BaseOperation):
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
+
+    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter):
+        """Retroactively generate an MTProto secret for existing users matched
+        by the filter, scoped exactly like every other bulk action (specific
+        admins / specific users / everyone when nothing is selected).
+
+        Safety constraint (explicitly requested): a user who already has a
+        secret must never be touched by this action, even if untouched means
+        "skip silently" - regenerating a secret for a user whose proxy is
+        already active would change their working credential and disconnect
+        them unexpectedly. This is enforced twice: once here (skip before
+        calling prepare_mtproto_secret at all) and once inside
+        prepare_mtproto_secret itself (which never overwrites a non-empty
+        secret) - belt and suspenders around the one constraint that must
+        never regress.
+        """
+        candidates = await get_users_for_mtproto_activation(db, bulk_model)
+
+        to_update: list[tuple[User, ProxyTable]] = []
+        for user in candidates:
+            current = ProxyTable.model_validate(user.proxy_settings)
+            if current.mtproto.secret:
+                continue
+            updated = await prepare_mtproto_secret(db, current, user.groups)
+            if not updated.mtproto.secret:
+                # No MTProto access via this user's current groups - nothing to activate.
+                continue
+            to_update.append((user, updated))
+
+        if bulk_model.dry_run:
+            return BulkOperationDryRunResponse(affected_users=len(to_update))
+
+        if not to_update:
+            if self.operator_type in (OperatorType.API, OperatorType.WEB):
+                return {"detail": "operation has been successfuly done on 0 users"}
+            return 0
+
+        for user, updated in to_update:
+            user.proxy_settings = updated.dict()
+        await db.commit()
+
+        updated_users = [user for user, _ in to_update]
+        await sync_users(updated_users)
+
+        if self.operator_type in (OperatorType.API, OperatorType.WEB):
+            return {"detail": f"operation has been successfuly done on {len(updated_users)} users"}
+        return len(updated_users)
 
     async def _get_users_sub_update_list(
         self, db: AsyncSession, db_user: User, offset: int = 0, limit: int = 10

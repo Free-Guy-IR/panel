@@ -22,6 +22,7 @@ const BulkDataPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bul
 const BulkExpirePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.expire'))
 const BulkGroupsPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.groups'))
 const BulkProxyPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.proxy'))
+const BulkMtprotoPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.mtproto'))
 const Groups = lazyWithChunkRecovery(() => import('../pages/_dashboard.groups'))
 const Hosts = lazyWithChunkRecovery(() => import('../pages/_dashboard.hosts'))
 const Nodes = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes'))
@@ -377,6 +378,14 @@ export const router = createHashRouter([
             element: (
               <Suspense fallback={<LoadingSpinner />}>
                 <BulkDataPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: '/bulk/mtproto',
+            element: (
+              <Suspense fallback={<LoadingSpinner />}>
+                <BulkMtprotoPage />
               </Suspense>
             ),
           },

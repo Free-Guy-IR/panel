@@ -2,7 +2,7 @@ import PageHeader from '@/components/layout/page-header'
 import { useAdmin } from '@/hooks/use-admin'
 import PageTransition from '@/components/layout/page-transition'
 import { getDocsUrl } from '@/utils/docs-url'
-import { ArrowUpDown, Calendar, Lock, Group, UserPlus } from 'lucide-react'
+import { ArrowUpDown, Calendar, Lock, Group, UserPlus, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
@@ -14,6 +14,7 @@ const allTabs = [
   { id: 'expire', label: 'bulk.expireDate', icon: Calendar, url: '/bulk/expire' },
   { id: 'data', label: 'bulk.dataLimit', icon: ArrowUpDown, url: '/bulk/data' },
   { id: 'proxy', label: 'bulk.proxySettings', icon: Lock, url: '/bulk/proxy' },
+  { id: 'mtproto', label: 'bulk.mtprotoActivate', icon: Send, url: '/bulk/mtproto' },
 ]
 
 const BulkPage = () => {
@@ -58,6 +59,7 @@ const BulkPage = () => {
       '/bulk/expire': { title: 'bulk.expireDate', description: 'bulk.expireDateDesc' },
       '/bulk/data': { title: 'bulk.dataLimit', description: 'bulk.dataLimitDesc' },
       '/bulk/proxy': { title: 'bulk.proxySettings', description: 'bulk.proxySettingsDesc' },
+      '/bulk/mtproto': { title: 'bulk.mtprotoActivate', description: 'bulk.mtprotoActivateDesc' },
     }
 
     const header = pathToHeader[location.pathname] || pathToHeader['/bulk']

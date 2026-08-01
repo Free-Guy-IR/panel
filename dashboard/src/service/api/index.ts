@@ -528,6 +528,18 @@ export type XHttpSettingsXPaddingBytes = string | null
 
 export type XHttpSettingsNoGrpcHeader = boolean | null
 
+export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const XHttpModes = {
+  auto: 'auto',
+  'packet-up': 'packet-up',
+  'stream-up': 'stream-up',
+  'stream-one': 'stream-one',
+} as const
+
+export type XHttpSettingsMode = XHttpModes | null
+
 export interface XHttpSettings {
   mode?: XHttpSettingsMode
   no_grpc_header?: XHttpSettingsNoGrpcHeader
@@ -553,23 +565,6 @@ export interface XHttpSettings {
   download_settings?: XHttpSettingsDownloadSettings
 }
 
-export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const XHttpModes = {
-  auto: 'auto',
-  'packet-up': 'packet-up',
-  'stream-up': 'stream-up',
-  'stream-one': 'stream-one',
-} as const
-
-export type XHttpSettingsMode = XHttpModes | null
-
-export interface WorkersHealth {
-  scheduler: WorkerHealth
-  node: WorkerHealth
-}
-
 export type WorkerHealthError = string | null
 
 export type WorkerHealthResponseTimeMs = number | null
@@ -578,6 +573,11 @@ export interface WorkerHealth {
   status: string
   response_time_ms?: WorkerHealthResponseTimeMs
   error?: WorkerHealthError
+}
+
+export interface WorkersHealth {
+  scheduler: WorkerHealth
+  node: WorkerHealth
 }
 
 export interface WireGuardSubnetUsage {
@@ -702,18 +702,6 @@ export type UsersPermissionsUpdateAnyOf = { [key: string]: PermissionScope | num
 
 export type UsersPermissionsUpdate = boolean | UsersPermissionsUpdateAnyOf | null
 
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
-
 export type UsersPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsReadSimple = boolean | UsersPermissionsReadSimpleAnyOf | null
@@ -725,6 +713,18 @@ export type UsersPermissionsRead = boolean | UsersPermissionsReadAnyOf | null
 export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
+
+export interface UsersPermissions {
+  create?: UsersPermissionsCreate
+  read?: UsersPermissionsRead
+  read_simple?: UsersPermissionsReadSimple
+  update?: UsersPermissionsUpdate
+  delete?: UsersPermissionsDelete
+  reset_usage?: UsersPermissionsResetUsage
+  revoke_sub?: UsersPermissionsRevokeSub
+  set_owner?: UsersPermissionsSetOwner
+  activate_next_plan?: UsersPermissionsActivateNextPlan
+}
 
 export type UsernameGenerationStrategy = (typeof UsernameGenerationStrategy)[keyof typeof UsernameGenerationStrategy]
 
@@ -1167,23 +1167,9 @@ export interface UserCreate {
   status?: UserCreateStatus
 }
 
-export type UserCountMetricStatsListPeriod = Period | null
-
-export interface UserCountMetricStat {
-  count: number
-  period_start: string
-}
-
 export type UserCountMetricStatsListStats = { [key: string]: UserCountMetricStat[] }
 
-export type UserCountMetric = (typeof UserCountMetric)[keyof typeof UserCountMetric]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserCountMetric = {
-  online: 'online',
-  expired: 'expired',
-  limited: 'limited',
-} as const
+export type UserCountMetricStatsListPeriod = Period | null
 
 export interface UserCountMetricStatsList {
   period?: UserCountMetricStatsListPeriod
@@ -1193,6 +1179,20 @@ export interface UserCountMetricStatsList {
   count_during_period?: number
   stats: UserCountMetricStatsListStats
 }
+
+export interface UserCountMetricStat {
+  count: number
+  period_start: string
+}
+
+export type UserCountMetric = (typeof UserCountMetric)[keyof typeof UserCountMetric]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserCountMetric = {
+  online: 'online',
+  expired: 'expired',
+  limited: 'limited',
+} as const
 
 export type UsageTable = (typeof UsageTable)[keyof typeof UsageTable]
 
@@ -1417,6 +1417,7 @@ export interface SubFormatEnable {
   clash?: boolean
   clash_meta?: boolean
   outline?: boolean
+  openvpn?: boolean
 }
 
 export interface Subscription {
@@ -1506,12 +1507,6 @@ export type SettingsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | 
 
 export type SettingsPermissionsUpdate = boolean | SettingsPermissionsUpdateAnyOf | null
 
-export interface SettingsPermissions {
-  read?: SettingsPermissionsRead
-  read_general?: SettingsPermissionsReadGeneral
-  update?: SettingsPermissionsUpdate
-}
-
 export type SettingsPermissionsReadGeneralAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGeneralAnyOf | null
@@ -1519,6 +1514,12 @@ export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGe
 export type SettingsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsRead = boolean | SettingsPermissionsReadAnyOf | null
+
+export interface SettingsPermissions {
+  read?: SettingsPermissionsRead
+  read_general?: SettingsPermissionsReadGeneral
+  update?: SettingsPermissionsUpdate
+}
 
 export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
 
@@ -1681,16 +1682,6 @@ export interface RemoveCoresResponse {
 }
 
 /**
- * A freshly generated OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
- */
-export interface OpenVPNPKIResponse {
-  ca_cert: string
-  server_cert: string
-  server_key: string
-  tls_crypt_key: string
-}
-
-/**
  * Response model for bulk client template deletion
  */
 export interface RemoveClientTemplatesResponse {
@@ -1786,6 +1777,9 @@ export interface ProxyTable {
   shadowsocks?: ShadowsocksSettings
   wireguard?: WireGuardSettings
   hysteria?: HysteriaSettings
+  hysteria2?: Hysteria2Settings
+  openvpn?: OpenVPNSettings
+  mtproto?: MTProtoSettings
 }
 
 export type ProxyHostSecurity = (typeof ProxyHostSecurity)[keyof typeof ProxyHostSecurity]
@@ -1874,6 +1868,40 @@ export interface OwnerCreateRequest {
   key: string
   password: string
   username: string
+}
+
+export type OpenVPNSettingsPassword = string | null
+
+export interface OpenVPNSettings {
+  password?: OpenVPNSettingsPassword
+}
+
+/**
+ * A freshly generated OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
+
+Returned by POST /api/core/openvpn/generate-pki - see app.core.openvpn.generate_openvpn_pki().
+Stateless: generation does not read or write any core config, so this response is not tied
+to a specific core_id and can be requested both while drafting a brand-new OpenVPN core
+(before it has been created) and when regenerating PKI for an existing one.
+ */
+export interface OpenVPNPKIResponse {
+  ca_cert: string
+  server_cert: string
+  server_key: string
+  tls_crypt_key: string
+}
+
+export type OpenVPNHostOverridesDnsServers = string[] | null
+
+/**
+ * Optional per-host DNS override for OpenVPN subscription output.
+
+If unset (or empty), the CoreConfig instance's own dns_servers (set in
+the OpenVPN core editor) is used instead - this only lets a specific
+host push a different DNS than its core's default.
+ */
+export interface OpenVPNHostOverrides {
+  dns_servers?: OpenVPNHostOverridesDnsServers
 }
 
 export type NotificationSettingsProxyUrl = string | null
@@ -2185,8 +2213,6 @@ export type NodeModifyKeepAlive = number | null
 
 export type NodeModifyServerCa = string | null
 
-export type NodeModifyConnectionType = NodeConnectionType | null
-
 export type NodeModifyUsageCoefficient = number | null
 
 export type NodeModifyPort = number | null
@@ -2221,6 +2247,21 @@ export interface NodeGeoFilesUpdate {
 
 export type NodeCreateProxyUrl = string | null
 
+export interface NodeCoreUpdate {
+  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
+  core_version?: string
+}
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
+
+export type NodeModifyConnectionType = NodeConnectionType | null
+
 export interface NodeCreate {
   name: string
   address: string
@@ -2248,19 +2289,6 @@ export interface NodeCreate {
   internal_timeout?: number
   proxy_url?: NodeCreateProxyUrl
 }
-
-export interface NodeCoreUpdate {
-  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
-  core_version?: string
-}
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
 
 export type NextPlanModelExpire = number | null
 
@@ -2315,6 +2343,12 @@ export interface ModifyUserByTemplate {
   note?: ModifyUserByTemplateNote
 }
 
+export type MTProtoSettingsSecret = string | null
+
+export interface MTProtoSettings {
+  secret?: MTProtoSettingsSecret
+}
+
 export type Language = (typeof Language)[keyof typeof Language]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -2362,28 +2396,27 @@ export interface HysteriaSettings {
   auth?: string
 }
 
+export interface Hysteria2Settings {
+  /** @minLength 1 */
+  password?: string
+}
+
 export type HwidsPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
 
 export type HwidsPermissionsDelete = boolean | HwidsPermissionsDeleteAnyOf | null
+
+export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
 
 export interface HwidsPermissions {
   read?: HwidsPermissionsRead
   delete?: HwidsPermissionsDelete
 }
 
-export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
-
-export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
-
 export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
-
-export interface HostsPermissions {
-  create?: HostsPermissionsCreate
-  read?: HostsPermissionsRead
-  update?: HostsPermissionsUpdate
-}
 
 export type HostsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2392,6 +2425,12 @@ export type HostsPermissionsRead = boolean | HostsPermissionsReadAnyOf | null
 export type HostsPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsCreate = boolean | HostsPermissionsCreateAnyOf | null
+
+export interface HostsPermissions {
+  create?: HostsPermissionsCreate
+  read?: HostsPermissionsRead
+  update?: HostsPermissionsUpdate
+}
 
 export interface HostNotificationEnable {
   create?: boolean
@@ -2458,6 +2497,11 @@ export interface HTTPException {
   detail: string
 }
 
+export interface GroupsResponse {
+  groups: GroupResponse[]
+  total: number
+}
+
 /**
  * Lightweight group model with only id and name for performance.
  */
@@ -2486,11 +2530,6 @@ export interface GroupResponse {
   is_disabled?: boolean
   id: number
   total_users?: number
-}
-
-export interface GroupsResponse {
-  groups: GroupResponse[]
-  total: number
 }
 
 export type GroupModifyInboundTags = string[] | null
@@ -2651,15 +2690,13 @@ export const FinalMaskTcpType = {
   xmc: 'xmc',
 } as const
 
-export type FinalMaskTcpLayerOutputSettingsAnyOf = { [key: string]: unknown }
-
-export type FinalMaskTcpLayerOutputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsOutput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerOutputSettingsAnyOf
-
 export interface FinalMaskTcpLayerOutput {
   type: FinalMaskTcpType
   settings?: FinalMaskTcpLayerOutputSettings
   [key: string]: unknown
 }
+
+export type FinalMaskTcpLayerOutputSettingsAnyOf = { [key: string]: unknown }
 
 export type FinalMaskTcpLayerInputSettingsAnyOf = { [key: string]: unknown }
 
@@ -2698,6 +2735,8 @@ export interface FinalMaskSudokuSettings {
   [key: string]: unknown
 }
 
+export type FinalMaskTcpLayerOutputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsOutput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerOutputSettingsAnyOf
+
 export type FinalMaskTcpLayerInputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsInput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerInputSettingsAnyOf
 
 export interface FinalMaskTcpLayerInput {
@@ -2730,6 +2769,18 @@ export type FinalMaskQuicParamsBrutalUp = string | number | null
 
 export type FinalMaskQuicParamsDebug = boolean | null
 
+export type FinalMaskQuicCongestion = (typeof FinalMaskQuicCongestion)[keyof typeof FinalMaskQuicCongestion]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const FinalMaskQuicCongestion = {
+  reno: 'reno',
+  bbr: 'bbr',
+  brutal: 'brutal',
+  'force-brutal': 'force-brutal',
+} as const
+
+export type FinalMaskQuicParamsCongestion = FinalMaskQuicCongestion | null
+
 export interface FinalMaskQuicParams {
   congestion?: FinalMaskQuicParamsCongestion
   debug?: FinalMaskQuicParamsDebug
@@ -2746,18 +2797,6 @@ export interface FinalMaskQuicParams {
   maxIncomingStreams?: FinalMaskQuicParamsMaxIncomingStreams
   [key: string]: unknown
 }
-
-export type FinalMaskQuicCongestion = (typeof FinalMaskQuicCongestion)[keyof typeof FinalMaskQuicCongestion]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const FinalMaskQuicCongestion = {
-  reno: 'reno',
-  bbr: 'bbr',
-  brutal: 'brutal',
-  'force-brutal': 'force-brutal',
-} as const
-
-export type FinalMaskQuicParamsCongestion = FinalMaskQuicCongestion | null
 
 export type FinalMaskPasswordSettingsPassword = string | null
 
@@ -2861,6 +2900,8 @@ export type CreateHostFinalMaskSettings = FinalMaskInput | null
 
 export type CreateHostSubscriptionTemplates = SubscriptionTemplates | null
 
+export type CreateHostOpenvpnOverrides = OpenVPNHostOverrides | null
+
 export type CreateHostWireguardOverrides = WireGuardHostOverrides | null
 
 export type CreateHostVerifyPeerCertByName = string[] | null
@@ -2882,6 +2923,26 @@ export type CreateHostFragmentSettings = FragmentSettingsInput | null
 export type CreateHostMuxSettings = MuxSettingsInput | null
 
 export type CreateHostTransportSettings = TransportSettings | null
+
+export type CreateHostHttpHeadersAnyOf = { [key: string]: string }
+
+export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
+
+export type CreateHostAllowinsecure = boolean | null
+
+export type CreateHostAlpn = ProxyHostALPN[] | null
+
+export type CreateHostPath = string | null
+
+export type CreateHostHost = string[] | null
+
+export type CreateHostSni = string[] | null
+
+export type CreateHostPort = number | null
+
+export type CreateHostInboundTag = string | null
+
+export type CreateHostId = number | null
 
 export interface CreateHost {
   id?: CreateHostId
@@ -2912,36 +2973,9 @@ export interface CreateHost {
   pinned_peer_cert_sha256?: CreateHostPinnedPeerCertSha256
   verify_peer_cert_by_name?: CreateHostVerifyPeerCertByName
   wireguard_overrides?: CreateHostWireguardOverrides
+  openvpn_overrides?: CreateHostOpenvpnOverrides
   subscription_templates?: CreateHostSubscriptionTemplates
   final_mask_settings?: CreateHostFinalMaskSettings
-}
-
-export type CreateHostHttpHeadersAnyOf = { [key: string]: string }
-
-export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
-
-export type CreateHostAllowinsecure = boolean | null
-
-export type CreateHostAlpn = ProxyHostALPN[] | null
-
-export type CreateHostPath = string | null
-
-export type CreateHostHost = string[] | null
-
-export type CreateHostSni = string[] | null
-
-export type CreateHostPort = number | null
-
-export type CreateHostInboundTag = string | null
-
-export type CreateHostId = number | null
-
-/**
- * Response model for lightweight core list.
- */
-export interface CoresSimpleResponse {
-  cores: CoreSimple[]
-  total: number
 }
 
 export type CoreType = (typeof CoreType)[keyof typeof CoreType]
@@ -2964,6 +2998,14 @@ export interface CoreSimple {
   id: number
   name: string
   type?: CoreSimpleType
+}
+
+/**
+ * Response model for lightweight core list.
+ */
+export interface CoresSimpleResponse {
+  cores: CoreSimple[]
+  total: number
 }
 
 export interface CoreResponseList {
@@ -3019,6 +3061,7 @@ export const ConfigFormat = {
   clash: 'clash',
   clash_meta: 'clash_meta',
   outline: 'outline',
+  openvpn: 'openvpn',
   block: 'block',
 } as const
 
@@ -3103,14 +3146,6 @@ export type CRUDPermissionsDeleteAnyOf = { [key: string]: PermissionScope | numb
 
 export type CRUDPermissionsDelete = boolean | CRUDPermissionsDeleteAnyOf | null
 
-export type CRUDPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
-
-export type CRUDPermissionsUpdate = boolean | CRUDPermissionsUpdateAnyOf | null
-
-export type CRUDPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
-
-export type CRUDPermissionsReadSimple = boolean | CRUDPermissionsReadSimpleAnyOf | null
-
 /**
  * Standard create/read/read_simple/update/delete permissions.
 Used directly by: groups, templates, client_templates, cores, admin_roles.
@@ -3123,6 +3158,14 @@ export interface CRUDPermissions {
   update?: CRUDPermissionsUpdate
   delete?: CRUDPermissionsDelete
 }
+
+export type CRUDPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+
+export type CRUDPermissionsUpdate = boolean | CRUDPermissionsUpdateAnyOf | null
+
+export type CRUDPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
+
+export type CRUDPermissionsReadSimple = boolean | CRUDPermissionsReadSimpleAnyOf | null
 
 export type CRUDPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -3214,6 +3257,20 @@ export interface BulkUserTemplatesActionResponse {
  */
 export interface BulkUserTemplateSelection {
   ids?: number[]
+}
+
+export type BulkUserFilterExpireBefore = string | null
+
+export type BulkUserFilterExpireAfter = string | null
+
+export interface BulkUserFilter {
+  dry_run?: boolean
+  group_ids?: number[]
+  admins?: number[]
+  users?: number[]
+  status?: UserStatus[]
+  expire_after?: BulkUserFilterExpireAfter
+  expire_before?: BulkUserFilterExpireBefore
 }
 
 export type BulkUserExpireBefore = string | null
@@ -3351,6 +3408,8 @@ export type BaseHostFinalMaskSettings = FinalMaskOutput | null
 
 export type BaseHostSubscriptionTemplates = SubscriptionTemplates | null
 
+export type BaseHostOpenvpnOverrides = OpenVPNHostOverrides | null
+
 export type BaseHostWireguardOverrides = WireGuardHostOverrides | null
 
 export type BaseHostVerifyPeerCertByName = string[] | null
@@ -3422,6 +3481,7 @@ export interface BaseHost {
   pinned_peer_cert_sha256?: BaseHostPinnedPeerCertSha256
   verify_peer_cert_by_name?: BaseHostVerifyPeerCertByName
   wireguard_overrides?: BaseHostWireguardOverrides
+  openvpn_overrides?: BaseHostOpenvpnOverrides
   subscription_templates?: BaseHostSubscriptionTemplates
   final_mask_settings?: BaseHostFinalMaskSettings
 }
@@ -8161,24 +8221,20 @@ export const useRestartCore = <TData = Awaited<ReturnType<typeof restartCore>>, 
 
 /**
  * Generate a fresh OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
- *
- * Stateless - does not read or write any core config, so it is not scoped to a core_id.
- * The dashboard's OpenVPN core editor calls this both to populate PKI on a brand-new
- * (not yet created) core draft and to regenerate PKI on an existing one; the caller is
- * responsible for embedding the result into CoreConfig.config["pki"] before saving.
- * Regenerating invalidates every previously-downloaded .ovpn file for users on that core,
- * since the CA and tls-crypt key both change.
+
+Stateless - does not read or write any core config, so it is not scoped to a core_id.
+The dashboard's OpenVPN core editor calls this both to populate PKI on a brand-new
+(not yet created) core draft and to regenerate PKI on an existing one; the caller is
+responsible for embedding the result into CoreConfig.config["pki"] before saving.
+Regenerating invalidates every previously-downloaded .ovpn file for users on that core,
+since the CA and tls-crypt key both change.
  * @summary Generate Openvpn Pki Bundle
  */
 export const generateOpenvpnPkiBundle = (signal?: AbortSignal) => {
   return orvalFetcher<OpenVPNPKIResponse>({ url: `/api/core/openvpn/generate-pki`, method: 'POST', signal })
 }
 
-export const getGenerateOpenvpnPkiBundleMutationOptions = <
-  TData = Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>,
-  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
-  TContext = unknown,
->(options?: {
+export const getGenerateOpenvpnPkiBundleMutationOptions = <TData = Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>, TError = ErrorType<Unauthorized | Forbidden>, TContext = unknown>(options?: {
   mutation?: UseMutationOptions<TData, TError, void, TContext>
 }) => {
   const mutationKey = ['generateOpenvpnPkiBundle']
@@ -8197,16 +8253,12 @@ export const getGenerateOpenvpnPkiBundleMutationOptions = <
 
 export type GenerateOpenvpnPkiBundleMutationResult = NonNullable<Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>>
 
-export type GenerateOpenvpnPkiBundleMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+export type GenerateOpenvpnPkiBundleMutationError = ErrorType<Unauthorized | Forbidden>
 
 /**
  * @summary Generate Openvpn Pki Bundle
  */
-export const useGenerateOpenvpnPkiBundle = <
-  TData = Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>,
-  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
-  TContext = unknown,
->(options?: {
+export const useGenerateOpenvpnPkiBundle = <TData = Awaited<ReturnType<typeof generateOpenvpnPkiBundle>>, TError = ErrorType<Unauthorized | Forbidden>, TContext = unknown>(options?: {
   mutation?: UseMutationOptions<TData, TError, void, TContext>
 }): UseMutationResult<TData, TError, void, TContext> => {
   const mutationOptions = getGenerateOpenvpnPkiBundleMutationOptions(options)
@@ -13709,6 +13761,64 @@ export const useBulkModifyUsersProxySettings = <
   mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUsersProxy> }, TContext>
 }): UseMutationResult<TData, TError, { data: BodyType<BulkUsersProxy> }, TContext> => {
   const mutationOptions = getBulkModifyUsersProxySettingsMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * Generate an MTProto secret for existing users who have MTProto access via
+their current groups but don't have one yet - e.g. users created before
+MTProto was enabled on their group.
+
+- **user_ids**: Optional list of user IDs to modify
+- **admins**: Optional list of admin IDs — their users will be targeted
+- **group_ids**: Optional list of group IDs to filter users by their group membership
+- **status**: Optional status to filter users (e.g., "expired", "active"), empty means no filtering
+- Sending no filters at all targets every user.
+
+Users who already have an MTProto secret are never touched, even if they
+match the filter - this only ever fills in a *missing* secret, never
+regenerates an existing one.
+ * @summary Retroactively generate MTProto secrets for existing users
+ */
+export const bulkActivateMtprotoSecrets = (bulkUserFilter: BodyType<BulkUserFilter>, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/api/users/bulk/mtproto_activate`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: bulkUserFilter, signal })
+}
+
+export const getBulkActivateMtprotoSecretsMutationOptions = <
+  TData = Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>,
+  TError = ErrorType<Unauthorized | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUserFilter> }, TContext>
+}) => {
+  const mutationKey = ['bulkActivateMtprotoSecrets']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>, { data: BodyType<BulkUserFilter> }> = props => {
+    const { data } = props ?? {}
+
+    return bulkActivateMtprotoSecrets(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<BulkUserFilter> }, TContext>
+}
+
+export type BulkActivateMtprotoSecretsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>>
+export type BulkActivateMtprotoSecretsMutationBody = BodyType<BulkUserFilter>
+export type BulkActivateMtprotoSecretsMutationError = ErrorType<Unauthorized | HTTPValidationError>
+
+/**
+ * @summary Retroactively generate MTProto secrets for existing users
+ */
+export const useBulkActivateMtprotoSecrets = <TData = Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>, TError = ErrorType<Unauthorized | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUserFilter> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<BulkUserFilter> }, TContext> => {
+  const mutationOptions = getBulkActivateMtprotoSecretsMutationOptions(options)
 
   return useMutation(mutationOptions)
 }

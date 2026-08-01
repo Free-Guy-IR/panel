@@ -10,6 +10,7 @@ import {
   useBulkModifyUsersExpire,
   useBulkAddGroupsToUsers,
   useBulkRemoveUsersFromGroups,
+  useBulkActivateMtprotoSecrets,
   ShadowsocksMethods,
   UserStatus,
 } from '@/service/api'
@@ -25,7 +26,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Settings, Group, User, Shield, CheckCircle, AlertTriangle, Plus, Minus, X, HardDrive, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2 } from 'lucide-react'
+import { Settings, Group, User, Shield, CheckCircle, AlertTriangle, Plus, Minus, X, HardDrive, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Send, Info } from 'lucide-react'
 import { BulkExpiredDateFilters } from '@/features/bulk/components/bulk-expired-date-filters'
 import { DecimalInput } from '@/components/common/decimal-input'
 import { SelectorPanel } from '@/features/bulk/components/selector-panel'
@@ -39,7 +40,7 @@ import { endOfDay, startOfDay } from 'date-fns'
 
 const PAGE_SIZE = 50
 
-type BulkOperationType = 'proxy' | 'data' | 'expire' | 'groups'
+type BulkOperationType = 'proxy' | 'data' | 'expire' | 'groups' | 'mtproto'
 type ExpiryUnit = TimeUnit
 
 interface BulkFlowProps {
@@ -135,6 +136,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
   const expireMutation = useBulkModifyUsersExpire()
   const addGroupsMutation = useBulkAddGroupsToUsers()
   const removeGroupsMutation = useBulkRemoveUsersFromGroups()
+  const mtprotoMutation = useBulkActivateMtprotoSecrets()
 
   const nextStep = () => {
     if (currentStep < 3) setCurrentStep((currentStep + 1) as 1 | 2 | 3)
@@ -159,6 +161,9 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
         if (operationType === 'expire') {
           return expireAmount !== undefined && expireAmount > 0
         }
+        if (operationType === 'mtproto') {
+          return true
+        }
         return true
       case 2:
         switch (operationType) {
@@ -170,6 +175,9 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             return expireSeconds !== undefined
           case 'groups':
             // Allow proceeding even if no targets selected - will apply to all users
+            return true
+          case 'mtproto':
+            // Allow proceeding even if no targets selected - will apply to all eligible users
             return true
           default:
             return false
@@ -200,7 +208,8 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
     (operationType === 'proxy' && proxyMutation.isPending) ||
     (operationType === 'data' && dataMutation.isPending) ||
     (operationType === 'expire' && expireMutation.isPending) ||
-    (operationType === 'groups' && (groupsOperation === 'add' ? addGroupsMutation.isPending : removeGroupsMutation.isPending))
+    (operationType === 'groups' && (groupsOperation === 'add' ? addGroupsMutation.isPending : removeGroupsMutation.isPending)) ||
+    (operationType === 'mtproto' && mtprotoMutation.isPending)
 
   const bulkPreviewDescription = (response: unknown) => {
     if (!response || typeof response !== 'object') return ''
@@ -254,6 +263,11 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             admins: selectedAdmins.length ? selectedAdmins : [],
             dry_run: false,
           }
+        case 'mtproto':
+          return {
+            ...basePayload,
+            dry_run: false,
+          }
         default:
           return basePayload
       }
@@ -269,6 +283,8 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return expireMutation
         case 'groups':
           return groupsOperation === 'add' ? addGroupsMutation : removeGroupsMutation
+        case 'mtproto':
+          return mtprotoMutation
         default:
           return proxyMutation
       }
@@ -360,6 +376,11 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             admins: selectedAdmins.length ? selectedAdmins : [],
             dry_run: true,
           }
+        case 'mtproto':
+          return {
+            ...basePayload,
+            dry_run: true,
+          }
       }
     })()
 
@@ -373,6 +394,8 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return expireMutation
         case 'groups':
           return groupsOperation === 'add' ? addGroupsMutation : removeGroupsMutation
+        case 'mtproto':
+          return mtprotoMutation
         default:
           return proxyMutation
       }
@@ -591,6 +614,26 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                     <p className="text-muted-foreground text-xs">
                       {expireOperation === 'add' ? t('bulk.addExpiry', { defaultValue: 'Add to Expiry' }) : t('bulk.subtractExpiry', { defaultValue: 'Subtract from Expiry' })}
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {operationType === 'mtproto' && (
+                <div className="rounded-lg border p-3 sm:p-4">
+                  <div className="flex items-start gap-2">
+                    <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <p className="text-xs leading-relaxed font-medium sm:text-sm">
+                        {t('bulk.mtprotoActivateDescription', {
+                          defaultValue: 'Generates an MTProto proxy secret for existing users who have MTProto access through their group but never received one - e.g. users created before MTProto was enabled on their group.',
+                        })}
+                      </p>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        {t('bulk.mtprotoActivateSafety', {
+                          defaultValue: 'Users who already have a secret are never touched or regenerated, even if selected below.',
+                        })}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -900,6 +943,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                       {operationType === 'data' && t('bulk.dataLimit')}
                       {operationType === 'expire' && t('bulk.expireDate')}
                       {operationType === 'groups' && t('bulk.groups')}
+                      {operationType === 'mtproto' && t('bulk.mtprotoActivate', { defaultValue: 'MTProto Activation' })}
                     </Badge>
                   </div>
 
@@ -1070,9 +1114,9 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             <AlertDialogCancel>{t('cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmApply}
-              disabled={proxyMutation.isPending || dataMutation.isPending || expireMutation.isPending || addGroupsMutation.isPending || removeGroupsMutation.isPending}
+              disabled={proxyMutation.isPending || dataMutation.isPending || expireMutation.isPending || addGroupsMutation.isPending || removeGroupsMutation.isPending || mtprotoMutation.isPending}
             >
-              {proxyMutation.isPending || dataMutation.isPending || expireMutation.isPending || addGroupsMutation.isPending || removeGroupsMutation.isPending
+              {proxyMutation.isPending || dataMutation.isPending || expireMutation.isPending || addGroupsMutation.isPending || removeGroupsMutation.isPending || mtprotoMutation.isPending
                 ? t('applying', { defaultValue: 'Applying...' })
                 : t('confirm', { defaultValue: 'Confirm' })}
             </AlertDialogAction>

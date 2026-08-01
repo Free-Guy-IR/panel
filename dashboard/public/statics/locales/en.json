@@ -3522,7 +3522,11 @@
         "sequence": "Sequential (user1, user2, user3...)",
         "random": "Random (a3f9c1d2e4b5, 9a8b7c6d5e4f...)"
       }
-    }
+    },
+    "mtprotoActivate": "MTProto Activation",
+    "mtprotoActivateDesc": "Generate missing MTProto secrets for existing users",
+    "mtprotoActivateDescription": "Generates an MTProto proxy secret for existing users who have MTProto access through their group but never received one - e.g. users created before MTProto was enabled on their group.",
+    "mtprotoActivateSafety": "Users who already have a secret are never touched or regenerated, even if selected below."
   },
   "operationSuccess": "Operation successful!",
   "operationFailed": "Operation failed!",
