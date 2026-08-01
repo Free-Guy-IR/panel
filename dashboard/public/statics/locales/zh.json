@@ -3197,7 +3197,9 @@
     "editError": "更新用户 «{{name}}» 失败",
     "createError": "创建用户 «{{name}}» 失败",
     "selectStatus": "选择状态",
-    "selectedTemplates": "已选择 {{count}} 个模板"
+    "selectedTemplates": "已选择 {{count}} 个模板",
+    "proxySettings.mtprotoSecret": "MTProto 密钥",
+    "proxySettings.regenerate": "重新生成"
   },
   "userSettings": {
     "subscriptionUrlCopied": "订阅链接已复制到剪贴板"

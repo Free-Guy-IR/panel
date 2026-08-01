@@ -3156,7 +3156,9 @@
     "editError": "Не удалось обновить пользователя «{{name}}»",
     "createError": "Не удалось создать пользователя «{{name}}»",
     "selectStatus": "Выберите статус",
-    "selectedTemplates": "Выбрано шаблонов: {{count}}"
+    "selectedTemplates": "Выбрано шаблонов: {{count}}",
+    "proxySettings.mtprotoSecret": "Секрет MTProto",
+    "proxySettings.regenerate": "Обновить"
   },
   "userSettings": {
     "subscriptionUrlCopied": "URL подписки скопирован в буфер обмена"

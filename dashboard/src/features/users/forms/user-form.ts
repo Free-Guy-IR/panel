@@ -27,6 +27,9 @@ export const wireguardSettingsSchema = z.object({
   private_key: z.string().nullable().optional(),
   public_key: z.string().nullable().optional(),
 })
+export const mtprotoSettingsSchema = z.object({
+  secret: z.string().nullable().optional(),
+})
 export const proxyTableInputSchema = z.object({
   vmess: vMessSettingsSchema.optional(),
   vless: vlessSettingsSchema.optional(),
@@ -34,6 +37,7 @@ export const proxyTableInputSchema = z.object({
   shadowsocks: shadowsocksSettingsSchema.optional(),
   wireguard: wireguardSettingsSchema.optional(),
   hysteria: hysteriaSettingsSchema.optional(),
+  mtproto: mtprotoSettingsSchema.optional(),
 })
 
 export const userStatusCreateEnum = z.enum(['active', 'on_hold'])
@@ -123,6 +127,9 @@ export const getDefaultUserForm = async () => {
       },
       hysteria: {
         auth: undefined,
+      },
+      mtproto: {
+        secret: undefined,
       },
     },
   } satisfies UseFormValues

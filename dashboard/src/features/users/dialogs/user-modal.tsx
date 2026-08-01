@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -1220,6 +1221,18 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
     return arr.join('')
   }
 
+  // MTProto secrets are a 16-byte (32 hex char) key, matching
+  // app.utils.mtproto.generate_mtproto_secret's secrets.token_hex(16) on
+  // the panel backend - not the letters/numbers/underscore shape
+  // generatePassword() above produces.
+  function generateMtprotoSecret(): string {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  }
+
   const generateAllProxySettings = React.useCallback(() => {
     const keyPair = generateWireGuardKeyPair()
     const newSettings = {
@@ -1232,6 +1245,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         private_key: keyPair.privateKey,
         public_key: keyPair.publicKey,
       },
+      mtproto: { secret: generateMtprotoSecret() },
     }
     form.setValue('proxy_settings', newSettings as any, { shouldDirty: true, shouldValidate: true })
     handleFieldChange('proxy_settings', newSettings)
@@ -2114,6 +2128,49 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                     placeholder={t('userDialog.proxySettings.wireguardPublicKey', { defaultValue: 'WireGuard Public key' })}
                                     disabled
                                   />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          {/* MTProto - secret stays masked by default (PasswordInput), unlike every
+                              other protocol's plain Input, since it's a bearer credential the same
+                              way an account password is. */}
+                          <FormField
+                            control={form.control}
+                            name="proxy_settings.mtproto.secret"
+                            render={({ field }) => (
+                              <FormItem className="mb-2">
+                                <FormLabel>{t('userDialog.proxySettings.mtprotoSecret', { defaultValue: 'MTProto Secret' })}</FormLabel>
+                                <FormControl>
+                                  <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
+                                    <PasswordInput
+                                      {...field}
+                                      value={field.value ?? ''}
+                                      placeholder={t('userDialog.proxySettings.mtprotoSecret', { defaultValue: 'MTProto Secret' })}
+                                      onChange={e => {
+                                        field.onChange(e)
+                                        form.trigger('proxy_settings.mtproto.secret')
+                                        handleFieldChange('proxy_settings.mtproto.secret', e.target.value)
+                                      }}
+                                    />
+                                    <Button
+                                      size="icon"
+                                      type="button"
+                                      variant="ghost"
+                                      onClick={e => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const newVal = generateMtprotoSecret()
+                                        field.onChange(newVal)
+                                        form.trigger('proxy_settings.mtproto.secret')
+                                        handleFieldChange('proxy_settings.mtproto.secret', newVal)
+                                      }}
+                                      title={t('userDialog.proxySettings.regenerate', { defaultValue: 'Regenerate' })}
+                                    >
+                                      <RefreshCcw className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>

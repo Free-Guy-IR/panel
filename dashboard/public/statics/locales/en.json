@@ -1854,7 +1854,9 @@
     "editError": "Failed to update user «{{name}}»",
     "createError": "Failed to create user «{{name}}»",
     "selectStatus": "Select status",
-    "selectedTemplates": "{{count}} Template(s) selected"
+    "selectedTemplates": "{{count}} Template(s) selected",
+    "proxySettings.mtprotoSecret": "MTProto Secret",
+    "proxySettings.regenerate": "Regenerate"
   },
   "userSettings": {
     "subscriptionUrlCopied": "Subscription URL copied to clipboard"

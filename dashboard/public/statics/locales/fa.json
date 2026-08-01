@@ -3234,7 +3234,9 @@
     "editError": "خطا در ویرایش کاربر «{{name}}»",
     "createError": "خطا در ایجاد کاربر «{{name}}»",
     "selectStatus": "انتخاب وضعیت",
-    "selectedTemplates": "{{count}} قالب انتخاب شده"
+    "selectedTemplates": "{{count}} قالب انتخاب شده",
+    "proxySettings.mtprotoSecret": "سکرت پروکسی تلگرام (MTProto)",
+    "proxySettings.regenerate": "تغییر"
   },
   "userSettings": {
     "subscriptionUrlCopied": "لینک اشتراک در کلیپ‌بورد کپی شد"
