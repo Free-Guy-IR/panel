@@ -43,7 +43,17 @@ class Hysteria2Settings(BaseModel):
 
 
 class OpenVPNSettings(BaseModel):
-    password: str = Field(default_factory=random_password, min_length=1)
+    # Deliberately no default_factory here (see MTProtoSettings.secret's
+    # docstring below for the exact bug class this used to have: a bare
+    # default_factory=random_password silently regenerated a fresh,
+    # never-persisted password on every read for any user whose stored
+    # proxy_settings predates this field or otherwise lacks it - found live
+    # during this fix's research: two successive ProxyTable.model_validate
+    # calls on the same stored dict produced two different passwords).
+    # Generation/persistence is instead handled explicitly by
+    # app.utils.openvpn.prepare_openvpn_password, called at the same point
+    # prepare_wireguard_keys/prepare_mtproto_secret are.
+    password: str | None = None
 
 
 class MTProtoSettings(BaseModel):

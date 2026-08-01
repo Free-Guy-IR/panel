@@ -111,6 +111,7 @@ from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
 from app.utils.mtproto import prepare_mtproto_secret
 from app.utils.system import readable_duration, readable_size
+from app.utils.openvpn import prepare_openvpn_password
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
 from config import subscription_env_settings, usage_settings
 
@@ -440,6 +441,7 @@ class UserOperation(BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
             )
+            proxy_settings = await prepare_openvpn_password(db, proxy_settings, groups)
             return await prepare_mtproto_secret(db, proxy_settings, groups)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
