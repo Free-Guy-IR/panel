@@ -3137,6 +3137,19 @@
         "title": "TLS"
       },
       "untitledInbound": "未命名入站"
+    },
+    "mtproto": {
+      "fields": {
+        "tag": "标签",
+        "port": "端口",
+        "fakeTlsDomain": "伪装 TLS 域名",
+        "fakeTlsDomainHint": "任何真实的、可公开访问的域名都可以使用——不需要归您所有，也不需要有自己的 TLS 证书。每个连接的客户端仅通过密钥进行验证；此域名仅用于将未经身份验证的探测伪装成前往该站点的普通 HTTPS 流量。",
+        "adTag": "赞助频道广告标签（可选）",
+        "adTagHint": "可选。通过 Telegram 的 @MTProxybot 注册此代理（提供服务器地址、端口和一个客户端密钥）以获取标签，然后粘贴到此处，即可向连接的客户端展示赞助频道。留空则为普通、不推广的代理。启用后，此实例的流量将通过 Telegram 的中间代理服务器转发，而不是直接连接 Telegram，这会增加一次额外的网络跳转。"
+      },
+      "instancesHint": "每个实例都是一个独立的 fake-TLS 监听器（端口 + 伪装域名），由所有授权用户共享。",
+      "keepAtLeastOne": "至少需要一个实例。",
+      "emptyInstances": "暂无实例。点击「添加实例」以创建一个。"
     }
   },
   "settings.cores.title": "核心",

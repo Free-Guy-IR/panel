@@ -3159,6 +3159,19 @@
     },
     "instance": {
       "add": "Add instance"
+    },
+    "mtproto": {
+      "fields": {
+        "tag": "Tag",
+        "port": "Port",
+        "fakeTlsDomain": "Fake-TLS domain",
+        "fakeTlsDomainHint": "Any real, publicly reachable domain works - it does not need to be owned by you or have any TLS certificate of its own. Every connecting client is validated against the secret alone; this domain is only used to disguise unauthenticated probes as ordinary HTTPS traffic to that site.",
+        "adTag": "Sponsor channel ad tag (optional)",
+        "adTagHint": "Optional. Register this proxy with Telegram's @MTProxybot (server address, port, and a client secret) to get a tag, then paste it here to show a sponsor channel to connecting clients. Leave empty for a plain, un-promoted proxy. Setting this routes traffic for this instance through Telegram's middle-proxy servers instead of connecting to Telegram directly, which adds one extra network hop."
+      },
+      "instancesHint": "Each instance is an independent fake-TLS listener (port + disguise domain), shared by every authorized user.",
+      "keepAtLeastOne": "At least one instance is required.",
+      "emptyInstances": "No instances yet. Click \"Add instance\" to create one."
     }
   },
   "settings.cores.title": "Cores",

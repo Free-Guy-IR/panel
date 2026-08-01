@@ -32,6 +32,7 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
   const tagError = issueFor(issues, 'tag')
   const portError = issueFor(issues, 'port')
   const domainError = issueFor(issues, 'fakeTlsDomain')
+  const adTagError = issueFor(issues, 'adTag')
 
   return (
     <div className="space-y-5">
@@ -78,6 +79,25 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
             {t('coreEditor.mtproto.fields.fakeTlsDomainHint', {
               defaultValue:
                 'Any real, publicly reachable domain works - it does not need to be owned by you or have any TLS certificate of its own. Every connecting client is validated against the secret alone; this domain is only used to disguise unauthenticated probes as ordinary HTTPS traffic to that site.',
+            })}
+          </p>
+        </div>
+
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>{t('coreEditor.mtproto.fields.adTag', { defaultValue: 'Sponsor channel ad tag (optional)' })}</Label>
+          <Input
+            value={instance.adTag}
+            dir="ltr"
+            className="text-xs"
+            isError={!!adTagError}
+            onChange={e => set('adTag', e.target.value)}
+            placeholder="dcabcdef0123456789abcdef01234567"
+          />
+          {adTagError && <p className="text-destructive text-[0.8rem] font-medium">{adTagError}</p>}
+          <p className="text-muted-foreground text-[11px]">
+            {t('coreEditor.mtproto.fields.adTagHint', {
+              defaultValue:
+                'Optional. Register this proxy with Telegram\'s @MTProxybot (server address, port, and a client secret) to get a tag, then paste it here to show a sponsor channel to connecting clients. Leave empty for a plain, un-promoted proxy. Setting this routes traffic for this instance through Telegram\'s middle-proxy servers instead of connecting to Telegram directly, which adds one extra network hop.',
             })}
           </p>
         </div>

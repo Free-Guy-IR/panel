@@ -110,6 +110,17 @@ class MTProtoConfig(dict):
         if not fake_tls_domain or not isinstance(fake_tls_domain, str):
             raise ValueError(f"{tag}: fake_tls_domain is required")
 
+        ad_tag = instance.get("ad_tag")
+        if ad_tag:
+            if not isinstance(ad_tag, str):
+                raise ValueError(f"{tag}: ad_tag must be a hex string")
+            try:
+                raw = bytes.fromhex(ad_tag)
+            except ValueError:
+                raise ValueError(f"{tag}: ad_tag must be a valid hex string") from None
+            if not (1 <= len(raw) <= 255):
+                raise ValueError(f"{tag}: ad_tag must decode to 1-255 bytes")
+
     def _resolve_instances(self):
         for instance in self["instances"]:
             self._read_instance(instance)
