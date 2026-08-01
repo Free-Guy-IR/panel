@@ -1590,7 +1590,17 @@
       "reserved": "Reserved（例如 0,0,0）",
       "dns": "DNS 服务器",
       "dnsHint": "留空使用系统 DNS"
-    }
+    },
+    "allowInsecure": "允许不安全连接",
+    "muxEnable": "启用 Mux",
+    "openvpn": {
+      "dns": "DNS 服务器",
+      "dnsHint": "为 OpenVPN 客户端覆盖此主机的 DNS。留空则使用核心的默认 DNS。",
+      "priority": "连接优先级",
+      "priorityHint": "当客户端在已下载文件中的多个 OpenVPN 主机之间进行故障转移时，数字较小的会优先尝试。",
+      "sectionNetworkOverrides": "网络设置"
+    },
+    "randomUserAgent": "随机 User Agent"
   },
   "inbound": "入站",
   "inbounds": "入站",
@@ -1891,7 +1901,9 @@
     "priorityUpdateError": "更新主机失败",
     "noHosts": "未配置主机",
     "noHostsDescription": "开始创建您的第一个主机配置。",
-    "noSearchResults": "没有主机匹配您的搜索条件。请尝试调整搜索词。"
+    "noSearchResults": "没有主机匹配您的搜索条件。请尝试调整搜索词。",
+    "noFilteredResults": "未找到节点",
+    "skip": "跳过"
   },
   "pasarguard": "PasarGuard",
   "group": {
@@ -2069,7 +2081,9 @@
     "updating": "更新中...",
     "updateAvailable": "有更新可用",
     "prerelease": "预发布版本",
-    "loadingReleases": "正在加载版本..."
+    "loadingReleases": "正在加载版本...",
+    "statusCheckFailed": "连接节点失败",
+    "statusCheckSuccess": "节点连接成功"
   },
   "theme": {
     "title": "主题",
@@ -2281,7 +2295,9 @@
       "dns": "DNS",
       "bindings": "绑定",
       "advanced": "高级",
-      "interface": "接口"
+      "interface": "接口",
+      "instances": "实例",
+      "pki": "PKI"
     },
     "sectionDesc": {
       "wgInterface": "WireGuard 接口与密钥",
@@ -2291,7 +2307,10 @@
       "routing": "路由规则与流量策略",
       "balancers": "负载均衡与调度策略",
       "dns": "DNS 解析与解析器",
-      "bindings": "入站标签回退与排除"
+      "bindings": "入站标签回退与排除",
+      "ovInstances": "每个实例都是运行在独立协议/端口上的独立 openvpn 进程。",
+      "ovPki": "服务器证书颁发机构、证书和密钥管理。",
+      "sbInbounds": "此 sing-box 核心的 Hysteria2 入站监听器"
     },
     "wg": {
       "interfaceBlurb": "此核心的 WireGuard 接口与密钥设置。",
@@ -2670,7 +2689,22 @@
       "discardEditTitle": "放弃更改？",
       "discardEditDescription": "如果现在关闭，对此入站的修改将会丢失。",
       "finishCurrentTitle": "请先完成当前入站",
-      "finishCurrentDescription": "请先加入列表，或关闭对话框并丢弃草稿，再开始另一个入站。"
+      "finishCurrentDescription": "请先加入列表，或关闭对话框并丢弃草稿，再开始另一个入站。",
+      "fallbacks": {
+        "addRow": "添加回落规则",
+        "alpn": "ALPN",
+        "dest": "目标 (dest)",
+        "hint": "适用于 VLESS 或 Trojan 的 TCP 入站。Xray 会将匹配的流量转发到 dest（端口、host:port 或 UDS 路径）。仅在启用 TLS 时 SNI 和 ALPN 才生效。没有设置 dest 的行会被忽略。",
+        "name": "SNI（名称）",
+        "path": "路径",
+        "remove": "删除规则",
+        "rowLabel": "规则 {{index}}",
+        "title": "回落 (Fallbacks)",
+        "xver0": "关闭 (0)"
+      },
+      "keepAtLeastOne": "至少需要一个入站。",
+      "randomPort": "生成随机端口",
+      "remove": "删除入站"
     },
     "outbound": {
       "add": "添加出站",
@@ -2843,7 +2877,8 @@
         "wireguardSecretRequired": "WireGuard 私钥为必填项。",
         "inboundTagRequired": "Loopback 需要入站标签。",
         "requiredFieldsTitle": "缺少必填字段"
-      }
+      },
+      "formatJson": "格式化"
     },
     "routing": {
       "outbound": "出站",
@@ -3068,6 +3103,40 @@
       "other": "其他",
       "sniLabel": "SNI",
       "sniDiscovered": "从 IP 发现"
+    },
+    "instance": {
+      "add": "添加实例"
+    },
+    "minRowsBlocked": "这将删除过多的条目。",
+    "singbox": {
+      "emptyInbounds": "暂无入站。点击「添加入站」以创建一个 Hysteria2 监听器。",
+      "fields": {
+        "downMbps": "下载带宽 (Mbps)",
+        "ignoreClientBandwidth": "忽略客户端带宽",
+        "ignoreClientBandwidthHint": "忽略客户端上报的带宽值，始终使用上方设置的值。",
+        "listen": "监听地址",
+        "listenPort": "监听端口",
+        "masquerade": "伪装 URL",
+        "tag": "标签",
+        "upMbps": "上传带宽 (Mbps)"
+      },
+      "hasErrors": "需要处理",
+      "inboundsHint": "每个入站都是此 sing-box 核心上一个独立的 Hysteria2 监听器。",
+      "obfs": {
+        "enable": "Salamander 混淆",
+        "generate": "生成密码",
+        "password": "混淆密码",
+        "title": "混淆"
+      },
+      "tls": {
+        "alpn": "ALPN",
+        "alpnPlaceholder": "h3",
+        "alwaysEnabledHint": "Hysteria2 始终需要 TLS，此入站无法禁用它。",
+        "certificate": "证书",
+        "serverName": "服务器名称 (SNI)",
+        "title": "TLS"
+      },
+      "untitledInbound": "未命名入站"
     }
   },
   "settings.cores.title": "核心",
