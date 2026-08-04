@@ -1337,23 +1337,87 @@ async def get_users_sub_update_list(
     return result, count
 
 
+def _subscription_update_from_clause(
+    user_id: int | None = None,
+    admin_id: int | None = None,
+):
+    conditions = []
+    if user_id is not None:
+        conditions.append(UserSubscriptionUpdate.user_id == user_id)
+        from_clause = UserSubscriptionUpdate.__table__
+    else:
+        from_clause = UserSubscriptionUpdate.__table__.join(User, UserSubscriptionUpdate.user_id == User.id)
+        if admin_id:
+            conditions.append(User.admin_id == admin_id)
+    return from_clause, conditions
+
+
 async def get_users_subscription_agent_counts(
-    db: AsyncSession, user_id: int | None = None, admin_id: int | None = None
+    db: AsyncSession,
+    user_id: int | None = None,
+    admin_id: int | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    period: Period | None = None,
 ) -> list[tuple[str, int]]:
     stmt = select(UserSubscriptionUpdate.user_agent, func.count().label("count"))
+    from_clause, conditions = _subscription_update_from_clause(user_id=user_id, admin_id=admin_id)
 
-    if user_id is not None:
-        stmt = stmt.where(UserSubscriptionUpdate.user_id == user_id)
-    else:
-        stmt = stmt.join(User, UserSubscriptionUpdate.user_id == User.id)
+    if start is not None:
+        start_utc = get_complete_period_start_for_filter(start, period) if period is not None else to_utc_for_filter(start)
+        conditions.append(UserSubscriptionUpdate.created_at >= start_utc)
+    if end is not None:
+        conditions.append(UserSubscriptionUpdate.created_at < to_utc_for_filter(end))
 
-        if admin_id:
-            stmt = stmt.where(User.admin_id == admin_id)
-
+    stmt = stmt.select_from(from_clause)
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
     stmt = stmt.group_by(UserSubscriptionUpdate.user_agent)
 
     result = await db.execute(stmt)
     return [(agent, count) for agent, count in result.all()]
+
+
+async def get_users_subscription_agent_stats(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    period: Period = Period.hour,
+    user_id: int | None = None,
+    admin_id: int | None = None,
+) -> list[dict]:
+    """Retrieve subscription update counts grouped by agent and period."""
+    trunc_expr = _build_trunc_expression(db, period, UserSubscriptionUpdate.created_at, start)
+    start_utc = get_complete_period_start_for_filter(start, period)
+    end_utc = to_utc_for_filter(end)
+    from_clause, conditions = _subscription_update_from_clause(user_id=user_id, admin_id=admin_id)
+    conditions.extend(
+        [
+            UserSubscriptionUpdate.created_at >= start_utc,
+            UserSubscriptionUpdate.created_at < end_utc,
+        ]
+    )
+
+    stmt = (
+        select(
+            trunc_expr.label("period_start"),
+            UserSubscriptionUpdate.user_agent.label("agent"),
+            func.count().label("count"),
+        )
+        .select_from(from_clause)
+        .where(and_(*conditions))
+        .group_by(trunc_expr, UserSubscriptionUpdate.user_agent)
+        .order_by(trunc_expr)
+    )
+
+    result = await db.execute(stmt)
+    dialect = db.bind.dialect.name
+    rows = []
+    for row in result.mappings():
+        row_dict = dict(row)
+        attach_timezone_to_period_start(row_dict, start.tzinfo, dialect)
+        rows.append(row_dict)
+    return rows
 
 
 async def autodelete_expired_users(

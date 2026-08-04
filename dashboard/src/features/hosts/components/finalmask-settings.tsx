@@ -18,8 +18,45 @@ interface FinalMaskSettingsProps {
   form: UseFormReturn<HostFormValues>
 }
 
+function normalizeHostFragmentSettings(settings: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!settings || typeof settings !== 'object') return settings
+  const out: Record<string, unknown> = { ...settings }
+
+  if (out.length != null && !Array.isArray(out.lengths)) {
+    out.lengths = [out.length]
+  }
+  delete out.length
+
+  const legacyDelay = out.delay ?? out.interval
+  if (legacyDelay != null && !Array.isArray(out.delays)) {
+    out.delays = [legacyDelay]
+  }
+  delete out.delay
+  delete out.interval
+
+  return out
+}
+
 export function FinalMaskSettings({ form }: FinalMaskSettingsProps) {
   const dir = useDirDetection()
+
+  useEffect(() => {
+    const tcp = form.getValues('final_mask_settings.tcp')
+    if (!Array.isArray(tcp)) return
+
+    let changed = false
+    const nextTcp = tcp.map((layer: any) => {
+      if (!layer || layer.type !== 'fragment' || !layer.settings) return layer
+      const settings = layer.settings as Record<string, unknown>
+      if (!('length' in settings || 'interval' in settings || 'delay' in settings)) return layer
+      changed = true
+      return { ...layer, settings: normalizeHostFragmentSettings(settings) }
+    })
+
+    if (changed) {
+      form.setValue('final_mask_settings.tcp', nextTcp, { shouldDirty: false })
+    }
+  }, [form])
 
   return (
     <Tabs dir={dir} defaultValue="tcp" className="w-full">
@@ -58,9 +95,10 @@ function TcpLayersForm({ form }: { form: UseFormReturn<any> }) {
     append({
       type: 'fragment',
       settings: {
-        packets: '',
-        length: '',
-        interval: '',
+        packets: 'tlshello',
+        lengths: [],
+        delays: [],
+        maxSplit: '',
       },
     })
   }
@@ -69,9 +107,10 @@ function TcpLayersForm({ form }: { form: UseFormReturn<any> }) {
     form.setValue(`final_mask_settings.tcp.${index}.type`, newType)
     if (newType === 'fragment') {
       form.setValue(`final_mask_settings.tcp.${index}.settings`, {
-        packets: '',
-        length: '',
-        interval: '',
+        packets: 'tlshello',
+        lengths: [],
+        delays: [],
+        maxSplit: '',
       })
     } else if (newType === 'sudoku') {
       form.setValue(`final_mask_settings.tcp.${index}.settings`, {
@@ -142,46 +181,7 @@ function TcpLayersForm({ form }: { form: UseFormReturn<any> }) {
                 </Button>
               </div>
 
-              {type === 'fragment' && (
-                <div className="bg-background grid grid-cols-3 gap-3 rounded-md border p-3">
-                  <FormField
-                    control={form.control}
-                    name={`final_mask_settings.tcp.${index}.settings.packets`}
-                    render={({ field: inputField }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Packets</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. 100-200" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`final_mask_settings.tcp.${index}.settings.length`}
-                    render={({ field: inputField }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Length</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. 10-20" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`final_mask_settings.tcp.${index}.settings.interval`}
-                    render={({ field: inputField }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Interval</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. 10-20" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
+              {type === 'fragment' && <FragmentSettingsForm prefix={`final_mask_settings.tcp.${index}.settings`} form={form} />}
 
               {type === 'sudoku' && <SudokuSettingsForm prefix={`final_mask_settings.tcp.${index}.settings`} form={form} />}
 
@@ -222,19 +222,30 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
 
   const handleAddLayer = () => {
     append({
-      type: 'header-dns',
+      type: 'mkcp-legacy',
       settings: {
-        domain: '',
+        header: 'wechat',
+        value: '',
       },
     })
   }
 
   const handleTypeChange = (index: number, newType: FinalMaskUdpType) => {
     form.setValue(`final_mask_settings.udp.${index}.type`, newType)
-    if (newType === 'header-dns' || newType === 'xdns') {
+    if (newType === 'mkcp-legacy') {
+      form.setValue(`final_mask_settings.udp.${index}.settings`, { header: 'wechat', value: '' })
+    } else if (newType === 'realm') {
+      form.setValue(`final_mask_settings.udp.${index}.settings`, { url: '', stunServers: [], tlsConfig: undefined })
+    } else if (newType === 'xdns') {
+      form.setValue(`final_mask_settings.udp.${index}.settings`, { domains: [], resolvers: [] })
+    } else if (newType === 'xicmp') {
+      form.setValue(`final_mask_settings.udp.${index}.settings`, { dgram: false, ips: [] })
+    } else if (newType === 'header-dns') {
       form.setValue(`final_mask_settings.udp.${index}.settings`, { domain: '' })
-    } else if (['header-dtls', 'header-srtp', 'header-utp', 'header-wechat', 'header-wireguard', 'mkcp-original', 'mkcp-aes128gcm', 'salamander'].includes(newType)) {
+    } else if (['header-dtls', 'header-srtp', 'header-utp', 'header-wechat', 'header-wireguard', 'mkcp-original', 'mkcp-aes128gcm'].includes(newType)) {
       form.setValue(`final_mask_settings.udp.${index}.settings`, { password: '' })
+    } else if (newType === 'salamander') {
+      form.setValue(`final_mask_settings.udp.${index}.settings`, { password: '', packetSize: '' })
     } else if (newType === 'noise') {
       form.setValue(`final_mask_settings.udp.${index}.settings`, { reset: undefined, noise: [] })
     } else if (newType === 'sudoku') {
@@ -283,20 +294,22 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="header-dns">header-dns</SelectItem>
+                            <SelectItem value="mkcp-legacy">mkcp-legacy</SelectItem>
+                            <SelectItem value="realm">realm</SelectItem>
                             <SelectItem value="xdns">xdns</SelectItem>
-                            <SelectItem value="header-dtls">header-dtls</SelectItem>
-                            <SelectItem value="header-srtp">header-srtp</SelectItem>
-                            <SelectItem value="header-utp">header-utp</SelectItem>
-                            <SelectItem value="header-wechat">header-wechat</SelectItem>
-                            <SelectItem value="header-wireguard">header-wireguard</SelectItem>
-                            <SelectItem value="mkcp-original">mkcp-original</SelectItem>
-                            <SelectItem value="mkcp-aes128gcm">mkcp-aes128gcm</SelectItem>
-                            <SelectItem value="noise">noise</SelectItem>
-                            <SelectItem value="salamander">salamander</SelectItem>
-                            <SelectItem value="sudoku">sudoku</SelectItem>
                             <SelectItem value="xicmp">xicmp</SelectItem>
+                            <SelectItem value="salamander">salamander</SelectItem>
+                            <SelectItem value="noise">noise</SelectItem>
+                            <SelectItem value="sudoku">sudoku</SelectItem>
                             <SelectItem value="header-custom">header-custom</SelectItem>
+                            <SelectItem value="header-dns">header-dns (legacy)</SelectItem>
+                            <SelectItem value="header-dtls">header-dtls (legacy)</SelectItem>
+                            <SelectItem value="header-srtp">header-srtp (legacy)</SelectItem>
+                            <SelectItem value="header-utp">header-utp (legacy)</SelectItem>
+                            <SelectItem value="header-wechat">header-wechat (legacy)</SelectItem>
+                            <SelectItem value="header-wireguard">header-wireguard (legacy)</SelectItem>
+                            <SelectItem value="mkcp-original">mkcp-original (legacy)</SelectItem>
+                            <SelectItem value="mkcp-aes128gcm">mkcp-aes128gcm (legacy)</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormItem>
@@ -308,7 +321,150 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
                 </Button>
               </div>
 
-              {(type === 'header-dns' || type === 'xdns') && (
+              {type === 'mkcp-legacy' && (
+                <div className="bg-background grid grid-cols-2 gap-3 rounded-md border p-3">
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.header`}
+                    render={({ field: selectField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Header</FormLabel>
+                        <Select onValueChange={selectField.onChange} value={selectField.value || 'wechat'}>
+                          <FormControl>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Header" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent side="top">
+                            <SelectItem value="dns">dns</SelectItem>
+                            <SelectItem value="dtls">dtls</SelectItem>
+                            <SelectItem value="srtp">srtp</SelectItem>
+                            <SelectItem value="utp">utp</SelectItem>
+                            <SelectItem value="wechat">wechat</SelectItem>
+                            <SelectItem value="wireguard">wireguard</SelectItem>
+                            <SelectItem value="">none (original/aes128gcm)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.value`}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Value / Domain / Password</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. www.baidu.com or password" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+              {type === 'realm' && (
+                <div className="bg-background space-y-3 rounded-md border p-3">
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.url`}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Realm URL</FormLabel>
+                        <FormControl>
+                          <Input placeholder="realm://token@host:port/id" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.stunServers`}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">STUN Servers</FormLabel>
+                        <FormControl>
+                          <StringArrayPopoverInput
+                            value={Array.isArray(inputField.value) ? inputField.value : []}
+                            onChange={(next: string[]) => inputField.onChange(next)}
+                            placeholder="Add STUN server (e.g. stun.l.google.com:19302)"
+                            addPlaceholder={t('arrayInput.addPlaceholder')}
+                            addButtonLabel={t('arrayInput.addButton')}
+                            itemsLabel={t('arrayInput.items')}
+                            emptyMessage={t('arrayInput.noItems')}
+                            duplicateErrorMessage={t('arrayInput.duplicateError')}
+                            clickToEditTitle={t('arrayInput.clickToEdit')}
+                            editItemTitle={t('arrayInput.editItem')}
+                            removeItemTitle={t('arrayInput.removeItem')}
+                            saveEditTitle={t('arrayInput.saveEdit')}
+                            cancelEditTitle={t('arrayInput.cancelEdit')}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <JsonObjectField form={form} name={`final_mask_settings.udp.${index}.settings.tlsConfig`} label="TLS Config (JSON object, optional)" />
+                </div>
+              )}
+
+              {type === 'xdns' && (
+                <div className="bg-background grid grid-cols-2 gap-3 rounded-md border p-3">
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.domains`}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Server Domains</FormLabel>
+                        <FormControl>
+                          <StringArrayPopoverInput
+                            value={Array.isArray(inputField.value) ? inputField.value : []}
+                            onChange={(next: string[]) => inputField.onChange(next)}
+                            placeholder="Add Server Domain"
+                            addPlaceholder={t('arrayInput.addPlaceholder')}
+                            addButtonLabel={t('arrayInput.addButton')}
+                            itemsLabel={t('arrayInput.items')}
+                            emptyMessage={t('arrayInput.noItems')}
+                            duplicateErrorMessage={t('arrayInput.duplicateError')}
+                            clickToEditTitle={t('arrayInput.clickToEdit')}
+                            editItemTitle={t('arrayInput.editItem')}
+                            removeItemTitle={t('arrayInput.removeItem')}
+                            saveEditTitle={t('arrayInput.saveEdit')}
+                            cancelEditTitle={t('arrayInput.cancelEdit')}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.resolvers`}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Client Resolvers</FormLabel>
+                        <FormControl>
+                          <StringArrayPopoverInput
+                            value={Array.isArray(inputField.value) ? inputField.value : []}
+                            onChange={(next: string[]) => inputField.onChange(next)}
+                            placeholder="Add Resolver (+udp://...)"
+                            addPlaceholder={t('arrayInput.addPlaceholder')}
+                            addButtonLabel={t('arrayInput.addButton')}
+                            itemsLabel={t('arrayInput.items')}
+                            emptyMessage={t('arrayInput.noItems')}
+                            duplicateErrorMessage={t('arrayInput.duplicateError')}
+                            clickToEditTitle={t('arrayInput.clickToEdit')}
+                            editItemTitle={t('arrayInput.editItem')}
+                            removeItemTitle={t('arrayInput.removeItem')}
+                            saveEditTitle={t('arrayInput.saveEdit')}
+                            cancelEditTitle={t('arrayInput.cancelEdit')}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+              {type === 'header-dns' && (
                 <div className="bg-background rounded-md border p-3">
                   <FormField
                     control={form.control}
@@ -325,7 +481,7 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
                 </div>
               )}
 
-              {['header-dtls', 'header-srtp', 'header-utp', 'header-wechat', 'header-wireguard', 'mkcp-original', 'mkcp-aes128gcm', 'salamander'].includes(type) && (
+              {['header-dtls', 'header-srtp', 'header-utp', 'header-wechat', 'header-wireguard', 'mkcp-original', 'mkcp-aes128gcm'].includes(type) && (
                 <div className="bg-background rounded-md border p-3">
                   <FormField
                     control={form.control}
@@ -342,36 +498,72 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
                 </div>
               )}
 
-              {type === 'sudoku' && <SudokuSettingsForm prefix={`final_mask_settings.udp.${index}.settings`} form={form} />}
-
-              {type === 'xicmp' && (
+              {type === 'salamander' && (
                 <div className="bg-background grid grid-cols-2 gap-3 rounded-md border p-3">
                   <FormField
                     control={form.control}
-                    name={`final_mask_settings.udp.${index}.settings.listenIp`}
+                    name={`final_mask_settings.udp.${index}.settings.password`}
                     render={({ field: inputField }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Listen IP</FormLabel>
+                        <FormLabel className="text-xs">Password</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. 127.0.0.1" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+                          <Input placeholder="Password" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
                         </FormControl>
                       </FormItem>
                     )}
                   />
                   <FormField
                     control={form.control}
-                    name={`final_mask_settings.udp.${index}.settings.id`}
+                    name={`final_mask_settings.udp.${index}.settings.packetSize`}
                     render={({ field: inputField }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">ID</FormLabel>
+                        <FormLabel className="text-xs">Packet Size (Range e.g. 100-200)</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="ID number"
-                            {...inputField}
-                            value={inputField.value ?? ''}
-                            onChange={e => inputField.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-                            className="h-8 text-xs"
+                          <Input placeholder="e.g. 100-200" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+              {type === 'sudoku' && <SudokuSettingsForm prefix={`final_mask_settings.udp.${index}.settings`} form={form} />}
+
+              {type === 'xicmp' && (
+                <div className="bg-background space-y-3 rounded-md border p-3">
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.dgram`}
+                    render={({ field: inputField }) => (
+                      <FormItem dir="ltr" className="flex min-h-8 items-center justify-between gap-3 rounded-md border px-3 py-1">
+                        <FormLabel className="min-w-0 cursor-pointer truncate text-left text-xs font-normal">DGRAM Mode</FormLabel>
+                        <FormControl>
+                          <Switch checked={!!inputField.value} onCheckedChange={inputField.onChange} className="scale-75" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`final_mask_settings.udp.${index}.settings.ips`}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">IPs</FormLabel>
+                        <FormControl>
+                          <StringArrayPopoverInput
+                            value={Array.isArray(inputField.value) ? inputField.value : []}
+                            onChange={(next: string[]) => inputField.onChange(next)}
+                            placeholder="Add IP (e.g. 1.1.1.1)"
+                            addPlaceholder={t('arrayInput.addPlaceholder')}
+                            addButtonLabel={t('arrayInput.addButton')}
+                            itemsLabel={t('arrayInput.items')}
+                            emptyMessage={t('arrayInput.noItems')}
+                            duplicateErrorMessage={t('arrayInput.duplicateError')}
+                            clickToEditTitle={t('arrayInput.clickToEdit')}
+                            editItemTitle={t('arrayInput.editItem')}
+                            removeItemTitle={t('arrayInput.removeItem')}
+                            saveEditTitle={t('arrayInput.saveEdit')}
+                            cancelEditTitle={t('arrayInput.cancelEdit')}
                           />
                         </FormControl>
                       </FormItem>
@@ -386,15 +578,14 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
                     control={form.control}
                     name={`final_mask_settings.udp.${index}.settings.reset`}
                     render={({ field: inputField }) => (
-                      <FormItem className="w-48">
-                        <FormLabel className="text-xs">Reset count</FormLabel>
+                      <FormItem className="w-56">
+                        <FormLabel className="text-xs">Reset (seconds / range)</FormLabel>
                         <FormControl>
                           <Input
-                            type="number"
-                            placeholder="Reset"
+                            placeholder="e.g. 30 or 30-60"
                             {...inputField}
                             value={inputField.value ?? ''}
-                            onChange={e => inputField.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                            onChange={e => inputField.onChange(e.target.value === '' ? undefined : e.target.value)}
                             className="h-8 text-xs"
                           />
                         </FormControl>
@@ -449,6 +640,29 @@ function QuicParamsForm({ form }: { form: UseFormReturn<any> }) {
                   <SelectItem value="bbr">bbr</SelectItem>
                   <SelectItem value="brutal">brutal</SelectItem>
                   <SelectItem value="force-brutal">force-brutal</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="final_mask_settings.quicParams.bbrProfile"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">BBR Profile</FormLabel>
+              <Select onValueChange={val => field.onChange(val === '__none__' ? undefined : val)} value={field.value || '__none__'}>
+                <FormControl>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select BBR profile" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent side="top">
+                  <SelectItem value="__none__">default (standard)</SelectItem>
+                  <SelectItem value="conservative">conservative</SelectItem>
+                  <SelectItem value="standard">standard</SelectItem>
+                  <SelectItem value="aggressive">aggressive</SelectItem>
                 </SelectContent>
               </Select>
             </FormItem>
@@ -688,6 +902,95 @@ function QuicParamsForm({ form }: { form: UseFormReturn<any> }) {
 }
 
 // ==========================================
+// Fragment Settings Form (FinalMask TCP)
+// ==========================================
+function FragmentSettingsForm({ prefix, form }: { prefix: string; form: UseFormReturn<any> }) {
+  const { t } = useTranslation()
+  return (
+    <div className="bg-background space-y-3 rounded-md border p-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField
+          control={form.control}
+          name={`${prefix}.packets`}
+          render={({ field: inputField }) => (
+            <FormItem>
+              <FormLabel className="text-xs">Packets</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g. tlshello or 1-3" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${prefix}.maxSplit`}
+          render={({ field: inputField }) => (
+            <FormItem>
+              <FormLabel className="text-xs">Max Split</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g. 3-6 or 0" {...inputField} value={inputField.value ?? ''} className="h-8 text-xs" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </div>
+      <FormField
+        control={form.control}
+        name={`${prefix}.lengths`}
+        render={({ field: inputField }) => (
+          <FormItem>
+            <FormLabel className="text-xs">Lengths</FormLabel>
+            <FormControl>
+              <StringArrayPopoverInput
+                value={Array.isArray(inputField.value) ? inputField.value.map(String) : []}
+                onChange={(next: string[]) => inputField.onChange(next)}
+                placeholder="Add length range (e.g. 3-5)"
+                addPlaceholder={t('arrayInput.addPlaceholder')}
+                addButtonLabel={t('arrayInput.addButton')}
+                itemsLabel={t('arrayInput.items')}
+                emptyMessage={t('arrayInput.noItems')}
+                duplicateErrorMessage={t('arrayInput.duplicateError')}
+                clickToEditTitle={t('arrayInput.clickToEdit')}
+                editItemTitle={t('arrayInput.editItem')}
+                removeItemTitle={t('arrayInput.removeItem')}
+                saveEditTitle={t('arrayInput.saveEdit')}
+                cancelEditTitle={t('arrayInput.cancelEdit')}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name={`${prefix}.delays`}
+        render={({ field: inputField }) => (
+          <FormItem>
+            <FormLabel className="text-xs">Delays (ms)</FormLabel>
+            <FormControl>
+              <StringArrayPopoverInput
+                value={Array.isArray(inputField.value) ? inputField.value.map(String) : []}
+                onChange={(next: string[]) => inputField.onChange(next)}
+                placeholder="Add delay range (e.g. 10-20)"
+                addPlaceholder={t('arrayInput.addPlaceholder')}
+                addButtonLabel={t('arrayInput.addButton')}
+                itemsLabel={t('arrayInput.items')}
+                emptyMessage={t('arrayInput.noItems')}
+                duplicateErrorMessage={t('arrayInput.duplicateError')}
+                clickToEditTitle={t('arrayInput.clickToEdit')}
+                editItemTitle={t('arrayInput.editItem')}
+                removeItemTitle={t('arrayInput.removeItem')}
+                saveEditTitle={t('arrayInput.saveEdit')}
+                cancelEditTitle={t('arrayInput.cancelEdit')}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+    </div>
+  )
+}
+
+// ==========================================
 // Sudoku Settings Form
 // ==========================================
 function SudokuSettingsForm({ prefix, form }: { prefix: string; form: UseFormReturn<any> }) {
@@ -798,40 +1101,43 @@ function SudokuSettingsForm({ prefix, form }: { prefix: string; form: UseFormRet
   )
 }
 
-function XmcSettingsForm({ prefix, form }: { prefix: string; form: UseFormReturn<HostFormValues> }) {
+function XmcSettingsForm({ prefix, form }: { prefix: string; form: UseFormReturn<any> }) {
   const { t } = useTranslation()
   return (
-    <div className="grid grid-cols-2 gap-3 bg-background p-3 rounded-md border">
-      <FormField
-        control={form.control}
-        name={`${prefix}.hostname`}
-        render={({ field: inputField }) => (
-          <FormItem>
-            <FormLabel className="text-xs">Hostname</FormLabel>
-            <FormControl>
-              <Input placeholder="Hostname" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
-            </FormControl>
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name={`${prefix}.password`}
-        render={({ field: inputField }) => (
-          <FormItem>
-            <FormLabel className="text-xs">Password</FormLabel>
-            <FormControl>
-              <Input placeholder="Password" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
-            </FormControl>
-          </FormItem>
-        )}
-      />
+    <div className="space-y-3 bg-background p-3 rounded-md border">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField
+          control={form.control}
+          name={`${prefix}.hostname`}
+          render={({ field: inputField }) => (
+            <FormItem>
+              <FormLabel className="text-xs">Hostname</FormLabel>
+              <FormControl>
+                <Input placeholder="Hostname" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${prefix}.password`}
+          render={({ field: inputField }) => (
+            <FormItem>
+              <FormLabel className="text-xs">Password</FormLabel>
+              <FormControl>
+                <Input placeholder="Password" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </div>
+      <JsonArrayField form={form} name={`${prefix}.profiles`} label="Profiles (JSON array of {username, uuid, texturesValue, texturesSignature})" />
       <FormField
         control={form.control}
         name={`${prefix}.usernames`}
         render={({ field: inputField }) => (
           <FormItem className="col-span-2">
-            <FormLabel className="text-xs">Usernames</FormLabel>
+            <FormLabel className="text-xs">Legacy Usernames List (Optional)</FormLabel>
             <FormControl>
               <StringArrayPopoverInput
                 value={Array.isArray(inputField.value) ? inputField.value : []}
@@ -864,6 +1170,54 @@ interface JsonArrayFieldProps {
 
 function JsonArrayField({ form, name, label }: JsonArrayFieldProps) {
   return <FormField control={form.control} name={name} render={({ field }) => <JsonArrayEditor label={label} value={field.value} onChange={field.onChange} />} />
+}
+
+function JsonObjectField({ form, name, label }: JsonArrayFieldProps) {
+  return <FormField control={form.control} name={name} render={({ field }) => <JsonObjectEditor label={label} value={field.value} onChange={field.onChange} />} />
+}
+
+function JsonObjectEditor({ label, value, onChange }: { label: string; value: unknown; onChange: (value: Record<string, unknown> | undefined) => void }) {
+  const serializedValue = value && typeof value === 'object' && !Array.isArray(value) ? JSON.stringify(value, null, 2) : ''
+  const [text, setText] = useState(serializedValue)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const next = value && typeof value === 'object' && !Array.isArray(value) ? JSON.stringify(value, null, 2) : ''
+    setText(next)
+    setError(null)
+  }, [value])
+
+  return (
+    <div className="space-y-2">
+      <FormLabel className="text-xs">{label}</FormLabel>
+      <CodeEditorPanel
+        language="json"
+        value={text}
+        onChange={next => {
+          setText(next)
+          const trimmed = next.trim()
+          if (!trimmed) {
+            setError(null)
+            onChange(undefined)
+            return
+          }
+          try {
+            const parsed = JSON.parse(trimmed)
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              setError('Must be a JSON object')
+              return
+            }
+            setError(null)
+            onChange(parsed as Record<string, unknown>)
+          } catch {
+            setError('Invalid JSON')
+          }
+        }}
+        embeddedContainerClassName="h-32"
+      />
+      {error && <p className="text-destructive text-[11px]">{error}</p>}
+    </div>
+  )
 }
 
 function JsonArrayEditor({ label, value, onChange }: { label: string; value: unknown; onChange: (value: XrayNoiseSettings[][]) => void }) {

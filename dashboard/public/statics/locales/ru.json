@@ -426,7 +426,7 @@
       },
       "manualSubscription": {
         "title": "Требовать HWID для ручных подписок",
-        "description": "Применять политику обязательного заголовка HWID к запросам форматов ручной подписки."
+        "description": "Применять политику HWID к ручным форматам подписки и скрывать ссылки конфигурации на странице подписки."
       },
       "limits": {
         "title": "Лимиты устройств",
@@ -1824,7 +1824,8 @@
     "security.info": "Если сервер промежуточного слоя (middleware) этого узла использует уровень безопасности, отличный от настроек входящего соединения по умолчанию, здесь можно задать свой уровень безопасности.",
     "sni.info": "SNI (Server Name Indication) используется, чтобы указать, к какому имени хоста пытается подключиться клиент. Это особенно полезно, если на один IP-адрес указывает несколько доменов.",
     "sniPlaceholder": "SNI (например, example.com)",
-    "wildcard": "Используйте * для генерации случайной строки (подходит для wildcard-доменов)"
+    "wildcard": "Используйте * для генерации случайной строки (подходит для wildcard-доменов)",
+    "fragmentNoiseDeprecated": "`noise` и `fragment` удаляются в новых версиях — используйте `finalMask`."
   },
   "enable": "Включить",
   "host": {
@@ -2186,7 +2187,9 @@
     "shadowsocksPasswordGenerationFailed": "Не удалось сгенерировать пароль",
     "discardChangesTitle": "Отменить изменения?",
     "discardChangesDescription": "Несохранённые изменения конфигурации ядра будут потеряны, если закрыть редактор.",
-    "scanRealityTarget": "Сканировать цель"
+    "scanRealityTarget": "Сканировать цель",
+    "clearVLESSEncryption": "Удалить шифрование",
+    "mldsa65DestCertHint": "Необязательно. Нужна согласованная пара seed+verify. Цель REALITY должна использовать крупный (обычно RSA) сертификат — цели с ECDSA часто молча ломаются без полезных логов на клиенте и сервере."
   },
   "coreEditor": {
     "nameRequired": "Укажите имя",
@@ -2622,7 +2625,12 @@
         "destinationPortRange": "Порт назначения должен быть целым числом от 0 до 65535.",
         "realityServerNamesRequired": "Для REALITY нужно хотя бы одно имя сервера (server name).",
         "realityServerNamesFormat": "Имена серверов REALITY должны быть списком непустых строк.",
-        "realityServerNamesNoEmpty": "Каждое имя сервера REALITY должно быть непустым; удалите пустые строки или лишние запятые."
+        "realityServerNamesNoEmpty": "Каждое имя сервера REALITY должно быть непустым; удалите пустые строки или лишние запятые.",
+        "mldsa65SeedInvalid": "Seed ML-DSA-65 должен быть URL-safe Base64 длиной 32 байта.",
+        "mldsa65VerifyInvalid": "Verify ML-DSA-65 должен быть URL-safe Base64 публичным ключом длиной 1952 байта.",
+        "mldsa65VerifyRequiresSeed": "Verify ML-DSA-65 требует matching seed на сервере. Создайте пару или очистите verify.",
+        "mldsa65SeedReusesPrivateKey": "Seed ML-DSA-65 не должен совпадать с private key REALITY.",
+        "mldsa65PairMismatch": "Verify ML-DSA-65 не соответствует seed. Создайте новую пару или вставьте согласованные значения."
       },
       "discardDraftTitle": "Отменить новый входящий?",
       "discardDraftDescription": "Этот входящий ещё не в списке. Закрытие без добавления отменит изменения.",
@@ -2689,7 +2697,8 @@
         "finalRulesTitle": "Финальные правила",
         "finalRulesHint": "Применяются на финальной стадии Freedom. IP: по одному CIDR или geoip на строку.",
         "addRule": "Добавить правило",
-        "removeRule": "Удалить правило"
+        "removeRule": "Удалить правило",
+        "fragmentNoiseDeprecated": "`noise` и `fragment` удаляются в новых версиях — используйте `finalMask`."
       },
       "blackhole": {
         "responseType": "Ответ",
@@ -3246,7 +3255,9 @@
     "second": "секунда",
     "seconds": "секунды",
     "ago": "назад",
-    "justNow": "только что"
+    "justNow": "только что",
+    "minute": "минута",
+    "minutes": "минуты"
   },
   "notConnectedYet": "Еще не подключен",
   "node.xrayVersion": "Версия ядра",
@@ -3615,5 +3626,12 @@
     "updateCommandLabel": "Выполните через SSH:",
     "closeBanner": "Закрыть уведомление об обновлении",
     "needsUpdate": "Требуется обновление"
-  }
+  },
+  "statistics.subscriptionDistributionDetails": "Детали клиентов подписки",
+  "statistics.subscriptionDistributionRetentionNote": "По умолчанию для каждого пользователя хранятся только последние {{limit}} обновлений подписки. Измените это через {{env}} в окружении.",
+  "statistics.subscriptionsDuringPeriod": "Обновления за период",
+  "statistics.period": "Период",
+  "statistics.periodAuto": "Авто",
+  "statistics.denseChartAreaHint": "На этом графике {{count}} свечей. Диаграмма-область в настройках темы обычно работает быстрее на больших диапазонах.",
+  "statistics.useAreaChart": "Использовать область"
 }
