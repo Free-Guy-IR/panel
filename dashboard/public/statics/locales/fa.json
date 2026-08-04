@@ -277,7 +277,7 @@
       },
       "manualSubscription": {
         "title": "الزام HWID برای اشتراک‌های دستی",
-        "description": "سیاست الزام هدر HWID را برای درخواست‌های فرمت اشتراک دستی اعمال کنید."
+        "description": "سیاست HWID را برای فرمت‌های اشتراک دستی اعمال کرده و لینک‌های کانفیگ را در صفحه اشتراک مخفی می‌کند."
       },
       "limits": {
         "title": "محدودیت دستگاه‌ها",
@@ -1459,7 +1459,8 @@
       "info": "ترافیک خروجی اضافه (فقط در کانفیگ سفارشی v2ray)"
     },
     "sni.info": "SNI (Server Name Indication) برای مشخص کردن نام میزبانی که کلاینت قصد اتصال به آن را دارد استفاده می‌شود. این هنگامی که چند دامنه به یک آدرس IP اشاره می‌کنند بسیار کاربردی است.",
-    "wildcard": "برای تولید یک رشته‌ی تصادفی از * استفاده کنید (برای دامنه‌های wildcard کاربرد دارد)"
+    "wildcard": "برای تولید یک رشته‌ی تصادفی از * استفاده کنید (برای دامنه‌های wildcard کاربرد دارد)",
+    "fragmentNoiseDeprecated": "`noise` و `fragment` در نسخه‌های جدیدتر حذف می‌شوند — به‌جای آن از `finalMask` استفاده کنید."
   },
   "inbound": "ورودی",
   "inbounds": "ورودی‌ها",
@@ -2208,7 +2209,9 @@
     "shadowsocksPasswordGenerationFailed": "تولید رمز عبور ناموفق بود",
     "discardChangesTitle": "لغو تغییرات؟",
     "discardChangesDescription": "اگر این ویرایشگر را ببندید، تغییرات ذخیره‌نشدهٔ پیکربندی هسته از بین خواهد رفت.",
-    "scanRealityTarget": "اسکن هدف"
+    "scanRealityTarget": "اسکن هدف",
+    "clearVLESSEncryption": "حذف رمزنگاری",
+    "mldsa65DestCertHint": "اختیاری. به جفت seed+verify هم‌خوان نیاز دارد. هدف REALITY باید گواهی بزرگ (معمولاً RSA) داشته باشد — اهداف ECDSA اغلب بدون لاگ مفید در کلاینت/سرور به‌صورت خاموش شکست می‌خورند."
   },
   "coreEditor": {
     "nameRequired": "نام الزامی است",
@@ -2644,7 +2647,12 @@
         "destinationPortRange": "پورت مقصد باید عدد صحیح از ۰ تا ۶۵۵۳۵ باشد.",
         "realityServerNamesRequired": "REALITY حداقل به یک نام سرور نیاز دارد.",
         "realityServerNamesFormat": "نام‌های سرور REALITY باید فهرستی از رشته‌های غیرخالی باشد.",
-        "realityServerNamesNoEmpty": "هر نام سرور REALITY باید غیرخالی باشد؛ خطوط خالی یا ویرگول‌های اضافی را حذف کنید."
+        "realityServerNamesNoEmpty": "هر نام سرور REALITY باید غیرخالی باشد؛ خطوط خالی یا ویرگول‌های اضافی را حذف کنید.",
+        "mldsa65SeedInvalid": "Seed مربوط به ML-DSA-65 باید مقدار Base64 URL-safe به‌طول ۳۲ بایت باشد.",
+        "mldsa65VerifyInvalid": "Verify مربوط به ML-DSA-65 باید کلید عمومی Base64 URL-safe به‌طول ۱۹۵۲ بایت باشد.",
+        "mldsa65VerifyRequiresSeed": "Verify مربوط به ML-DSA-65 به seed هم‌خوان در سرور نیاز دارد. جفت را تولید کنید یا Verify را پاک کنید.",
+        "mldsa65SeedReusesPrivateKey": "Seed مربوط به ML-DSA-65 نباید با کلید خصوصی REALITY یکی باشد.",
+        "mldsa65PairMismatch": "Verify مربوط به ML-DSA-65 با seed هم‌خوان نیست. جفت جدید تولید کنید یا مقادیر هم‌خوان وارد کنید."
       },
       "discardDraftTitle": "ورودی جدید را دور بیندازید؟",
       "discardDraftDescription": "این ورودی هنوز در فهرست نیست. بستن بدون افزودن، تغییرات را دور می‌اندازد.",
@@ -2711,7 +2719,8 @@
         "finalRulesTitle": "قوانین نهایی",
         "finalRulesHint": "در مرحله نهایی Freedom اعمال می‌شود. IP: هر خط یک CIDR یا برچسب geoip.",
         "addRule": "افزودن قانون",
-        "removeRule": "حذف قانون"
+        "removeRule": "حذف قانون",
+        "fragmentNoiseDeprecated": "`noise` و `fragment` در نسخه‌های جدیدتر حذف می‌شوند — به‌جای آن از `finalMask` استفاده کنید."
       },
       "blackhole": {
         "responseType": "پاسخ",
@@ -3319,7 +3328,9 @@
     "second": "ثانیه",
     "seconds": "ثانیه",
     "ago": "پیش",
-    "justNow": "همین الان"
+    "justNow": "همین الان",
+    "minute": "دقیقه",
+    "minutes": "دقیقه"
   },
   "notConnectedYet": "هنوز متصل نشده",
   "node.xrayVersion": "نسخه هسته",
@@ -3668,5 +3679,12 @@
     "updateCommandLabel": "از طریق SSH متصل شوید و اجرا کنید:",
     "closeBanner": "بستن اعلان به‌روزرسانی",
     "needsUpdate": "نیاز به به‌روزرسانی"
-  }
+  },
+  "statistics.subscriptionDistributionDetails": "جزئیات کلاینت‌های اشتراک",
+  "statistics.subscriptionDistributionRetentionNote": "به‌طور پیش‌فرض فقط {{limit}} به‌روزرسانی اخیر اشتراک برای هر کاربر نگه داشته می‌شود. برای تغییر، {{env}} را در محیط تنظیم کنید.",
+  "statistics.subscriptionsDuringPeriod": "به‌روزرسانی در دوره زمانی",
+  "statistics.period": "بازه",
+  "statistics.denseChartAreaHint": "این نمودار {{count}} شمع دارد. نمودار ناحیه‌ای از تنظیمات تم معمولاً برای بازه‌های بزرگ روان‌تر است.",
+  "statistics.useAreaChart": "استفاده از نمودار ناحیه‌ای",
+  "statistics.periodAuto": "خودکار"
 }

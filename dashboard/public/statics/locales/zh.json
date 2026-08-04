@@ -391,7 +391,7 @@
       },
       "manualSubscription": {
         "title": "手动订阅要求 HWID",
-        "description": "将强制 HWID 请求头策略应用到手动订阅格式请求。"
+        "description": "将 HWID 策略应用于手动订阅格式，并在订阅页面隐藏配置链接。"
       },
       "limits": {
         "title": "设备限制",
@@ -1600,7 +1600,8 @@
       "priorityHint": "当客户端在已下载文件中的多个 OpenVPN 主机之间进行故障转移时，数字较小的会优先尝试。",
       "sectionNetworkOverrides": "网络设置"
     },
-    "randomUserAgent": "随机 User Agent"
+    "randomUserAgent": "随机 User Agent",
+    "fragmentNoiseDeprecated": "`noise` 和 `fragment` 将在新版本中移除 — 请改用 `finalMask`。"
   },
   "inbound": "入站",
   "inbounds": "入站",
@@ -2245,7 +2246,9 @@
     "shadowsocksPasswordGenerationFailed": "密码生成失败",
     "discardChangesTitle": "放弃更改？",
     "discardChangesDescription": "如果关闭此编辑器，未保存的内核配置更改将会丢失。",
-    "scanRealityTarget": "扫描目标"
+    "scanRealityTarget": "扫描目标",
+    "clearVLESSEncryption": "移除加密",
+    "mldsa65DestCertHint": "可选。需要匹配的 seed+verify 密钥对。REALITY 目标站点应使用较大（通常为 RSA）的证书——ECDSA 目标常会静默失败，且客户端/服务端几乎没有有用日志。"
   },
   "coreEditor": {
     "nameRequired": "名称为必填项",
@@ -2681,7 +2684,12 @@
         "destinationPortRange": "目标端口必须为 0 至 65535 之间的整数。",
         "realityServerNamesRequired": "REALITY 至少需要填写一个 server name。",
         "realityServerNamesFormat": "REALITY 的 server names 必须为非空字符串的列表。",
-        "realityServerNamesNoEmpty": "每个 REALITY server name 都必须非空；请删除空行或多余逗号。"
+        "realityServerNamesNoEmpty": "每个 REALITY server name 都必须非空；请删除空行或多余逗号。",
+        "mldsa65SeedInvalid": "ML-DSA-65 seed 必须是 32 字节的 URL-safe Base64 值。",
+        "mldsa65VerifyInvalid": "ML-DSA-65 verify 必须是 1952 字节的 URL-safe Base64 公钥。",
+        "mldsa65VerifyRequiresSeed": "ML-DSA-65 verify 需要服务端有匹配的 seed。请生成密钥对或清空 verify。",
+        "mldsa65SeedReusesPrivateKey": "ML-DSA-65 seed 不能与 REALITY 私钥相同。",
+        "mldsa65PairMismatch": "ML-DSA-65 verify 与 seed 不匹配。请重新生成密钥对或粘贴匹配的值。"
       },
       "discardDraftTitle": "放弃新入站？",
       "discardDraftDescription": "此入站尚未加入列表。关闭而不添加将丢弃更改。",
@@ -2748,7 +2756,8 @@
         "finalRulesTitle": "最终规则 (finalRules)",
         "finalRulesHint": "在 Freedom 最终出站阶段匹配。IP：每行一个 CIDR 或 geoip 标签。",
         "addRule": "添加规则",
-        "removeRule": "删除规则"
+        "removeRule": "删除规则",
+        "fragmentNoiseDeprecated": "`noise` 和 `fragment` 将在新版本中移除 — 请改用 `finalMask`。"
       },
       "blackhole": {
         "responseType": "响应",
@@ -3282,7 +3291,9 @@
     "second": "秒",
     "seconds": "秒",
     "ago": "前",
-    "justNow": "刚刚"
+    "justNow": "刚刚",
+    "minute": "分钟",
+    "minutes": "分钟"
   },
   "notConnectedYet": "尚未连接",
   "node.xrayVersion": "核心版本",
@@ -3660,5 +3671,12 @@
     "updateCommandLabel": "通过 SSH 连接并运行:",
     "closeBanner": "关闭更新通知",
     "needsUpdate": "需要更新"
-  }
+  },
+  "statistics.subscriptionDistributionDetails": "订阅客户端详情",
+  "statistics.subscriptionDistributionRetentionNote": "默认每位用户仅保留最近 {{limit}} 条订阅更新记录。如需修改，请在环境变量中设置 {{env}}。",
+  "statistics.subscriptionsDuringPeriod": "期间更新次数",
+  "statistics.period": "周期",
+  "statistics.periodAuto": "自动",
+  "statistics.denseChartAreaHint": "此图表有 {{count}} 个数据点。主题设置中的面积图在大数据量时通常更流畅。",
+  "statistics.useAreaChart": "使用面积图"
 }

@@ -329,7 +329,7 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
           restartNodes: nav.restartNodes,
           fallbacksInboundTags: [],
           excludeInboundTags: [],
-  xrayProfile: null,
+          xrayProfile: null,
           xrayBaseline: null,
           wgDraft: fallbackDraft,
           wgBaseline: cloneWg(fallbackDraft),
