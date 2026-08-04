@@ -143,7 +143,6 @@ function PieTooltip({
         <div className="border-border/20 h-3 w-3 rounded-full border" style={{ backgroundColor: fill }} />
         <span className="text-foreground text-sm font-medium">{agent}</span>
       </div>
-
       <div className="mt-2 space-y-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
@@ -152,7 +151,6 @@ function PieTooltip({
           </div>
           <span className="text-foreground font-mono text-sm font-semibold">{numberWithCommas(updates)}</span>
         </div>
-
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground text-xs">{t('statistics.percentage')}</span>
           <Badge variant="secondary" className="text-xs font-medium">
@@ -297,19 +295,6 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
       const safePercentage = typeof segment.percentage === 'number' && !Number.isNaN(segment.percentage) ? segment.percentage : 0
       const safeCount = typeof segment.count === 'number' && !Number.isNaN(segment.count) ? segment.count : 0
       const key = buildSegmentKey(segment.name, index)
-
-      // Color assignment logic similar to AllNodesStackedBarChart
-      let color
-      if (index === 0) {
-        // First segment uses primary color
-        color = 'hsl(var(--primary))'
-      } else if (index < 5) {
-        // Use palette colors for segments 2-5: --chart-2, --chart-3, ...
-        color = `hsl(var(--chart-${index + 1}))`
-      } else {
-        // Generate distinct colors for segments beyond palette
-        color = generateDistinctColor(index, data?.segments?.length || 0, resolvedTheme === 'dark')
-      }
 
       return {
         ...segment,

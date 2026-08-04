@@ -20,7 +20,6 @@ const PERIOD_KEYS = [
   { key: '24h', period: Period.hour, amount: 24, unit: 'hour' },
   { key: '3d', period: Period.day, amount: 3, unit: 'day' },
   { key: '7d', period: Period.day, amount: 7, unit: 'day' },
-  { key: '30d', period: Period.day, amount: 30, unit: 'day' },
   { key: '1m', period: Period.day, amount: 1, unit: 'month' },
   { key: '3m', period: Period.day, amount: 3, unit: 'month' },
 ] as const

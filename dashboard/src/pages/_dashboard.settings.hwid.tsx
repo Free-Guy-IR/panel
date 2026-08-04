@@ -92,7 +92,6 @@ export default function HwidSettings() {
   }
 
   const hwidEnabled = form.watch('enabled')
-  const hwidForced = form.watch('forced')
 
   if (isLoading) {
     return (

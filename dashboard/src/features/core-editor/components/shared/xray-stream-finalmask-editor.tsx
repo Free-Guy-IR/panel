@@ -336,8 +336,6 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
         paddingMin: undefined,
         paddingMax: undefined,
       })
-    } else if (newType === 'xicmp') {
-      form.setValue(`udp.${index}.settings`, { listenIp: '', id: undefined })
     } else if (newType === 'header-custom') {
       form.setValue(`udp.${index}.settings`, { client: [], server: [] })
     }

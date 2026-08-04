@@ -234,7 +234,6 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedData, setSelectedData] = useState<UsageChartDataPoint | null>(null)
   const [currentDataIndex, setCurrentDataIndex] = useState(0)
-  const [chartData, setChartData] = useState<UsageChartDataPoint[] | null>(null)
   const [chartView, setChartView] = useState<'bar' | 'pie'>('bar')
   const chartViewType = useChartViewType()
 
@@ -267,14 +266,6 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
       },
     },
   )
-
-  // Navigation handler for modal
-  const handleModalNavigate = (index: number) => {
-    if (chartData && chartData[index]) {
-      setCurrentDataIndex(index)
-      setSelectedData(chartData[index])
-    }
-  }
 
   // Build color palette for nodes
   const nodeList: NodeSimple[] = useMemo(() => nodesResponse?.nodes || [], [nodesResponse])
