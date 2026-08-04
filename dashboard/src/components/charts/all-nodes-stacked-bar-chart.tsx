@@ -229,12 +229,6 @@ export function AllNodesStackedBarChart() {
   const { resolvedTheme } = useTheme()
   const shouldUseNodeUsage = selectedAdmin === 'all'
 
-  const handleModalNavigate = (index: number) => {
-    if (!chartData[index]) return
-    setCurrentDataIndex(index)
-    setSelectedData(chartData[index])
-  }
-
   const nodeList: NodeSimple[] = useMemo(() => nodesResponse?.nodes || [], [nodesResponse])
 
   const generateDistinctColor = useCallback((index: number, isDark: boolean): string => {

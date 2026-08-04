@@ -45,7 +45,6 @@ const PERIOD_KEYS = [
   { key: '5d', period: 'day' as Period, amount: 5, unit: 'day' },
   { key: '7d', period: 'day' as Period, amount: 7, unit: 'day' },
   { key: '14d', period: 'day' as Period, amount: 14, unit: 'day' },
-  { key: '30d', period: 'day' as Period, amount: 30, unit: 'day' },
   { key: '1m', period: 'day' as Period, amount: 1, unit: 'month' },
   { key: '3m', period: 'day' as Period, amount: 3, unit: 'month' },
   { key: 'all', period: 'day' as Period, allTime: true },
