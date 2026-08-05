@@ -37,6 +37,11 @@ jobs:
                 git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
             done
 
+            # core-kit's dist imports its siblings by package name, and
+            # resolution from inside the clone never reaches the dashboard's
+            # node_modules. Give it its own, exactly as a local checkout has.
+            cd "$GITHUB_WORKSPACE/../core-kit" && bun install
+
       - name: Install dependencies
         working-directory: ./dashboard
         run: bun install --frozen-lockfile
