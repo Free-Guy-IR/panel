@@ -86,18 +86,16 @@ jobs:
 
             - name: Fetch sibling config kits
               run: |
-                  # dashboard/package.json refers to these through file:../../<kit>,
-                  # i.e. next to the panel checkout. Clone them there so bun resolves
-                  # them the same way it does locally. Each kit ships its built dist/,
-                  # so no build step is needed here.
+                  # dashboard/package.json refers to these through file:../../<kit>, i.e.
+                  # next to the panel checkout. Clone them there so bun resolves them the
+                  # same way it does locally, and give each one its own node_modules: their
+                  # compiled dist/ resolves imports from inside the kit, so it never reaches
+                  # the dashboard's node_modules. Each kit ships its built dist/, so no
+                  # TypeScript build is needed here.
                   for kit in core-kit openvpn-config-kit mtproto-config-kit singbox-config-kit wireguard-config-kit; do
                       git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
+                      (cd "$GITHUB_WORKSPACE/../$kit" && bun install)
                   done
-
-                  # core-kit's dist imports its siblings by package name, and
-                  # resolution from inside the clone never reaches the dashboard's
-                  # node_modules. Give it its own, exactly as a local checkout has.
-                  cd "$GITHUB_WORKSPACE/../core-kit" && bun install
 
             - name: Install dependencies
               working-directory: ./dashboard
