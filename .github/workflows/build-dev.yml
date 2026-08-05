@@ -27,6 +27,16 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Fetch sibling config kits
+        run: |
+            # dashboard/package.json refers to these through file:../../<kit>,
+            # i.e. next to the panel checkout. Clone them there so bun resolves
+            # them the same way it does locally. Each kit ships its built dist/,
+            # so no build step is needed here.
+            for kit in core-kit openvpn-config-kit mtproto-config-kit singbox-config-kit wireguard-config-kit; do
+                git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
+            done
+
       - name: Install dependencies
         working-directory: ./dashboard
         run: bun install --frozen-lockfile
