@@ -24,6 +24,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:$PYTHON_VERSION-slim-bookworm
 
+# Links the published image to this repository on GHCR. Without it the
+# package stays unattached, and the release workflow's GITHUB_TOKEN is
+# refused with "permission_denied: write_package" when pushing.
+LABEL org.opencontainers.image.source="https://github.com/Free-Guy-IR/panel"
+
 COPY --from=builder /build /code
 WORKDIR /code
 
