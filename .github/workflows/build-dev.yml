@@ -35,8 +35,13 @@ jobs:
             # compiled dist/ resolves imports from inside the kit, so it never reaches
             # the dashboard's node_modules. Each kit ships its built dist/, so no
             # TypeScript build is needed here.
-            for kit in core-kit openvpn-config-kit mtproto-config-kit singbox-config-kit wireguard-config-kit; do
+            KITS="core-kit openvpn-config-kit mtproto-config-kit singbox-config-kit wireguard-config-kit"
+            for kit in $KITS; do
                 git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
+            done
+            # Install only after every kit exists: core-kit resolves its
+            # siblings through file:../<kit>, so they must already be on disk.
+            for kit in $KITS; do
                 (cd "$GITHUB_WORKSPACE/../$kit" && bun install)
             done
 
