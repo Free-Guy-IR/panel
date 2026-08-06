@@ -1,6 +1,8 @@
 import json
 from random import choice
 
+from pydantic import BaseModel
+
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -11,7 +13,6 @@ from app.models.subscription import (
     WebSocketTransportConfig,
     XHTTPTransportConfig,
 )
-from app.utils.helpers import UUIDEncoder
 
 from . import BaseSubscription
 
@@ -62,7 +63,7 @@ class XrayConfiguration(BaseSubscription):
         self.config.append(json_template)
 
     def render(self):
-        return json.dumps(self.config, indent=4, cls=UUIDEncoder)
+        return json.dumps(self.config, indent=4)
 
     def add(
         self,
@@ -666,7 +667,10 @@ class XrayConfiguration(BaseSubscription):
             stream_settings["sockopt"] = sockopt
 
         if finalmask is not None:
-            stream_settings["finalmask"] = finalmask
+            if isinstance(finalmask, BaseModel):
+                stream_settings["finalmask"] = finalmask.model_dump(exclude_none=True, by_alias=True, mode="json")
+            else:
+                stream_settings["finalmask"] = finalmask
 
         return stream_settings
 

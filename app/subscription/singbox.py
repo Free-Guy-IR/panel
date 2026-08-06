@@ -9,7 +9,6 @@ from app.models.subscription import (
     TLSConfig,
     WebSocketTransportConfig,
 )
-from app.utils.helpers import UUIDEncoder
 
 from . import BaseSubscription
 
@@ -60,7 +59,7 @@ class SingBoxConfiguration(BaseSubscription):
 
     def render(self):
         self._finalize_config()
-        return json.dumps(self.config, indent=4, cls=UUIDEncoder)
+        return json.dumps(self.config, indent=4)
 
     def _finalize_config(self):
         urltest_types = ["vmess", "vless", "trojan", "shadowsocks", "hysteria2", "tuic", "http", "ssh"]

@@ -1,7 +1,7 @@
 import { useFieldArray, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { HostFormValues } from '../forms/host-form'
-import type { FinalMaskTcpType, FinalMaskUdpType, XrayNoiseSettings } from '@/service/api'
+import type { FinalMaskTcpLayer, FinalMaskTcpType, FinalMaskUdpType, XrayNoiseSettings } from '@/service/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -22,13 +22,13 @@ function normalizeHostFragmentSettings(settings: Record<string, unknown> | undef
   if (!settings || typeof settings !== 'object') return settings
   const out: Record<string, unknown> = { ...settings }
 
-  if (out.length != null && !Array.isArray(out.lengths)) {
+  if (out.length != null && (!Array.isArray(out.lengths) || (out.lengths as unknown[]).length === 0)) {
     out.lengths = [out.length]
   }
   delete out.length
 
   const legacyDelay = out.delay ?? out.interval
-  if (legacyDelay != null && !Array.isArray(out.delays)) {
+  if (legacyDelay != null && legacyDelay !== '' && (!Array.isArray(out.delays) || (out.delays as unknown[]).length === 0)) {
     out.delays = [legacyDelay]
   }
   delete out.delay
@@ -45,7 +45,7 @@ export function FinalMaskSettings({ form }: FinalMaskSettingsProps) {
     if (!Array.isArray(tcp)) return
 
     let changed = false
-    const nextTcp = tcp.map((layer: any) => {
+    const nextTcp = tcp.map(layer => {
       if (!layer || layer.type !== 'fragment' || !layer.settings) return layer
       const settings = layer.settings as Record<string, unknown>
       if (!('length' in settings || 'interval' in settings || 'delay' in settings)) return layer
@@ -54,7 +54,7 @@ export function FinalMaskSettings({ form }: FinalMaskSettingsProps) {
     })
 
     if (changed) {
-      form.setValue('final_mask_settings.tcp', nextTcp, { shouldDirty: false })
+      form.setValue('final_mask_settings.tcp', nextTcp as FinalMaskTcpLayer[], { shouldDirty: false })
     }
   }, [form])
 
@@ -515,9 +515,9 @@ function UdpLayersForm({ form }: { form: UseFormReturn<any> }) {
                     name={`final_mask_settings.udp.${index}.settings.packetSize`}
                     render={({ field: inputField }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Packet Size (Range e.g. 100-200)</FormLabel>
+                        <FormLabel className="text-xs">Packet Size (Gecko, e.g. 512-1200)</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. 100-200" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
+                          <Input placeholder="e.g. 512-1200" {...inputField} value={inputField.value || ''} className="h-8 text-xs" />
                         </FormControl>
                       </FormItem>
                     )}
