@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 5.2.0
+ * OpenAPI spec version: 5.2.1
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -426,29 +426,23 @@ export type XrayMuxSettingsInputXudpConcurrency = number | null
 
 export type XrayMuxSettingsInputConcurrency = number | null
 
-export type XrayFragmentSettingsOutputMaxSplit = string | null
-
-export interface XrayFragmentSettingsOutput {
-  /** @pattern ^(:?tlshello|[\d-]{1,16})$ */
-  packets: string
-  /** @pattern ^[\d-]{1,16}$ */
-  length: string
-  /** @pattern ^[\d-]{1,16}$ */
-  delay: string
-  maxSplit?: XrayFragmentSettingsOutputMaxSplit
-  [key: string]: unknown
+export interface XrayMuxSettingsInput {
+  enabled?: boolean
+  concurrency?: XrayMuxSettingsInputConcurrency
+  xudp_concurrency?: XrayMuxSettingsInputXudpConcurrency
+  xudp_proxy_udp_443?: Xudp
 }
 
-export type XrayFragmentSettingsInputMaxSplit = string | null
+export type XrayFragmentSettingsMaxSplit = string | null
 
-export interface XrayFragmentSettingsInput {
+export interface XrayFragmentSettings {
   /** @pattern ^(:?tlshello|[\d-]{1,16})$ */
   packets: string
   /** @pattern ^[\d-]{1,16}$ */
   length: string
   /** @pattern ^[\d-]{1,16}$ */
   interval: string
-  maxSplit?: XrayFragmentSettingsInputMaxSplit
+  maxSplit?: XrayFragmentSettingsMaxSplit
   [key: string]: unknown
 }
 
@@ -460,13 +454,6 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
-
-export interface XrayMuxSettingsInput {
-  enabled?: boolean
-  concurrency?: XrayMuxSettingsInputConcurrency
-  xudp_concurrency?: XrayMuxSettingsInputXudpConcurrency
-  xudp_proxy_udp_443?: Xudp
-}
 
 export type XMuxSettingsHKeepAlivePeriod = number | null
 
@@ -713,10 +700,6 @@ export type UsersPermissionsReadAnyOf = { [key: string]: PermissionScope | numbe
 
 export type UsersPermissionsRead = boolean | UsersPermissionsReadAnyOf | null
 
-export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
-
-export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
-
 export interface UsersPermissions {
   create?: UsersPermissionsCreate
   read?: UsersPermissionsRead
@@ -728,6 +711,10 @@ export interface UsersPermissions {
   set_owner?: UsersPermissionsSetOwner
   activate_next_plan?: UsersPermissionsActivateNextPlan
 }
+
+export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
+
+export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
 
 export type UsernameGenerationStrategy = (typeof UsernameGenerationStrategy)[keyof typeof UsernameGenerationStrategy]
 
@@ -1097,13 +1084,6 @@ export interface UserModify {
   status?: UserModifyStatus
 }
 
-/**
- * User IP lists for all nodes
- */
-export interface UserIPListAll {
-  nodes: UserIPListAllNodes
-}
-
 export type UserIPListIps = { [key: string]: number }
 
 /**
@@ -1114,6 +1094,13 @@ export interface UserIPList {
 }
 
 export type UserIPListAllNodes = { [key: string]: UserIPList | null }
+
+/**
+ * User IP lists for all nodes
+ */
+export interface UserIPListAll {
+  nodes: UserIPListAllNodes
+}
 
 export type UserHWIDResponseDeviceModel = string | null
 
@@ -1929,19 +1916,6 @@ export type NotificationSettingsTelegramChatId = number | null
 
 export type NotificationSettingsTelegramApiToken = string | null
 
-export interface NotificationSettings {
-  notify_telegram?: boolean
-  notify_discord?: boolean
-  telegram_api_token?: NotificationSettingsTelegramApiToken
-  telegram_chat_id?: NotificationSettingsTelegramChatId
-  telegram_topic_id?: NotificationSettingsTelegramTopicId
-  discord_webhook_url?: NotificationSettingsDiscordWebhookUrl
-  channels?: NotificationChannels
-  proxy_url?: NotificationSettingsProxyUrl
-  /** */
-  max_retries: number
-}
-
 export interface NotificationEnable {
   admin?: AdminNotificationEnable
   admin_role?: BaseNotificationEnable
@@ -1969,6 +1943,19 @@ export interface NotificationChannels {
   user?: NotificationChannel
   user_template?: NotificationChannel
   api_key?: NotificationChannel
+}
+
+export interface NotificationSettings {
+  notify_telegram?: boolean
+  notify_discord?: boolean
+  telegram_api_token?: NotificationSettingsTelegramApiToken
+  telegram_chat_id?: NotificationSettingsTelegramChatId
+  telegram_topic_id?: NotificationSettingsTelegramTopicId
+  discord_webhook_url?: NotificationSettingsDiscordWebhookUrl
+  channels?: NotificationChannels
+  proxy_url?: NotificationSettingsProxyUrl
+  /** */
+  max_retries: number
 }
 
 export type NotificationChannelDiscordWebhookUrl = string | null
@@ -2033,10 +2020,6 @@ export type NodesPermissionsUpdateAnyOf = { [key: string]: PermissionScope | num
 
 export type NodesPermissionsUpdate = boolean | NodesPermissionsUpdateAnyOf | null
 
-export type NodesPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
-
-export type NodesPermissionsReadSimple = boolean | NodesPermissionsReadSimpleAnyOf | null
-
 export interface NodesPermissions {
   create?: NodesPermissionsCreate
   read?: NodesPermissionsRead
@@ -2048,6 +2031,10 @@ export interface NodesPermissions {
   logs?: NodesPermissionsLogs
   stats?: NodesPermissionsStats
 }
+
+export type NodesPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
+
+export type NodesPermissionsReadSimple = boolean | NodesPermissionsReadSimpleAnyOf | null
 
 export type NodesPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2420,16 +2407,14 @@ export type HwidsPermissionsDeleteAnyOf = { [key: string]: PermissionScope | num
 
 export type HwidsPermissionsDelete = boolean | HwidsPermissionsDeleteAnyOf | null
 
-export interface HwidsPermissions {
-  read?: HwidsPermissionsRead
-  delete?: HwidsPermissionsDelete
-}
-
 export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
 export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
 
-export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+export interface HwidsPermissions {
+  read?: HwidsPermissionsRead
+  delete?: HwidsPermissionsDelete
+}
 
 export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
 
@@ -2438,6 +2423,8 @@ export interface HostsPermissions {
   read?: HostsPermissionsRead
   update?: HostsPermissionsUpdate
 }
+
+export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2599,22 +2586,13 @@ export interface GRPCSettings {
   initial_windows_size?: GRPCSettingsInitialWindowsSize
 }
 
-export type FragmentSettingsOutputSingBox = SingBoxFragmentSettings | null
+export type FragmentSettingsSingBox = SingBoxFragmentSettings | null
 
-export type FragmentSettingsOutputXray = XrayFragmentSettingsOutput | null
+export type FragmentSettingsXray = XrayFragmentSettings | null
 
-export interface FragmentSettingsOutput {
-  xray?: FragmentSettingsOutputXray
-  sing_box?: FragmentSettingsOutputSingBox
-}
-
-export type FragmentSettingsInputSingBox = SingBoxFragmentSettings | null
-
-export type FragmentSettingsInputXray = XrayFragmentSettingsInput | null
-
-export interface FragmentSettingsInput {
-  xray?: FragmentSettingsInputXray
-  sing_box?: FragmentSettingsInputSingBox
+export interface FragmentSettings {
+  xray?: FragmentSettingsXray
+  sing_box?: FragmentSettingsSingBox
 }
 
 export interface Forbidden {
@@ -3010,7 +2988,7 @@ export type CreateHostVlessRoute = string | null
 
 export type CreateHostNoiseSettings = NoiseSettings | null
 
-export type CreateHostFragmentSettings = FragmentSettingsInput | null
+export type CreateHostFragmentSettings = FragmentSettings | null
 
 export type CreateHostMuxSettings = MuxSettingsInput | null
 
@@ -3518,7 +3496,7 @@ export type BaseHostVlessRoute = string | null
 
 export type BaseHostNoiseSettings = NoiseSettings | null
 
-export type BaseHostFragmentSettings = FragmentSettingsOutput | null
+export type BaseHostFragmentSettings = FragmentSettings | null
 
 export type BaseHostMuxSettings = MuxSettingsOutput | null
 
