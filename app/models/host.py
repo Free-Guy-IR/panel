@@ -69,6 +69,38 @@ class NoiseSettings(BaseModel):
     xray: list[XrayNoiseSettings] | None = Field(default=None)
 
 
+def prune_blank_values(value: Any) -> Any:
+    """Recursively drop entries that carry no configured value.
+
+    Xray treats a present-but-blank masking field as a real one: an empty
+    maxSplit parses as 0 and the config is rejected outright. The dashboard
+    writes cleared inputs as empty strings, and exclude_none only removes
+    null, so those blanks otherwise reach the client verbatim.
+
+    Empty strings, lists and dicts all mean "not set" for these settings and
+    are dropped alongside None. Meaningful falsy values (0, False) are kept.
+    """
+    if isinstance(value, dict):
+        pruned = {}
+        for key, item in value.items():
+            cleaned = prune_blank_values(item)
+            if cleaned is not None:
+                pruned[key] = cleaned
+        return pruned or None
+
+    if isinstance(value, list):
+        items = [cleaned for cleaned in (prune_blank_values(i) for i in value) if cleaned is not None]
+        return items or None
+
+    if value is None:
+        return None
+
+    if isinstance(value, str) and not value.strip():
+        return None
+
+    return value
+
+
 class FinalMaskBaseModel(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True, use_enum_values=True)
 
