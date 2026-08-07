@@ -4,9 +4,8 @@ import ipaddress
 import json
 import os
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import PosixPath
-from typing import Union
 
 import commentjson
 from cryptography import x509
@@ -58,7 +57,7 @@ def generate_openvpn_pki(common_name: str = "PasarGuard-OpenVPN-CA") -> dict[str
     CoreConfig.config["pki"] - the same "generate once, store inline" pattern
     already used for the Hysteria2 TLS certificate in app/core/singbox.py.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     ca_key = ec.generate_private_key(ec.SECP384R1())
     ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
@@ -159,7 +158,7 @@ class OpenVPNConfig(dict):
 
     def __init__(
         self,
-        config: Union[dict, str, PosixPath] | None = None,
+        config: dict | str | PosixPath | None = None,
         exclude_inbound_tags: set[str] | None = None,
         fallbacks_inbound_tags: set[str] | None = None,
         skip_validation: bool = False,
@@ -198,11 +197,11 @@ class OpenVPNConfig(dict):
         if not instances:
             raise ValueError("config doesn't have instances")
         if not isinstance(instances, list):
-            raise ValueError("instances must be a list")
+            raise TypeError("instances must be a list")
 
         pki = self.get("pki")
         if not isinstance(pki, dict):
-            raise ValueError("config doesn't have a pki section")
+            raise TypeError("config doesn't have a pki section")
         for field in _REQUIRED_PKI_FIELDS:
             if not pki.get(field):
                 raise ValueError(f"pki.{field} is required - generate it via generate_openvpn_pki() before saving")
@@ -312,7 +311,7 @@ class OpenVPNConfig(dict):
         }
 
     @classmethod
-    def from_json(cls, data: dict) -> "OpenVPNConfig":
+    def from_json(cls, data: dict) -> OpenVPNConfig:
         instance = cls(
             config=data.get("config", {}),
             exclude_inbound_tags=set(data.get("exclude_inbound_tags", [])),

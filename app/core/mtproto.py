@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import PosixPath
-from typing import Union
 
 import commentjson
 
@@ -45,7 +44,7 @@ class MTProtoConfig(dict):
 
     def __init__(
         self,
-        config: Union[dict, str, PosixPath] | None = None,
+        config: dict | str | PosixPath | None = None,
         exclude_inbound_tags: set[str] | None = None,
         fallbacks_inbound_tags: set[str] | None = None,
         skip_validation: bool = False,
@@ -84,7 +83,7 @@ class MTProtoConfig(dict):
         if not instances:
             raise ValueError("config doesn't have instances")
         if not isinstance(instances, list):
-            raise ValueError("instances must be a list")
+            raise TypeError("instances must be a list")
 
         seen_tags: set[str] = set()
         seen_ports: set[int] = set()
@@ -182,7 +181,7 @@ class MTProtoConfig(dict):
         }
 
     @classmethod
-    def from_json(cls, data: dict) -> "MTProtoConfig":
+    def from_json(cls, data: dict) -> MTProtoConfig:
         instance = cls(
             config=data.get("config", {}),
             exclude_inbound_tags=set(data.get("exclude_inbound_tags", [])),

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import PosixPath
-from typing import Union
 
 import commentjson
 
@@ -32,7 +31,7 @@ class SingBoxConfig(dict):
 
     def __init__(
         self,
-        config: Union[dict, str, PosixPath] | None = None,
+        config: dict | str | PosixPath | None = None,
         exclude_inbound_tags: set[str] | None = None,
         fallbacks_inbound_tags: set[str] | None = None,
         skip_validation: bool = False,
@@ -70,7 +69,7 @@ class SingBoxConfig(dict):
         if not self.get("inbounds"):
             raise ValueError("config doesn't have inbounds")
         if not isinstance(self["inbounds"], list):
-            raise ValueError("inbounds must be a list")
+            raise TypeError("inbounds must be a list")
 
         if not self.get("outbounds"):
             raise ValueError("config doesn't have outbounds")
@@ -183,7 +182,7 @@ class SingBoxConfig(dict):
         }
 
     @classmethod
-    def from_json(cls, data: dict) -> "SingBoxConfig":
+    def from_json(cls, data: dict) -> SingBoxConfig:
         instance = cls(
             config=data.get("config", {}),
             exclude_inbound_tags=set(data.get("exclude_inbound_tags", [])),
