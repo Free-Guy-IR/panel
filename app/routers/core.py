@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, status
 
+from app.core.openvpn import generate_openvpn_pki
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
-from app.core.openvpn import generate_openvpn_pki
 from app.models.core import (
     BulkCoreSelection,
     CoreCreate,

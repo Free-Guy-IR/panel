@@ -10,6 +10,11 @@ on:
 
 jobs:
   notify:
+    # Skip unless this repository actually has a Telegram bot configured. The
+    # reusable workflow lives in the upstream organisation and posts to its
+    # channel, so on a fork without TELEGRAM_TARGETS/TELEGRAM_BOT_TOKEN it can
+    # only ever fail and mark every push red.
+    if: ${{ vars.TELEGRAM_TARGETS != '' }}
     uses: PasarGuard/.github/.github/workflows/telegram-notify.yml@main
     secrets:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
