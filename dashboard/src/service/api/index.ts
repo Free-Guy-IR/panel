@@ -21,6 +21,20 @@ import type {
 } from '@tanstack/react-query'
 import { orvalFetcher } from '../http'
 import type { ErrorType, BodyType } from '../http'
+export type ConnectionStatesForUsersParams = {
+  user_ids?: number[] | null
+}
+
+export type ListConnectionStatesParams = {
+  /**
+   * Filter to one verdict
+   */
+  verdict?: string | null
+  min_devices?: number | null
+  limit?: number
+  offset?: number
+}
+
 export type GetUserTemplatesSimpleParams = {
   ids?: number[] | null
   offset?: number | null
@@ -423,13 +437,6 @@ export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
 
-export interface XrayMuxSettingsOutput {
-  enabled?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
-
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
 export type XrayMuxSettingsInputConcurrency = number | null
@@ -462,6 +469,13 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
+
+export interface XrayMuxSettingsOutput {
+  enabled?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
 
 export type XMuxSettingsHKeepAlivePeriod = number | null
 
@@ -688,6 +702,18 @@ export type UsersPermissionsRevokeSubAnyOf = { [key: string]: PermissionScope | 
 
 export type UsersPermissionsRevokeSub = boolean | UsersPermissionsRevokeSubAnyOf | null
 
+export interface UsersPermissions {
+  create?: UsersPermissionsCreate
+  read?: UsersPermissionsRead
+  read_simple?: UsersPermissionsReadSimple
+  update?: UsersPermissionsUpdate
+  delete?: UsersPermissionsDelete
+  reset_usage?: UsersPermissionsResetUsage
+  revoke_sub?: UsersPermissionsRevokeSub
+  set_owner?: UsersPermissionsSetOwner
+  activate_next_plan?: UsersPermissionsActivateNextPlan
+}
+
 export type UsersPermissionsResetUsageAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsResetUsage = boolean | UsersPermissionsResetUsageAnyOf | null
@@ -711,18 +737,6 @@ export type UsersPermissionsRead = boolean | UsersPermissionsReadAnyOf | null
 export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
-
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
 
 export type UsernameGenerationStrategy = (typeof UsernameGenerationStrategy)[keyof typeof UsernameGenerationStrategy]
 
@@ -1489,6 +1503,8 @@ export interface ShadowsocksSettings {
   method?: ShadowsocksMethods
 }
 
+export type SettingsSchemaConnectionLimit = ConnectionLimit | null
+
 export type SettingsSchemaGeneral = General | null
 
 export type SettingsSchemaHwid = HWIDSettings | null
@@ -1511,17 +1527,12 @@ export interface SettingsSchema {
   subscription?: SettingsSchemaSubscription
   hwid?: SettingsSchemaHwid
   general?: SettingsSchemaGeneral
+  connection_limit?: SettingsSchemaConnectionLimit
 }
 
 export type SettingsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsUpdate = boolean | SettingsPermissionsUpdateAnyOf | null
-
-export interface SettingsPermissions {
-  read?: SettingsPermissionsRead
-  read_general?: SettingsPermissionsReadGeneral
-  update?: SettingsPermissionsUpdate
-}
 
 export type SettingsPermissionsReadGeneralAnyOf = { [key: string]: PermissionScope | number }
 
@@ -1530,6 +1541,12 @@ export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGe
 export type SettingsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsRead = boolean | SettingsPermissionsReadAnyOf | null
+
+export interface SettingsPermissions {
+  read?: SettingsPermissionsRead
+  read_general?: SettingsPermissionsReadGeneral
+  update?: SettingsPermissionsUpdate
+}
 
 export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
 
@@ -2020,18 +2037,6 @@ export type NodesPermissionsReconnectAnyOf = { [key: string]: PermissionScope | 
 
 export type NodesPermissionsReconnect = boolean | NodesPermissionsReconnectAnyOf | null
 
-export interface NodesPermissions {
-  create?: NodesPermissionsCreate
-  read?: NodesPermissionsRead
-  read_simple?: NodesPermissionsReadSimple
-  update?: NodesPermissionsUpdate
-  delete?: NodesPermissionsDelete
-  reconnect?: NodesPermissionsReconnect
-  update_core?: NodesPermissionsUpdateCore
-  logs?: NodesPermissionsLogs
-  stats?: NodesPermissionsStats
-}
-
 export type NodesPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
 
 export type NodesPermissionsDelete = boolean | NodesPermissionsDeleteAnyOf | null
@@ -2052,7 +2057,26 @@ export type NodesPermissionsCreateAnyOf = { [key: string]: PermissionScope | num
 
 export type NodesPermissionsCreate = boolean | NodesPermissionsCreateAnyOf | null
 
+export interface NodesPermissions {
+  create?: NodesPermissionsCreate
+  read?: NodesPermissionsRead
+  read_simple?: NodesPermissionsReadSimple
+  update?: NodesPermissionsUpdate
+  delete?: NodesPermissionsDelete
+  reconnect?: NodesPermissionsReconnect
+  update_core?: NodesPermissionsUpdateCore
+  logs?: NodesPermissionsLogs
+  stats?: NodesPermissionsStats
+}
+
 export type NodeUsageStatsListPeriod = Period | null
+
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
 
 export interface NodeUsageStat {
   period_start: string
@@ -2061,13 +2085,6 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
-
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -2259,19 +2276,6 @@ export interface NodeGeoFilesUpdate {
 
 export type NodeCreateProxyUrl = string | null
 
-export interface NodeCoreUpdate {
-  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
-  core_version?: string
-}
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
-
 export interface NodeCreate {
   name: string
   address: string
@@ -2299,6 +2303,19 @@ export interface NodeCreate {
   internal_timeout?: number
   proxy_url?: NodeCreateProxyUrl
 }
+
+export interface NodeCoreUpdate {
+  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
+  core_version?: string
+}
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
 
 export type NextPlanModelExpire = number | null
 
@@ -2395,13 +2412,6 @@ export interface KCPSettings {
 
 export type InboundUsageStatsListPeriod = Period | null
 
-export interface InboundUsageStatsList {
-  period?: InboundUsageStatsListPeriod
-  start: string
-  end: string
-  stats: InboundUsageStatsListStats
-}
-
 export interface InboundUsageStat {
   period_start: string
   uplink: number
@@ -2409,6 +2419,13 @@ export interface InboundUsageStat {
 }
 
 export type InboundUsageStatsListStats = { [key: string]: InboundUsageStat[] }
+
+export interface InboundUsageStatsList {
+  period?: InboundUsageStatsListPeriod
+  start: string
+  end: string
+  stats: InboundUsageStatsListStats
+}
 
 export type InboundSummaryNetwork = string | null
 
@@ -2441,15 +2458,9 @@ export interface HwidsPermissions {
   delete?: HwidsPermissionsDelete
 }
 
-export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
-
-export interface HostsPermissions {
-  create?: HostsPermissionsCreate
-  read?: HostsPermissionsRead
-  update?: HostsPermissionsUpdate
-}
-
 export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+
+export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
 
 export type HostsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2458,6 +2469,12 @@ export type HostsPermissionsRead = boolean | HostsPermissionsReadAnyOf | null
 export type HostsPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsCreate = boolean | HostsPermissionsCreateAnyOf | null
+
+export interface HostsPermissions {
+  create?: HostsPermissionsCreate
+  read?: HostsPermissionsRead
+  update?: HostsPermissionsUpdate
+}
 
 export interface HostNotificationEnable {
   create?: boolean
@@ -2524,6 +2541,11 @@ export interface HTTPException {
   detail: string
 }
 
+export interface GroupsResponse {
+  groups: GroupResponse[]
+  total: number
+}
+
 /**
  * Lightweight group model with only id and name for performance.
  */
@@ -2552,11 +2574,6 @@ export interface GroupResponse {
   is_disabled?: boolean
   id: number
   total_users?: number
-}
-
-export interface GroupsResponse {
-  groups: GroupResponse[]
-  total: number
 }
 
 export type GroupModifyInboundTags = string[] | null
@@ -2626,6 +2643,8 @@ export interface Forbidden {
 
 export type FinalMaskXmcSettingsUsernames = string[] | null
 
+export type FinalMaskXmcSettingsProfiles = FinalMaskXmcProfile[] | null
+
 export type FinalMaskXmcSettingsPassword = string | null
 
 export type FinalMaskXmcSettingsHostname = string | null
@@ -2645,8 +2664,6 @@ export interface FinalMaskXmcProfile {
   texturesSignature: string
   [key: string]: unknown
 }
-
-export type FinalMaskXmcSettingsProfiles = FinalMaskXmcProfile[] | null
 
 export type FinalMaskXicmpSettingsId = number | null
 
@@ -2846,6 +2863,18 @@ export type FinalMaskQuicParamsBbrProfile = string | null
 
 export type FinalMaskQuicParamsDebug = boolean | null
 
+export type FinalMaskQuicCongestion = (typeof FinalMaskQuicCongestion)[keyof typeof FinalMaskQuicCongestion]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const FinalMaskQuicCongestion = {
+  reno: 'reno',
+  bbr: 'bbr',
+  brutal: 'brutal',
+  'force-brutal': 'force-brutal',
+} as const
+
+export type FinalMaskQuicParamsCongestion = FinalMaskQuicCongestion | null
+
 export interface FinalMaskQuicParams {
   congestion?: FinalMaskQuicParamsCongestion
   debug?: FinalMaskQuicParamsDebug
@@ -2863,18 +2892,6 @@ export interface FinalMaskQuicParams {
   maxIncomingStreams?: FinalMaskQuicParamsMaxIncomingStreams
   [key: string]: unknown
 }
-
-export type FinalMaskQuicCongestion = (typeof FinalMaskQuicCongestion)[keyof typeof FinalMaskQuicCongestion]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const FinalMaskQuicCongestion = {
-  reno: 'reno',
-  bbr: 'bbr',
-  brutal: 'brutal',
-  'force-brutal': 'force-brutal',
-} as const
-
-export type FinalMaskQuicParamsCongestion = FinalMaskQuicCongestion | null
 
 export type FinalMaskPasswordSettingsPassword = string | null
 
@@ -3103,11 +3120,6 @@ export interface CoresSimpleResponse {
   total: number
 }
 
-export interface CoreResponseList {
-  count: number
-  cores?: CoreResponse[]
-}
-
 export type CoreResponseType = CoreType | null
 
 export type CoreResponseConfig = { [key: string]: unknown }
@@ -3120,6 +3132,11 @@ export interface CoreResponse {
   fallbacks_inbound_tags: string[]
   id: number
   created_at: string
+}
+
+export interface CoreResponseList {
+  count: number
+  cores?: CoreResponse[]
 }
 
 export type CoreCreateFallbacksInboundTags = unknown[] | null
@@ -3138,6 +3155,104 @@ export interface CoreCreate {
   type?: CoreCreateType
   exclude_inbound_tags?: CoreCreateExcludeInboundTags
   fallbacks_inbound_tags?: CoreCreateFallbacksInboundTags
+}
+
+export type ConnectionStateResponseDetails = { [key: string]: unknown }
+
+export type ConnectionStateResponseCheckedAt = string | null
+
+export type ConnectionStateResponseUsername = string | null
+
+/**
+ * What the panel last observed about one subscription.
+ */
+export interface ConnectionStateResponse {
+  user_id: number
+  username?: ConnectionStateResponseUsername
+  devices?: number
+  address_sources?: number
+  hwid_count?: number
+  node_count?: number
+  app_count?: number
+  verdict?: string
+  streak?: number
+  checked_at?: ConnectionStateResponseCheckedAt
+  reasons?: string[]
+  details?: ConnectionStateResponseDetails
+}
+
+export interface ConnectionStatesResponse {
+  states: ConnectionStateResponse[]
+  total: number
+  device_limit?: number
+  enabled?: boolean
+  monitor_only?: boolean
+}
+
+/**
+ * Detection of one subscription being used by several people at once.
+
+The panel reads each user's live IPs straight from the nodes, so this needs
+no log parsing. What it mostly has to do is avoid mistaking one person for
+several: a phone changing towers, a CDN presenting many edge addresses, a
+tunnel presenting one address for everybody.
+ */
+export interface ConnectionLimit {
+  enabled?: boolean
+  monitor_only?: boolean
+  /**
+   * @minimum 30
+   * @maximum 3600
+   */
+  check_interval_seconds?: number
+  /**
+   * @minimum 60
+   * @maximum 1800
+   */
+  online_window_seconds?: number
+  /**
+   * @minimum 5
+   * @maximum 1440
+   */
+  node_window_minutes?: number
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  device_limit?: number
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  warn_at_devices?: number
+  /**
+   * @minimum 1
+   * @maximum 20
+   */
+  persistence_cycles?: number
+  /**
+   * @minimum 10
+   * @maximum 600
+   */
+  concurrency_window_seconds?: number
+  /**
+   * @minimum 8
+   * @maximum 32
+   */
+  ipv4_group_prefix?: number
+  /**
+   * @minimum 16
+   * @maximum 128
+   */
+  ipv6_group_prefix?: number
+  /**
+   * @minimum 2
+   * @maximum 100
+   */
+  infrastructure_min_users?: number
+  cdn_ranges?: string[]
+  apply_to_group_ids?: number[]
+  apply_to_admin_ids?: number[]
 }
 
 export interface Conflict {
@@ -15051,4 +15166,187 @@ export const useResetUserHwids = <TData = Awaited<ReturnType<typeof resetUserHwi
   const mutationOptions = getResetUserHwidsMutationOptions(options)
 
   return useMutation(mutationOptions)
+}
+
+/**
+ * Users ordered by how many devices were last seen on them.
+ * @summary List Connection States
+ */
+export const listConnectionStates = (params?: ListConnectionStatesParams, signal?: AbortSignal) => {
+  return orvalFetcher<ConnectionStatesResponse>({ url: `/api/connection-limit/states`, method: 'GET', params, signal })
+}
+
+export const getListConnectionStatesQueryKey = (params?: ListConnectionStatesParams) => {
+  return [`/api/connection-limit/states`, ...(params ? [params] : [])] as const
+}
+
+export const getListConnectionStatesQueryOptions = <TData = Awaited<ReturnType<typeof listConnectionStates>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListConnectionStatesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListConnectionStatesQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listConnectionStates>>> = ({ signal }) => listConnectionStates(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListConnectionStatesQueryResult = NonNullable<Awaited<ReturnType<typeof listConnectionStates>>>
+export type ListConnectionStatesQueryError = ErrorType<HTTPValidationError>
+
+export function useListConnectionStates<TData = Awaited<ReturnType<typeof listConnectionStates>>, TError = ErrorType<HTTPValidationError>>(
+  params: undefined | ListConnectionStatesParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListConnectionStates<TData = Awaited<ReturnType<typeof listConnectionStates>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListConnectionStatesParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListConnectionStates<TData = Awaited<ReturnType<typeof listConnectionStates>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListConnectionStatesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Connection States
+ */
+
+export function useListConnectionStates<TData = Awaited<ReturnType<typeof listConnectionStates>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListConnectionStatesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listConnectionStates>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListConnectionStatesQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * States for the users on one page of the users table.
+
+Taking the ids the page is already showing keeps this to a single indexed
+query, rather than a request per row.
+ * @summary Connection States For Users
+ */
+export const connectionStatesForUsers = (params?: ConnectionStatesForUsersParams, signal?: AbortSignal) => {
+  return orvalFetcher<ConnectionStatesResponse>({ url: `/api/connection-limit/states/by-user`, method: 'GET', params, signal })
+}
+
+export const getConnectionStatesForUsersQueryKey = (params?: ConnectionStatesForUsersParams) => {
+  return [`/api/connection-limit/states/by-user`, ...(params ? [params] : [])] as const
+}
+
+export const getConnectionStatesForUsersQueryOptions = <TData = Awaited<ReturnType<typeof connectionStatesForUsers>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ConnectionStatesForUsersParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getConnectionStatesForUsersQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof connectionStatesForUsers>>> = ({ signal }) => connectionStatesForUsers(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ConnectionStatesForUsersQueryResult = NonNullable<Awaited<ReturnType<typeof connectionStatesForUsers>>>
+export type ConnectionStatesForUsersQueryError = ErrorType<HTTPValidationError>
+
+export function useConnectionStatesForUsers<TData = Awaited<ReturnType<typeof connectionStatesForUsers>>, TError = ErrorType<HTTPValidationError>>(
+  params: undefined | ConnectionStatesForUsersParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useConnectionStatesForUsers<TData = Awaited<ReturnType<typeof connectionStatesForUsers>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ConnectionStatesForUsersParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useConnectionStatesForUsers<TData = Awaited<ReturnType<typeof connectionStatesForUsers>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ConnectionStatesForUsersParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Connection States For Users
+ */
+
+export function useConnectionStatesForUsers<TData = Awaited<ReturnType<typeof connectionStatesForUsers>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ConnectionStatesForUsersParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof connectionStatesForUsers>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getConnectionStatesForUsersQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * The CDN ranges shipped by default, so the settings form can offer them.
+ * @summary Default Cdn Ranges
+ */
+export const defaultCdnRanges = (signal?: AbortSignal) => {
+  return orvalFetcher<string[]>({ url: `/api/connection-limit/defaults/cdn-ranges`, method: 'GET', signal })
+}
+
+export const getDefaultCdnRangesQueryKey = () => {
+  return [`/api/connection-limit/defaults/cdn-ranges`] as const
+}
+
+export const getDefaultCdnRangesQueryOptions = <TData = Awaited<ReturnType<typeof defaultCdnRanges>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getDefaultCdnRangesQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof defaultCdnRanges>>> = ({ signal }) => defaultCdnRanges(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DefaultCdnRangesQueryResult = NonNullable<Awaited<ReturnType<typeof defaultCdnRanges>>>
+export type DefaultCdnRangesQueryError = ErrorType<unknown>
+
+export function useDefaultCdnRanges<TData = Awaited<ReturnType<typeof defaultCdnRanges>>, TError = ErrorType<unknown>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDefaultCdnRanges<TData = Awaited<ReturnType<typeof defaultCdnRanges>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDefaultCdnRanges<TData = Awaited<ReturnType<typeof defaultCdnRanges>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Default Cdn Ranges
+ */
+
+export function useDefaultCdnRanges<TData = Awaited<ReturnType<typeof defaultCdnRanges>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getDefaultCdnRangesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }

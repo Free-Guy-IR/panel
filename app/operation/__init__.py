@@ -24,7 +24,7 @@ from app.db.models import Admin as DBAdmin, ClientTemplate, CoreConfig, Group, N
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
 from app.models.user import UserCreate, UserModify
-from app.operation.permissions import get_scope_admin_id, get_allowed_group_ids
+from app.operation.permissions import get_allowed_group_ids, get_scope_admin_id
 from app.utils.helpers import ensure_datetime_timezone
 from app.utils.jwt import get_subscription_payload
 

@@ -1,4 +1,6 @@
 import { setupColumns } from '@/features/users/components/columns'
+import { DeviceCountsProvider } from '@/features/users/components/device-counts-provider'
+import { getUsersAutoRefreshIntervalSeconds } from '@/utils/userPreferenceStorage'
 import { ActionButtonsModalHost } from '@/features/users/components/action-buttons'
 import SetOwnerModal from '@/features/users/dialogs/set-owner-modal'
 import ApplyTemplateModal from '@/features/templates/dialogs/apply-template-modal'
@@ -1156,11 +1158,19 @@ const UsersTable = memo(() => {
     filters.no_expire
   )
   const usersList = usersData?.users || []
+  const visibleUserIds = useMemo(() => usersList.map(user => user.id), [usersList])
+  // Follow whatever cadence was chosen for the table itself; when that is off,
+  // still refresh occasionally so a badge is not left showing a stale count.
+  const deviceRefreshMs = (() => {
+    const seconds = getUsersAutoRefreshIntervalSeconds()
+    return seconds > 0 ? seconds * 1000 : 120_000
+  })()
   const isCurrentlyLoading = isLoading || (isFetching && !usersData)
   const isEmpty = !isCurrentlyLoading && usersList.length === 0 && totalUsers === 0 && !hasActiveFilters
   const isSearchEmpty = !isCurrentlyLoading && usersList.length === 0 && hasActiveFilters
 
   return (
+    <DeviceCountsProvider userIds={visibleUserIds} refetchInterval={deviceRefreshMs}>
     <div>
       <Filters
         filters={filters}
@@ -1320,6 +1330,7 @@ const UsersTable = memo(() => {
       )}
       <ActionButtonsModalHost />
     </div>
+    </DeviceCountsProvider>
   )
 })
 

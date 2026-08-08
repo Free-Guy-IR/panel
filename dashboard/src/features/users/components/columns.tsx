@@ -1,6 +1,7 @@
 import { UserResponse, UserStatus } from '@/service/api'
 import type { ColumnDef, Row, Table } from '@tanstack/react-table'
 import { ChevronDown } from 'lucide-react'
+import DeviceCountBadge from './device-count-badge'
 import ActionButtons from './action-buttons'
 import { OnlineBadge } from './online-badge'
 import { StatusBadge } from './status-badge'
@@ -138,6 +139,7 @@ export const setupColumns = ({
               <div className="flex items-center gap-x-1.5 overflow-hidden">
                 <span className="overflow-hidden text-sm font-medium text-ellipsis whitespace-nowrap">{row.getValue('username')}</span>
                 <span className="text-muted-foreground/70 hidden shrink-0 font-mono text-[10px] md:inline">#{row.original.id}</span>
+                <DeviceCountBadge userId={row.original.id} />
                 {onlineTimeText && <span className="text-muted-foreground hidden shrink-0 text-[10px] font-normal md:inline">{onlineTimeText}</span>}
               </div>
               {showCreatedBy && row.original.admin?.username && (
