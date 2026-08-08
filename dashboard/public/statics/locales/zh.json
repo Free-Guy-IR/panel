@@ -3697,5 +3697,12 @@
   "statistics.allInbounds": "所有入站",
   "statistics.perInboundTotals": "各入站合计",
   "statistics.noInboundData": "尚未记录入站流量",
-  "statistics.inboundDataHint": "入站历史自启用之时起开始累积。"
+  "statistics.inboundDataHint": "入站历史自启用之时起开始累积。",
+  "admins.groupAccess.title": "Inbound access",
+  "admins.groupAccess.all": "All",
+  "admins.groupAccess.description": "Choose which groups this admin may assign. Their users can only use the inbounds those groups contain.",
+  "admins.groupAccess.allowAll": "Access to all inbounds",
+  "admins.groupAccess.selectAll": "Select all groups",
+  "admins.groupAccess.noneSelected": "With no group selected, this admin's users get no inbounds at all.",
+  "admins.groupAccess.inboundCount": "{{count}} inbounds"
 }
