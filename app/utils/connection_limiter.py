@@ -218,9 +218,11 @@ async def collect_live_ips(
                 if node is None:
                     continue
                 try:
-                    response = await node.get_user_online_ip_list(user.username, timeout=10)
+                    # Nodes index stats by the user's id, not their name - the
+                    # panel's own IP-list endpoint does the same.
+                    response = await node.get_user_online_ip_list(str(user.id), timeout=10)
                 except Exception as exc:
-                    logger.debug("node %s did not answer for %s: %s", node_id, user.username, exc)
+                    logger.debug("node %s did not answer for user %s: %s", node_id, user.id, exc)
                     continue
                 if response is None:
                     continue

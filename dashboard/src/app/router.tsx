@@ -34,6 +34,7 @@ const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.
 const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.general'))
 const HwidSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.hwid'))
 const ConnectionLimitSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.connection-limit'))
+const ConnectionLimitReview = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.connection-limit-review'))
 const NotificationSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.notifications'))
 const SubscriptionSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.subscriptions'))
 const TelegramSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.telegram'))
@@ -296,6 +297,14 @@ export const router = createHashRouter([
             element: (
               <Suspense fallback={<LoadingSpinner />}>
                 <ConnectionLimitSettings />
+              </Suspense>
+            ),
+          },
+          {
+            path: '/settings/connection-limit/review',
+            element: (
+              <Suspense fallback={<LoadingSpinner />}>
+                <ConnectionLimitReview />
               </Suspense>
             ),
           },

@@ -3736,5 +3736,19 @@
   "connectionLimit.badge.aria": "{{count}} دستگاه",
   "connectionLimit.badge.title": "{{count}} دستگاه",
   "connectionLimit.badge.limit": "سقف {{limit}}",
-  "connectionLimit.badge.streak": "{{count}} چرخه‌ی پیاپی"
+  "connectionLimit.badge.streak": "{{count}} چرخه‌ی پیاپی",
+  "settings.connectionLimit.review.navTitle": "بررسی دستگاه‌ها",
+  "settings.connectionLimit.review.title": "دستگاه‌های هر اشتراک",
+  "settings.connectionLimit.review.description": "آنچه آخرین بررسی دیده است. روی هیچ‌کدام اقدامی انجام نشده.",
+  "settings.connectionLimit.review.overLimit": "بالای سقف",
+  "settings.connectionLimit.review.atLimit": "در آستانه",
+  "settings.connectionLimit.review.withinLimit": "در حد مجاز",
+  "settings.connectionLimit.review.all": "همه‌ی کاربران",
+  "settings.connectionLimit.review.devices": "دستگاه",
+  "settings.connectionLimit.review.evidence": "آنچه دیده شد",
+  "settings.connectionLimit.review.streak": "چرخه",
+  "settings.connectionLimit.review.checked": "بررسی",
+  "settings.connectionLimit.review.empty": "هنوز چیزی برای این فیلتر ثبت نشده.",
+  "settings.connectionLimit.review.disabled": "تشخیص خاموش است. از تنظیمات بالا روشنش کنید تا جمع‌آوری شروع شود.",
+  "settings.connectionLimit.review.count": "{{from}}–{{to}} از {{total}}"
 }

@@ -3728,5 +3728,19 @@
   "connectionLimit.badge.aria": "{{count}} devices",
   "connectionLimit.badge.title": "{{count}} device(s)",
   "connectionLimit.badge.limit": "limit {{limit}}",
-  "connectionLimit.badge.streak": "seen {{count}} cycle(s) running"
+  "connectionLimit.badge.streak": "seen {{count}} cycle(s) running",
+  "settings.connectionLimit.review.navTitle": "Device review",
+  "settings.connectionLimit.review.title": "Devices per subscription",
+  "settings.connectionLimit.review.description": "What the last check saw. Nothing here has been acted on.",
+  "settings.connectionLimit.review.overLimit": "Over the limit",
+  "settings.connectionLimit.review.atLimit": "At the limit",
+  "settings.connectionLimit.review.withinLimit": "Within the limit",
+  "settings.connectionLimit.review.all": "All users",
+  "settings.connectionLimit.review.devices": "Devices",
+  "settings.connectionLimit.review.evidence": "What was seen",
+  "settings.connectionLimit.review.streak": "Cycles",
+  "settings.connectionLimit.review.checked": "Checked",
+  "settings.connectionLimit.review.empty": "Nothing recorded for this filter yet.",
+  "settings.connectionLimit.review.disabled": "Detection is off. Turn it on in the settings above to start collecting.",
+  "settings.connectionLimit.review.count": "{{from}}–{{to}} of {{total}}"
 }
