@@ -3641,5 +3641,10 @@
   "statistics.period": "Период",
   "statistics.periodAuto": "Авто",
   "statistics.denseChartAreaHint": "На этом графике {{count}} свечей. Диаграмма-область в настройках темы обычно работает быстрее на больших диапазонах.",
-  "statistics.useAreaChart": "Использовать область"
+  "statistics.useAreaChart": "Использовать область",
+  "statistics.allNodesLive": "Все узлы (в реальном времени)",
+  "statistics.perNodeLive": "Трафик по узлам в реальном времени",
+  "statistics.totalAcrossNodes": "Всего",
+  "statistics.noConnectedNodes": "Нет подключённых узлов для отображения.",
+  "statistics.unavailable": "Недоступно"
 }

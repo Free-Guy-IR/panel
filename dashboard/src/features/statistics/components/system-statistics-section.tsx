@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { formatBytes } from '@/utils/formatByte'
 import { formatDuration } from '@/utils/formatDuration'
+import { formatMbpsPair } from '@/utils/formatSpeed'
 import { CircularProgress } from '@/components/ui/circular-progress'
 
 interface SystemStatisticsSectionProps {
@@ -16,15 +17,6 @@ interface SystemStatisticsSectionProps {
 export default function SystemStatisticsSection({ currentStats, usersStats }: SystemStatisticsSectionProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
-
-  const formatMbpsPair = (bytesPerSecond: number, decimals = 1) => {
-    const mbps = (bytesPerSecond * 8) / (1024 * 1024)
-    const mbpsText = mbps.toFixed(decimals).replace(/\.0$/, '')
-    const mbPerSec = bytesPerSecond / (1024 * 1024)
-    const mbPerSecText = mbPerSec.toFixed(decimals).replace(/\.0$/, '')
-
-    return { mbpsText, mbPerSecText }
-  }
 
   // Helper to check if stats are from a node (realtime stats)
   const isNodeStats = (stats: SystemResourceStats | NodeRealtimeStats): stats is NodeRealtimeStats => {

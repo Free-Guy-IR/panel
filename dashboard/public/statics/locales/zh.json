@@ -3686,5 +3686,10 @@
   "statistics.period": "周期",
   "statistics.periodAuto": "自动",
   "statistics.denseChartAreaHint": "此图表有 {{count}} 个数据点。主题设置中的面积图在大数据量时通常更流畅。",
-  "statistics.useAreaChart": "使用面积图"
+  "statistics.useAreaChart": "使用面积图",
+  "statistics.allNodesLive": "所有节点（实时）",
+  "statistics.perNodeLive": "各节点实时流量",
+  "statistics.totalAcrossNodes": "合计",
+  "statistics.noConnectedNodes": "没有已连接的节点可显示。",
+  "statistics.unavailable": "不可用"
 }
