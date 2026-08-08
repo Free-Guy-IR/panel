@@ -3694,5 +3694,10 @@
   "statistics.period": "بازه",
   "statistics.denseChartAreaHint": "این نمودار {{count}} شمع دارد. نمودار ناحیه‌ای از تنظیمات تم معمولاً برای بازه‌های بزرگ روان‌تر است.",
   "statistics.useAreaChart": "استفاده از نمودار ناحیه‌ای",
-  "statistics.periodAuto": "خودکار"
+  "statistics.periodAuto": "خودکار",
+  "statistics.allNodesLive": "همه گره‌ها (لحظه‌ای)",
+  "statistics.perNodeLive": "ترافیک لحظه‌ای هر گره",
+  "statistics.totalAcrossNodes": "مجموع",
+  "statistics.noConnectedNodes": "هیچ گره متصلی برای نمایش وجود ندارد.",
+  "statistics.unavailable": "در دسترس نیست"
 }
