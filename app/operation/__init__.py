@@ -228,12 +228,17 @@ class BaseOperation:
         return db_group
 
     async def validate_all_groups(
-        self, db, model: UserCreate | UserModify | UserTemplate | BulkGroup, admin=None
+        self, db, model: UserCreate | UserModify | UserTemplate | BulkGroup, admin=None, exempt_group_ids=None
     ) -> list[Group]:
         """Resolve requested group ids, refusing any the admin may not use.
 
         `admin` is optional because several callers resolve groups only to
         render them; enforcement applies wherever an acting admin is passed.
+
+        `exempt_group_ids` are groups already on the record being edited. They
+        are allowed through even when the admin could not grant them, so that
+        an unrelated edit to such a user is not blocked by state the admin
+        never chose and cannot see.
         """
         requested_group_ids: list[int] = []
         if model.group_ids:
@@ -257,7 +262,7 @@ class BaseOperation:
         if admin is not None:
             allowed_group_ids = get_allowed_group_ids(admin)
             if allowed_group_ids is not None:
-                allowed = set(allowed_group_ids)
+                allowed = set(allowed_group_ids) | set(exempt_group_ids or ())
                 forbidden = [groups_by_id[gid].name for gid in unique_ids if gid not in allowed]
                 if forbidden:
                     await self.raise_error(

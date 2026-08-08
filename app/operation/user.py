@@ -800,7 +800,11 @@ class UserOperation(BaseOperation):
 
         validated_groups = None
         if modified_user.group_ids is not None:
-            validated_groups = await self.validate_all_groups(db, modified_user, admin)
+            # Whatever the user already belongs to is not a change this admin is
+            # making, so it is not theirs to be blocked by.
+            validated_groups = await self.validate_all_groups(
+                db, modified_user, admin, exempt_group_ids={group.id for group in db_user.groups}
+            )
 
         if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
             await self.get_validated_user_template(db, modified_user.next_plan.user_template_id)
