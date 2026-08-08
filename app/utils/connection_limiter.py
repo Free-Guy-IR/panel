@@ -35,7 +35,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import distinct, select
+from sqlalchemy import delete, distinct, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -123,18 +123,21 @@ class Observation:
     details: dict = field(default_factory=dict)
 
 
-async def candidate_users(db: AsyncSession, settings: ConnectionLimit) -> list[User]:
-    """Users recent enough to be worth asking the nodes about."""
-    since = datetime.now(UTC) - timedelta(seconds=settings.online_window_seconds)
-    stmt = select(User).where(User.online_at.is_not(None), User.online_at > since, User.status == "active")
+def scope_conditions(settings: ConnectionLimit) -> list:
+    """Who the settings cover, as conditions on the users table.
+
+    Separate from being online, which decides when a covered user is worth
+    asking about rather than whether they are covered at all.
+    """
+    from app.db.models import users_groups_association
+
+    conditions = [User.status == "active"]
 
     if settings.apply_to_admin_ids:
-        stmt = stmt.where(User.admin_id.in_(settings.apply_to_admin_ids))
+        conditions.append(User.admin_id.in_(settings.apply_to_admin_ids))
 
     if settings.apply_to_group_ids:
-        from app.db.models import users_groups_association
-
-        stmt = stmt.where(
+        conditions.append(
             User.id.in_(
                 select(users_groups_association.c.user_id).where(
                     users_groups_association.c.groups_id.in_(settings.apply_to_group_ids)
@@ -142,7 +145,35 @@ async def candidate_users(db: AsyncSession, settings: ConnectionLimit) -> list[U
             )
         )
 
+    return conditions
+
+
+async def candidate_users(db: AsyncSession, settings: ConnectionLimit) -> list[User]:
+    """Users recent enough to be worth asking the nodes about."""
+    since = datetime.now(UTC) - timedelta(seconds=settings.online_window_seconds)
+    stmt = select(User).where(User.online_at.is_not(None), User.online_at > since, *scope_conditions(settings))
     return list((await db.execute(stmt)).scalars().all())
+
+
+async def prune_out_of_scope(db: AsyncSession, settings: ConnectionLimit) -> int:
+    """Drop the rows for users the settings have stopped covering.
+
+    Nothing rewrites a row once its user is out of scope, so without this the
+    review list keeps showing whoever was in the group that was selected last
+    week, frozen at whatever their final check said.
+    """
+    covered = select(User.id).where(*scope_conditions(settings))
+    exempt = select(UserConnectionLimit.user_id).where(UserConnectionLimit.exempt.is_(True))
+
+    result = await db.execute(
+        delete(UserConnectionState).where(
+            or_(
+                UserConnectionState.user_id.not_in(covered),
+                UserConnectionState.user_id.in_(exempt),
+            )
+        )
+    )
+    return result.rowcount or 0
 
 
 async def nodes_per_user(db: AsyncSession, settings: ConnectionLimit, user_ids: list[int]) -> dict[int, set[int]]:

@@ -18,7 +18,7 @@ from app.db import GetDB
 from app.db.crud.settings import get_settings
 from app.db.models import UserConnectionState
 from app.models.settings import ConnectionLimit
-from app.utils.connection_limiter import run_assessment
+from app.utils.connection_limiter import prune_out_of_scope, run_assessment
 from app.utils.logger import get_logger
 from config import runtime_settings
 
@@ -45,6 +45,13 @@ async def record_connection_states():
         return
 
     async with GetDB() as db:
+        # Before anything else, so that narrowing the scope takes effect even
+        # on a cycle that later runs out of time.
+        forgotten = await prune_out_of_scope(db, settings)
+        if forgotten:
+            await db.commit()
+            logger.info("forgot %d user(s) the settings no longer cover", forgotten)
+
         try:
             # Belt and braces: collection has its own deadline, but a cycle
             # that overruns anyway must not hold the slot against the next one.
