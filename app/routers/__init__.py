@@ -5,6 +5,7 @@ from . import (
     admin_role,
     api_key,
     client_template,
+    connection_limit,
     core,
     group,
     home,
@@ -38,6 +39,7 @@ routers = [
     subscription.router,
     user_template.router,
     hwid.router,
+    connection_limit.router,
 ]
 
 for router in routers:

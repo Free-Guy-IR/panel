@@ -966,13 +966,13 @@ class UserConnectionState(Base, IdMixin):
     )
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
     checked_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC))
-    # Independent sources after collapsing CDN, dropping infrastructure and
-    # grouping addresses by prefix. This is the number the badge shows.
-    sources: Mapped[int] = mapped_column(default=0)
+    # Estimated devices connected at once - the number the badge shows.
+    devices: Mapped[int] = mapped_column(default=0)
+    address_sources: Mapped[int] = mapped_column(default=0)
+    hwid_count: Mapped[int] = mapped_column(default=0)
     node_count: Mapped[int] = mapped_column(default=0)
-    device_count: Mapped[int] = mapped_column(default=0)
     app_count: Mapped[int] = mapped_column(default=0)
-    verdict: Mapped[str] = mapped_column(String(16), default="single")
+    verdict: Mapped[str] = mapped_column(String(16), default="within_limit")
     # How many consecutive cycles this verdict has held; a single cycle proves
     # nothing, so the UI only trusts a verdict once this has built up.
     streak: Mapped[int] = mapped_column(default=0)

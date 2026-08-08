@@ -1,8 +1,8 @@
 """add connection limiter tables
 
-Revision ID: 4069ceeb6c41
+Revision ID: f174c3b13642
 Revises: b8c2d5f1a943
-Create Date: 2026-08-08 18:58:22.333130
+Create Date: 2026-08-08 19:17:37.783429
 
 """
 from alembic import op
@@ -13,7 +13,7 @@ import app.db.compiles_types
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '4069ceeb6c41'
+revision = 'f174c3b13642'
 down_revision = 'b8c2d5f1a943'
 branch_labels = None
 depends_on = None
@@ -54,9 +54,10 @@ def upgrade() -> None:
     op.create_table('user_connection_states',
     sa.Column('user_id', app.db.compiles_types.SqliteCompatibleBigInteger(), nullable=False),
     sa.Column('checked_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('sources', sa.Integer(), nullable=False),
+    sa.Column('devices', sa.Integer(), nullable=False),
+    sa.Column('address_sources', sa.Integer(), nullable=False),
+    sa.Column('hwid_count', sa.Integer(), nullable=False),
     sa.Column('node_count', sa.Integer(), nullable=False),
-    sa.Column('device_count', sa.Integer(), nullable=False),
     sa.Column('app_count', sa.Integer(), nullable=False),
     sa.Column('verdict', sa.String(length=16), nullable=False),
     sa.Column('streak', sa.Integer(), nullable=False),

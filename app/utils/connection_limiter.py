@@ -68,9 +68,10 @@ DEFAULT_CDN_RANGES = [
     "2a04:4e40::/32", "2a04:4e42::/32",
 ]
 
-SINGLE = "single"
-SUSPICIOUS = "suspicious"
-SHARED = "shared"
+# What the count means, not a claim about who is behind it.
+WITHIN_LIMIT = "within_limit"
+AT_LIMIT = "at_limit"
+OVER_LIMIT = "over_limit"
 
 
 def _networks(ranges: list[str]) -> list[ipaddress._BaseNetwork]:
@@ -102,11 +103,14 @@ class Observation:
 
     user_id: int
     username: str
-    sources: int = 0
+    # Estimated devices connected at once - the number the badge shows.
+    devices: int = 0
+    # The two floors it was taken from, kept so the popover can explain it.
+    address_sources: int = 0
+    hwid_count: int = 0
     node_count: int = 0
-    device_count: int = 0
     app_count: int = 0
-    verdict: str = SINGLE
+    verdict: str = WITHIN_LIMIT
     reasons: list[str] = field(default_factory=list)
     details: dict = field(default_factory=dict)
 
@@ -190,7 +194,7 @@ async def collect_live_ips(users: list[User], by_node: dict[int, set[int]]) -> d
                 continue
             try:
                 response = await node.get_user_online_ip_list(user.username, timeout=10)
-            except Exception as exc:  # noqa: BLE001 - an unreachable node is routine
+            except Exception as exc:
                 logger.debug("node %s did not answer for %s: %s", node_id, user.username, exc)
                 continue
             if response is None:
@@ -311,14 +315,20 @@ def assess(
         if newest - seen <= settings.concurrency_window_seconds
     }
 
-    # A CDN hides how many people are behind it, so it counts once.
-    sources = len(concurrent_groups) + (1 if cdn_seen else 0)
-    obs.sources = sources
+    # A CDN hides how many devices are behind it, so it counts once. This is
+    # therefore a floor on the number of devices, not the number itself.
+    address_sources = len(concurrent_groups) + (1 if cdn_seen else 0)
+    obs.address_sources = address_sources
 
     apps = context.get("apps") or set()
     hwids = context.get("hwids") or set()
     obs.app_count = len(apps)
-    obs.device_count = len(hwids)
+    obs.hwid_count = len(hwids)
+
+    # Each signal is a floor and each is blind to what the other sees: hardware
+    # ids find devices sharing one address, addresses find devices whose app
+    # reports no hardware id. The larger is the better estimate.
+    obs.devices = max(address_sources, len(hwids))
 
     obs.details = {
         "real_groups": sorted(concurrent_groups),
@@ -342,21 +352,14 @@ def assess(
         for g in concurrent_groups
     }
 
-    if sources >= settings.shared_threshold and len(distinct_networks) > 1:
-        obs.verdict = SHARED
-    elif sources >= settings.suspicious_threshold:
-        obs.verdict = SUSPICIOUS
+    # Purely a comparison against the configured allowance. No inference about
+    # whether the devices belong to one person or several.
+    if obs.devices > settings.device_limit:
+        obs.verdict = OVER_LIMIT
+    elif obs.devices >= settings.warn_at_devices:
+        obs.verdict = AT_LIMIT
     else:
-        obs.verdict = SINGLE
-
-    # Distinct hardware ids are distinct devices however the traffic is routed,
-    # which is the one signal that still works when everyone is behind a CDN.
-    # Held to "suspicious" on its own: a phone, a laptop and a tablet are three
-    # devices and may still be one person.
-    if len(hwids) >= 2 and obs.verdict == SINGLE:
-        obs.verdict = SUSPICIOUS
-    if len(hwids) >= 2 and concurrent and len(distinct_networks) > 1:
-        obs.verdict = SHARED
+        obs.verdict = WITHIN_LIMIT
 
     obs.reasons = _reasons(
         obs, concurrent_groups, cdn_seen, infra_seen, concurrent, distinct_networks, apps, devices, hwids
@@ -365,8 +368,8 @@ def assess(
 
 
 def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids) -> list[str]:
-    """Plain statements of what was seen, for the admin to judge for themselves."""
-    out = []
+    """Plain statements of what was seen, so the number can be checked."""
+    out = [f"{obs.devices} device(s) estimated"]
     if real_groups:
         out.append(f"{len(real_groups)} distinct network(s): {', '.join(sorted(real_groups)[:4])}")
     if cdn_seen:
@@ -382,13 +385,13 @@ def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps,
         out.append(f"{len(networks)} unrelated networks")
     if len(apps) > 1:
         out.append(f"{len(apps)} different apps: {', '.join(sorted(apps)[:3])}")
-    if len(hwids) > 1:
+    if hwids:
         labels = sorted({devices.get(h, h[:12]) for h in hwids})
-        out.append(f"{len(hwids)} different devices: {', '.join(labels[:3])}")
+        out.append(f"{len(hwids)} hardware id(s) reported: {', '.join(labels[:3])}")
+    if cdn_seen and not hwids:
+        out.append("behind a CDN with no hardware id reported - several devices would look like one")
     if obs.node_count > 1:
         out.append(f"on {obs.node_count} nodes (may just be an app that probes every server)")
-    if not out:
-        out.append("one source, nothing unusual")
     return out
 
 

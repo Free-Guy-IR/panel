@@ -371,9 +371,9 @@ class General(BaseModel):
 
 
 class ConnectionLimitVerdict(str, Enum):
-    single = "single"
-    suspicious = "suspicious"
-    shared = "shared"
+    within_limit = "within_limit"
+    at_limit = "at_limit"
+    over_limit = "over_limit"
 
 
 class ConnectionLimit(BaseModel):
@@ -395,10 +395,10 @@ class ConnectionLimit(BaseModel):
     # Which nodes to ask per user, based on where they carried traffic lately.
     node_window_minutes: int = Field(default=30, ge=5, le=1440)
 
-    # Above this many independent sources a user is called shared.
-    shared_threshold: int = Field(default=3, ge=2, le=20)
-    # At this many they are worth a second look but not called shared.
-    suspicious_threshold: int = Field(default=2, ge=2, le=20)
+    # Devices allowed on one subscription. Above this counts as over the limit.
+    device_limit: int = Field(default=2, ge=1, le=50)
+    # Reaching this many is worth surfacing before the limit is exceeded.
+    warn_at_devices: int = Field(default=2, ge=1, le=50)
     # A verdict only counts once the pattern has held this many cycles.
     persistence_cycles: int = Field(default=3, ge=1, le=20)
 
@@ -443,8 +443,8 @@ class ConnectionLimit(BaseModel):
 
     @model_validator(mode="after")
     def thresholds_are_ordered(self):
-        if self.suspicious_threshold > self.shared_threshold:
-            raise ValueError("suspicious_threshold cannot be above shared_threshold")
+        if self.warn_at_devices > self.device_limit:
+            raise ValueError("warn_at_devices cannot be above device_limit")
         return self
 
 
