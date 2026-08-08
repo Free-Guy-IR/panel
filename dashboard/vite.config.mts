@@ -14,7 +14,8 @@ export default defineConfig({
   build: {
     outDir: 'build',
     assetsDir: 'statics',
-    emptyOutDir: false,
+    // Off meant every build's chunks piled up forever and shipped in the image.
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
