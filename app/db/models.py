@@ -109,6 +109,10 @@ class Admin(Base, CreatedAtUTCMixin):
     role_id: Mapped[int] = fk_id_column("admin_roles.id", default=0)
     role: Mapped[AdminRole | None] = relationship(back_populates="admins", init=False, lazy="select")
     permission_overrides: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
+    # NULL means every group is allowed. A list restricts this admin to exactly
+    # those group ids, both when assigning groups and when their users' inbounds
+    # are resolved.
+    allowed_group_ids: Mapped[list[int] | None] = mapped_column(PostgresJSONB, default=None)
 
     @hybrid_property
     def is_disabled(self) -> bool:
@@ -278,10 +282,35 @@ class User(Base, CreatedAtUTCMixin):
     def last_traffic_reset_time(self):
         return self.usage_logs[-1].reset_at if self.usage_logs else self.created_at
 
+    async def _owner_allowed_group_ids(self, session) -> list[int] | None:
+        """The group ids this user's admin may use, or None when unrestricted.
+
+        Read from the already-loaded admin when there is one, so the common
+        path costs nothing extra; otherwise a single primary-key lookup.
+        """
+        if self.admin_id is None:
+            return None
+
+        admin = self.__dict__.get("admin")
+        if admin is not None:
+            return admin.allowed_group_ids
+
+        allowed = await session.scalar(select(Admin.allowed_group_ids).where(Admin.id == self.admin_id))
+        return allowed
+
     async def inbounds(self) -> list[str]:
-        """Returns a flat list of all included inbound tags for enabled groups."""
+        """Returns a flat list of all included inbound tags for enabled groups.
+
+        Groups outside the owning admin's allowance are skipped. This method is
+        what both the subscription and the node sync are built from, so the
+        restriction holds at the point of authentication and not just in the UI.
+        """
         session = async_object_session(self)
         if session is not None:
+            allowed_group_ids = await self._owner_allowed_group_ids(session)
+            if allowed_group_ids is not None and not allowed_group_ids:
+                return []
+
             stmt = (
                 select(ProxyInbound.tag)
                 .select_from(users_groups_association)
@@ -291,13 +320,23 @@ class User(Base, CreatedAtUTCMixin):
                 .where(users_groups_association.c.user_id == self.id, Group.is_disabled.is_(False))
                 .distinct()
             )
+            if allowed_group_ids is not None:
+                stmt = stmt.where(Group.id.in_(allowed_group_ids))
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
         # Fallback for detached instances: use already-loaded attrs only.
+        admin = self.__dict__.get("admin")
+        allowed_group_ids = admin.allowed_group_ids if admin is not None else None
+        if allowed_group_ids is not None and not allowed_group_ids:
+            return []
+        allowed_set = set(allowed_group_ids) if allowed_group_ids is not None else None
+
         included_tags = set()
         for group in self.__dict__.get("groups") or []:
             if group.is_disabled:
+                continue
+            if allowed_set is not None and group.id not in allowed_set:
                 continue
             for inbound in group.__dict__.get("inbounds") or []:
                 included_tags.add(inbound.tag)
