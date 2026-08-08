@@ -3657,5 +3657,11 @@
   "statistics.perNodeLive": "Live traffic per node",
   "statistics.totalAcrossNodes": "Total",
   "statistics.noConnectedNodes": "No connected nodes to report on.",
-  "statistics.unavailable": "Unavailable"
+  "statistics.unavailable": "Unavailable",
+  "statistics.inboundUsage": "Inbound usage",
+  "statistics.inboundUsageDescription": "Total traffic per inbound over time",
+  "statistics.allInbounds": "All inbounds",
+  "statistics.perInboundTotals": "Total per inbound",
+  "statistics.noInboundData": "No inbound traffic recorded yet",
+  "statistics.inboundDataHint": "Inbound history builds up from the moment it is enabled."
 }

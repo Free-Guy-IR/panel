@@ -247,6 +247,14 @@ export type GetUserCountMetricParams = {
   end?: string | null
 }
 
+export type GetInboundsUsageStatsParams = {
+  period?: Period
+  inbound_tag?: string | null
+  node_id?: number | null
+  start?: string | null
+  end?: string | null
+}
+
 export type GetUsageParams = {
   period?: Period
   node_id?: number | null
@@ -700,6 +708,10 @@ export type UsersPermissionsReadAnyOf = { [key: string]: PermissionScope | numbe
 
 export type UsersPermissionsRead = boolean | UsersPermissionsReadAnyOf | null
 
+export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
+
+export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
+
 export interface UsersPermissions {
   create?: UsersPermissionsCreate
   read?: UsersPermissionsRead
@@ -711,10 +723,6 @@ export interface UsersPermissions {
   set_owner?: UsersPermissionsSetOwner
   activate_next_plan?: UsersPermissionsActivateNextPlan
 }
-
-export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
-
-export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
 
 export type UsernameGenerationStrategy = (typeof UsernameGenerationStrategy)[keyof typeof UsernameGenerationStrategy]
 
@@ -1084,6 +1092,13 @@ export interface UserModify {
   status?: UserModifyStatus
 }
 
+/**
+ * User IP lists for all nodes
+ */
+export interface UserIPListAll {
+  nodes: UserIPListAllNodes
+}
+
 export type UserIPListIps = { [key: string]: number }
 
 /**
@@ -1094,13 +1109,6 @@ export interface UserIPList {
 }
 
 export type UserIPListAllNodes = { [key: string]: UserIPList | null }
-
-/**
- * User IP lists for all nodes
- */
-export interface UserIPListAll {
-  nodes: UserIPListAllNodes
-}
 
 export type UserHWIDResponseDeviceModel = string | null
 
@@ -1916,6 +1924,19 @@ export type NotificationSettingsTelegramChatId = number | null
 
 export type NotificationSettingsTelegramApiToken = string | null
 
+export interface NotificationSettings {
+  notify_telegram?: boolean
+  notify_discord?: boolean
+  telegram_api_token?: NotificationSettingsTelegramApiToken
+  telegram_chat_id?: NotificationSettingsTelegramChatId
+  telegram_topic_id?: NotificationSettingsTelegramTopicId
+  discord_webhook_url?: NotificationSettingsDiscordWebhookUrl
+  channels?: NotificationChannels
+  proxy_url?: NotificationSettingsProxyUrl
+  /** */
+  max_retries: number
+}
+
 export interface NotificationEnable {
   admin?: AdminNotificationEnable
   admin_role?: BaseNotificationEnable
@@ -1928,34 +1949,6 @@ export interface NotificationEnable {
   api_key?: BaseNotificationEnable
   days_left?: boolean
   percentage_reached?: boolean
-}
-
-/**
- * Per-object notification channels
- */
-export interface NotificationChannels {
-  admin?: NotificationChannel
-  admin_role?: NotificationChannel
-  core?: NotificationChannel
-  group?: NotificationChannel
-  host?: NotificationChannel
-  node?: NotificationChannel
-  user?: NotificationChannel
-  user_template?: NotificationChannel
-  api_key?: NotificationChannel
-}
-
-export interface NotificationSettings {
-  notify_telegram?: boolean
-  notify_discord?: boolean
-  telegram_api_token?: NotificationSettingsTelegramApiToken
-  telegram_chat_id?: NotificationSettingsTelegramChatId
-  telegram_topic_id?: NotificationSettingsTelegramTopicId
-  discord_webhook_url?: NotificationSettingsDiscordWebhookUrl
-  channels?: NotificationChannels
-  proxy_url?: NotificationSettingsProxyUrl
-  /** */
-  max_retries: number
 }
 
 export type NotificationChannelDiscordWebhookUrl = string | null
@@ -1971,6 +1964,21 @@ export interface NotificationChannel {
   telegram_chat_id?: NotificationChannelTelegramChatId
   telegram_topic_id?: NotificationChannelTelegramTopicId
   discord_webhook_url?: NotificationChannelDiscordWebhookUrl
+}
+
+/**
+ * Per-object notification channels
+ */
+export interface NotificationChannels {
+  admin?: NotificationChannel
+  admin_role?: NotificationChannel
+  core?: NotificationChannel
+  group?: NotificationChannel
+  host?: NotificationChannel
+  node?: NotificationChannel
+  user?: NotificationChannel
+  user_template?: NotificationChannel
+  api_key?: NotificationChannel
 }
 
 export interface NotFound {
@@ -2012,14 +2020,6 @@ export type NodesPermissionsReconnectAnyOf = { [key: string]: PermissionScope | 
 
 export type NodesPermissionsReconnect = boolean | NodesPermissionsReconnectAnyOf | null
 
-export type NodesPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
-
-export type NodesPermissionsDelete = boolean | NodesPermissionsDeleteAnyOf | null
-
-export type NodesPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
-
-export type NodesPermissionsUpdate = boolean | NodesPermissionsUpdateAnyOf | null
-
 export interface NodesPermissions {
   create?: NodesPermissionsCreate
   read?: NodesPermissionsRead
@@ -2031,6 +2031,14 @@ export interface NodesPermissions {
   logs?: NodesPermissionsLogs
   stats?: NodesPermissionsStats
 }
+
+export type NodesPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
+
+export type NodesPermissionsDelete = boolean | NodesPermissionsDeleteAnyOf | null
+
+export type NodesPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+
+export type NodesPermissionsUpdate = boolean | NodesPermissionsUpdateAnyOf | null
 
 export type NodesPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2384,6 +2392,23 @@ export interface KCPSettings {
   read_buffer_size?: KCPSettingsReadBufferSize
   write_buffer_size?: KCPSettingsWriteBufferSize
 }
+
+export type InboundUsageStatsListPeriod = Period | null
+
+export interface InboundUsageStatsList {
+  period?: InboundUsageStatsListPeriod
+  start: string
+  end: string
+  stats: InboundUsageStatsListStats
+}
+
+export interface InboundUsageStat {
+  period_start: string
+  uplink: number
+  downlink: number
+}
+
+export type InboundUsageStatsListStats = { [key: string]: InboundUsageStat[] }
 
 export type InboundSummaryNetwork = string | null
 
@@ -9320,6 +9345,69 @@ export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getGetUsageQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Retrieve per-inbound usage statistics within a specified date range.
+ * @summary Get Inbounds Usage Stats
+ */
+export const getInboundsUsageStats = (params?: GetInboundsUsageStatsParams, signal?: AbortSignal) => {
+  return orvalFetcher<InboundUsageStatsList>({ url: `/api/node/inbounds/usage`, method: 'GET', params, signal })
+}
+
+export const getGetInboundsUsageStatsQueryKey = (params?: GetInboundsUsageStatsParams) => {
+  return [`/api/node/inbounds/usage`, ...(params ? [params] : [])] as const
+}
+
+export const getGetInboundsUsageStatsQueryOptions = <TData = Awaited<ReturnType<typeof getInboundsUsageStats>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: GetInboundsUsageStatsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetInboundsUsageStatsQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getInboundsUsageStats>>> = ({ signal }) => getInboundsUsageStats(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetInboundsUsageStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getInboundsUsageStats>>>
+export type GetInboundsUsageStatsQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useGetInboundsUsageStats<TData = Awaited<ReturnType<typeof getInboundsUsageStats>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params: undefined | GetInboundsUsageStatsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInboundsUsageStats<TData = Awaited<ReturnType<typeof getInboundsUsageStats>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: GetInboundsUsageStatsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInboundsUsageStats<TData = Awaited<ReturnType<typeof getInboundsUsageStats>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: GetInboundsUsageStatsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Inbounds Usage Stats
+ */
+
+export function useGetInboundsUsageStats<TData = Awaited<ReturnType<typeof getInboundsUsageStats>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: GetInboundsUsageStatsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getInboundsUsageStats>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetInboundsUsageStatsQueryOptions(params, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 

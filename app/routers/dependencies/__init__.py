@@ -6,6 +6,7 @@ from .core import get_core_list_query, get_core_simple_list_query
 from .group import get_group_list_query, get_group_simple_list_query
 from .host import get_host_list_query
 from .node import (
+    get_inbound_usage_query,
     get_node_clear_usage_query,
     get_node_list_query,
     get_node_simple_list_query,
@@ -45,6 +46,7 @@ __all__ = [
     # host
     "get_host_list_query",
     # node
+    "get_inbound_usage_query",
     "get_node_clear_usage_query",
     "get_node_list_query",
     "get_node_simple_list_query",

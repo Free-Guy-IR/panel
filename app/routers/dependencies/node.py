@@ -1,6 +1,7 @@
 from fastapi import Query
 
 from app.models.node import (
+    InboundUsageQuery,
     NodeClearUsageQuery,
     NodeListQuery,
     NodeSimpleListQuery,
@@ -15,6 +16,16 @@ get_node_usage_query = make_query_dependency(
     NodeUsageQuery,
     field_overrides={
         "period": Query(Period.hour),
+        "node_id": Query(None),
+        "start": Query(None, examples=["2024-01-01T00:00:00+03:30"]),
+        "end": Query(None, examples=["2024-01-31T23:59:59+03:30"]),
+    },
+)
+get_inbound_usage_query = make_query_dependency(
+    InboundUsageQuery,
+    field_overrides={
+        "period": Query(Period.hour),
+        "inbound_tag": Query(None),
         "node_id": Query(None),
         "start": Query(None, examples=["2024-01-01T00:00:00+03:30"]),
         "end": Query(None, examples=["2024-01-31T23:59:59+03:30"]),

@@ -10,6 +10,7 @@ from app.db.compiles_types import DateDiff
 from app.db.models import (
     DataLimitResetStrategy,
     Node,
+    NodeInboundUsage,
     NodeStat,
     NodeStatus,
     NodeUsage,
@@ -25,7 +26,15 @@ from app.models.node import (
     NodeSimpleSortOption,
     UsageTable,
 )
-from app.models.stats import NodeStats, NodeStatsList, NodeUsageStat, NodeUsageStatsList, Period
+from app.models.stats import (
+    InboundUsageStat,
+    InboundUsageStatsList,
+    NodeStats,
+    NodeStatsList,
+    NodeUsageStat,
+    NodeUsageStatsList,
+    Period,
+)
 
 from .general import (
     MYSQL_FORMATS,
@@ -830,3 +839,65 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(delete(NodeStat).where(NodeStat.node_id.in_(node_ids)))
     await db.execute(delete(Node).where(Node.id.in_(node_ids)))
     await db.commit()
+
+
+async def get_inbounds_usage(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    period: Period,
+    inbound_tag: str | None = None,
+    node_id: int | None = None,
+) -> InboundUsageStatsList:
+    """Per-inbound traffic grouped into complete period buckets.
+
+    Deliberately the same shape and bucketing rules as get_nodes_usage - the
+    partial first bucket is dropped the same way - so both series can be shown
+    on the same axes without one being offset against the other.
+    """
+    dialect = db.bind.dialect.name
+
+    trunc_expr = _build_trunc_expression(db, period, NodeInboundUsage.created_at, start)
+
+    start_utc = to_utc_for_filter(start)
+    end_utc = to_utc_for_filter(end)
+    conditions = [NodeInboundUsage.created_at >= start_utc, NodeInboundUsage.created_at < end_utc]
+
+    if inbound_tag:
+        conditions.append(NodeInboundUsage.inbound_tag == inbound_tag)
+    if node_id is not None:
+        conditions.append(NodeInboundUsage.node_id == node_id)
+
+    stmt = (
+        select(
+            trunc_expr.label("period_start"),
+            NodeInboundUsage.inbound_tag.label("inbound_tag"),
+            func.sum(NodeInboundUsage.downlink).label("downlink"),
+            func.sum(NodeInboundUsage.uplink).label("uplink"),
+        )
+        .where(and_(*conditions))
+        .group_by(trunc_expr, NodeInboundUsage.inbound_tag)
+        .order_by(trunc_expr, NodeInboundUsage.inbound_tag)
+    )
+
+    if start.tzinfo:
+        first_complete_bucket = _get_next_period_boundary(start, period)
+        boundary_value = first_complete_bucket.replace(tzinfo=None)
+
+        if dialect == "postgresql":
+            stmt = stmt.having(trunc_expr >= boundary_value)
+        elif dialect in ("mysql", "sqlite"):
+            format_str = MYSQL_FORMATS[period] if dialect == "mysql" else SQLITE_FORMATS[period]
+            boundary_str = boundary_value.strftime(format_str.replace("%i", "%M"))
+            stmt = stmt.having(literal_column("period_start") >= boundary_str)
+
+    result = await db.execute(stmt)
+
+    stats: dict[str, list[InboundUsageStat]] = {}
+    for row in result.mappings():
+        row_dict = dict(row)
+        tag = row_dict.pop("inbound_tag")
+        attach_timezone_to_period_start(row_dict, start.tzinfo, dialect)
+        stats.setdefault(tag, []).append(InboundUsageStat(**row_dict))
+
+    return InboundUsageStatsList(period=period, start=start, end=end, stats=stats)

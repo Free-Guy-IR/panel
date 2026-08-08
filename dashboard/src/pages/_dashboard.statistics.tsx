@@ -1,8 +1,9 @@
 import PageHeader from '@/components/layout/page-header'
 import MainContent from '@/features/statistics/components/statistics-charts'
 import AllNodesLiveSection from '@/features/statistics/components/all-nodes-live-section'
+import InboundUsageChart from '@/features/statistics/components/inbound-usage-chart'
 import { Button } from '@/components/ui/button'
-import { LayoutGrid } from 'lucide-react'
+import { ArrowDownUp, LayoutGrid } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useGetSystemResourceStats, useGetSystemUsersStats, useGetNodesSimple, NodeSimple, NodeStatus } from '@/service/api'
@@ -17,7 +18,10 @@ import { hasPermission } from '@/utils/rbac'
 const Statistics = () => {
   const { t } = useTranslation()
   const [selectedServer, setSelectedServer] = useState<string>('master')
-  const [showAllNodes, setShowAllNodes] = useState(false)
+  // Three mutually exclusive views; a single mode avoids a both-on state.
+  const [viewMode, setViewMode] = useState<'node' | 'allNodes' | 'inbounds'>('node')
+  const showAllNodes = viewMode === 'allNodes'
+  const showInbounds = viewMode === 'inbounds'
   const { admin } = useAdmin()
   const canViewNodeStats = hasPermission(admin, 'nodes', 'stats')
   const canViewSystemStats = hasPermission(admin, 'system', 'read')
@@ -102,18 +106,28 @@ const Statistics = () => {
                     <Button
                       type="button"
                       variant={showAllNodes ? 'default' : 'outline'}
-                      onClick={() => setShowAllNodes(prev => !prev)}
+                      onClick={() => setViewMode(prev => (prev === 'allNodes' ? 'node' : 'allNodes'))}
                       className="h-9 w-full text-xs sm:h-10 sm:w-auto sm:text-sm"
                       aria-pressed={showAllNodes}
                     >
                       <LayoutGrid className="h-4 w-4" />
                       {t('statistics.allNodesLive', { defaultValue: 'All nodes (live)' })}
                     </Button>
+                    <Button
+                      type="button"
+                      variant={showInbounds ? 'default' : 'outline'}
+                      onClick={() => setViewMode(prev => (prev === 'inbounds' ? 'node' : 'inbounds'))}
+                      className="h-9 w-full text-xs sm:h-10 sm:w-auto sm:text-sm"
+                      aria-pressed={showInbounds}
+                    >
+                      <ArrowDownUp className="h-4 w-4" />
+                      {t('statistics.inboundUsage', { defaultValue: 'Inbound usage' })}
+                    </Button>
                     <div className="w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px]">
                     {isLoadingNodes ? (
                       <Skeleton className="h-9 w-full sm:h-10" />
                     ) : (
-                      <Select value={selectedServer} onValueChange={setSelectedServer} disabled={showAllNodes}>
+                      <Select value={selectedServer} onValueChange={setSelectedServer} disabled={showAllNodes || showInbounds}>
                         <SelectTrigger className="h-9 w-full text-xs sm:h-10 sm:text-sm">
                           <SelectValue placeholder={t('selectServer')} />
                         </SelectTrigger>
@@ -146,7 +160,9 @@ const Statistics = () => {
       <div className="w-full">
         <div className="w-full px-3 pt-2 sm:px-4">
           <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
-            {showAllNodes && canViewNodeStats ? (
+            {showInbounds && canViewNodeStats ? (
+              <InboundUsageChart />
+            ) : showAllNodes && canViewNodeStats ? (
               <AllNodesLiveSection nodes={nodesData} />
             ) : (
               <Card>

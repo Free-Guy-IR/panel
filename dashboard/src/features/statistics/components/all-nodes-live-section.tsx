@@ -127,58 +127,86 @@ export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps)
         ))}
       </div>
 
-      {/* One row per node */}
-      <div className="animate-fade-in w-full" style={{ animationDuration: '600ms', animationDelay: '350ms' }}>
-        <Card dir={dir} className="w-full overflow-hidden rounded-lg border">
-          <CardContent className="p-4 sm:p-5 lg:p-6">
-            <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4">
-              <h3 className="truncate text-base font-semibold sm:text-lg">{t('statistics.perNodeLive', { defaultValue: 'Live traffic per node' })}</h3>
-              <span className="text-muted-foreground shrink-0 text-xs sm:text-sm">
-                {reporting.length}/{pollableNodes.length}
-              </span>
-            </div>
+      {/* Section heading for the per-node cards */}
+      <div className="animate-fade-in flex items-center justify-between gap-2 px-1" style={{ animationDuration: '600ms', animationDelay: '350ms' }}>
+        <h3 className="truncate text-base font-semibold sm:text-lg">{t('statistics.perNodeLive', { defaultValue: 'Live traffic per node' })}</h3>
+        <span className="text-muted-foreground shrink-0 text-xs sm:text-sm">
+          {reporting.length}/{pollableNodes.length}
+        </span>
+      </div>
 
-            {pollableNodes.length === 0 ? (
-              <p className="text-muted-foreground py-6 text-center text-xs sm:text-sm">{t('statistics.noConnectedNodes', { defaultValue: 'No connected nodes to report on.' })}</p>
-            ) : (
-              <div className="flex flex-col gap-2 sm:gap-3">
-                {perNode.map(({ node, isLoading, hasError, incoming, outgoing }) => {
-                  const up = formatMbpsPair(outgoing)
-                  const down = formatMbpsPair(incoming)
-
-                  return (
-                    <div key={node.id} className="bg-muted/30 flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', getNodeStatusDotColor(node.status))} />
-                        <span className="min-w-0 truncate text-xs font-medium sm:text-sm">{node.name}</span>
-                      </div>
-
-                      {isLoading ? (
-                        <Skeleton className="h-5 w-40 shrink-0 sm:h-6" />
-                      ) : hasError ? (
-                        <span className="text-muted-foreground shrink-0 text-xs sm:text-sm">{t('statistics.unavailable', { defaultValue: 'Unavailable' })}</span>
-                      ) : (
-                        <div dir="ltr" className="flex shrink-0 items-center gap-3 sm:gap-4">
-                          <span className="flex items-center gap-1.5 whitespace-nowrap">
-                            <Upload className="text-primary h-3.5 w-3.5 shrink-0" />
-                            <span className="text-xs font-semibold sm:text-sm">{up.mbPerSecText} MB/s</span>
-                            <span className="bg-muted/60 text-muted-foreground rounded px-1 py-0.5 text-[10px] font-medium sm:text-xs">{up.mbpsText} Mb/s</span>
-                          </span>
-                          <span className="flex items-center gap-1.5 whitespace-nowrap">
-                            <Download className="text-primary h-3.5 w-3.5 shrink-0" />
-                            <span className="text-xs font-semibold sm:text-sm">{down.mbPerSecText} MB/s</span>
-                            <span className="bg-muted/60 text-muted-foreground rounded px-1 py-0.5 text-[10px] font-medium sm:text-xs">{down.mbpsText} Mb/s</span>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+      {pollableNodes.length === 0 ? (
+        <Card dir={dir} className="w-full rounded-lg border">
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-center text-xs sm:text-sm">{t('statistics.noConnectedNodes', { defaultValue: 'No connected nodes to report on.' })}</p>
           </CardContent>
         </Card>
-      </div>
+      ) : (
+        /* Two cards per row from sm upwards, one per row on phones. */
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+          {perNode.map(({ node, isLoading, hasError, incoming, outgoing }, index) => {
+            const up = formatMbpsPair(outgoing)
+            const down = formatMbpsPair(incoming)
+
+            return (
+              <div key={node.id} className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: `${400 + index * 60}ms` }}>
+                <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
+                  <div
+                    className={cn(
+                      'from-primary/10 absolute inset-0 bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-500',
+                      'dark:from-primary/5 dark:to-transparent',
+                      'group-hover:opacity-100',
+                    )}
+                  />
+                  <CardContent className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className={cn('h-2 w-2 shrink-0 rounded-full', getNodeStatusDotColor(node.status))} />
+                      <p className="min-w-0 truncate text-sm font-semibold sm:text-base">{node.name}</p>
+                    </div>
+
+                    {isLoading ? (
+                      <div className="flex flex-col gap-2">
+                        <Skeleton className="h-6 w-32" />
+                        <Skeleton className="h-6 w-32" />
+                      </div>
+                    ) : hasError ? (
+                      <p className="text-muted-foreground py-2 text-xs sm:text-sm">{t('statistics.unavailable', { defaultValue: 'Unavailable' })}</p>
+                    ) : (
+                      <div className="flex flex-col gap-2 sm:gap-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="bg-primary/10 rounded-md p-1">
+                              <Upload className="text-primary h-3.5 w-3.5" />
+                            </span>
+                            <span className="text-muted-foreground truncate text-xs font-medium">{t('statistics.uplink')}</span>
+                          </span>
+                          <span dir="ltr" className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-sm font-bold whitespace-nowrap sm:text-base">{up.mbPerSecText} MB/s</span>
+                            <span className="bg-muted/60 text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap sm:text-xs">{up.mbpsText} Mb/s</span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="bg-primary/10 rounded-md p-1">
+                              <Download className="text-primary h-3.5 w-3.5" />
+                            </span>
+                            <span className="text-muted-foreground truncate text-xs font-medium">{t('statistics.downlink')}</span>
+                          </span>
+                          <span dir="ltr" className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-sm font-bold whitespace-nowrap sm:text-base">{down.mbPerSecText} MB/s</span>
+                            <span className="bg-muted/60 text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap sm:text-xs">{down.mbpsText} Mb/s</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

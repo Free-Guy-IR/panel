@@ -3646,5 +3646,11 @@
   "statistics.perNodeLive": "Трафик по узлам в реальном времени",
   "statistics.totalAcrossNodes": "Всего",
   "statistics.noConnectedNodes": "Нет подключённых узлов для отображения.",
-  "statistics.unavailable": "Недоступно"
+  "statistics.unavailable": "Недоступно",
+  "statistics.inboundUsage": "Трафик входящих",
+  "statistics.inboundUsageDescription": "Суммарный трафик по каждому входящему за период",
+  "statistics.allInbounds": "Все входящие",
+  "statistics.perInboundTotals": "Итого по входящему",
+  "statistics.noInboundData": "Трафик входящих ещё не записан",
+  "statistics.inboundDataHint": "История входящих накапливается с момента включения."
 }

@@ -3691,5 +3691,11 @@
   "statistics.perNodeLive": "各节点实时流量",
   "statistics.totalAcrossNodes": "合计",
   "statistics.noConnectedNodes": "没有已连接的节点可显示。",
-  "statistics.unavailable": "不可用"
+  "statistics.unavailable": "不可用",
+  "statistics.inboundUsage": "入站用量",
+  "statistics.inboundUsageDescription": "各入站在一段时间内的总流量",
+  "statistics.allInbounds": "所有入站",
+  "statistics.perInboundTotals": "各入站合计",
+  "statistics.noInboundData": "尚未记录入站流量",
+  "statistics.inboundDataHint": "入站历史自启用之时起开始累积。"
 }
