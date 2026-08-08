@@ -3772,5 +3772,17 @@
   "settings.connectionLimit.override.saved": "ذخیره شد",
   "settings.connectionLimit.override.cleared": "به پیش‌فرض برگشت",
   "settings.connectionLimit.override.failed": "ذخیره نشد",
-  "settings.connectionLimit.override.invalid": "عددی ۱ یا بیشتر وارد کنید، یا خالی بگذارید"
+  "settings.connectionLimit.override.invalid": "عددی ۱ یا بیشتر وارد کنید، یا خالی بگذارید",
+  "connectionLimit.reason.devices": "تخمین {{count}} دستگاه",
+  "connectionLimit.reason.allowance": "سقف اعمال‌شده: {{count}}",
+  "connectionLimit.reason.networks": "{{count}} شبکه‌ی مجزا: {{items}}",
+  "connectionLimit.reason.cdn": "{{count}} آدرس CDN، روی هم یک دستگاه شمرده شد",
+  "connectionLimit.reason.infrastructure": "{{count}} آدرس مشترک یا تونل، شمرده نشد",
+  "connectionLimit.reason.earlier": "{{count}} شبکه‌ی دیگر زودتر دیده شد، نه هم‌زمان",
+  "connectionLimit.reason.concurrent": "{{count}} تای آن‌ها هم‌زمان زنده بودند",
+  "connectionLimit.reason.unrelated_networks": "{{count}} شبکه‌ی بی‌ارتباط",
+  "connectionLimit.reason.apps": "{{count}} برنامه‌ی متفاوت: {{items}}",
+  "connectionLimit.reason.hardware_ids": "{{count}} شناسه‌ی سخت‌افزاری: {{items}}",
+  "connectionLimit.reason.cdn_without_hwid": "پشت CDN و بدون شناسه‌ی سخت‌افزاری — چند دستگاه یکی دیده می‌شوند",
+  "connectionLimit.reason.nodes": "روی {{count}} نود (ممکن است فقط برنامه‌ای باشد که همه‌ی سرورها را می‌آزماید)"
 }

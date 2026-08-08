@@ -4,6 +4,7 @@ import type { ConnectionStateResponse } from '@/service/api'
 import dayjs from 'dayjs'
 import { Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { renderReason, type ConnectionReason } from './connection-reasons'
 import { useDeviceCounts } from './device-counts-provider'
 
 const toneFor = (verdict: string | undefined) => {
@@ -62,9 +63,9 @@ export default function DeviceCountBadge({ userId }: { userId: number }) {
         </div>
 
         <ul className="mt-2 space-y-1">
-          {(state.reasons ?? []).map((reason, index) => (
+          {((state.reasons ?? []) as ConnectionReason[]).map((reason, index) => (
             <li key={index} className="text-muted-foreground text-xs leading-relaxed" dir="auto">
-              {reason}
+              {renderReason(reason, t)}
             </li>
           ))}
         </ul>

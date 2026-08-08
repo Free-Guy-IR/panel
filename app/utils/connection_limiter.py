@@ -116,7 +116,7 @@ class Observation:
     # The allowance this user was actually judged against - their own where
     # one is set, otherwise the global default.
     limit_applied: int = 0
-    reasons: list[str] = field(default_factory=list)
+    reasons: list[dict] = field(default_factory=list)
     details: dict = field(default_factory=dict)
 
 
@@ -430,33 +430,41 @@ def assess(
     return obs
 
 
-def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids) -> list[str]:
-    """Plain statements of what was seen, so the number can be checked."""
-    out = [f"{obs.devices} device(s) estimated"]
+def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids) -> list[dict]:
+    """What was seen, as codes the frontend renders in the reader's language.
+
+    Values travel alongside the code rather than baked into a sentence, so the
+    wording lives with the translations and a row written today reads correctly
+    in a language added tomorrow.
+    """
+    out: list[dict] = [{"code": "devices", "count": obs.devices}]
+
     if obs.limit_applied:
-        out.append(f"allowance in force: {obs.limit_applied}")
+        out.append({"code": "allowance", "count": obs.limit_applied})
     if real_groups:
-        out.append(f"{len(real_groups)} distinct network(s): {', '.join(sorted(real_groups)[:4])}")
+        out.append({"code": "networks", "count": len(real_groups), "items": sorted(real_groups)[:4]})
     if cdn_seen:
-        out.append(f"{len(cdn_seen)} CDN address(es), counted as one source")
+        out.append({"code": "cdn", "count": len(cdn_seen)})
     if infra_seen:
-        out.append(f"{len(infra_seen)} shared/tunnel address(es), not counted")
+        out.append({"code": "infrastructure", "count": len(infra_seen)})
+
     earlier = obs.details.get("earlier_groups") or []
     if earlier:
-        out.append(f"{len(earlier)} further network(s) seen earlier, not at the same time - not counted")
+        out.append({"code": "earlier", "count": len(earlier)})
     if concurrent:
-        out.append(f"{len(real_groups)} of them live at the same moment")
+        out.append({"code": "concurrent", "count": len(real_groups)})
     if len(networks) > 1:
-        out.append(f"{len(networks)} unrelated networks")
+        out.append({"code": "unrelated_networks", "count": len(networks)})
     if len(apps) > 1:
-        out.append(f"{len(apps)} different apps: {', '.join(sorted(apps)[:3])}")
+        out.append({"code": "apps", "count": len(apps), "items": sorted(apps)[:3]})
     if hwids:
         labels = sorted({devices.get(h, h[:12]) for h in hwids})
-        out.append(f"{len(hwids)} hardware id(s) reported: {', '.join(labels[:3])}")
+        out.append({"code": "hardware_ids", "count": len(hwids), "items": labels[:3]})
     if cdn_seen and not hwids:
-        out.append("behind a CDN with no hardware id reported - several devices would look like one")
+        out.append({"code": "cdn_without_hwid"})
     if obs.node_count > 1:
-        out.append(f"on {obs.node_count} nodes (may just be an app that probes every server)")
+        out.append({"code": "nodes", "count": obs.node_count})
+
     return out
 
 

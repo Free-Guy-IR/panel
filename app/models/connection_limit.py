@@ -19,7 +19,8 @@ class ConnectionStateResponse(BaseModel):
     # uses this to decide how much to make of a reading.
     streak: int = 0
     checked_at: datetime | None = None
-    reasons: list[str] = Field(default_factory=list)
+    # Codes plus their values; the frontend renders them in the panel's language.
+    reasons: list[dict] = Field(default_factory=list)
     details: dict = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)

@@ -3730,5 +3730,17 @@
   "settings.connectionLimit.override.saved": "Saved",
   "settings.connectionLimit.override.cleared": "Back to the default",
   "settings.connectionLimit.override.failed": "Could not save",
-  "settings.connectionLimit.override.invalid": "Enter a number of 1 or more, or leave it empty"
+  "settings.connectionLimit.override.invalid": "Enter a number of 1 or more, or leave it empty",
+  "connectionLimit.reason.devices": "{{count}} device(s) estimated",
+  "connectionLimit.reason.allowance": "allowance in force: {{count}}",
+  "connectionLimit.reason.networks": "{{count}} distinct network(s): {{items}}",
+  "connectionLimit.reason.cdn": "{{count}} CDN address(es), counted as one device",
+  "connectionLimit.reason.infrastructure": "{{count}} shared or tunnel address(es), not counted",
+  "connectionLimit.reason.earlier": "{{count}} further network(s) seen earlier, not at the same time",
+  "connectionLimit.reason.concurrent": "{{count}} of them live at the same moment",
+  "connectionLimit.reason.unrelated_networks": "{{count}} unrelated networks",
+  "connectionLimit.reason.apps": "{{count}} different apps: {{items}}",
+  "connectionLimit.reason.hardware_ids": "{{count}} hardware id(s) reported: {{items}}",
+  "connectionLimit.reason.cdn_without_hwid": "behind a CDN with no hardware id reported — several devices would look like one",
+  "connectionLimit.reason.nodes": "on {{count}} nodes (may just be an app that probes every server)"
 }

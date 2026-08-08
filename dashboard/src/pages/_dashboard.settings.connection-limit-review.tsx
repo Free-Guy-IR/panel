@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { renderReason, type ConnectionReason } from '@/features/users/components/connection-reasons'
 import OverrideDialog from '@/features/users/components/connection-override-dialog'
 import { useListConnectionStates } from '@/service/api'
 import dayjs from 'dayjs'
@@ -152,9 +153,9 @@ export default function ConnectionLimitReview() {
 
                       <TableCell className="hidden max-w-md align-top md:table-cell">
                         <ul className="space-y-0.5">
-                          {(state.reasons ?? []).slice(1).map((reason, index) => (
+                          {((state.reasons ?? []) as ConnectionReason[]).slice(1).map((reason, index) => (
                             <li key={index} className="text-muted-foreground text-xs leading-relaxed" dir="auto">
-                              {reason}
+                              {renderReason(reason, t)}
                             </li>
                           ))}
                         </ul>
