@@ -609,7 +609,12 @@ async def get_inbounds_stats(node: PasarGuardNode):
         thread_pool = await _get_thread_pool()
         return await loop.run_in_executor(thread_pool, _process_inbounds_stats_response, stats_response)
     except NodeAPIError as e:
-        logger.error("Failed to get inbounds stats, error: %s", e.detail)
+        # Backends without per-inbound counters (WireGuard) say so explicitly.
+        # That is a property of the backend, not a failure worth reporting.
+        if e.detail and "not applicable" in e.detail:
+            logger.debug("Inbound stats unavailable for this backend: %s", e.detail)
+        else:
+            logger.error("Failed to get inbounds stats, error: %s", e.detail)
         return {}
     except Exception as e:
         logger.error("Failed to get inbounds stats, unknown error: %s", e)
