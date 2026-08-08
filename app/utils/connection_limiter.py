@@ -28,7 +28,9 @@ routed.
 Nothing in this module acts on a user. It reports what it sees.
 """
 
+import asyncio
 import ipaddress
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -177,33 +179,66 @@ async def exempt_user_ids(db: AsyncSession, user_ids: list[int]) -> set[int]:
     return set(rows)
 
 
-async def collect_live_ips(users: list[User], by_node: dict[int, set[int]]) -> dict[int, dict[str, int]]:
+async def collect_live_ips(
+    users: list[User],
+    by_node: dict[int, set[int]],
+    concurrency: int = 12,
+    deadline_seconds: float = 45.0,
+) -> dict[int, dict[str, int]]:
     """Ask each user's own nodes for their live addresses and last-seen times.
 
+    Users are polled concurrently: done one at a time this is thousands of
+    sequential round trips and cannot finish inside a cycle.
+
     A node that does not answer is skipped rather than counted as zero, so an
-    unreachable node cannot make a user look compliant or in violation.
+    unreachable node cannot make a user look compliant or over the limit. If
+    the deadline passes, whatever has been gathered is returned and the rest
+    are left for the next cycle - a cycle that runs forever blocks every cycle
+    after it.
     """
     healthy = {node_id: node for node_id, node in await node_manager.get_healthy_nodes()}
     result: dict[int, dict[str, int]] = {}
+    if not healthy:
+        logger.warning("no healthy nodes; skipping address collection")
+        return result
 
-    for user in users:
-        seen: dict[str, int] = {}
-        for node_id in by_node.get(user.id, set()):
-            node = healthy.get(node_id)
-            if node is None:
-                continue
-            try:
-                response = await node.get_user_online_ip_list(user.username, timeout=10)
-            except Exception as exc:
-                logger.debug("node %s did not answer for %s: %s", node_id, user.username, exc)
-                continue
-            if response is None:
-                continue
-            for ip_text, last_seen in (response.ips or {}).items():
-                # Keep the most recent sighting of each address.
-                if last_seen > seen.get(ip_text, 0):
-                    seen[ip_text] = last_seen
-        result[user.id] = seen
+    semaphore = asyncio.Semaphore(concurrency)
+    started = time.monotonic()
+    timed_out = False
+
+    async def for_user(user: User) -> tuple[int, dict[str, int]]:
+        nonlocal timed_out
+        async with semaphore:
+            if time.monotonic() - started > deadline_seconds:
+                timed_out = True
+                return user.id, {}
+            seen: dict[str, int] = {}
+            for node_id in by_node.get(user.id, set()):
+                node = healthy.get(node_id)
+                if node is None:
+                    continue
+                try:
+                    response = await node.get_user_online_ip_list(user.username, timeout=10)
+                except Exception as exc:
+                    logger.debug("node %s did not answer for %s: %s", node_id, user.username, exc)
+                    continue
+                if response is None:
+                    continue
+                for ip_text, last_seen in (response.ips or {}).items():
+                    # Keep the most recent sighting of each address.
+                    if last_seen > seen.get(ip_text, 0):
+                        seen[ip_text] = last_seen
+            return user.id, seen
+
+    for user_id, seen in await asyncio.gather(*[for_user(u) for u in users]):
+        result[user_id] = seen
+
+    if timed_out:
+        logger.warning(
+            "address collection hit its %.0fs deadline; %d users covered this cycle",
+            deadline_seconds,
+            sum(1 for v in result.values() if v),
+        )
     return result
 
 

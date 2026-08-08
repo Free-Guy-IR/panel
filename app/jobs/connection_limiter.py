@@ -8,6 +8,7 @@ The job only observes. Acting on a user is a separate decision that has not
 been enabled.
 """
 
+import asyncio
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -44,7 +45,13 @@ async def record_connection_states():
         return
 
     async with GetDB() as db:
-        observations = await run_assessment(db, settings)
+        try:
+            # Belt and braces: collection has its own deadline, but a cycle
+            # that overruns anyway must not hold the slot against the next one.
+            observations = await asyncio.wait_for(run_assessment(db, settings), timeout=120)
+        except TimeoutError:
+            logger.warning("connection check exceeded its time budget; skipping this cycle")
+            return
         if not observations:
             return
 
