@@ -20,7 +20,9 @@ class ConnectionStateResponse(BaseModel):
     streak: int = 0
     checked_at: datetime | None = None
     # Codes plus their values; the frontend renders them in the panel's language.
-    reasons: list[dict] = Field(default_factory=list)
+    # Rows written before reasons were structured hold plain sentences instead,
+    # and stay that way until their user is next seen - so both shapes are read.
+    reasons: list[dict | str] = Field(default_factory=list)
     details: dict = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
