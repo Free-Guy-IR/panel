@@ -12,7 +12,9 @@ interface AllNodesLiveSectionProps {
   nodes: NodeSimple[]
 }
 
-const REFETCH_INTERVAL_MS = 2000
+// Each poll is an instantaneous sample, so polling faster than this makes
+// the totals jump around too quickly to read.
+const REFETCH_INTERVAL_MS = 5000
 
 function getNodeStatusDotColor(status: NodeStatus) {
   switch (status) {
@@ -52,7 +54,7 @@ export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps)
       ...getRealtimeNodeStatsQueryOptions(node.id, {
         query: {
           refetchInterval: REFETCH_INTERVAL_MS,
-          staleTime: 1000,
+          staleTime: REFETCH_INTERVAL_MS,
           refetchOnWindowFocus: true,
           retry: false,
         },
