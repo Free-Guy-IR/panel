@@ -904,6 +904,81 @@ class Settings(Base, IdMixin):
     subscription: Mapped[dict] = mapped_column(JSON())
     hwid: Mapped[dict] = mapped_column(JSON())
     general: Mapped[dict] = mapped_column(JSON())
+    # Nullable so existing rows need no backfill; the API substitutes defaults.
+    connection_limit: Mapped[dict | None] = mapped_column(JSON(), default=None, nullable=True)
+
+
+class UserConnectionLimit(Base, IdMixin):
+    """A user whose IP allowance differs from the default, or who is exempt.
+
+    Rows exist only for users that differ, so this stays a small table even on
+    a panel with thousands of users.
+    """
+
+    __tablename__ = "user_connection_limits"
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
+    # NULL with exempt=False means "use the default from settings".
+    ip_limit: Mapped[int | None] = mapped_column(default=None)
+    exempt: Mapped[bool] = mapped_column(default=False, server_default="0")
+    note: Mapped[str | None] = mapped_column(String(256), default=None)
+
+
+class ConnectionRestriction(Base, IdMixin):
+    """One restriction the limiter applied, and what is needed to undo it.
+
+    The user's groups and status before the restriction are stored here
+    because restoring has to put back exactly what was there - reconstructing
+    it afterwards is guesswork once the user has been moved.
+    """
+
+    __tablename__ = "connection_restrictions"
+    __table_args__ = (
+        Index("ix_connection_restrictions_active", "active"),
+        Index("ix_connection_restrictions_user_active", "user_id", "active"),
+    )
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC))
+    ip_count: Mapped[int] = mapped_column(default=0)
+    ip_limit: Mapped[int] = mapped_column(default=0)
+    # Distinct IPs seen at the moment of the violation, for the admin to review.
+    observed_ips: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
+    method: Mapped[str] = mapped_column(String(16), default="disable")
+    previous_status: Mapped[str | None] = mapped_column(String(16), default=None)
+    previous_group_ids: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
+    restore_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    restored_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    # Only one row per user may be active; the restore job keys off this.
+    active: Mapped[bool] = mapped_column(default=True, server_default="1")
+
+
+class UserConnectionState(Base, IdMixin):
+    """The most recent judgement about how many people are using one account.
+
+    One row per user, overwritten each cycle. History is deliberately not kept
+    here - this is what the users list renders, and it has to stay small and
+    cheap to query.
+    """
+
+    __tablename__ = "user_connection_states"
+    __table_args__ = (
+        Index("ix_user_connection_states_verdict", "verdict"),
+        Index("ix_user_connection_states_checked_at", "checked_at"),
+    )
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
+    checked_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC))
+    # Independent sources after collapsing CDN, dropping infrastructure and
+    # grouping addresses by prefix. This is the number the badge shows.
+    sources: Mapped[int] = mapped_column(default=0)
+    node_count: Mapped[int] = mapped_column(default=0)
+    device_count: Mapped[int] = mapped_column(default=0)
+    app_count: Mapped[int] = mapped_column(default=0)
+    verdict: Mapped[str] = mapped_column(String(16), default="single")
+    # How many consecutive cycles this verdict has held; a single cycle proves
+    # nothing, so the UI only trusts a verdict once this has built up.
+    streak: Mapped[int] = mapped_column(default=0)
+    # The evidence behind the verdict, rendered as-is in the popover.
+    reasons: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
+    details: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
 
 
 class AdminRole(Base, CreatedAtUTCMixin):

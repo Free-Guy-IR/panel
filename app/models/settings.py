@@ -370,6 +370,84 @@ class General(BaseModel):
         return validate_custom_variables(value)
 
 
+class ConnectionLimitVerdict(str, Enum):
+    single = "single"
+    suspicious = "suspicious"
+    shared = "shared"
+
+
+class ConnectionLimit(BaseModel):
+    """Detection of one subscription being used by several people at once.
+
+    The panel reads each user's live IPs straight from the nodes, so this needs
+    no log parsing. What it mostly has to do is avoid mistaking one person for
+    several: a phone changing towers, a CDN presenting many edge addresses, a
+    tunnel presenting one address for everybody.
+    """
+
+    enabled: bool = Field(default=False)
+    # Nothing is ever acted on while this is true; observations are only recorded.
+    monitor_only: bool = Field(default=True)
+
+    check_interval_seconds: int = Field(default=120, ge=30, le=3600)
+    # Only users seen this recently are worth asking the nodes about.
+    online_window_seconds: int = Field(default=180, ge=60, le=1800)
+    # Which nodes to ask per user, based on where they carried traffic lately.
+    node_window_minutes: int = Field(default=30, ge=5, le=1440)
+
+    # Above this many independent sources a user is called shared.
+    shared_threshold: int = Field(default=3, ge=2, le=20)
+    # At this many they are worth a second look but not called shared.
+    suspicious_threshold: int = Field(default=2, ge=2, le=20)
+    # A verdict only counts once the pattern has held this many cycles.
+    persistence_cycles: int = Field(default=3, ge=1, le=20)
+
+    # Two addresses seen further apart than this were probably not concurrent -
+    # more likely the same person after their address changed.
+    concurrency_window_seconds: int = Field(default=90, ge=10, le=600)
+
+    # Addresses are compared at this granularity so that a phone moving between
+    # towers inside one carrier block does not read as several people.
+    ipv4_group_prefix: int = Field(default=24, ge=8, le=32)
+    ipv6_group_prefix: int = Field(default=64, ge=16, le=128)
+
+    # An address currently attributed to more than this many users is shared
+    # infrastructure - a tunnel, a CDN edge, a NAT - and identifies nobody.
+    # Detected rather than configured, so it covers providers nobody listed.
+    infrastructure_min_users: int = Field(default=4, ge=2, le=100)
+
+    # A user's addresses inside a CDN collapse to one source, because one
+    # person behind a CDN legitimately appears as several edge addresses.
+    # Cloudflare and Fastly ship as defaults; add others here.
+    cdn_ranges: list[str] = Field(default_factory=list)
+
+    # Empty means every group and every admin.
+    apply_to_group_ids: list[int] = Field(default_factory=list)
+    apply_to_admin_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("cdn_ranges")
+    @classmethod
+    def validate_cdn_ranges(cls, value: list[str]) -> list[str]:
+        import ipaddress
+
+        cleaned = []
+        for entry in value:
+            text = (entry or "").strip()
+            if not text:
+                continue
+            try:
+                cleaned.append(str(ipaddress.ip_network(text, strict=False)))
+            except ValueError:
+                raise ValueError(f"'{text}' is not a valid IP range")
+        return list(dict.fromkeys(cleaned))
+
+    @model_validator(mode="after")
+    def thresholds_are_ordered(self):
+        if self.suspicious_threshold > self.shared_threshold:
+            raise ValueError("suspicious_threshold cannot be above shared_threshold")
+        return self
+
+
 class SettingsSchema(BaseModel):
     telegram: Telegram | None = Field(default=None)
     webhook: Webhook | None = Field(default=None)
@@ -378,5 +456,6 @@ class SettingsSchema(BaseModel):
     subscription: Subscription | None = Field(default=None)
     hwid: HWIDSettings | None = Field(default=None)
     general: General | None = Field(default=None)
+    connection_limit: ConnectionLimit | None = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)
