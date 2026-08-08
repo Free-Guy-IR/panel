@@ -425,6 +425,10 @@ class ConnectionLimit(BaseModel):
     apply_to_group_ids: list[int] = Field(default_factory=list)
     apply_to_admin_ids: list[int] = Field(default_factory=list)
 
+    # Resolve the provider behind an address when a case is reviewed. Off by
+    # default: it sends customer addresses to a third-party service.
+    resolve_isp: bool = Field(default=False)
+
     @field_validator("cdn_ranges")
     @classmethod
     def validate_cdn_ranges(cls, value: list[str]) -> list[str]:

@@ -21,6 +21,11 @@ import type {
 } from '@tanstack/react-query'
 import { orvalFetcher } from '../http'
 import type { ErrorType, BodyType } from '../http'
+export type ListOverridesParams = {
+  limit?: number
+  offset?: number
+}
+
 export type ConnectionStatesForUsersParams = {
   user_ids?: number[] | null
 }
@@ -1218,6 +1223,39 @@ export interface UserCountMetricStatsList {
   stats: UserCountMetricStatsListStats
 }
 
+export type UserConnectionLimitResponseUsername = string | null
+
+export type UserConnectionLimitResponseNote = string | null
+
+export type UserConnectionLimitResponseIpLimit = number | null
+
+export interface UserConnectionLimitResponse {
+  ip_limit?: UserConnectionLimitResponseIpLimit
+  exempt?: boolean
+  note?: UserConnectionLimitResponseNote
+  user_id: number
+  username?: UserConnectionLimitResponseUsername
+}
+
+export interface UserConnectionLimitsResponse {
+  overrides: UserConnectionLimitResponse[]
+  total: number
+  default_device_limit?: number
+}
+
+export type UserConnectionLimitPayloadNote = string | null
+
+export type UserConnectionLimitPayloadIpLimit = number | null
+
+/**
+ * A device allowance for one user, or an exemption from checking.
+ */
+export interface UserConnectionLimitPayload {
+  ip_limit?: UserConnectionLimitPayloadIpLimit
+  exempt?: boolean
+  note?: UserConnectionLimitPayloadNote
+}
+
 export type UsageTable = (typeof UsageTable)[keyof typeof UsageTable]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -1661,6 +1699,21 @@ export interface RoleAccess {
   require_template?: boolean
   allowed_template_ids?: RoleAccessAllowedTemplateIds
   allowed_group_ids?: RoleAccessAllowedGroupIds
+}
+
+export type ResolvedAddressCountry = string | null
+
+export type ResolvedAddressProvider = string | null
+
+export interface ResolvedAddress {
+  address: string
+  provider?: ResolvedAddressProvider
+  country?: ResolvedAddressCountry
+}
+
+export interface ResolvedAddressesResponse {
+  addresses: ResolvedAddress[]
+  enabled?: boolean
 }
 
 export interface RemoveUsersResponse {
@@ -3253,6 +3306,7 @@ export interface ConnectionLimit {
   cdn_ranges?: string[]
   apply_to_group_ids?: number[]
   apply_to_admin_ids?: number[]
+  resolve_isp?: boolean
 }
 
 export interface Conflict {
@@ -15343,6 +15397,224 @@ export function useDefaultCdnRanges<TData = Awaited<ReturnType<typeof defaultCdn
   query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof defaultCdnRanges>>, TError, TData>>
 }): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getDefaultCdnRangesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Users given their own allowance, or exempted from checking.
+ * @summary List Overrides
+ */
+export const listOverrides = (params?: ListOverridesParams, signal?: AbortSignal) => {
+  return orvalFetcher<UserConnectionLimitsResponse>({ url: `/api/connection-limit/overrides`, method: 'GET', params, signal })
+}
+
+export const getListOverridesQueryKey = (params?: ListOverridesParams) => {
+  return [`/api/connection-limit/overrides`, ...(params ? [params] : [])] as const
+}
+
+export const getListOverridesQueryOptions = <TData = Awaited<ReturnType<typeof listOverrides>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListOverridesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListOverridesQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listOverrides>>> = ({ signal }) => listOverrides(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListOverridesQueryResult = NonNullable<Awaited<ReturnType<typeof listOverrides>>>
+export type ListOverridesQueryError = ErrorType<HTTPValidationError>
+
+export function useListOverrides<TData = Awaited<ReturnType<typeof listOverrides>>, TError = ErrorType<HTTPValidationError>>(
+  params: undefined | ListOverridesParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOverrides<TData = Awaited<ReturnType<typeof listOverrides>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListOverridesParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOverrides<TData = Awaited<ReturnType<typeof listOverrides>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListOverridesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Overrides
+ */
+
+export function useListOverrides<TData = Awaited<ReturnType<typeof listOverrides>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListOverridesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listOverrides>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListOverridesQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Give one user their own allowance, or exempt them.
+ * @summary Set Override
+ */
+export const setOverride = (userId: number, userConnectionLimitPayload: BodyType<UserConnectionLimitPayload>) => {
+  return orvalFetcher<UserConnectionLimitResponse>({
+    url: `/api/connection-limit/overrides/${userId}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: userConnectionLimitPayload,
+  })
+}
+
+export const getSetOverrideMutationOptions = <TData = Awaited<ReturnType<typeof setOverride>>, TError = ErrorType<HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { userId: number; data: BodyType<UserConnectionLimitPayload> }, TContext>
+}) => {
+  const mutationKey = ['setOverride']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof setOverride>>, { userId: number; data: BodyType<UserConnectionLimitPayload> }> = props => {
+    const { userId, data } = props ?? {}
+
+    return setOverride(userId, data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { userId: number; data: BodyType<UserConnectionLimitPayload> }, TContext>
+}
+
+export type SetOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof setOverride>>>
+export type SetOverrideMutationBody = BodyType<UserConnectionLimitPayload>
+export type SetOverrideMutationError = ErrorType<HTTPValidationError>
+
+/**
+ * @summary Set Override
+ */
+export const useSetOverride = <TData = Awaited<ReturnType<typeof setOverride>>, TError = ErrorType<HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { userId: number; data: BodyType<UserConnectionLimitPayload> }, TContext>
+}): UseMutationResult<TData, TError, { userId: number; data: BodyType<UserConnectionLimitPayload> }, TContext> => {
+  const mutationOptions = getSetOverrideMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * Put a user back on the default allowance.
+ * @summary Clear Override
+ */
+export const clearOverride = (userId: number) => {
+  return orvalFetcher<void>({ url: `/api/connection-limit/overrides/${userId}`, method: 'DELETE' })
+}
+
+export const getClearOverrideMutationOptions = <TData = Awaited<ReturnType<typeof clearOverride>>, TError = ErrorType<HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { userId: number }, TContext>
+}) => {
+  const mutationKey = ['clearOverride']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearOverride>>, { userId: number }> = props => {
+    const { userId } = props ?? {}
+
+    return clearOverride(userId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { userId: number }, TContext>
+}
+
+export type ClearOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof clearOverride>>>
+
+export type ClearOverrideMutationError = ErrorType<HTTPValidationError>
+
+/**
+ * @summary Clear Override
+ */
+export const useClearOverride = <TData = Awaited<ReturnType<typeof clearOverride>>, TError = ErrorType<HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { userId: number }, TContext>
+}): UseMutationResult<TData, TError, { userId: number }, TContext> => {
+  const mutationOptions = getClearOverrideMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * Name the provider behind each address this user was last seen on.
+
+Resolved here rather than in the checking loop: the loop handles well over
+a thousand users a minute and would turn into thousands of lookups, while
+a review only needs the handful an admin is actually looking at.
+ * @summary Resolve User Addresses
+ */
+export const resolveUserAddresses = (userId: number, signal?: AbortSignal) => {
+  return orvalFetcher<ResolvedAddressesResponse>({ url: `/api/connection-limit/addresses/${userId}`, method: 'GET', signal })
+}
+
+export const getResolveUserAddressesQueryKey = (userId: number) => {
+  return [`/api/connection-limit/addresses/${userId}`] as const
+}
+
+export const getResolveUserAddressesQueryOptions = <TData = Awaited<ReturnType<typeof resolveUserAddresses>>, TError = ErrorType<HTTPValidationError>>(
+  userId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getResolveUserAddressesQueryKey(userId)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof resolveUserAddresses>>> = ({ signal }) => resolveUserAddresses(userId, signal)
+
+  return { queryKey, queryFn, enabled: !!userId, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ResolveUserAddressesQueryResult = NonNullable<Awaited<ReturnType<typeof resolveUserAddresses>>>
+export type ResolveUserAddressesQueryError = ErrorType<HTTPValidationError>
+
+export function useResolveUserAddresses<TData = Awaited<ReturnType<typeof resolveUserAddresses>>, TError = ErrorType<HTTPValidationError>>(
+  userId: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useResolveUserAddresses<TData = Awaited<ReturnType<typeof resolveUserAddresses>>, TError = ErrorType<HTTPValidationError>>(
+  userId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useResolveUserAddresses<TData = Awaited<ReturnType<typeof resolveUserAddresses>>, TError = ErrorType<HTTPValidationError>>(
+  userId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Resolve User Addresses
+ */
+
+export function useResolveUserAddresses<TData = Awaited<ReturnType<typeof resolveUserAddresses>>, TError = ErrorType<HTTPValidationError>>(
+  userId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resolveUserAddresses>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getResolveUserAddressesQueryOptions(userId, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import OverrideDialog from '@/features/users/components/connection-override-dialog'
 import { useListConnectionStates } from '@/service/api'
 import dayjs from 'dayjs'
 import { RefreshCw, Users } from 'lucide-react'
@@ -39,6 +40,7 @@ export default function ConnectionLimitReview() {
   const { t } = useTranslation()
   const [verdict, setVerdict] = useState<string>('over_limit')
   const [page, setPage] = useState(0)
+  const [editing, setEditing] = useState<{ id: number; username?: string | null } | null>(null)
 
   const { data, isLoading, isFetching, refetch } = useListConnectionStates(
     {
@@ -127,6 +129,7 @@ export default function ConnectionLimitReview() {
                     <TableHead className="hidden text-xs lg:table-cell">
                       {t('settings.connectionLimit.review.checked', { defaultValue: 'Checked' })}
                     </TableHead>
+                    <TableHead className="text-xs" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -162,6 +165,17 @@ export default function ConnectionLimitReview() {
                       <TableCell className="text-muted-foreground hidden align-top text-xs lg:table-cell" dir="ltr">
                         {state.checked_at ? dayjs(state.checked_at).format('HH:mm') : '—'}
                       </TableCell>
+
+                      <TableCell className="align-top">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setEditing({ id: state.user_id, username: state.username })}
+                        >
+                          {t('settings.connectionLimit.review.setAllowance', { defaultValue: 'Allowance' })}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -191,6 +205,14 @@ export default function ConnectionLimitReview() {
           )}
         </CardContent>
       </Card>
+
+      <OverrideDialog
+        userId={editing?.id ?? null}
+        username={editing?.username}
+        defaultLimit={data?.device_limit ?? 2}
+        open={editing !== null}
+        onOpenChange={open => !open && setEditing(null)}
+      />
     </div>
   )
 }

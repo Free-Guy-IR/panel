@@ -113,6 +113,9 @@ class Observation:
     node_count: int = 0
     app_count: int = 0
     verdict: str = WITHIN_LIMIT
+    # The allowance this user was actually judged against - their own where
+    # one is set, otherwise the global default.
+    limit_applied: int = 0
     reasons: list[str] = field(default_factory=list)
     details: dict = field(default_factory=dict)
 
@@ -164,6 +167,22 @@ async def nodes_per_user(db: AsyncSession, settings: ConnectionLimit, user_ids: 
     for user_id, node_id in rows:
         out.setdefault(user_id, set()).add(node_id)
     return out
+
+
+async def per_user_limits(db: AsyncSession, user_ids: list[int]) -> dict[int, int]:
+    """Allowances for the users that have their own; the rest use the default."""
+    if not user_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(UserConnectionLimit.user_id, UserConnectionLimit.ip_limit).where(
+                UserConnectionLimit.user_id.in_(user_ids),
+                UserConnectionLimit.ip_limit.is_not(None),
+                UserConnectionLimit.exempt.is_(False),
+            )
+        )
+    ).all()
+    return {user_id: limit for user_id, limit in rows}
 
 
 async def exempt_user_ids(db: AsyncSession, user_ids: list[int]) -> set[int]:
@@ -316,6 +335,7 @@ def assess(
     context: dict,
     devices: dict[str, str],
     settings: ConnectionLimit,
+    device_limit: int | None = None,
 ) -> Observation:
     """Turn one user's raw sightings into a verdict with its reasons."""
     obs = Observation(user_id=user.id, username=user.username, node_count=len(node_ids))
@@ -389,11 +409,17 @@ def assess(
         for g in concurrent_groups
     }
 
-    # Purely a comparison against the configured allowance. No inference about
-    # whether the devices belong to one person or several.
-    if obs.devices > settings.device_limit:
+    # Purely a comparison against the allowance in force for this user. No
+    # inference about whether the devices belong to one person or several.
+    limit = device_limit if device_limit is not None else settings.device_limit
+    obs.limit_applied = limit
+    # Warn one below the limit when the user has their own, rather than at the
+    # global warn level which may sit above their allowance entirely.
+    warn_at = settings.warn_at_devices if device_limit is None else max(1, limit)
+
+    if obs.devices > limit:
         obs.verdict = OVER_LIMIT
-    elif obs.devices >= settings.warn_at_devices:
+    elif obs.devices >= warn_at:
         obs.verdict = AT_LIMIT
     else:
         obs.verdict = WITHIN_LIMIT
@@ -407,6 +433,8 @@ def assess(
 def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids) -> list[str]:
     """Plain statements of what was seen, so the number can be checked."""
     out = [f"{obs.devices} device(s) estimated"]
+    if obs.limit_applied:
+        out.append(f"allowance in force: {obs.limit_applied}")
     if real_groups:
         out.append(f"{len(real_groups)} distinct network(s): {', '.join(sorted(real_groups)[:4])}")
     if cdn_seen:
@@ -452,6 +480,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
         logger.debug("treating %d address(es) as shared infrastructure", len(infra))
 
     context, devices = await fetch_context(db, user_ids, settings.node_window_minutes)
+    overrides = await per_user_limits(db, user_ids)
     cdn_nets = _networks(settings.cdn_ranges or DEFAULT_CDN_RANGES)
 
     return [
@@ -464,6 +493,83 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
             context.get(user.id) or {},
             devices.get(user.id) or {},
             settings,
+            overrides.get(user.id),
         )
         for user in users
     ]
+
+
+# Provider names are looked up on demand and cached for the process lifetime.
+# The provider behind an address effectively never changes, and a review only
+# ever asks about a handful, so this stays small and costs nothing in the
+# checking loop.
+_provider_cache: dict[str, dict[str, str | None]] = {}
+_PROVIDER_CACHE_LIMIT = 5000
+
+
+async def lookup_providers(addresses: list[str]) -> dict[str, dict[str, str | None]]:
+    """Name the provider behind each address, as far as that is knowable.
+
+    Private and CDN addresses are answered locally - there is no third party
+    to ask about 10.0.0.1, and a Cloudflare range is already known. Anything
+    else goes to a public lookup service, which means the address leaves this
+    server; the caller is responsible for having been given permission.
+    """
+    import json
+    import urllib.request
+
+    out: dict[str, dict[str, str | None]] = {}
+    to_fetch: list[str] = []
+
+    cdn_nets = _networks(DEFAULT_CDN_RANGES)
+
+    for address in addresses:
+        if address in _provider_cache:
+            out[address] = _provider_cache[address]
+            continue
+
+        ip = parse_ip(address)
+        if ip is None:
+            out[address] = {"provider": None, "country": None}
+            continue
+        if not ip.is_global:
+            out[address] = {"provider": "private / tunnel", "country": None}
+            continue
+        if ip.version == 4 and any(ip in net for net in cdn_nets):
+            out[address] = {"provider": "CDN", "country": None}
+            continue
+        to_fetch.append(address)
+
+    if not to_fetch:
+        return out
+
+    loop = asyncio.get_running_loop()
+
+    def fetch(address: str) -> dict[str, str | None]:
+        try:
+            request = urllib.request.Request(
+                f"http://ip-api.com/json/{address}?fields=status,country,isp,org",
+                headers={"User-Agent": "pasarguard-panel"},
+            )
+            with urllib.request.urlopen(request, timeout=6) as response:
+                data = json.loads(response.read() or b"{}")
+            if data.get("status") != "success":
+                return {"provider": None, "country": None}
+            return {"provider": data.get("isp") or data.get("org"), "country": data.get("country")}
+        except Exception:
+            return {"provider": None, "country": None}
+
+    # Bounded, and only ever the addresses on one screen.
+    semaphore = asyncio.Semaphore(5)
+
+    async def one(address: str):
+        async with semaphore:
+            result = await loop.run_in_executor(None, fetch, address)
+            if len(_provider_cache) < _PROVIDER_CACHE_LIMIT:
+                _provider_cache[address] = result
+            return address, result
+
+    for address, result in await asyncio.gather(*[one(a) for a in to_fetch[:40]]):
+        out[address] = result
+
+    return out

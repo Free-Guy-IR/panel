@@ -973,6 +973,9 @@ class UserConnectionState(Base, IdMixin):
     node_count: Mapped[int] = mapped_column(default=0)
     app_count: Mapped[int] = mapped_column(default=0)
     verdict: Mapped[str] = mapped_column(String(16), default="within_limit")
+    # The allowance this verdict was made against, so a row can be read
+    # correctly later even if the default has changed since.
+    limit_applied: Mapped[int] = mapped_column(default=0)
     # How many consecutive cycles this verdict has held; a single cycle proves
     # nothing, so the UI only trusts a verdict once this has built up.
     streak: Mapped[int] = mapped_column(default=0)

@@ -4,7 +4,8 @@ import { SubscriptionFormActions } from '@/features/subscriptions/components/sub
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { useDefaultCdnRanges } from '@/service/api'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useDefaultCdnRanges, useGetAdminsSimple, useGetGroupsSimple } from '@/service/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
@@ -24,6 +25,9 @@ const connectionLimitSchema = z
     concurrency_window_seconds: z.number().min(10).default(90),
     infrastructure_min_users: z.number().min(2).default(4),
     cdn_ranges: z.string().default(''),
+    apply_to_group_ids: z.array(z.number()).default([]),
+    apply_to_admin_ids: z.array(z.number()).default([]),
+    resolve_isp: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
     if (data.warn_at_devices > data.device_limit) {
@@ -47,6 +51,9 @@ const defaultValues: ConnectionLimitFormInput = {
   concurrency_window_seconds: 90,
   infrastructure_min_users: 4,
   cdn_ranges: '',
+  apply_to_group_ids: [],
+  apply_to_admin_ids: [],
+  resolve_isp: false,
 }
 
 const toPositive = (value: unknown, fallback: number): number => {
@@ -59,6 +66,10 @@ export default function ConnectionLimitSettings() {
   const { t } = useTranslation()
   const { settings, isLoading, error, updateSettings, isSaving } = useSettingsContext()
   const { data: shippedRanges } = useDefaultCdnRanges()
+  const { data: groupsData } = useGetGroupsSimple({ limit: 500 })
+  const { data: adminsData } = useGetAdminsSimple({ limit: 500 })
+  const groups = groupsData?.groups ?? []
+  const admins = adminsData?.admins ?? []
 
   const formValues = useMemo<ConnectionLimitFormInput>(() => {
     const limit = settings?.connection_limit
@@ -73,6 +84,9 @@ export default function ConnectionLimitSettings() {
       concurrency_window_seconds: toPositive(limit.concurrency_window_seconds, 90),
       infrastructure_min_users: toPositive(limit.infrastructure_min_users, 4),
       cdn_ranges: (limit.cdn_ranges ?? []).join('\n'),
+      apply_to_group_ids: limit.apply_to_group_ids ?? [],
+      apply_to_admin_ids: limit.apply_to_admin_ids ?? [],
+      resolve_isp: limit.resolve_isp ?? false,
     }
   }, [settings?.connection_limit])
 
@@ -97,6 +111,9 @@ export default function ConnectionLimitSettings() {
             .split('\n')
             .map(line => line.trim())
             .filter(Boolean),
+          apply_to_group_ids: data.apply_to_group_ids ?? [],
+          apply_to_admin_ids: data.apply_to_admin_ids ?? [],
+          resolve_isp: data.resolve_isp ?? false,
         },
       })
     } catch {
@@ -350,6 +367,136 @@ export default function ConnectionLimitSettings() {
                     })}
                   </FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+          </section>
+
+          <section className="space-y-4">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-semibold sm:text-lg">
+                {t('settings.connectionLimit.scope.title', { defaultValue: 'Who is checked' })}
+              </h3>
+              <p className="text-muted-foreground max-w-3xl text-xs leading-relaxed sm:text-sm">
+                {t('settings.connectionLimit.scope.description', {
+                  defaultValue: 'Leave both empty to check every user. Choosing any narrows checking to those users only.',
+                })}
+              </p>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="apply_to_group_ids"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel className="text-sm font-medium">
+                        {t('settings.connectionLimit.scope.groups', { defaultValue: 'Groups' })}
+                      </FormLabel>
+                      <span className="text-muted-foreground text-xs">
+                        {(field.value ?? []).length === 0
+                          ? t('settings.connectionLimit.scope.allGroups', { defaultValue: 'all groups' })
+                          : `${(field.value ?? []).length}/${groups.length}`}
+                      </span>
+                    </div>
+                    <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border p-2">
+                      {groups.length === 0 ? (
+                        <p className="text-muted-foreground px-1 py-2 text-xs">
+                          {t('settings.connectionLimit.scope.noGroups', { defaultValue: 'No groups yet' })}
+                        </p>
+                      ) : (
+                        groups.map(group => {
+                          const selected = (field.value ?? []).includes(group.id)
+                          return (
+                            <label
+                              key={group.id}
+                              className="hover:bg-muted/40 flex cursor-pointer items-center gap-x-2 rounded-sm px-2 py-1.5 transition-colors"
+                            >
+                              <Checkbox
+                                checked={selected}
+                                onCheckedChange={checked => {
+                                  const current = new Set(field.value ?? [])
+                                  if (checked === true) current.add(group.id)
+                                  else current.delete(group.id)
+                                  field.onChange(Array.from(current))
+                                }}
+                                className="h-4 w-4"
+                              />
+                              <span className="truncate text-xs">{group.name}</span>
+                            </label>
+                          )
+                        })
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="apply_to_admin_ids"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel className="text-sm font-medium">
+                        {t('settings.connectionLimit.scope.admins', { defaultValue: 'Admins' })}
+                      </FormLabel>
+                      <span className="text-muted-foreground text-xs">
+                        {(field.value ?? []).length === 0
+                          ? t('settings.connectionLimit.scope.allAdmins', { defaultValue: 'all admins' })
+                          : `${(field.value ?? []).length}/${admins.length}`}
+                      </span>
+                    </div>
+                    <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border p-2">
+                      {admins.map(admin => {
+                        const selected = (field.value ?? []).includes(admin.id)
+                        return (
+                          <label
+                            key={admin.id}
+                            className="hover:bg-muted/40 flex cursor-pointer items-center gap-x-2 rounded-sm px-2 py-1.5 transition-colors"
+                          >
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={checked => {
+                                const current = new Set(field.value ?? [])
+                                if (checked === true) current.add(admin.id)
+                                else current.delete(admin.id)
+                                field.onChange(Array.from(current))
+                              }}
+                              className="h-4 w-4"
+                            />
+                            <span className="truncate text-xs">{admin.username}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="resolve_isp"
+              render={({ field }) => (
+                <FormItem className="bg-card hover:bg-accent/50 flex flex-row items-center justify-between gap-4 space-y-0 rounded-md border p-3 transition-colors sm:p-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <FormLabel className="cursor-pointer text-sm font-medium">
+                      {t('settings.connectionLimit.isp.title', { defaultValue: 'Look up the provider behind an address' })}
+                    </FormLabel>
+                    <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                      {t('settings.connectionLimit.isp.description', {
+                        defaultValue:
+                          'Shows the ISP name when reviewing a user. Only when a case is opened, never during checking — but it does send that address to a third-party service.',
+                      })}
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} className="shrink-0" />
+                  </FormControl>
                 </FormItem>
               )}
             />

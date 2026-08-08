@@ -14,6 +14,7 @@ class ConnectionStateResponse(BaseModel):
     node_count: int = 0
     app_count: int = 0
     verdict: str = "within_limit"
+    limit_applied: int = 0
     # Consecutive cycles this verdict has held. One cycle is noise; the UI
     # uses this to decide how much to make of a reading.
     streak: int = 0
@@ -32,3 +33,38 @@ class ConnectionStatesResponse(BaseModel):
     device_limit: int = 0
     enabled: bool = False
     monitor_only: bool = True
+
+
+class UserConnectionLimitPayload(BaseModel):
+    """A device allowance for one user, or an exemption from checking."""
+
+    # null means "use the default from settings".
+    ip_limit: int | None = Field(default=None, ge=1, le=100)
+    exempt: bool = False
+    note: str | None = Field(default=None, max_length=256)
+
+
+class UserConnectionLimitResponse(UserConnectionLimitPayload):
+    user_id: int
+    username: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserConnectionLimitsResponse(BaseModel):
+    overrides: list[UserConnectionLimitResponse]
+    total: int
+    default_device_limit: int = 0
+
+
+class ResolvedAddress(BaseModel):
+    address: str
+    provider: str | None = None
+    country: str | None = None
+
+
+class ResolvedAddressesResponse(BaseModel):
+    addresses: list[ResolvedAddress]
+    # False when provider lookup is switched off, so the UI can say why the
+    # names are missing rather than showing blanks.
+    enabled: bool = False

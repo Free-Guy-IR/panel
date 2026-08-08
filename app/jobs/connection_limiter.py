@@ -87,6 +87,7 @@ async def record_connection_states():
             state.node_count = obs.node_count
             state.app_count = obs.app_count
             state.verdict = obs.verdict
+            state.limit_applied = obs.limit_applied
             state.streak = streak
             state.reasons = obs.reasons
             state.details = obs.details
