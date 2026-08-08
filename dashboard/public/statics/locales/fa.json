@@ -3699,5 +3699,11 @@
   "statistics.perNodeLive": "ترافیک لحظه‌ای هر گره",
   "statistics.totalAcrossNodes": "مجموع",
   "statistics.noConnectedNodes": "هیچ گره متصلی برای نمایش وجود ندارد.",
-  "statistics.unavailable": "در دسترس نیست"
+  "statistics.unavailable": "در دسترس نیست",
+  "statistics.inboundUsage": "مصرف اینباندها",
+  "statistics.inboundUsageDescription": "مجموع ترافیک هر اینباند در طول زمان",
+  "statistics.allInbounds": "همه اینباندها",
+  "statistics.perInboundTotals": "مجموع هر اینباند",
+  "statistics.noInboundData": "هنوز ترافیکی برای اینباندها ثبت نشده",
+  "statistics.inboundDataHint": "تاریخچه اینباندها از لحظه فعال شدن شروع به جمع شدن می‌کند."
 }

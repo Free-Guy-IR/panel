@@ -74,6 +74,21 @@ class NodeUsageStatsList(StatList):
     stats: dict[int, list[NodeUsageStat]]
 
 
+class InboundUsageStat(PeriodStartStat):
+    uplink: int
+    downlink: int
+
+    @field_validator("downlink", "uplink", mode="before")
+    def cast_to_int(cls, v):
+        return NumericValidatorMixin.cast_to_int(v)
+
+
+class InboundUsageStatsList(StatList):
+    # Keyed by inbound tag rather than id: stats arrive from the node keyed by
+    # tag, and history stays readable after an inbound is renamed or removed.
+    stats: dict[str, list[InboundUsageStat]]
+
+
 class NodeRealtimeStats(BaseModel):
     mem_total: int
     mem_used: int

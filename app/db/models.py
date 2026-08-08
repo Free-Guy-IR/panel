@@ -727,6 +727,27 @@ class NodeUsage(Base, IdMixin):
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
+class NodeInboundUsage(Base, IdMixin):
+    """Ten-minute buckets of per-inbound traffic, mirroring NodeUsage.
+
+    The tag is stored rather than a foreign key to inbounds: an inbound can be
+    renamed or removed from a core config while its recorded history stays
+    meaningful, and stats arrive from the node keyed by tag anyway.
+    """
+
+    __tablename__ = "node_inbound_usages"
+    __table_args__ = (
+        UniqueConstraint("created_at", "node_id", "inbound_tag"),
+        Index("ix_node_inbound_usages_created_at", "created_at"),
+        Index("ix_node_inbound_usages_tag_created_at", "inbound_tag", "created_at"),
+    )
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), unique=False)  # 10 minute per record
+    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="CASCADE")
+    inbound_tag: Mapped[str] = mapped_column(String(256))
+    uplink: Mapped[int] = mapped_column(BigInteger, default=0)
+    downlink: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
 class NodeUsageResetLogs(Base, CreatedAtUTCMixin):
     __tablename__ = "node_usage_reset_logs"
     __table_args__ = (
