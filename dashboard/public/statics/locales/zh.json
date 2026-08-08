@@ -3776,5 +3776,7 @@
   "connectionLimit.reason.apps": "{{count}} 个不同应用：{{items}}",
   "connectionLimit.reason.hardware_ids": "{{count}} 个硬件标识：{{items}}",
   "connectionLimit.reason.cdn_without_hwid": "位于 CDN 之后且无硬件标识 — 多台设备会显示为一台",
-  "connectionLimit.reason.nodes": "位于 {{count}} 个节点（也可能只是应用在探测所有服务器）"
+  "connectionLimit.reason.nodes": "连续 {{cycles}} 次检查中都在 {{count}} 个节点上（仍有可能是逐个探测服务器的应用）",
+  "settings.connectionLimit.persistence.title": "一种情形需要持续的检查次数",
+  "settings.connectionLimit.persistence.description": "只有连续这么多次检查都出现在多个节点上，才会报告此项。逐个探测服务器的应用只在一次检查中出现高值，随后回落。"
 }

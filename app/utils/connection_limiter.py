@@ -42,6 +42,7 @@ from app.db.models import (
     NodeUserUsage,
     User,
     UserConnectionLimit,
+    UserConnectionState,
     UserHWID,
     UserSubscriptionUpdate,
 )
@@ -111,6 +112,8 @@ class Observation:
     address_sources: int = 0
     hwid_count: int = 0
     node_count: int = 0
+    # How many checks in a row the user has been on more than one node.
+    node_streak: int = 0
     app_count: int = 0
     verdict: str = WITHIN_LIMIT
     # The allowance this user was actually judged against - their own where
@@ -183,6 +186,24 @@ async def per_user_limits(db: AsyncSession, user_ids: list[int]) -> dict[int, in
         )
     ).all()
     return {user_id: limit for user_id, limit in rows}
+
+
+async def prior_node_streaks(db: AsyncSession, user_ids: list[int]) -> dict[int, int]:
+    """How long each user has already been on more than one node.
+
+    The run has to survive across cycles to mean anything, and the state
+    row is where it lives between them.
+    """
+    if not user_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(UserConnectionState.user_id, UserConnectionState.node_streak).where(
+                UserConnectionState.user_id.in_(user_ids)
+            )
+        )
+    ).all()
+    return {user_id: streak or 0 for user_id, streak in rows}
 
 
 async def exempt_user_ids(db: AsyncSession, user_ids: list[int]) -> set[int]:
@@ -336,9 +357,11 @@ def assess(
     devices: dict[str, str],
     settings: ConnectionLimit,
     device_limit: int | None = None,
+    prior_node_streak: int = 0,
 ) -> Observation:
     """Turn one user's raw sightings into a verdict with its reasons."""
     obs = Observation(user_id=user.id, username=user.username, node_count=len(node_ids))
+    obs.node_streak = prior_node_streak + 1 if obs.node_count > 1 else 0
 
     real_groups: dict[str, int] = {}
     cdn_seen: list[str] = []
@@ -425,12 +448,15 @@ def assess(
         obs.verdict = WITHIN_LIMIT
 
     obs.reasons = _reasons(
-        obs, concurrent_groups, cdn_seen, infra_seen, concurrent, distinct_networks, apps, devices, hwids
+        obs, concurrent_groups, cdn_seen, infra_seen, concurrent, distinct_networks, apps, devices, hwids,
+        settings.persistence_cycles,
     )
     return obs
 
 
-def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids) -> list[dict]:
+def _reasons(
+    obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles
+) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
     Values travel alongside the code rather than baked into a sentence, so the
@@ -462,8 +488,10 @@ def _reasons(obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps,
         out.append({"code": "hardware_ids", "count": len(hwids), "items": labels[:3]})
     if cdn_seen and not hwids:
         out.append({"code": "cdn_without_hwid"})
-    if obs.node_count > 1:
-        out.append({"code": "nodes", "count": obs.node_count})
+    # Held for long enough to be worth reading. Below that it is as likely
+    # to be one refresh of an app that tries every server as anything else.
+    if obs.node_count > 1 and obs.node_streak >= persistence_cycles:
+        out.append({"code": "nodes", "count": obs.node_count, "cycles": obs.node_streak})
 
     return out
 
@@ -489,6 +517,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
 
     context, devices = await fetch_context(db, user_ids, settings.node_window_minutes)
     overrides = await per_user_limits(db, user_ids)
+    node_streaks = await prior_node_streaks(db, user_ids)
     cdn_nets = _networks(settings.cdn_ranges or DEFAULT_CDN_RANGES)
 
     return [
@@ -502,6 +531,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
             devices.get(user.id) or {},
             settings,
             overrides.get(user.id),
+            node_streaks.get(user.id, 0),
         )
         for user in users
     ]

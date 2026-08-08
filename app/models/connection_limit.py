@@ -18,6 +18,9 @@ class ConnectionStateResponse(BaseModel):
     # Consecutive cycles this verdict has held. One cycle is noise; the UI
     # uses this to decide how much to make of a reading.
     streak: int = 0
+    # Checks in a row on more than one node, which is what makes that worth
+    # reporting rather than a single refresh of an app that tries every server.
+    node_streak: int = 0
     checked_at: datetime | None = None
     # Codes plus their values; the frontend renders them in the panel's language.
     # Rows written before reasons were structured hold plain sentences instead,

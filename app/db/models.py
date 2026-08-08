@@ -979,6 +979,10 @@ class UserConnectionState(Base, IdMixin):
     # How many consecutive cycles this verdict has held; a single cycle proves
     # nothing, so the UI only trusts a verdict once this has built up.
     streak: Mapped[int] = mapped_column(default=0)
+    # Consecutive checks this user has been on more than one node. A client
+    # that probes every server spikes for one cycle; being genuinely spread
+    # across nodes does not go away, so the run is what tells them apart.
+    node_streak: Mapped[int] = mapped_column(default=0, server_default="0")
     # The evidence behind the verdict, rendered as-is in the popover.
     reasons: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
     details: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)

@@ -3784,5 +3784,7 @@
   "connectionLimit.reason.apps": "{{count}} برنامه‌ی متفاوت: {{items}}",
   "connectionLimit.reason.hardware_ids": "{{count}} شناسه‌ی سخت‌افزاری: {{items}}",
   "connectionLimit.reason.cdn_without_hwid": "پشت CDN و بدون شناسه‌ی سخت‌افزاری — چند دستگاه یکی دیده می‌شوند",
-  "connectionLimit.reason.nodes": "روی {{count}} نود (ممکن است فقط برنامه‌ای باشد که همه‌ی سرورها را می‌آزماید)"
+  "connectionLimit.reason.nodes": "روی {{count}} نود، در {{cycles}} بررسی پیاپی (باز هم ممکن است برنامه‌ای باشد که همه‌ی سرورها را می‌آزماید)",
+  "settings.connectionLimit.persistence.title": "تعداد بررسی‌هایی که یک الگو باید دوام بیاورد",
+  "settings.connectionLimit.persistence.description": "بودن روی چند نود تنها وقتی گزارش می‌شود که این تعداد بررسی پیاپی دوام آورده باشد. برنامه‌ای که همه‌ی سرورها را می‌آزماید فقط در یک بررسی عدد بالا می‌دهد و بعد پایین می‌آید."
 }

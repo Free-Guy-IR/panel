@@ -23,6 +23,7 @@ const connectionLimitSchema = z
     check_interval_seconds: z.number().min(30).default(120),
     online_window_seconds: z.number().min(60).default(180),
     concurrency_window_seconds: z.number().min(10).default(90),
+    persistence_cycles: z.number().min(1).max(20).default(3),
     infrastructure_min_users: z.number().min(2).default(4),
     cdn_ranges: z.string().default(''),
     apply_to_group_ids: z.array(z.number()).default([]),
@@ -49,6 +50,7 @@ const defaultValues: ConnectionLimitFormInput = {
   check_interval_seconds: 120,
   online_window_seconds: 180,
   concurrency_window_seconds: 90,
+  persistence_cycles: 3,
   infrastructure_min_users: 4,
   cdn_ranges: '',
   apply_to_group_ids: [],
@@ -82,6 +84,7 @@ export default function ConnectionLimitSettings() {
       check_interval_seconds: toPositive(limit.check_interval_seconds, 120),
       online_window_seconds: toPositive(limit.online_window_seconds, 180),
       concurrency_window_seconds: toPositive(limit.concurrency_window_seconds, 90),
+      persistence_cycles: toPositive(limit.persistence_cycles, 3),
       infrastructure_min_users: toPositive(limit.infrastructure_min_users, 4),
       cdn_ranges: (limit.cdn_ranges ?? []).join('\n'),
       apply_to_group_ids: limit.apply_to_group_ids ?? [],
@@ -106,6 +109,7 @@ export default function ConnectionLimitSettings() {
           check_interval_seconds: toPositive(data.check_interval_seconds, 120),
           online_window_seconds: toPositive(data.online_window_seconds, 180),
           concurrency_window_seconds: toPositive(data.concurrency_window_seconds, 90),
+          persistence_cycles: toPositive(data.persistence_cycles, 3),
           infrastructure_min_users: toPositive(data.infrastructure_min_users, 4),
           cdn_ranges: (data.cdn_ranges || '')
             .split('\n')
@@ -297,6 +301,28 @@ export default function ConnectionLimitSettings() {
                     <FormDescription className="text-xs leading-relaxed sm:text-sm">
                       {t('settings.connectionLimit.concurrency.description', {
                         defaultValue: 'Addresses seen further apart than this are treated as the same person after an address change.',
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="persistence_cycles"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium">
+                      {t('settings.connectionLimit.persistence.title', { defaultValue: 'Checks a pattern must hold for' })}
+                    </FormLabel>
+                    <FormControl>
+                      <DecimalInput placeholder="3" value={field.value} emptyValue={3} normalizeDisplayValueOnBlur={Math.floor} onValueChange={v => field.onChange(v ?? 3)} />
+                    </FormControl>
+                    <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                      {t('settings.connectionLimit.persistence.description', {
+                        defaultValue:
+                          'Being on several nodes is only reported once it has held this many checks in a row. An app that tries every server reaches a high count for one check and drops back.',
                       })}
                     </FormDescription>
                     <FormMessage />

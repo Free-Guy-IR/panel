@@ -3742,5 +3742,7 @@
   "connectionLimit.reason.apps": "{{count}} different apps: {{items}}",
   "connectionLimit.reason.hardware_ids": "{{count}} hardware id(s) reported: {{items}}",
   "connectionLimit.reason.cdn_without_hwid": "behind a CDN with no hardware id reported — several devices would look like one",
-  "connectionLimit.reason.nodes": "on {{count}} nodes (may just be an app that probes every server)"
+  "connectionLimit.reason.nodes": "on {{count}} nodes across {{cycles}} checks in a row (could still be an app that tries every server)",
+  "settings.connectionLimit.persistence.title": "Checks a pattern must hold for",
+  "settings.connectionLimit.persistence.description": "Being on several nodes is only reported once it has held this many checks in a row. An app that tries every server reaches a high count for one check and drops back."
 }

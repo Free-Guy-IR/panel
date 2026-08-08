@@ -3731,5 +3731,7 @@
   "connectionLimit.reason.apps": "{{count}} разных приложени(я): {{items}}",
   "connectionLimit.reason.hardware_ids": "{{count}} аппаратн(ых) идентификатор(ов): {{items}}",
   "connectionLimit.reason.cdn_without_hwid": "за CDN без аппаратного идентификатора — несколько устройств выглядят как одно",
-  "connectionLimit.reason.nodes": "на {{count}} узлах (возможно, приложение опрашивает все серверы)"
+  "connectionLimit.reason.nodes": "на {{count}} узлах в течение {{cycles}} проверок подряд (всё ещё может быть приложение, которое пробует каждый сервер)",
+  "settings.connectionLimit.persistence.title": "Сколько проверок должна держаться картина",
+  "settings.connectionLimit.persistence.description": "Присутствие на нескольких узлах сообщается только после стольких проверок подряд. Приложение, пробующее каждый сервер, даёт высокое число в одной проверке и затем падает."
 }
