@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils'
 import { renderReason, type ConnectionReason } from '@/features/users/components/connection-reasons'
 import OverrideDialog from '@/features/users/components/connection-override-dialog'
+import useDirDetection from '@/hooks/use-dir-detection'
 import { useListConnectionStates } from '@/service/api'
 import dayjs from 'dayjs'
 import { RefreshCw, Users } from 'lucide-react'
@@ -39,6 +40,8 @@ const verdictLabel = (verdict: string | undefined) => {
 
 export default function ConnectionLimitReview() {
   const { t } = useTranslation()
+  const dir = useDirDetection()
+  const isRTL = dir === 'rtl'
   const [verdict, setVerdict] = useState<string>('over_limit')
   const [page, setPage] = useState(0)
   const [editing, setEditing] = useState<{ id: number; username?: string | null } | null>(null)
@@ -116,21 +119,23 @@ export default function ConnectionLimitReview() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table dir={isRTL ? 'rtl' : 'ltr'}>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">{t('username')}</TableHead>
-                    <TableHead className="text-xs">{t('settings.connectionLimit.review.devices', { defaultValue: 'Devices' })}</TableHead>
-                    <TableHead className="hidden text-xs md:table-cell">
+                    <TableHead className={cn('w-44 text-xs', isRTL && 'text-right')}>{t('username')}</TableHead>
+                    <TableHead className={cn('w-28 text-xs', isRTL && 'text-right')}>
+                      {t('settings.connectionLimit.review.devices', { defaultValue: 'Devices' })}
+                    </TableHead>
+                    <TableHead className={cn('hidden text-xs md:table-cell', isRTL && 'text-right')}>
                       {t('settings.connectionLimit.review.evidence', { defaultValue: 'What was seen' })}
                     </TableHead>
-                    <TableHead className="hidden text-xs sm:table-cell">
+                    <TableHead className={cn('hidden w-16 text-xs sm:table-cell', isRTL && 'text-right')}>
                       {t('settings.connectionLimit.review.streak', { defaultValue: 'Cycles' })}
                     </TableHead>
-                    <TableHead className="hidden text-xs lg:table-cell">
+                    <TableHead className={cn('hidden w-20 text-xs lg:table-cell', isRTL && 'text-right')}>
                       {t('settings.connectionLimit.review.checked', { defaultValue: 'Checked' })}
                     </TableHead>
-                    <TableHead className="text-xs" />
+                    <TableHead className="w-24 text-xs" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -138,8 +143,8 @@ export default function ConnectionLimitReview() {
                     <TableRow key={state.user_id}>
                       <TableCell className="align-top">
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-medium">{state.username}</span>
-                          <span className="text-muted-foreground/70 font-mono text-[10px]">#{state.user_id}</span>
+                          <bdi className="truncate text-sm font-medium">{state.username}</bdi>
+                          <bdi className="text-muted-foreground/70 font-mono text-[10px]">#{state.user_id}</bdi>
                         </div>
                       </TableCell>
 
@@ -152,19 +157,23 @@ export default function ConnectionLimitReview() {
                       </TableCell>
 
                       <TableCell className="hidden max-w-md align-top md:table-cell">
-                        <ul className="space-y-0.5">
+                        {/* Every line starts at the same edge as the rest of the panel. The
+                            addresses and hardware ids inside read left-to-right whatever the
+                            language, and so do the sentences on rows written before reasons
+                            were structured - bdi keeps each one from dragging its line around. */}
+                        <ul className="space-y-0.5" dir={dir}>
                           {((state.reasons ?? []) as ConnectionReason[]).slice(1).map((reason, index) => (
-                            <li key={index} className="text-muted-foreground text-xs leading-relaxed" dir="auto">
-                              {renderReason(reason, t)}
+                            <li key={index} className="text-muted-foreground text-xs leading-relaxed">
+                              <bdi>{renderReason(reason, t)}</bdi>
                             </li>
                           ))}
                         </ul>
                       </TableCell>
 
-                      <TableCell className="hidden align-top text-xs sm:table-cell">{state.streak}</TableCell>
+                      <TableCell className="hidden align-top text-xs tabular-nums sm:table-cell">{state.streak}</TableCell>
 
-                      <TableCell className="text-muted-foreground hidden align-top text-xs lg:table-cell" dir="ltr">
-                        {state.checked_at ? dayjs(state.checked_at).format('HH:mm') : '—'}
+                      <TableCell className="text-muted-foreground hidden align-top text-xs whitespace-nowrap tabular-nums lg:table-cell">
+                        <bdi>{state.checked_at ? dayjs(state.checked_at).format('HH:mm') : '—'}</bdi>
                       </TableCell>
 
                       <TableCell className="align-top">
