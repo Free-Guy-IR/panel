@@ -24,6 +24,7 @@ const connectionLimitSchema = z
     online_window_seconds: z.number().min(60).default(180),
     concurrency_window_seconds: z.number().min(10).default(90),
     persistence_cycles: z.number().min(1).max(20).default(3),
+    node_min_traffic_kb: z.number().min(0).default(1024),
     count_fetched_devices: z.boolean().default(false),
     infrastructure_min_users: z.number().min(2).default(4),
     cdn_ranges: z.string().default(''),
@@ -52,6 +53,7 @@ const defaultValues: ConnectionLimitFormInput = {
   online_window_seconds: 180,
   concurrency_window_seconds: 90,
   persistence_cycles: 3,
+  node_min_traffic_kb: 1024,
   count_fetched_devices: false,
   infrastructure_min_users: 4,
   cdn_ranges: '',
@@ -87,6 +89,7 @@ export default function ConnectionLimitSettings() {
       online_window_seconds: toPositive(limit.online_window_seconds, 180),
       concurrency_window_seconds: toPositive(limit.concurrency_window_seconds, 90),
       persistence_cycles: toPositive(limit.persistence_cycles, 3),
+      node_min_traffic_kb: limit.node_min_traffic_kb ?? 1024,
       count_fetched_devices: limit.count_fetched_devices ?? false,
       infrastructure_min_users: toPositive(limit.infrastructure_min_users, 4),
       cdn_ranges: (limit.cdn_ranges ?? []).join('\n'),
@@ -113,6 +116,7 @@ export default function ConnectionLimitSettings() {
           online_window_seconds: toPositive(data.online_window_seconds, 180),
           concurrency_window_seconds: toPositive(data.concurrency_window_seconds, 90),
           persistence_cycles: toPositive(data.persistence_cycles, 3),
+          node_min_traffic_kb: Math.max(0, Math.floor(data.node_min_traffic_kb ?? 1024)),
           count_fetched_devices: data.count_fetched_devices,
           infrastructure_min_users: toPositive(data.infrastructure_min_users, 4),
           cdn_ranges: (data.cdn_ranges || '')
@@ -327,6 +331,28 @@ export default function ConnectionLimitSettings() {
                       {t('settings.connectionLimit.persistence.description', {
                         defaultValue:
                           'Being on several nodes is only reported once it has held this many checks in a row. An app that tries every server reaches a high count for one check and drops back.',
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="node_min_traffic_kb"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium">
+                      {t('settings.connectionLimit.nodeTraffic.title', { defaultValue: 'Traffic before a node counts (KB)' })}
+                    </FormLabel>
+                    <FormControl>
+                      <DecimalInput placeholder="1024" value={field.value} emptyValue={1024} normalizeDisplayValueOnBlur={Math.floor} onValueChange={v => field.onChange(v ?? 1024)} />
+                    </FormControl>
+                    <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                      {t('settings.connectionLimit.nodeTraffic.description', {
+                        defaultValue:
+                          'A client that tries every server leaves a handshake of a few kilobytes on each; one that is actually being used leaves megabytes. Nodes below this are still asked for the user\'s addresses — they just do not count as a node the user is on. Zero counts every node.',
                       })}
                     </FormDescription>
                     <FormMessage />

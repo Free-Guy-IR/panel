@@ -3742,10 +3742,12 @@
   "connectionLimit.reason.apps": "{{count}} different apps: {{items}}",
   "connectionLimit.reason.hardware_ids": "{{count}} hardware id(s) reported: {{items}}",
   "connectionLimit.reason.cdn_without_hwid": "behind a CDN with no hardware id reported — several devices would look like one",
-  "connectionLimit.reason.nodes": "on {{count}} nodes across {{cycles}} checks in a row (could still be an app that tries every server)",
+  "connectionLimit.reason.nodes": "carried traffic on {{count}} nodes, across {{cycles}} checks in a row",
   "settings.connectionLimit.persistence.title": "Checks a pattern must hold for",
   "settings.connectionLimit.persistence.description": "Being on several nodes is only reported once it has held this many checks in a row. An app that tries every server reaches a high count for one check and drops back.",
   "connectionLimit.reason.fetched_not_counted": "{{count}} device(s) fetched the subscription but were not counted — holding the configuration is not being connected",
   "settings.connectionLimit.fetched.title": "Count devices that only fetched the subscription",
-  "settings.connectionLimit.fetched.description": "Fetching the subscription link means a device holds the configuration, not that it is connected — an app refreshes in the background with the tunnel off. Behind a CDN these are counted regardless, because every address collapses into one there."
+  "settings.connectionLimit.fetched.description": "Fetching the subscription link means a device holds the configuration, not that it is connected — an app refreshes in the background with the tunnel off. Behind a CDN these are counted regardless, because every address collapses into one there.",
+  "settings.connectionLimit.nodeTraffic.title": "Traffic before a node counts (KB)",
+  "settings.connectionLimit.nodeTraffic.description": "A client that tries every server leaves a handshake of a few kilobytes on each; one that is actually being used leaves megabytes. Nodes below this are still asked for the user's addresses — they just do not count as a node the user is on. Zero counts every node."
 }

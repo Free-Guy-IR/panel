@@ -35,7 +35,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, distinct, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -176,8 +176,10 @@ async def prune_out_of_scope(db: AsyncSession, settings: ConnectionLimit) -> int
     return result.rowcount or 0
 
 
-async def nodes_per_user(db: AsyncSession, settings: ConnectionLimit, user_ids: list[int]) -> dict[int, set[int]]:
-    """Which nodes each user has been carried on lately.
+async def nodes_per_user(
+    db: AsyncSession, settings: ConnectionLimit, user_ids: list[int]
+) -> dict[int, dict[int, int]]:
+    """Which nodes each user has been carried on lately, and how much each carried.
 
     Without this every user would have to be looked up on every node, which on
     this panel is ~19 calls each instead of the ~3 they actually need.
@@ -188,19 +190,35 @@ async def nodes_per_user(db: AsyncSession, settings: ConnectionLimit, user_ids: 
     since = datetime.now(UTC) - timedelta(minutes=settings.node_window_minutes)
     rows = (
         await db.execute(
-            select(distinct(NodeUserUsage.user_id), NodeUserUsage.node_id).where(
+            select(
+                NodeUserUsage.user_id,
+                NodeUserUsage.node_id,
+                func.sum(NodeUserUsage.used_traffic),
+            )
+            .where(
                 NodeUserUsage.user_id.in_(user_ids),
                 NodeUserUsage.created_at > since,
                 NodeUserUsage.node_id.is_not(None),
                 NodeUserUsage.used_traffic > 0,
             )
+            .group_by(NodeUserUsage.user_id, NodeUserUsage.node_id)
         )
     ).all()
 
-    out: dict[int, set[int]] = {}
-    for user_id, node_id in rows:
-        out.setdefault(user_id, set()).add(node_id)
+    out: dict[int, dict[int, int]] = {}
+    for user_id, node_id, traffic in rows:
+        out.setdefault(user_id, {})[node_id] = int(traffic or 0)
     return out
+
+
+def nodes_actually_used(traffic_by_node: dict[int, int], settings: ConnectionLimit) -> set[int]:
+    """The nodes that carried real traffic, not just a handshake.
+
+    Trying every server leaves a few kilobytes on each; using one leaves
+    megabytes. A threshold of zero counts every node the user touched.
+    """
+    floor = settings.node_min_traffic_kb * 1024
+    return {node_id for node_id, traffic in traffic_by_node.items() if traffic >= floor}
 
 
 async def per_user_limits(db: AsyncSession, user_ids: list[int]) -> dict[int, int]:
@@ -252,7 +270,7 @@ async def exempt_user_ids(db: AsyncSession, user_ids: list[int]) -> set[int]:
 
 async def collect_live_ips(
     users: list[User],
-    by_node: dict[int, set[int]],
+    by_node: dict[int, dict[int, int]],
     concurrency: int = 12,
     deadline_seconds: float = 45.0,
 ) -> dict[int, dict[str, int]]:
@@ -260,6 +278,10 @@ async def collect_live_ips(
 
     Users are polled concurrently: done one at a time this is thousands of
     sequential round trips and cannot finish inside a cycle.
+
+    Every node the user touched is asked, however little it carried. A node
+    that only saw a handshake is not reported as one they are on, but it can
+    still be holding a live address, and missing that would undercount them.
 
     A node that does not answer is skipped rather than counted as zero, so an
     unreachable node cannot make a user look compliant or over the limit. If
@@ -284,7 +306,7 @@ async def collect_live_ips(
                 timed_out = True
                 return user.id, {}
             seen: dict[str, int] = {}
-            for node_id in by_node.get(user.id, set()):
+            for node_id in by_node.get(user.id) or {}:
                 node = healthy.get(node_id)
                 if node is None:
                     continue
@@ -383,6 +405,7 @@ def assess(
     user: User,
     live_ips: dict[str, int],
     node_ids: set[int],
+    node_traffic: dict[int, int],
     infra: set[str],
     cdn_nets: list,
     context: dict,
@@ -457,6 +480,7 @@ def assess(
         "apps": sorted(apps),
         "devices": sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids),
         "nodes": sorted(node_ids),
+        "nodes_touched": sorted(node_traffic),
     }
 
     concurrent = len(concurrent_groups) > 1
@@ -569,7 +593,8 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
         assess(
             user,
             live.get(user.id) or {},
-            by_node.get(user.id, set()),
+            nodes_actually_used(by_node.get(user.id) or {}, settings),
+            by_node.get(user.id) or {},
             infra,
             cdn_nets,
             context.get(user.id) or {},

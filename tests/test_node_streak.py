@@ -24,10 +24,14 @@ def _settings(**overrides) -> ConnectionLimit:
 
 
 def _assess(node_ids, prior_streak, settings=None):
+    # Every node in these cases carried enough to count; the threshold has its
+    # own tests, and mixing the two would test both badly.
+    carried = {node_id: 50 * 1024 * 1024 for node_id in node_ids}
     return assess(
         USER,
         LIVE,
         set(node_ids),
+        carried,
         set(),
         [],
         {"apps": set(), "hwids": set()},

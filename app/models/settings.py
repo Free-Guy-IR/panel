@@ -394,6 +394,10 @@ class ConnectionLimit(BaseModel):
     online_window_seconds: int = Field(default=180, ge=60, le=1800)
     # Which nodes to ask per user, based on where they carried traffic lately.
     node_window_minutes: int = Field(default=30, ge=5, le=1440)
+    # Traffic a node must have carried before the user counts as being on it.
+    # A client trying every server leaves a handshake on each - kilobytes -
+    # while using one leaves megabytes. Zero counts every node it touched.
+    node_min_traffic_kb: int = Field(default=1024, ge=0, le=1_048_576)
 
     # Devices allowed on one subscription. Above this counts as over the limit.
     device_limit: int = Field(default=2, ge=1, le=50)
