@@ -3783,5 +3783,6 @@
   "settings.hwid.scope.noGroups": "No groups yet",
   "settings.hwid.scope.label": "Groups",
   "connectionLimit.reason.hwid_by_model": "counted as {{count}} device(s) by phone model: {{items}}",
-  "connectionLimit.reason.node_traffic": "traffic on {{count}} node(s): {{items}}"
+  "connectionLimit.reason.node_traffic": "traffic on {{count}} node(s): {{items}}",
+  "connectionLimit.reason.nodes_at_once_pending": "seen on {{count}} nodes at once ({{cycles}} check(s) so far) — not counted yet; a brief overlap is usually a node switch: {{items}}"
 }

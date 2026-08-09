@@ -3817,5 +3817,6 @@
   "settings.hwid.scope.noGroups": "还没有用户组",
   "settings.hwid.scope.label": "用户组",
   "connectionLimit.reason.hwid_by_model": "按手机型号计为 {{count}} 台设备：{{items}}",
-  "connectionLimit.reason.node_traffic": "{{count}} 个节点上的流量：{{items}}"
+  "connectionLimit.reason.node_traffic": "{{count}} 个节点上的流量：{{items}}",
+  "connectionLimit.reason.nodes_at_once_pending": "同一时刻出现在 {{count}} 个节点上（目前 {{cycles}} 次检查）——尚未计入；短暂重叠通常是切换节点：{{items}}"
 }

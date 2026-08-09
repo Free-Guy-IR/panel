@@ -3772,5 +3772,6 @@
   "settings.hwid.scope.noGroups": "Групп пока нет",
   "settings.hwid.scope.label": "Группы",
   "connectionLimit.reason.hwid_by_model": "учтено как {{count}} устройств(о) по модели телефона: {{items}}",
-  "connectionLimit.reason.node_traffic": "трафик на {{count}} узлах: {{items}}"
+  "connectionLimit.reason.node_traffic": "трафик на {{count}} узлах: {{items}}",
+  "connectionLimit.reason.nodes_at_once_pending": "замечен на {{count}} узлах одновременно ({{cycles}} проверок пока) — ещё не учтено; краткое совпадение обычно означает смену узла: {{items}}"
 }

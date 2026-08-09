@@ -144,6 +144,7 @@ async def record_connection_states():
             state.limit_applied = obs.limit_applied
             state.streak = streak
             state.node_streak = obs.node_streak
+            state.at_once_streak = obs.at_once_streak
             obs.streak = streak
             state.reasons = obs.reasons
             state.details = obs.details

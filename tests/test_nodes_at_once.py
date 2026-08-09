@@ -19,12 +19,16 @@ USER = SimpleNamespace(id=1, username="someone")
 MB = 1024 * 1024
 
 
-def _assess(seen_by_node, used, bucket_traffic=None, addresses=("5.115.21.4",), **overrides):
+def _assess(seen_by_node, used, bucket_traffic=None, addresses=("5.115.21.4",), sustained=True, **overrides):
+    """sustained=True stands in for the overlap having already held several
+    checks - a real second device. sustained=False is the first check of an
+    overlap, which is where a node switch shows up."""
     activity = NodeActivity(
         touched=set(used),
         used=set(used),
         concurrent=len(bucket_traffic or {}),
         concurrent_nodes=bucket_traffic or {},
+        traffic=dict(bucket_traffic or {}),
     )
     return assess(
         USER,
@@ -38,8 +42,10 @@ def _assess(seen_by_node, used, bucket_traffic=None, addresses=("5.115.21.4",), 
         {"apps": set(), "hwids": set()},
         {},
         ConnectionLimit(cdn_ranges=[], **overrides),
-        None,
-        0,
+        device_limit=None,
+        prior_node_streak=0,
+        # Enough prior overlap that this check crosses the persistence bar.
+        prior_at_once_streak=5 if sustained else 0,
     )
 
 
@@ -58,14 +64,31 @@ def test_someone_working_down_the_server_list_is_one_device():
     assert _reason(obs, "nodes_at_once") is None
 
 
-def test_two_nodes_holding_the_user_at_the_same_moment_is_two_devices():
+def test_two_nodes_held_across_several_checks_is_two_devices():
     obs = _assess(
         seen_by_node={21: NOW - 5, 23: NOW},
         used={21, 23},
         bucket_traffic={21: 212 * MB, 23: 165 * MB},
+        sustained=True,
     )
     assert obs.devices == 2
     assert _reason(obs, "nodes_at_once")["count"] == 2
+
+
+def test_a_first_overlap_is_a_node_switch_not_a_second_device():
+    """The reported case: one person downloads, the speed is poor, they move to
+    another node. The old node lingers, so two are seen at once for a moment -
+    but it does not hold, so it is not counted."""
+    obs = _assess(
+        seen_by_node={16: NOW - 3, 40: NOW},
+        used={16, 40},
+        bucket_traffic={16: 332 * MB, 40: 3 * MB},
+        sustained=False,
+    )
+    assert obs.devices == 1
+    assert _reason(obs, "nodes_at_once") is None
+    pending = _reason(obs, "nodes_at_once_pending")
+    assert pending is not None and pending["count"] == 2
 
 
 def test_a_node_that_was_only_tried_does_not_count_even_while_still_reported():

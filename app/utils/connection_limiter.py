@@ -138,6 +138,11 @@ class Observation:
     node_count: int = 0
     # How many checks in a row the user has been on more than one node.
     node_streak: int = 0
+    # Nodes holding the user at one moment this check, and how many checks in a
+    # row that has held. One phone cannot sustain real traffic on two nodes -
+    # a brief overlap is a node switch - so only a run of them is a device.
+    at_once: int = 0
+    at_once_streak: int = 0
     app_count: int = 0
     verdict: str = WITHIN_LIMIT
     # How many cycles running this verdict has held. Filled in by the job,
@@ -323,22 +328,25 @@ async def per_user_limits(db: AsyncSession, user_ids: list[int]) -> dict[int, in
     return {user_id: limit for user_id, limit in rows}
 
 
-async def prior_node_streaks(db: AsyncSession, user_ids: list[int]) -> dict[int, int]:
-    """How long each user has already been on more than one node.
+async def prior_node_streaks(db: AsyncSession, user_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """How long each user has already been on more than one node, and on two at
+    once. Both runs have to survive across cycles to mean anything, and the
+    state row is where they live between them.
 
-    The run has to survive across cycles to mean anything, and the state
-    row is where it lives between them.
+    Returns per user: (node_streak, at_once_streak).
     """
     if not user_ids:
         return {}
     rows = (
         await db.execute(
-            select(UserConnectionState.user_id, UserConnectionState.node_streak).where(
-                UserConnectionState.user_id.in_(user_ids)
-            )
+            select(
+                UserConnectionState.user_id,
+                UserConnectionState.node_streak,
+                UserConnectionState.at_once_streak,
+            ).where(UserConnectionState.user_id.in_(user_ids))
         )
     ).all()
-    return {user_id: streak or 0 for user_id, streak in rows}
+    return {user_id: (node_streak or 0, at_once_streak or 0) for user_id, node_streak, at_once_streak in rows}
 
 
 async def exempt_user_ids(db: AsyncSession, user_ids: list[int]) -> set[int]:
@@ -540,6 +548,7 @@ def assess(
     settings: ConnectionLimit,
     device_limit: int | None = None,
     prior_node_streak: int = 0,
+    prior_at_once_streak: int = 0,
     node_labels: dict[int, str] | None = None,
 ) -> Observation:
     """Turn one user's raw sightings into a verdict with its reasons."""
@@ -627,11 +636,20 @@ def assess(
     }
     at_once = len(nodes_now) if len(nodes_now) > 1 else 0
     at_once_traffic = {node_id: activity.traffic.get(node_id, activity.concurrent_nodes.get(node_id, 0)) for node_id in nodes_now}
+    obs.at_once = at_once
+
+    # A brief two-node overlap is a node switch, not two devices: one phone
+    # cannot sustain real traffic on two nodes at once, and a node keeps
+    # reporting a user for a short while after they have left it. So the
+    # overlap only counts as a device once it has held for several checks in a
+    # row - a real second device stays, a switch is gone by the next check.
+    obs.at_once_streak = prior_at_once_streak + 1 if at_once > 1 else 0
+    at_once_counted = at_once if obs.at_once_streak >= settings.persistence_cycles else 0
 
     # Each measure is a floor and blind to what the others see: addresses, the
-    # phones behind the hardware ids, and nodes held at once. The largest is
-    # the estimate.
-    obs.devices = max(address_sources, at_once, hwid_devices)
+    # phones behind the hardware ids, and nodes held at once (once sustained).
+    # The largest is the estimate.
+    obs.devices = max(address_sources, at_once_counted, hwid_devices)
 
     obs.details = {
         "real_groups": sorted(concurrent_groups),
@@ -690,6 +708,8 @@ def assess(
         pooled=pooled_addresses,
         pools_used=pools_in_play,
         at_once=at_once,
+        at_once_counted=at_once_counted,
+        at_once_streak=obs.at_once_streak,
         at_once_nodes=at_once_traffic,
         node_labels=node_labels,
         node_traffic=activity.traffic,
@@ -708,7 +728,8 @@ def _mb(byte_count: int) -> str:
 
 def _reasons(
     obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles,
-    known_models, pooled, pools_used, at_once, at_once_nodes, node_labels, node_traffic, used_nodes
+    known_models, pooled, pools_used, at_once, at_once_counted, at_once_streak, at_once_nodes,
+    node_labels, node_traffic, used_nodes
 ) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
@@ -752,14 +773,20 @@ def _reasons(
         })
     if cdn_seen and not hwids:
         out.append({"code": "cdn_without_hwid"})
-    # Two nodes holding the user at the same moment - what the count rests on
-    # here - with the node and how much each carried.
+    # Two nodes holding the user at the same moment. It only counts as devices
+    # once it has held for several checks; a single overlap is a node switch,
+    # so say which of the two it is rather than counting it straight away.
     if at_once > 1:
-        out.append({
-            "code": "nodes_at_once",
-            "count": at_once,
-            "items": [f"{node_labels.get(nid, str(nid))}: {_mb(t)}" for nid, t in sorted(at_once_nodes.items())][:4],
-        })
+        node_items = [f"{node_labels.get(nid, str(nid))}: {_mb(t)}" for nid, t in sorted(at_once_nodes.items())][:4]
+        if at_once_counted:
+            out.append({"code": "nodes_at_once", "count": at_once, "items": node_items})
+        else:
+            out.append({
+                "code": "nodes_at_once_pending",
+                "count": at_once,
+                "cycles": at_once_streak,
+                "items": node_items,
+            })
     # Where the traffic actually went, always shown when there is any, so the
     # node and its amount are never missing from the evidence.
     if used_nodes:
@@ -820,7 +847,8 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
             settings,
             node_labels=node_labels,
             device_limit=overrides.get(user.id),
-            prior_node_streak=node_streaks.get(user.id, 0),
+            prior_node_streak=node_streaks.get(user.id, (0, 0))[0],
+            prior_at_once_streak=node_streaks.get(user.id, (0, 0))[1],
         )
         for user in users
     ]

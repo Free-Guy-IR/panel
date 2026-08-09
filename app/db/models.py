@@ -989,6 +989,9 @@ class UserConnectionState(Base, IdMixin):
     # that probes every server spikes for one cycle; being genuinely spread
     # across nodes does not go away, so the run is what tells them apart.
     node_streak: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Consecutive checks the user has been on two nodes at once. A single
+    # overlap is a node switch; only a run of them is a second device.
+    at_once_streak: Mapped[int] = mapped_column(default=0, server_default="0")
     # The evidence behind the verdict, rendered as-is in the popover.
     reasons: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
     details: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)

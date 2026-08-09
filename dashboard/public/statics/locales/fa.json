@@ -3825,5 +3825,6 @@
   "settings.hwid.scope.noGroups": "هنوز گروهی نیست",
   "settings.hwid.scope.label": "گروه‌ها",
   "connectionLimit.reason.hwid_by_model": "بر پایه‌ی مدل گوشی، {{count}} دستگاه شمرده شد: {{items}}",
-  "connectionLimit.reason.node_traffic": "ترافیک روی {{count}} نود: {{items}}"
+  "connectionLimit.reason.node_traffic": "ترافیک روی {{count}} نود: {{items}}",
+  "connectionLimit.reason.nodes_at_once_pending": "روی {{count}} نود در یک لحظه دیده شد ({{cycles}} بررسی تا الان) — هنوز شمرده نشده؛ هم‌پوشانی کوتاه معمولاً یعنی تعویض نود: {{items}}"
 }
