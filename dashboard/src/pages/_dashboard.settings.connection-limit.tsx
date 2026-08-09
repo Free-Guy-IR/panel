@@ -24,6 +24,7 @@ const connectionLimitSchema = z
     online_window_seconds: z.number().min(60).default(180),
     concurrency_window_seconds: z.number().min(10).default(90),
     persistence_cycles: z.number().min(1).max(20).default(3),
+    count_fetched_devices: z.boolean().default(false),
     infrastructure_min_users: z.number().min(2).default(4),
     cdn_ranges: z.string().default(''),
     apply_to_group_ids: z.array(z.number()).default([]),
@@ -51,6 +52,7 @@ const defaultValues: ConnectionLimitFormInput = {
   online_window_seconds: 180,
   concurrency_window_seconds: 90,
   persistence_cycles: 3,
+  count_fetched_devices: false,
   infrastructure_min_users: 4,
   cdn_ranges: '',
   apply_to_group_ids: [],
@@ -85,6 +87,7 @@ export default function ConnectionLimitSettings() {
       online_window_seconds: toPositive(limit.online_window_seconds, 180),
       concurrency_window_seconds: toPositive(limit.concurrency_window_seconds, 90),
       persistence_cycles: toPositive(limit.persistence_cycles, 3),
+      count_fetched_devices: limit.count_fetched_devices ?? false,
       infrastructure_min_users: toPositive(limit.infrastructure_min_users, 4),
       cdn_ranges: (limit.cdn_ranges ?? []).join('\n'),
       apply_to_group_ids: limit.apply_to_group_ids ?? [],
@@ -110,6 +113,7 @@ export default function ConnectionLimitSettings() {
           online_window_seconds: toPositive(data.online_window_seconds, 180),
           concurrency_window_seconds: toPositive(data.concurrency_window_seconds, 90),
           persistence_cycles: toPositive(data.persistence_cycles, 3),
+          count_fetched_devices: data.count_fetched_devices,
           infrastructure_min_users: toPositive(data.infrastructure_min_users, 4),
           cdn_ranges: (data.cdn_ranges || '')
             .split('\n')
@@ -503,6 +507,29 @@ export default function ConnectionLimitSettings() {
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="count_fetched_devices"
+              render={({ field }) => (
+                <FormItem className="bg-card hover:bg-accent/50 flex flex-row items-center justify-between gap-4 space-y-0 rounded-md border p-3 transition-colors sm:p-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <FormLabel className="cursor-pointer text-sm font-medium">
+                      {t('settings.connectionLimit.fetched.title', { defaultValue: 'Count devices that only fetched the subscription' })}
+                    </FormLabel>
+                    <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                      {t('settings.connectionLimit.fetched.description', {
+                        defaultValue:
+                          'Fetching the subscription link means a device holds the configuration, not that it is connected — an app refreshes in the background with the tunnel off. Behind a CDN these are counted regardless, because every address collapses into one there.',
+                      })}
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} className="shrink-0" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

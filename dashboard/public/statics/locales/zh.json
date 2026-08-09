@@ -3778,5 +3778,8 @@
   "connectionLimit.reason.cdn_without_hwid": "位于 CDN 之后且无硬件标识 — 多台设备会显示为一台",
   "connectionLimit.reason.nodes": "连续 {{cycles}} 次检查中都在 {{count}} 个节点上（仍有可能是逐个探测服务器的应用）",
   "settings.connectionLimit.persistence.title": "一种情形需要持续的检查次数",
-  "settings.connectionLimit.persistence.description": "只有连续这么多次检查都出现在多个节点上，才会报告此项。逐个探测服务器的应用只在一次检查中出现高值，随后回落。"
+  "settings.connectionLimit.persistence.description": "只有连续这么多次检查都出现在多个节点上，才会报告此项。逐个探测服务器的应用只在一次检查中出现高值，随后回落。",
+  "connectionLimit.reason.fetched_not_counted": "{{count}} 台设备拉取过订阅但未计入——持有配置并不等于已连接",
+  "settings.connectionLimit.fetched.title": "将仅拉取过订阅的设备计入",
+  "settings.connectionLimit.fetched.description": "拉取订阅链接表示该设备持有配置，而非已连接——应用会在隧道关闭时于后台刷新。在 CDN 之后无论如何都会计入，因为那里所有地址都会归并为一个。"
 }

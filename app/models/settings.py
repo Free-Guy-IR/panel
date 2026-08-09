@@ -401,6 +401,10 @@ class ConnectionLimit(BaseModel):
     warn_at_devices: int = Field(default=2, ge=1, le=50)
     # A verdict only counts once the pattern has held this many cycles.
     persistence_cycles: int = Field(default=3, ge=1, le=20)
+    # Treat a device that only fetched the subscription as a connected one.
+    # Off by default: holding the configuration is not the same as using it,
+    # and behind a CDN the fetch count is used regardless.
+    count_fetched_devices: bool = False
 
     # Two addresses seen further apart than this were probably not concurrent -
     # more likely the same person after their address changed.

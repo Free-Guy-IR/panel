@@ -372,8 +372,9 @@ async def fetch_context(
     ).all()
     devices: dict[int, dict[str, str]] = defaultdict(dict)
     for user_id, hwid, model, os_name in hwid_rows:
-        label = " ".join(part for part in (model, os_name) if part) or hwid[:12]
-        devices[user_id][hwid] = label
+        label = " ".join(part for part in (model, os_name) if part)
+        if label:
+            devices[user_id][hwid] = label
 
     return context, devices
 
@@ -436,10 +437,17 @@ def assess(
     obs.app_count = len(apps)
     obs.hwid_count = len(hwids)
 
-    # Each signal is a floor and each is blind to what the other sees: hardware
-    # ids find devices sharing one address, addresses find devices whose app
-    # reports no hardware id. The larger is the better estimate.
-    obs.devices = max(address_sources, len(hwids))
+    # Fetching the subscription means a device holds the configuration, not
+    # that it is connected, so on its own it is not evidence of a device being
+    # used. Behind a CDN it is the only thing that can tell two devices apart -
+    # every address collapses to one there - which is the case it was for.
+    counted_fetches = address_sources > 0 and (bool(cdn_seen) or settings.count_fetched_devices)
+    if address_sources == 0:
+        obs.devices = 0
+    elif counted_fetches:
+        obs.devices = max(address_sources, len(hwids))
+    else:
+        obs.devices = address_sources
 
     obs.details = {
         "real_groups": sorted(concurrent_groups),
@@ -447,7 +455,7 @@ def assess(
         "cdn_addresses": sorted(cdn_seen),
         "infrastructure_addresses": sorted(infra_seen),
         "apps": sorted(apps),
-        "devices": sorted({devices.get(h, h[:12]) for h in hwids}),
+        "devices": sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids),
         "nodes": sorted(node_ids),
     }
 
@@ -481,12 +489,14 @@ def assess(
     obs.reasons = _reasons(
         obs, concurrent_groups, cdn_seen, infra_seen, concurrent, distinct_networks, apps, devices, hwids,
         settings.persistence_cycles,
+        counted_fetches=counted_fetches,
     )
     return obs
 
 
 def _reasons(
-    obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles
+    obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles,
+    counted_fetches
 ) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
@@ -515,8 +525,12 @@ def _reasons(
     if len(apps) > 1:
         out.append({"code": "apps", "count": len(apps), "items": sorted(apps)[:3]})
     if hwids:
-        labels = sorted({devices.get(h, h[:12]) for h in hwids})
+        # Keyed by the id, so two devices reporting the same model stay two,
+        # and the id itself is shown - it is what identifies the device.
+        labels = sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids)
         out.append({"code": "hardware_ids", "count": len(hwids), "items": labels[:3]})
+    if hwids and not counted_fetches:
+        out.append({"code": "fetched_not_counted", "count": len(hwids)})
     if cdn_seen and not hwids:
         out.append({"code": "cdn_without_hwid"})
     # Held for long enough to be worth reading. Below that it is as likely
