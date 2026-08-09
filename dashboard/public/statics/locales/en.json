@@ -3784,5 +3784,7 @@
   "settings.hwid.scope.label": "Groups",
   "connectionLimit.reason.hwid_by_model": "counted as {{count}} device(s) by phone model: {{items}}",
   "connectionLimit.reason.node_traffic": "traffic on {{count}} node(s): {{items}}",
-  "connectionLimit.reason.nodes_at_once_pending": "seen on {{count}} nodes at once ({{cycles}} check(s) so far) — not counted yet; a brief overlap is usually a node switch: {{items}}"
+  "connectionLimit.reason.nodes_at_once_pending": "seen on {{count}} nodes at once ({{cycles}} check(s) so far) — not counted yet; a brief overlap is usually a node switch: {{items}}",
+  "settings.connectionLimit.deviceWindow.title": "Remember a device for (minutes)",
+  "settings.connectionLimit.deviceWindow.description": "How far back to look for the apps and devices that fetched the subscription. Longer than the node window, because an app keeps a configuration and runs a while without fetching again — a short window loses a device that is still in use."
 }

@@ -834,7 +834,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
     if infra:
         logger.debug("treating %d address(es) as shared infrastructure", len(infra))
 
-    context, devices = await fetch_context(db, user_ids, settings.node_window_minutes)
+    context, devices = await fetch_context(db, user_ids, settings.device_window_minutes)
     overrides = await per_user_limits(db, user_ids)
     node_streaks = await prior_node_streaks(db, user_ids)
     node_labels = await node_label_map(db)

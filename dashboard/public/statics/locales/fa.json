@@ -3826,5 +3826,7 @@
   "settings.hwid.scope.label": "گروه‌ها",
   "connectionLimit.reason.hwid_by_model": "بر پایه‌ی مدل گوشی، {{count}} دستگاه شمرده شد: {{items}}",
   "connectionLimit.reason.node_traffic": "ترافیک روی {{count}} نود: {{items}}",
-  "connectionLimit.reason.nodes_at_once_pending": "روی {{count}} نود در یک لحظه دیده شد ({{cycles}} بررسی تا الان) — هنوز شمرده نشده؛ هم‌پوشانی کوتاه معمولاً یعنی تعویض نود: {{items}}"
+  "connectionLimit.reason.nodes_at_once_pending": "روی {{count}} نود در یک لحظه دیده شد ({{cycles}} بررسی تا الان) — هنوز شمرده نشده؛ هم‌پوشانی کوتاه معمولاً یعنی تعویض نود: {{items}}",
+  "settings.connectionLimit.deviceWindow.title": "مدت به‌خاطر سپردن یک دستگاه (دقیقه)",
+  "settings.connectionLimit.deviceWindow.description": "چقدر به عقب برای اپ‌ها و دستگاه‌هایی که لینک اشتراک را گرفته‌اند نگاه شود. بلندتر از پنجره‌ی نود، چون اپ کانفیگ را نگه می‌دارد و مدتی بدون گرفتن دوباره کار می‌کند — پنجره‌ی کوتاه دستگاهی را که هنوز در حال استفاده است از دست می‌دهد."
 }

@@ -25,6 +25,7 @@ const connectionLimitSchema = z
     concurrency_window_seconds: z.number().min(10).default(90),
     persistence_cycles: z.number().min(1).max(20).default(3),
     node_min_traffic_kb: z.number().min(0).default(1024),
+    device_window_minutes: z.number().min(5).max(1440).default(180),
     count_fetched_devices: z.boolean().default(false),
     enforcement_enabled: z.boolean().default(false),
     infrastructure_min_users: z.number().min(2).default(4),
@@ -55,6 +56,7 @@ const defaultValues: ConnectionLimitFormInput = {
   concurrency_window_seconds: 90,
   persistence_cycles: 3,
   node_min_traffic_kb: 1024,
+  device_window_minutes: 180,
   count_fetched_devices: false,
   enforcement_enabled: false,
   infrastructure_min_users: 4,
@@ -92,6 +94,7 @@ export default function ConnectionLimitSettings() {
       concurrency_window_seconds: toPositive(limit.concurrency_window_seconds, 90),
       persistence_cycles: toPositive(limit.persistence_cycles, 3),
       node_min_traffic_kb: limit.node_min_traffic_kb ?? 1024,
+      device_window_minutes: toPositive(limit.device_window_minutes, 180),
       count_fetched_devices: limit.count_fetched_devices ?? false,
       enforcement_enabled: limit.enforcement_enabled ?? false,
       infrastructure_min_users: toPositive(limit.infrastructure_min_users, 4),
@@ -120,6 +123,7 @@ export default function ConnectionLimitSettings() {
           concurrency_window_seconds: toPositive(data.concurrency_window_seconds, 90),
           persistence_cycles: toPositive(data.persistence_cycles, 3),
           node_min_traffic_kb: Math.max(0, Math.floor(data.node_min_traffic_kb ?? 1024)),
+          device_window_minutes: toPositive(data.device_window_minutes, 180),
           count_fetched_devices: data.count_fetched_devices,
           enforcement_enabled: data.enforcement_enabled,
           infrastructure_min_users: toPositive(data.infrastructure_min_users, 4),
@@ -335,6 +339,28 @@ export default function ConnectionLimitSettings() {
                       {t('settings.connectionLimit.persistence.description', {
                         defaultValue:
                           'Being on several nodes is only reported once it has held this many checks in a row. An app that tries every server reaches a high count for one check and drops back.',
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="device_window_minutes"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium">
+                      {t('settings.connectionLimit.deviceWindow.title', { defaultValue: 'Remember a device for (minutes)' })}
+                    </FormLabel>
+                    <FormControl>
+                      <DecimalInput placeholder="180" value={field.value} emptyValue={180} normalizeDisplayValueOnBlur={Math.floor} onValueChange={v => field.onChange(v ?? 180)} />
+                    </FormControl>
+                    <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                      {t('settings.connectionLimit.deviceWindow.description', {
+                        defaultValue:
+                          'How far back to look for the apps and devices that fetched the subscription. Longer than the node window, because an app keeps a configuration and runs a while without fetching again — a short window loses a device that is still in use.',
                       })}
                     </FormDescription>
                     <FormMessage />

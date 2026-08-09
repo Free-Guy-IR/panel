@@ -3773,5 +3773,7 @@
   "settings.hwid.scope.label": "Группы",
   "connectionLimit.reason.hwid_by_model": "учтено как {{count}} устройств(о) по модели телефона: {{items}}",
   "connectionLimit.reason.node_traffic": "трафик на {{count}} узлах: {{items}}",
-  "connectionLimit.reason.nodes_at_once_pending": "замечен на {{count}} узлах одновременно ({{cycles}} проверок пока) — ещё не учтено; краткое совпадение обычно означает смену узла: {{items}}"
+  "connectionLimit.reason.nodes_at_once_pending": "замечен на {{count}} узлах одновременно ({{cycles}} проверок пока) — ещё не учтено; краткое совпадение обычно означает смену узла: {{items}}",
+  "settings.connectionLimit.deviceWindow.title": "Помнить устройство (минут)",
+  "settings.connectionLimit.deviceWindow.description": "Насколько далеко назад искать приложения и устройства, запрашивавшие подписку. Дольше окна узла, поскольку приложение хранит конфигурацию и какое-то время работает без повторного запроса — короткое окно теряет устройство, которое всё ещё используется."
 }

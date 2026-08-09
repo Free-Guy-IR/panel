@@ -401,6 +401,11 @@ class ConnectionLimit(BaseModel):
 
     # Which nodes to ask per user, based on where they carried traffic lately.
     node_window_minutes: int = Field(default=30, ge=5, le=1440)
+    # How far back to look for the apps and devices that fetched the
+    # subscription. Longer than the node window because an app keeps a
+    # configuration and runs without re-fetching for a while, so a shorter
+    # window loses the device that is plainly still in use.
+    device_window_minutes: int = Field(default=180, ge=5, le=1440)
     # Traffic a node must have carried before the user counts as being on it.
     # A client trying every server leaves a handshake on each - kilobytes -
     # while using one leaves megabytes. Zero counts every node it touched.
