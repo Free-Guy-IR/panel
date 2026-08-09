@@ -16,6 +16,11 @@ class HWIDMode(StrEnum):
 
 class RoleHWIDSettings(HWIDSettings):
     mode: HWIDMode = Field(default=HWIDMode.USE_GLOBAL)
+    # Group scoping lives on the global policy alone. Outside the covered
+    # groups there is no policy for a role to override, and inside them the
+    # role has no business narrowing further - so the field is pinned shut
+    # rather than inherited into every role response.
+    apply_to_group_ids: list[int] = Field(default_factory=list, exclude=True, frozen=True)
 
 
 class PermissionScope(IntEnum):
