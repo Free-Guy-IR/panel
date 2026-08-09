@@ -21,6 +21,20 @@ import type {
 } from '@tanstack/react-query'
 import { orvalFetcher } from '../http'
 import type { ErrorType, BodyType } from '../http'
+export type ReleaseUserParams = {
+  /**
+   * Also drop their history, so they start from the first step
+   */
+  forget?: boolean
+}
+
+export type ListViolationsParams = {
+  user_id?: number | null
+  active_only?: boolean
+  limit?: number
+  offset?: number
+}
+
 export type ListOverridesParams = {
   limit?: number
   offset?: number
@@ -582,6 +596,11 @@ export const XHttpModes = {
 
 export type XHttpSettingsMode = XHttpModes | null
 
+export interface WorkersHealth {
+  scheduler: WorkerHealth
+  node: WorkerHealth
+}
+
 export type WorkerHealthError = string | null
 
 export type WorkerHealthResponseTimeMs = number | null
@@ -590,11 +609,6 @@ export interface WorkerHealth {
   status: string
   response_time_ms?: WorkerHealthResponseTimeMs
   error?: WorkerHealthError
-}
-
-export interface WorkersHealth {
-  scheduler: WorkerHealth
-  node: WorkerHealth
 }
 
 export interface WireGuardSubnetUsage {
@@ -707,18 +721,6 @@ export type UsersPermissionsRevokeSubAnyOf = { [key: string]: PermissionScope | 
 
 export type UsersPermissionsRevokeSub = boolean | UsersPermissionsRevokeSubAnyOf | null
 
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
-
 export type UsersPermissionsResetUsageAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsResetUsage = boolean | UsersPermissionsResetUsageAnyOf | null
@@ -742,6 +744,18 @@ export type UsersPermissionsRead = boolean | UsersPermissionsReadAnyOf | null
 export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
+
+export interface UsersPermissions {
+  create?: UsersPermissionsCreate
+  read?: UsersPermissionsRead
+  read_simple?: UsersPermissionsReadSimple
+  update?: UsersPermissionsUpdate
+  delete?: UsersPermissionsDelete
+  reset_usage?: UsersPermissionsResetUsage
+  revoke_sub?: UsersPermissionsRevokeSub
+  set_owner?: UsersPermissionsSetOwner
+  activate_next_plan?: UsersPermissionsActivateNextPlan
+}
 
 export type UsernameGenerationStrategy = (typeof UsernameGenerationStrategy)[keyof typeof UsernameGenerationStrategy]
 
@@ -1223,6 +1237,12 @@ export interface UserCountMetricStatsList {
   stats: UserCountMetricStatsListStats
 }
 
+export interface UserConnectionLimitsResponse {
+  overrides: UserConnectionLimitResponse[]
+  total: number
+  default_device_limit?: number
+}
+
 export type UserConnectionLimitResponseUsername = string | null
 
 export type UserConnectionLimitResponseNote = string | null
@@ -1235,12 +1255,6 @@ export interface UserConnectionLimitResponse {
   note?: UserConnectionLimitResponseNote
   user_id: number
   username?: UserConnectionLimitResponseUsername
-}
-
-export interface UserConnectionLimitsResponse {
-  overrides: UserConnectionLimitResponse[]
-  total: number
-  default_device_limit?: number
 }
 
 export type UserConnectionLimitPayloadNote = string | null
@@ -1572,6 +1586,12 @@ export type SettingsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | 
 
 export type SettingsPermissionsUpdate = boolean | SettingsPermissionsUpdateAnyOf | null
 
+export interface SettingsPermissions {
+  read?: SettingsPermissionsRead
+  read_general?: SettingsPermissionsReadGeneral
+  update?: SettingsPermissionsUpdate
+}
+
 export type SettingsPermissionsReadGeneralAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGeneralAnyOf | null
@@ -1579,12 +1599,6 @@ export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGe
 export type SettingsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsRead = boolean | SettingsPermissionsReadAnyOf | null
-
-export interface SettingsPermissions {
-  read?: SettingsPermissionsRead
-  read_general?: SettingsPermissionsReadGeneral
-  update?: SettingsPermissionsUpdate
-}
 
 export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
 
@@ -2329,6 +2343,19 @@ export interface NodeGeoFilesUpdate {
 
 export type NodeCreateProxyUrl = string | null
 
+export interface NodeCoreUpdate {
+  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
+  core_version?: string
+}
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
+
 export interface NodeCreate {
   name: string
   address: string
@@ -2356,19 +2383,6 @@ export interface NodeCreate {
   internal_timeout?: number
   proxy_url?: NodeCreateProxyUrl
 }
-
-export interface NodeCoreUpdate {
-  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
-  core_version?: string
-}
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
 
 export type NextPlanModelExpire = number | null
 
@@ -2502,18 +2516,24 @@ export type HwidsPermissionsDeleteAnyOf = { [key: string]: PermissionScope | num
 
 export type HwidsPermissionsDelete = boolean | HwidsPermissionsDeleteAnyOf | null
 
-export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
-
-export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
-
 export interface HwidsPermissions {
   read?: HwidsPermissionsRead
   delete?: HwidsPermissionsDelete
 }
 
+export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
+
 export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
+
+export interface HostsPermissions {
+  create?: HostsPermissionsCreate
+  read?: HostsPermissionsRead
+  update?: HostsPermissionsUpdate
+}
 
 export type HostsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2522,12 +2542,6 @@ export type HostsPermissionsRead = boolean | HostsPermissionsReadAnyOf | null
 export type HostsPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsCreate = boolean | HostsPermissionsCreateAnyOf | null
-
-export interface HostsPermissions {
-  create?: HostsPermissionsCreate
-  read?: HostsPermissionsRead
-  update?: HostsPermissionsUpdate
-}
 
 export interface HostNotificationEnable {
   create?: boolean
@@ -2594,11 +2608,6 @@ export interface HTTPException {
   detail: string
 }
 
-export interface GroupsResponse {
-  groups: GroupResponse[]
-  total: number
-}
-
 /**
  * Lightweight group model with only id and name for performance.
  */
@@ -2627,6 +2636,11 @@ export interface GroupResponse {
   is_disabled?: boolean
   id: number
   total_users?: number
+}
+
+export interface GroupsResponse {
+  groups: GroupResponse[]
+  total: number
 }
 
 export type GroupModifyInboundTags = string[] | null
@@ -3143,6 +3157,14 @@ export interface CreateHost {
   final_mask_settings?: CreateHostFinalMaskSettings
 }
 
+/**
+ * Response model for lightweight core list.
+ */
+export interface CoresSimpleResponse {
+  cores: CoreSimple[]
+  total: number
+}
+
 export type CoreType = (typeof CoreType)[keyof typeof CoreType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -3163,14 +3185,6 @@ export interface CoreSimple {
   id: number
   name: string
   type?: CoreSimpleType
-}
-
-/**
- * Response model for lightweight core list.
- */
-export interface CoresSimpleResponse {
-  cores: CoreSimple[]
-  total: number
 }
 
 export type CoreResponseType = CoreType | null
@@ -3210,7 +3224,51 @@ export interface CoreCreate {
   fallbacks_inbound_tags?: CoreCreateFallbacksInboundTags
 }
 
+export interface ConnectionViolationsResponse {
+  violations: ConnectionViolationResponse[]
+  total: number
+  enforcement_enabled?: boolean
+  steps?: number[]
+  window_hours?: number
+}
+
+export type ConnectionViolationResponseRestoredAt = string | null
+
+export type ConnectionViolationResponseRestoreAt = string | null
+
+export type ConnectionViolationResponseUsername = string | null
+
+/**
+ * One time the limiter acted on a user, and what it did.
+ */
+export interface ConnectionViolationResponse {
+  id: number
+  user_id: number
+  username?: ConnectionViolationResponseUsername
+  created_at: string
+  devices?: number
+  limit_applied?: number
+  observed_addresses?: string[]
+  step_applied?: number
+  disable_minutes?: number
+  restore_at?: ConnectionViolationResponseRestoreAt
+  restored_at?: ConnectionViolationResponseRestoredAt
+  active?: boolean
+}
+
+export interface ConnectionStatesResponse {
+  states: ConnectionStateResponse[]
+  total: number
+  device_limit?: number
+  enabled?: boolean
+  monitor_only?: boolean
+}
+
 export type ConnectionStateResponseDetails = { [key: string]: unknown }
+
+export type ConnectionStateResponseReasonsItemAnyOf = { [key: string]: unknown }
+
+export type ConnectionStateResponseReasonsItem = ConnectionStateResponseReasonsItemAnyOf | string
 
 export type ConnectionStateResponseCheckedAt = string | null
 
@@ -3228,18 +3286,12 @@ export interface ConnectionStateResponse {
   node_count?: number
   app_count?: number
   verdict?: string
+  limit_applied?: number
   streak?: number
+  node_streak?: number
   checked_at?: ConnectionStateResponseCheckedAt
-  reasons?: string[]
+  reasons?: ConnectionStateResponseReasonsItem[]
   details?: ConnectionStateResponseDetails
-}
-
-export interface ConnectionStatesResponse {
-  states: ConnectionStateResponse[]
-  total: number
-  device_limit?: number
-  enabled?: boolean
-  monitor_only?: boolean
 }
 
 /**
@@ -3269,6 +3321,11 @@ export interface ConnectionLimit {
    */
   node_window_minutes?: number
   /**
+   * @minimum 0
+   * @maximum 1048576
+   */
+  node_min_traffic_kb?: number
+  /**
    * @minimum 1
    * @maximum 50
    */
@@ -3283,6 +3340,19 @@ export interface ConnectionLimit {
    * @maximum 20
    */
   persistence_cycles?: number
+  enforcement_enabled?: boolean
+  punishment_steps?: number[]
+  /**
+   * @minimum 1
+   * @maximum 8760
+   */
+  violation_window_hours?: number
+  /**
+   * @minimum 1
+   * @maximum 3650
+   */
+  violation_retention_days?: number
+  count_fetched_devices?: boolean
   /**
    * @minimum 10
    * @maximum 600
@@ -15621,4 +15691,112 @@ export function useResolveUserAddresses<TData = Awaited<ReturnType<typeof resolv
   query.queryKey = queryOptions.queryKey
 
   return query
+}
+
+/**
+ * Every time the limiter acted on someone, most recent first.
+ * @summary List Violations
+ */
+export const listViolations = (params?: ListViolationsParams, signal?: AbortSignal) => {
+  return orvalFetcher<ConnectionViolationsResponse>({ url: `/api/connection-limit/violations`, method: 'GET', params, signal })
+}
+
+export const getListViolationsQueryKey = (params?: ListViolationsParams) => {
+  return [`/api/connection-limit/violations`, ...(params ? [params] : [])] as const
+}
+
+export const getListViolationsQueryOptions = <TData = Awaited<ReturnType<typeof listViolations>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListViolationsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListViolationsQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listViolations>>> = ({ signal }) => listViolations(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListViolationsQueryResult = NonNullable<Awaited<ReturnType<typeof listViolations>>>
+export type ListViolationsQueryError = ErrorType<HTTPValidationError>
+
+export function useListViolations<TData = Awaited<ReturnType<typeof listViolations>>, TError = ErrorType<HTTPValidationError>>(
+  params: undefined | ListViolationsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListViolations<TData = Awaited<ReturnType<typeof listViolations>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListViolationsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListViolations<TData = Awaited<ReturnType<typeof listViolations>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListViolationsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Violations
+ */
+
+export function useListViolations<TData = Awaited<ReturnType<typeof listViolations>>, TError = ErrorType<HTTPValidationError>>(
+  params?: ListViolationsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listViolations>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListViolationsQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Lift whatever is in force on this user, and put back what was there.
+
+The one that matters for the last step, which has no time on it and would
+otherwise stay until someone did this.
+ * @summary Release User
+ */
+export const releaseUser = (userId: number, params?: ReleaseUserParams, signal?: AbortSignal) => {
+  return orvalFetcher<void>({ url: `/api/connection-limit/violations/${userId}/release`, method: 'POST', params, signal })
+}
+
+export const getReleaseUserMutationOptions = <TData = Awaited<ReturnType<typeof releaseUser>>, TError = ErrorType<HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { userId: number; params?: ReleaseUserParams }, TContext>
+}) => {
+  const mutationKey = ['releaseUser']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof releaseUser>>, { userId: number; params?: ReleaseUserParams }> = props => {
+    const { userId, params } = props ?? {}
+
+    return releaseUser(userId, params)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { userId: number; params?: ReleaseUserParams }, TContext>
+}
+
+export type ReleaseUserMutationResult = NonNullable<Awaited<ReturnType<typeof releaseUser>>>
+
+export type ReleaseUserMutationError = ErrorType<HTTPValidationError>
+
+/**
+ * @summary Release User
+ */
+export const useReleaseUser = <TData = Awaited<ReturnType<typeof releaseUser>>, TError = ErrorType<HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { userId: number; params?: ReleaseUserParams }, TContext>
+}): UseMutationResult<TData, TError, { userId: number; params?: ReleaseUserParams }, TContext> => {
+  const mutationOptions = getReleaseUserMutationOptions(options)
+
+  return useMutation(mutationOptions)
 }

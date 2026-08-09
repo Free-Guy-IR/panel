@@ -26,6 +26,7 @@ const connectionLimitSchema = z
     persistence_cycles: z.number().min(1).max(20).default(3),
     node_min_traffic_kb: z.number().min(0).default(1024),
     count_fetched_devices: z.boolean().default(false),
+    enforcement_enabled: z.boolean().default(false),
     infrastructure_min_users: z.number().min(2).default(4),
     cdn_ranges: z.string().default(''),
     apply_to_group_ids: z.array(z.number()).default([]),
@@ -55,6 +56,7 @@ const defaultValues: ConnectionLimitFormInput = {
   persistence_cycles: 3,
   node_min_traffic_kb: 1024,
   count_fetched_devices: false,
+  enforcement_enabled: false,
   infrastructure_min_users: 4,
   cdn_ranges: '',
   apply_to_group_ids: [],
@@ -91,6 +93,7 @@ export default function ConnectionLimitSettings() {
       persistence_cycles: toPositive(limit.persistence_cycles, 3),
       node_min_traffic_kb: limit.node_min_traffic_kb ?? 1024,
       count_fetched_devices: limit.count_fetched_devices ?? false,
+      enforcement_enabled: limit.enforcement_enabled ?? false,
       infrastructure_min_users: toPositive(limit.infrastructure_min_users, 4),
       cdn_ranges: (limit.cdn_ranges ?? []).join('\n'),
       apply_to_group_ids: limit.apply_to_group_ids ?? [],
@@ -118,6 +121,7 @@ export default function ConnectionLimitSettings() {
           persistence_cycles: toPositive(data.persistence_cycles, 3),
           node_min_traffic_kb: Math.max(0, Math.floor(data.node_min_traffic_kb ?? 1024)),
           count_fetched_devices: data.count_fetched_devices,
+          enforcement_enabled: data.enforcement_enabled,
           infrastructure_min_users: toPositive(data.infrastructure_min_users, 4),
           cdn_ranges: (data.cdn_ranges || '')
             .split('\n')
@@ -570,6 +574,43 @@ export default function ConnectionLimitSettings() {
                       {t('settings.connectionLimit.isp.description', {
                         defaultValue:
                           'Shows the ISP name when reviewing a user. Only when a case is opened, never during checking — but it does send that address to a third-party service.',
+                      })}
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} className="shrink-0" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </section>
+
+
+          <section className="space-y-4">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-semibold sm:text-lg">
+                {t('settings.connectionLimit.enforcement.title', { defaultValue: 'Acting on what is found' })}
+              </h3>
+              <p className="text-muted-foreground max-w-3xl text-xs leading-relaxed sm:text-sm">
+                {t('settings.connectionLimit.enforcement.description', {
+                  defaultValue:
+                    'Everything above only observes. With this on, a user whose verdict has held for the required number of checks is warned on the first violation, then disabled for 10 minutes, then 30, then an hour, and after that until someone lifts it. Violations are counted over the last three days, so a user who behaves for long enough starts again at the first step. Turning this off releases anyone still restricted.',
+                })}
+              </p>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="enforcement_enabled"
+              render={({ field }) => (
+                <FormItem className="bg-card hover:bg-accent/50 flex flex-row items-center justify-between gap-4 space-y-0 rounded-md border p-3 transition-colors sm:p-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <FormLabel className="cursor-pointer text-sm font-medium">
+                      {t('settings.connectionLimit.enforcement.toggle', { defaultValue: 'Act on users over the limit' })}
+                    </FormLabel>
+                    <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                      {t('settings.connectionLimit.enforcement.toggleHelp', {
+                        defaultValue: 'Off by default. Nothing is done to anyone until this is on.',
                       })}
                     </FormDescription>
                   </div>

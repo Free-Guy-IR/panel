@@ -74,3 +74,31 @@ class ResolvedAddressesResponse(BaseModel):
     # False when provider lookup is switched off, so the UI can say why the
     # names are missing rather than showing blanks.
     enabled: bool = False
+
+
+class ConnectionViolationResponse(BaseModel):
+    """One time the limiter acted on a user, and what it did."""
+
+    id: int
+    user_id: int
+    username: str | None = None
+    created_at: datetime
+    devices: int = 0
+    limit_applied: int = 0
+    observed_addresses: list[str] = Field(default_factory=list)
+    # Zero is a warning that changed nothing, -1 a disable only a person lifts.
+    step_applied: int = 0
+    disable_minutes: int = 0
+    restore_at: datetime | None = None
+    restored_at: datetime | None = None
+    active: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConnectionViolationsResponse(BaseModel):
+    violations: list[ConnectionViolationResponse]
+    total: int
+    # Echoed so the page can say what would happen next without asking twice.
+    enforcement_enabled: bool = False
+    steps: list[int] = Field(default_factory=list)
+    window_hours: int = 72

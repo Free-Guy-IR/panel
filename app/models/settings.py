@@ -405,6 +405,18 @@ class ConnectionLimit(BaseModel):
     warn_at_devices: int = Field(default=2, ge=1, le=50)
     # A verdict only counts once the pattern has held this many cycles.
     persistence_cycles: int = Field(default=3, ge=1, le=20)
+    # Act on users the checking judges, rather than only recording them. Off
+    # by default: everything above only observes until this is turned on.
+    enforcement_enabled: bool = False
+    # The escalation, in minutes per step: a warning, then disables of growing
+    # length, then one that only a person can lift. The last step repeats for
+    # every violation past the end of the list.
+    punishment_steps: list[int] = Field(default_factory=lambda: [0, 10, 30, 60, -1])
+    # How far back violations are counted when deciding which step to apply.
+    violation_window_hours: int = Field(default=72, ge=1, le=8760)
+    # How long the history is kept before being forgotten entirely.
+    violation_retention_days: int = Field(default=30, ge=1, le=3650)
+
     # Treat a device that only fetched the subscription as a connected one.
     # Off by default: holding the configuration is not the same as using it,
     # and behind a CDN the fetch count is used regardless.

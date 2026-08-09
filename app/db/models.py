@@ -943,6 +943,12 @@ class ConnectionRestriction(Base, IdMixin):
     # Distinct IPs seen at the moment of the violation, for the admin to review.
     observed_ips: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
     method: Mapped[str] = mapped_column(String(16), default="disable")
+    # Which rung of the escalation this was, and the disable it carried:
+    # zero for a warning, minutes for a timed disable, -1 for one that only a
+    # person can lift. Stored rather than derived so the row still reads
+    # correctly after the settings are changed.
+    step_applied: Mapped[int] = mapped_column(default=0, server_default="0")
+    disable_minutes: Mapped[int] = mapped_column(default=0, server_default="0")
     previous_status: Mapped[str | None] = mapped_column(String(16), default=None)
     previous_group_ids: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
     restore_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)

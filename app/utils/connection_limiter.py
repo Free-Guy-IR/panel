@@ -116,6 +116,10 @@ class Observation:
     node_streak: int = 0
     app_count: int = 0
     verdict: str = WITHIN_LIMIT
+    # How many cycles running this verdict has held. Filled in by the job,
+    # which is the only thing that can see across cycles, and read by
+    # enforcement - one cycle proves nothing.
+    streak: int = 0
     # The allowance this user was actually judged against - their own where
     # one is set, otherwise the global default.
     limit_applied: int = 0

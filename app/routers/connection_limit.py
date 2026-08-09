@@ -1,15 +1,19 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+import asyncio
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.db.crud.settings import get_settings
-from app.db.models import User, UserConnectionLimit, UserConnectionState
+from app.db.models import ConnectionRestriction, User, UserConnectionLimit, UserConnectionState
 from app.models.admin import AdminDetails
 from app.models.connection_limit import (
     ConnectionStateResponse,
+    ConnectionViolationResponse,
+    ConnectionViolationsResponse,
     ConnectionStatesResponse,
     ResolvedAddress,
     ResolvedAddressesResponse,
@@ -20,9 +24,18 @@ from app.models.connection_limit import (
 from app.models.settings import ConnectionLimit
 from app.utils.connection_limiter import DEFAULT_CDN_RANGES, lookup_providers
 
+from app.jobs.dependencies import SYSTEM_ADMIN
+from app.operation import OperatorType
+from app.operation.user import UserOperation
+from app.utils.connection_enforcement import active_restriction, release
+from app.utils.logger import get_logger
+from app import notification
+
 from .authentication import require_permission
 
 router = APIRouter(tags=["Connection Limit"], prefix="/api/connection-limit")
+logger = get_logger("connection-limit-api")
+user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
 
 
 async def _settings(db: AsyncSession) -> ConnectionLimit:
@@ -238,3 +251,88 @@ async def resolve_user_addresses(
         ],
         enabled=True,
     )
+
+
+@router.get("/violations", response_model=ConnectionViolationsResponse)
+async def list_violations(
+    user_id: int | None = Query(default=None),
+    active_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("settings", "read")),
+):
+    """Every time the limiter acted on someone, most recent first."""
+    settings = await _settings(db)
+
+    stmt = select(ConnectionRestriction, User.username).join(User, User.id == ConnectionRestriction.user_id)
+    if user_id is not None:
+        stmt = stmt.where(ConnectionRestriction.user_id == user_id)
+    if active_only:
+        stmt = stmt.where(ConnectionRestriction.active.is_(True))
+
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = (
+        await db.execute(stmt.order_by(ConnectionRestriction.created_at.desc()).limit(limit).offset(offset))
+    ).all()
+
+    violations = []
+    for row, username in rows:
+        item = ConnectionViolationResponse(
+            id=row.id,
+            user_id=row.user_id,
+            username=username,
+            created_at=row.created_at,
+            devices=row.ip_count,
+            limit_applied=row.ip_limit,
+            observed_addresses=row.observed_ips or [],
+            step_applied=row.step_applied,
+            disable_minutes=row.disable_minutes,
+            restore_at=row.restore_at,
+            restored_at=row.restored_at,
+            active=row.active,
+        )
+        violations.append(item)
+
+    return ConnectionViolationsResponse(
+        violations=violations,
+        total=total or 0,
+        enforcement_enabled=settings.enforcement_enabled,
+        steps=settings.punishment_steps,
+        window_hours=settings.violation_window_hours,
+    )
+
+
+@router.post("/violations/{user_id}/release", status_code=204)
+async def release_user(
+    user_id: int,
+    forget: bool = Query(default=False, description="Also drop their history, so they start from the first step"),
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("settings", "modify")),
+):
+    """Lift whatever is in force on this user, and put back what was there.
+
+    The one that matters for the last step, which has no time on it and would
+    otherwise stay until someone did this.
+    """
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar()
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    restriction = await active_restriction(db, user_id)
+    if restriction is not None:
+        release(restriction, user)
+        await db.commit()
+        try:
+            updated = await user_operator.update_user(user)
+            asyncio.create_task(notification.user_status_change(updated, SYSTEM_ADMIN))
+        except Exception:
+            logger.exception("released user %s but could not reach the nodes", user_id)
+
+    if forget:
+        await db.execute(
+            delete(ConnectionRestriction).where(
+                ConnectionRestriction.user_id == user_id, ConnectionRestriction.active.is_(False)
+            )
+        )
+        await db.commit()

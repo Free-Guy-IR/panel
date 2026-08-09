@@ -4,8 +4,10 @@ Writes one row per user into user_connection_states, which is what the users
 list reads. Recomputing per row, or asking the nodes from a page request,
 would not survive a table of four thousand users.
 
-The job only observes. Acting on a user is a separate decision that has not
-been enabled.
+Acting on a user is a separate decision behind its own switch, off by default.
+With it off this job only ever observes, and anyone still restricted from when
+it was on is released - being left disabled by a feature that is no longer
+running is the one outcome nobody would expect.
 """
 
 import asyncio
@@ -16,13 +18,19 @@ from sqlalchemy import select
 from app import scheduler
 from app.db import GetDB
 from app.db.crud.settings import get_settings
-from app.db.models import UserConnectionState
+from app.db.models import User, UserConnectionState
+from app.jobs.dependencies import SYSTEM_ADMIN
+from app.operation import OperatorType
+from app.operation.user import UserOperation
 from app.models.settings import ConnectionLimit
+from app import notification
+from app.utils.connection_enforcement import due_to_restore, forget_old, release, restrict
 from app.utils.connection_limiter import prune_out_of_scope, run_assessment
 from app.utils.logger import get_logger
 from config import runtime_settings
 
 logger = get_logger("connection-limiter")
+user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
 
 # Re-read each cycle rather than caching, so a settings change takes effect on
 # the next run instead of at the next restart.
@@ -39,8 +47,47 @@ async def _current_settings() -> ConnectionLimit | None:
         return None
 
 
+async def _push_to_nodes(users) -> None:
+    """Make the account change real on the nodes, and tell whoever is listening.
+
+    The same path the panel takes when a user expires or runs out of data, so
+    a user restricted here is disconnected exactly as one who ran out would be.
+    """
+    for user in users:
+        try:
+            updated = await user_operator.update_user(user)
+            asyncio.create_task(notification.user_status_change(updated, SYSTEM_ADMIN))
+        except Exception:
+            logger.exception("could not push the change for user %s to the nodes", user.id)
+
+
+async def _release_due(db, settings) -> None:
+    """Let go of anyone whose time is up, or of everyone when enforcement is off."""
+    everyone = settings is None or not settings.enforcement_enabled
+    pairs = await due_to_restore(db, everyone=everyone)
+    if not pairs:
+        return
+
+    for restriction, user in pairs:
+        release(restriction, user)
+    await db.commit()
+
+    await _push_to_nodes([user for _, user in pairs])
+    logger.info(
+        "released %d user(s)%s",
+        len(pairs),
+        " because enforcement is off" if everyone else "",
+    )
+
+
 async def record_connection_states():
     settings = await _current_settings()
+
+    # Ahead of every early return: a restriction that has expired must lift
+    # even on a cycle where nothing else is going to run.
+    async with GetDB() as db:
+        await _release_due(db, settings)
+
     if settings is None or not settings.enabled:
         return
 
@@ -97,10 +144,14 @@ async def record_connection_states():
             state.limit_applied = obs.limit_applied
             state.streak = streak
             state.node_streak = obs.node_streak
+            obs.streak = streak
             state.reasons = obs.reasons
             state.details = obs.details
 
         await db.commit()
+
+        if settings.enforcement_enabled:
+            await _enforce(db, observations, settings)
 
     over = sum(1 for o in observations if o.verdict == "over_limit")
     logger.info(
@@ -109,6 +160,43 @@ async def record_connection_states():
         over,
         settings.device_limit,
     )
+
+
+async def _enforce(db, observations, settings) -> None:
+    """Act on the users whose verdict has held long enough to be believed.
+
+    A single cycle proves nothing - an address changes, a phone switches from
+    wifi to mobile - so a user is only acted on once the same verdict has come
+    back persistence_cycles times running.
+    """
+    over = [o for o in observations if o.verdict == "over_limit" and o.streak >= settings.persistence_cycles]
+    if not over:
+        return
+
+    users = {
+        user.id: user
+        for user in (
+            await db.execute(select(User).where(User.id.in_([o.user_id for o in over])))
+        )
+        .scalars()
+        .all()
+    }
+
+    changed = []
+    for observation in over:
+        user = users.get(observation.user_id)
+        if user is None:
+            continue
+        if await restrict(db, user, observation, settings) is not None:
+            changed.append(user)
+
+    await db.commit()
+    if changed:
+        await _push_to_nodes(changed)
+
+    forgotten = await forget_old(db, settings.violation_retention_days)
+    if forgotten:
+        await db.commit()
 
 
 if runtime_settings.role.runs_scheduler:
