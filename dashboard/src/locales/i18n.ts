@@ -1,6 +1,9 @@
 import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import HttpApi from 'i18next-http-backend'
+
+/** Replaced at build time; falls back to a constant during development. */
+const BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev'
 import { initReactI18next } from 'react-i18next'
 import { joinURL } from 'ufo'
 
@@ -24,7 +27,9 @@ i18n
         caches: ['localStorage'],
       },
       backend: {
-        loadPath: joinURL(import.meta.env.BASE_URL, `statics/locales/{{lng}}.json`),
+        // Tied to the build, so a new one is fetched exactly once per deploy
+        // rather than the browser holding on to the previous translations.
+        loadPath: joinURL(import.meta.env.BASE_URL, `statics/locales/{{lng}}.json?v=${BUILD_ID}`),
       },
     },
     function (err) {

@@ -176,20 +176,28 @@ async def candidate_users(db: AsyncSession, settings: ConnectionLimit) -> list[U
 
 
 async def prune_out_of_scope(db: AsyncSession, settings: ConnectionLimit) -> int:
-    """Drop the rows for users the settings have stopped covering.
+    """Drop the rows that no longer describe anything.
 
     Nothing rewrites a row once its user is out of scope, so without this the
     review list keeps showing whoever was in the group that was selected last
     week, frozen at whatever their final check said.
+
+    The same goes for a reading that has simply gone old. A device count is a
+    statement about right now, and one from hours ago was reached by whatever
+    the logic was then - shown beside fresh rows it reads as a current finding
+    when it is not. Where there is no recent reading, no row is the honest
+    answer.
     """
     covered = select(User.id).where(*scope_conditions(settings))
     exempt = select(UserConnectionLimit.user_id).where(UserConnectionLimit.exempt.is_(True))
+    stale = datetime.now(UTC) - timedelta(hours=settings.state_max_age_hours)
 
     result = await db.execute(
         delete(UserConnectionState).where(
             or_(
                 UserConnectionState.user_id.not_in(covered),
                 UserConnectionState.user_id.in_(exempt),
+                UserConnectionState.checked_at < stale,
             )
         )
     )

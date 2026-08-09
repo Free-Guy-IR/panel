@@ -392,6 +392,10 @@ class ConnectionLimit(BaseModel):
     check_interval_seconds: int = Field(default=120, ge=30, le=3600)
     # Only users seen this recently are worth asking the nodes about.
     online_window_seconds: int = Field(default=180, ge=60, le=1800)
+    # How long a reading still describes the user. Past this the row is
+    # dropped rather than shown as though it were current.
+    state_max_age_hours: int = Field(default=6, ge=1, le=720)
+
     # Which nodes to ask per user, based on where they carried traffic lately.
     node_window_minutes: int = Field(default=30, ge=5, le=1440)
     # Traffic a node must have carried before the user counts as being on it.

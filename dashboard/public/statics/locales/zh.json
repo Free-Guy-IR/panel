@@ -3806,5 +3806,8 @@
   "settings.connectionLimit.violations.release": "解除",
   "settings.connectionLimit.violations.released": "已解除",
   "settings.connectionLimit.violations.releaseFailed": "解除失败",
-  "connectionLimit.reason.carrier_pool": "{{count}} 个地址来自运营商地址池（{{items}}）——移动网络会为同一部手机的每条连接分配不同地址，因此每个地址池只计一次"
+  "connectionLimit.reason.carrier_pool": "{{count}} 个地址来自运营商地址池（{{items}}）——移动网络会为同一部手机的每条连接分配不同地址，因此每个地址池只计一次",
+  "settings.connection-limit.title": "连接限制",
+  "settings.connection-limit-review.title": "每个订阅的设备",
+  "settings.connection-limit-violations.title": "违规记录"
 }

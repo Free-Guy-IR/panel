@@ -3761,5 +3761,8 @@
   "settings.connectionLimit.violations.release": "Снять",
   "settings.connectionLimit.violations.released": "Снято",
   "settings.connectionLimit.violations.releaseFailed": "Не удалось снять",
-  "connectionLimit.reason.carrier_pool": "{{count}} адресов пришли из пулов оператора ({{items}}) — мобильная сеть выдаёт одному телефону разный адрес на каждое соединение, поэтому каждый пул считается один раз"
+  "connectionLimit.reason.carrier_pool": "{{count}} адресов пришли из пулов оператора ({{items}}) — мобильная сеть выдаёт одному телефону разный адрес на каждое соединение, поэтому каждый пул считается один раз",
+  "settings.connection-limit.title": "Ограничение подключений",
+  "settings.connection-limit-review.title": "Устройства на подписку",
+  "settings.connection-limit-violations.title": "Нарушения"
 }
