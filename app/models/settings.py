@@ -351,6 +351,9 @@ class Subscription(BaseModel):
 
 class HWIDSettings(BaseModel):
     enabled: bool = Field(default=True)
+    # Which groups the policy covers. Empty covers everyone; otherwise a user
+    # outside these groups is not covered at all, whoever their admin is.
+    apply_to_group_ids: list[int] = Field(default_factory=list)
     forced: bool = Field(default=False)
     require_hwid_for_manual_sub: bool = Field(default=False)
     fallback_limit: int | None = Field(default=None, ge=0)

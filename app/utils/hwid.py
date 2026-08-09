@@ -1,4 +1,32 @@
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.admin_role import HWIDMode, RoleHWIDSettings
+
+
+async def hwid_covers_user(db: AsyncSession, user_id: int, settings) -> bool:
+    """Whether the policy applies to this user at all.
+
+    An empty group list covers everyone. Otherwise membership decides, and
+    nothing else does - the admin, their role, the user's own limit all only
+    matter once the user is covered.
+    """
+    group_ids = getattr(settings, "apply_to_group_ids", None) or []
+    if not group_ids:
+        return True
+
+    from app.db.models import users_groups_association
+
+    return (
+        await db.scalar(
+            select(users_groups_association.c.user_id)
+            .where(
+                users_groups_association.c.user_id == user_id,
+                users_groups_association.c.groups_id.in_(group_ids),
+            )
+            .limit(1)
+        )
+    ) is not None
 from app.models.settings import HWIDSettings
 
 

@@ -1692,6 +1692,7 @@ export type RoleHWIDSettingsFallbackLimit = number | null
 
 export interface RoleHWIDSettings {
   enabled?: boolean
+  apply_to_group_ids?: number[]
   forced?: boolean
   require_hwid_for_manual_sub?: boolean
   fallback_limit?: RoleHWIDSettingsFallbackLimit
@@ -2558,6 +2559,7 @@ export type HWIDSettingsFallbackLimit = number | null
 
 export interface HWIDSettings {
   enabled?: boolean
+  apply_to_group_ids?: number[]
   forced?: boolean
   require_hwid_for_manual_sub?: boolean
   fallback_limit?: HWIDSettingsFallbackLimit
@@ -3316,6 +3318,11 @@ export interface ConnectionLimit {
    */
   online_window_seconds?: number
   /**
+   * @minimum 1
+   * @maximum 720
+   */
+  state_max_age_hours?: number
+  /**
    * @minimum 5
    * @maximum 1440
    */
@@ -3358,6 +3365,21 @@ export interface ConnectionLimit {
    * @maximum 600
    */
   concurrency_window_seconds?: number
+  /**
+   * @minimum 8
+   * @maximum 24
+   */
+  carrier_pool_prefix?: number
+  /**
+   * @minimum 16
+   * @maximum 64
+   */
+  carrier_pool_prefix_v6?: number
+  /**
+   * @minimum 0
+   * @maximum 10000
+   */
+  carrier_pool_min_users?: number
   /**
    * @minimum 8
    * @maximum 32

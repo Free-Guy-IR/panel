@@ -3765,5 +3765,9 @@
   "settings.connection-limit.title": "Ограничение подключений",
   "settings.connection-limit-review.title": "Устройства на подписку",
   "settings.connection-limit-violations.title": "Нарушения",
-  "connectionLimit.reason.nodes_at_once": "{{count}} узлов передавали реальный трафик одновременно ({{items}}) — один человек в момент времени пользуется одним узлом"
+  "connectionLimit.reason.nodes_at_once": "{{count}} узлов передавали реальный трафик одновременно ({{items}}) — один человек в момент времени пользуется одним узлом",
+  "settings.hwid.scope.title": "Группы, на которые действует политика",
+  "settings.hwid.scope.everyone": "все",
+  "settings.hwid.scope.description": "Пусто — действует на всех. С выбранными группами пользователи вне их не затрагиваются вовсе.",
+  "settings.hwid.scope.noGroups": "Групп пока нет"
 }

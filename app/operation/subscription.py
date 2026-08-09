@@ -27,7 +27,7 @@ from app.subscription.share import (
     setup_format_variables,
 )
 from app.templates import render_template
-from app.utils.hwid import resolve_effective_hwid_settings
+from app.utils.hwid import hwid_covers_user, resolve_effective_hwid_settings
 from config import template_settings
 
 from . import BaseOperation
@@ -333,9 +333,13 @@ class SubscriptionOperation(BaseOperation):
             return None
         return effective_hwid_conf.fallback_limit
 
-    async def is_user_hwid_enabled(self, db_user: User, *, is_manual_sub: bool = False) -> bool:
+    async def is_user_hwid_enabled(
+        self, db_user: User, *, is_manual_sub: bool = False, db: AsyncSession | None = None
+    ) -> bool:
         role_hwid_settings = db_user.admin.role.hwid if db_user.admin and db_user.admin.role else None
         global_hwid_conf: HWIDSettings = await hwid_settings()
+        if db is not None and not await hwid_covers_user(db, db_user.id, global_hwid_conf):
+            return False
         effective_hwid_conf = resolve_effective_hwid_settings(global_hwid_conf, role_hwid_settings)
         return self.is_hwid_enabled(
             global_hwid_conf,
@@ -358,6 +362,11 @@ class SubscriptionOperation(BaseOperation):
     ):
         global_hwid_conf: HWIDSettings = await hwid_settings()
         effective_hwid_conf = resolve_effective_hwid_settings(global_hwid_conf, role_hwid_settings)
+
+        # Outside the chosen groups there is no policy to speak of: nothing is
+        # required, nothing is registered, nothing is capped.
+        if not await hwid_covers_user(db, user_id, global_hwid_conf):
+            return
 
         # Registration is gated on the master "enabled" switch only: whenever HWID is
         # enabled we record/refresh the device on any request that carries an X-HWID,
@@ -416,7 +425,7 @@ class SubscriptionOperation(BaseOperation):
         is_browser_request = "text/html" in accept_header
         is_subscription_page_request = is_browser_request and not sub_settings.disable_sub_template
         if is_subscription_page_request:
-            is_hwid_enabled = await self.is_user_hwid_enabled(db_user)
+            is_hwid_enabled = await self.is_user_hwid_enabled(db_user, db=db)
             template = (
                 db_user.admin.sub_template
                 if db_user.admin and db_user.admin.sub_template
@@ -618,7 +627,7 @@ class SubscriptionOperation(BaseOperation):
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token, load_admin_role=True)
         user = await self.validated_user(db_user)
-        is_hwid_enabled = await self.is_user_hwid_enabled(db_user)
+        is_hwid_enabled = await self.is_user_hwid_enabled(db_user, db=db)
 
         links = []
         if sub_settings.allow_browser_config:
@@ -705,7 +714,7 @@ class SubscriptionOperation(BaseOperation):
         """
         db_user = await self.get_validated_sub(db, token=token, load_admin_role=True)
         user = await self.validated_user(db_user)
-        is_hwid_enabled = await self.is_user_hwid_enabled(db_user)
+        is_hwid_enabled = await self.is_user_hwid_enabled(db_user, db=db)
         sub_settings: SubSettings = await subscription_settings()
         format_variables = await self.get_format_variables(user)
         return self._make_apps_import_urls(

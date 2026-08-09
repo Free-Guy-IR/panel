@@ -3,6 +3,8 @@ import { SubscriptionFormActions } from '@/features/subscriptions/components/sub
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useGetGroupsSimple } from '@/service/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
@@ -19,6 +21,7 @@ const hwidSettingsSchema = z
     fallback_limit: z.number().min(0).default(0),
     min_limit: z.number().min(0).default(0),
     max_limit: z.number().min(0).default(0),
+    apply_to_group_ids: z.array(z.number()).default([]),
   })
   .superRefine((data, ctx) => {
     if (data.max_limit > 0 && data.min_limit > data.max_limit) {
@@ -39,6 +42,7 @@ const defaultValues: HwidSettingsFormInput = {
   fallback_limit: 0,
   min_limit: 0,
   max_limit: 0,
+  apply_to_group_ids: [],
 }
 
 const toDeviceLimit = (value: unknown): number => {
@@ -50,6 +54,8 @@ const toDeviceLimit = (value: unknown): number => {
 export default function HwidSettings() {
   const { t } = useTranslation()
   const { settings, isLoading, error, updateSettings, isSaving } = useSettingsContext()
+  const { data: groupsData } = useGetGroupsSimple({ limit: 500 })
+  const groups = groupsData?.groups ?? []
 
   const formValues = useMemo<HwidSettingsFormInput>(() => {
     const hwid = settings?.hwid
@@ -61,6 +67,7 @@ export default function HwidSettings() {
       fallback_limit: toDeviceLimit(hwid.fallback_limit),
       min_limit: toDeviceLimit(hwid.min_limit),
       max_limit: toDeviceLimit(hwid.max_limit),
+      apply_to_group_ids: hwid.apply_to_group_ids ?? [],
     }
   }, [settings?.hwid])
 
@@ -79,6 +86,7 @@ export default function HwidSettings() {
           fallback_limit: toDeviceLimit(data.fallback_limit),
           min_limit: toDeviceLimit(data.min_limit),
           max_limit: toDeviceLimit(data.max_limit),
+          apply_to_group_ids: data.apply_to_group_ids ?? [],
         },
       })
     } catch {
@@ -249,6 +257,63 @@ export default function HwidSettings() {
               />
             </div>
           </section>
+
+
+          {hwidEnabled && (
+            <FormField
+              control={form.control}
+              name="apply_to_group_ids"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <FormLabel className="text-sm font-medium">
+                      {t('settings.hwid.scope.title', { defaultValue: 'Groups the policy covers' })}
+                    </FormLabel>
+                    <span className="text-muted-foreground text-xs">
+                      {(field.value ?? []).length === 0
+                        ? t('settings.hwid.scope.everyone', { defaultValue: 'everyone' })
+                        : `${(field.value ?? []).length}/${groups.length}`}
+                    </span>
+                  </div>
+                  <FormDescription className="text-xs leading-relaxed sm:text-sm">
+                    {t('settings.hwid.scope.description', {
+                      defaultValue: 'Empty covers everyone. With groups chosen, users outside them are not covered at all.',
+                    })}
+                  </FormDescription>
+                  <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {groups.length === 0 ? (
+                      <p className="text-muted-foreground px-1 py-2 text-xs">
+                        {t('settings.hwid.scope.noGroups', { defaultValue: 'No groups yet' })}
+                      </p>
+                    ) : (
+                      groups.map(group => {
+                        const selected = (field.value ?? []).includes(group.id)
+                        return (
+                          <label
+                            key={group.id}
+                            className="hover:bg-muted/40 flex cursor-pointer items-center gap-x-2 rounded-sm px-2 py-1.5 transition-colors"
+                          >
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={checked => {
+                                const current = new Set(field.value ?? [])
+                                if (checked === true) current.add(group.id)
+                                else current.delete(group.id)
+                                field.onChange(Array.from(current))
+                              }}
+                              className="h-4 w-4"
+                            />
+                            <span className="truncate text-xs">{group.name}</span>
+                          </label>
+                        )
+                      })
+                    )}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <SubscriptionFormActions onCancel={handleCancel} isSaving={isSaving} />
         </form>
