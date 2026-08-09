@@ -259,7 +259,20 @@ export default function HwidSettings() {
           </section>
 
 
-          {hwidEnabled && (
+          {/* A section like every other on this page: always shown, its control
+              disabled while HWID is off, rather than vanishing - which read as a
+              missing feature when the master toggle happened to be off. */}
+          <section className="space-y-4">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-semibold sm:text-lg">
+                {t('settings.hwid.scope.title', { defaultValue: 'Groups the policy covers' })}
+              </h3>
+              <p className="text-muted-foreground max-w-3xl text-xs leading-relaxed sm:text-sm">
+                {t('settings.hwid.scope.description', {
+                  defaultValue: 'Empty covers everyone. With groups chosen, users outside them are not covered at all.',
+                })}
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="apply_to_group_ids"
@@ -267,7 +280,7 @@ export default function HwidSettings() {
                 <FormItem className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <FormLabel className="text-sm font-medium">
-                      {t('settings.hwid.scope.title', { defaultValue: 'Groups the policy covers' })}
+                      {t('settings.hwid.scope.label', { defaultValue: 'Groups' })}
                     </FormLabel>
                     <span className="text-muted-foreground text-xs">
                       {(field.value ?? []).length === 0
@@ -275,12 +288,7 @@ export default function HwidSettings() {
                         : `${(field.value ?? []).length}/${groups.length}`}
                     </span>
                   </div>
-                  <FormDescription className="text-xs leading-relaxed sm:text-sm">
-                    {t('settings.hwid.scope.description', {
-                      defaultValue: 'Empty covers everyone. With groups chosen, users outside them are not covered at all.',
-                    })}
-                  </FormDescription>
-                  <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border p-2">
+                  <div className={`max-h-52 space-y-1 overflow-y-auto rounded-md border p-2 ${hwidEnabled ? '' : 'pointer-events-none opacity-50'}`}>
                     {groups.length === 0 ? (
                       <p className="text-muted-foreground px-1 py-2 text-xs">
                         {t('settings.hwid.scope.noGroups', { defaultValue: 'No groups yet' })}
@@ -295,6 +303,7 @@ export default function HwidSettings() {
                           >
                             <Checkbox
                               checked={selected}
+                              disabled={!hwidEnabled}
                               onCheckedChange={checked => {
                                 const current = new Set(field.value ?? [])
                                 if (checked === true) current.add(group.id)
@@ -313,7 +322,7 @@ export default function HwidSettings() {
                 </FormItem>
               )}
             />
-          )}
+          </section>
 
           <SubscriptionFormActions onCancel={handleCancel} isSaving={isSaving} />
         </form>

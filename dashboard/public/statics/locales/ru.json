@@ -3769,5 +3769,6 @@
   "settings.hwid.scope.title": "Группы, на которые действует политика",
   "settings.hwid.scope.everyone": "все",
   "settings.hwid.scope.description": "Пусто — действует на всех. С выбранными группами пользователи вне их не затрагиваются вовсе.",
-  "settings.hwid.scope.noGroups": "Групп пока нет"
+  "settings.hwid.scope.noGroups": "Групп пока нет",
+  "settings.hwid.scope.label": "Группы"
 }

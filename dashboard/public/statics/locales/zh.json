@@ -3814,5 +3814,6 @@
   "settings.hwid.scope.title": "策略覆盖的用户组",
   "settings.hwid.scope.everyone": "所有人",
   "settings.hwid.scope.description": "留空覆盖所有人。选择用户组后，组外用户完全不受约束。",
-  "settings.hwid.scope.noGroups": "还没有用户组"
+  "settings.hwid.scope.noGroups": "还没有用户组",
+  "settings.hwid.scope.label": "用户组"
 }

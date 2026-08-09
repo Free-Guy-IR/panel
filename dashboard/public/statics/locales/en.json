@@ -3780,5 +3780,6 @@
   "settings.hwid.scope.title": "Groups the policy covers",
   "settings.hwid.scope.everyone": "everyone",
   "settings.hwid.scope.description": "Empty covers everyone. With groups chosen, users outside them are not covered at all.",
-  "settings.hwid.scope.noGroups": "No groups yet"
+  "settings.hwid.scope.noGroups": "No groups yet",
+  "settings.hwid.scope.label": "Groups"
 }
