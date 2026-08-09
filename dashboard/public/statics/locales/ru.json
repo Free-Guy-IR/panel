@@ -3733,14 +3733,14 @@
   "connectionLimit.reason.cdn_without_hwid": "за CDN без аппаратного идентификатора — несколько устройств выглядят как одно",
   "connectionLimit.reason.nodes": "передавал трафик на {{count}} узлах в течение {{cycles}} проверок подряд",
   "settings.connectionLimit.persistence.title": "Сколько проверок должна держаться картина",
-  "settings.connectionLimit.persistence.description": "Присутствие на нескольких узлах сообщается только после стольких проверок подряд. Приложение, пробующее каждый сервер, даёт высокое число в одной проверке и затем падает.",
+  "settings.connectionLimit.persistence.description": "Несколько узлов сообщаются только после стольких проверок подряд.",
   "connectionLimit.reason.fetched_not_counted": "{{count}} устройств(о) запрашивали подписку, но не были учтены — хранить конфигурацию не значит быть подключённым",
   "settings.connectionLimit.fetched.title": "Учитывать устройства, которые только запросили подписку",
-  "settings.connectionLimit.fetched.description": "Запрос ссылки на подписку означает, что устройство хранит конфигурацию, а не что оно подключено — приложение обновляет её в фоне при выключенном туннеле. За CDN они учитываются в любом случае, поскольку там все адреса сводятся к одному.",
+  "settings.connectionLimit.fetched.description": "Запрос подписки — не подключение. За CDN они учитываются в любом случае.",
   "settings.connectionLimit.nodeTraffic.title": "Трафик, после которого узел учитывается (КБ)",
-  "settings.connectionLimit.nodeTraffic.description": "Клиент, пробующий каждый сервер, оставляет на каждом рукопожатие в несколько килобайт; реально используемый узел — мегабайты. У узлов ниже порога адреса всё равно запрашиваются — они просто не считаются узлом, на котором находится пользователь. Ноль учитывает все узлы.",
+  "settings.connectionLimit.nodeTraffic.description": "Ниже порога узел считается лишь опробованным. Ноль учитывает все узлы.",
   "settings.connectionLimit.enforcement.title": "Действия по результатам",
-  "settings.connectionLimit.enforcement.description": "Всё выше только наблюдает. С этой настройкой пользователь, чей вердикт продержался нужное число проверок, получает предупреждение за первое нарушение, затем отключение на 10 минут, потом на 30, потом на час, а далее — до снятия вручную. Нарушения считаются за последние трое суток, так что тот, кто столько продержится, начнёт снова с первой ступени. Выключение освобождает всех, кто ещё ограничен.",
+  "settings.connectionLimit.enforcement.description": "Предупреждение, затем 10, 30 и 60 минут, далее до снятия. Счёт за трое суток.",
   "settings.connectionLimit.enforcement.toggle": "Применять меры к превысившим лимит",
   "settings.connectionLimit.enforcement.toggleHelp": "По умолчанию выключено. Пока не включено, ни с кем ничего не происходит.",
   "settings.connectionLimit.violations.navTitle": "Нарушения",
@@ -3764,5 +3764,6 @@
   "connectionLimit.reason.carrier_pool": "{{count}} адресов пришли из пулов оператора ({{items}}) — мобильная сеть выдаёт одному телефону разный адрес на каждое соединение, поэтому каждый пул считается один раз",
   "settings.connection-limit.title": "Ограничение подключений",
   "settings.connection-limit-review.title": "Устройства на подписку",
-  "settings.connection-limit-violations.title": "Нарушения"
+  "settings.connection-limit-violations.title": "Нарушения",
+  "connectionLimit.reason.nodes_at_once": "{{count}} узлов передавали реальный трафик одновременно ({{items}}) — один человек в момент времени пользуется одним узлом"
 }

@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.models.settings import ConnectionLimit
-from app.utils.connection_limiter import _networks, assess
+from app.utils.connection_limiter import NodeActivity, _networks, assess
 
 USER = SimpleNamespace(id=7, username="someone")
 NOW = 1_800_000_000
@@ -28,7 +28,7 @@ def _assess(live, hwids, *, cdn=False, **overrides):
         USER,
         live,
         set(),
-        {},
+        NodeActivity(),
         set(),
         frozenset(),
         _networks(settings.cdn_ranges),
@@ -104,7 +104,7 @@ def test_two_devices_of_the_same_model_stay_two():
         USER,
         {"5.115.21.4": NOW},
         set(),
-        {},
+        NodeActivity(),
         set(),
         frozenset(),
         [],

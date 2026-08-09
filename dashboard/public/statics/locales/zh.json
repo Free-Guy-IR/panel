@@ -3778,14 +3778,14 @@
   "connectionLimit.reason.cdn_without_hwid": "位于 CDN 之后且无硬件标识 — 多台设备会显示为一台",
   "connectionLimit.reason.nodes": "连续 {{cycles}} 次检查中在 {{count}} 个节点上有流量",
   "settings.connectionLimit.persistence.title": "一种情形需要持续的检查次数",
-  "settings.connectionLimit.persistence.description": "只有连续这么多次检查都出现在多个节点上，才会报告此项。逐个探测服务器的应用只在一次检查中出现高值，随后回落。",
+  "settings.connectionLimit.persistence.description": "连续达到此检查次数后才报告位于多个节点。",
   "connectionLimit.reason.fetched_not_counted": "{{count}} 台设备拉取过订阅但未计入——持有配置并不等于已连接",
   "settings.connectionLimit.fetched.title": "将仅拉取过订阅的设备计入",
-  "settings.connectionLimit.fetched.description": "拉取订阅链接表示该设备持有配置，而非已连接——应用会在隧道关闭时于后台刷新。在 CDN 之后无论如何都会计入，因为那里所有地址都会归并为一个。",
+  "settings.connectionLimit.fetched.description": "拉取订阅不等于已连接。在 CDN 之后仍会计入。",
   "settings.connectionLimit.nodeTraffic.title": "节点计入所需的流量（KB）",
-  "settings.connectionLimit.nodeTraffic.description": "逐个探测服务器的客户端只会在每个节点留下几 KB 的握手流量；真正在使用的节点则是数 MB。低于此值的节点仍会被查询用户地址——只是不计为用户所在的节点。填 0 则计入所有节点。",
+  "settings.connectionLimit.nodeTraffic.description": "低于此值视为仅探测而非使用。填 0 则计入所有节点。",
   "settings.connectionLimit.enforcement.title": "对发现的情况采取措施",
-  "settings.connectionLimit.enforcement.description": "以上各项仅作观察。开启后，判定连续保持所需次数的用户第一次会收到警告，第二次停用 10 分钟，再来 30 分钟、1 小时，此后将一直停用直到有人手动解除。违规按最近三天计算，因此在此期间表现良好的用户会重新从第一级开始。关闭此项会释放所有仍处于限制中的用户。",
+  "settings.connectionLimit.enforcement.description": "先警告，再 10、30、60 分钟，之后直到手动解除。按三天计算。",
   "settings.connectionLimit.enforcement.toggle": "对超限用户采取措施",
   "settings.connectionLimit.enforcement.toggleHelp": "默认关闭。未开启前不会对任何人做任何事。",
   "settings.connectionLimit.violations.navTitle": "违规记录",
@@ -3809,5 +3809,6 @@
   "connectionLimit.reason.carrier_pool": "{{count}} 个地址来自运营商地址池（{{items}}）——移动网络会为同一部手机的每条连接分配不同地址，因此每个地址池只计一次",
   "settings.connection-limit.title": "连接限制",
   "settings.connection-limit-review.title": "每个订阅的设备",
-  "settings.connection-limit-violations.title": "违规记录"
+  "settings.connection-limit-violations.title": "违规记录",
+  "connectionLimit.reason.nodes_at_once": "{{count}} 个节点在同一时刻都有真实流量（{{items}}）——一个人同一时刻只会使用一个节点"
 }

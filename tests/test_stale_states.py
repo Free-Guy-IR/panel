@@ -1,6 +1,12 @@
-"""A reading old enough to be from superseded logic must not look current."""
+"""A reading that no longer describes the user must not look current.
+
+Two things end a reading: its age, and a deploy. Both are tested here, and the
+age one has to hold the build boundary still to say anything - a fresh process
+invalidates everything before it, which is the point of it.
+"""
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -10,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.db.models import Admin, Base, Group, User, UserConnectionState
 from app.models.proxy import ProxyTable
 from app.models.settings import ConnectionLimit
+import app.utils.connection_limiter as limiter
 from app.utils.connection_limiter import prune_out_of_scope
 
 
@@ -58,7 +65,7 @@ async def test_a_reading_from_hours_ago_is_dropped(db):
     fresh = await _user_with_state(db, "fresh", age_hours=0.1)
     old = await _user_with_state(db, "old", age_hours=9)
 
-    await prune_out_of_scope(db, ConnectionLimit(state_max_age_hours=6))
+    await _prune_since_an_older_build(db, ConnectionLimit(state_max_age_hours=6))
     await db.commit()
 
     assert await _remaining(db) == {fresh}
@@ -69,7 +76,7 @@ async def test_a_reading_from_hours_ago_is_dropped(db):
 async def test_a_reading_inside_the_window_is_kept(db):
     recent = await _user_with_state(db, "recent", age_hours=5)
 
-    await prune_out_of_scope(db, ConnectionLimit(state_max_age_hours=6))
+    await _prune_since_an_older_build(db, ConnectionLimit(state_max_age_hours=6))
     await db.commit()
 
     assert await _remaining(db) == {recent}
@@ -79,7 +86,37 @@ async def test_a_reading_inside_the_window_is_kept(db):
 async def test_the_window_is_the_setting(db):
     await _user_with_state(db, "someone", age_hours=9)
 
-    await prune_out_of_scope(db, ConnectionLimit(state_max_age_hours=24))
+    await _prune_since_an_older_build(db, ConnectionLimit(state_max_age_hours=24))
     await db.commit()
 
     assert len(await _remaining(db)) == 1
+
+
+async def _prune_since_an_older_build(db, settings):
+    """Prune with the build boundary out of the way, to test the age alone."""
+    long_ago = datetime.now(UTC) - timedelta(days=365)
+    with patch.object(limiter, "STARTED_AT", long_ago):
+        return await prune_out_of_scope(db, settings)
+
+
+@pytest.mark.asyncio
+async def test_a_reading_this_build_did_not_make_is_dropped(db):
+    """A deploy changes how the count is reached, so what came before it goes."""
+    await _user_with_state(db, "from-before", age_hours=0.5)
+
+    with patch.object(limiter, "STARTED_AT", datetime.now(UTC) - timedelta(minutes=1)):
+        await prune_out_of_scope(db, ConnectionLimit(state_max_age_hours=720))
+    await db.commit()
+
+    assert await _remaining(db) == set()
+
+
+@pytest.mark.asyncio
+async def test_a_reading_this_build_did_make_is_kept(db):
+    user_id = await _user_with_state(db, "from-now", age_hours=0)
+
+    with patch.object(limiter, "STARTED_AT", datetime.now(UTC) - timedelta(minutes=5)):
+        await prune_out_of_scope(db, ConnectionLimit(state_max_age_hours=720))
+    await db.commit()
+
+    assert await _remaining(db) == {user_id}

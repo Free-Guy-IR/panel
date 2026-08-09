@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.models.settings import ConnectionLimit
-from app.utils.connection_limiter import assess
+from app.utils.connection_limiter import NodeActivity, assess
 
 USER = SimpleNamespace(id=7, username="someone")
 NOW = 1_800_000_000
@@ -26,7 +26,14 @@ def _settings(**overrides) -> ConnectionLimit:
 def _assess(node_ids, prior_streak, settings=None):
     # Every node in these cases carried enough to count; the threshold has its
     # own tests, and mixing the two would test both badly.
-    carried = {node_id: 50 * 1024 * 1024 for node_id in node_ids}
+    carried = NodeActivity(
+        touched=set(node_ids),
+        used=set(node_ids),
+        # One at a time here: simultaneity has its own tests, and mixing the
+        # two would test both badly.
+        concurrent=1,
+        concurrent_nodes={next(iter(node_ids), 0): 50 * 1024 * 1024} if node_ids else {},
+    )
     return assess(
         USER,
         LIVE,

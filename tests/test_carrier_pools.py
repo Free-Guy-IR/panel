@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.models.settings import ConnectionLimit
-from app.utils.connection_limiter import assess, carrier_pools
+from app.utils.connection_limiter import NodeActivity, assess, carrier_pools
 
 NOW = 1_800_000_000
 USER = SimpleNamespace(id=16586, username="hamed_7333593")
@@ -34,7 +34,7 @@ def _assess(addresses, pools, settings=None):
         USER,
         {ip: NOW for ip in addresses},
         set(),
-        {},
+        NodeActivity(),
         set(),
         pools,
         [],

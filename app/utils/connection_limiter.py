@@ -52,6 +52,10 @@ from app.utils.logger import get_logger
 
 logger = get_logger("connection-limiter")
 
+# When this build began running. Readings from before it were reached by
+# different code and are dropped rather than shown as current.
+STARTED_AT = datetime.now(UTC)
+
 # Published ranges for the two CDNs in use here. Editable in settings, because
 # the next one to be added will not be in this list.
 DEFAULT_CDN_RANGES = [
@@ -190,7 +194,13 @@ async def prune_out_of_scope(db: AsyncSession, settings: ConnectionLimit) -> int
     """
     covered = select(User.id).where(*scope_conditions(settings))
     exempt = select(UserConnectionLimit.user_id).where(UserConnectionLimit.exempt.is_(True))
-    stale = datetime.now(UTC) - timedelta(hours=settings.state_max_age_hours)
+    # Whichever is the more recent: a reading past its age, or one this build
+    # did not make. A deploy changes how the count is reached, so a row from
+    # before it describes the user by rules that no longer apply.
+    stale = max(
+        datetime.now(UTC) - timedelta(hours=settings.state_max_age_hours),
+        STARTED_AT,
+    )
 
     result = await db.execute(
         delete(UserConnectionState).where(
@@ -204,39 +214,21 @@ async def prune_out_of_scope(db: AsyncSession, settings: ConnectionLimit) -> int
     return result.rowcount or 0
 
 
-async def nodes_per_user(
-    db: AsyncSession, settings: ConnectionLimit, user_ids: list[int]
-) -> dict[int, dict[int, int]]:
-    """Which nodes each user has been carried on lately, and how much each carried.
+@dataclass
+class NodeActivity:
+    """Where one user's traffic went during the window."""
 
-    Without this every user would have to be looked up on every node, which on
-    this panel is ~19 calls each instead of the ~3 they actually need.
-    """
-    if not user_ids:
-        return {}
-
-    since = datetime.now(UTC) - timedelta(minutes=settings.node_window_minutes)
-    rows = (
-        await db.execute(
-            select(
-                NodeUserUsage.user_id,
-                NodeUserUsage.node_id,
-                func.sum(NodeUserUsage.used_traffic),
-            )
-            .where(
-                NodeUserUsage.user_id.in_(user_ids),
-                NodeUserUsage.created_at > since,
-                NodeUserUsage.node_id.is_not(None),
-                NodeUserUsage.used_traffic > 0,
-            )
-            .group_by(NodeUserUsage.user_id, NodeUserUsage.node_id)
-        )
-    ).all()
-
-    out: dict[int, dict[int, int]] = {}
-    for user_id, node_id, traffic in rows:
-        out.setdefault(user_id, {})[node_id] = int(traffic or 0)
-    return out
+    # Every node with any traffic at all. These are the nodes worth asking for
+    # the user's live addresses, however little each carried.
+    touched: set[int] = field(default_factory=set)
+    # Those that carried real traffic rather than the handshake a client
+    # leaves behind when it tries every server.
+    used: set[int] = field(default_factory=set)
+    # The most nodes carrying real traffic inside a single bucket. A person
+    # uses one node at a time, so anything above one is that many devices.
+    concurrent: int = 0
+    # Which nodes those were, and what each carried, for the evidence.
+    concurrent_nodes: dict[int, int] = field(default_factory=dict)
 
 
 def nodes_actually_used(traffic_by_node: dict[int, int], settings: ConnectionLimit) -> set[int]:
@@ -247,6 +239,63 @@ def nodes_actually_used(traffic_by_node: dict[int, int], settings: ConnectionLim
     """
     floor = settings.node_min_traffic_kb * 1024
     return {node_id for node_id, traffic in traffic_by_node.items() if traffic >= floor}
+
+
+async def nodes_per_user(
+    db: AsyncSession, settings: ConnectionLimit, user_ids: list[int]
+) -> dict[int, NodeActivity]:
+    """Where each user's traffic went lately, and whether it was in two places at once.
+
+    Without this every user would have to be looked up on every node, which on
+    this panel is ~19 calls each instead of the ~3 they actually need.
+
+    Usage is recorded per ten-minute bucket, and the buckets are kept apart
+    rather than summed: twenty minutes on one node then ten on another sums to
+    the same as two people on both, and only the buckets tell them apart.
+    """
+    if not user_ids:
+        return {}
+
+    since = datetime.now(UTC) - timedelta(minutes=settings.node_window_minutes)
+    rows = (
+        await db.execute(
+            select(
+                NodeUserUsage.user_id,
+                NodeUserUsage.created_at,
+                NodeUserUsage.node_id,
+                func.sum(NodeUserUsage.used_traffic),
+            )
+            .where(
+                NodeUserUsage.user_id.in_(user_ids),
+                NodeUserUsage.created_at > since,
+                NodeUserUsage.node_id.is_not(None),
+                NodeUserUsage.used_traffic > 0,
+            )
+            .group_by(NodeUserUsage.user_id, NodeUserUsage.created_at, NodeUserUsage.node_id)
+        )
+    ).all()
+
+    buckets: dict[int, dict[object, dict[int, int]]] = defaultdict(lambda: defaultdict(dict))
+    totals: dict[int, dict[int, int]] = defaultdict(dict)
+    for user_id, bucket, node_id, traffic in rows:
+        traffic = int(traffic or 0)
+        buckets[user_id][bucket][node_id] = traffic
+        totals[user_id][node_id] = totals[user_id].get(node_id, 0) + traffic
+
+    out: dict[int, NodeActivity] = {}
+    for user_id, per_bucket in buckets.items():
+        activity = NodeActivity(
+            touched=set(totals[user_id]),
+            used=nodes_actually_used(totals[user_id], settings),
+        )
+        for nodes in per_bucket.values():
+            real = {node_id: nodes[node_id] for node_id in nodes_actually_used(nodes, settings)}
+            if len(real) > activity.concurrent:
+                activity.concurrent = len(real)
+                activity.concurrent_nodes = real
+        out[user_id] = activity
+
+    return out
 
 
 async def per_user_limits(db: AsyncSession, user_ids: list[int]) -> dict[int, int]:
@@ -298,7 +347,7 @@ async def exempt_user_ids(db: AsyncSession, user_ids: list[int]) -> set[int]:
 
 async def collect_live_ips(
     users: list[User],
-    by_node: dict[int, dict[int, int]],
+    by_node: dict[int, NodeActivity],
     concurrency: int = 12,
     deadline_seconds: float = 45.0,
 ) -> dict[int, dict[str, int]]:
@@ -334,7 +383,7 @@ async def collect_live_ips(
                 timed_out = True
                 return user.id, {}
             seen: dict[str, int] = {}
-            for node_id in by_node.get(user.id) or {}:
+            for node_id in (by_node.get(user.id) or NodeActivity()).touched:
                 node = healthy.get(node_id)
                 if node is None:
                     continue
@@ -461,7 +510,7 @@ def assess(
     user: User,
     live_ips: dict[str, int],
     node_ids: set[int],
-    node_traffic: dict[int, int],
+    activity: NodeActivity,
     infra: set[str],
     pools: frozenset[str],
     cdn_nets: list,
@@ -524,13 +573,19 @@ def assess(
     # that it is connected, so on its own it is not evidence of a device being
     # used. Behind a CDN it is the only thing that can tell two devices apart -
     # every address collapses to one there - which is the case it was for.
+    # A person uses one node at a time, so traffic on two nodes inside one
+    # bucket is two devices - evidence an address cannot give, because a
+    # carrier pool, a CDN and a NAT all blur addresses and none of them blurs
+    # this. One node says nothing, so only two or more count as a floor.
+    at_once = activity.concurrent if activity.concurrent > 1 else 0
+
     counted_fetches = address_sources > 0 and (bool(cdn_seen) or settings.count_fetched_devices)
     if address_sources == 0:
-        obs.devices = 0
+        obs.devices = at_once
     elif counted_fetches:
-        obs.devices = max(address_sources, len(hwids))
+        obs.devices = max(address_sources, len(hwids), at_once)
     else:
-        obs.devices = address_sources
+        obs.devices = max(address_sources, at_once)
 
     obs.details = {
         "real_groups": sorted(concurrent_groups),
@@ -540,7 +595,8 @@ def assess(
         "apps": sorted(apps),
         "devices": sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids),
         "nodes": sorted(node_ids),
-        "nodes_touched": sorted(node_traffic),
+        "nodes_touched": sorted(activity.touched),
+        "nodes_at_once": sorted(activity.concurrent_nodes),
     }
 
     concurrent = len(concurrent_groups) > 1
@@ -580,13 +636,15 @@ def assess(
         counted_fetches=counted_fetches,
         pooled=pooled_addresses,
         pools_used=pools_in_play,
+        at_once=at_once,
+        at_once_nodes=activity.concurrent_nodes,
     )
     return obs
 
 
 def _reasons(
     obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles,
-    counted_fetches, pooled, pools_used
+    counted_fetches, pooled, pools_used, at_once, at_once_nodes
 ) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
@@ -627,6 +685,12 @@ def _reasons(
         out.append({"code": "cdn_without_hwid"})
     # Held for long enough to be worth reading. Below that it is as likely
     # to be one refresh of an app that tries every server as anything else.
+    if at_once > 1:
+        out.append({
+            "code": "nodes_at_once",
+            "count": at_once,
+            "items": [f"{node_id}: {traffic // 1048576}MB" for node_id, traffic in sorted(at_once_nodes.items())][:4],
+        })
     if obs.node_count > 1 and obs.node_streak >= persistence_cycles:
         out.append({"code": "nodes", "count": obs.node_count, "cycles": obs.node_streak})
 
@@ -664,8 +728,8 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
         assess(
             user,
             live.get(user.id) or {},
-            nodes_actually_used(by_node.get(user.id) or {}, settings),
-            by_node.get(user.id) or {},
+            (by_node.get(user.id) or NodeActivity()).used,
+            by_node.get(user.id) or NodeActivity(),
             infra,
             pools,
             cdn_nets,

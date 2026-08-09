@@ -3786,14 +3786,14 @@
   "connectionLimit.reason.cdn_without_hwid": "پشت CDN و بدون شناسه‌ی سخت‌افزاری — چند دستگاه یکی دیده می‌شوند",
   "connectionLimit.reason.nodes": "روی {{count}} نود ترافیک داشته، در {{cycles}} بررسی پیاپی",
   "settings.connectionLimit.persistence.title": "تعداد بررسی‌هایی که یک الگو باید دوام بیاورد",
-  "settings.connectionLimit.persistence.description": "بودن روی چند نود تنها وقتی گزارش می‌شود که این تعداد بررسی پیاپی دوام آورده باشد. برنامه‌ای که همه‌ی سرورها را می‌آزماید فقط در یک بررسی عدد بالا می‌دهد و بعد پایین می‌آید.",
+  "settings.connectionLimit.persistence.description": "بودن روی چند نود فقط پس از دوام در این تعداد بررسی پیاپی گزارش می‌شود.",
   "connectionLimit.reason.fetched_not_counted": "{{count}} دستگاه لینک اشتراک را گرفته‌اند ولی شمرده نشدند — داشتن کانفیگ به معنی متصل بودن نیست",
   "settings.connectionLimit.fetched.title": "دستگاه‌هایی که فقط لینک اشتراک را گرفته‌اند هم شمرده شوند",
-  "settings.connectionLimit.fetched.description": "گرفتن لینک اشتراک یعنی آن دستگاه کانفیگ را دارد، نه اینکه متصل است — برنامه در پس‌زمینه و با تونل خاموش هم به‌روزرسانی می‌کند. پشت CDN این‌ها در هر حال شمرده می‌شوند، چون آنجا همه‌ی آدرس‌ها به یکی تبدیل می‌شوند.",
+  "settings.connectionLimit.fetched.description": "گرفتن لینک اشتراک یعنی متصل بودن نیست. پشت CDN در هر حال شمرده می‌شوند.",
   "settings.connectionLimit.nodeTraffic.title": "حداقل ترافیک برای شمرده‌شدن یک نود (کیلوبایت)",
-  "settings.connectionLimit.nodeTraffic.description": "برنامه‌ای که همه‌ی سرورها را می‌آزماید روی هرکدام فقط چند کیلوبایت دست‌دادن جا می‌گذارد؛ نودی که واقعاً استفاده می‌شود مگابایت. از نودهای زیر این حد همچنان آدرس کاربر پرسیده می‌شود — فقط به‌عنوان نودی که کاربر روی آن است شمرده نمی‌شوند. صفر یعنی همه‌ی نودها شمرده شوند.",
+  "settings.connectionLimit.nodeTraffic.description": "زیر این حد، نود فقط آزموده‌شده حساب می‌شود نه استفاده‌شده. صفر یعنی همه‌ی نودها.",
   "settings.connectionLimit.enforcement.title": "اقدام روی آنچه پیدا می‌شود",
-  "settings.connectionLimit.enforcement.description": "همه‌ی موارد بالا فقط مشاهده می‌کنند. با روشن کردن این گزینه، کاربری که رأیش به تعداد بررسی لازم دوام آورده باشد بار اول اخطار می‌گیرد، بار دوم ۱۰ دقیقه غیرفعال می‌شود، بعد ۳۰ دقیقه، بعد یک ساعت، و از آن به بعد تا وقتی کسی آزادش کند. تخلف‌ها در سه روز گذشته شمرده می‌شوند، پس کاربری که این مدت درست رفتار کند دوباره از پله‌ی اول شروع می‌کند. خاموش کردن این گزینه هرکسی را که هنوز محدود است آزاد می‌کند.",
+  "settings.connectionLimit.enforcement.description": "اخطار، بعد ۱۰ و ۳۰ و ۶۰ دقیقه، بعد تا آزادسازی دستی. شمارش در سه روز گذشته.",
   "settings.connectionLimit.enforcement.toggle": "روی کاربران بالای سقف اقدام شود",
   "settings.connectionLimit.enforcement.toggleHelp": "پیش‌فرض خاموش است. تا روشن نشود هیچ کاری با هیچ‌کس نمی‌شود.",
   "settings.connectionLimit.violations.navTitle": "تخلف‌ها",
@@ -3817,5 +3817,6 @@
   "connectionLimit.reason.carrier_pool": "{{count}} آدرس از استخر اپراتور آمده‌اند ({{items}}) — شبکه‌ی موبایل به یک گوشی برای هر اتصال آدرس متفاوتی می‌دهد، پس هر استخر یک بار شمرده می‌شود",
   "settings.connection-limit.title": "محدودیت اتصال",
   "settings.connection-limit-review.title": "دستگاه‌های هر اشتراک",
-  "settings.connection-limit-violations.title": "تخلف‌ها"
+  "settings.connection-limit-violations.title": "تخلف‌ها",
+  "connectionLimit.reason.nodes_at_once": "{{count}} نود در یک لحظه ترافیک واقعی داشتند ({{items}}) — یک نفر در هر لحظه فقط از یک نود استفاده می‌کند"
 }
