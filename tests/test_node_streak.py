@@ -37,6 +37,7 @@ def _assess(node_ids, prior_streak, settings=None):
     return assess(
         USER,
         LIVE,
+        {},
         set(node_ids),
         carried,
         set(),

@@ -350,8 +350,12 @@ async def collect_live_ips(
     by_node: dict[int, NodeActivity],
     concurrency: int = 12,
     deadline_seconds: float = 45.0,
-) -> dict[int, dict[str, int]]:
+) -> tuple[dict[int, dict[str, int]], dict[int, dict[int, int]]]:
     """Ask each user's own nodes for their live addresses and last-seen times.
+
+    Two things come back: the addresses, and which node last saw them when.
+    The second is what tells a user on two nodes at once from one moving
+    between servers, because a node stops reporting someone who has left.
 
     Users are polled concurrently: done one at a time this is thousands of
     sequential round trips and cannot finish inside a cycle.
@@ -368,21 +372,25 @@ async def collect_live_ips(
     """
     healthy = {node_id: node for node_id, node in await node_manager.get_healthy_nodes()}
     result: dict[int, dict[str, int]] = {}
+    live_nodes: dict[int, dict[int, int]] = {}
     if not healthy:
         logger.warning("no healthy nodes; skipping address collection")
-        return result
+        return result, live_nodes
 
     semaphore = asyncio.Semaphore(concurrency)
     started = time.monotonic()
     timed_out = False
 
-    async def for_user(user: User) -> tuple[int, dict[str, int]]:
+    async def for_user(user: User) -> tuple[int, dict[str, int], dict[int, int]]:
         nonlocal timed_out
         async with semaphore:
             if time.monotonic() - started > deadline_seconds:
                 timed_out = True
-                return user.id, {}
+                return user.id, {}, {}
             seen: dict[str, int] = {}
+            # The latest moment each node saw them, which is what says whether
+            # two nodes have the user at once or one after the other.
+            per_node: dict[int, int] = {}
             for node_id in (by_node.get(user.id) or NodeActivity()).touched:
                 node = healthy.get(node_id)
                 if node is None:
@@ -400,10 +408,13 @@ async def collect_live_ips(
                     # Keep the most recent sighting of each address.
                     if last_seen > seen.get(ip_text, 0):
                         seen[ip_text] = last_seen
-            return user.id, seen
+                    if last_seen > per_node.get(node_id, 0):
+                        per_node[node_id] = last_seen
+            return user.id, seen, per_node
 
-    for user_id, seen in await asyncio.gather(*[for_user(u) for u in users]):
+    for user_id, seen, per_node in await asyncio.gather(*[for_user(u) for u in users]):
         result[user_id] = seen
+        live_nodes[user_id] = per_node
 
     if timed_out:
         logger.warning(
@@ -411,7 +422,7 @@ async def collect_live_ips(
             deadline_seconds,
             sum(1 for v in result.values() if v),
         )
-    return result
+    return result, live_nodes
 
 
 def infrastructure_addresses(live: dict[int, dict[str, int]], settings: ConnectionLimit) -> set[str]:
@@ -509,6 +520,7 @@ def _in_pools(ip_text: str, settings: ConnectionLimit, pools: frozenset[str]) ->
 def assess(
     user: User,
     live_ips: dict[str, int],
+    seen_by_node: dict[int, int],
     node_ids: set[int],
     activity: NodeActivity,
     infra: set[str],
@@ -573,11 +585,23 @@ def assess(
     # that it is connected, so on its own it is not evidence of a device being
     # used. Behind a CDN it is the only thing that can tell two devices apart -
     # every address collapses to one there - which is the case it was for.
-    # A person uses one node at a time, so traffic on two nodes inside one
-    # bucket is two devices - evidence an address cannot give, because a
-    # carrier pool, a CDN and a NAT all blur addresses and none of them blurs
-    # this. One node says nothing, so only two or more count as a floor.
-    at_once = activity.concurrent if activity.concurrent > 1 else 0
+    # A person uses one node at a time, so two nodes holding the same user at
+    # the same moment is two devices - evidence an address cannot give,
+    # because a carrier pool, a CDN and a NAT all blur addresses and none of
+    # them blurs this.
+    #
+    # Both conditions are needed. Reporting the user now rules out someone
+    # working down the server list, who has left the nodes behind them.
+    # Having carried real traffic rules out a node that was only tried. One
+    # node alone says nothing either way.
+    newest_node = max(seen_by_node.values(), default=0)
+    nodes_now = {
+        node_id
+        for node_id, last_seen in seen_by_node.items()
+        if newest_node - last_seen <= settings.concurrency_window_seconds and node_id in activity.used
+    }
+    at_once = len(nodes_now) if len(nodes_now) > 1 else 0
+    at_once_traffic = {node_id: activity.concurrent_nodes.get(node_id, 0) for node_id in nodes_now}
 
     counted_fetches = address_sources > 0 and (bool(cdn_seen) or settings.count_fetched_devices)
     if address_sources == 0:
@@ -596,7 +620,8 @@ def assess(
         "devices": sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids),
         "nodes": sorted(node_ids),
         "nodes_touched": sorted(activity.touched),
-        "nodes_at_once": sorted(activity.concurrent_nodes),
+        "nodes_at_once": sorted(nodes_now),
+        "nodes_with_traffic_in_one_bucket": sorted(activity.concurrent_nodes),
     }
 
     concurrent = len(concurrent_groups) > 1
@@ -637,7 +662,7 @@ def assess(
         pooled=pooled_addresses,
         pools_used=pools_in_play,
         at_once=at_once,
-        at_once_nodes=activity.concurrent_nodes,
+        at_once_nodes=at_once_traffic,
     )
     return obs
 
@@ -711,7 +736,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
         return []
 
     by_node = await nodes_per_user(db, settings, user_ids)
-    live = await collect_live_ips(users, by_node)
+    live, live_nodes = await collect_live_ips(users, by_node)
     infra = infrastructure_addresses(live, settings)
     pools = carrier_pools(live, settings)
     if pools:
@@ -728,6 +753,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
         assess(
             user,
             live.get(user.id) or {},
+            live_nodes.get(user.id) or {},
             (by_node.get(user.id) or NodeActivity()).used,
             by_node.get(user.id) or NodeActivity(),
             infra,

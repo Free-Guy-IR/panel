@@ -27,6 +27,7 @@ def _assess(live, hwids, *, cdn=False, **overrides):
     return assess(
         USER,
         live,
+        {},
         set(),
         NodeActivity(),
         set(),
@@ -103,6 +104,7 @@ def test_two_devices_of_the_same_model_stay_two():
     obs = assess(
         USER,
         {"5.115.21.4": NOW},
+        {},
         set(),
         NodeActivity(),
         set(),

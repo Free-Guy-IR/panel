@@ -33,6 +33,7 @@ def _assess(addresses, pools, settings=None):
     return assess(
         USER,
         {ip: NOW for ip in addresses},
+        {},
         set(),
         NodeActivity(),
         set(),
