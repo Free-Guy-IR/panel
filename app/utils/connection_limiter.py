@@ -714,6 +714,7 @@ def assess(
         node_labels=node_labels,
         node_traffic=activity.traffic,
         used_nodes=activity.used,
+        node_min_traffic_kb=settings.node_min_traffic_kb,
     )
     return obs
 
@@ -729,7 +730,7 @@ def _mb(byte_count: int) -> str:
 def _reasons(
     obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles,
     known_models, pooled, pools_used, at_once, at_once_counted, at_once_streak, at_once_nodes,
-    node_labels, node_traffic, used_nodes
+    node_labels, node_traffic, used_nodes, node_min_traffic_kb
 ) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
@@ -787,16 +788,23 @@ def _reasons(
                 "cycles": at_once_streak,
                 "items": node_items,
             })
-    # Where the traffic actually went, always shown when there is any, so the
-    # node and its amount are never missing from the evidence.
-    if used_nodes:
+    # Every node the user carried any traffic on, with the amount, so the node
+    # they are on is always shown even when it is below the counting threshold.
+    # The threshold governs whether a node counts towards devices, not whether
+    # it is shown: a node under it is marked rather than hidden.
+    if node_traffic:
+        floor = node_min_traffic_kb * 1024
+        items = []
+        for nid, traffic in sorted(node_traffic.items(), key=lambda kv: kv[1], reverse=True):
+            label = f"{node_labels.get(nid, str(nid))}: {_mb(traffic)}"
+            if traffic < floor:
+                label += " *"  # below the threshold; shown, not counted
+            items.append(label)
         out.append({
             "code": "node_traffic",
-            "count": len(used_nodes),
-            "items": [
-                f"{node_labels.get(nid, str(nid))}: {_mb(node_traffic.get(nid, 0))}"
-                for nid in sorted(used_nodes, key=lambda n: node_traffic.get(n, 0), reverse=True)
-            ][:6],
+            "count": len(node_traffic),
+            "counted": len(used_nodes),
+            "items": items[:8],
         })
     if obs.node_count > 1 and obs.node_streak >= persistence_cycles:
         out.append({"code": "nodes", "count": obs.node_count, "cycles": obs.node_streak})

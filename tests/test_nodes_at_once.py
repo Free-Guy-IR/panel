@@ -133,3 +133,30 @@ def test_fewer_than_two_nodes_is_never_a_reason_to_count_anyone(nodes):
     obs = _assess(seen_by_node=nodes, used=set(nodes), bucket_traffic={n: 40 * MB for n in nodes},
                   addresses=())
     assert obs.devices == 0
+
+
+def test_a_connected_node_below_the_threshold_is_shown_not_hidden():
+    """The node a user is on always appears in the evidence, even when it is
+    under the counting threshold - shown with a mark, not counted."""
+    from app.utils.connection_limiter import NodeActivity, assess
+    activity = NodeActivity(touched={21}, used=set(), concurrent=0, concurrent_nodes={}, traffic={21: 96_000})
+    obs = assess(
+        USER,
+        {},
+        {},
+        set(),
+        activity,
+        set(),
+        frozenset(),
+        [],
+        {"apps": set(), "hwids": set()},
+        {},
+        ConnectionLimit(cdn_ranges=[], node_min_traffic_kb=10024),
+        node_labels={21: "141.94.92.71"},
+    )
+    nt = _reason(obs, "node_traffic")
+    assert nt is not None
+    assert nt["count"] == 1 and nt["counted"] == 0
+    assert any("141.94.92.71" in it and "*" in it for it in nt["items"])
+    # It is shown but contributes nothing to the device count.
+    assert obs.devices == 0
