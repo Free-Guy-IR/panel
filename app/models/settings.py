@@ -426,6 +426,14 @@ class ConnectionLimit(BaseModel):
     # more likely the same person after their address changed.
     concurrency_window_seconds: int = Field(default=90, ge=10, le=600)
 
+    # A mobile carrier hands one phone addresses from across a large pool, so a
+    # block that many different users are inside is a pool rather than a place.
+    # Its addresses then count as one, however many /24s they span. Zero users
+    # turns the detection off entirely.
+    carrier_pool_prefix: int = Field(default=12, ge=8, le=24)
+    carrier_pool_prefix_v6: int = Field(default=32, ge=16, le=64)
+    carrier_pool_min_users: int = Field(default=10, ge=0, le=10000)
+
     # Addresses are compared at this granularity so that a phone moving between
     # towers inside one carrier block does not read as several people.
     ipv4_group_prefix: int = Field(default=24, ge=8, le=32)

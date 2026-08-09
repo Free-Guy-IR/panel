@@ -33,6 +33,7 @@ def _assess(node_ids, prior_streak, settings=None):
         set(node_ids),
         carried,
         set(),
+        frozenset(),
         [],
         {"apps": set(), "hwids": set()},
         {},

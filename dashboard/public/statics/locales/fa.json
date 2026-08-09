@@ -3813,5 +3813,6 @@
   "settings.connectionLimit.violations.over": "تمام‌شده",
   "settings.connectionLimit.violations.release": "آزادسازی",
   "settings.connectionLimit.violations.released": "آزاد شد",
-  "settings.connectionLimit.violations.releaseFailed": "آزادسازی انجام نشد"
+  "settings.connectionLimit.violations.releaseFailed": "آزادسازی انجام نشد",
+  "connectionLimit.reason.carrier_pool": "{{count}} آدرس از استخر اپراتور آمده‌اند ({{items}}) — شبکه‌ی موبایل به یک گوشی برای هر اتصال آدرس متفاوتی می‌دهد، پس هر استخر یک بار شمرده می‌شود"
 }

@@ -94,9 +94,25 @@ def parse_ip(text: str):
         return None
 
 
-def group_key(ip, settings: ConnectionLimit) -> str:
-    """Collapse an address to the unit worth counting as one place."""
+def group_key(ip, settings: ConnectionLimit, pools: frozenset[str] = frozenset()) -> str:
+    """Collapse an address to the unit worth counting as one place.
+
+    Normally that is the /24 it sits in, which keeps a phone moving between
+    towers inside one block from reading as several people. Inside a carrier
+    pool it is the whole pool: the carrier hands out addresses from across it
+    to a single phone, so the /24 says nothing about who is on the other end.
+    """
+    if pools:
+        pool = pool_key(ip, settings)
+        if pool in pools:
+            return pool
     prefix = settings.ipv4_group_prefix if ip.version == 4 else settings.ipv6_group_prefix
+    return str(ipaddress.ip_network(f"{ip}/{prefix}", strict=False))
+
+
+def pool_key(ip, settings: ConnectionLimit) -> str:
+    """The block an address would belong to if it were part of a carrier pool."""
+    prefix = settings.carrier_pool_prefix if ip.version == 4 else settings.carrier_pool_prefix_v6
     return str(ipaddress.ip_network(f"{ip}/{prefix}", strict=False))
 
 
@@ -354,6 +370,29 @@ def infrastructure_addresses(live: dict[int, dict[str, int]], settings: Connecti
     return {ip for ip, owners in users_per_ip.items() if len(owners) >= settings.infrastructure_min_users}
 
 
+def carrier_pools(live: dict[int, dict[str, int]], settings: ConnectionLimit) -> frozenset[str]:
+    """Blocks that many different users are inside, which makes them a pool.
+
+    One household is one block. A block that a large slice of the panel is
+    sitting in belongs to a carrier, and the addresses it hands out cannot be
+    told apart by their /24.
+    """
+    if not settings.carrier_pool_min_users:
+        return frozenset()
+
+    users_per_pool: dict[str, set[int]] = defaultdict(set)
+    for user_id, ips in live.items():
+        for ip_text in ips:
+            ip = parse_ip(ip_text)
+            if ip is None or not ip.is_global:
+                continue
+            users_per_pool[pool_key(ip, settings)].add(user_id)
+
+    return frozenset(
+        pool for pool, owners in users_per_pool.items() if len(owners) >= settings.carrier_pool_min_users
+    )
+
+
 async def fetch_context(
     db: AsyncSession, user_ids: list[int], window_minutes: int
 ) -> tuple[dict[int, dict[str, set]], dict[int, dict[str, str]]]:
@@ -405,12 +444,18 @@ async def fetch_context(
     return context, devices
 
 
+def _in_pools(ip_text: str, settings: ConnectionLimit, pools: frozenset[str]) -> bool:
+    ip = parse_ip(ip_text)
+    return ip is not None and ip.is_global and pool_key(ip, settings) in pools
+
+
 def assess(
     user: User,
     live_ips: dict[str, int],
     node_ids: set[int],
     node_traffic: dict[int, int],
     infra: set[str],
+    pools: frozenset[str],
     cdn_nets: list,
     context: dict,
     devices: dict[str, str],
@@ -441,12 +486,15 @@ def assess(
         if any(ip in net for net in cdn_nets):
             cdn_seen.append(ip_text)
             continue
-        key = group_key(ip, settings)
+        key = group_key(ip, settings, pools)
         if last_seen > real_groups.get(key, 0):
             real_groups[key] = last_seen
 
     # Only what was live at the same moment counts. An address seen ten
     # minutes ago is the same person earlier, not another person now.
+    pools_in_play = {key for key in real_groups if key in pools}
+    pooled_addresses = sum(1 for ip_text in live_ips if _in_pools(ip_text, settings, pools))
+
     newest = max(real_groups.values(), default=0)
     concurrent_groups = {
         key: seen
@@ -494,8 +542,12 @@ def assess(
 
     # Two addresses inside one carrier block are usually one moving phone, so
     # unrelated networks are what actually suggest separate people.
+    # A pool is already one network however wide it is, so it stands for
+    # itself here rather than being cut into octets that mean nothing.
     distinct_networks = {
-        (g.split(".")[0] + "." + g.split(".")[1]) if ":" not in g else g.split(":")[0]
+        g
+        if g in pools
+        else ((g.split(".")[0] + "." + g.split(".")[1]) if ":" not in g else g.split(":")[0])
         for g in concurrent_groups
     }
 
@@ -518,13 +570,15 @@ def assess(
         obs, concurrent_groups, cdn_seen, infra_seen, concurrent, distinct_networks, apps, devices, hwids,
         settings.persistence_cycles,
         counted_fetches=counted_fetches,
+        pooled=pooled_addresses,
+        pools_used=pools_in_play,
     )
     return obs
 
 
 def _reasons(
     obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles,
-    counted_fetches
+    counted_fetches, pooled, pools_used
 ) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
@@ -540,6 +594,8 @@ def _reasons(
         out.append({"code": "networks", "count": len(real_groups), "items": sorted(real_groups)[:4]})
     if cdn_seen:
         out.append({"code": "cdn", "count": len(cdn_seen)})
+    if pooled:
+        out.append({"code": "carrier_pool", "count": pooled, "items": sorted(pools_used)[:3]})
     if infra_seen:
         out.append({"code": "infrastructure", "count": len(infra_seen)})
 
@@ -585,6 +641,9 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
     by_node = await nodes_per_user(db, settings, user_ids)
     live = await collect_live_ips(users, by_node)
     infra = infrastructure_addresses(live, settings)
+    pools = carrier_pools(live, settings)
+    if pools:
+        logger.debug("treating %d block(s) as carrier pools", len(pools))
     if infra:
         logger.debug("treating %d address(es) as shared infrastructure", len(infra))
 
@@ -600,6 +659,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
             nodes_actually_used(by_node.get(user.id) or {}, settings),
             by_node.get(user.id) or {},
             infra,
+            pools,
             cdn_nets,
             context.get(user.id) or {},
             devices.get(user.id) or {},

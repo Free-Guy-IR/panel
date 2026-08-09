@@ -3771,5 +3771,6 @@
   "settings.connectionLimit.violations.over": "over",
   "settings.connectionLimit.violations.release": "Release",
   "settings.connectionLimit.violations.released": "Released",
-  "settings.connectionLimit.violations.releaseFailed": "Could not release them"
+  "settings.connectionLimit.violations.releaseFailed": "Could not release them",
+  "connectionLimit.reason.carrier_pool": "{{count}} addresses came from carrier pools ({{items}}) — a mobile network hands one phone a different address per connection, so each pool counts once"
 }
