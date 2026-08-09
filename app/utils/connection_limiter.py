@@ -620,7 +620,7 @@ def assess(
         "devices": sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids),
         "nodes": sorted(node_ids),
         "nodes_touched": sorted(activity.touched),
-        "nodes_at_once": sorted(nodes_now),
+        "nodes_at_once": sorted(nodes_now) if at_once else [],
         "nodes_with_traffic_in_one_bucket": sorted(activity.concurrent_nodes),
     }
 
