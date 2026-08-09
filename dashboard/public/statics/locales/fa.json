@@ -3818,10 +3818,12 @@
   "settings.connection-limit.title": "محدودیت اتصال",
   "settings.connection-limit-review.title": "دستگاه‌های هر اشتراک",
   "settings.connection-limit-violations.title": "تخلف‌ها",
-  "connectionLimit.reason.nodes_at_once": "{{count}} نود در یک لحظه ترافیک واقعی داشتند ({{items}}) — یک نفر در هر لحظه فقط از یک نود استفاده می‌کند",
+  "connectionLimit.reason.nodes_at_once": "روی {{count}} نود در یک لحظه: {{items}}",
   "settings.hwid.scope.title": "گروه‌هایی که سیاست پوشش می‌دهد",
   "settings.hwid.scope.everyone": "همه",
   "settings.hwid.scope.description": "خالی یعنی همه. با انتخاب گروه، کاربران بیرون از آن‌ها اصلاً مشمول نمی‌شوند.",
   "settings.hwid.scope.noGroups": "هنوز گروهی نیست",
-  "settings.hwid.scope.label": "گروه‌ها"
+  "settings.hwid.scope.label": "گروه‌ها",
+  "connectionLimit.reason.hwid_by_model": "بر پایه‌ی مدل گوشی، {{count}} دستگاه شمرده شد: {{items}}",
+  "connectionLimit.reason.node_traffic": "ترافیک روی {{count}} نود: {{items}}"
 }

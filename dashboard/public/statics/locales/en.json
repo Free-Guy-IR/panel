@@ -3776,10 +3776,12 @@
   "settings.connection-limit.title": "Connection limit",
   "settings.connection-limit-review.title": "Devices per subscription",
   "settings.connection-limit-violations.title": "Violations",
-  "connectionLimit.reason.nodes_at_once": "{{count}} nodes carried real traffic at the same moment ({{items}}) — one person uses one node at a time",
+  "connectionLimit.reason.nodes_at_once": "on {{count}} nodes at the same moment: {{items}}",
   "settings.hwid.scope.title": "Groups the policy covers",
   "settings.hwid.scope.everyone": "everyone",
   "settings.hwid.scope.description": "Empty covers everyone. With groups chosen, users outside them are not covered at all.",
   "settings.hwid.scope.noGroups": "No groups yet",
-  "settings.hwid.scope.label": "Groups"
+  "settings.hwid.scope.label": "Groups",
+  "connectionLimit.reason.hwid_by_model": "counted as {{count}} device(s) by phone model: {{items}}",
+  "connectionLimit.reason.node_traffic": "traffic on {{count}} node(s): {{items}}"
 }

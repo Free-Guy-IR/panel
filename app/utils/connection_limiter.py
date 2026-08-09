@@ -39,6 +39,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
+    Node,
     NodeUserUsage,
     User,
     UserConnectionLimit,
@@ -131,6 +132,9 @@ class Observation:
     # The two floors it was taken from, kept so the popover can explain it.
     address_sources: int = 0
     hwid_count: int = 0
+    # Distinct phones behind the hardware ids, after folding the same model in
+    # several apps into one. This is the hardware-id contribution to the count.
+    hwid_devices: int = 0
     node_count: int = 0
     # How many checks in a row the user has been on more than one node.
     node_streak: int = 0
@@ -229,6 +233,10 @@ class NodeActivity:
     concurrent: int = 0
     # Which nodes those were, and what each carried, for the evidence.
     concurrent_nodes: dict[int, int] = field(default_factory=dict)
+    # Total traffic per node over the whole window, so the evidence can always
+    # show where a user's traffic went and how much - not only when two nodes
+    # happened to overlap.
+    traffic: dict[int, int] = field(default_factory=dict)
 
 
 def nodes_actually_used(traffic_by_node: dict[int, int], settings: ConnectionLimit) -> set[int]:
@@ -287,6 +295,7 @@ async def nodes_per_user(
         activity = NodeActivity(
             touched=set(totals[user_id]),
             used=nodes_actually_used(totals[user_id], settings),
+            traffic=dict(totals[user_id]),
         )
         for nodes in per_bucket.values():
             real = {node_id: nodes[node_id] for node_id in nodes_actually_used(nodes, settings)}
@@ -531,6 +540,7 @@ def assess(
     settings: ConnectionLimit,
     device_limit: int | None = None,
     prior_node_streak: int = 0,
+    node_labels: dict[int, str] | None = None,
 ) -> Observation:
     """Turn one user's raw sightings into a verdict with its reasons."""
     obs = Observation(user_id=user.id, username=user.username, node_count=len(node_ids))
@@ -576,15 +586,30 @@ def assess(
     address_sources = len(concurrent_groups) + (1 if cdn_seen else 0)
     obs.address_sources = address_sources
 
+    node_labels = node_labels or {}
+
     apps = context.get("apps") or set()
     hwids = context.get("hwids") or set()
     obs.app_count = len(apps)
     obs.hwid_count = len(hwids)
 
-    # Fetching the subscription means a device holds the configuration, not
-    # that it is connected, so on its own it is not evidence of a device being
-    # used. Behind a CDN it is the only thing that can tell two devices apart -
-    # every address collapses to one there - which is the case it was for.
+    # One phone imported into two apps reports two hardware ids but one phone
+    # model; two different phones report two models. So devices are counted by
+    # model, not by id: the same model in several apps is one device, a
+    # different model is another.
+    #
+    # An id whose app does not report a model (V2Box sends none) cannot be told
+    # apart from a phone already seen, so it never adds a device on its own - it
+    # only ensures that a user who has any device at all is counted as at least
+    # one. Erring towards not counting is the side to err on while nothing is
+    # enforced. The strict setting counts every distinct id instead.
+    known_models = {devices[h].strip().lower() for h in hwids if devices.get(h)}
+    if settings.count_fetched_devices:
+        hwid_devices = len(hwids)
+    else:
+        hwid_devices = max(len(known_models), 1 if hwids else 0)
+    obs.hwid_devices = hwid_devices
+
     # A person uses one node at a time, so two nodes holding the same user at
     # the same moment is two devices - evidence an address cannot give,
     # because a carrier pool, a CDN and a NAT all blur addresses and none of
@@ -601,15 +626,12 @@ def assess(
         if newest_node - last_seen <= settings.concurrency_window_seconds and node_id in activity.used
     }
     at_once = len(nodes_now) if len(nodes_now) > 1 else 0
-    at_once_traffic = {node_id: activity.concurrent_nodes.get(node_id, 0) for node_id in nodes_now}
+    at_once_traffic = {node_id: activity.traffic.get(node_id, activity.concurrent_nodes.get(node_id, 0)) for node_id in nodes_now}
 
-    counted_fetches = address_sources > 0 and (bool(cdn_seen) or settings.count_fetched_devices)
-    if address_sources == 0:
-        obs.devices = at_once
-    elif counted_fetches:
-        obs.devices = max(address_sources, len(hwids), at_once)
-    else:
-        obs.devices = max(address_sources, at_once)
+    # Each measure is a floor and blind to what the others see: addresses, the
+    # phones behind the hardware ids, and nodes held at once. The largest is
+    # the estimate.
+    obs.devices = max(address_sources, at_once, hwid_devices)
 
     obs.details = {
         "real_groups": sorted(concurrent_groups),
@@ -622,6 +644,12 @@ def assess(
         "nodes_touched": sorted(activity.touched),
         "nodes_at_once": sorted(nodes_now) if at_once else [],
         "nodes_with_traffic_in_one_bucket": sorted(activity.concurrent_nodes),
+        # Where the traffic went, always: "node label -> bytes" for every node
+        # that carried real traffic this window.
+        "node_traffic": {
+            node_labels.get(node_id, str(node_id)): activity.traffic.get(node_id, 0)
+            for node_id in sorted(activity.used)
+        },
     }
 
     concurrent = len(concurrent_groups) > 1
@@ -658,18 +686,29 @@ def assess(
     obs.reasons = _reasons(
         obs, concurrent_groups, cdn_seen, infra_seen, concurrent, distinct_networks, apps, devices, hwids,
         settings.persistence_cycles,
-        counted_fetches=counted_fetches,
+        known_models=known_models,
         pooled=pooled_addresses,
         pools_used=pools_in_play,
         at_once=at_once,
         at_once_nodes=at_once_traffic,
+        node_labels=node_labels,
+        node_traffic=activity.traffic,
+        used_nodes=activity.used,
     )
     return obs
 
 
+def _mb(byte_count: int) -> str:
+    """A short, honest size: MB above a megabyte, KB below, so a handshake reads
+    as kilobytes rather than rounding to 0MB."""
+    if byte_count >= 1048576:
+        return f"{byte_count / 1048576:.1f}MB"
+    return f"{max(1, byte_count // 1024)}KB"
+
+
 def _reasons(
     obs, real_groups, cdn_seen, infra_seen, concurrent, networks, apps, devices, hwids, persistence_cycles,
-    counted_fetches, pooled, pools_used, at_once, at_once_nodes
+    known_models, pooled, pools_used, at_once, at_once_nodes, node_labels, node_traffic, used_nodes
 ) -> list[dict]:
     """What was seen, as codes the frontend renders in the reader's language.
 
@@ -700,21 +739,37 @@ def _reasons(
     if len(apps) > 1:
         out.append({"code": "apps", "count": len(apps), "items": sorted(apps)[:3]})
     if hwids:
-        # Keyed by the id, so two devices reporting the same model stay two,
-        # and the id itself is shown - it is what identifies the device.
+        # The ids themselves, each with its phone model where the app reported
+        # one, for the detail.
         labels = sorted(f"{devices[h]} - {h}" if devices.get(h) else h for h in hwids)
-        out.append({"code": "hardware_ids", "count": len(hwids), "items": labels[:3]})
-    if hwids and not counted_fetches:
-        out.append({"code": "fetched_not_counted", "count": len(hwids)})
+        out.append({"code": "hardware_ids", "count": len(hwids), "items": labels[:4]})
+        # How those ids map to phones: same model in several apps is one phone,
+        # a different model is another. This is what the count rests on.
+        out.append({
+            "code": "hwid_by_model",
+            "count": obs.hwid_devices,
+            "items": sorted(known_models)[:4],
+        })
     if cdn_seen and not hwids:
         out.append({"code": "cdn_without_hwid"})
-    # Held for long enough to be worth reading. Below that it is as likely
-    # to be one refresh of an app that tries every server as anything else.
+    # Two nodes holding the user at the same moment - what the count rests on
+    # here - with the node and how much each carried.
     if at_once > 1:
         out.append({
             "code": "nodes_at_once",
             "count": at_once,
-            "items": [f"{node_id}: {traffic // 1048576}MB" for node_id, traffic in sorted(at_once_nodes.items())][:4],
+            "items": [f"{node_labels.get(nid, str(nid))}: {_mb(t)}" for nid, t in sorted(at_once_nodes.items())][:4],
+        })
+    # Where the traffic actually went, always shown when there is any, so the
+    # node and its amount are never missing from the evidence.
+    if used_nodes:
+        out.append({
+            "code": "node_traffic",
+            "count": len(used_nodes),
+            "items": [
+                f"{node_labels.get(nid, str(nid))}: {_mb(node_traffic.get(nid, 0))}"
+                for nid in sorted(used_nodes, key=lambda n: node_traffic.get(n, 0), reverse=True)
+            ][:6],
         })
     if obs.node_count > 1 and obs.node_streak >= persistence_cycles:
         out.append({"code": "nodes", "count": obs.node_count, "cycles": obs.node_streak})
@@ -747,6 +802,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
     context, devices = await fetch_context(db, user_ids, settings.node_window_minutes)
     overrides = await per_user_limits(db, user_ids)
     node_streaks = await prior_node_streaks(db, user_ids)
+    node_labels = await node_label_map(db)
     cdn_nets = _networks(settings.cdn_ranges or DEFAULT_CDN_RANGES)
 
     return [
@@ -762,11 +818,25 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
             context.get(user.id) or {},
             devices.get(user.id) or {},
             settings,
-            overrides.get(user.id),
-            node_streaks.get(user.id, 0),
+            node_labels=node_labels,
+            device_limit=overrides.get(user.id),
+            prior_node_streak=node_streaks.get(user.id, 0),
         )
         for user in users
     ]
+
+
+async def node_label_map(db: AsyncSession) -> dict[int, str]:
+    """Node id to a human label: the name and its address, so the evidence
+    names the node and shows its IP rather than an opaque number."""
+    rows = (await db.execute(select(Node.id, Node.name, Node.address))).all()
+    out: dict[int, str] = {}
+    for node_id, name, address in rows:
+        if name and address and name != address:
+            out[node_id] = f"{name} ({address})"
+        else:
+            out[node_id] = address or name or str(node_id)
+    return out
 
 
 # Provider names are looked up on demand and cached for the process lifetime.

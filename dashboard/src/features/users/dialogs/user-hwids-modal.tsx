@@ -49,7 +49,13 @@ export function UserHwidsModal({ isOpen, onOpenChange, userId, username }: UserH
     },
   })
 
-  const invalidateHwids = () => queryClient.invalidateQueries({ queryKey })
+  const invalidateHwids = () => {
+    queryClient.invalidateQueries({ queryKey })
+    // The backend clears this user's device-review row on reset/delete; drop
+    // the cached copies so the review and the users-table badge refetch it.
+    queryClient.invalidateQueries({ queryKey: ['/api/connection-limit/states'] })
+    queryClient.invalidateQueries({ queryKey: ['/api/connection-limit/states/by-user'] })
+  }
 
   const deleteMutation = useDeleteUserHwid({
     mutation: {
