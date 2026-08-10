@@ -3775,5 +3775,11 @@
   "connectionLimit.reason.node_traffic": "трафик на {{count}} узлах: {{items}}",
   "connectionLimit.reason.nodes_at_once_pending": "замечен на {{count}} узлах одновременно ({{cycles}} проверок пока) — ещё не учтено; краткое совпадение обычно означает смену узла: {{items}}",
   "settings.connectionLimit.deviceWindow.title": "Помнить устройство (минут)",
-  "settings.connectionLimit.deviceWindow.description": "Насколько далеко назад искать приложения и устройства, запрашивавшие подписку. Дольше окна узла, поскольку приложение хранит конфигурацию и какое-то время работает без повторного запроса — короткое окно теряет устройство, которое всё ещё используется."
+  "settings.connectionLimit.deviceWindow.description": "Насколько далеко назад искать приложения и устройства, запрашивавшие подписку. Дольше окна узла, поскольку приложение хранит конфигурацию и какое-то время работает без повторного запроса — короткое окно теряет устройство, которое всё ещё используется.",
+  "settings.connectionLimit.review.addresses": "Адреса",
+  "settings.connectionLimit.addresses.title": "Адреса и операторы",
+  "settings.connectionLimit.addresses.description": "Сети, где пользователь был замечен недавно, и оператор за каждой.",
+  "settings.connectionLimit.addresses.lookupOff": "Определение оператора выключено, показаны только адреса. Включите его в настройках выше.",
+  "settings.connectionLimit.addresses.empty": "Для этого пользователя адресов нет.",
+  "settings.connectionLimit.addresses.unknown": "неизвестно"
 }

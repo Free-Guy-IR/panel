@@ -6,11 +6,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { renderReason, type ConnectionReason } from '@/features/users/components/connection-reasons'
+import ConnectionAddressesDialog from '@/features/users/components/connection-addresses-dialog'
 import OverrideDialog from '@/features/users/components/connection-override-dialog'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useListConnectionStates } from '@/service/api'
 import dayjs from 'dayjs'
-import { RefreshCw, Users } from 'lucide-react'
+import { MapPin, RefreshCw, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -45,6 +46,7 @@ export default function ConnectionLimitReview() {
   const [verdict, setVerdict] = useState<string>('over_limit')
   const [page, setPage] = useState(0)
   const [editing, setEditing] = useState<{ id: number; username?: string | null } | null>(null)
+  const [addressesFor, setAddressesFor] = useState<{ id: number; username?: string | null } | null>(null)
 
   const { data, isLoading, isFetching, refetch } = useListConnectionStates(
     {
@@ -177,14 +179,25 @@ export default function ConnectionLimitReview() {
                       </TableCell>
 
                       <TableCell className="align-top">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => setEditing({ id: state.user_id, username: state.username })}
-                        >
-                          {t('settings.connectionLimit.review.setAllowance', { defaultValue: 'Allowance' })}
-                        </Button>
+                        <div className="flex flex-col items-stretch gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 justify-start gap-1.5 text-xs"
+                            onClick={() => setAddressesFor({ id: state.user_id, username: state.username })}
+                          >
+                            <MapPin className="h-3 w-3" />
+                            {t('settings.connectionLimit.review.addresses', { defaultValue: 'Addresses' })}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 justify-start text-xs"
+                            onClick={() => setEditing({ id: state.user_id, username: state.username })}
+                          >
+                            {t('settings.connectionLimit.review.setAllowance', { defaultValue: 'Allowance' })}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -222,6 +235,13 @@ export default function ConnectionLimitReview() {
         defaultLimit={data?.device_limit ?? 2}
         open={editing !== null}
         onOpenChange={open => !open && setEditing(null)}
+      />
+
+      <ConnectionAddressesDialog
+        userId={addressesFor?.id ?? null}
+        username={addressesFor?.username}
+        open={addressesFor !== null}
+        onOpenChange={open => !open && setAddressesFor(null)}
       />
     </div>
   )

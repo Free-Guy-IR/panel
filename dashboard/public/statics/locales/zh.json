@@ -3820,5 +3820,11 @@
   "connectionLimit.reason.node_traffic": "{{count}} 个节点上的流量：{{items}}",
   "connectionLimit.reason.nodes_at_once_pending": "同一时刻出现在 {{count}} 个节点上（目前 {{cycles}} 次检查）——尚未计入；短暂重叠通常是切换节点：{{items}}",
   "settings.connectionLimit.deviceWindow.title": "记住设备的时长（分钟）",
-  "settings.connectionLimit.deviceWindow.description": "向前追溯多久以查找拉取过订阅的应用和设备。比节点窗口更长，因为应用会保留配置并在一段时间内不再拉取——过短的窗口会漏掉仍在使用的设备。"
+  "settings.connectionLimit.deviceWindow.description": "向前追溯多久以查找拉取过订阅的应用和设备。比节点窗口更长，因为应用会保留配置并在一段时间内不再拉取——过短的窗口会漏掉仍在使用的设备。",
+  "settings.connectionLimit.review.addresses": "地址",
+  "settings.connectionLimit.addresses.title": "地址与运营商",
+  "settings.connectionLimit.addresses.description": "该用户最近出现的网络，以及每个网络背后的运营商。",
+  "settings.connectionLimit.addresses.lookupOff": "运营商查询已关闭，仅显示地址。请在上方设置中开启。",
+  "settings.connectionLimit.addresses.empty": "该用户没有记录的地址。",
+  "settings.connectionLimit.addresses.unknown": "未知"
 }

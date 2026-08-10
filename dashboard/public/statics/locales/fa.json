@@ -3828,5 +3828,11 @@
   "connectionLimit.reason.node_traffic": "ترافیک روی {{count}} نود: {{items}}",
   "connectionLimit.reason.nodes_at_once_pending": "روی {{count}} نود در یک لحظه دیده شد ({{cycles}} بررسی تا الان) — هنوز شمرده نشده؛ هم‌پوشانی کوتاه معمولاً یعنی تعویض نود: {{items}}",
   "settings.connectionLimit.deviceWindow.title": "مدت به‌خاطر سپردن یک دستگاه (دقیقه)",
-  "settings.connectionLimit.deviceWindow.description": "چقدر به عقب برای اپ‌ها و دستگاه‌هایی که لینک اشتراک را گرفته‌اند نگاه شود. بلندتر از پنجره‌ی نود، چون اپ کانفیگ را نگه می‌دارد و مدتی بدون گرفتن دوباره کار می‌کند — پنجره‌ی کوتاه دستگاهی را که هنوز در حال استفاده است از دست می‌دهد."
+  "settings.connectionLimit.deviceWindow.description": "چقدر به عقب برای اپ‌ها و دستگاه‌هایی که لینک اشتراک را گرفته‌اند نگاه شود. بلندتر از پنجره‌ی نود، چون اپ کانفیگ را نگه می‌دارد و مدتی بدون گرفتن دوباره کار می‌کند — پنجره‌ی کوتاه دستگاهی را که هنوز در حال استفاده است از دست می‌دهد.",
+  "settings.connectionLimit.review.addresses": "آدرس‌ها",
+  "settings.connectionLimit.addresses.title": "آدرس‌ها و اپراتورها",
+  "settings.connectionLimit.addresses.description": "شبکه‌هایی که این کاربر اخیراً روی آن‌ها دیده شده، و اپراتور پشت هرکدام.",
+  "settings.connectionLimit.addresses.lookupOff": "تشخیص اپراتور خاموش است، پس فقط آدرس‌ها نشان داده می‌شوند. از تنظیمات بالا روشنش کنید.",
+  "settings.connectionLimit.addresses.empty": "آدرسی برای این کاربر ثبت نشده.",
+  "settings.connectionLimit.addresses.unknown": "نامشخص"
 }

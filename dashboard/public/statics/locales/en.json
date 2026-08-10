@@ -3786,5 +3786,11 @@
   "connectionLimit.reason.node_traffic": "traffic on {{count}} node(s): {{items}}",
   "connectionLimit.reason.nodes_at_once_pending": "seen on {{count}} nodes at once ({{cycles}} check(s) so far) — not counted yet; a brief overlap is usually a node switch: {{items}}",
   "settings.connectionLimit.deviceWindow.title": "Remember a device for (minutes)",
-  "settings.connectionLimit.deviceWindow.description": "How far back to look for the apps and devices that fetched the subscription. Longer than the node window, because an app keeps a configuration and runs a while without fetching again — a short window loses a device that is still in use."
+  "settings.connectionLimit.deviceWindow.description": "How far back to look for the apps and devices that fetched the subscription. Longer than the node window, because an app keeps a configuration and runs a while without fetching again — a short window loses a device that is still in use.",
+  "settings.connectionLimit.review.addresses": "Addresses",
+  "settings.connectionLimit.addresses.title": "Addresses and providers",
+  "settings.connectionLimit.addresses.description": "The networks this user was last seen on, and the provider behind each.",
+  "settings.connectionLimit.addresses.lookupOff": "Provider lookup is off, so only the addresses are shown. Turn it on in the settings above.",
+  "settings.connectionLimit.addresses.empty": "No addresses recorded for this user.",
+  "settings.connectionLimit.addresses.unknown": "unknown"
 }
