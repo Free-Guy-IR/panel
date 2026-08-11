@@ -709,10 +709,14 @@ class ClashMetaConfiguration(ClashConfiguration):
             "password": settings["password"],
         }
 
-        obfs_password, _quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
+        obfs_password, quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
         if obfs_password:
             node["obfs"] = "salamander"
             node["obfs-password"] = obfs_password
+
+        hop_ports = (quic_params.get("udpHop") or {}).get("ports")
+        if hop_ports:
+            node["ports"] = hop_ports
 
         self._apply_tls(node, inbound.tls_config, "hysteria2")
         self._apply_mux(node, inbound.mux_settings)

@@ -344,6 +344,7 @@ class StandardLinks(BaseSubscription):
             payload["obfs-password"] = obfs_password
         if hop_ports := quic_params.get("udpHop", {}).get("ports"):
             payload["mports"] = hop_ports
+            payload["mport"] = hop_ports
         if brutal_up := quic_params.get("brutalUp"):
             payload["up"] = brutal_up
         if brutal_down := quic_params.get("brutalDown"):

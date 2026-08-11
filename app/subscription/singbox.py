@@ -369,9 +369,17 @@ class SingBoxConfiguration(BaseSubscription):
             "server_port": self._select_port(inbound.port),
             "password": settings["password"],
         }
-        obfs_password, _quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
+        obfs_password, quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
         if obfs_password:
             config["obfs"] = {"type": "salamander", "password": obfs_password}
+        udp_hop = quic_params.get("udpHop") or {}
+        hop_ports = udp_hop.get("ports")
+        if hop_ports:
+            # sing-box server_ports wants START:END (colon); finalmask stores START-END (dash)
+            config["server_ports"] = [str(hop_ports).replace("-", ":")]
+        hop_iv = udp_hop.get("hopInterval") or udp_hop.get("interval")
+        if hop_iv:
+            config["hop_interval"] = f"{str(hop_iv).rstrip('s')}s"
         if inbound.tls_config.tls in ("tls", "reality"):
             config["tls"] = self._apply_tls(inbound.tls_config, inbound.fragment_settings)
         return self._normalize_and_remove_none_values(config)
