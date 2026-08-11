@@ -1,14 +1,21 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { SbBindingsSection } from '@/features/core-editor/components/singbox/sb-bindings-section'
+import { SbDnsSection } from '@/features/core-editor/components/singbox/sb-dns-section'
+import { SbExperimentalSection } from '@/features/core-editor/components/singbox/sb-experimental-section'
+import { SbOutboundsSection } from '@/features/core-editor/components/singbox/sb-outbounds-section'
+import { SbRouteSection } from '@/features/core-editor/components/singbox/sb-route-section'
+import { SbRuleSetsSection } from '@/features/core-editor/components/singbox/sb-rulesets-section'
 import { SingBoxInboundForm } from '@/features/core-editor/components/singbox/singbox-inbound-form'
 import { XrayAdvancedSection } from '@/features/core-editor/components/xray/xray-advanced-section'
 import { useSectionHeaderAddPulseEffect, type SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
 import { createNewHysteria2InboundDraft, createNewInboundDraft } from '@/features/core-editor/kit/singbox-adapter'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import type { SbCoreSection } from '@/features/core-editor/state/core-editor-store'
-import { validateInboundDraft } from '@pasarguard/singbox-config-kit'
-import type { SingBoxProtocol } from '@pasarguard/singbox-config-kit'
+import { cn } from '@/lib/utils'
+import { SINGBOX_BALANCER_OUTBOUND_TYPES, validateInboundDraft } from '@pasarguard/singbox-config-kit'
+import type { SingBoxProtocol, SingBoxVersion } from '@pasarguard/singbox-config-kit'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,11 +26,55 @@ interface SingBoxCoreEditorProps {
 }
 
 const ADD_PROTOCOLS: readonly SingBoxProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'tuic', 'hysteria2']
+const VERSIONS: readonly SingBoxVersion[] = ['1.11', '1.12']
 
-/** Top-level sing-box section: a list of inbound cards (add/remove) across every supported protocol, plus the shared Advanced JSON tab. */
+/** sing-box core editor: dispatches to a section by activeSection, with a core-wide version switch. */
 export function SingBoxCoreEditor({ headerAddPulse, headerAddEpoch }: SingBoxCoreEditorProps) {
   const { t } = useTranslation()
   const section = useCoreEditorStore(s => s.activeSection) as SbCoreSection
+  const draft = useCoreEditorStore(s => s.sbDraft)
+  const updateSbDraft = useCoreEditorStore(s => s.updateSbDraft)
+
+  if (!draft) return null
+  const version = draft.singboxVersion ?? '1.12'
+  const setVersion = (v: SingBoxVersion) => updateSbDraft(d => ({ ...d, singboxVersion: v }))
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-muted-foreground text-xs">{t('coreEditor.singbox.versionHint', { defaultValue: 'sing-box release these settings target.' })}</p>
+        <div className="bg-background inline-flex h-9 items-center gap-1 rounded-lg border p-0.5 shadow-sm" role="radiogroup" aria-label="sing-box version">
+          {VERSIONS.map(v => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={version === v}
+              onClick={() => setVersion(v)}
+              className={cn('h-8 min-w-8 rounded-md px-3 text-sm font-medium transition-colors', version === v ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted')}
+            >
+              {v}.x
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {section === 'inbounds' && <SbInboundsAccordion headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
+      {section === 'outbounds' && <SbOutboundsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} sectionId="outbounds" />}
+      {section === 'balancers' && <SbOutboundsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} sectionId="balancers" onlyTypes={SINGBOX_BALANCER_OUTBOUND_TYPES} />}
+      {section === 'route' && <SbRouteSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
+      {section === 'ruleSets' && <SbRuleSetsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
+      {section === 'dns' && <SbDnsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
+      {section === 'bindings' && <SbBindingsSection />}
+      {section === 'experimental' && <SbExperimentalSection />}
+      {section === 'advanced' && <XrayAdvancedSection />}
+    </div>
+  )
+}
+
+/** The original inbound-cards accordion, kept as-is for the Inbounds section. */
+function SbInboundsAccordion({ headerAddPulse, headerAddEpoch }: SingBoxCoreEditorProps) {
+  const { t } = useTranslation()
   const draft = useCoreEditorStore(s => s.sbDraft)
   const updateSbDraft = useCoreEditorStore(s => s.updateSbDraft)
   const [openItems, setOpenItems] = useState<string[]>(() => (draft?.inbounds ?? []).map((_, i) => `inbound-${i}`))
@@ -41,7 +92,6 @@ export function SingBoxCoreEditor({ headerAddPulse, headerAddEpoch }: SingBoxCor
   )
 
   const addInbound = useCallback(() => {
-    // The page-header "+ Add" and pulse effect default to Hysteria2, preserving prior behavior.
     updateSbDraft(d => {
       const next = createNewHysteria2InboundDraft(d)
       const nextInbounds = [...d.inbounds, next]
@@ -60,9 +110,7 @@ export function SingBoxCoreEditor({ headerAddPulse, headerAddEpoch }: SingBoxCor
     [updateSbDraft],
   )
 
-  if (section === 'advanced') return <XrayAdvancedSection />
   if (!draft) return null
-
   const allTags = draft.inbounds.map(i => i.tag)
 
   return (

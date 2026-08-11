@@ -17,7 +17,16 @@ export type XrayCoreSection = 'bindings' | 'inbounds' | 'outbounds' | 'routing' 
 
 export type WgCoreSection = 'interface' | 'advanced'
 
-export type SbCoreSection = 'inbounds' | 'advanced'
+export type SbCoreSection =
+  | 'inbounds'
+  | 'outbounds'
+  | 'balancers'
+  | 'route'
+  | 'ruleSets'
+  | 'dns'
+  | 'bindings'
+  | 'experimental'
+  | 'advanced'
 
 export type OvCoreSection = 'instances' | 'pki' | 'advanced'
 

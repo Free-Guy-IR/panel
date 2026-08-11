@@ -683,17 +683,26 @@ export default function CoreEditorPage() {
 
     if (kind === 'singbox') {
       const section = activeSection as SbCoreSection
+      // Titles/button labels are plain strings (PageHeader t()'s them; unknown strings pass through)
+      // so the parity sections render correctly without adding i18n keys — matching the nav labels.
       return {
         inbounds: {
           title: 'coreEditor.section.inbounds',
           description: 'coreEditor.sectionDesc.sbInbounds',
           buttonText: 'coreEditor.inbound.add',
         },
+        outbounds: { title: 'Outbounds', buttonText: 'Add outbound' },
+        balancers: { title: 'Balancers', buttonText: 'Add balancer' },
+        route: { title: 'Route', buttonText: 'Add rule' },
+        ruleSets: { title: 'Rule Sets', buttonText: 'Add rule set' },
+        dns: { title: 'DNS', buttonText: 'Add server' },
+        bindings: { title: 'Bindings' },
+        experimental: { title: 'Experimental' },
         advanced: {
           title: 'coreEditor.section.advanced',
           description: 'coreEditor.sectionDesc.advanced',
         },
-      }[section]
+      }[section] as { title: string; description?: string; buttonText?: string } | undefined
     }
 
     if (kind === 'openvpn') {

@@ -217,11 +217,32 @@ function inboundToDraft(raw: unknown): SingBoxInboundDraft {
   }
 }
 
+/** 1.12 DNS servers are typed ({type,server}); 1.11 uses a bare {address}. Infer from what's present. */
+function inferSingboxVersion(cfg: Record<string, unknown>): SingBoxCoreDraft['singboxVersion'] {
+  const dns = asRecord(cfg.dns)
+  const servers = dns && Array.isArray(dns.servers) ? dns.servers : []
+  for (const s of servers) {
+    const sr = asRecord(s)
+    if (!sr) continue
+    if (typeof sr.type === 'string') return '1.12'
+    if (typeof sr.address === 'string') return '1.11'
+  }
+  return '1.12'
+}
+
 function singBoxConfigToDraftFromValid(c: SingBoxCoreConfig): SingBoxCoreDraft {
   const logLevel = c.log && typeof c.log.level === 'string' ? c.log.level : 'info'
+  const cfg = c as unknown as Record<string, unknown>
+  // outbounds/route/dns/experimental are stored wire-shaped, so read them back verbatim; unknown
+  // fields survive the round-trip because nothing here rewrites them.
   return {
     logLevel,
+    singboxVersion: inferSingboxVersion(cfg),
     inbounds: c.inbounds.map(inboundToDraft),
+    outbounds: (Array.isArray(cfg.outbounds) ? cfg.outbounds : []) as SingBoxCoreDraft['outbounds'],
+    route: (asRecord(cfg.route) ?? {}) as SingBoxCoreDraft['route'],
+    dns: (asRecord(cfg.dns) ?? {}) as SingBoxCoreDraft['dns'],
+    experimental: (asRecord(cfg.experimental) ?? {}) as SingBoxCoreDraft['experimental'],
   }
 }
 
