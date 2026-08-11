@@ -356,7 +356,7 @@ class SingBoxConfig(dict):
     # NOTE: the multi-protocol metadata (network/tls/sni/alpn/pbk/sids/method/
     # is_2022/...) all lives in `_inbounds_by_tag`, never on the inbound dict
     # itself, so nothing new needs stripping here.
-    _PANEL_ONLY_INBOUND_KEYS = ("port_hopping_range",)
+    _PANEL_ONLY_INBOUND_KEYS = ("port_hopping_range", "up_mbps", "down_mbps")
 
     def to_str(self, **json_kwargs) -> str:
         wire_config = deepcopy(dict(self))
