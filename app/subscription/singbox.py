@@ -380,6 +380,12 @@ class SingBoxConfiguration(BaseSubscription):
         hop_iv = udp_hop.get("hopInterval") or udp_hop.get("interval")
         if hop_iv:
             config["hop_interval"] = f"{str(hop_iv).rstrip('s')}s"
+        up_mbps = self._hysteria_mbps(quic_params.get("brutalUp"))
+        if up_mbps:
+            config["up_mbps"] = up_mbps
+        down_mbps = self._hysteria_mbps(quic_params.get("brutalDown"))
+        if down_mbps:
+            config["down_mbps"] = down_mbps
         if inbound.tls_config.tls in ("tls", "reality"):
             config["tls"] = self._apply_tls(inbound.tls_config, inbound.fragment_settings)
         return self._normalize_and_remove_none_values(config)

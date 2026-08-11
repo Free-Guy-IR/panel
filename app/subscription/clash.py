@@ -718,6 +718,13 @@ class ClashMetaConfiguration(ClashConfiguration):
         if hop_ports:
             node["ports"] = hop_ports
 
+        up_mbps = self._hysteria_mbps(quic_params.get("brutalUp"))
+        if up_mbps:
+            node["up"] = f"{up_mbps} Mbps"
+        down_mbps = self._hysteria_mbps(quic_params.get("brutalDown"))
+        if down_mbps:
+            node["down"] = f"{down_mbps} Mbps"
+
         self._apply_tls(node, inbound.tls_config, "hysteria2")
         self._apply_mux(node, inbound.mux_settings)
 

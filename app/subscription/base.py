@@ -187,6 +187,16 @@ class BaseSubscription:
 
         return obfs_password, quic_params
 
+    @staticmethod
+    def _hysteria_mbps(value) -> int | None:
+        """Integer Mbps from a finalmask brutal value like '50 mbps' (None if absent/unparsable)."""
+        if value is None:
+            return None
+        try:
+            return int(str(value).strip().split()[0])
+        except (ValueError, IndexError):
+            return None
+
     def _build_wireguard_components(
         self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
     ) -> dict | None:

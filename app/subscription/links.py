@@ -345,10 +345,12 @@ class StandardLinks(BaseSubscription):
         if hop_ports := quic_params.get("udpHop", {}).get("ports"):
             payload["mports"] = hop_ports
             payload["mport"] = hop_ports
-        if brutal_up := quic_params.get("brutalUp"):
-            payload["up"] = brutal_up
-        if brutal_down := quic_params.get("brutalDown"):
-            payload["down"] = brutal_down
+        up_mbps = self._hysteria_mbps(quic_params.get("brutalUp"))
+        if up_mbps:
+            payload["up"] = max(up_mbps * 125000, 65536)
+        down_mbps = self._hysteria_mbps(quic_params.get("brutalDown"))
+        if down_mbps:
+            payload["down"] = max(down_mbps * 125000, 65536)
         if inbound.tls_config.tls in ("tls", "reality"):
             self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
         payload = self._normalize_and_remove_none_values(payload)
