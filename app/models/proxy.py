@@ -15,6 +15,7 @@ class VMessSettings(BaseModel):
 
 class VlessSettings(BaseModel):
     id: UUID = Field(default_factory=uuid4)
+    flow: str | None = None
 
 
 class TrojanSettings(BaseModel):
@@ -130,6 +131,11 @@ class WireGuardSettings(BaseModel):
         return self
 
 
+class TuicSettings(BaseModel):
+    uuid: UUID = Field(default_factory=uuid4)
+    password: str = Field(default_factory=random_password)
+
+
 class ProxyTable(BaseModel):
     vmess: VMessSettings = Field(default_factory=VMessSettings)
     vless: VlessSettings = Field(default_factory=VlessSettings)
@@ -140,6 +146,7 @@ class ProxyTable(BaseModel):
     hysteria2: Hysteria2Settings = Field(default_factory=Hysteria2Settings)
     openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
     mtproto: MTProtoSettings = Field(default_factory=MTProtoSettings)
+    tuic: TuicSettings = Field(default_factory=TuicSettings)
 
     def dict(self, *, no_obj=True, **kwargs):
         if no_obj:

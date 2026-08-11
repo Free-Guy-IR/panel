@@ -1,11 +1,23 @@
 import {
   createDefaultHysteria2InboundDraft,
+  createDefaultInboundDraft,
   createDefaultSingBoxCoreDraft,
   generateSingBoxCoreConfigJsonFromDraft,
   validateSingBoxCoreConfig,
   validateSingBoxCoreDraft,
 } from '@pasarguard/singbox-config-kit'
-import type { HysteriaInboundDraft, SingBoxCoreConfig, SingBoxCoreDraft, SingBoxValidationIssue } from '@pasarguard/singbox-config-kit'
+import type {
+  HysteriaInboundDraft,
+  ShadowsocksInboundDraft,
+  SingBoxCoreConfig,
+  SingBoxCoreDraft,
+  SingBoxInboundDraft,
+  SingBoxProtocol,
+  SingBoxValidationIssue,
+  TlsDraftFields,
+  TransportDraftFields,
+  TuicInboundDraft,
+} from '@pasarguard/singbox-config-kit'
 import { validateCoreConfig } from '@pasarguard/core-kit'
 
 /** Same certMode inference used by the Xray inbound TLS certificate toggle: content wins if either field/value is present. */
@@ -23,8 +35,87 @@ function strArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(v => String(v)) : []
 }
 
+function str(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+/** Reads a sing-box tls object into the shared TLS draft fields (used by vless/vmess/trojan/tuic). */
+function tlsToDraftFields(rawTls: unknown): TlsDraftFields {
+  const tls = asRecord(rawTls) ?? {}
+  const reality = asRecord(tls.reality)
+  const handshake = reality ? asRecord(reality.handshake) : null
+  const utls = asRecord(tls.utls)
+  const ech = asRecord(tls.ech)
+  const acme = asRecord(tls.acme)
+  const dns01 = acme ? asRecord(acme.dns01_challenge) : null
+
+  const certificate = stringOrLines(tls.certificate)
+  const key = stringOrLines(tls.key)
+  const hasCert = Object.prototype.hasOwnProperty.call(tls, 'certificate') || Object.prototype.hasOwnProperty.call(tls, 'key') || !!certificate || !!key
+
+  return {
+    tlsEnabled: tls.enabled === true,
+    tlsServerName: str(tls.server_name),
+    tlsAlpn: strArray(tls.alpn),
+    tlsMinVersion: str(tls.min_version),
+    tlsMaxVersion: str(tls.max_version),
+    tlsCipherSuites: strArray(tls.cipher_suites),
+    certMode: hasCert ? 'content' : 'path',
+    certificateFile: str(tls.certificate_path),
+    keyFile: str(tls.key_path),
+    certificate,
+    key,
+    echEnabled: !!ech && ech.enabled === true,
+    echKey: ech ? stringOrLines(ech.key) : '',
+    echPqSignatureSchemesEnabled: !!ech && ech.pq_signature_schemes_enabled === true,
+    echDynamicRecordSizingDisabled: !!ech && ech.dynamic_record_sizing_disabled === true,
+    acmeEnabled: acme !== null,
+    acmeDomain: acme ? strArray(acme.domain) : [],
+    acmeEmail: acme ? str(acme.email) : '',
+    acmeProvider: acme ? str(acme.provider) : '',
+    acmeDns01Provider: dns01 ? str(dns01.provider) : '',
+    acmeDns01ApiToken: dns01 ? str(dns01.api_token) : '',
+    acmeDns01AccessKeyId: dns01 ? str(dns01.access_key_id) : '',
+    acmeDns01AccessKeySecret: dns01 ? str(dns01.access_key_secret) : '',
+    utlsEnabled: !!utls && utls.enabled === true,
+    utlsFingerprint: utls ? str(utls.fingerprint) : '',
+    realityEnabled: !!reality && reality.enabled === true,
+    realityHandshakeServer: handshake ? str(handshake.server) : '',
+    realityHandshakePort: handshake && typeof handshake.server_port === 'number' ? String(handshake.server_port) : '',
+    realityPrivateKey: reality ? str(reality.private_key) : '',
+    realityShortId: reality ? strArray(reality.short_id) : [],
+    realityMaxTimeDifference: reality ? str(reality.max_time_difference) : '',
+  }
+}
+
+/** Reads a sing-box transport object into the shared transport draft fields. */
+function transportToDraftFields(rawTransport: unknown): TransportDraftFields {
+  const tr = asRecord(rawTransport)
+  if (!tr || typeof tr.type !== 'string') {
+    return { transportType: '', transportPath: '', transportHost: '', transportServiceName: '', transportMethod: '' }
+  }
+  const type = tr.type as TransportDraftFields['transportType']
+  const headers = asRecord(tr.headers)
+  const host = headers ? str(headers.Host ?? headers.host) : Array.isArray(tr.host) ? String(tr.host[0] ?? '') : str(tr.host)
+  return {
+    transportType: type === 'ws' || type === 'grpc' || type === 'http' || type === 'httpupgrade' ? type : '',
+    transportPath: str(tr.path),
+    transportHost: host,
+    transportServiceName: str(tr.service_name),
+    transportMethod: str(tr.method),
+  }
+}
+
+function baseFields(raw: Record<string, unknown>) {
+  return {
+    tag: str(raw.tag),
+    listen: str(raw.listen) || '::',
+    listenPort: typeof raw.listen_port === 'number' ? raw.listen_port : ('' as number | string),
+  }
+}
+
 function hysteria2InboundToDraft(raw: unknown): HysteriaInboundDraft {
-  const inbound = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const inbound = asRecord(raw) ?? {}
   const tls = asRecord(inbound.tls) ?? {}
   const obfs = asRecord(inbound.obfs)
   const ech = asRecord(tls.ech)
@@ -34,22 +125,17 @@ function hysteria2InboundToDraft(raw: unknown): HysteriaInboundDraft {
 
   const certificate = stringOrLines(tls.certificate)
   const key = stringOrLines(tls.key)
-  const hasCertificateField = Object.prototype.hasOwnProperty.call(tls, 'certificate')
-  const hasKeyField = Object.prototype.hasOwnProperty.call(tls, 'key')
-
-  // Masquerade: a bare string is the URL shorthand (type ""); an object carries its own type.
+  const hasCert = Object.prototype.hasOwnProperty.call(tls, 'certificate') || Object.prototype.hasOwnProperty.call(tls, 'key') || !!certificate || !!key
   const masqType = masq && typeof masq.type === 'string' ? (masq.type as string) : ''
   const masqUrl = masq && typeof masq.url === 'string' ? (masq.url as string) : ''
 
   return {
-    tag: typeof inbound.tag === 'string' ? inbound.tag : '',
-    listen: typeof inbound.listen === 'string' && inbound.listen ? inbound.listen : '::',
-    listenPort: typeof inbound.listen_port === 'number' ? inbound.listen_port : '',
+    protocol: 'hysteria2',
+    ...baseFields(inbound),
     upMbps: typeof inbound.up_mbps === 'number' ? String(inbound.up_mbps) : '',
     downMbps: typeof inbound.down_mbps === 'number' ? String(inbound.down_mbps) : '',
     ignoreClientBandwidth: inbound.ignore_client_bandwidth === true,
-    udpTimeout:
-      typeof inbound.udp_timeout === 'string' || typeof inbound.udp_timeout === 'number' ? String(inbound.udp_timeout) : '',
+    udpTimeout: typeof inbound.udp_timeout === 'string' || typeof inbound.udp_timeout === 'number' ? String(inbound.udp_timeout) : '',
     udpFragment: inbound.udp_fragment === true,
     brutalDebug: inbound.brutal_debug === true,
     portHoppingRange: typeof inbound.port_hopping_range === 'string' ? inbound.port_hopping_range : '',
@@ -62,14 +148,14 @@ function hysteria2InboundToDraft(raw: unknown): HysteriaInboundDraft {
     masqueradeStatusCode: masq && typeof masq.status_code === 'number' ? String(masq.status_code) : '',
     masqueradeHeaders: masq && asRecord(masq.headers) ? JSON.stringify(masq.headers) : '',
     masqueradeContent: masq && typeof masq.content === 'string' ? masq.content : '',
-    tlsServerName: typeof tls.server_name === 'string' ? tls.server_name : '',
+    tlsServerName: str(tls.server_name),
     tlsAlpn: strArray(tls.alpn),
-    tlsMinVersion: typeof tls.min_version === 'string' ? tls.min_version : '',
-    tlsMaxVersion: typeof tls.max_version === 'string' ? tls.max_version : '',
+    tlsMinVersion: str(tls.min_version),
+    tlsMaxVersion: str(tls.max_version),
     tlsCipherSuites: strArray(tls.cipher_suites),
-    certMode: hasCertificateField || hasKeyField || certificate || key ? 'content' : 'path',
-    certificateFile: typeof tls.certificate_path === 'string' ? tls.certificate_path : '',
-    keyFile: typeof tls.key_path === 'string' ? tls.key_path : '',
+    certMode: hasCert ? 'content' : 'path',
+    certificateFile: str(tls.certificate_path),
+    keyFile: str(tls.key_path),
     certificate,
     key,
     echEnabled: !!ech && ech.enabled === true,
@@ -87,11 +173,55 @@ function hysteria2InboundToDraft(raw: unknown): HysteriaInboundDraft {
   }
 }
 
+function streamInboundToDraft(raw: Record<string, unknown>, protocol: 'vless' | 'vmess' | 'trojan'): SingBoxInboundDraft {
+  return {
+    protocol,
+    ...baseFields(raw),
+    ...tlsToDraftFields(raw.tls),
+    ...transportToDraftFields(raw.transport),
+  } as SingBoxInboundDraft
+}
+
+function shadowsocksInboundToDraft(raw: Record<string, unknown>): ShadowsocksInboundDraft {
+  return {
+    protocol: 'shadowsocks',
+    ...baseFields(raw),
+    method: str(raw.method) || '2022-blake3-aes-128-gcm',
+    password: str(raw.password),
+  }
+}
+
+function tuicInboundToDraft(raw: Record<string, unknown>): TuicInboundDraft {
+  return {
+    protocol: 'tuic',
+    ...baseFields(raw),
+    ...tlsToDraftFields(raw.tls),
+    congestionControl: str(raw.congestion_control),
+  }
+}
+
+function inboundToDraft(raw: unknown): SingBoxInboundDraft {
+  const inbound = asRecord(raw) ?? {}
+  switch (inbound.type) {
+    case 'vless':
+    case 'vmess':
+    case 'trojan':
+      return streamInboundToDraft(inbound, inbound.type)
+    case 'shadowsocks':
+      return shadowsocksInboundToDraft(inbound)
+    case 'tuic':
+      return tuicInboundToDraft(inbound)
+    case 'hysteria2':
+    default:
+      return hysteria2InboundToDraft(inbound)
+  }
+}
+
 function singBoxConfigToDraftFromValid(c: SingBoxCoreConfig): SingBoxCoreDraft {
   const logLevel = c.log && typeof c.log.level === 'string' ? c.log.level : 'info'
   return {
     logLevel,
-    inbounds: c.inbounds.map(hysteria2InboundToDraft),
+    inbounds: c.inbounds.map(inboundToDraft),
   }
 }
 
@@ -111,6 +241,11 @@ export function createNewSingBoxDraft(): SingBoxCoreDraft {
 /** For the "Add inbound" button: guarantees a fresh default tag unique against the current draft. */
 export function createNewHysteria2InboundDraft(draft: SingBoxCoreDraft): HysteriaInboundDraft {
   return createDefaultHysteria2InboundDraft(draft.inbounds.map(i => i.tag))
+}
+
+/** Generic "Add inbound" for any protocol, unique against the current draft's tags. */
+export function createNewInboundDraft(draft: SingBoxCoreDraft, protocol: SingBoxProtocol): SingBoxInboundDraft {
+  return createDefaultInboundDraft(protocol, draft.inbounds.map(i => i.tag))
 }
 
 export function draftToPersistedConfig(draft: SingBoxCoreDraft): Record<string, unknown> {

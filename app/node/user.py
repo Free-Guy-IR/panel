@@ -67,7 +67,9 @@ def _serialize_user_for_node(
     if ProxyProtocol.vmess in allowed_protocols:
         proxy_kwargs["vmess_id"] = user_settings.get("vmess", {}).get("id")
     if ProxyProtocol.vless in allowed_protocols:
-        proxy_kwargs["vless_id"] = user_settings.get("vless", {}).get("id")
+        vless_settings = user_settings.get("vless", {})
+        proxy_kwargs["vless_id"] = vless_settings.get("id")
+        proxy_kwargs["vless_flow"] = vless_settings.get("flow")
     if ProxyProtocol.trojan in allowed_protocols:
         proxy_kwargs["trojan_password"] = user_settings.get("trojan", {}).get("password")
     if ProxyProtocol.shadowsocks in allowed_protocols:
@@ -92,6 +94,10 @@ def _serialize_user_for_node(
     if ProxyProtocol.mtproto in allowed_protocols:
         proxy_kwargs["mtproto_username"] = str(id)
         proxy_kwargs["mtproto_secret"] = user_settings.get("mtproto", {}).get("secret")
+    if ProxyProtocol.tuic in allowed_protocols:
+        tuic_settings = user_settings.get("tuic", {})
+        proxy_kwargs["tuic_uuid"] = tuic_settings.get("uuid")
+        proxy_kwargs["tuic_password"] = tuic_settings.get("password")
 
     return create_user(
         str(id),

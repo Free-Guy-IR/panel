@@ -710,6 +710,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const isWireGuardInbound = selectedInbound?.protocol === 'wireguard'
   const isOpenVPNInbound = selectedInbound?.protocol === 'openvpn'
   const isMTProtoInbound = selectedInbound?.protocol === 'mtproto'
+  const isHysteria2Inbound = selectedInbound?.protocol === 'hysteria2'
   const isInboundModeResolved = !isDialogOpen || !selectedInboundTag || !!selectedInbound || !isLoadingInbounds
   const shouldRenderWireGuardLayout = resolvedHostMode === 'wireguard'
   const shouldRenderOpenVPNLayout = resolvedHostMode === 'openvpn'
@@ -1512,6 +1513,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                 </div>
               ) : (
                 <Accordion type="single" collapsible value={openSection} onValueChange={handleAccordionChange} className="!mt-0 mb-6 flex w-full flex-col gap-y-6">
+                  {!isHysteria2Inbound && (
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="network">
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
@@ -1667,6 +1669,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                       </div>
                     </AccordionContent>
                   </AccordionItem>
+                  )}
 
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="security">
                     <AccordionTrigger>
@@ -1980,7 +1983,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     </AccordionContent>
                   </AccordionItem>
 
-                  {selectedInbound?.protocol !== 'hysteria2' && selectedInbound?.protocol !== 'openvpn' && (
+                  {!isHysteria2Inbound && selectedInbound?.protocol !== 'openvpn' && (
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="transport">
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
@@ -3149,7 +3152,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     </AccordionContent>
                   </AccordionItem>
                   )}
-                  {renderCamouflageSection()}
+                  {!isHysteria2Inbound && renderCamouflageSection()}
+                  {!isHysteria2Inbound && (
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="mux">
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
@@ -3632,6 +3636,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                       </div>
                     </AccordionContent>
                   </AccordionItem>
+                  )}
+                  {!isHysteria2Inbound && (
                   <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="routing">
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
@@ -3675,6 +3681,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                       />
                     </AccordionContent>
                   </AccordionItem>
+                  )}
                 </Accordion>
               )}
             </div>
