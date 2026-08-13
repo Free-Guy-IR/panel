@@ -1,3 +1,6 @@
+import asyncio
+import base64
+import json
 import re
 from json import dumps as json_dumps
 from typing import Any, ClassVar
@@ -738,6 +741,100 @@ class SubscriptionOperation(BaseOperation):
                 apps_with_updated_urls.append(updated_app)
 
         return apps_with_updated_urls
+
+    _PING_SKIP_SCHEMES: ClassVar[set[str]] = {"wireguard", "wg", "openvpn", "ovpn", "block", "tg"}
+    _PING_UDP_SCHEMES: ClassVar[set[str]] = {"hysteria", "hysteria2", "hy2", "tuic"}
+    _PING_MAX_HOSTS: ClassVar[int] = 80
+
+    @staticmethod
+    def _parse_ping_targets(links: list[str]) -> dict[str, tuple[int, bool]]:
+        """Parse config links into {host: (port, udp_based)}, one entry per host, skipping non-pingable protocols."""
+        targets: dict[str, tuple[int, bool]] = {}
+        for raw in links:
+            raw = raw.strip()
+            m = re.match(r"^([a-z0-9]+)://", raw, re.IGNORECASE)
+            if not m:
+                continue
+            scheme = m.group(1).lower()
+            if scheme in SubscriptionOperation._PING_SKIP_SCHEMES:
+                continue
+            udp = scheme in SubscriptionOperation._PING_UDP_SCHEMES
+            host, port = "", 443
+            if scheme == "vmess":
+                # vmess payload is base64-encoded JSON: {"add": host, "port": port, ...}
+                try:
+                    payload = raw[m.end() :].split("#", 1)[0].split("?", 1)[0].strip()
+                    data = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4)))
+                    host = str(data.get("add", "")).strip()
+                    port = int(str(data.get("port", "443")))
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    continue
+            else:
+                rest = raw[m.end() :].split("#", 1)[0].split("?", 1)[0]
+                if "@" in rest:
+                    rest = rest.rsplit("@", 1)[1]
+                rest = rest.strip().rstrip("/")
+                if rest.startswith("["):  # IPv6 [addr]:port
+                    host, _, tail = rest.partition("]")
+                    host = host[1:]
+                    p = tail.lstrip(":") or "443"
+                else:
+                    host, _, p = rest.partition(":")
+                    p = p or "443"
+                host = host.strip()
+                try:
+                    port = int(p.split("/")[0].split(",")[0])
+                except (ValueError, IndexError):
+                    port = 443
+            if not host or host in targets:
+                continue
+            targets[host] = (port, udp)
+            if len(targets) >= SubscriptionOperation._PING_MAX_HOSTS:
+                break
+        return targets
+
+    @staticmethod
+    async def _tcp_ping(host: str, port: int, udp_based: bool = False, timeout: float = 3.0) -> int:
+        """TCP handshake latency in ms, or -1 when unreachable / timed out.
+
+        For UDP-based protocols (hysteria2/tuic) a fast TCP "connection refused" still
+        proves the host is alive (the kernel answered with RST), so it counts as reachable.
+        """
+        loop = asyncio.get_event_loop()
+        start = loop.time()
+        writer = None
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+            return max(1, round((loop.time() - start) * 1000))
+        except ConnectionRefusedError:
+            if udp_based:
+                return max(1, round((loop.time() - start) * 1000))
+            return -1
+        except (OSError, asyncio.TimeoutError, ValueError):
+            return -1
+        finally:
+            if writer is not None:
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+
+    async def ping(self, db: AsyncSession, token: str) -> dict[str, int]:
+        """Server-side TCP latency/health of the user's config server hosts (no proxy core needed).
+
+        Returns {host: latency_ms} where latency_ms > 0 means reachable and -1 means down/timeout,
+        which the subscription page renders as a live per-server status dot + ping badge.
+        """
+        db_user = await self.get_validated_sub(db, token=token)
+        user = await self.validated_user(db_user)
+        conf, _ = await self.fetch_config(user, ConfigFormat.links)
+        text = conf.decode("utf-8", "ignore") if isinstance(conf, (bytes, bytearray)) else str(conf)
+        targets = self._parse_ping_targets([line for line in text.splitlines() if line.strip()])
+        if not targets:
+            return {}
+        items = list(targets.items())
+        results = await asyncio.gather(*[self._tcp_ping(host, port, udp) for host, (port, udp) in items])
+        return {host: ms for (host, _), ms in zip(items, results)}
 
     async def user_subscription_headers(
         self,
