@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 import re
 from json import dumps as json_dumps
 from typing import Any, ClassVar
@@ -150,17 +152,6 @@ class SubscriptionOperation(BaseOperation):
             return sub_settings.announce
 
     @staticmethod
-    def _format_announce_url(sub_settings: SubSettings, format_variables: dict) -> str:
-        """Format announcement URL with dynamic variables, falling back to raw URL if needed."""
-        if not sub_settings.announce_url:
-            return ""
-
-        try:
-            return sub_settings.announce_url.format_map(format_variables)
-        except (ValueError, KeyError):
-            return sub_settings.announce_url
-
-    @staticmethod
     def create_response_headers(
         user: UsersResponseWithInbounds,
         request_url: str,
@@ -187,7 +178,6 @@ class SubscriptionOperation(BaseOperation):
         format_variables.update({"PROFILE_TITLE": formatted_title})
         apply_custom_format_variables(format_variables, custom_variables)
         formatted_announce = SubscriptionOperation._format_announce(sub_settings, format_variables)
-        formatted_announce_url = SubscriptionOperation._format_announce_url(sub_settings, format_variables)
 
         # Prefer admin's support_url over subscription settings
         support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
@@ -203,7 +193,7 @@ class SubscriptionOperation(BaseOperation):
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
             "announce": encode_title(formatted_announce),
-            "announce-url": formatted_announce_url,
+            "announce-url": sub_settings.announce_url,
         }
         if extra_headers:
             headers.update(extra_headers)
@@ -278,16 +268,15 @@ class SubscriptionOperation(BaseOperation):
         """Create response headers for /info endpoint with only support-url, announce, and announce-url."""
         # Prefer admin's support_url over subscription settings
         support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
-        custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
-        format_variables = setup_format_variables(user, sub_settings.custom_variables)
-        apply_custom_format_variables(format_variables, custom_variables)
-        formatted_announce = SubscriptionOperation._format_announce(sub_settings, format_variables)
-        formatted_announce_url = SubscriptionOperation._format_announce_url(sub_settings, format_variables)
+        formatted_announce = SubscriptionOperation._format_announce(
+            sub_settings,
+            setup_format_variables(user, sub_settings.custom_variables),
+        )
 
         headers = {
             "support-url": support_url,
             "announce": encode_title(formatted_announce),
-            "announce-url": formatted_announce_url,
+            "announce-url": sub_settings.announce_url,
         }
 
         # Only include headers that have values
@@ -611,7 +600,7 @@ class SubscriptionOperation(BaseOperation):
             "user": SubscriptionUserResponse.model_validate(user),
             "links": links,
             "announce": formatted_announce,
-            "announce_url": self._format_announce_url(sub_settings, format_variables),
+            "announce_url": sub_settings.announce_url,
             "has_openvpn": has_openvpn,
             "apps": self._make_apps_import_urls(
                 sub_settings.applications,
@@ -753,49 +742,74 @@ class SubscriptionOperation(BaseOperation):
 
         return apps_with_updated_urls
 
-    _PING_SKIP_SCHEMES: ClassVar[set[str]] = {"wireguard", "wg", "openvpn", "ovpn", "block"}
+    _PING_SKIP_SCHEMES: ClassVar[set[str]] = {"wireguard", "wg", "openvpn", "ovpn", "block", "tg"}
+    _PING_UDP_SCHEMES: ClassVar[set[str]] = {"hysteria", "hysteria2", "hy2", "tuic"}
     _PING_MAX_HOSTS: ClassVar[int] = 80
 
     @staticmethod
-    def _parse_ping_targets(links: list[str]) -> dict[str, int]:
-        """Parse config links into {host: port}, one entry per host, skipping non-pingable protocols."""
-        targets: dict[str, int] = {}
+    def _parse_ping_targets(links: list[str]) -> dict[str, tuple[int, bool]]:
+        """Parse config links into {host: (port, udp_based)}, one entry per host, skipping non-pingable protocols."""
+        targets: dict[str, tuple[int, bool]] = {}
         for raw in links:
             raw = raw.strip()
             m = re.match(r"^([a-z0-9]+)://", raw, re.IGNORECASE)
-            if not m or m.group(1).lower() in SubscriptionOperation._PING_SKIP_SCHEMES:
+            if not m:
                 continue
-            rest = raw[m.end() :].split("#", 1)[0].split("?", 1)[0]
-            if "@" in rest:
-                rest = rest.rsplit("@", 1)[1]
-            rest = rest.strip().rstrip("/")
-            if rest.startswith("["):  # IPv6 [addr]:port
-                host, _, tail = rest.partition("]")
-                host = host[1:]
-                port = tail.lstrip(":") or "443"
+            scheme = m.group(1).lower()
+            if scheme in SubscriptionOperation._PING_SKIP_SCHEMES:
+                continue
+            udp = scheme in SubscriptionOperation._PING_UDP_SCHEMES
+            host, port = "", 443
+            if scheme == "vmess":
+                # vmess payload is base64-encoded JSON: {"add": host, "port": port, ...}
+                try:
+                    payload = raw[m.end() :].split("#", 1)[0].split("?", 1)[0].strip()
+                    data = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4)))
+                    host = str(data.get("add", "")).strip()
+                    port = int(str(data.get("port", "443")))
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    continue
             else:
-                host, _, port = rest.partition(":")
-                port = port or "443"
-            host = host.strip()
+                rest = raw[m.end() :].split("#", 1)[0].split("?", 1)[0]
+                if "@" in rest:
+                    rest = rest.rsplit("@", 1)[1]
+                rest = rest.strip().rstrip("/")
+                if rest.startswith("["):  # IPv6 [addr]:port
+                    host, _, tail = rest.partition("]")
+                    host = host[1:]
+                    p = tail.lstrip(":") or "443"
+                else:
+                    host, _, p = rest.partition(":")
+                    p = p or "443"
+                host = host.strip()
+                try:
+                    port = int(p.split("/")[0].split(",")[0])
+                except (ValueError, IndexError):
+                    port = 443
             if not host or host in targets:
                 continue
-            try:
-                targets[host] = int(port.split("/")[0].split(",")[0])
-            except (ValueError, IndexError):
-                targets[host] = 443
+            targets[host] = (port, udp)
             if len(targets) >= SubscriptionOperation._PING_MAX_HOSTS:
                 break
         return targets
 
     @staticmethod
-    async def _tcp_ping(host: str, port: int, timeout: float = 3.0) -> int:
-        """TCP handshake latency in ms, or -1 when unreachable / timed out."""
+    async def _tcp_ping(host: str, port: int, udp_based: bool = False, timeout: float = 3.0) -> int:
+        """TCP handshake latency in ms, or -1 when unreachable / timed out.
+
+        For UDP-based protocols (hysteria2/tuic) a fast TCP "connection refused" still
+        proves the host is alive (the kernel answered with RST), so it counts as reachable.
+        """
         loop = asyncio.get_event_loop()
         start = loop.time()
         writer = None
         try:
             _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
             return max(1, round((loop.time() - start) * 1000))
+        except ConnectionRefusedError:
+            if udp_based:
+                return max(1, round((loop.time() - start) * 1000))
+            return -1
         except (OSError, asyncio.TimeoutError, ValueError):
             return -1
         finally:
@@ -819,7 +833,7 @@ class SubscriptionOperation(BaseOperation):
         if not targets:
             return {}
         items = list(targets.items())
-        results = await asyncio.gather(*[self._tcp_ping(host, port) for host, port in items])
+        results = await asyncio.gather(*[self._tcp_ping(host, port, udp) for host, (port, udp) in items])
         return {host: ms for (host, _), ms in zip(items, results)}
 
     async def user_subscription_headers(

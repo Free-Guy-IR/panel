@@ -1557,7 +1557,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     const paddingBytesCurrent = getTransportMetaValue(xhttpExtra, 'xpaddingbytes')
     const hasPaddingBytes = paddingBytesCurrent !== undefined && String(paddingBytesCurrent).trim() !== '' && String(paddingBytesCurrent).trim() !== '0-0'
     if (hasPaddingBytes) return
-    updateXhttpMeta('xpaddingbytes', '100-1000')
+    /* xPaddingBytes auto-default removed (user-controlled) */
   }, [inboundTransportType, xPaddingObfsEnabled, xhttpExtra, xPaddingBytesKey, updateXhttpMeta])
 
   useEffect(() => {
@@ -3515,11 +3515,6 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                                 checked={xPaddingObfsEnabled}
                                 onCheckedChange={checked => {
                                   const updates: Record<string, unknown> = { xpaddingobfsmode: checked }
-                                  if (checked) {
-                                    const paddingBytesCurrent = getTransportMetaValue(xhttpExtra, 'xpaddingbytes')
-                                    const hasPaddingBytes = paddingBytesCurrent !== undefined && String(paddingBytesCurrent).trim() !== '' && String(paddingBytesCurrent).trim() !== '0-0'
-                                    if (!hasPaddingBytes) updates.xpaddingbytes = '100-1000'
-                                  }
                                   updateXhttpMetaBatch(updates)
                                 }}
                               />
@@ -3850,7 +3845,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                                               const paddingBytesCurrent = getTransportMetaValue(inboundTransport, 'xpaddingbytes')
                                               const hasPaddingBytes = paddingBytesCurrent !== undefined && String(paddingBytesCurrent).trim() !== '' && String(paddingBytesCurrent).trim() !== '0-0'
                                               if (!hasPaddingBytes) {
-                                                patchTransport({ [jsonKey]: parsed, [xPaddingBytesKey]: '100-1000' })
+                                                patchTransport({ [jsonKey]: parsed })
                                                 return
                                               }
                                             }
