@@ -316,6 +316,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const selectedNoiseSettings = form.watch('noise_settings.xray')
   const selectedFragmentSettings = form.watch('fragment_settings.xray')
   const xPaddingObfsEnabled = form.watch('transport_settings.xhttp_settings.x_padding_obfs_mode') === true
+  const selectedFingerprint = form.watch('fingerprint')
   const infoPopoverSide = isMobile ? 'bottom' : dir === 'rtl' ? 'left' : 'right'
   const infoPopoverAlign = isMobile ? 'center' : 'start'
   const hasFragmentPopulated = Boolean(
