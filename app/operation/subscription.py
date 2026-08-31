@@ -1,3 +1,4 @@
+import asyncio
 import re
 from json import dumps as json_dumps
 from typing import Any, ClassVar
@@ -133,7 +134,7 @@ class SubscriptionOperation(BaseOperation):
 
         try:
             return profile_title.format_map(format_variables)
-        except ValueError, KeyError:
+        except (ValueError, KeyError):
             # Invalid format string, return original title
             return profile_title
 
@@ -145,7 +146,7 @@ class SubscriptionOperation(BaseOperation):
 
         try:
             return sub_settings.announce.format_map(format_variables)
-        except ValueError, KeyError:
+        except (ValueError, KeyError):
             return sub_settings.announce
 
     @staticmethod
@@ -252,7 +253,7 @@ class SubscriptionOperation(BaseOperation):
                 return ""
             try:
                 return header_value.format_map(format_variables)
-            except ValueError, KeyError:
+            except (ValueError, KeyError):
                 return header_value
 
         if isinstance(value, (dict, list, tuple, bool, int, float)):
@@ -738,6 +739,75 @@ class SubscriptionOperation(BaseOperation):
                 apps_with_updated_urls.append(updated_app)
 
         return apps_with_updated_urls
+
+    _PING_SKIP_SCHEMES: ClassVar[set[str]] = {"wireguard", "wg", "openvpn", "ovpn", "block"}
+    _PING_MAX_HOSTS: ClassVar[int] = 80
+
+    @staticmethod
+    def _parse_ping_targets(links: list[str]) -> dict[str, int]:
+        """Parse config links into {host: port}, one entry per host, skipping non-pingable protocols."""
+        targets: dict[str, int] = {}
+        for raw in links:
+            raw = raw.strip()
+            m = re.match(r"^([a-z0-9]+)://", raw, re.IGNORECASE)
+            if not m or m.group(1).lower() in SubscriptionOperation._PING_SKIP_SCHEMES:
+                continue
+            rest = raw[m.end() :].split("#", 1)[0].split("?", 1)[0]
+            if "@" in rest:
+                rest = rest.rsplit("@", 1)[1]
+            rest = rest.strip().rstrip("/")
+            if rest.startswith("["):  # IPv6 [addr]:port
+                host, _, tail = rest.partition("]")
+                host = host[1:]
+                port = tail.lstrip(":") or "443"
+            else:
+                host, _, port = rest.partition(":")
+                port = port or "443"
+            host = host.strip()
+            if not host or host in targets:
+                continue
+            try:
+                targets[host] = int(port.split("/")[0].split(",")[0])
+            except (ValueError, IndexError):
+                targets[host] = 443
+            if len(targets) >= SubscriptionOperation._PING_MAX_HOSTS:
+                break
+        return targets
+
+    @staticmethod
+    async def _tcp_ping(host: str, port: int, timeout: float = 3.0) -> int:
+        """TCP handshake latency in ms, or -1 when unreachable / timed out."""
+        loop = asyncio.get_event_loop()
+        start = loop.time()
+        writer = None
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+            return max(1, round((loop.time() - start) * 1000))
+        except (OSError, asyncio.TimeoutError, ValueError):
+            return -1
+        finally:
+            if writer is not None:
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+
+    async def ping(self, db: AsyncSession, token: str) -> dict[str, int]:
+        """Server-side TCP latency/health of the user's config server hosts (no proxy core needed).
+
+        Returns {host: latency_ms} where latency_ms > 0 means reachable and -1 means down/timeout,
+        which the subscription page renders as a live per-server status dot + ping badge.
+        """
+        db_user = await self.get_validated_sub(db, token=token)
+        user = await self.validated_user(db_user)
+        conf, _ = await self.fetch_config(user, ConfigFormat.links)
+        text = conf.decode("utf-8", "ignore") if isinstance(conf, (bytes, bytearray)) else str(conf)
+        targets = self._parse_ping_targets([line for line in text.splitlines() if line.strip()])
+        if not targets:
+            return {}
+        items = list(targets.items())
+        results = await asyncio.gather(*[self._tcp_ping(host, port) for host, port in items])
+        return {host: ms for (host, _), ms in zip(items, results)}
 
     async def user_subscription_headers(
         self,

@@ -87,6 +87,12 @@ async def get_sub_user_usage(
     return await subscription_operator.get_user_usage(db, token=token, query=query)
 
 
+@router.get("/{token}/ping")
+async def user_subscription_ping(token: str, db: AsyncSession = Depends(get_db)):
+    """Live server latency/health (server-side TCP) of the user's config servers, for the subscription page."""
+    return JSONResponse(content=await subscription_operator.ping(db, token=token))
+
+
 @router.get("/{token}/{client_type}")
 async def user_subscription_with_client_type(
     request: Request,
