@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_object_session
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
 from sqlalchemy.sql.expression import select, text
 
 from app.db.base import Base
@@ -237,6 +237,7 @@ class User(Base, CreatedAtUTCMixin):
     hwid_limit: Mapped[int | None] = mapped_column(BigInteger, default=None)
     edit_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    _reseted_usage_query: Mapped[int | None] = query_expression(repr=False)
 
     @hybrid_property
     def expire(self) -> dt | None:
@@ -260,6 +261,8 @@ class User(Base, CreatedAtUTCMixin):
 
     @hybrid_property
     def reseted_usage(self) -> int:
+        if self._reseted_usage_query is not None:
+            return int(self._reseted_usage_query)
         return int(sum([log.used_traffic_at_reset for log in self.usage_logs]))
 
     @reseted_usage.expression
@@ -272,7 +275,7 @@ class User(Base, CreatedAtUTCMixin):
 
     @property
     def lifetime_used_traffic(self) -> int:
-        return int(sum([log.used_traffic_at_reset for log in self.usage_logs]) + self.used_traffic)
+        return self.reseted_usage + self.used_traffic
 
     @property
     def last_traffic_reset_time(self):
@@ -378,7 +381,10 @@ class User(Base, CreatedAtUTCMixin):
 
 class UserSubscriptionUpdate(Base, CreatedAtUTCMixin):
     __tablename__ = "user_subscription_updates"
-    __table_args__ = (Index("idx_user_subscription_updates_user_id", "user_id"),)
+    __table_args__ = (
+        Index("idx_user_subscription_updates_user_id", "user_id"),
+        Index("idx_user_subscription_updates_user_created", "user_id", "created_at"),
+    )
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
     user: Mapped[User] = relationship(back_populates="subscription_updates", init=False)
     user_agent: Mapped[str] = mapped_column(String(512))
@@ -567,6 +573,7 @@ class ProxyHost(Base, IdMixin):
     openvpn_overrides: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
     subscription_templates: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
     final_mask_settings: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
+    cipher_suites: Mapped[str | None] = mapped_column(String(1024), default=None)
 
 
 class System(Base, IdMixin):

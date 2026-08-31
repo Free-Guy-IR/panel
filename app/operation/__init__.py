@@ -24,7 +24,8 @@ from app.db.models import Admin as DBAdmin, ClientTemplate, CoreConfig, Group, N
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
 from app.models.user import UserCreate, UserModify
-from app.operation.permissions import get_allowed_group_ids, get_scope_admin_id
+from app.models.user_template import UserTemplateCreate, UserTemplateModify
+from app.operation.permissions import apply_group_access, get_allowed_group_ids, get_scope_admin_id
 from app.utils.helpers import ensure_datetime_timezone
 from app.utils.jwt import get_subscription_payload
 
@@ -167,6 +168,8 @@ class BaseOperation:
         load_next_plan: bool = True,
         load_usage_logs: bool = True,
         load_groups: bool = True,
+        join_groups: bool = False,
+        load_lifetime_used_traffic: bool = False,
         scope_resource: str = "users",
         scope_action: str = "read",
     ) -> User:
@@ -177,6 +180,8 @@ class BaseOperation:
             load_next_plan=load_next_plan,
             load_usage_logs=load_usage_logs,
             load_groups=load_groups,
+            join_groups=join_groups,
+            load_lifetime_used_traffic=load_lifetime_used_traffic,
             admin_id=get_scope_admin_id(admin, scope_resource, scope_action),
         )
         if not db_user:
@@ -193,6 +198,8 @@ class BaseOperation:
         load_next_plan: bool = True,
         load_usage_logs: bool = True,
         load_groups: bool = True,
+        join_groups: bool = False,
+        load_lifetime_used_traffic: bool = False,
         scope_resource: str = "users",
         scope_action: str = "read",
     ) -> User:
@@ -203,6 +210,8 @@ class BaseOperation:
             load_next_plan=load_next_plan,
             load_usage_logs=load_usage_logs,
             load_groups=load_groups,
+            join_groups=join_groups,
+            load_lifetime_used_traffic=load_lifetime_used_traffic,
             admin_id=get_scope_admin_id(admin, scope_resource, scope_action),
         )
         if not db_user:
@@ -228,18 +237,13 @@ class BaseOperation:
         return db_group
 
     async def validate_all_groups(
-        self, db, model: UserCreate | UserModify | UserTemplate | BulkGroup, admin=None, exempt_group_ids=None
+        self,
+        db,
+        model: UserCreate | UserModify | UserTemplate | UserTemplateCreate | UserTemplateModify | BulkGroup,
+        admin: AdminDetails | None = None,
+        *,
+        existing_group_ids: set[int] | list[int] | None = None,
     ) -> list[Group]:
-        """Resolve requested group ids, refusing any the admin may not use.
-
-        `admin` is optional because several callers resolve groups only to
-        render them; enforcement applies wherever an acting admin is passed.
-
-        `exempt_group_ids` are groups already on the record being edited. They
-        are allowed through even when the admin could not grant them, so that
-        an unrelated edit to such a user is not blocked by state the admin
-        never chose and cannot see.
-        """
         requested_group_ids: list[int] = []
         if model.group_ids:
             requested_group_ids.extend(model.group_ids)
@@ -250,6 +254,16 @@ class BaseOperation:
             return []
 
         unique_ids = list(dict.fromkeys(requested_group_ids))
+
+        if admin is not None:
+            allowed_ids = apply_group_access(admin, unique_ids)
+            if allowed_ids is not None:
+                allowed_set = set(allowed_ids)
+                grandfathered = set(existing_group_ids or ())
+                for group_id in unique_ids:
+                    if group_id not in allowed_set and group_id not in grandfathered:
+                        await self.raise_error("Group not found", 404)
+
         groups = await get_groups_by_ids(db, unique_ids, load_users=False, load_inbounds=True)
         groups_by_id = {group.id: group for group in groups}
 

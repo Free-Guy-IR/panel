@@ -58,7 +58,8 @@ jobs:
             - name: Generate changelog
               run: |
                   bunx changelogen@latest --from "${{ steps.tags.outputs.previous }}" --to "${{ steps.tags.outputs.current }}" \
-                    | grep -v "Generating changelog for " > CHANGELOG.md
+                    | grep -v "Generating changelog for " \
+                    | sed -e '/^\[log\]/d' -e '/./,$!d' > CHANGELOG.md
 
             - name: Update release notes
               env:
@@ -143,7 +144,7 @@ jobs:
               uses: docker/setup-buildx-action@v4
 
             - name: Login to GitHub Container Registry
-              uses: docker/login-action@v4.5.2
+              uses: docker/login-action@v4.6.0
               with:
                   registry: ghcr.io
                   username: ${{ github.repository_owner }}
@@ -166,7 +167,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Login to GitHub Container Registry
-              uses: docker/login-action@v4.5.2
+              uses: docker/login-action@v4.6.0
               with:
                   registry: ghcr.io
                   username: ${{ github.repository_owner }}

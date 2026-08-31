@@ -4,8 +4,10 @@ import { getCurrentAdmin } from '@/service/api'
 import { hasPermission } from '@/utils/rbac'
 import { createHashRouter, Navigate, RouteObject } from 'react-router'
 import { LoadingSpinner } from '@/components/common/loading-spinner'
+import { RouteErrorPage } from '@/components/layout/error-page'
 import { TabbedRouteSuspenseFallback } from '@/components/layout/tabbed-route-suspense-fallback'
 import { lazyWithChunkRecovery } from '@/utils/chunk-recovery'
+import { isAuthenticationError } from '@/utils/error-utils'
 // Replace direct imports with lazy imports for route-level components
 const CoresLayout = lazyWithChunkRecovery(() => import('@/pages/_dashboard.nodes.cores'))
 const CoresIndex = lazyWithChunkRecovery(() => import('@/pages/_dashboard.nodes.cores._index'))
@@ -69,7 +71,11 @@ const fetchAdminLoader = async (): Promise<any> => {
     const response = await getCurrentAdmin()
     return response
   } catch (error) {
-    throw Response.redirect('/login')
+    if (isAuthenticationError(error)) {
+      throw Response.redirect('/login')
+    }
+
+    throw error
   }
 }
 
@@ -84,7 +90,7 @@ export const router = createHashRouter([
     ),
     errorElement: (
       <Suspense fallback={<LoadingSpinner />}>
-        <Login />
+        <RouteErrorPage />
       </Suspense>
     ),
     loader: fetchAdminLoader,
@@ -434,6 +440,11 @@ export const router = createHashRouter([
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <Login />
+      </Suspense>
+    ),
+    errorElement: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <RouteErrorPage />
       </Suspense>
     ),
   },

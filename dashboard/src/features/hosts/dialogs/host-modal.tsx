@@ -812,6 +812,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     form.setValue('security', 'inbound_default', { shouldDirty: true })
     form.setValue('alpn', [], { shouldDirty: true })
     form.setValue('fingerprint', '', { shouldDirty: true })
+    form.setValue('cipher_suites', undefined, { shouldDirty: true })
     form.setValue('allowinsecure', false, { shouldDirty: true })
     form.setValue('random_user_agent', false, { shouldDirty: true })
     form.setValue('use_sni_as_host', false, { shouldDirty: true })
@@ -940,6 +941,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.security = 'inbound_default'
         payload.alpn = []
         payload.fingerprint = ''
+        payload.cipher_suites = undefined
         payload.allowinsecure = false
         payload.random_user_agent = false
         payload.use_sni_as_host = false
@@ -1824,6 +1826,22 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                             )}
                           />
                         </div>
+                        {selectedFingerprint === 'unsafe' && (
+                          <FormField
+                            control={form.control}
+                            name="cipher_suites"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t('hostsDialog.cipherSuites', { defaultValue: 'Cipher Suites' })}</FormLabel>
+                                <FormControl>
+                                  <Input placeholder={t('hostsDialog.cipherSuitesPlaceholder', { defaultValue: 'e.g. TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256' })} {...field} value={field.value ?? ''} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+
 
                         <FormField
                           control={form.control}

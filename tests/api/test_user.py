@@ -12,19 +12,23 @@ from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from fastapi import status
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, event, func, select, update
 
 from app.db.crud.hwid import register_user_hwid
-from app.db.models import NodeUserUsage, User, UserStatus
+from app.db.crud.user import get_user as get_db_user
+from app.db.crud.user import get_users as get_db_users
+from app.db.crud.user import update_users_status
+from app.db.models import NodeUserUsage, User, UserStatus, UserUsageResetLogs
 from app.models.settings import ConfigFormat, SubRule, Subscription
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
+from app.models.user import UserListQuery
 from app.models.validators import MAX_ON_HOLD_EXPIRE_DURATION_SECONDS
 from app.operation.subscription import SubscriptionOperation
 from app.utils import jwt as jwt_utils
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
-from app.utils.jwt import create_subscription_token, get_secret_key, get_subscription_payload
+from app.utils.jwt import create_admin_token, create_subscription_token, get_secret_key, get_subscription_payload
 from config import usage_settings
-from tests.api import TestSession, client
+from tests.api import TestSession, client, engine
 from tests.api.helpers import (
     auth_headers,
     create_admin,
@@ -93,6 +97,129 @@ def count_user_chart_rows(user_id: int) -> int:
             return result.scalar_one()
 
     return asyncio.run(_count_rows())
+
+
+def test_update_users_status_does_not_refresh_users_individually():
+    usernames = [unique_name("bulk_status") for _ in range(3)]
+
+    async def _update_status():
+        async with TestSession() as session:
+            session.add_all([User(username=username) for username in usernames])
+            await session.commit()
+
+            statements: list[str] = []
+            listener_registered = False
+
+            def record_statement(_, __, statement, *args):
+                statements.append(statement)
+
+            try:
+                users = await get_db_users(session, UserListQuery(usernames=usernames))
+                event.listen(session.bind.sync_engine, "before_cursor_execute", record_statement)
+                listener_registered = True
+
+                assert await update_users_status(session, [], UserStatus.expired) == []
+                assert statements == []
+
+                updated_users = await update_users_status(session, users, UserStatus.expired)
+
+                assert all(user.status == UserStatus.expired for user in updated_users)
+                changed_at_values = {user.last_status_change for user in updated_users}
+                assert None not in changed_at_values
+                assert len(changed_at_values) == 1
+                assert all("groups" in user.__dict__ for user in updated_users)
+                assert all("usage_logs" in user.__dict__ for user in updated_users)
+
+                event.remove(session.bind.sync_engine, "before_cursor_execute", record_statement)
+                listener_registered = False
+
+                async with TestSession() as verification_session:
+                    persisted_result = await verification_session.execute(
+                        select(User.status, User.last_status_change).where(User.username.in_(usernames))
+                    )
+                    persisted_rows = persisted_result.all()
+
+                assert len(persisted_rows) == len(usernames)
+                assert all(row.status == UserStatus.expired for row in persisted_rows)
+                persisted_changed_at_values = {row.last_status_change for row in persisted_rows}
+                assert None not in persisted_changed_at_values
+                assert len(persisted_changed_at_values) == 1
+
+                return statements
+            finally:
+                if listener_registered:
+                    event.remove(session.bind.sync_engine, "before_cursor_execute", record_statement)
+                await session.rollback()
+                await session.execute(delete(User).where(User.username.in_(usernames)))
+                await session.commit()
+
+    statements = asyncio.run(_update_status())
+
+    assert len(statements) == 1
+    assert statements[0].lstrip().upper().startswith("UPDATE")
+
+
+def test_get_user_uses_two_selects_and_preserves_lifetime_traffic():
+    """The optimized endpoint keeps its two-query budget and response semantics."""
+    access_token = asyncio.run(create_admin_token(None, "testadmin"))
+    user = create_user(access_token, username=unique_name("single_read"))
+
+    async def _add_reset_log():
+        async with TestSession() as session:
+            session.add(UserUsageResetLogs(user_id=user["id"], used_traffic_at_reset=12345))
+            await session.commit()
+
+    asyncio.run(_add_reset_log())
+
+    select_count = 0
+
+    def _count_selects(*args):
+        nonlocal select_count
+        statement = args[2]
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+
+    event.listen(engine.sync_engine, "before_cursor_execute", _count_selects)
+    try:
+        response = client.get(f"/api/user/{user['username']}", headers=auth_headers(access_token))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["lifetime_used_traffic"] == 12345
+        assert select_count == 2
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", _count_selects)
+        delete_user(access_token, user["username"])
+
+
+def test_optimized_lifetime_traffic_is_refreshed_in_same_session():
+    """A query-scoped aggregate must not outlive a subsequent ORM refresh."""
+    access_token = asyncio.run(create_admin_token(None, "testadmin"))
+    user = create_user(access_token, username=unique_name("fresh_lifetime"))
+
+    async def _check_refresh():
+        async with TestSession() as session:
+            db_user = await get_db_user(
+                session,
+                user["username"],
+                load_admin=False,
+                load_next_plan=False,
+                load_usage_logs=False,
+                load_groups=False,
+                load_lifetime_used_traffic=True,
+            )
+            assert db_user is not None
+            initial_lifetime_used_traffic = db_user.lifetime_used_traffic
+
+            session.add(UserUsageResetLogs(user_id=user["id"], used_traffic_at_reset=23456))
+            await session.commit()
+            await session.refresh(db_user)
+            await db_user.awaitable_attrs.usage_logs
+
+            assert db_user.lifetime_used_traffic == initial_lifetime_used_traffic + 23456
+
+    try:
+        asyncio.run(_check_refresh())
+    finally:
+        delete_user(access_token, user["username"])
 
 
 def extract_wireguard_config_bodies(response) -> list[str]:
@@ -1722,6 +1849,17 @@ def test_format_announce_supports_dynamic_variables():
     assert announce == "Hello alice, 1 GB left"
 
 
+def test_format_announce_url_supports_dynamic_variables():
+    sub_settings = Subscription(rules=[], announce_url="https://status.example.com/{USERNAME}")
+
+    announce_url = SubscriptionOperation._format_announce_url(
+        sub_settings,
+        {"USERNAME": "alice"},
+    )
+
+    assert announce_url == "https://status.example.com/alice"
+
+
 def test_detect_client_rule_matches_user_agent():
     rule = SubRule(
         pattern=r"^PasarGuardRuleHeaderClient$",
@@ -2053,6 +2191,137 @@ def test_role_requiring_template_cannot_manually_create_user(access_token):
         delete_admin(access_token, admin["username"])
         _delete_role(access_token, role["id"])
         delete_user_template(access_token, template["id"])
+        cleanup_groups(access_token, core, groups)
+
+
+def _create_group_restricted_user_role(access_token: str, *, allowed_group_ids: list[int]) -> dict:
+    response = client.post(
+        "/api/admin-role",
+        headers=auth_headers(access_token),
+        json={
+            "name": unique_name("group_restricted_user_role"),
+            "permissions": {
+                "users": {"create": True, "read": True, "update": True, "delete": True},
+                "groups": {"read": True, "read_simple": True},
+                "templates": {"create": True, "read": True, "update": True},
+            },
+            "access": {
+                "require_template": False,
+                "allowed_template_ids": None,
+                "allowed_group_ids": allowed_group_ids,
+            },
+        },
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def test_role_allowed_group_ids_blocks_assigning_unknown_group_by_id(access_token):
+    """Knowing a group ID must not bypass allowed_group_ids on user assignment."""
+    core, groups = setup_groups(access_token, 2)
+    allowed_group, forbidden_group = groups
+    role = _create_group_restricted_user_role(access_token, allowed_group_ids=[allowed_group["id"]])
+    admin = create_admin(access_token, role_id=role["id"])
+    admin_token = _login(admin["username"], admin["password"])
+    created_username = None
+    mixed_user = None
+
+    try:
+        list_response = client.get("/api/groups", headers=auth_headers(admin_token))
+        assert list_response.status_code == status.HTTP_200_OK
+        listed_ids = {group["id"] for group in list_response.json()["groups"]}
+        assert allowed_group["id"] in listed_ids
+        assert forbidden_group["id"] not in listed_ids
+
+        forbidden_get = client.get(f"/api/group/{forbidden_group['id']}", headers=auth_headers(admin_token))
+        assert forbidden_get.status_code == status.HTTP_404_NOT_FOUND
+
+        create_forbidden = client.post(
+            "/api/user",
+            headers=auth_headers(admin_token),
+            json={
+                "username": unique_name("group_acl_denied"),
+                "proxy_settings": {},
+                "data_limit": 1024 * 1024,
+                "data_limit_reset_strategy": "no_reset",
+                "status": "active",
+                "group_ids": [forbidden_group["id"]],
+            },
+        )
+        assert create_forbidden.status_code == status.HTTP_404_NOT_FOUND
+        assert create_forbidden.json()["detail"] == "Group not found"
+
+        create_allowed = client.post(
+            "/api/user",
+            headers=auth_headers(admin_token),
+            json={
+                "username": unique_name("group_acl_allowed"),
+                "proxy_settings": {},
+                "data_limit": 1024 * 1024,
+                "data_limit_reset_strategy": "no_reset",
+                "status": "active",
+                "group_ids": [allowed_group["id"]],
+            },
+        )
+        assert create_allowed.status_code == status.HTTP_201_CREATED
+        created_username = create_allowed.json()["username"]
+        assert create_allowed.json()["group_ids"] == [allowed_group["id"]]
+
+        modify_forbidden = client.put(
+            f"/api/user/{created_username}",
+            headers=auth_headers(admin_token),
+            json={"group_ids": [allowed_group["id"], forbidden_group["id"]]},
+        )
+        assert modify_forbidden.status_code == status.HTTP_404_NOT_FOUND
+        assert modify_forbidden.json()["detail"] == "Group not found"
+
+        # Owner-created user may already have a forbidden group; admin can keep it, but not add another.
+        mixed_user = create_user(
+            access_token,
+            group_ids=[allowed_group["id"], forbidden_group["id"]],
+            payload={"username": unique_name("group_acl_mixed")},
+        )
+        keep_existing = client.put(
+            f"/api/user/{mixed_user['username']}",
+            headers=auth_headers(admin_token),
+            json={"group_ids": [allowed_group["id"], forbidden_group["id"]], "note": "keep"},
+        )
+        assert keep_existing.status_code == status.HTTP_200_OK
+        assert set(keep_existing.json()["group_ids"]) == {allowed_group["id"], forbidden_group["id"]}
+    finally:
+        if created_username:
+            delete_user(access_token, created_username)
+        if mixed_user is not None:
+            delete_user(access_token, mixed_user["username"])
+        delete_admin(access_token, admin["username"])
+        _delete_role(access_token, role["id"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_role_allowed_group_ids_blocks_template_group_assignment(access_token):
+    core, groups = setup_groups(access_token, 2)
+    allowed_group, forbidden_group = groups
+    role = _create_group_restricted_user_role(access_token, allowed_group_ids=[allowed_group["id"]])
+    admin = create_admin(access_token, role_id=role["id"])
+    admin_token = _login(admin["username"], admin["password"])
+
+    try:
+        response = client.post(
+            "/api/user_template",
+            headers=auth_headers(admin_token),
+            json={
+                "name": unique_name("group_acl_template"),
+                "data_limit": 1024 * 1024,
+                "expire_duration": 3600,
+                "status": "active",
+                "group_ids": [forbidden_group["id"]],
+            },
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["detail"] == "Group not found"
+    finally:
+        delete_admin(access_token, admin["username"])
+        _delete_role(access_token, role["id"])
         cleanup_groups(access_token, core, groups)
 
 

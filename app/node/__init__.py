@@ -5,6 +5,7 @@ from PasarGuardNodeBridge import Health, NodeType, PasarGuardNode, create_node
 from PasarGuardNodeBridge.common.service_pb2 import User as ProtoUser
 
 from app.db.models import Node, NodeConnectionType
+from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory
 from app.node.user import core_users
 from app.utils.logger import get_logger
 from config import nats_settings
@@ -22,50 +23,71 @@ class NodeManager:
         self._lock = RWLock(fast=True)
         self.logger = get_logger("node-manager")
 
-    async def _shutdown_node(self, node: PasarGuardNode | None):
+    def _create_node_kwargs(self, node: Node) -> dict:
+        kwargs = {
+            "connection": type_map[node.connection_type],
+            "address": node.address,
+            "port": node.port,
+            "api_port": node.api_port,
+            "server_ca": node.server_ca,
+            "api_key": node.api_key,
+            "name": node.name,
+            "logger": self.logger,
+            "default_timeout": node.default_timeout,
+            "internal_timeout": node.internal_timeout,
+            "proxy": node.proxy_url,
+            "extra": {"id": node.id, "usage_coefficient": node.usage_coefficient},
+            "node_id": str(node.id),
+        }
+        store, coordinator, worker_id = get_bridge_memory()
+        if store is not None and coordinator is not None:
+            kwargs["user_sync_store"] = store
+            kwargs["lifecycle_coordinator"] = coordinator
+            kwargs["worker_id"] = worker_id
+        return kwargs
+
+    async def _shutdown_node(self, node: PasarGuardNode | None, *, remote_stop: bool = True):
         if node is None:
             return
 
         try:
             await node.set_health(Health.INVALID)
-            await node.stop()
+            if remote_stop:
+                await node.stop()
         except Exception:
             pass
 
     async def update_node(self, node: Node) -> PasarGuardNode:
-        async with self._lock.writer_lock:
-            old_node: PasarGuardNode | None = self._nodes.pop(node.id, None)
+        await ensure_bridge_memory()
 
-            new_node = create_node(
-                connection=type_map[node.connection_type],
-                address=node.address,
-                port=node.port,
-                api_port=node.api_port,
-                server_ca=node.server_ca,
-                api_key=node.api_key,
-                name=node.name,
-                logger=self.logger,
-                default_timeout=node.default_timeout,
-                internal_timeout=node.internal_timeout,
-                proxy=node.proxy_url,
-                extra={"id": node.id, "usage_coefficient": node.usage_coefficient},
-            )
+        # Serialize against in-flight full syncs (sync_full) so a reconnect/health-check
+        # restart doesn't swap the node object out from under a slow peer sync — that race
+        # is what turns a slow sync into a stop/start restart loop.
+        lock = self._user_sync_locks.setdefault(node.id, asyncio.Lock())
+        async with lock:
+            async with self._lock.writer_lock:
+                old_node: PasarGuardNode | None = self._nodes.pop(node.id, None)
 
-            self._nodes[node.id] = new_node
-            self._user_sync_locks.setdefault(node.id, asyncio.Lock())
+                new_node = create_node(**self._create_node_kwargs(node))
 
-        # Stop the old node after releasing the lock.
-        await self._shutdown_node(old_node)
+                self._nodes[node.id] = new_node
+
+            # Stop the old node after releasing the lock.
+            await self._shutdown_node(old_node)
 
         return new_node
 
-    async def remove_node(self, id: int) -> None:
-        async with self._lock.writer_lock:
+    async def remove_node(self, id: int, *, remote_stop: bool = True) -> None:
+        # Serialize against in-flight sync_full/update_node the same way update_node does,
+        # so removal can't tear the node down mid-sync and can't drop the lock entry while
+        # a current waiter still holds that lock identity.
+        lock = self._user_sync_locks.setdefault(id, asyncio.Lock())
+        async with lock, self._lock.writer_lock:
             old_node: PasarGuardNode | None = self._nodes.pop(id, None)
             self._user_sync_locks.pop(id, None)
 
         # Do cleanup without holding the lock to avoid slow delete operations.
-        asyncio.create_task(self._shutdown_node(old_node))
+        asyncio.create_task(self._shutdown_node(old_node, remote_stop=remote_stop))
 
     async def get_node(self, id: int) -> PasarGuardNode | None:
         async with self._lock.reader_lock:
@@ -141,6 +163,22 @@ class NodeManager:
 
         if failed_count:
             raise RuntimeError(f"failed to sync {failed_count}/{len(users)} users to node {node_id}")
+
+    async def sync_full(
+        self, node_id: int, users: list[ProtoUser], *, flush_pending: bool = False
+    ) -> PasarGuardNode | None:
+        """Push a full user snapshot to a node, serialized against update_node/remove_node.
+
+        Guards against the reconnect/health-check watchdog tearing down the node object
+        mid-sync (which previously restarted the sync from scratch and could loop).
+        """
+        lock = self._user_sync_locks.setdefault(node_id, asyncio.Lock())
+        async with lock:
+            node = await self.get_node(node_id)
+            if node is None:
+                return None
+            await node.sync_users(users, flush_pending=flush_pending)
+            return node
 
     async def _update_users(self, users: list[ProtoUser]):
         nodes = await self._snapshot_node_items()

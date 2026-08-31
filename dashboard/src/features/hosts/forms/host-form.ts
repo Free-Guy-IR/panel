@@ -84,7 +84,6 @@ export interface HostFormValues {
       packet: string
       delay: string
       apply_to: 'ip' | 'ipv4' | 'ipv6'
-      rand_range?: string
     }[]
   }
   mux_settings?: MuxSettings
@@ -99,7 +98,7 @@ export interface HostFormValues {
     dns_servers?: string[]
   }
   subscription_templates?: {
-    xray?: number
+    xray?: number | null
   }
   transport_settings?: {
     xhttp_settings?: {
@@ -168,6 +167,7 @@ export interface HostFormValues {
     }
   }
   final_mask_settings?: FinalMask
+  cipher_suites?: string
 }
 
 const transportSettingsSchema = z
@@ -394,12 +394,6 @@ export const HostFormSchema = z.object({
                 message: "Delay must be in format like '10-20' or '10'",
               }),
             apply_to: z.enum(['ip', 'ipv4', 'ipv6']).default('ip'),
-            rand_range: z
-              .string()
-              .optional()
-              .refine(val => !val || /^\d{1,16}(-\d{1,16})?$/.test(val), {
-                message: "Rand range must be in format like '10-20' or '10'",
-              }),
           }),
         )
         .optional(),
@@ -472,10 +466,11 @@ export const HostFormSchema = z.object({
     .optional(),
   subscription_templates: z
     .object({
-      xray: z.number().int().positive().optional(),
+      xray: z.number().int().positive().nullable().optional(),
     })
     .optional(),
   final_mask_settings: z.custom<FinalMask>().optional(),
+  cipher_suites: z.string().optional(),
 })
 
 export const hostFormDefaultValues: HostFormValues = {
@@ -504,6 +499,7 @@ export const hostFormDefaultValues: HostFormValues = {
   fragment_settings: undefined,
   subscription_templates: undefined,
   final_mask_settings: undefined,
+  cipher_suites: undefined,
 }
 
 /** Normalize API fragment settings for the host form (accept legacy `delay` as `interval`). */

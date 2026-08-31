@@ -676,7 +676,7 @@ class UserOperation(BaseOperation):
                 )
 
         if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
-            await self.get_validated_user_template(db, new_user.next_plan.user_template_id)
+            await self._get_validated_template_with_access(db, new_user.next_plan.user_template_id, admin)
 
         all_groups = await self.validate_all_groups(db, new_user, admin)
         db_admin = await get_admin(db, admin.username, load_users=False, load_usage_logs=False)
@@ -800,14 +800,15 @@ class UserOperation(BaseOperation):
 
         validated_groups = None
         if modified_user.group_ids is not None:
-            # Whatever the user already belongs to is not a change this admin is
-            # making, so it is not theirs to be blocked by.
             validated_groups = await self.validate_all_groups(
-                db, modified_user, admin, exempt_group_ids={group.id for group in db_user.groups}
+                db,
+                modified_user,
+                admin,
+                existing_group_ids={group.id for group in db_user.groups},
             )
 
         if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
-            await self.get_validated_user_template(db, modified_user.next_plan.user_template_id)
+            await self._get_validated_template_with_access(db, modified_user.next_plan.user_template_id, admin)
 
         effective_groups = validated_groups if validated_groups is not None else db_user.groups
         current_proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
@@ -1413,11 +1414,25 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(
+            db,
+            username,
+            admin,
+            load_usage_logs=False,
+            join_groups=True,
+            load_lifetime_used_traffic=True,
+        )
         return await self.validate_user(db_user)
 
     async def get_user_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserNotificationResponse:
-        db_user = await self.get_validated_user_by_id(db, user_id, admin)
+        db_user = await self.get_validated_user_by_id(
+            db,
+            user_id,
+            admin,
+            load_usage_logs=False,
+            join_groups=True,
+            load_lifetime_used_traffic=True,
+        )
         return await self.validate_user(db_user)
 
     async def get_users(
