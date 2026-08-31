@@ -152,6 +152,17 @@ class SubscriptionOperation(BaseOperation):
             return sub_settings.announce
 
     @staticmethod
+    def _format_announce_url(sub_settings: SubSettings, format_variables: dict) -> str:
+        """Format announcement URL with dynamic variables, falling back to raw URL if needed."""
+        if not sub_settings.announce_url:
+            return ""
+
+        try:
+            return sub_settings.announce_url.format_map(format_variables)
+        except (ValueError, KeyError):
+            return sub_settings.announce_url
+
+    @staticmethod
     def create_response_headers(
         user: UsersResponseWithInbounds,
         request_url: str,
@@ -178,6 +189,7 @@ class SubscriptionOperation(BaseOperation):
         format_variables.update({"PROFILE_TITLE": formatted_title})
         apply_custom_format_variables(format_variables, custom_variables)
         formatted_announce = SubscriptionOperation._format_announce(sub_settings, format_variables)
+        formatted_announce_url = SubscriptionOperation._format_announce_url(sub_settings, format_variables)
 
         # Prefer admin's support_url over subscription settings
         support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
@@ -193,7 +205,7 @@ class SubscriptionOperation(BaseOperation):
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
             "announce": encode_title(formatted_announce),
-            "announce-url": sub_settings.announce_url,
+            "announce-url": formatted_announce_url,
         }
         if extra_headers:
             headers.update(extra_headers)
@@ -276,7 +288,7 @@ class SubscriptionOperation(BaseOperation):
         headers = {
             "support-url": support_url,
             "announce": encode_title(formatted_announce),
-            "announce-url": sub_settings.announce_url,
+            "announce-url": formatted_announce_url,
         }
 
         # Only include headers that have values
