@@ -276,7 +276,7 @@ class BaseOperation:
         if admin is not None:
             allowed_group_ids = get_allowed_group_ids(admin)
             if allowed_group_ids is not None:
-                allowed = set(allowed_group_ids) | set(exempt_group_ids or ())
+                allowed = set(allowed_group_ids) | set(existing_group_ids or ())
                 forbidden = [groups_by_id[gid].name for gid in unique_ids if gid not in allowed]
                 if forbidden:
                     await self.raise_error(

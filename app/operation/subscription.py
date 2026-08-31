@@ -280,10 +280,9 @@ class SubscriptionOperation(BaseOperation):
         """Create response headers for /info endpoint with only support-url, announce, and announce-url."""
         # Prefer admin's support_url over subscription settings
         support_url = (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url
-        formatted_announce = SubscriptionOperation._format_announce(
-            sub_settings,
-            setup_format_variables(user, sub_settings.custom_variables),
-        )
+        format_variables = setup_format_variables(user, sub_settings.custom_variables)
+        formatted_announce = SubscriptionOperation._format_announce(sub_settings, format_variables)
+        formatted_announce_url = SubscriptionOperation._format_announce_url(sub_settings, format_variables)
 
         headers = {
             "support-url": support_url,
