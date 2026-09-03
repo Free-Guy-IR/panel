@@ -2,7 +2,7 @@ from enum import Enum
 from ipaddress import ip_network
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from app.db.models import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity, UserStatus
 
@@ -133,6 +133,20 @@ class FinalMaskFragmentSettings(FinalMaskBaseModel):
 
         return value
 
+    @model_serializer(mode="plain")
+    def _serialize_scalar(self):
+        # Xray FinalMask expects scalar "length"/"delay" (a value or "min-max" range),
+        # not the "lengths"/"delays" arrays this model stores internally.
+        out = {}
+        if self.packets is not None:
+            out["packets"] = self.packets
+        if self.lengths:
+            out["length"] = str(self.lengths[0]) if len(self.lengths) == 1 else "-".join(str(x) for x in self.lengths)
+        if self.delays:
+            out["delay"] = str(self.delays[0]) if len(self.delays) == 1 else "-".join(str(x) for x in self.delays)
+        if self.max_split is not None:
+            out["maxSplit"] = self.max_split
+        return out
 
 class FinalMaskTcpType(str, Enum):
     header_custom = "header-custom"
