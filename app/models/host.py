@@ -133,6 +133,23 @@ class FinalMaskFragmentSettings(FinalMaskBaseModel):
 
         return value
 
+    @staticmethod
+    def _collapse_to_range(values: list[str | int]) -> str:
+        """One entry stays as it is; several collapse to the span they cover.
+
+        Xray reads a single value or one "min-max" range, while the dashboard
+        offers a list. Joining the entries end to end produced "3-5-6-8-10-20",
+        which is not a range at all and which Xray rejects, so the bounds are
+        what gets carried over.
+        """
+        if len(values) == 1:
+            return str(values[0])
+
+        bounds = [int(part) for value in values for part in str(value).split("-") if part.strip().isdigit()]
+        if not bounds:
+            return str(values[0])
+        return f"{min(bounds)}-{max(bounds)}"
+
     @model_serializer(mode="plain")
     def _serialize_scalar(self):
         # Xray FinalMask expects scalar "length"/"delay" (a value or "min-max" range),
@@ -141,12 +158,13 @@ class FinalMaskFragmentSettings(FinalMaskBaseModel):
         if self.packets is not None:
             out["packets"] = self.packets
         if self.lengths:
-            out["length"] = str(self.lengths[0]) if len(self.lengths) == 1 else "-".join(str(x) for x in self.lengths)
+            out["length"] = self._collapse_to_range(self.lengths)
         if self.delays:
-            out["delay"] = str(self.delays[0]) if len(self.delays) == 1 else "-".join(str(x) for x in self.delays)
+            out["delay"] = self._collapse_to_range(self.delays)
         if self.max_split is not None:
             out["maxSplit"] = self.max_split
         return out
+
 
 class FinalMaskTcpType(str, Enum):
     header_custom = "header-custom"

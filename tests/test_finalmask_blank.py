@@ -37,10 +37,12 @@ def test_blank_max_split_is_not_emitted():
 
     settings = emitted["tcp"][0]["settings"]
     assert "maxSplit" not in settings
-    # The configured values must survive untouched.
+    # The configured values must survive, in the scalar shape Xray reads: the
+    # model keeps lengths/delays as lists internally and emits "length"/"delay".
     assert settings["packets"] == "tlshello"
-    assert settings["lengths"] == ["6-9"]
-    assert settings["delays"] == ["1-2"]
+    assert settings["length"] == "6-9"
+    assert settings["delay"] == "1-2"
+    assert "lengths" not in settings and "delays" not in settings
 
 
 def test_meaningful_falsy_values_are_kept():
@@ -64,3 +66,33 @@ def test_nested_and_list_pruning():
 def test_fully_blank_prunes_to_none():
     """An all-blank finalmask must collapse so the key can be omitted entirely."""
     assert prune_blank_values({"a": "", "b": {}, "c": []}) is None
+
+
+def test_several_lengths_collapse_to_the_span_they_cover():
+    """Xray reads one range, the dashboard offers a list.
+
+    Joining the entries end to end produced "3-5-6-8-10-20", which is not a
+    range and which Xray rejects outright.
+    """
+    stored = {
+        "tcp": [
+            {
+                "type": "fragment",
+                "settings": {"packets": "tlshello", "lengths": ["3-5", "6-8", "10-20"], "delays": [1, 2]},
+            }
+        ]
+    }
+
+    settings = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")["tcp"][0]["settings"]
+
+    assert settings["length"] == "3-20"
+    assert settings["delay"] == "1-2"
+
+
+def test_a_single_length_is_carried_over_exactly():
+    stored = {"tcp": [{"type": "fragment", "settings": {"packets": "tlshello", "lengths": ["24-70"], "delays": ["0"]}}]}
+
+    settings = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")["tcp"][0]["settings"]
+
+    assert settings["length"] == "24-70"
+    assert settings["delay"] == "0"
