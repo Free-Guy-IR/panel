@@ -2,7 +2,7 @@ from enum import Enum
 from ipaddress import ip_network
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity, UserStatus
 
@@ -66,6 +66,56 @@ class XrayNoiseSettings(BaseModel):
 
 class NoiseSettings(BaseModel):
     xray: list[XrayNoiseSettings] | None = Field(default=None)
+
+
+def _collapse_to_range(values: list[str | int]) -> str:
+    """One entry as it stands; several as the span they cover.
+
+    Xray reads a single value or one "min-max" range. Joining the entries end
+    to end gave "3-5-6-8-10-20", which is not a range and which Xray rejects
+    along with the whole config carrying it, so the bounds are what survives.
+    """
+    if len(values) == 1:
+        return str(values[0])
+
+    bounds = [int(part) for value in values for part in str(value).split("-") if part.strip().isdigit()]
+    if not bounds:
+        return str(values[0])
+    return f"{min(bounds)}-{max(bounds)}"
+
+
+def to_xray_finalmask(value: Any) -> Any:
+    """The shape Xray reads, built only on the way out to a client.
+
+    Fragment lengths and delays are kept as lists because that is what the
+    dashboard edits and what the API returns; Xray takes one value or one
+    range per field. Converting here rather than in the model keeps the two
+    contracts from drifting into each other.
+    """
+    if not isinstance(value, dict):
+        return value
+
+    converted = {}
+    for key, layers in value.items():
+        if key not in ("tcp", "udp") or not isinstance(layers, list):
+            converted[key] = layers
+            continue
+
+        rebuilt = []
+        for layer in layers:
+            settings = layer.get("settings") if isinstance(layer, dict) else None
+            if not isinstance(settings, dict):
+                rebuilt.append(layer)
+                continue
+
+            settings = dict(settings)
+            for plural, singular in (("lengths", "length"), ("delays", "delay")):
+                entries = settings.pop(plural, None)
+                if isinstance(entries, list) and entries:
+                    settings[singular] = _collapse_to_range(entries)
+            rebuilt.append({**layer, "settings": settings})
+        converted[key] = rebuilt
+    return converted
 
 
 def prune_blank_values(value: Any) -> Any:
@@ -132,38 +182,6 @@ class FinalMaskFragmentSettings(FinalMaskBaseModel):
             value["delays"] = [legacy_delay]
 
         return value
-
-    @staticmethod
-    def _collapse_to_range(values: list[str | int]) -> str:
-        """One entry stays as it is; several collapse to the span they cover.
-
-        Xray reads a single value or one "min-max" range, while the dashboard
-        offers a list. Joining the entries end to end produced "3-5-6-8-10-20",
-        which is not a range at all and which Xray rejects, so the bounds are
-        what gets carried over.
-        """
-        if len(values) == 1:
-            return str(values[0])
-
-        bounds = [int(part) for value in values for part in str(value).split("-") if part.strip().isdigit()]
-        if not bounds:
-            return str(values[0])
-        return f"{min(bounds)}-{max(bounds)}"
-
-    @model_serializer(mode="plain")
-    def _serialize_scalar(self):
-        # Xray FinalMask expects scalar "length"/"delay" (a value or "min-max" range),
-        # not the "lengths"/"delays" arrays this model stores internally.
-        out = {}
-        if self.packets is not None:
-            out["packets"] = self.packets
-        if self.lengths:
-            out["length"] = self._collapse_to_range(self.lengths)
-        if self.delays:
-            out["delay"] = self._collapse_to_range(self.delays)
-        if self.max_split is not None:
-            out["maxSplit"] = self.max_split
-        return out
 
 
 class FinalMaskTcpType(str, Enum):

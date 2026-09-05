@@ -13,7 +13,14 @@ from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
 from app.db.models import ProxyHostSecurity
-from app.models.host import BaseHost, FinalMask, OpenVPNHostOverrides, TransportSettings, WireGuardHostOverrides
+from app.models.host import (
+    BaseHost,
+    FinalMask,
+    OpenVPNHostOverrides,
+    TransportSettings,
+    WireGuardHostOverrides,
+    to_xray_finalmask,
+)
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -72,7 +79,7 @@ async def _prepare_subscription_inbound_data(
     if final_mask_settings:
         if isinstance(final_mask_settings, FinalMask):
             fms = final_mask_settings.model_dump(by_alias=True, exclude_none=True)
-        finalmask_link = json.dumps(fms, separators=(",", ":"))
+        finalmask_link = json.dumps(to_xray_finalmask(fms), separators=(",", ":"))
 
     if protocol == "wireguard":
         wg_over: WireGuardHostOverrides | None = host.wireguard_overrides

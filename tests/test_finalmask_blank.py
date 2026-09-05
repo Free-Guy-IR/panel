@@ -11,7 +11,7 @@ That breaks every client using the host, not just the field that was cleared,
 so it is worth pinning down.
 """
 
-from app.models.host import FinalMask, prune_blank_values
+from app.models.host import FinalMask, prune_blank_values, to_xray_finalmask
 
 
 def test_blank_max_split_is_not_emitted():
@@ -37,12 +37,10 @@ def test_blank_max_split_is_not_emitted():
 
     settings = emitted["tcp"][0]["settings"]
     assert "maxSplit" not in settings
-    # The configured values must survive, in the scalar shape Xray reads: the
-    # model keeps lengths/delays as lists internally and emits "length"/"delay".
+    # The configured values must survive untouched.
     assert settings["packets"] == "tlshello"
-    assert settings["length"] == "6-9"
-    assert settings["delay"] == "1-2"
-    assert "lengths" not in settings and "delays" not in settings
+    assert settings["lengths"] == ["6-9"]
+    assert settings["delays"] == ["1-2"]
 
 
 def test_meaningful_falsy_values_are_kept():
@@ -68,31 +66,57 @@ def test_fully_blank_prunes_to_none():
     assert prune_blank_values({"a": "", "b": {}, "c": []}) is None
 
 
+def _emitted(stored: dict) -> dict:
+    """What a client is handed, as the subscription builds it."""
+    dumped = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")
+    return to_xray_finalmask(dumped)["tcp"][0]["settings"]
+
+
 def test_several_lengths_collapse_to_the_span_they_cover():
     """Xray reads one range, the dashboard offers a list.
 
     Joining the entries end to end produced "3-5-6-8-10-20", which is not a
     range and which Xray rejects outright.
     """
-    stored = {
-        "tcp": [
-            {
-                "type": "fragment",
-                "settings": {"packets": "tlshello", "lengths": ["3-5", "6-8", "10-20"], "delays": [1, 2]},
-            }
-        ]
-    }
-
-    settings = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")["tcp"][0]["settings"]
+    settings = _emitted(
+        {
+            "tcp": [
+                {
+                    "type": "fragment",
+                    "settings": {"packets": "tlshello", "lengths": ["3-5", "6-8", "10-20"], "delays": [1, 2]},
+                }
+            ]
+        }
+    )
 
     assert settings["length"] == "3-20"
     assert settings["delay"] == "1-2"
+    assert "lengths" not in settings and "delays" not in settings
 
 
 def test_a_single_length_is_carried_over_exactly():
+    settings = _emitted(
+        {"tcp": [{"type": "fragment", "settings": {"packets": "tlshello", "lengths": ["24-70"], "delays": ["0"]}}]}
+    )
+
+    assert settings["length"] == "24-70"
+    assert settings["delay"] == "0"
+
+
+def test_the_model_itself_keeps_the_shape_the_api_returns():
+    """Only the way out to a client is converted; the API contract is the list."""
     stored = {"tcp": [{"type": "fragment", "settings": {"packets": "tlshello", "lengths": ["24-70"], "delays": ["0"]}}]}
 
     settings = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")["tcp"][0]["settings"]
 
-    assert settings["length"] == "24-70"
-    assert settings["delay"] == "0"
+    assert settings["lengths"] == ["24-70"]
+    assert settings["delays"] == ["0"]
+    assert "length" not in settings and "delay" not in settings
+
+
+def test_a_layer_without_fragment_lists_passes_through():
+    stored = {"tcp": [{"type": "sudoku", "settings": {"packets": "tlshello"}}], "udp": []}
+
+    emitted = to_xray_finalmask(FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json"))
+
+    assert emitted["tcp"][0]["settings"] == {"packets": "tlshello"}
