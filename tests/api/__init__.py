@@ -1,5 +1,7 @@
 import asyncio
+import contextlib
 import json
+import os
 
 from alembic.command import upgrade
 from alembic.config import Config
@@ -101,7 +103,29 @@ async def create_tables():
         await conn.run_sync(base.Base.metadata.create_all)
 
 
+def _reset_local_database() -> None:
+    """Start every local run from an empty database.
+
+    The local database is a file that nothing ever cleared, so each run left
+    its users and usage rows behind for the next one. Anything that counts
+    without scoping to what it created then reads the leftovers and drifts
+    upwards run after run. CI points DATABASE_URL at a real server and owns
+    its own schema, so this only touches the local sqlite file.
+    """
+    if not IS_SQLITE or ":memory:" in DATABASE_URL:
+        return
+
+    path = DATABASE_URL.split("///", 1)[-1]
+    if not path or path == ":memory:":
+        return
+
+    for leftover in (path, f"{path}-wal", f"{path}-shm"):
+        with contextlib.suppress(OSError):
+            os.remove(leftover)
+
+
 if TEST_FROM == "local":
+    _reset_local_database()
     run_migrations()
 
 
