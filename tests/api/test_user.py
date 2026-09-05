@@ -15,9 +15,7 @@ from fastapi import status
 from sqlalchemy import delete, event, func, select, update
 
 from app.db.crud.hwid import register_user_hwid
-from app.db.crud.user import get_user as get_db_user
-from app.db.crud.user import get_users as get_db_users
-from app.db.crud.user import update_users_status
+from app.db.crud.user import get_user as get_db_user, get_users as get_db_users, update_users_status
 from app.db.models import NodeUserUsage, User, UserStatus, UserUsageResetLogs
 from app.models.settings import ConfigFormat, SubRule, Subscription
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
@@ -1148,7 +1146,11 @@ def test_subscription_uses_inbound_flow_for_vless_udp443(access_token):
     )
 
     try:
-        assert "flow" not in user["proxy_settings"]["vless"]
+        # The model declares flow as optional, so pydantic emits the key with a
+        # null value rather than dropping it. What this pins down is that the
+        # user carries no flow of their own, so the one asserted below can only
+        # have come from the inbound.
+        assert user["proxy_settings"]["vless"].get("flow") is None
 
         response = client.get(f"{user['subscription_url']}/links")
         assert response.status_code == status.HTTP_200_OK
