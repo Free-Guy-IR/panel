@@ -121,7 +121,7 @@ async def test_with_the_switch_on_a_restriction_still_running_is_left_in_place(d
     from app.jobs.connection_limiter import _release_due
 
     user = await _user(db)
-    settings = ConnectionLimit(enforcement_enabled=True, punishment_steps=[10])
+    settings = ConnectionLimit(enforcement_enabled=True, monitor_only=False, punishment_steps=[10])
     await restrict(db, user, _Observation(user.id, 3), settings)
     await db.commit()
 
@@ -136,7 +136,7 @@ async def test_when_its_time_is_up_it_lifts_by_itself(db):
     from app.jobs.connection_limiter import _release_due
 
     user = await _user(db)
-    settings = ConnectionLimit(enforcement_enabled=True, punishment_steps=[10])
+    settings = ConnectionLimit(enforcement_enabled=True, monitor_only=False, punishment_steps=[10])
     await restrict(db, user, _Observation(user.id, 3), settings)
     row = (await db.execute(select(ConnectionRestriction))).scalar()
     row.restore_at = datetime.now(UTC) - timedelta(seconds=1)

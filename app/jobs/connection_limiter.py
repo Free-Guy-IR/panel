@@ -11,9 +11,10 @@ running is the one outcome nobody would expect.
 """
 
 import asyncio
+import time
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import notification, scheduler
 from app.db import GetDB
@@ -29,7 +30,31 @@ from app.utils.logger import get_logger
 from config import runtime_settings
 
 logger = get_logger("connection-limiter")
+
+# The job is registered on a fixed one-minute tick; how often a check actually
+# runs is a setting, and persistence_cycles counts those checks - so a cycle
+# that comes round too early has to stand aside, or a user reaches the end of
+# the ladder in half the time the settings describe.
+_last_assessment = 0.0
+
+
+async def _seconds_since_last_check(db) -> float | None:
+    """How long ago the last cycle ran, taken from the states it wrote.
+
+    The in-process clock starts again at every restart, and without this a
+    deploy would hand every user an extra check - which on a three-cycle
+    ladder is a third of the way to a disable.
+    """
+    last = await db.scalar(select(func.max(UserConnectionState.checked_at)))
+    if last is None:
+        return None
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - last).total_seconds()
+
+
 user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
+
 
 # Re-read each cycle rather than caching, so a settings change takes effect on
 # the next run instead of at the next restart.
@@ -60,9 +85,18 @@ async def _push_to_nodes(users) -> None:
             logger.exception("could not push the change for user %s to the nodes", user.id)
 
 
+def _enforcing(settings) -> bool:
+    """Whether anyone may be acted on at all.
+
+    "Monitor only" promises to record without restricting anyone, so it holds
+    the whole enforcement path shut regardless of the enforcement switch.
+    """
+    return settings is not None and settings.enforcement_enabled and not settings.monitor_only
+
+
 async def _release_due(db, settings) -> None:
     """Let go of anyone whose time is up, or of everyone when enforcement is off."""
-    everyone = settings is None or not settings.enforcement_enabled
+    everyone = not _enforcing(settings)
     pairs = await due_to_restore(db, everyone=everyone)
     if not pairs:
         return
@@ -90,6 +124,19 @@ async def record_connection_states():
     if settings is None or not settings.enabled:
         return
 
+    global _last_assessment
+    now = time.monotonic()
+    # A second of tolerance: the tick and the interval drift against each other.
+    due_after = settings.check_interval_seconds - 1
+    if _last_assessment:
+        if now - _last_assessment < due_after:
+            return
+    else:
+        async with GetDB() as db:
+            elapsed = await _seconds_since_last_check(db)
+        if elapsed is not None and elapsed < due_after:
+            return
+
     async with GetDB() as db:
         # Before anything else, so that narrowing the scope takes effect even
         # on a cycle that later runs out of time.
@@ -103,8 +150,13 @@ async def record_connection_states():
             # that overruns anyway must not hold the slot against the next one.
             observations = await asyncio.wait_for(run_assessment(db, settings), timeout=120)
         except TimeoutError:
+            # The slot was spent either way, so the next cycle waits its turn.
+            _last_assessment = now
             logger.warning("connection check exceeded its time budget; skipping this cycle")
             return
+        # Stamped once the checking has actually happened: a cycle that failed
+        # outright recorded nothing and no streak moved, so it may retry.
+        _last_assessment = now
         if not observations:
             return
 
@@ -150,7 +202,7 @@ async def record_connection_states():
 
         await db.commit()
 
-        if settings.enforcement_enabled:
+        if _enforcing(settings):
             await _enforce(db, observations, settings)
 
     over = sum(1 for o in observations if o.verdict == "over_limit")
@@ -209,7 +261,9 @@ if runtime_settings.role.runs_scheduler:
     scheduler.add_job(
         record_connection_states,
         "interval",
-        seconds=60,
+        # The tick is the finest interval the settings allow; how often a check
+        # actually runs is read from the settings on each tick.
+        seconds=30,
         max_instances=1,
         coalesce=True,
         id="record_connection_states",
