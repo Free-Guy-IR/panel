@@ -172,3 +172,7 @@ deadlock-analysis.md
 # AI
 .AGENT
 graphify-out
+*.sqlite3.*
+*.bak-*
+test.db
+test.db-*
