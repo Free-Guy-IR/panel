@@ -1810,7 +1810,13 @@ async def bulk_set_owner(db: AsyncSession, users: list[User], admin: Admin) -> l
 
     for user in users:
         old_admin = user.admin
-        if old_admin and old_admin.id != admin.id:
+        if old_admin is not None and old_admin.id == admin.id:
+            # Already theirs. Nothing is moving, so nothing may be counted: the
+            # counter is only ever added to, never recomputed from the users, so
+            # crediting it again here would inflate it for good and could push
+            # the admin past their own data limit.
+            continue
+        if old_admin is not None:
             if old_admin.id not in admin_traffic_changes:
                 admin_traffic_changes[old_admin.id] = 0
             admin_traffic_changes[old_admin.id] -= user.used_traffic

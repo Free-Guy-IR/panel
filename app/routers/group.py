@@ -21,7 +21,7 @@ from app.operation import OperatorType
 from app.operation.group import GroupOperation
 from app.utils import responses
 
-from .authentication import require_permission
+from .authentication import require_permission, require_scope_all
 from .dependencies import get_group_list_query, get_group_simple_list_query
 
 router = APIRouter(prefix="/api/group", tags=["Groups"], responses={401: responses._401, 403: responses._403})
@@ -208,6 +208,7 @@ async def bulk_add_groups_to_users(
     bulk_group: BulkGroup,
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("groups", "update")),
+    _: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
     """
     Bulk assign groups to multiple users, users under specific admins, or all users.
@@ -233,6 +234,7 @@ async def bulk_remove_users_from_groups(
     bulk_group: BulkGroup,
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("groups", "update")),
+    _: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
     """
     Bulk remove groups from multiple users, users under specific admins, or all users.
