@@ -15,16 +15,15 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from app import scheduler
+from app import notification, scheduler
 from app.db import GetDB
 from app.db.crud.settings import get_settings
 from app.db.models import User, UserConnectionState
 from app.jobs.dependencies import SYSTEM_ADMIN
+from app.models.settings import ConnectionLimit
 from app.operation import OperatorType
 from app.operation.user import UserOperation
-from app.models.settings import ConnectionLimit
-from app import notification
-from app.utils.connection_enforcement import due_to_restore, forget_old, release, restrict
+from app.utils.connection_enforcement import USER_LOAD_OPTIONS, due_to_restore, forget_old, release, restrict
 from app.utils.connection_limiter import prune_out_of_scope, run_assessment
 from app.utils.logger import get_logger
 from config import runtime_settings
@@ -177,7 +176,11 @@ async def _enforce(db, observations, settings) -> None:
     users = {
         user.id: user
         for user in (
-            await db.execute(select(User).where(User.id.in_([o.user_id for o in over])))
+            # The user is loaded fresh here, so everything restrict() and
+            # update_user() read off it has to come with the query (see
+            # USER_LOAD_OPTIONS): an unloaded relationship raises under the
+            # async session instead of loading.
+            await db.execute(select(User).options(*USER_LOAD_OPTIONS).where(User.id.in_([o.user_id for o in over])))
         )
         .scalars()
         .all()

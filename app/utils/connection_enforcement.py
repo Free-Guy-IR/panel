@@ -19,10 +19,21 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.models import ConnectionRestriction, User, UserStatus
 from app.models.settings import ConnectionLimit
 from app.utils.logger import get_logger
+
+# Everything restrict() and update_user() read off a user has to come with
+# the query. Under the async session an unloaded relationship does not load,
+# it raises MissingGreenlet - which is how nobody was ever restricted.
+USER_LOAD_OPTIONS = (
+    joinedload(User.admin),
+    joinedload(User.next_plan),
+    selectinload(User.usage_logs),
+    selectinload(User.groups),
+)
 
 logger = get_logger("connection-enforcement")
 
@@ -125,6 +136,7 @@ async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tu
     stmt = (
         select(ConnectionRestriction, User)
         .join(User, User.id == ConnectionRestriction.user_id)
+        .options(*USER_LOAD_OPTIONS)
         .where(ConnectionRestriction.active.is_(True))
     )
     if not everyone:
