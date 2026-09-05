@@ -701,7 +701,7 @@ class SubscriptionOperation(BaseOperation):
     async def user_subscription_by_id(
         self, db: AsyncSession, user_id: int, admin: AdminDetails, client_type: ConfigFormat, request_url: str = ""
     ):
-        db_user = await self.get_validated_user_by_id(db, user_id, admin)
+        db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="read")
         return await self.user_subscription_by_user(db_user, client_type, request_url)
 
     async def user_subscription_info(
@@ -821,7 +821,7 @@ class SubscriptionOperation(BaseOperation):
             if udp_based:
                 return max(1, round((loop.time() - start) * 1000))
             return -1
-        except (OSError, asyncio.TimeoutError, ValueError):
+        except (TimeoutError, OSError, ValueError):
             return -1
         finally:
             if writer is not None:

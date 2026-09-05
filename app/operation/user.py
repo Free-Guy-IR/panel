@@ -916,7 +916,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="update")
 
         return await self._modify_user(db, db_user, modified_user, admin)
 
@@ -960,7 +960,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="delete")
         return await self._remove_user(db, db_user, admin)
 
     async def remove_user_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails):
@@ -1061,7 +1061,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="update")
 
         return await self._reset_user_data_usage(db, db_user, admin)
 
@@ -1110,7 +1110,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="revoke_sub")
         return await self._revoke_user_sub(db, db_user, admin)
 
     async def revoke_user_sub_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserResponse:
@@ -1293,7 +1293,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="update")
         return await self._active_next_plan(db, db_user, admin)
 
     async def active_next_plan_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserResponse:
@@ -1318,7 +1318,7 @@ class UserOperation(BaseOperation):
             stacklevel=2,
         )
         new_admin = await self.get_validated_admin(db, username=admin_username)
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="update")
         return await self._set_owner(db, db_user, new_admin, admin)
 
     async def set_owner_by_id(
@@ -1377,7 +1377,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="read")
         return await self._get_user_usage(
             db,
             db_user,
@@ -1396,7 +1396,7 @@ class UserOperation(BaseOperation):
         admin: AdminDetails,
         query: UserUsageQuery,
     ) -> UserUsageStatsList:
-        db_user = await self.get_validated_user_by_id(db, user_id, admin)
+        db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="read")
         return await self._get_user_usage(
             db,
             db_user,
@@ -1421,6 +1421,7 @@ class UserOperation(BaseOperation):
             load_usage_logs=False,
             join_groups=True,
             load_lifetime_used_traffic=True,
+            scope_action="read",
         )
         return await self.validate_user(db_user)
 
@@ -1432,6 +1433,7 @@ class UserOperation(BaseOperation):
             load_usage_logs=False,
             join_groups=True,
             load_lifetime_used_traffic=True,
+            scope_action="read",
         )
         return await self.validate_user(db_user)
 
@@ -1442,7 +1444,10 @@ class UserOperation(BaseOperation):
         query: UserListQuery,
     ) -> UsersResponse:
         """Get all users"""
-        scope_admin_id = get_scope_admin_id(admin, "users", "read_simple")
+        # The scope has to come from the action the route enforces
+        # (require_permission("users", "read")), or an admin restricted to their
+        # own users is handed every user in the panel.
+        scope_admin_id = get_scope_admin_id(admin, "users", "read")
         if scope_admin_id is not None:
             query = query.model_copy(update={"owner": [admin.username], "admin_ids": None})
 
@@ -1470,7 +1475,7 @@ class UserOperation(BaseOperation):
         query: UserSimpleListQuery,
     ) -> UsersSimpleResponse:
         """Get lightweight user list with only id and username"""
-        scope_admin_id = get_scope_admin_id(admin, "users", "read")
+        scope_admin_id = get_scope_admin_id(admin, "users", "read_simple")
         admin_filter = (
             None
             if scope_admin_id is None
@@ -1748,7 +1753,7 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="update")
         return await self._modify_user_with_template(db, db_user, modified_template, admin)
 
     async def modify_user_with_template_by_id(
@@ -2012,13 +2017,13 @@ class UserOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
-        db_user = await self.get_validated_user(db, username, admin)
+        db_user = await self.get_validated_user(db, username, admin, scope_action="read")
         return await self._get_users_sub_update_list(db, db_user, offset, limit)
 
     async def get_users_sub_update_list_by_id(
         self, db: AsyncSession, user_id: int, admin: AdminDetails, offset: int = 0, limit: int = 10
     ) -> UserSubscriptionUpdateList:
-        db_user = await self.get_validated_user_by_id(db, user_id, admin)
+        db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="read")
         return await self._get_users_sub_update_list(db, db_user, offset, limit)
 
     async def get_users_sub_update_chart(
@@ -2037,7 +2042,7 @@ class UserOperation(BaseOperation):
         resolved_admin_id: int | None = None
 
         if user_id is not None:
-            db_user = await self.get_validated_user_by_id(db, user_id, admin)
+            db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="read")
             resolved_user_id = db_user.id
         elif username:
             warnings.warn(
@@ -2046,7 +2051,7 @@ class UserOperation(BaseOperation):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            db_user = await self.get_validated_user(db, username, admin)
+            db_user = await self.get_validated_user(db, username, admin, scope_action="read")
             resolved_user_id = db_user.id
         else:
             if admin_id:

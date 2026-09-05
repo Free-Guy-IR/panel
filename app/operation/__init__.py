@@ -171,7 +171,7 @@ class BaseOperation:
         join_groups: bool = False,
         load_lifetime_used_traffic: bool = False,
         scope_resource: str = "users",
-        scope_action: str = "read",
+        scope_action: str,
     ) -> User:
         db_user = await get_user(
             db,
@@ -201,7 +201,7 @@ class BaseOperation:
         join_groups: bool = False,
         load_lifetime_used_traffic: bool = False,
         scope_resource: str = "users",
-        scope_action: str = "read",
+        scope_action: str,
     ) -> User:
         db_user = await get_user_by_id(
             db,

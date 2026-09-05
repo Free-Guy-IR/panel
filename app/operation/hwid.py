@@ -20,7 +20,7 @@ async def _clear_connection_state(db: AsyncSession, user_id: int) -> None:
 
 class HWIDOperation(BaseOperation):
     async def get_user_hwids(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserHWIDListResponse:
-        db_user = await self.get_validated_user_by_id(db, user_id, admin)
+        db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="read")
         hwids = await get_user_hwids(db, db_user.id)
         hwid_responses = [UserHWIDResponse.model_validate(h) for h in hwids]
         return UserHWIDListResponse(hwids=hwid_responses, count=len(hwid_responses))
