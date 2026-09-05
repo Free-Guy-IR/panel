@@ -87,6 +87,15 @@ def _resolve_enabled_user_status(user: User) -> UserStatus:
     return UserStatus.active
 
 
+# Deleting users cascades: node_user_usages, user_usage_logs, hwids, states and
+# the rest all hang off users with ON DELETE CASCADE, so removing a few hundred
+# accounts can mean hundreds of thousands of row deletes. Held in one
+# transaction that collides with the ten-second usage job and the panel answers
+# "Database temporarily unavailable". Each chunk is committed on its own, so the
+# locks are released between chunks and the job gets its turn.
+DELETE_CHUNK_SIZE = 100
+
+
 def _build_user_select_stmt(
     *,
     load_admin: bool = True,
@@ -559,25 +568,35 @@ async def remove_expired_users(
 ) -> list[str]:
     conditions = _cleanup_target_user_conditions(expired_after, expired_before, admin_id, target)
 
-    rows = (await db.execute(select(User.id, User.username).where(*conditions))).all()
+    # Ascending id everywhere a delete runs, so two cleanups never take the
+    # same rows in opposite orders and deadlock against each other.
+    rows = (await db.execute(select(User.id, User.username).where(*conditions).order_by(User.id))).all()
     if not rows:
         return []
 
-    usernames = [username for _, username in rows]
-
     if dry_run:
-        return usernames
+        return [username for _, username in rows]
 
+    username_by_id = dict(rows)
     user_ids = [user_id for user_id, _ in rows]
+    deleted: list[str] = []
 
-    for start in range(0, len(user_ids), 1000):
-        chunk = user_ids[start : start + 1000]
-        await release_allocations_by_user_ids(db, chunk)
-        await _delete_user_dependencies(db, chunk)
-        await db.execute(delete(User).where(User.id.in_(chunk)))
-    await db.commit()
+    for start in range(0, len(user_ids), DELETE_CHUNK_SIZE):
+        chunk = user_ids[start : start + DELETE_CHUNK_SIZE]
+        try:
+            await release_allocations_by_user_ids(db, chunk)
+            await _delete_user_dependencies(db, chunk)
+            await db.execute(delete(User).where(User.id.in_(chunk)))
+            await db.commit()
+        except Exception:
+            # Leave the session usable: the caller still has to answer the request.
+            await db.rollback()
+            raise
+        # Reported after the commit, so the caller only announces users that
+        # are really gone even if a later chunk fails.
+        deleted.extend(username_by_id[user_id] for user_id in chunk)
 
-    return usernames
+    return deleted
 
 
 async def get_active_to_expire_users(db: AsyncSession) -> list[User]:
@@ -1017,12 +1036,25 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
     if not db_users:
         return
 
-    user_ids = list({user.id for user in db_users})
+    seen: set[int] = set()
+    unique_users: list[User] = []
+    for user in sorted(db_users, key=lambda user: user.id):
+        if user.id not in seen:
+            seen.add(user.id)
+            unique_users.append(user)
 
-    await release_users_allocations(db, db_users)
-    await _delete_user_dependencies(db, user_ids)
-    await db.execute(delete(User).where(User.id.in_(user_ids)))
-    await db.commit()
+    for start in range(0, len(unique_users), DELETE_CHUNK_SIZE):
+        chunk = unique_users[start : start + DELETE_CHUNK_SIZE]
+        chunk_ids = [user.id for user in chunk]
+        try:
+            await release_users_allocations(db, chunk)
+            await _delete_user_dependencies(db, chunk_ids)
+            await db.execute(delete(User).where(User.id.in_(chunk_ids)))
+            await db.commit()
+        except Exception:
+            # Leave the session usable: the caller still has to answer the request.
+            await db.rollback()
+            raise
 
 
 async def modify_user(
