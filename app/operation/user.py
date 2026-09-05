@@ -1444,9 +1444,6 @@ class UserOperation(BaseOperation):
         query: UserListQuery,
     ) -> UsersResponse:
         """Get all users"""
-        # The scope has to come from the action the route enforces
-        # (require_permission("users", "read")), or an admin restricted to their
-        # own users is handed every user in the panel.
         scope_admin_id = get_scope_admin_id(admin, "users", "read")
         if scope_admin_id is not None:
             query = query.model_copy(update={"owner": [admin.username], "admin_ids": None})

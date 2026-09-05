@@ -1,15 +1,3 @@
-"""Two things that were reachable through the panel and should not have been.
-
-Handing an admin a user they already own moved no ownership, and yet still
-credited their traffic counter a second time. The counter is only ever added
-to - never recomputed from the users - so the inflation was permanent, and the
-admin limit job compares that very counter against the admin's data limit.
-
-And the bulk group endpoints reached every user in the panel while asking only
-whether the caller may use the groups. Which groups a user is in decides which
-inbounds they get, so that is the power to cut off or upgrade anyone's users.
-"""
-
 import ast
 import pathlib
 
@@ -74,7 +62,6 @@ async def test_a_user_the_admin_already_owns_moves_no_counter(db):
 
 @pytest.mark.asyncio
 async def test_setting_the_same_owner_twice_does_not_keep_adding(db):
-    """The counter is never recomputed, so an inflation here is permanent."""
     old = await _admin(db, "old", used_traffic=300)
     new = await _admin(db, "new", used_traffic=0)
     user = await _user(db, "moving", old, used_traffic=300)
@@ -104,7 +91,6 @@ async def test_a_real_move_still_shifts_the_traffic_between_both(db):
 
 @pytest.mark.asyncio
 async def test_a_user_with_no_owner_is_still_credited_to_the_new_one(db):
-    """The guard must not swallow this case, which has no old admin to debit."""
     new = await _admin(db, "new", used_traffic=0)
     user = await _user(db, "orphan", None, used_traffic=700)
     await db.commit()
@@ -115,7 +101,6 @@ async def test_a_user_with_no_owner_is_still_credited_to_the_new_one(db):
 
 
 def _dependencies(route_name: str) -> set[str]:
-    """The permission dependencies declared on one route."""
     tree = ast.parse(ROUTER.read_text())
     for node in ast.walk(tree):
         if not isinstance(node, ast.AsyncFunctionDef) or node.name != route_name:
@@ -136,7 +121,6 @@ def _dependencies(route_name: str) -> set[str]:
 
 @pytest.mark.parametrize("route", BULK_ROUTES)
 def test_the_bulk_group_routes_also_require_the_user_scope(route):
-    """They reach every user in the panel, so the group permission is not enough."""
     declared = _dependencies(route)
 
     assert "require_permission('groups', 'update')" in declared

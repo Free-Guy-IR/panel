@@ -25,9 +25,6 @@ from app.db.models import ConnectionRestriction, User, UserStatus
 from app.models.settings import ConnectionLimit
 from app.utils.logger import get_logger
 
-# Everything restrict() and update_user() read off a user has to come with
-# the query. Under the async session an unloaded relationship does not load,
-# it raises MissingGreenlet - which is how nobody was ever restricted.
 USER_LOAD_OPTIONS = (
     joinedload(User.admin),
     joinedload(User.next_plan),

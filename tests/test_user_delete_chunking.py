@@ -1,13 +1,3 @@
-"""Deleting many users at once must not be one long transaction.
-
-Everything hangs off users with ON DELETE CASCADE - usage rows above all - so a
-cleanup of a few hundred accounts is hundreds of thousands of row deletes. Held
-open, it collided with the ten-second usage job and the panel answered
-"Database temporarily unavailable" while the deletes themselves went through.
-Each chunk is committed on its own now, and what comes back is what is really
-gone.
-"""
-
 import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
@@ -48,7 +38,6 @@ async def _users(db, count: int, status: UserStatus = UserStatus.limited) -> lis
 
 
 def _count_commits(db, monkeypatch) -> list[int]:
-    """Count commits without swallowing them."""
     calls = [0]
     original = db.commit
 
@@ -97,7 +86,6 @@ async def test_a_user_listed_twice_is_deleted_once(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_what_comes_back_is_only_what_was_committed(db, monkeypatch):
-    """A chunk that fails must not have its users announced as deleted."""
     await _users(db, 4)
     monkeypatch.setattr(crud_user, "DELETE_CHUNK_SIZE", 2)
 
@@ -115,9 +103,7 @@ async def test_what_comes_back_is_only_what_was_committed(db, monkeypatch):
     with pytest.raises(RuntimeError):
         await remove_expired_users(db, target="limited")
 
-    # remove_expired_users rolled the failed chunk back itself.
     monkeypatch.setattr(db, "commit", original)
-    # The first chunk is gone for good; the second was never announced.
     assert (await db.scalar(select(func.count()).select_from(User))) == 2
 
 

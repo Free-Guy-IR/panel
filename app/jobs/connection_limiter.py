@@ -31,20 +31,10 @@ from config import runtime_settings
 
 logger = get_logger("connection-limiter")
 
-# The job is registered on a fixed one-minute tick; how often a check actually
-# runs is a setting, and persistence_cycles counts those checks - so a cycle
-# that comes round too early has to stand aside, or a user reaches the end of
-# the ladder in half the time the settings describe.
 _last_assessment = 0.0
 
 
 async def _seconds_since_last_check(db) -> float | None:
-    """How long ago the last cycle ran, taken from the states it wrote.
-
-    The in-process clock starts again at every restart, and without this a
-    deploy would hand every user an extra check - which on a three-cycle
-    ladder is a third of the way to a disable.
-    """
     last = await db.scalar(select(func.max(UserConnectionState.checked_at)))
     if last is None:
         return None
@@ -86,11 +76,6 @@ async def _push_to_nodes(users) -> None:
 
 
 def _enforcing(settings) -> bool:
-    """Whether anyone may be acted on at all.
-
-    "Monitor only" promises to record without restricting anyone, so it holds
-    the whole enforcement path shut regardless of the enforcement switch.
-    """
     return settings is not None and settings.enforcement_enabled and not settings.monitor_only
 
 
@@ -126,7 +111,6 @@ async def record_connection_states():
 
     global _last_assessment
     now = time.monotonic()
-    # A second of tolerance: the tick and the interval drift against each other.
     due_after = settings.check_interval_seconds - 1
     if _last_assessment:
         if now - _last_assessment < due_after:
@@ -150,12 +134,9 @@ async def record_connection_states():
             # that overruns anyway must not hold the slot against the next one.
             observations = await asyncio.wait_for(run_assessment(db, settings), timeout=120)
         except TimeoutError:
-            # The slot was spent either way, so the next cycle waits its turn.
             _last_assessment = now
             logger.warning("connection check exceeded its time budget; skipping this cycle")
             return
-        # Stamped once the checking has actually happened: a cycle that failed
-        # outright recorded nothing and no streak moved, so it may retry.
         _last_assessment = now
         if not observations:
             return
@@ -228,10 +209,6 @@ async def _enforce(db, observations, settings) -> None:
     users = {
         user.id: user
         for user in (
-            # The user is loaded fresh here, so everything restrict() and
-            # update_user() read off it has to come with the query (see
-            # USER_LOAD_OPTIONS): an unloaded relationship raises under the
-            # async session instead of loading.
             await db.execute(select(User).options(*USER_LOAD_OPTIONS).where(User.id.in_([o.user_id for o in over])))
         )
         .scalars()
@@ -261,8 +238,6 @@ if runtime_settings.role.runs_scheduler:
     scheduler.add_job(
         record_connection_states,
         "interval",
-        # The tick is the finest interval the settings allow; how often a check
-        # actually runs is read from the settings on each tick.
         seconds=30,
         max_instances=1,
         coalesce=True,

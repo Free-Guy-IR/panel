@@ -104,14 +104,6 @@ async def create_tables():
 
 
 def _reset_local_database() -> None:
-    """Start every local run from an empty database.
-
-    The local database is a file that nothing ever cleared, so each run left
-    its users and usage rows behind for the next one. Anything that counts
-    without scoping to what it created then reads the leftovers and drifts
-    upwards run after run. CI points DATABASE_URL at a real server and owns
-    its own schema, so this only touches the local sqlite file.
-    """
     if not IS_SQLITE or ":memory:" in DATABASE_URL:
         return
 
@@ -148,14 +140,11 @@ async def get_test_db():
         yield db
 
 
-from app import create_app  # noqa
-
+from app import create_app
 
 app = create_app()
 
-
 app.dependency_overrides[base.get_db] = get_test_db
-
 
 with open(XRAY_JSON_TEST_FILE, "w") as f:
     f.write(
@@ -177,6 +166,5 @@ with open(XRAY_JSON_TEST_FILE, "w") as f:
             indent=4,
         )
     )
-
 
 client = TestClient(app)

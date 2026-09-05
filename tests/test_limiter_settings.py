@@ -1,12 +1,3 @@
-"""Two settings the panel offers that the job was not reading.
-
-"Monitor only" says it records without restricting anyone, and it sat next to
-the enforcement switch doing nothing at all, so a panel with both on restricted
-people anyway. And the check interval is what persistence_cycles counts: the
-job ticks every minute regardless, so a panel set to check every two minutes
-walked a user up the whole ladder in half the time its own settings described.
-"""
-
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -40,7 +31,6 @@ def test_monitor_only_holds_the_enforcement_path_shut():
 
 @pytest.mark.asyncio
 async def test_monitor_only_releases_whoever_is_still_held():
-    """Switching it on has to let go of anyone already restricted."""
     with patch.object(job, "due_to_restore", new_callable=AsyncMock, return_value=[]) as due:
         await job._release_due(AsyncMock(), _settings(monitor_only=True))
 
@@ -57,7 +47,6 @@ async def test_enforcement_on_and_monitor_off_keeps_running_restrictions():
 
 @pytest.mark.asyncio
 async def test_a_cycle_that_comes_round_too_early_stands_aside(monkeypatch):
-    """persistence_cycles counts checks, so the spacing has to be the configured one."""
     monkeypatch.setattr(job, "_last_assessment", 0.0)
     clock = {"t": 1000.0}
     monkeypatch.setattr(job.time, "monotonic", lambda: clock["t"])
@@ -88,7 +77,6 @@ async def test_a_cycle_that_comes_round_too_early_stands_aside(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_restart_does_not_hand_everyone_an_extra_check(monkeypatch):
-    """The in-process clock starts again; the states remember when it last ran."""
     monkeypatch.setattr(job, "_last_assessment", 0.0)
     monkeypatch.setattr(job.time, "monotonic", lambda: 42.0)
 
@@ -114,7 +102,6 @@ async def test_a_restart_does_not_hand_everyone_an_extra_check(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_cycle_that_failed_outright_may_retry(monkeypatch):
-    """Nothing was recorded and no streak moved, so it does not cost a slot."""
     monkeypatch.setattr(job, "_last_assessment", 0.0)
     monkeypatch.setattr(job.time, "monotonic", lambda: 900.0)
 
@@ -138,7 +125,6 @@ async def test_a_cycle_that_failed_outright_may_retry(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_restrictions_are_still_lifted_on_every_tick(monkeypatch):
-    """The interval holds back checking, never the release of served time."""
     monkeypatch.setattr(job, "_last_assessment", 5000.0)
     monkeypatch.setattr(job.time, "monotonic", lambda: 5001.0)
 
@@ -156,7 +142,6 @@ async def test_restrictions_are_still_lifted_on_every_tick(monkeypatch):
 
 
 def test_the_tick_is_fine_enough_for_the_smallest_interval_allowed():
-    """A panel set to check every 30s cannot be served by a 60s tick."""
     import ast
     import pathlib
 

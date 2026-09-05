@@ -69,12 +69,6 @@ class NoiseSettings(BaseModel):
 
 
 def _collapse_to_range(values: list[str | int]) -> str:
-    """One entry as it stands; several as the span they cover.
-
-    Xray reads a single value or one "min-max" range. Joining the entries end
-    to end gave "3-5-6-8-10-20", which is not a range and which Xray rejects
-    along with the whole config carrying it, so the bounds are what survives.
-    """
     if len(values) == 1:
         return str(values[0])
 
@@ -85,13 +79,6 @@ def _collapse_to_range(values: list[str | int]) -> str:
 
 
 def to_xray_finalmask(value: Any) -> Any:
-    """The shape Xray reads, built only on the way out to a client.
-
-    Fragment lengths and delays are kept as lists because that is what the
-    dashboard edits and what the API returns; Xray takes one value or one
-    range per field. Converting here rather than in the model keeps the two
-    contracts from drifting into each other.
-    """
     if not isinstance(value, dict):
         return value
 
@@ -345,7 +332,6 @@ FinalMaskUdpSettings = (
     | FinalMaskMkcpLegacySettings
     | dict[str, Any]
 )
-
 
 FINAL_MASK_TCP_SETTINGS_MODELS = {
     FinalMaskTcpType.header_custom: FinalMaskTcpHeaderCustomSettings,

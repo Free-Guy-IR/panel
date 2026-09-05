@@ -958,8 +958,6 @@ class ConnectionRestriction(Base, IdMixin):
     disable_minutes: Mapped[int] = mapped_column(default=0, server_default="0")
     previous_status: Mapped[str | None] = mapped_column(String(16), default=None)
     previous_group_ids: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
-    # What the checking saw at the moment it acted, in the same shape the live
-    # state records: a row that only says "3 of 2" cannot be argued with later.
     reasons: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
     restore_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     restored_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)

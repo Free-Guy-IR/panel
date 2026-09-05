@@ -886,9 +886,6 @@ class TestGetUserCountMetricStats:
     async def test_single_metric_responses_share_count_logic(self):
         async with TestSession() as session:
             admin_id, active_user_id, node_id = await setup_test_data(session)
-            # test.db is a file that keeps every previous run, so a count across
-            # all admins picks up users this test never created. Every other test
-            # here scopes to its own admin; these two have to as well.
             admin_username = (await session.execute(select(Admin.username).where(Admin.id == admin_id))).scalar_one()
 
             expired_user = User(
@@ -962,9 +959,6 @@ class TestGetUserCountMetricStats:
     async def test_partial_first_bucket_is_excluded(self):
         async with TestSession() as session:
             admin_id, user_id, node_id = await setup_test_data(session)
-            # test.db is a file that keeps every previous run, so a count across
-            # all admins picks up users this test never created. Every other test
-            # here scopes to its own admin; these two have to as well.
             admin_username = (await session.execute(select(Admin.username).where(Admin.id == admin_id))).scalar_one()
 
             tehran_tz = timezone(timedelta(hours=3, minutes=30))

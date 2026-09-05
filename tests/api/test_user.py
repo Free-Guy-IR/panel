@@ -1146,10 +1146,6 @@ def test_subscription_uses_inbound_flow_for_vless_udp443(access_token):
     )
 
     try:
-        # The model declares flow as optional, so pydantic emits the key with a
-        # null value rather than dropping it. What this pins down is that the
-        # user carries no flow of their own, so the one asserted below can only
-        # have come from the inbound.
         assert user["proxy_settings"]["vless"].get("flow") is None
 
         response = client.get(f"{user['subscription_url']}/links")

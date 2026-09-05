@@ -37,7 +37,6 @@ def test_blank_max_split_is_not_emitted():
 
     settings = emitted["tcp"][0]["settings"]
     assert "maxSplit" not in settings
-    # The configured values must survive untouched.
     assert settings["packets"] == "tlshello"
     assert settings["lengths"] == ["6-9"]
     assert settings["delays"] == ["1-2"]
@@ -67,17 +66,11 @@ def test_fully_blank_prunes_to_none():
 
 
 def _emitted(stored: dict) -> dict:
-    """What a client is handed, as the subscription builds it."""
     dumped = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")
     return to_xray_finalmask(dumped)["tcp"][0]["settings"]
 
 
 def test_several_lengths_collapse_to_the_span_they_cover():
-    """Xray reads one range, the dashboard offers a list.
-
-    Joining the entries end to end produced "3-5-6-8-10-20", which is not a
-    range and which Xray rejects outright.
-    """
     settings = _emitted(
         {
             "tcp": [
@@ -104,7 +97,6 @@ def test_a_single_length_is_carried_over_exactly():
 
 
 def test_the_model_itself_keeps_the_shape_the_api_returns():
-    """Only the way out to a client is converted; the API contract is the list."""
     stored = {"tcp": [{"type": "fragment", "settings": {"packets": "tlshello", "lengths": ["24-70"], "delays": ["0"]}}]}
 
     settings = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")["tcp"][0]["settings"]

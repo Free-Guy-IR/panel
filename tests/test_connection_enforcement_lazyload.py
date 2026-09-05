@@ -1,12 +1,3 @@
-"""The job loads the user itself, so nothing about it is in memory beforehand.
-
-The earlier tests built the user in the same session, which left its
-relationships loaded and hid what happened in production: reading an unloaded
-relationship under the async session raises MissingGreenlet, the cycle died
-there, and no restriction was ever applied. The push here reads exactly what
-update_user() reads, so the loader has to cover all of it, both ways round.
-"""
-
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -58,7 +49,6 @@ async def _stored_user(db) -> tuple[User, int]:
 
 
 def _what_update_user_reads(users):
-    """What _push_to_nodes -> update_user -> validate_user touches on each user."""
     for user in users:
         UserNotificationResponse.model_validate(user)
         assert user.admin is not None

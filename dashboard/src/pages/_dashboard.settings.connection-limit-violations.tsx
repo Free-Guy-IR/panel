@@ -179,8 +179,6 @@ export default function ConnectionLimitViolations() {
                               ))}
                             </ul>
                           )}
-                          {/* Rows written before the reasons were recorded still
-                              have their addresses, which is what they had. */}
                           <bdi className="text-muted-foreground/70">
                             {(violation.observed_addresses ?? []).slice(0, 4).join(', ') || '—'}
                           </bdi>

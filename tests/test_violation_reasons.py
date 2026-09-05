@@ -1,11 +1,3 @@
-"""A violation has to say what it rested on.
-
-The row recorded the count and the addresses and nothing else, so the table
-could show "3 of 2" and no more: which of the three measures reached three,
-and on what evidence, was computed and then thrown away. Anyone asking why
-their account was cut off deserves an answer that survives the moment.
-"""
-
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
@@ -74,7 +66,6 @@ async def test_a_disable_records_what_it_rested_on(db):
 
 @pytest.mark.asyncio
 async def test_a_warning_records_them_too(db):
-    """The first rung changes nothing, and still has to explain itself."""
     user = await _user(db)
 
     assert await restrict(db, user, _Observation(user.id), ConnectionLimit(punishment_steps=[0, 10])) is None

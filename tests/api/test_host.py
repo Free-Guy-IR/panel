@@ -383,8 +383,6 @@ def test_host_finalmask_new_types(access_token):
         assert fm.get("quicParams", {}).get("bbrProfile") == "standard"
         assert len(fm.get("tcp", [])) == 2
         assert fm["tcp"][0]["type"] == "fragment"
-        # Several entries collapse to the span they cover, not to the entries
-        # joined end to end ("3-5-6-8-10-20" is not a range Xray can read).
         assert fm["tcp"][0]["settings"].get("lengths") == ["3-5", "6-8", "10-20"]
         assert fm["tcp"][0]["settings"].get("delays") == ["10-20"]
         assert len(fm.get("udp", [])) == 6
@@ -474,8 +472,6 @@ def test_host_finalmask_legacy_interval_to_delays(access_token):
         get_res = client.get(f"/api/host/{host_id}", headers={"Authorization": f"Bearer {access_token}"})
         assert get_res.status_code == status.HTTP_200_OK
         settings = ((get_res.json().get("final_mask_settings") or {}).get("tcp") or [{}])[0].get("settings") or {}
-        # The API answers with what it stores; the Freedom-style "interval" has
-        # become a delay, and the scalar Xray form belongs to the config only.
         assert settings.get("lengths") == ["10-20"]
         assert settings.get("delays") == ["5-10"]
         assert "interval" not in settings

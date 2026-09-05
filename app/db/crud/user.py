@@ -87,12 +87,6 @@ def _resolve_enabled_user_status(user: User) -> UserStatus:
     return UserStatus.active
 
 
-# Deleting users cascades: node_user_usages, user_usage_logs, hwids, states and
-# the rest all hang off users with ON DELETE CASCADE, so removing a few hundred
-# accounts can mean hundreds of thousands of row deletes. Held in one
-# transaction that collides with the ten-second usage job and the panel answers
-# "Database temporarily unavailable". Each chunk is committed on its own, so the
-# locks are released between chunks and the job gets its turn.
 DELETE_CHUNK_SIZE = 100
 
 
@@ -568,8 +562,6 @@ async def remove_expired_users(
 ) -> list[str]:
     conditions = _cleanup_target_user_conditions(expired_after, expired_before, admin_id, target)
 
-    # Ascending id everywhere a delete runs, so two cleanups never take the
-    # same rows in opposite orders and deadlock against each other.
     rows = (await db.execute(select(User.id, User.username).where(*conditions).order_by(User.id))).all()
     if not rows:
         return []
@@ -589,11 +581,8 @@ async def remove_expired_users(
             await db.execute(delete(User).where(User.id.in_(chunk)))
             await db.commit()
         except Exception:
-            # Leave the session usable: the caller still has to answer the request.
             await db.rollback()
             raise
-        # Reported after the commit, so the caller only announces users that
-        # are really gone even if a later chunk fails.
         deleted.extend(username_by_id[user_id] for user_id in chunk)
 
     return deleted
@@ -1052,7 +1041,6 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
             await db.execute(delete(User).where(User.id.in_(chunk_ids)))
             await db.commit()
         except Exception:
-            # Leave the session usable: the caller still has to answer the request.
             await db.rollback()
             raise
 
@@ -1811,10 +1799,6 @@ async def bulk_set_owner(db: AsyncSession, users: list[User], admin: Admin) -> l
     for user in users:
         old_admin = user.admin
         if old_admin is not None and old_admin.id == admin.id:
-            # Already theirs. Nothing is moving, so nothing may be counted: the
-            # counter is only ever added to, never recomputed from the users, so
-            # crediting it again here would inflate it for good and could push
-            # the admin past their own data limit.
             continue
         if old_admin is not None:
             if old_admin.id not in admin_traffic_changes:

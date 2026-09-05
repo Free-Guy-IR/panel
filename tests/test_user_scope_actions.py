@@ -1,12 +1,3 @@
-"""The scope that applies has to belong to the action being performed.
-
-Two ways it came apart. The by-username endpoints called the shared loader
-without naming an action, so it fell back to the read scope: an admin allowed
-to delete only their own users could delete anyone's by passing a username
-instead of an id. And the two list endpoints read each other's scope, so an
-admin restricted to their own users was handed every user in the panel.
-"""
-
 import ast
 import pathlib
 from unittest.mock import AsyncMock, patch
@@ -23,10 +14,6 @@ LOADERS = {"get_validated_user", "get_validated_user_by_id"}
 
 
 def _admin(**user_actions) -> AdminDetails:
-    """An admin whose users-resource actions carry the given scopes.
-
-    A value of 2 is ALL, 1 is OWN; True is allowed with no scope at all.
-    """
     return AdminDetails(
         id=7,
         username="reseller",
@@ -40,7 +27,6 @@ def _admin(**user_actions) -> AdminDetails:
 
 
 def test_every_loader_call_names_the_action_it_performs():
-    """A call that omits it silently gets the read scope, which is the bug."""
     offenders = []
     for path in sorted(OPERATION_DIR.rglob("*.py")):
         tree = ast.parse(path.read_text())
@@ -68,7 +54,6 @@ def test_the_loader_refuses_to_be_called_without_an_action():
     [("remove_user", "delete"), ("modify_user", "update"), ("revoke_user_sub", "revoke_sub")],
 )
 async def test_a_by_username_write_is_confined_to_the_admins_own_users(method, action):
-    """Read may be unrestricted while the write is not; the write scope wins."""
     op = UserOperation(OperatorType.API)
     admin = _admin(read={"scope": 2}, **{action: {"scope": 1}})
 
@@ -97,7 +82,6 @@ async def test_a_by_username_read_stays_on_the_read_scope():
 
 
 def test_the_two_list_endpoints_read_their_own_scope():
-    """Reading the other one's scope handed an OWN-scoped admin the whole panel."""
     source = (OPERATION_DIR / "user.py").read_text()
     tree = ast.parse(source)
 
