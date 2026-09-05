@@ -3938,6 +3938,7 @@
   "settings.connectionLimit.violations.empty": "Nobody has been acted on.",
   "settings.connectionLimit.violations.action": "What was done",
   "settings.connectionLimit.violations.addresses": "Addresses at the time",
+  "settings.connectionLimit.violations.why": "Why it was acted on",
   "settings.connectionLimit.violations.when": "When",
   "settings.connectionLimit.violations.warned": "Warned",
   "settings.connectionLimit.violations.untilLifted": "Until lifted",

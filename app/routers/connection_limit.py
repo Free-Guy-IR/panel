@@ -1,20 +1,21 @@
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-import asyncio
-
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import notification
 from app.db import get_db
 from app.db.crud.settings import get_settings
 from app.db.models import ConnectionRestriction, User, UserConnectionLimit, UserConnectionState
+from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.admin import AdminDetails
 from app.models.connection_limit import (
     ConnectionStateResponse,
+    ConnectionStatesResponse,
     ConnectionViolationResponse,
     ConnectionViolationsResponse,
-    ConnectionStatesResponse,
     ResolvedAddress,
     ResolvedAddressesResponse,
     UserConnectionLimitPayload,
@@ -22,14 +23,11 @@ from app.models.connection_limit import (
     UserConnectionLimitsResponse,
 )
 from app.models.settings import ConnectionLimit
-from app.utils.connection_limiter import DEFAULT_CDN_RANGES, lookup_providers
-
-from app.jobs.dependencies import SYSTEM_ADMIN
 from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.utils.connection_enforcement import active_restriction, release
+from app.utils.connection_limiter import DEFAULT_CDN_RANGES, lookup_providers
 from app.utils.logger import get_logger
-from app import notification
 
 from .authentication import require_permission
 
@@ -107,8 +105,11 @@ async def connection_states_for_users(
     settings = await _settings(db)
     if not user_ids:
         return ConnectionStatesResponse(
-            states=[], total=0, device_limit=settings.device_limit,
-            enabled=settings.enabled, monitor_only=settings.monitor_only,
+            states=[],
+            total=0,
+            device_limit=settings.device_limit,
+            enabled=settings.enabled,
+            monitor_only=settings.monitor_only,
         )
 
     rows = (
@@ -177,9 +178,7 @@ async def set_override(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    row = (
-        await db.execute(select(UserConnectionLimit).where(UserConnectionLimit.user_id == user_id))
-    ).scalar()
+    row = (await db.execute(select(UserConnectionLimit).where(UserConnectionLimit.user_id == user_id))).scalar()
     if row is None:
         row = UserConnectionLimit(user_id=user_id)
         db.add(row)
@@ -202,9 +201,7 @@ async def clear_override(
     _: AdminDetails = Depends(require_permission("settings", "update")),
 ):
     """Put a user back on the default allowance."""
-    row = (
-        await db.execute(select(UserConnectionLimit).where(UserConnectionLimit.user_id == user_id))
-    ).scalar()
+    row = (await db.execute(select(UserConnectionLimit).where(UserConnectionLimit.user_id == user_id))).scalar()
     if row is not None:
         await db.delete(row)
         await db.commit()
@@ -224,9 +221,7 @@ async def resolve_user_addresses(
     """
     settings = await _settings(db)
 
-    state = (
-        await db.execute(select(UserConnectionState).where(UserConnectionState.user_id == user_id))
-    ).scalar()
+    state = (await db.execute(select(UserConnectionState).where(UserConnectionState.user_id == user_id))).scalar()
     if state is None:
         return ResolvedAddressesResponse(addresses=[], enabled=settings.resolve_isp)
 
@@ -239,14 +234,14 @@ async def resolve_user_addresses(
 
     if not settings.resolve_isp:
         # Still list what was seen; just without the provider names.
-        return ResolvedAddressesResponse(
-            addresses=[ResolvedAddress(address=a) for a in seen], enabled=False
-        )
+        return ResolvedAddressesResponse(addresses=[ResolvedAddress(address=a) for a in seen], enabled=False)
 
     resolved = await lookup_providers(seen)
     return ResolvedAddressesResponse(
         addresses=[
-            ResolvedAddress(address=a, provider=resolved.get(a, {}).get("provider"), country=resolved.get(a, {}).get("country"))
+            ResolvedAddress(
+                address=a, provider=resolved.get(a, {}).get("provider"), country=resolved.get(a, {}).get("country")
+            )
             for a in seen
         ],
         enabled=True,
@@ -272,9 +267,7 @@ async def list_violations(
         stmt = stmt.where(ConnectionRestriction.active.is_(True))
 
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
-    rows = (
-        await db.execute(stmt.order_by(ConnectionRestriction.created_at.desc()).limit(limit).offset(offset))
-    ).all()
+    rows = (await db.execute(stmt.order_by(ConnectionRestriction.created_at.desc()).limit(limit).offset(offset))).all()
 
     violations = []
     for row, username in rows:
@@ -286,6 +279,7 @@ async def list_violations(
             devices=row.ip_count,
             limit_applied=row.ip_limit,
             observed_addresses=row.observed_ips or [],
+            reasons=row.reasons or [],
             step_applied=row.step_applied,
             disable_minutes=row.disable_minutes,
             restore_at=row.restore_at,

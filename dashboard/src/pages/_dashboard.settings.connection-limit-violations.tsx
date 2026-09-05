@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { renderReason, type ConnectionReason } from '@/features/users/components/connection-reasons'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useListViolations, useReleaseUser } from '@/service/api'
@@ -127,7 +128,7 @@ export default function ConnectionLimitViolations() {
                       {t('settings.connectionLimit.review.devices', { defaultValue: 'Devices' })}
                     </TableHead>
                     <TableHead className={cn('hidden text-xs md:table-cell', isRTL && 'text-right')}>
-                      {t('settings.connectionLimit.violations.addresses', { defaultValue: 'Addresses at the time' })}
+                      {t('settings.connectionLimit.violations.why', { defaultValue: 'Why it was acted on' })}
                     </TableHead>
                     <TableHead className={cn('hidden w-32 text-xs lg:table-cell', isRTL && 'text-right')}>
                       {t('settings.connectionLimit.violations.when', { defaultValue: 'When' })}
@@ -168,7 +169,22 @@ export default function ConnectionLimitViolations() {
                       </TableCell>
 
                       <TableCell className="text-muted-foreground hidden max-w-md align-top text-xs md:table-cell">
-                        <bdi>{(violation.observed_addresses ?? []).slice(0, 4).join(', ') || '—'}</bdi>
+                        <div className="flex flex-col gap-1">
+                          {((violation.reasons ?? []) as ConnectionReason[]).length > 0 && (
+                            <ul className="text-foreground/80 space-y-0.5">
+                              {((violation.reasons ?? []) as ConnectionReason[]).map((reason, index) => (
+                                <li key={index}>
+                                  <bdi>{renderReason(reason, t)}</bdi>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {/* Rows written before the reasons were recorded still
+                              have their addresses, which is what they had. */}
+                          <bdi className="text-muted-foreground/70">
+                            {(violation.observed_addresses ?? []).slice(0, 4).join(', ') || '—'}
+                          </bdi>
+                        </div>
                       </TableCell>
 
                       <TableCell className="text-muted-foreground hidden align-top text-xs whitespace-nowrap tabular-nums lg:table-cell">

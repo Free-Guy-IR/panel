@@ -3280,6 +3280,14 @@ export type ConnectionViolationResponseUsername = string | null
 /**
  * One time the limiter acted on a user, and what it did.
  */
+/** A reason the limiter recorded: a code and the values behind it. */
+export interface ConnectionReason {
+  code?: string
+  count?: number
+  cycles?: number
+  items?: string[]
+}
+
 export interface ConnectionViolationResponse {
   id: number
   user_id: number
@@ -3288,6 +3296,7 @@ export interface ConnectionViolationResponse {
   devices?: number
   limit_applied?: number
   observed_addresses?: string[]
+  reasons?: ConnectionReason[]
   step_applied?: number
   disable_minutes?: number
   restore_at?: ConnectionViolationResponseRestoreAt

@@ -103,13 +103,16 @@ async def restrict(
         disable_minutes=minutes,
         previous_status=user.status.value if hasattr(user.status, "value") else str(user.status),
         previous_group_ids=[group.id for group in user.groups],
+        reasons=list(observation.reasons or []),
         active=minutes != WARNING_ONLY,
     )
 
     if minutes == WARNING_ONLY:
         restriction.restored_at = datetime.now(UTC)
         db.add(restriction)
-        logger.info("warned %s: %d devices against a limit of %d", user.username, observation.devices, observation.limit_applied)
+        logger.info(
+            "warned %s: %d devices against a limit of %d", user.username, observation.devices, observation.limit_applied
+        )
         return None
 
     if minutes != UNTIL_LIFTED:

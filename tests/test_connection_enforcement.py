@@ -27,10 +27,13 @@ from app.utils.connection_enforcement import (
 )
 
 STEPS = [0, 10, 30, 60, -1]
-OBSERVED = SimpleNamespace(devices=5, limit_applied=2, details={"real_groups": ["5.115.21.0/24"]})
+OBSERVED = SimpleNamespace(
+    devices=5, limit_applied=2, details={"real_groups": ["5.115.21.0/24"]}, reasons=[{"code": "allowance", "count": 2}]
+)
 
 
 # --------------------------------------------------------------- the ladder --
+
 
 @pytest.mark.parametrize(
     "already, expected",
@@ -50,6 +53,7 @@ def test_no_steps_configured_is_a_warning_and_nothing_else():
 
 
 # ------------------------------------------------------------- against a db --
+
 
 @pytest_asyncio.fixture
 async def db():
@@ -124,7 +128,9 @@ async def test_the_last_step_leaves_nothing_to_restore_it(db):
     for _ in range(4):
         await restrict(db, user, OBSERVED, settings)
         await db.commit()
-        for row in (await db.execute(select(ConnectionRestriction).where(ConnectionRestriction.active.is_(True)))).scalars():
+        for row in (
+            await db.execute(select(ConnectionRestriction).where(ConnectionRestriction.active.is_(True)))
+        ).scalars():
             release(row, user)
         await db.commit()
 
@@ -148,6 +154,7 @@ async def test_violations_outside_the_window_do_not_count(db):
 
 
 # --------------------------------------------------------------- restoring --
+
 
 @pytest.mark.asyncio
 async def test_time_served_puts_back_exactly_what_was_there(db):

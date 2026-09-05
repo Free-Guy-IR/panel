@@ -86,6 +86,9 @@ class ConnectionViolationResponse(BaseModel):
     devices: int = 0
     limit_applied: int = 0
     observed_addresses: list[str] = Field(default_factory=list)
+    # Why it was acted on, in the shape the live state already uses, so the
+    # table can say what the count rested on rather than only what it was.
+    reasons: list[dict] = Field(default_factory=list)
     # Zero is a warning that changed nothing, -1 a disable only a person lifts.
     step_applied: int = 0
     disable_minutes: int = 0
