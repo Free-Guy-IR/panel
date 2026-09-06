@@ -1,6 +1,6 @@
 from datetime import UTC, datetime as dt
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja2.sandbox import SandboxedEnvironment
 
 from config import template_settings
@@ -12,7 +12,10 @@ if template_settings.custom_templates_directory:
     # User's templates have priority over default templates
     template_directories.insert(0, template_settings.custom_templates_directory)
 
-env = Environment(loader=FileSystemLoader(template_directories))
+env = Environment(
+    loader=FileSystemLoader(template_directories),
+    autoescape=select_autoescape(["html", "htm", "xml"]),
+)
 env.filters.update(CUSTOM_FILTERS)
 env.globals["now"] = lambda: dt.now(UTC)
 
