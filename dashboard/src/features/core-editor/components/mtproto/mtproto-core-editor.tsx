@@ -110,11 +110,22 @@ export function MTProtoCoreEditor({ headerAddPulse, headerAddEpoch }: MTProtoCor
         cell: ({ row }) => <span className="text-xs">{row.original.port}</span>,
       },
       {
+        accessorKey: 'mode',
+        header: () => t('coreEditor.mtproto.fields.mode', { defaultValue: 'Mode' }),
+        cell: ({ row }) => (
+          <span className="text-xs">
+            {row.original.mode === 'plain'
+              ? t('coreEditor.mtproto.mode.plain', { defaultValue: 'Plain (dd)' })
+              : t('coreEditor.mtproto.mode.faketls', { defaultValue: 'Fake-TLS (ee)' })}
+          </span>
+        ),
+      },
+      {
         accessorKey: 'fakeTlsDomain',
         header: () => t('coreEditor.mtproto.fields.fakeTlsDomain', { defaultValue: 'Fake-TLS domain' }),
         cell: ({ row }) => (
           <span dir="ltr" className="text-xs">
-            {row.original.fakeTlsDomain}
+            {row.original.mode === 'plain' ? '-' : row.original.fakeTlsDomain}
           </span>
         ),
       },

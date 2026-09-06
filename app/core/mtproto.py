@@ -105,9 +105,16 @@ class MTProtoConfig(dict):
             raise ValueError(f"{tag}: duplicate port {port} within this core config")
         seen_ports.add(port)
 
+        mode = instance.get("mode") or "faketls"
+        if mode not in ("faketls", "plain"):
+            raise ValueError(f"{tag}: mode must be 'faketls' or 'plain'")
+        instance["mode"] = mode
+
         fake_tls_domain = instance.get("fake_tls_domain")
-        if not fake_tls_domain or not isinstance(fake_tls_domain, str):
-            raise ValueError(f"{tag}: fake_tls_domain is required")
+        if mode == "faketls" and (not fake_tls_domain or not isinstance(fake_tls_domain, str)):
+            raise ValueError(f"{tag}: fake_tls_domain is required for faketls mode")
+        if mode == "plain" and instance.get("ad_tag"):
+            raise ValueError(f"{tag}: plain mode cannot be combined with ad_tag")
 
         ad_tag = instance.get("ad_tag")
         if ad_tag:
@@ -130,20 +137,22 @@ class MTProtoConfig(dict):
         if tag in self.exclude_inbound_tags:
             return
 
+        mode = instance.get("mode") or "faketls"
         metadata = {
             "tag": tag,
             "protocol": "mtproto",
             "network": "tcp",
-            "tls": "tls",
+            "tls": "tls" if mode == "faketls" else "none",
             "port": instance.get("port"),
-            "sni": instance.get("fake_tls_domain", ""),
+            "sni": instance.get("fake_tls_domain", "") if mode == "faketls" else "",
             # Same generic per-inbound extra-data channel OpenVPN/Hysteria2
             # use (app.core.hosts) - carries the fake-TLS domain through to
             # _build_mtproto_components (app/subscription/base.py), which
             # can't get it from a bare host/port alone.
             "finalmask": {
                 "mtproto": {
-                    "fake_tls_domain": instance.get("fake_tls_domain", ""),
+                    "mode": mode,
+                    "fake_tls_domain": instance.get("fake_tls_domain", "") if mode == "faketls" else "",
                 }
             },
         }

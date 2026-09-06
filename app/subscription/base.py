@@ -328,11 +328,15 @@ class BaseSubscription:
         else:
             finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
         mtproto_data = finalmask_dict.get("mtproto", {})
+        mode = mtproto_data.get("mode") or "faketls"
         fake_tls_domain = mtproto_data.get("fake_tls_domain")
-        if not fake_tls_domain:
-            return None
 
-        full_secret = "ee" + raw_secret + fake_tls_domain.encode("ascii").hex()
+        if mode == "plain":
+            full_secret = "dd" + raw_secret
+        else:
+            if not fake_tls_domain:
+                return None
+            full_secret = "ee" + raw_secret + fake_tls_domain.encode("ascii").hex()
 
         validated_remark = self._remark_validation(remark)
         self.proxy_remarks.append(validated_remark)

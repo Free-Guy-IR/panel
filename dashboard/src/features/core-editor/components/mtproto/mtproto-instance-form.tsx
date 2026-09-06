@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import type { MTProtoInstanceDraft, MTProtoValidationIssue } from '@pasarguard/mtproto-config-kit'
@@ -65,6 +66,26 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
+          <Label>{t('coreEditor.mtproto.fields.mode', { defaultValue: 'Mode' })}</Label>
+          <Select value={instance.mode} onValueChange={v => set('mode', v === 'plain' ? 'plain' : 'faketls')}>
+            <SelectTrigger className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="faketls">{t('coreEditor.mtproto.mode.faketlsLong', { defaultValue: 'Fake-TLS (ee secret, disguised as HTTPS)' })}</SelectItem>
+              <SelectItem value="plain">{t('coreEditor.mtproto.mode.plainLong', { defaultValue: 'Plain (dd secret, no TLS, no SNI)' })}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-[11px]">
+            {t('coreEditor.mtproto.fields.modeHint', {
+              defaultValue:
+                'Fake-TLS wraps the proxy in a TLS-looking handshake and needs a cover domain. Plain uses the classic obfuscated2 transport with no TLS layer; networks that fingerprint Fake-TLS often let plain traffic through. Each mode needs its own instance and port; users automatically get a matching ee- or dd-prefixed secret.',
+            })}
+          </p>
+        </div>
+
+        {instance.mode === 'faketls' && (
+        <div className="space-y-1.5 sm:col-span-2">
           <Label>{t('coreEditor.mtproto.fields.fakeTlsDomain', { defaultValue: 'Fake-TLS domain' })}</Label>
           <Input
             value={instance.fakeTlsDomain}
@@ -82,7 +103,9 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
             })}
           </p>
         </div>
+        )}
 
+        {instance.mode === 'faketls' && (
         <div className="space-y-1.5 sm:col-span-2">
           <Label>{t('coreEditor.mtproto.fields.adTag', { defaultValue: 'Sponsor channel ad tag (optional)' })}</Label>
           <Input
@@ -97,10 +120,11 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
           <p className="text-muted-foreground text-[11px]">
             {t('coreEditor.mtproto.fields.adTagHint', {
               defaultValue:
-                'Optional. Register this proxy with Telegram\'s @MTProxybot (server address, port, and a client secret) to get a tag, then paste it here to show a sponsor channel to connecting clients. Leave empty for a plain, un-promoted proxy. Setting this routes traffic for this instance through Telegram\'s middle-proxy servers instead of connecting to Telegram directly, which adds one extra network hop.',
+                'Optional. Leave empty for a plain, un-promoted proxy. To show a sponsor channel, register this proxy with Telegram\'s @MTProxybot: send it /newproxy, then the host and port your users connect to, then one client secret. The secret it wants is the ee-prefixed value from any active user\'s proxy link, the part after secret= in tg://proxy?...&secret=ee... which you can copy from that user\'s subscription page. The bot replies with a tag; paste it above. Setting a tag routes this instance through Telegram\'s middle-proxy servers rather than connecting directly, which adds one network hop, and an invalid tag makes clients connect but carry no traffic.',
             })}
           </p>
         </div>
+        )}
       </div>
     </div>
   )

@@ -13,6 +13,7 @@ function instanceToDraft(raw: unknown): MTProtoInstanceDraft {
   return {
     tag: typeof instance.tag === 'string' ? instance.tag : '',
     port: typeof instance.port === 'number' ? instance.port : '',
+    mode: instance.mode === 'plain' ? 'plain' : 'faketls',
     fakeTlsDomain: typeof instance.fake_tls_domain === 'string' ? instance.fake_tls_domain : '',
     adTag: typeof instance.ad_tag === 'string' ? instance.ad_tag : '',
   }
