@@ -1,6 +1,6 @@
 services:
   pasarguard:
-    image: pasarguard/panel:latest
+    image: ghcr.io/free-guy-ir/panel:latest
     restart: always
     env_file: .env
     network_mode: host
