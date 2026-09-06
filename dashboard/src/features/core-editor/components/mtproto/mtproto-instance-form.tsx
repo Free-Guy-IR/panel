@@ -48,17 +48,16 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
           <Label>{t('coreEditor.mtproto.fields.port', { defaultValue: 'Port' })}</Label>
           <div dir="ltr" className={cn('flex items-center gap-2', dir === 'rtl' ? 'flex-row-reverse' : 'flex-row')}>
             <div className="min-w-0 flex-1">
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={String(instance.port)}
-                className="text-xs"
-                isError={!!portError}
-                onChange={e => set('port', e.target.value)}
-                placeholder="443"
-              />
+              <Input type="text" inputMode="numeric" value={String(instance.port)} className="text-xs" isError={!!portError} onChange={e => set('port', e.target.value)} placeholder="443" />
             </div>
-            <Button type="button" size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => set('port', randomPort())} title={t('coreEditor.inbound.randomPort', { defaultValue: 'Generate random port' })}>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 shrink-0"
+              onClick={() => set('port', randomPort())}
+              title={t('coreEditor.inbound.randomPort', { defaultValue: 'Generate random port' })}
+            >
               <RefreshCcw className="h-3 w-3" />
             </Button>
           </div>
@@ -85,45 +84,31 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
         </div>
 
         {instance.mode === 'faketls' && (
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label>{t('coreEditor.mtproto.fields.fakeTlsDomain', { defaultValue: 'Fake-TLS domain' })}</Label>
-          <Input
-            value={instance.fakeTlsDomain}
-            dir="ltr"
-            className="text-xs"
-            isError={!!domainError}
-            onChange={e => set('fakeTlsDomain', e.target.value)}
-            placeholder="www.example.com"
-          />
-          {domainError && <p className="text-destructive text-[0.8rem] font-medium">{domainError}</p>}
-          <p className="text-muted-foreground text-[11px]">
-            {t('coreEditor.mtproto.fields.fakeTlsDomainHint', {
-              defaultValue:
-                'Any real, publicly reachable domain works - it does not need to be owned by you or have any TLS certificate of its own. Every connecting client is validated against the secret alone; this domain is only used to disguise unauthenticated probes as ordinary HTTPS traffic to that site.',
-            })}
-          </p>
-        </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>{t('coreEditor.mtproto.fields.fakeTlsDomain', { defaultValue: 'Fake-TLS domain' })}</Label>
+            <Input value={instance.fakeTlsDomain} dir="ltr" className="text-xs" isError={!!domainError} onChange={e => set('fakeTlsDomain', e.target.value)} placeholder="www.example.com" />
+            {domainError && <p className="text-destructive text-[0.8rem] font-medium">{domainError}</p>}
+            <p className="text-muted-foreground text-[11px]">
+              {t('coreEditor.mtproto.fields.fakeTlsDomainHint', {
+                defaultValue:
+                  'Any real, publicly reachable domain works - it does not need to be owned by you or have any TLS certificate of its own. Every connecting client is validated against the secret alone; this domain is only used to disguise unauthenticated probes as ordinary HTTPS traffic to that site.',
+              })}
+            </p>
+          </div>
         )}
 
         {instance.mode === 'faketls' && (
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label>{t('coreEditor.mtproto.fields.adTag', { defaultValue: 'Sponsor channel ad tag (optional)' })}</Label>
-          <Input
-            value={instance.adTag}
-            dir="ltr"
-            className="text-xs"
-            isError={!!adTagError}
-            onChange={e => set('adTag', e.target.value)}
-            placeholder="dcabcdef0123456789abcdef01234567"
-          />
-          {adTagError && <p className="text-destructive text-[0.8rem] font-medium">{adTagError}</p>}
-          <p className="text-muted-foreground text-[11px]">
-            {t('coreEditor.mtproto.fields.adTagHint', {
-              defaultValue:
-                'Optional. Leave empty for a plain, un-promoted proxy. To show a sponsor channel, register this proxy with Telegram\'s @MTProxybot: send it /newproxy, then the host and port your users connect to, then one client secret. The secret it wants is the ee-prefixed value from any active user\'s proxy link, the part after secret= in tg://proxy?...&secret=ee... which you can copy from that user\'s subscription page. The bot replies with a tag; paste it above. Setting a tag routes this instance through Telegram\'s middle-proxy servers rather than connecting directly, which adds one network hop, and an invalid tag makes clients connect but carry no traffic.',
-            })}
-          </p>
-        </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>{t('coreEditor.mtproto.fields.adTag', { defaultValue: 'Sponsor channel ad tag (optional)' })}</Label>
+            <Input value={instance.adTag} dir="ltr" className="text-xs" isError={!!adTagError} onChange={e => set('adTag', e.target.value)} placeholder="dcabcdef0123456789abcdef01234567" />
+            {adTagError && <p className="text-destructive text-[0.8rem] font-medium">{adTagError}</p>}
+            <p className="text-muted-foreground text-[11px]">
+              {t('coreEditor.mtproto.fields.adTagHint', {
+                defaultValue:
+                  "Optional. Leave empty for a plain, un-promoted proxy. To show a sponsor channel, register this proxy with Telegram's @MTProxybot: send it /newproxy, then the host and port your users connect to, then one client secret. The secret it wants is the ee-prefixed value from any active user's proxy link, the part after secret= in tg://proxy?...&secret=ee... which you can copy from that user's subscription page. The bot replies with a tag; paste it above. Setting a tag routes this instance through Telegram's middle-proxy servers rather than connecting directly, which adds one network hop, and an invalid tag makes clients connect but carry no traffic.",
+              })}
+            </p>
+          </div>
         )}
       </div>
     </div>

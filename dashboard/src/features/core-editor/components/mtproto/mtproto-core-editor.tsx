@@ -114,9 +114,7 @@ export function MTProtoCoreEditor({ headerAddPulse, headerAddEpoch }: MTProtoCor
         header: () => t('coreEditor.mtproto.fields.mode', { defaultValue: 'Mode' }),
         cell: ({ row }) => (
           <span className="text-xs">
-            {row.original.mode === 'plain'
-              ? t('coreEditor.mtproto.mode.plain', { defaultValue: 'Plain (dd)' })
-              : t('coreEditor.mtproto.mode.faketls', { defaultValue: 'Fake-TLS (ee)' })}
+            {row.original.mode === 'plain' ? t('coreEditor.mtproto.mode.plain', { defaultValue: 'Plain (dd)' }) : t('coreEditor.mtproto.mode.faketls', { defaultValue: 'Fake-TLS (ee)' })}
           </span>
         ),
       },

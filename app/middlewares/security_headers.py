@@ -1,20 +1,7 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-SUBSCRIPTION_CSP = "; ".join(
-    [
-        "default-src 'none'",
-        "script-src 'unsafe-inline'",
-        "style-src 'unsafe-inline'",
-        "img-src 'self' https: data:",
-        "font-src data:",
-        "connect-src 'none'",
-        "form-action 'none'",
-        "frame-ancestors 'none'",
-        "base-uri 'none'",
-        "object-src 'none'",
-    ]
-)
+SUBSCRIPTION_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' https: data:; font-src data:; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
 
 BASE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
