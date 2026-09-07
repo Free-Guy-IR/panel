@@ -4,6 +4,7 @@ import type { WireGuardCoreDraft } from '@pasarguard/wireguard-config-kit'
 import type { SingBoxCoreDraft } from '@pasarguard/singbox-config-kit'
 import type { OpenVPNCoreDraft } from '@pasarguard/openvpn-config-kit'
 import type { MTProtoCoreDraft } from '@pasarguard/mtproto-config-kit'
+import type { L2TPCoreDraft } from '@pasarguard/l2tp-config-kit'
 import { create } from 'zustand'
 import type { CoreResponse } from '@/service/api'
 import { apiCoreTypeToKind } from '../kit/core-kind'
@@ -12,6 +13,7 @@ import { createNewWireGuardDraft, draftToPersistedConfig, wireGuardConfigToDraft
 import { createNewSingBoxDraft, draftToPersistedConfig as sbDraftToPersistedConfig, singBoxConfigToDraft } from '../kit/singbox-adapter'
 import { createNewOpenVPNDraft, draftToPersistedConfig as ovDraftToPersistedConfig, openVPNConfigToDraft } from '../kit/openvpn-adapter'
 import { createNewMTProtoDraft, draftToPersistedConfig as mtDraftToPersistedConfig, mtprotoConfigToDraft } from '../kit/mtproto-adapter'
+import { createNewL2TPDraft, draftToPersistedConfig as l2tpDraftToPersistedConfig, l2tpConfigToDraft } from '../kit/l2tp-adapter'
 
 export type XrayCoreSection = 'bindings' | 'inbounds' | 'outbounds' | 'routing' | 'balancers' | 'dns' | 'advanced'
 
@@ -31,6 +33,8 @@ export type SbCoreSection =
 export type OvCoreSection = 'instances' | 'pki' | 'advanced'
 
 export type MtCoreSection = 'instances' | 'advanced'
+
+export type L2tpCoreSection = 'settings' | 'advanced'
 
 function cloneProfile(p: Profile): Profile {
   return JSON.parse(JSON.stringify(p)) as Profile
@@ -52,6 +56,10 @@ function cloneMt(d: MTProtoCoreDraft): MTProtoCoreDraft {
   return JSON.parse(JSON.stringify(d)) as MTProtoCoreDraft
 }
 
+function cloneL2tp(d: L2TPCoreDraft): L2TPCoreDraft {
+  return JSON.parse(JSON.stringify(d)) as L2TPCoreDraft
+}
+
 export interface PersistedSnapshot {
   kind: CoreKind
   coreName: string
@@ -62,7 +70,8 @@ export interface PersistedSnapshot {
   sbDraft: SingBoxCoreDraft | null
   ovDraft: OpenVPNCoreDraft | null
   mtDraft: MTProtoCoreDraft | null
-  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection
+  l2tpDraft: L2TPCoreDraft | null
+  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection | L2tpCoreSection
   monacoJson: string
   xrayImportWarnings: string[]
   /** Last `JSON.stringify(core.config)` from the API used to hydrate this draft (clean-state refetch sync). */
@@ -80,6 +89,7 @@ function captureSnapshot(s: CoreEditorStoreState): PersistedSnapshot {
     sbDraft: s.sbDraft ? cloneSb(s.sbDraft) : null,
     ovDraft: s.ovDraft ? cloneOv(s.ovDraft) : null,
     mtDraft: s.mtDraft ? cloneMt(s.mtDraft) : null,
+    l2tpDraft: s.l2tpDraft ? cloneL2tp(s.l2tpDraft) : null,
     activeSection: s.activeSection,
     monacoJson: s.monacoJson,
     xrayImportWarnings: [...s.xrayImportWarnings],
@@ -88,13 +98,14 @@ function captureSnapshot(s: CoreEditorStoreState): PersistedSnapshot {
 }
 
 /** Legacy snapshots used `overview`; map to current sections. */
-function normalizePersistedActiveSection(snapshot: PersistedSnapshot): XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection {
+function normalizePersistedActiveSection(snapshot: PersistedSnapshot): XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection | L2tpCoreSection {
   const s = snapshot.activeSection as string
   if (snapshot.kind === 'wg' && s === 'overview') return 'interface'
   if (snapshot.kind === 'xray' && s === 'overview') return 'bindings'
   if (snapshot.kind === 'singbox' && s === 'overview') return 'inbounds'
   if (snapshot.kind === 'openvpn' && s === 'overview') return 'instances'
   if (snapshot.kind === 'mtproto' && s === 'overview') return 'instances'
+  if (snapshot.kind === 'l2tp' && s === 'overview') return 'settings'
   return snapshot.activeSection
 }
 
@@ -116,6 +127,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -141,6 +154,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -166,6 +181,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       ovBaseline: cloneOv(d),
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -199,6 +216,33 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       dirty: false,
     }
   }
+  if (snapshot.kind === 'l2tp' && snapshot.l2tpDraft) {
+    const d = cloneL2tp(snapshot.l2tpDraft)
+    return {
+      kind: snapshot.kind,
+      coreName: snapshot.coreName,
+      fallbacksInboundTags: [...snapshot.fallbacksInboundTags],
+      excludeInboundTags: [...snapshot.excludeInboundTags],
+      xrayProfile: null,
+      xrayBaseline: null,
+      wgDraft: null,
+      wgBaseline: null,
+      sbDraft: null,
+      sbBaseline: null,
+      ovDraft: null,
+      ovBaseline: null,
+      mtDraft: null,
+      mtBaseline: null,
+      l2tpDraft: d,
+      l2tpBaseline: cloneL2tp(d),
+      activeSection: normalizePersistedActiveSection(snapshot),
+      monacoJson: snapshot.monacoJson,
+      monacoDirty: false,
+      xrayImportWarnings: [...snapshot.xrayImportWarnings],
+      serverHydratedConfigJson: snapshot.serverHydratedConfigJson ?? null,
+      dirty: false,
+    }
+  }
   if (snapshot.kind === 'xray' && snapshot.xrayProfile) {
     const p = cloneProfile(snapshot.xrayProfile)
     return {
@@ -216,6 +260,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -246,7 +292,9 @@ export interface CoreEditorStoreState {
   ovBaseline: OpenVPNCoreDraft | null
   mtDraft: MTProtoCoreDraft | null
   mtBaseline: MTProtoCoreDraft | null
-  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection
+  l2tpDraft: L2TPCoreDraft | null
+  l2tpBaseline: L2TPCoreDraft | null
+  activeSection: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection | L2tpCoreSection
   dirty: boolean
   monacoJson: string
   monacoDirty: boolean
@@ -259,7 +307,7 @@ export interface CoreEditorStoreState {
   initNew: (kind: CoreKind, name?: string) => void
   reset: () => void
   setCoreName: (name: string) => void
-  setActiveSection: (s: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection) => void
+  setActiveSection: (s: XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection | L2tpCoreSection) => void
   setRestartNodes: (v: boolean) => void
   setFallbacksInboundTags: (tags: string[]) => void
   setExcludeInboundTags: (tags: string[]) => void
@@ -273,6 +321,8 @@ export interface CoreEditorStoreState {
   updateOvDraft: (updater: (d: OpenVPNCoreDraft) => OpenVPNCoreDraft) => void
   setMtDraft: (d: MTProtoCoreDraft) => void
   updateMtDraft: (updater: (d: MTProtoCoreDraft) => MTProtoCoreDraft) => void
+  setL2tpDraft: (d: L2TPCoreDraft) => void
+  updateL2tpDraft: (updater: (d: L2TPCoreDraft) => L2TPCoreDraft) => void
   markClean: () => void
   discardDraft: () => void
   switchKind: (nextKind: CoreKind) => void
@@ -281,10 +331,11 @@ export interface CoreEditorStoreState {
   applyMonacoJson: () => { ok: true } | { ok: false; error: string }
 }
 
-const defaultSection = (kind: CoreKind): XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection => {
+const defaultSection = (kind: CoreKind): XrayCoreSection | WgCoreSection | SbCoreSection | OvCoreSection | MtCoreSection | L2tpCoreSection => {
   if (kind === 'wg') return 'interface'
   if (kind === 'openvpn') return 'instances'
   if (kind === 'mtproto') return 'instances'
+  if (kind === 'l2tp') return 'settings'
   if (kind === 'singbox') return 'inbounds'
   return 'inbounds'
 }
@@ -308,6 +359,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   ovBaseline: null,
   mtDraft: null,
   mtBaseline: null,
+  l2tpDraft: null,
+  l2tpBaseline: null,
   activeSection: 'inbounds',
   dirty: false,
   monacoJson: '{}',
@@ -348,6 +401,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
           ovBaseline: null,
           mtDraft: null,
           mtBaseline: null,
+          l2tpDraft: null,
+          l2tpBaseline: null,
           activeSection: nav.activeSection,
           dirty: false,
           monacoJson: JSON.stringify(core.config, null, 2),
@@ -378,6 +433,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: null,
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: nav.activeSection,
         dirty: false,
         monacoJson: JSON.stringify(draftToPersistedConfig(draft), null, 2),
@@ -411,6 +468,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
           ovBaseline: null,
           mtDraft: null,
           mtBaseline: null,
+          l2tpDraft: null,
+          l2tpBaseline: null,
           activeSection: nav.activeSection,
           dirty: false,
           monacoJson: JSON.stringify(core.config, null, 2),
@@ -441,6 +500,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: null,
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: nav.activeSection,
         dirty: false,
         monacoJson: JSON.stringify(sbDraftToPersistedConfig(draft), null, 2),
@@ -474,6 +535,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
           ovBaseline: cloneOv(fallbackDraft),
           mtDraft: null,
           mtBaseline: null,
+          l2tpDraft: null,
+          l2tpBaseline: null,
           activeSection: nav.activeSection,
           dirty: false,
           monacoJson: JSON.stringify(core.config, null, 2),
@@ -504,6 +567,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: cloneOv(draft),
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: nav.activeSection,
         dirty: false,
         monacoJson: JSON.stringify(ovDraftToPersistedConfig(draft), null, 2),
@@ -577,6 +642,73 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       set({ persistedSnapshot: captureSnapshot(get()) })
       return
     }
+    if (kind === 'l2tp') {
+      const parsed = l2tpConfigToDraft(core.config)
+      if (!parsed.ok) {
+        const fallbackDraft = createNewL2TPDraft()
+        set({
+          hydrated: true,
+          isNew: false,
+          coreId: core.id,
+          coreName: core.name,
+          kind,
+          restartNodes: nav.restartNodes,
+          fallbacksInboundTags: [],
+          excludeInboundTags: [],
+          xrayProfile: null,
+          xrayBaseline: null,
+          wgDraft: null,
+          wgBaseline: null,
+          sbDraft: null,
+          sbBaseline: null,
+          ovDraft: null,
+          ovBaseline: null,
+          mtDraft: null,
+          mtBaseline: null,
+          l2tpDraft: fallbackDraft,
+          l2tpBaseline: cloneL2tp(fallbackDraft),
+          activeSection: nav.activeSection,
+          dirty: false,
+          monacoJson: JSON.stringify(core.config, null, 2),
+          monacoDirty: false,
+          xrayImportWarnings: [parsed.message],
+          serverHydratedConfigJson: serverJson,
+        })
+        set({ persistedSnapshot: captureSnapshot(get()) })
+        return
+      }
+      const draft = parsed.draft
+      set({
+        hydrated: true,
+        isNew: false,
+        coreId: core.id,
+        coreName: core.name,
+        kind,
+        restartNodes: nav.restartNodes,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        sbDraft: null,
+        sbBaseline: null,
+        ovDraft: null,
+        ovBaseline: null,
+        mtDraft: null,
+        mtBaseline: null,
+        l2tpDraft: draft,
+        l2tpBaseline: cloneL2tp(draft),
+        activeSection: nav.activeSection,
+        dirty: false,
+        monacoJson: JSON.stringify(l2tpDraftToPersistedConfig(draft), null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+        serverHydratedConfigJson: serverJson,
+      })
+      set({ persistedSnapshot: captureSnapshot(get()) })
+      return
+    }
     const { profile, issues } = importRawToProfile(core.config)
     const p = cloneProfile(profile)
     set({
@@ -598,6 +730,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: nav.activeSection,
       dirty: false,
       monacoJson: JSON.stringify(profileToPersistedConfig(p), null, 2),
@@ -630,6 +764,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: null,
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: defaultSection(kind),
         dirty: false,
         monacoJson: JSON.stringify(draftToPersistedConfig(draft), null, 2),
@@ -661,6 +797,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: null,
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: defaultSection(kind),
         dirty: false,
         monacoJson: JSON.stringify(sbDraftToPersistedConfig(draft), null, 2),
@@ -692,6 +830,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: cloneOv(draft),
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: defaultSection(kind),
         dirty: false,
         // The default draft's pki is empty (server-generated), so a naive serialization would
@@ -736,6 +876,39 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       set({ persistedSnapshot: captureSnapshot(get()) })
       return
     }
+    if (kind === 'l2tp') {
+      const draft = createNewL2TPDraft()
+      set({
+        hydrated: true,
+        isNew: true,
+        coreId: null,
+        coreName: name,
+        kind,
+        restartNodes: true,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        sbDraft: null,
+        sbBaseline: null,
+        ovDraft: null,
+        ovBaseline: null,
+        mtDraft: null,
+        mtBaseline: null,
+        l2tpDraft: draft,
+        l2tpBaseline: cloneL2tp(draft),
+        activeSection: defaultSection(kind),
+        dirty: false,
+        monacoJson: JSON.stringify(l2tpDraftToPersistedConfig(draft), null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+        serverHydratedConfigJson: null,
+      })
+      set({ persistedSnapshot: captureSnapshot(get()) })
+      return
+    }
     const p = createNewXrayProfile()
     set({
       hydrated: true,
@@ -756,6 +929,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: defaultSection(kind),
       dirty: false,
       monacoJson: JSON.stringify(profileToPersistedConfig(p), null, 2),
@@ -786,6 +961,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: 'inbounds',
       dirty: false,
       monacoJson: '{}',
@@ -870,8 +1047,21 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
     get().syncMonacoFromDraft()
   },
 
+  setL2tpDraft: l2tpDraft => {
+    set({ l2tpDraft, dirty: true })
+    get().syncMonacoFromDraft()
+  },
+
+  updateL2tpDraft: updater => {
+    const cur = get().l2tpDraft
+    if (!cur) return
+    const next = updater(cloneL2tp(cur))
+    set({ l2tpDraft: next, dirty: true })
+    get().syncMonacoFromDraft()
+  },
+
   markClean: () => {
-    const { kind, xrayProfile, wgDraft, sbDraft, ovDraft, mtDraft } = get()
+    const { kind, xrayProfile, wgDraft, sbDraft, ovDraft, mtDraft, l2tpDraft } = get()
     if (kind === 'wg' && wgDraft) {
       set({ wgBaseline: cloneWg(wgDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'singbox' && sbDraft) {
@@ -880,6 +1070,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       set({ ovBaseline: cloneOv(ovDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'mtproto' && mtDraft) {
       set({ mtBaseline: cloneMt(mtDraft), dirty: false, monacoDirty: false })
+    } else if (kind === 'l2tp' && l2tpDraft) {
+      set({ l2tpBaseline: cloneL2tp(l2tpDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'xray' && xrayProfile) {
       set({ xrayBaseline: cloneProfile(xrayProfile), dirty: false, monacoDirty: false })
     }
@@ -914,6 +1106,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: null,
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: defaultSection('wg'),
         dirty: true,
         monacoJson: JSON.stringify(draftToPersistedConfig(draft), null, 2),
@@ -938,6 +1132,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: null,
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: defaultSection('singbox'),
         dirty: true,
         monacoJson: JSON.stringify(sbDraftToPersistedConfig(draft), null, 2),
@@ -962,6 +1158,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ovBaseline: cloneOv(draft),
         mtDraft: null,
         mtBaseline: null,
+        l2tpDraft: null,
+        l2tpBaseline: null,
         activeSection: defaultSection('openvpn'),
         dirty: true,
         monacoJson: JSON.stringify({ instances: draft.instances, pki: { ca_cert: '', server_cert: '', server_key: '', tls_crypt_key: '' } }, null, 2),
@@ -994,6 +1192,32 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       })
       return
     }
+    if (nextKind === 'l2tp') {
+      const draft = createNewL2TPDraft()
+      set({
+        kind: 'l2tp',
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        sbDraft: null,
+        sbBaseline: null,
+        ovDraft: null,
+        ovBaseline: null,
+        mtDraft: null,
+        mtBaseline: null,
+        l2tpDraft: draft,
+        l2tpBaseline: cloneL2tp(draft),
+        activeSection: defaultSection('l2tp'),
+        dirty: true,
+        monacoJson: JSON.stringify(l2tpDraftToPersistedConfig(draft), null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+      })
+      return
+    }
     const p = createNewXrayProfile()
     set({
       kind: 'xray',
@@ -1009,6 +1233,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       ovBaseline: null,
       mtDraft: null,
       mtBaseline: null,
+      l2tpDraft: null,
+      l2tpBaseline: null,
       activeSection: defaultSection('xray'),
       dirty: true,
       monacoJson: JSON.stringify(profileToPersistedConfig(p), null, 2),
@@ -1020,7 +1246,7 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   setMonacoJson: (monacoJson, opts) => set({ monacoJson, monacoDirty: opts?.dirty ?? true }),
 
   syncMonacoFromDraft: () => {
-    const { kind, xrayProfile, wgDraft, sbDraft, ovDraft, mtDraft } = get()
+    const { kind, xrayProfile, wgDraft, sbDraft, ovDraft, mtDraft, l2tpDraft } = get()
     try {
       if (kind === 'wg' && wgDraft) {
         set({ monacoJson: JSON.stringify(draftToPersistedConfig(wgDraft), null, 2), monacoDirty: false })
@@ -1030,6 +1256,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         set({ monacoJson: JSON.stringify(ovDraftToPersistedConfig(ovDraft), null, 2), monacoDirty: false })
       } else if (kind === 'mtproto' && mtDraft) {
         set({ monacoJson: JSON.stringify(mtDraftToPersistedConfig(mtDraft), null, 2), monacoDirty: false })
+      } else if (kind === 'l2tp' && l2tpDraft) {
+        set({ monacoJson: JSON.stringify(l2tpDraftToPersistedConfig(l2tpDraft), null, 2), monacoDirty: false })
       } else if (kind === 'xray' && xrayProfile) {
         set({ monacoJson: JSON.stringify(profileToPersistedConfig(xrayProfile), null, 2), monacoDirty: false })
       }
@@ -1068,6 +1296,12 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       const r = mtprotoConfigToDraft(parsed)
       if (!r.ok) return { ok: false, error: r.message }
       set({ mtDraft: r.draft, dirty: true, monacoDirty: false })
+      return { ok: true }
+    }
+    if (kind === 'l2tp') {
+      const r = l2tpConfigToDraft(parsed)
+      if (!r.ok) return { ok: false, error: r.message }
+      set({ l2tpDraft: r.draft, dirty: true, monacoDirty: false })
       return { ok: true }
     }
     const { profile, issues } = importRawToProfile(parsed)

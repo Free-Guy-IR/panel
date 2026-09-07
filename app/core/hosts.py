@@ -154,6 +154,28 @@ async def _prepare_subscription_inbound_data(
             else None,
         )
 
+    if protocol == "l2tp":
+        l2tp_meta = (inbound_config.get("finalmask") or {}).get("l2tp") or {}
+        default_address = [l2tp_meta["server_addr"]] if l2tp_meta.get("server_addr") else ["{SERVER_IP}"]
+        return SubscriptionInboundData(
+            remark=host.remark,
+            inbound_tag=host.inbound_tag,
+            protocol=protocol,
+            address=list(host.address) if host.address else default_address,
+            port=[inbound_config.get("port") or 1701],
+            network=network,
+            tls_config=TLSConfig(),
+            transport_config=TCPTransportConfig(path="", host=[]),
+            mux_settings=None,
+            finalmask=final_mask_settings,
+            finalmask_link=finalmask_link,
+            priority=host.priority,
+            status=list(host.status) if host.status else None,
+            subscription_templates=host.subscription_templates.model_dump(exclude_none=True)
+            if host.subscription_templates
+            else None,
+        )
+
     if protocol == "mtproto":
         return SubscriptionInboundData(
             remark=host.remark,

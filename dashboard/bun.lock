@@ -12,6 +12,7 @@
         "@monaco-editor/react": "^4.7.0",
         "@noble/post-quantum": "^0.5.4",
         "@pasarguard/core-kit": "file:../../core-kit",
+        "@pasarguard/l2tp-config-kit": "file:../../l2tp-config-kit",
         "@pasarguard/mtproto-config-kit": "file:../../mtproto-config-kit",
         "@pasarguard/openvpn-config-kit": "file:../../openvpn-config-kit",
         "@pasarguard/singbox-config-kit": "file:../../singbox-config-kit",
@@ -498,6 +499,8 @@
     "@oxc-project/types": ["@oxc-project/types@0.147.0", "", {}, "sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg=="],
 
     "@pasarguard/core-kit": ["@pasarguard/core-kit@file:../../core-kit", { "dependencies": { "@pasarguard/mtproto-config-kit": "file:../mtproto-config-kit", "@pasarguard/openvpn-config-kit": "file:../openvpn-config-kit", "@pasarguard/singbox-config-kit": "file:../singbox-config-kit", "@pasarguard/wireguard-config-kit": "file:../wireguard-config-kit", "@pasarguard/xray-config-kit": "0.3.7" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
+
+    "@pasarguard/l2tp-config-kit": ["@pasarguard/l2tp-config-kit@file:../../l2tp-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
     "@pasarguard/mtproto-config-kit": ["@pasarguard/mtproto-config-kit@file:../../mtproto-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
@@ -2105,13 +2108,13 @@
 
     "@orval/mock/openapi3-ts": ["openapi3-ts@4.4.0", "", { "dependencies": { "yaml": "^2.5.0" } }, "sha512-9asTNB9IkKEzWMcHmVZE7Ts3kC9G7AFHfs8i7caD8HbI76gEjdkId4z/AkP83xdZsH7PLAnnbl47qZkXuxpArw=="],
 
-    "@pasarguard/core-kit/@pasarguard/mtproto-config-kit": ["@pasarguard/mtproto-config-kit@file:../../mtproto-config-kit", {}],
+    "@pasarguard/core-kit/@pasarguard/mtproto-config-kit": ["@pasarguard/mtproto-config-kit@file:../../mtproto-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
-    "@pasarguard/core-kit/@pasarguard/openvpn-config-kit": ["@pasarguard/openvpn-config-kit@file:../../openvpn-config-kit", {}],
+    "@pasarguard/core-kit/@pasarguard/openvpn-config-kit": ["@pasarguard/openvpn-config-kit@file:../../openvpn-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
-    "@pasarguard/core-kit/@pasarguard/singbox-config-kit": ["@pasarguard/singbox-config-kit@file:../../singbox-config-kit", {}],
+    "@pasarguard/core-kit/@pasarguard/singbox-config-kit": ["@pasarguard/singbox-config-kit@file:../../singbox-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
-    "@pasarguard/core-kit/@pasarguard/wireguard-config-kit": ["@pasarguard/wireguard-config-kit@file:../../wireguard-config-kit", {}],
+    "@pasarguard/core-kit/@pasarguard/wireguard-config-kit": ["@pasarguard/wireguard-config-kit@file:../../wireguard-config-kit", { "dependencies": { "@stablelib/x25519": "^2.0.1", "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
     "@pasarguard/core-kit/@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@0.3.7", "", { "dependencies": { "@noble/post-quantum": "^0.5.4", "@stablelib/x25519": "^2.0.1", "mlkem": "^2.7.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.25.2" } }, "sha512-KxlrXE7ys/ZHRpn4tnCV3jaokoROV2MOTBof2/3HT/KhsHritEKGsd4SmAlDvTpVjIhiQdBBeYNLjcd7zAN+CQ=="],
 

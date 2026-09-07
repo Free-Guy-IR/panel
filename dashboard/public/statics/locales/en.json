@@ -2466,6 +2466,7 @@
       "portListPlaceholder": "e.g. 53,443,1000-2000"
     },
     "section": {
+      "settings": "Settings",
       "label": "Section",
       "inbounds": "Inbounds",
       "outbounds": "Outbounds",
@@ -2479,6 +2480,8 @@
       "pki": "PKI"
     },
     "sectionDesc": {
+      "l2tpSettings": "The L2TP/IPsec server, its client address pool and its IPsec settings.",
+      "mtInstances": "Each instance is an independent MTProto listener shared by every authorized user.",
       "wgInterface": "WireGuard interface and keys",
       "advanced": "JSON editing and diagnostics",
       "inbounds": "Inbound listeners and protocols",
@@ -3317,6 +3320,36 @@
     },
     "instance": {
       "add": "Add instance"
+    },
+    "l2tp": {
+      "blurb": "One L2TP/IPsec server. Clients authenticate the IPsec layer with the shared key (PSK) and the PPP layer with their own username and password. The listener is always UDP 1701, with IKE on 500 and NAT-T on 4500.",
+      "generatePsk": "Generate",
+      "copyPsk": "Copy",
+      "fields": {
+        "inboundTag": "Inbound tag",
+        "inboundTagHint": "Identifies this server across the panel and names its files on the node.",
+        "serverAddr": "Server address",
+        "serverAddrHint": "The public IP or hostname clients connect to.",
+        "psk": "Pre-shared key (PSK)",
+        "pskHint": "Every client needs this key; it is shown on their subscription page.",
+        "pskEmptyHint": "Leave empty and the panel generates a random key when you save.",
+        "pskPlaceholder": "Leave empty to generate one",
+        "pskCopyFailed": "Could not copy the key",
+        "pool": "Client address pool",
+        "poolHint": "Private IPv4 range handed to clients, between /8 and /29.",
+        "localIp": "Server address inside the tunnel",
+        "localIpHint": "Must sit inside the pool. Empty means the pool's first address.",
+        "egressInterface": "Egress interface",
+        "egressInterfaceHint": "Optional. Send this pool's traffic out a specific interface on the node.",
+        "dns": "DNS servers",
+        "dnsHint": "One IPv4 address per line. Empty means 1.1.1.1 and 8.8.8.8.",
+        "ikeProposals": "IKE proposals",
+        "ikeProposalsHint": "One per line. Empty means the node's defaults.",
+        "espProposals": "ESP proposals",
+        "espProposalsHint": "One per line. Empty means the node's defaults.",
+        "legacyClients": "Allow legacy clients",
+        "legacyClientsHint": "Adds older 3DES/modp1024 algorithms for very old devices. Weaker; leave off unless you need it."
+      }
     },
     "mtproto": {
       "fields": {

@@ -10,6 +10,7 @@ from nats.js.kv import KeyValue
 
 from app import on_shutdown, on_startup
 from app.core.abstract_core import AbstractCore
+from app.core.l2tp import L2TPConfig
 from app.core.mtproto import MTProtoConfig
 from app.core.openvpn import OpenVPNConfig
 from app.core.singbox import SingBoxConfig
@@ -35,6 +36,7 @@ class CoreManager:
         CoreType.singbox: SingBoxConfig,
         CoreType.openvpn: OpenVPNConfig,
         CoreType.mtproto: MTProtoConfig,
+        CoreType.l2tp: L2TPConfig,
     }
 
     def __init__(self):

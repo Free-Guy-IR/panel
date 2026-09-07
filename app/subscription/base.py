@@ -306,6 +306,39 @@ class BaseSubscription:
             "tls_crypt_key": tls_crypt_key,
         }
 
+    def _build_l2tp_components(
+        self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
+    ) -> dict | None:
+        user_id = settings.get("_user_id")
+        password = settings.get("password")
+        if user_id is None or not password:
+            return None
+
+        finalmask = inbound.finalmask
+        if finalmask is None:
+            finalmask_dict = {}
+        elif isinstance(finalmask, dict):
+            finalmask_dict = finalmask
+        else:
+            finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
+        l2tp_data = finalmask_dict.get("l2tp") or {}
+        psk = l2tp_data.get("psk")
+        if not psk:
+            return None
+
+        server = (address or "").strip() or str(l2tp_data.get("server_addr") or "").strip()
+        if not server:
+            return None
+
+        return {
+            "remark": self._remark_validation(remark),
+            "server": server,
+            "username": str(user_id),
+            "password": str(password),
+            "secret": str(psk),
+            "dns": [str(d) for d in (l2tp_data.get("dns") or [])],
+        }
+
     def _build_mtproto_components(
         self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
     ) -> dict | None:

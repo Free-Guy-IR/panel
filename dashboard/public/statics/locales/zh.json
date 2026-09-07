@@ -2430,6 +2430,7 @@
       "portListPlaceholder": "例如 53,443,1000-2000"
     },
     "section": {
+      "settings": "设置",
       "label": "分区",
       "inbounds": "入站",
       "outbounds": "出站",
@@ -2443,6 +2444,8 @@
       "pki": "PKI"
     },
     "sectionDesc": {
+      "l2tpSettings": "L2TP/IPsec 服务器、客户端地址池及其 IPsec 设置。",
+      "mtInstances": "每个实例都是一个独立的 MTProto 监听器，由所有授权用户共享。",
       "wgInterface": "WireGuard 接口与密钥",
       "advanced": "JSON 编辑与诊断工具",
       "inbounds": "入站监听与协议配置",
@@ -3294,6 +3297,36 @@
         "title": "TLS"
       },
       "untitledInbound": "未命名入站"
+    },
+    "l2tp": {
+      "blurb": "一台 L2TP/IPsec 服务器。客户端用共享密钥 (PSK) 通过 IPsec 层，用自己的用户名和密码通过 PPP 层。监听端口固定为 UDP 1701，IKE 为 500，NAT-T 为 4500。",
+      "generatePsk": "生成",
+      "copyPsk": "复制",
+      "fields": {
+        "inboundTag": "入站标签",
+        "inboundTagHint": "在面板中标识该服务器，并决定其在节点上的文件名。",
+        "serverAddr": "服务器地址",
+        "serverAddrHint": "客户端连接的公网 IP 或域名。",
+        "psk": "预共享密钥 (PSK)",
+        "pskHint": "每个客户端都需要此密钥，并会显示在其订阅页面上。",
+        "pskEmptyHint": "留空则面板在保存时生成随机密钥。",
+        "pskPlaceholder": "留空以自动生成",
+        "pskCopyFailed": "无法复制密钥",
+        "pool": "客户端地址池",
+        "poolHint": "分配给客户端的私有 IPv4 网段，介于 /8 与 /29 之间。",
+        "localIp": "隧道内的服务器地址",
+        "localIpHint": "必须位于地址池内。留空表示池中的第一个地址。",
+        "egressInterface": "出口接口",
+        "egressInterfaceHint": "可选。让该地址池的流量从节点的指定接口发出。",
+        "dns": "DNS 服务器",
+        "dnsHint": "每行一个 IPv4 地址。留空表示 1.1.1.1 和 8.8.8.8。",
+        "ikeProposals": "IKE 提案",
+        "ikeProposalsHint": "每行一个。留空表示节点默认值。",
+        "espProposals": "ESP 提案",
+        "espProposalsHint": "每行一个。留空表示节点默认值。",
+        "legacyClients": "允许旧版客户端",
+        "legacyClientsHint": "加入较旧的 3DES/modp1024 算法。安全性较低，非必要请关闭。"
+      }
     },
     "mtproto": {
       "fields": {

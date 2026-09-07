@@ -15,7 +15,7 @@
 
 ---
 
-> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/PasarGuard/panel), extended with **sing-box (Hysteria2)**, **OpenVPN**, and **MTProto (Telegram proxy)** as additional core types alongside Xray and WireGuard.
+> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/PasarGuard/panel), extended with **sing-box (Hysteria2)**, **OpenVPN**, **MTProto (Telegram proxy)** and **L2TP/IPsec** as additional core types alongside Xray and WireGuard.
 
 ---
 
@@ -98,7 +98,7 @@ PasarGuard is a user-friendly, feature-rich, and reliable proxy management tool.
 - **Multi-Node** support for infrastructure distribution
 
 **🔐 Protocols & Security**
-- Supports **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**, **OpenVPN** and **MTProto** (Telegram proxy)
+- Supports **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**, **OpenVPN**, **MTProto** (Telegram proxy) and **L2TP/IPsec**
 - **TLS** and **REALITY** support
 - **Multi-protocol** for a single user
 

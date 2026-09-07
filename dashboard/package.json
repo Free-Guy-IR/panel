@@ -18,6 +18,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@noble/post-quantum": "^0.5.4",
     "@pasarguard/core-kit": "file:../../core-kit",
+    "@pasarguard/l2tp-config-kit": "file:../../l2tp-config-kit",
     "@pasarguard/mtproto-config-kit": "file:../../mtproto-config-kit",
     "@pasarguard/openvpn-config-kit": "file:../../openvpn-config-kit",
     "@pasarguard/singbox-config-kit": "file:../../singbox-config-kit",

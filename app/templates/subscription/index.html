@@ -631,6 +631,17 @@
             </div>
             {% endif %}
 
+            {% if user.status in ('active','on_hold') and l2tp_details %}
+            <div class="links-section">
+                <h2>L2TP/IPsec</h2>
+                {% for d in l2tp_details %}
+                <div class="link-item">
+                    <input type="text" class="link-input" value="{{ d.remark | e }} | server: {{ d.server | e }} | username: {{ d.username | e }} | password: {{ d.password | e }} | secret: {{ d.secret | e }}" readonly />
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
             {% if user.status in ('active','on_hold') %}
             <div class="links-section">
                 <h2>Subscription Links</h2>

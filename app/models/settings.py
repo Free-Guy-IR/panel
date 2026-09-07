@@ -200,6 +200,7 @@ class ConfigFormat(str, Enum):
     clash_meta = "clash_meta"
     outline = "outline"
     openvpn = "openvpn"
+    l2tp = "l2tp"
     block = "block"
 
 
@@ -219,6 +220,7 @@ class SubFormatEnable(BaseModel):
     clash_meta: bool = Field(default=True)
     outline: bool = Field(default=True)
     openvpn: bool = Field(default=True)
+    l2tp: bool = Field(default=True)
 
 
 class Platform(StrEnum):

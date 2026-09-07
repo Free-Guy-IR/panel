@@ -37,6 +37,7 @@ from app.models.core import (
 from app.models.reality_scan import RealityScanRequest, RealityScanResult
 from app.node.sync import sync_users
 from app.operation import BaseOperation
+from app.utils.l2tp import ensure_l2tp_core_material
 from app.utils.logger import get_logger
 from app.utils.reality_scan import RealityScanError, scan_reality_target
 
@@ -97,6 +98,8 @@ class CoreOperation(BaseOperation):
     async def create_core(self, db: AsyncSession, new_core: CoreCreate, admin: AdminDetails) -> CoreResponse:
         if new_core.type == CoreType.wg:
             await self._validate_wireguard_subnet(db, new_core.config, exclude_core_id=None)
+        if new_core.type == CoreType.l2tp:
+            new_core.config = ensure_l2tp_core_material(new_core.config)
         try:
             validated_core = core_manager.validate_core(
                 new_core.config,
@@ -139,6 +142,8 @@ class CoreOperation(BaseOperation):
         was_wg = db_core.type == CoreType.wg
         if modified_core.type == CoreType.wg:
             await self._validate_wireguard_subnet(db, modified_core.config, exclude_core_id=db_core.id)
+        if modified_core.type == CoreType.l2tp:
+            modified_core.config = ensure_l2tp_core_material(modified_core.config)
         try:
             validated_core = core_manager.validate_core(
                 modified_core.config,

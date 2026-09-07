@@ -10,6 +10,7 @@ import { draftToPersistedConfig } from '@/features/core-editor/kit/wireguard-ada
 import { draftToPersistedConfig as sbDraftToPersistedConfig } from '@/features/core-editor/kit/singbox-adapter'
 import { draftToPersistedConfig as ovDraftToPersistedConfig } from '@/features/core-editor/kit/openvpn-adapter'
 import { draftToPersistedConfig as mtDraftToPersistedConfig } from '@/features/core-editor/kit/mtproto-adapter'
+import { draftToPersistedConfig as l2tpDraftToPersistedConfig } from '@/features/core-editor/kit/l2tp-adapter'
 import useDirDetection from '@/hooks/use-dir-detection'
 import type { JsonValue } from '@pasarguard/xray-config-kit'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -84,6 +85,8 @@ export function XrayAdvancedSection() {
   const ovBaseline = useCoreEditorStore(s => s.ovBaseline)
   const mtDraft = useCoreEditorStore(s => s.mtDraft)
   const mtBaseline = useCoreEditorStore(s => s.mtBaseline)
+  const l2tpDraft = useCoreEditorStore(s => s.l2tpDraft)
+  const l2tpBaseline = useCoreEditorStore(s => s.l2tpBaseline)
   const [showDiff, setShowDiff] = useState(false)
   const [activeTab, setActiveTab] = useState<AdvancedTab>('all')
   const [tabDraft, setTabDraft] = useState<string>('')
@@ -179,6 +182,7 @@ export function XrayAdvancedSection() {
       else if (kind === 'singbox' && sbBaseline) full = sbDraftToPersistedConfig(sbBaseline)
       else if (kind === 'openvpn' && ovBaseline) full = ovDraftToPersistedConfig(ovBaseline)
       else if (kind === 'mtproto' && mtBaseline) full = mtDraftToPersistedConfig(mtBaseline)
+      else if (kind === 'l2tp' && l2tpBaseline) full = l2tpDraftToPersistedConfig(l2tpBaseline)
       else if (kind === 'xray' && xrayBaseline) full = profileToPersistedConfig(xrayBaseline)
       else return {} as JsonValue
       const cloned = JSON.parse(JSON.stringify(full)) as Record<string, unknown>
@@ -186,7 +190,7 @@ export function XrayAdvancedSection() {
     } catch {
       return {} as JsonValue
     }
-  }, [kind, wgBaseline, sbBaseline, ovBaseline, mtBaseline, xrayBaseline, effectiveTab])
+  }, [kind, wgBaseline, sbBaseline, ovBaseline, mtBaseline, l2tpBaseline, xrayBaseline, effectiveTab])
 
   const afterJson = useMemo<JsonValue>(() => {
     try {
@@ -195,6 +199,7 @@ export function XrayAdvancedSection() {
       else if (kind === 'singbox' && sbDraft) full = sbDraftToPersistedConfig(sbDraft)
       else if (kind === 'openvpn' && ovDraft) full = ovDraftToPersistedConfig(ovDraft)
       else if (kind === 'mtproto' && mtDraft) full = mtDraftToPersistedConfig(mtDraft)
+      else if (kind === 'l2tp' && l2tpDraft) full = l2tpDraftToPersistedConfig(l2tpDraft)
       else if (kind === 'xray' && xrayProfile) full = profileToPersistedConfig(xrayProfile)
       else return {} as JsonValue
       const cloned = JSON.parse(JSON.stringify(full)) as Record<string, unknown>
@@ -202,7 +207,7 @@ export function XrayAdvancedSection() {
     } catch {
       return {} as JsonValue
     }
-  }, [kind, wgDraft, sbDraft, ovDraft, mtDraft, xrayProfile, effectiveTab])
+  }, [kind, wgDraft, sbDraft, ovDraft, mtDraft, l2tpDraft, xrayProfile, effectiveTab])
 
   const editorValue = effectiveTab === 'all' ? monacoJson : tabDraft
   const editorOnChange = effectiveTab === 'all' ? handleAllJsonChange : handleTabJsonChange

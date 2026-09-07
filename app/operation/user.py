@@ -112,6 +112,7 @@ from app.settings import hwid_settings, subscription_settings
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
+from app.utils.l2tp import prepare_l2tp_password
 from app.utils.logger import get_logger
 from app.utils.mtproto import prepare_mtproto_secret
 from app.utils.openvpn import prepare_openvpn_password
@@ -446,7 +447,8 @@ class UserOperation(BaseOperation):
                 exclude_user_id=exclude_user_id,
             )
             proxy_settings = await prepare_openvpn_password(db, proxy_settings, groups)
-            return await prepare_mtproto_secret(db, proxy_settings, groups)
+            proxy_settings = await prepare_mtproto_secret(db, proxy_settings, groups)
+            return await prepare_l2tp_password(db, proxy_settings, groups)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
 

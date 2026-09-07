@@ -71,6 +71,10 @@ class MTProtoSettings(BaseModel):
     secret: str | None = None
 
 
+class L2TPSettings(BaseModel):
+    password: str | None = None
+
+
 class WireGuardPeerIPs(BaseModel):
     peer_ips: list[str] = Field(default_factory=list)
 
@@ -147,6 +151,7 @@ class ProxyTable(BaseModel):
     openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
     mtproto: MTProtoSettings = Field(default_factory=MTProtoSettings)
     tuic: TuicSettings = Field(default_factory=TuicSettings)
+    l2tp: L2TPSettings = Field(default_factory=L2TPSettings)
 
     def dict(self, *, no_obj=True, **kwargs):
         if no_obj:

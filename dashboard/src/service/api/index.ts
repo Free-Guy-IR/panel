@@ -454,6 +454,13 @@ export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
 
+export interface XrayMuxSettingsOutput {
+  enabled?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
+
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
 export type XrayMuxSettingsInputConcurrency = number | null
@@ -486,13 +493,6 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
-
-export interface XrayMuxSettingsOutput {
-  enabled?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
 
 export type XMuxSettingsHKeepAlivePeriod = number | null
 
@@ -557,6 +557,18 @@ export type XHttpSettingsXPaddingBytes = string | null
 
 export type XHttpSettingsNoGrpcHeader = boolean | null
 
+export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const XHttpModes = {
+  auto: 'auto',
+  'packet-up': 'packet-up',
+  'stream-up': 'stream-up',
+  'stream-one': 'stream-one',
+} as const
+
+export type XHttpSettingsMode = XHttpModes | null
+
 export interface XHttpSettings {
   mode?: XHttpSettingsMode
   no_grpc_header?: XHttpSettingsNoGrpcHeader
@@ -581,18 +593,6 @@ export interface XHttpSettings {
   xmux?: XHttpSettingsXmux
   download_settings?: XHttpSettingsDownloadSettings
 }
-
-export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const XHttpModes = {
-  auto: 'auto',
-  'packet-up': 'packet-up',
-  'stream-up': 'stream-up',
-  'stream-one': 'stream-one',
-} as const
-
-export type XHttpSettingsMode = XHttpModes | null
 
 export interface WorkersHealth {
   scheduler: WorkerHealth
@@ -674,8 +674,11 @@ export interface WebSocketSettings {
   heartbeatPeriod?: WebSocketSettingsHeartbeatPeriod
 }
 
+export type VlessSettingsFlow = string | null
+
 export interface VlessSettings {
   id?: string
+  flow?: VlessSettingsFlow
 }
 
 export type ValidationErrorCtx = { [key: string]: unknown }
@@ -711,6 +714,18 @@ export type UsersPermissionsActivateNextPlanAnyOf = { [key: string]: PermissionS
 
 export type UsersPermissionsActivateNextPlan = boolean | UsersPermissionsActivateNextPlanAnyOf | null
 
+export interface UsersPermissions {
+  create?: UsersPermissionsCreate
+  read?: UsersPermissionsRead
+  read_simple?: UsersPermissionsReadSimple
+  update?: UsersPermissionsUpdate
+  delete?: UsersPermissionsDelete
+  reset_usage?: UsersPermissionsResetUsage
+  revoke_sub?: UsersPermissionsRevokeSub
+  set_owner?: UsersPermissionsSetOwner
+  activate_next_plan?: UsersPermissionsActivateNextPlan
+}
+
 export type UsersPermissionsSetOwnerAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsSetOwner = boolean | UsersPermissionsSetOwnerAnyOf | null
@@ -731,18 +746,6 @@ export type UsersPermissionsUpdateAnyOf = { [key: string]: PermissionScope | num
 
 export type UsersPermissionsUpdate = boolean | UsersPermissionsUpdateAnyOf | null
 
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
-
 export type UsersPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsReadSimple = boolean | UsersPermissionsReadSimpleAnyOf | null
@@ -755,18 +758,6 @@ export type UsersPermissionsCreateAnyOf = { [key: string]: PermissionScope | num
 
 export type UsersPermissionsCreate = boolean | UsersPermissionsCreateAnyOf | null
 
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
-
 export type UsernameGenerationStrategy = (typeof UsernameGenerationStrategy)[keyof typeof UsernameGenerationStrategy]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -777,19 +768,19 @@ export const UsernameGenerationStrategy = {
 
 export type UserUsageStatsListPeriod = Period | null
 
-export interface UserUsageStatsList {
-  period?: UserUsageStatsListPeriod
-  start: string
-  end: string
-  stats: UserUsageStatsListStats
-}
-
 export interface UserUsageStat {
   period_start: string
   total_traffic: number
 }
 
 export type UserUsageStatsListStats = { [key: string]: UserUsageStat[] }
+
+export interface UserUsageStatsList {
+  period?: UserUsageStatsListPeriod
+  start: string
+  end: string
+  stats: UserUsageStatsListStats
+}
 
 export type UserTemplateSimpleName = string | null
 
@@ -1135,6 +1126,13 @@ export interface UserModify {
   status?: UserModifyStatus
 }
 
+/**
+ * User IP lists for all nodes
+ */
+export interface UserIPListAll {
+  nodes: UserIPListAllNodes
+}
+
 export type UserIPListIps = { [key: string]: number }
 
 /**
@@ -1145,13 +1143,6 @@ export interface UserIPList {
 }
 
 export type UserIPListAllNodes = { [key: string]: UserIPList | null }
-
-/**
- * User IP lists for all nodes
- */
-export interface UserIPListAll {
-  nodes: UserIPListAllNodes
-}
 
 export type UserHWIDResponseDeviceModel = string | null
 
@@ -1220,23 +1211,9 @@ export interface UserCreate {
   status?: UserCreateStatus
 }
 
-export type UserCountMetricStatsListPeriod = Period | null
-
-export interface UserCountMetricStat {
-  period_start: string
-  count: number
-}
-
 export type UserCountMetricStatsListStats = { [key: string]: UserCountMetricStat[] }
 
-export type UserCountMetric = (typeof UserCountMetric)[keyof typeof UserCountMetric]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserCountMetric = {
-  online: 'online',
-  expired: 'expired',
-  limited: 'limited',
-} as const
+export type UserCountMetricStatsListPeriod = Period | null
 
 export interface UserCountMetricStatsList {
   period?: UserCountMetricStatsListPeriod
@@ -1247,11 +1224,19 @@ export interface UserCountMetricStatsList {
   stats: UserCountMetricStatsListStats
 }
 
-export interface UserConnectionLimitsResponse {
-  overrides: UserConnectionLimitResponse[]
-  total: number
-  default_device_limit?: number
+export interface UserCountMetricStat {
+  period_start: string
+  count: number
 }
+
+export type UserCountMetric = (typeof UserCountMetric)[keyof typeof UserCountMetric]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const UserCountMetric = {
+  online: 'online',
+  expired: 'expired',
+  limited: 'limited',
+} as const
 
 export type UserConnectionLimitResponseUsername = string | null
 
@@ -1265,6 +1250,12 @@ export interface UserConnectionLimitResponse {
   note?: UserConnectionLimitResponseNote
   user_id: number
   username?: UserConnectionLimitResponseUsername
+}
+
+export interface UserConnectionLimitsResponse {
+  overrides: UserConnectionLimitResponse[]
+  total: number
+  default_device_limit?: number
 }
 
 export type UserConnectionLimitPayloadNote = string | null
@@ -1292,13 +1283,16 @@ export interface Unauthorized {
   detail?: string
 }
 
+export interface TuicSettings {
+  uuid?: string
+  password?: string
+}
+
 export interface TrojanSettings {
   password?: string
 }
 
 export type TransportSettingsWebsocketSettings = WebSocketSettings | null
-
-export type TransportSettingsTcpSettings = TcpSettings | null
 
 export type TransportSettingsKcpSettings = KCPSettings | null
 
@@ -1351,6 +1345,8 @@ export interface TcpSettings {
   request?: TcpSettingsRequest
   response?: TcpSettingsResponse
 }
+
+export type TransportSettingsTcpSettings = TcpSettings | null
 
 export interface SystemUsersStats {
   total_user: number
@@ -1486,14 +1482,6 @@ export interface SubscriptionTemplates {
 
 export type SubscriptionResponseHeaders = { [key: string]: unknown }
 
-export type SubRuleResponseHeaders = { [key: string]: unknown }
-
-export interface SubRule {
-  pattern: string
-  target: ConfigFormat
-  response_headers?: SubRuleResponseHeaders
-}
-
 export interface SubFormatEnable {
   links?: boolean
   links_base64?: boolean
@@ -1504,6 +1492,7 @@ export interface SubFormatEnable {
   clash_meta?: boolean
   outline?: boolean
   openvpn?: boolean
+  l2tp?: boolean
 }
 
 export interface Subscription {
@@ -1522,6 +1511,14 @@ export interface Subscription {
   disable_sub_template?: boolean
   randomize_order?: boolean
   custom_variables?: CustomVariable[]
+}
+
+export type SubRuleResponseHeaders = { [key: string]: unknown }
+
+export interface SubRule {
+  pattern: string
+  target: ConfigFormat
+  response_headers?: SubRuleResponseHeaders
 }
 
 export type SingBoxMuxSettingsBrutal = Brutal | null
@@ -1694,20 +1691,36 @@ export interface RoleLimits {
   on_hold_timeout_max?: RoleLimitsOnHoldTimeoutMax
 }
 
-export type RoleHWIDSettingsMaxLimit = number | null
+export type RoleHWIDSettingsOutputMaxLimit = number | null
 
-export type RoleHWIDSettingsMinLimit = number | null
+export type RoleHWIDSettingsOutputMinLimit = number | null
 
-export type RoleHWIDSettingsFallbackLimit = number | null
+export type RoleHWIDSettingsOutputFallbackLimit = number | null
 
-export interface RoleHWIDSettings {
+export interface RoleHWIDSettingsOutput {
+  enabled?: boolean
+  forced?: boolean
+  require_hwid_for_manual_sub?: boolean
+  fallback_limit?: RoleHWIDSettingsOutputFallbackLimit
+  min_limit?: RoleHWIDSettingsOutputMinLimit
+  max_limit?: RoleHWIDSettingsOutputMaxLimit
+  mode?: HWIDMode
+}
+
+export type RoleHWIDSettingsInputMaxLimit = number | null
+
+export type RoleHWIDSettingsInputMinLimit = number | null
+
+export type RoleHWIDSettingsInputFallbackLimit = number | null
+
+export interface RoleHWIDSettingsInput {
   enabled?: boolean
   apply_to_group_ids?: number[]
   forced?: boolean
   require_hwid_for_manual_sub?: boolean
-  fallback_limit?: RoleHWIDSettingsFallbackLimit
-  min_limit?: RoleHWIDSettingsMinLimit
-  max_limit?: RoleHWIDSettingsMaxLimit
+  fallback_limit?: RoleHWIDSettingsInputFallbackLimit
+  min_limit?: RoleHWIDSettingsInputMinLimit
+  max_limit?: RoleHWIDSettingsInputMaxLimit
   mode?: HWIDMode
 }
 
@@ -1726,10 +1739,6 @@ export interface RoleAccess {
   allowed_group_ids?: RoleAccessAllowedGroupIds
 }
 
-export type ResolvedAddressCountry = string | null
-
-export type ResolvedAddressProvider = string | null
-
 export interface ResolvedAddress {
   address: string
   provider?: ResolvedAddressProvider
@@ -1740,6 +1749,10 @@ export interface ResolvedAddressesResponse {
   addresses: ResolvedAddress[]
   enabled?: boolean
 }
+
+export type ResolvedAddressCountry = string | null
+
+export type ResolvedAddressProvider = string | null
 
 export interface RemoveUsersResponse {
   users: string[]
@@ -1885,6 +1898,8 @@ export interface ProxyTable {
   hysteria2?: Hysteria2Settings
   openvpn?: OpenVPNSettings
   mtproto?: MTProtoSettings
+  tuic?: TuicSettings
+  l2tp?: L2TPSettings
 }
 
 export type ProxyHostSecurity = (typeof ProxyHostSecurity)[keyof typeof ProxyHostSecurity]
@@ -2115,6 +2130,18 @@ export type NodesPermissionsReconnectAnyOf = { [key: string]: PermissionScope | 
 
 export type NodesPermissionsReconnect = boolean | NodesPermissionsReconnectAnyOf | null
 
+export interface NodesPermissions {
+  create?: NodesPermissionsCreate
+  read?: NodesPermissionsRead
+  read_simple?: NodesPermissionsReadSimple
+  update?: NodesPermissionsUpdate
+  delete?: NodesPermissionsDelete
+  reconnect?: NodesPermissionsReconnect
+  update_core?: NodesPermissionsUpdateCore
+  logs?: NodesPermissionsLogs
+  stats?: NodesPermissionsStats
+}
+
 export type NodesPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
 
 export type NodesPermissionsDelete = boolean | NodesPermissionsDeleteAnyOf | null
@@ -2135,26 +2162,7 @@ export type NodesPermissionsCreateAnyOf = { [key: string]: PermissionScope | num
 
 export type NodesPermissionsCreate = boolean | NodesPermissionsCreateAnyOf | null
 
-export interface NodesPermissions {
-  create?: NodesPermissionsCreate
-  read?: NodesPermissionsRead
-  read_simple?: NodesPermissionsReadSimple
-  update?: NodesPermissionsUpdate
-  delete?: NodesPermissionsDelete
-  reconnect?: NodesPermissionsReconnect
-  update_core?: NodesPermissionsUpdateCore
-  logs?: NodesPermissionsLogs
-  stats?: NodesPermissionsStats
-}
-
 export type NodeUsageStatsListPeriod = Period | null
-
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
 
 export interface NodeUsageStat {
   period_start: string
@@ -2163,6 +2171,13 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
+
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -2354,19 +2369,6 @@ export interface NodeGeoFilesUpdate {
 
 export type NodeCreateProxyUrl = string | null
 
-export interface NodeCoreUpdate {
-  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
-  core_version?: string
-}
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
-
 export interface NodeCreate {
   name: string
   address: string
@@ -2394,6 +2396,19 @@ export interface NodeCreate {
   internal_timeout?: number
   proxy_url?: NodeCreateProxyUrl
 }
+
+export interface NodeCoreUpdate {
+  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
+  core_version?: string
+}
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
 
 export type NextPlanModelExpire = number | null
 
@@ -2454,6 +2469,18 @@ export interface MTProtoSettings {
   secret?: MTProtoSettingsSecret
 }
 
+export type MTProtoRegistrationSecretDomain = string | null
+
+export type MTProtoRegistrationSecretPort = number | null
+
+export interface MTProtoRegistrationSecret {
+  tag: string
+  port?: MTProtoRegistrationSecretPort
+  mode: string
+  domain?: MTProtoRegistrationSecretDomain
+  secret: string
+}
+
 export type Language = (typeof Language)[keyof typeof Language]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -2463,6 +2490,12 @@ export const Language = {
   ru: 'ru',
   zh: 'zh',
 } as const
+
+export type L2TPSettingsPassword = string | null
+
+export interface L2TPSettings {
+  password?: L2TPSettingsPassword
+}
 
 export type KCPSettingsWriteBufferSize = number | null
 
@@ -2527,24 +2560,18 @@ export type HwidsPermissionsDeleteAnyOf = { [key: string]: PermissionScope | num
 
 export type HwidsPermissionsDelete = boolean | HwidsPermissionsDeleteAnyOf | null
 
+export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
+
 export interface HwidsPermissions {
   read?: HwidsPermissionsRead
   delete?: HwidsPermissionsDelete
 }
 
-export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
-
-export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
-
 export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
-
-export interface HostsPermissions {
-  create?: HostsPermissionsCreate
-  read?: HostsPermissionsRead
-  update?: HostsPermissionsUpdate
-}
 
 export type HostsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -2553,6 +2580,12 @@ export type HostsPermissionsRead = boolean | HostsPermissionsReadAnyOf | null
 export type HostsPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsCreate = boolean | HostsPermissionsCreateAnyOf | null
+
+export interface HostsPermissions {
+  create?: HostsPermissionsCreate
+  read?: HostsPermissionsRead
+  update?: HostsPermissionsUpdate
+}
 
 export interface HostNotificationEnable {
   create?: boolean
@@ -2722,25 +2755,25 @@ export interface Forbidden {
 
 export type FinalMaskXmcSettingsUsernames = string[] | null
 
-export type FinalMaskXmcSettingsProfiles = FinalMaskXmcProfile[] | null
-
 export type FinalMaskXmcSettingsPassword = string | null
 
 export type FinalMaskXmcSettingsHostname = string | null
-
-export interface FinalMaskXmcSettings {
-  hostname?: FinalMaskXmcSettingsHostname
-  password?: FinalMaskXmcSettingsPassword
-  profiles?: FinalMaskXmcSettingsProfiles
-  usernames?: FinalMaskXmcSettingsUsernames
-  [key: string]: unknown
-}
 
 export interface FinalMaskXmcProfile {
   username: string
   uuid: string
   texturesValue: string
   texturesSignature: string
+  [key: string]: unknown
+}
+
+export type FinalMaskXmcSettingsProfiles = FinalMaskXmcProfile[] | null
+
+export interface FinalMaskXmcSettings {
+  hostname?: FinalMaskXmcSettingsHostname
+  password?: FinalMaskXmcSettingsPassword
+  profiles?: FinalMaskXmcSettingsProfiles
+  usernames?: FinalMaskXmcSettingsUsernames
   [key: string]: unknown
 }
 
@@ -2855,8 +2888,6 @@ export interface FinalMaskTcpLayer {
   settings?: FinalMaskTcpLayerSettings
   [key: string]: unknown
 }
-
-export type FinalMaskTcpLayerSettingsAnyOf = { [key: string]: unknown }
 
 export type FinalMaskTcpHeaderCustomSettingsErrors = FinalMaskNoiseItem[][] | null
 
@@ -2981,6 +3012,8 @@ export interface FinalMaskPasswordSettings {
   [key: string]: unknown
 }
 
+export type FinalMaskNoiseSettingsNoise = FinalMaskNoiseItem[] | null
+
 export type FinalMaskNoiseSettingsReset = string | number | null
 
 export interface FinalMaskNoiseSettings {
@@ -3010,8 +3043,6 @@ export interface FinalMaskNoiseItem {
   randRange?: FinalMaskNoiseItemRandRange
   [key: string]: unknown
 }
-
-export type FinalMaskNoiseSettingsNoise = FinalMaskNoiseItem[] | null
 
 export type FinalMaskMkcpLegacySettingsValue = string | null
 
@@ -3213,6 +3244,7 @@ export const CoreType = {
   mtproto: 'mtproto',
   singbox: 'singbox',
   openvpn: 'openvpn',
+  l2tp: 'l2tp',
 } as const
 
 export type CoreSimpleType = CoreType | null
@@ -3263,31 +3295,17 @@ export interface CoreCreate {
   fallbacks_inbound_tags?: CoreCreateFallbacksInboundTags
 }
 
-export interface ConnectionViolationsResponse {
-  violations: ConnectionViolationResponse[]
-  total: number
-  enforcement_enabled?: boolean
-  steps?: number[]
-  window_hours?: number
-}
-
 export type ConnectionViolationResponseRestoredAt = string | null
 
 export type ConnectionViolationResponseRestoreAt = string | null
+
+export type ConnectionViolationResponseReasonsItem = { [key: string]: unknown }
 
 export type ConnectionViolationResponseUsername = string | null
 
 /**
  * One time the limiter acted on a user, and what it did.
  */
-/** A reason the limiter recorded: a code and the values behind it. */
-export interface ConnectionReason {
-  code?: string
-  count?: number
-  cycles?: number
-  items?: string[]
-}
-
 export interface ConnectionViolationResponse {
   id: number
   user_id: number
@@ -3296,12 +3314,20 @@ export interface ConnectionViolationResponse {
   devices?: number
   limit_applied?: number
   observed_addresses?: string[]
-  reasons?: ConnectionReason[]
+  reasons?: ConnectionViolationResponseReasonsItem[]
   step_applied?: number
   disable_minutes?: number
   restore_at?: ConnectionViolationResponseRestoreAt
   restored_at?: ConnectionViolationResponseRestoredAt
   active?: boolean
+}
+
+export interface ConnectionViolationsResponse {
+  violations: ConnectionViolationResponse[]
+  total: number
+  enforcement_enabled?: boolean
+  steps?: number[]
+  window_hours?: number
 }
 
 export interface ConnectionStatesResponse {
@@ -3373,6 +3399,11 @@ export interface ConnectionLimit {
    * @maximum 1440
    */
   node_window_minutes?: number
+  /**
+   * @minimum 5
+   * @maximum 1440
+   */
+  device_window_minutes?: number
   /**
    * @minimum 0
    * @maximum 1048576
@@ -3464,6 +3495,7 @@ export const ConfigFormat = {
   clash_meta: 'clash_meta',
   outline: 'outline',
   openvpn: 'openvpn',
+  l2tp: 'l2tp',
   block: 'block',
 } as const
 
@@ -3548,18 +3580,6 @@ export type CRUDPermissionsDeleteAnyOf = { [key: string]: PermissionScope | numb
 
 export type CRUDPermissionsDelete = boolean | CRUDPermissionsDeleteAnyOf | null
 
-export type CRUDPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
-
-export type CRUDPermissionsUpdate = boolean | CRUDPermissionsUpdateAnyOf | null
-
-export type CRUDPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
-
-export type CRUDPermissionsReadSimple = boolean | CRUDPermissionsReadSimpleAnyOf | null
-
-export type CRUDPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
-
-export type CRUDPermissionsRead = boolean | CRUDPermissionsReadAnyOf | null
-
 /**
  * Standard create/read/read_simple/update/delete permissions.
 Used directly by: groups, templates, client_templates, cores, admin_roles.
@@ -3572,6 +3592,18 @@ export interface CRUDPermissions {
   update?: CRUDPermissionsUpdate
   delete?: CRUDPermissionsDelete
 }
+
+export type CRUDPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+
+export type CRUDPermissionsUpdate = boolean | CRUDPermissionsUpdateAnyOf | null
+
+export type CRUDPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
+
+export type CRUDPermissionsReadSimple = boolean | CRUDPermissionsReadSimpleAnyOf | null
+
+export type CRUDPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type CRUDPermissionsRead = boolean | CRUDPermissionsReadAnyOf | null
 
 export type CRUDPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
@@ -3995,7 +4027,7 @@ export interface AdminRoleResponse {
   limits?: RoleLimits
   features?: RoleFeatures
   access?: RoleAccess
-  hwid?: RoleHWIDSettings
+  hwid?: RoleHWIDSettingsOutput
   disabled_when_limited?: boolean
   disconnect_users_when_limited?: boolean
   disconnect_users_when_disabled?: boolean
@@ -4015,7 +4047,7 @@ export type AdminRoleModifyDisconnectUsersWhenLimited = boolean | null
 
 export type AdminRoleModifyDisabledWhenLimited = boolean | null
 
-export type AdminRoleModifyHwid = RoleHWIDSettings | null
+export type AdminRoleModifyHwid = RoleHWIDSettingsInput | null
 
 export type AdminRoleModifyAccess = RoleAccess | null
 
@@ -4052,7 +4084,7 @@ export interface AdminRoleData {
   limits?: RoleLimits
   features?: RoleFeatures
   access?: RoleAccess
-  hwid?: RoleHWIDSettings
+  hwid?: RoleHWIDSettingsOutput
   disabled_when_limited?: boolean
   disconnect_users_when_limited?: boolean
   disconnect_users_when_disabled?: boolean
@@ -4065,7 +4097,7 @@ export interface AdminRoleCreate {
   limits?: RoleLimits
   features?: RoleFeatures
   access?: RoleAccess
-  hwid?: RoleHWIDSettings
+  hwid?: RoleHWIDSettingsInput
   disabled_when_limited?: boolean
   disconnect_users_when_limited?: boolean
   disconnect_users_when_disabled?: boolean
@@ -8457,6 +8489,76 @@ export const useDeleteCoreConfig = <TData = Awaited<ReturnType<typeof deleteCore
   const mutationOptions = getDeleteCoreConfigMutationOptions(options)
 
   return useMutation(mutationOptions)
+}
+
+/**
+ * Return a client secret that @MTProxybot accepts when registering this instance.
+ * @summary Get Mtproto Registration Secret
+ */
+export const getMtprotoRegistrationSecret = (coreId: number, tag: string, signal?: AbortSignal) => {
+  return orvalFetcher<MTProtoRegistrationSecret>({ url: `/api/core/${coreId}/mtproto/${tag}/registration-secret`, method: 'GET', signal })
+}
+
+export const getGetMtprotoRegistrationSecretQueryKey = (coreId: number, tag: string) => {
+  return [`/api/core/${coreId}/mtproto/${tag}/registration-secret`] as const
+}
+
+export const getGetMtprotoRegistrationSecretQueryOptions = <TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  coreId: number,
+  tag: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetMtprotoRegistrationSecretQueryKey(coreId, tag)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>> = ({ signal }) => getMtprotoRegistrationSecret(coreId, tag, signal)
+
+  return { queryKey, queryFn, enabled: !!(coreId && tag), ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+}
+
+export type GetMtprotoRegistrationSecretQueryResult = NonNullable<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>>
+export type GetMtprotoRegistrationSecretQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  coreId: number,
+  tag: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  coreId: number,
+  tag: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  coreId: number,
+  tag: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Mtproto Registration Secret
+ */
+
+export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  coreId: number,
+  tag: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetMtprotoRegistrationSecretQueryOptions(coreId, tag, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -14645,6 +14747,69 @@ export function useGetSubUserUsage<TData = Awaited<ReturnType<typeof getSubUserU
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getSubUserUsage>>, TError, TData>> },
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getGetSubUserUsageQueryOptions(token, params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Live server latency/health (server-side TCP) of the user's config servers, for the subscription page.
+ * @summary User Subscription Ping
+ */
+export const userSubscriptionPing = (token: string, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/sub/${token}/ping`, method: 'GET', signal })
+}
+
+export const getUserSubscriptionPingQueryKey = (token: string) => {
+  return [`/sub/${token}/ping`] as const
+}
+
+export const getUserSubscriptionPingQueryOptions = <TData = Awaited<ReturnType<typeof userSubscriptionPing>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getUserSubscriptionPingQueryKey(token)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof userSubscriptionPing>>> = ({ signal }) => userSubscriptionPing(token, signal)
+
+  return { queryKey, queryFn, enabled: !!token, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UserSubscriptionPingQueryResult = NonNullable<Awaited<ReturnType<typeof userSubscriptionPing>>>
+export type UserSubscriptionPingQueryError = ErrorType<HTTPValidationError>
+
+export function useUserSubscriptionPing<TData = Awaited<ReturnType<typeof userSubscriptionPing>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUserSubscriptionPing<TData = Awaited<ReturnType<typeof userSubscriptionPing>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUserSubscriptionPing<TData = Awaited<ReturnType<typeof userSubscriptionPing>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary User Subscription Ping
+ */
+
+export function useUserSubscriptionPing<TData = Awaited<ReturnType<typeof userSubscriptionPing>>, TError = ErrorType<HTTPValidationError>>(
+  token: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userSubscriptionPing>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getUserSubscriptionPingQueryOptions(token, options)
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 

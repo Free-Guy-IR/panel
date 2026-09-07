@@ -85,6 +85,12 @@ client_config = {
         "as_base64": False,
         "extension": ".ovpn",
     },
+    ConfigFormat.l2tp: {
+        "config_format": "l2tp",
+        "media_type": "application/json",
+        "as_base64": False,
+        "extension": ".json",
+    },
     ConfigFormat.xray: {
         "config_format": "xray",
         "media_type": "application/json",
@@ -451,6 +457,7 @@ class SubscriptionOperation(BaseOperation):
             )
             links = []
             has_openvpn = False
+            l2tp_details = []
             if is_allow_browser_config:
                 conf, media_type = await self.fetch_config(
                     user,
@@ -459,6 +466,8 @@ class SubscriptionOperation(BaseOperation):
                 links = conf.splitlines()
                 ovpn_conf, _ = await self.fetch_config(user, ConfigFormat.openvpn)
                 has_openvpn = bool(ovpn_conf)
+                l2tp_conf, _ = await self.fetch_config(user, ConfigFormat.l2tp)
+                l2tp_details = json.loads(l2tp_conf) if l2tp_conf else []
 
             format_variables = await self.get_format_variables(user)
             formatted_announce = self._format_announce(sub_settings, format_variables)
@@ -474,6 +483,7 @@ class SubscriptionOperation(BaseOperation):
                         format_variables,
                         is_hwid_enabled,
                         has_openvpn=has_openvpn,
+                        l2tp_details=l2tp_details,
                     ),
                 )
             )
@@ -606,6 +616,7 @@ class SubscriptionOperation(BaseOperation):
         format_variables: dict,
         is_hwid_enabled: bool,
         has_openvpn: bool = False,
+        l2tp_details: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         return {
             "user": SubscriptionUserResponse.model_validate(user),
@@ -613,6 +624,7 @@ class SubscriptionOperation(BaseOperation):
             "announce": formatted_announce,
             "announce_url": sub_settings.announce_url,
             "has_openvpn": has_openvpn,
+            "l2tp_details": l2tp_details or [],
             "apps": self._make_apps_import_urls(
                 sub_settings.applications,
                 format_variables,

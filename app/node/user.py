@@ -98,6 +98,9 @@ def _serialize_user_for_node(
         tuic_settings = user_settings.get("tuic", {})
         proxy_kwargs["tuic_uuid"] = tuic_settings.get("uuid")
         proxy_kwargs["tuic_password"] = tuic_settings.get("password")
+    if ProxyProtocol.l2tp in allowed_protocols:
+        proxy_kwargs["l2tp_username"] = str(id)
+        proxy_kwargs["l2tp_password"] = user_settings.get("l2tp", {}).get("password")
 
     return create_user(
         str(id),
