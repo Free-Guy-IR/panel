@@ -928,6 +928,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                 <SelectItem value="singbox">Sing-box</SelectItem>
                                 <SelectItem value="openvpn">OpenVPN</SelectItem>
                                 <SelectItem value="mtproto">MTProto</SelectItem>
+                                <SelectItem value="l2tp">L2TP/IPsec</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormControl>

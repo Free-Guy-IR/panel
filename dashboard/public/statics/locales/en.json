@@ -3332,7 +3332,7 @@
         "serverAddrHint": "The public IP or hostname clients connect to.",
         "psk": "Pre-shared key (PSK)",
         "pskHint": "Every client needs this key; it is shown on their subscription page.",
-        "pskEmptyHint": "Leave empty and the panel generates a random key when you save.",
+        "pskEmptyHint": "Leave empty and the panel generates a random key when you save. On an existing core a new key replaces the old one, so every client has to be updated.",
         "pskPlaceholder": "Leave empty to generate one",
         "pskCopyFailed": "Could not copy the key",
         "pool": "Client address pool",

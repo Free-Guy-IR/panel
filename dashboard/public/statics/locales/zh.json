@@ -3309,7 +3309,7 @@
         "serverAddrHint": "客户端连接的公网 IP 或域名。",
         "psk": "预共享密钥 (PSK)",
         "pskHint": "每个客户端都需要此密钥，并会显示在其订阅页面上。",
-        "pskEmptyHint": "留空则面板在保存时生成随机密钥。",
+        "pskEmptyHint": "留空则面板在保存时生成随机密钥。对已存在的核心，新密钥会替换旧密钥，因此所有客户端都必须更新。",
         "pskPlaceholder": "留空以自动生成",
         "pskCopyFailed": "无法复制密钥",
         "pool": "客户端地址池",
