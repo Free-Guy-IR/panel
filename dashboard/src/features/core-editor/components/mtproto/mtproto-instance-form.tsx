@@ -9,6 +9,7 @@ import type { MTProtoInstanceDraft, MTProtoValidationIssue } from '@pasarguard/m
 import { Check, Copy, RefreshCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { fetcher } from '@/service/http'
 
 interface MTProtoInstanceFormProps {
   instance: MTProtoInstanceDraft
@@ -26,16 +27,15 @@ function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
     if (coreId === undefined || !tag.trim()) return
     setState('loading')
     try {
-      const r = await fetch(`/api/core/${coreId}/mtproto/${encodeURIComponent(tag.trim())}/registration-secret`, {
-        headers: { Accept: 'application/json' },
-        credentials: 'include',
-      })
-      if (!r.ok) throw new Error(String(r.status))
-      const body = (await r.json()) as { secret?: string }
-      if (!body.secret) throw new Error('empty')
+      const body = await fetcher<{ secret?: string }>(`/api/core/${coreId}/mtproto/${encodeURIComponent(tag.trim())}/registration-secret`)
+      if (!body?.secret) throw new Error('empty')
       setSecret(body.secret)
-      await navigator.clipboard.writeText(body.secret)
-      setState('copied')
+      try {
+        await navigator.clipboard.writeText(body.secret)
+        setState('copied')
+      } catch {
+        setState('idle')
+      }
     } catch {
       setState('error')
     }
