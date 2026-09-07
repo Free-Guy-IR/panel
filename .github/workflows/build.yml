@@ -93,18 +93,22 @@ jobs:
                   # compiled dist/ resolves imports from inside the kit, so it never reaches
                   # the dashboard's node_modules. Each kit ships its built dist/, so no
                   # TypeScript build is needed here.
-                  # A kit may carry "@<git ref>" to pin it. An unpinned kit follows
-                  # its default branch, which is fine while its API is stable; pin one
-                  # the moment the dashboard starts depending on a new export, so a
-                  # later kit change cannot break this build without a bump here.
-                  KITS="core-kit openvpn-config-kit mtproto-config-kit@v0.2.0 singbox-config-kit wireguard-config-kit"
+                  KITS="core-kit openvpn-config-kit mtproto-config-kit@d80ced491f8ab0ddc3620bb48ceae82f5dfa15a6 singbox-config-kit wireguard-config-kit"
                   for entry in $KITS; do
                       kit="${entry%%@*}"
                       ref="${entry#*@}"
+                      dir="$GITHUB_WORKSPACE/../$kit"
                       if [ "$ref" = "$entry" ]; then
-                          git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
+                          git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$dir"
                       else
-                          git clone --depth 1 --branch "$ref" "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
+                          git clone --filter=blob:none --no-checkout "https://github.com/${{ github.repository_owner }}/$kit.git" "$dir"
+                          git -C "$dir" checkout --detach "$ref"
+                          got="$(git -C "$dir" rev-parse HEAD)"
+                          if [ "$got" != "$ref" ]; then
+                              echo "::error::$kit resolved to $got, expected $ref"
+                              exit 1
+                          fi
+                          echo "$kit pinned at $got"
                       fi
                   done
                   KITS="$(echo "$KITS" | tr " " "\n" | sed "s/@.*//" | tr "\n" " ")"
@@ -123,12 +127,23 @@ jobs:
               run: |
                   for kit in core-kit mtproto-config-kit openvpn-config-kit singbox-config-kit wireguard-config-kit; do
                       f="node_modules/@pasarguard/$kit/package.json"
-                      if [ -f "$f" ]; then
-                          echo "$kit -> $(node -p "require('./$f').version")"
-                      else
-                          echo "$kit -> (absent)"
-                      fi
+                      d="$GITHUB_WORKSPACE/../$kit"
+                      version="(absent)"
+                      commit="(absent)"
+                      [ -f "$f" ] && version="$(node -p "require('./$f').version")"
+                      [ -d "$d/.git" ] && commit="$(git -C "$d" rev-parse HEAD)"
+                      echo "$kit -> $version @ $commit"
                   done
+
+            - name: Verify pinned kits did not drift
+              run: |
+                  expected_mtproto="d80ced491f8ab0ddc3620bb48ceae82f5dfa15a6"
+                  got="$(git -C "$GITHUB_WORKSPACE/../mtproto-config-kit" rev-parse HEAD)"
+                  if [ "$got" != "$expected_mtproto" ]; then
+                      echo "::error::mtproto-config-kit drifted: $got != $expected_mtproto"
+                      exit 1
+                  fi
+                  echo "mtproto-config-kit verified at $got"
 
             - name: Build dashboard
               run: ./build_dashboard.sh
