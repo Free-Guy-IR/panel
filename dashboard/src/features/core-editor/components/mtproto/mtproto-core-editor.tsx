@@ -20,10 +20,17 @@ interface MTProtoCoreEditorProps {
 }
 
 /** Top-level MTProto section: a searchable/reorderable table of instances (add/edit/delete), plus the shared Advanced JSON tab. Unlike OpenVPN, there is no PKI section - MTProto secrets are symmetric, nothing is server-generated. */
+function summariseDomains(raw: string): string {
+  const list = raw.split(/[\s,;]+/).filter(Boolean)
+  if (list.length === 0) return ''
+  return list.length > 1 ? `${list[0]} +${list.length - 1}` : list[0]
+}
+
 export function MTProtoCoreEditor({ headerAddPulse, headerAddEpoch }: MTProtoCoreEditorProps) {
   const { t } = useTranslation()
   const section = useCoreEditorStore(s => s.activeSection) as MtCoreSection
   const draft = useCoreEditorStore(s => s.mtDraft)
+  const coreId = useCoreEditorStore(s => s.coreId)
   const updateMtDraft = useCoreEditorStore(s => s.updateMtDraft)
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -119,11 +126,11 @@ export function MTProtoCoreEditor({ headerAddPulse, headerAddEpoch }: MTProtoCor
         ),
       },
       {
-        accessorKey: 'fakeTlsDomain',
-        header: () => t('coreEditor.mtproto.fields.fakeTlsDomain', { defaultValue: 'Fake-TLS domain' }),
+        accessorKey: 'fakeTlsDomains',
+        header: () => t('coreEditor.mtproto.fields.fakeTlsDomains', { defaultValue: 'Fake-TLS domains' }),
         cell: ({ row }) => (
           <span dir="ltr" className="text-xs">
-            {row.original.mode === 'plain' ? '-' : row.original.fakeTlsDomain}
+            {row.original.mode === 'plain' ? '-' : summariseDomains(row.original.fakeTlsDomains)}
           </span>
         ),
       },
@@ -149,7 +156,7 @@ export function MTProtoCoreEditor({ headerAddPulse, headerAddEpoch }: MTProtoCor
         columns={columns}
         data={[...draft.instances]}
         getRowId={(_row, i) => String(i)}
-        getSearchableText={item => `${item.tag} ${item.port} ${item.fakeTlsDomain}`}
+        getSearchableText={item => `${item.tag} ${item.port} ${item.fakeTlsDomains}`}
         minRowCount={1}
         minRowCountMessage={t('coreEditor.mtproto.keepAtLeastOne', { defaultValue: 'At least one instance is required.' })}
         emptyLabel={t('coreEditor.mtproto.emptyInstances', { defaultValue: 'No instances yet. Click "Add instance" to create one.' })}
@@ -184,7 +191,9 @@ export function MTProtoCoreEditor({ headerAddPulse, headerAddEpoch }: MTProtoCor
           </Button>
         }
       >
-        {draftInstance && <MTProtoInstanceForm instance={draftInstance} issues={dialogIssues} onChange={updater => setDraftInstance(prev => (prev ? updater(prev) : prev))} />}
+        {draftInstance && (
+          <MTProtoInstanceForm instance={draftInstance} issues={dialogIssues} coreId={coreId ?? undefined} onChange={updater => setDraftInstance(prev => (prev ? updater(prev) : prev))} />
+        )}
       </CoreEditorFormDialog>
     </div>
   )

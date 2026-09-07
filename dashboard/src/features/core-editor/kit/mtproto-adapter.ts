@@ -1,4 +1,6 @@
 import {
+  instanceDomains,
+  joinDomains,
   createDefaultMTProtoCoreDraft,
   createDefaultMTProtoInstanceDraft,
   generateMTProtoCoreConfigJsonFromDraft,
@@ -14,7 +16,12 @@ function instanceToDraft(raw: unknown): MTProtoInstanceDraft {
     tag: typeof instance.tag === 'string' ? instance.tag : '',
     port: typeof instance.port === 'number' ? instance.port : '',
     mode: instance.mode === 'plain' ? 'plain' : 'faketls',
-    fakeTlsDomain: typeof instance.fake_tls_domain === 'string' ? instance.fake_tls_domain : '',
+    fakeTlsDomains: joinDomains(
+      instanceDomains({
+        fake_tls_domain: typeof instance.fake_tls_domain === 'string' ? instance.fake_tls_domain : undefined,
+        fake_tls_domains: Array.isArray(instance.fake_tls_domains) ? (instance.fake_tls_domains as string[]) : undefined,
+      }),
+    ),
     adTag: typeof instance.ad_tag === 'string' ? instance.ad_tag : '',
   }
 }

@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 
 from app.core.openvpn import generate_openvpn_pki
 from app.db import AsyncSession, get_db
+from app.db.models import User as DBUser
 from app.models.admin import AdminDetails
 from app.models.core import (
     BulkCoreSelection,
@@ -9,10 +11,12 @@ from app.models.core import (
     CoreResponse,
     CoreResponseList,
     CoresSimpleResponse,
+    MTProtoRegistrationSecret,
     OpenVPNPKIResponse,
     RemoveCoresResponse,
 )
 from app.models.reality_scan import RealityScanRequest, RealityScanResult
+from app.models.user import UserStatus
 from app.operation import OperatorType
 from app.operation.core import CoreOperation
 from app.operation.node import NodeOperation
@@ -50,6 +54,51 @@ async def get_core_config(
 ) -> dict:
     """Get a core configuration by its ID."""
     return await core_operator.get_validated_core_config(db, core_id)
+
+
+@router.get("/{core_id}/mtproto/{tag}/registration-secret", response_model=MTProtoRegistrationSecret)
+async def get_mtproto_registration_secret(
+    core_id: int,
+    tag: str,
+    _: AdminDetails = Depends(require_permission("cores", "read")),
+    db: AsyncSession = Depends(get_db),
+) -> MTProtoRegistrationSecret:
+    """Return a client secret that @MTProxybot accepts when registering this instance."""
+    core = await core_operator.get_validated_core_config(db, core_id)
+    config = core["config"] if isinstance(core, dict) else core.config
+    instance = next((i for i in config.get("instances", []) if i.get("tag") == tag), None)
+    if instance is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"no mtproto instance tagged {tag}")
+
+    mode = instance.get("mode") or "faketls"
+    domains = instance.get("fake_tls_domains") or (
+        [instance["fake_tls_domain"]] if instance.get("fake_tls_domain") else []
+    )
+    if mode == "faketls" and not domains:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"{tag} has no fake-tls domain")
+
+    stmt = (
+        select(DBUser.proxy_settings)
+        .where(DBUser.status == UserStatus.active)
+        .where(DBUser.proxy_settings["mtproto"]["secret"].isnot(None))
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    raw_secret = (row or {}).get("mtproto", {}).get("secret") if row else None
+    if not raw_secret:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="no active user has an mtproto secret yet - create one first",
+        )
+
+    if mode == "plain":
+        secret = "dd" + raw_secret
+        domain = None
+    else:
+        domain = domains[0]
+        secret = "ee" + raw_secret + domain.encode("ascii").hex()
+
+    return MTProtoRegistrationSecret(tag=tag, port=instance.get("port"), mode=mode, domain=domain, secret=secret)
 
 
 @router.put("/{core_id}", response_model=CoreResponse)

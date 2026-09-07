@@ -1,17 +1,66 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import type { MTProtoInstanceDraft, MTProtoValidationIssue } from '@pasarguard/mtproto-config-kit'
-import { RefreshCcw } from 'lucide-react'
+import { Check, Copy, RefreshCcw } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface MTProtoInstanceFormProps {
   instance: MTProtoInstanceDraft
   issues: MTProtoValidationIssue[]
   onChange: (updater: (draft: MTProtoInstanceDraft) => MTProtoInstanceDraft) => void
+  coreId?: number
+}
+
+function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
+  const { t } = useTranslation()
+  const [secret, setSecret] = useState('')
+  const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle')
+
+  const load = async () => {
+    if (coreId === undefined || !tag.trim()) return
+    setState('loading')
+    try {
+      const r = await fetch(`/api/core/${coreId}/mtproto/${encodeURIComponent(tag.trim())}/registration-secret`, {
+        headers: { Accept: 'application/json' },
+        credentials: 'include',
+      })
+      if (!r.ok) throw new Error(String(r.status))
+      const body = (await r.json()) as { secret?: string }
+      if (!body.secret) throw new Error('empty')
+      setSecret(body.secret)
+      await navigator.clipboard.writeText(body.secret)
+      setState('copied')
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div dir="ltr" className="flex items-center gap-2">
+        <Input value={secret} dir="ltr" readOnly className="text-xs" placeholder="ee…" />
+        <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={load} disabled={coreId === undefined || state === 'loading'}>
+          {state === 'copied' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+        </Button>
+      </div>
+      <p className="text-muted-foreground text-[11px]">
+        {state === 'error'
+          ? t('coreEditor.mtproto.fields.registrationSecretError', {
+              defaultValue: 'Could not build a secret. Save the instance first, and make sure at least one active user has MTProto access.',
+            })
+          : t('coreEditor.mtproto.fields.registrationSecretHint', {
+              defaultValue:
+                'Press copy to fetch a working client secret for this instance and put it on the clipboard. Send this exact value to @MTProxybot as the secret, together with your server address and the port above.',
+            })}
+      </p>
+    </div>
+  )
 }
 
 function issueFor(issues: MTProtoValidationIssue[], suffix: string): string | undefined {
@@ -22,7 +71,7 @@ function randomPort(): number {
   return Math.floor(Math.random() * (65535 - 10000 + 1)) + 10000
 }
 
-export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInstanceFormProps) {
+export function MTProtoInstanceForm({ instance, issues, onChange, coreId }: MTProtoInstanceFormProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
 
@@ -32,7 +81,8 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
 
   const tagError = issueFor(issues, 'tag')
   const portError = issueFor(issues, 'port')
-  const domainError = issueFor(issues, 'fakeTlsDomain')
+  const domainError = issueFor(issues, 'fakeTlsDomains')
+  const domains = instance.fakeTlsDomains.split(/[\s,;]+/).filter(Boolean)
   const adTagError = issueFor(issues, 'adTag')
 
   return (
@@ -85,15 +135,32 @@ export function MTProtoInstanceForm({ instance, issues, onChange }: MTProtoInsta
 
         {instance.mode === 'faketls' && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>{t('coreEditor.mtproto.fields.fakeTlsDomain', { defaultValue: 'Fake-TLS domain' })}</Label>
-            <Input value={instance.fakeTlsDomain} dir="ltr" className="text-xs" isError={!!domainError} onChange={e => set('fakeTlsDomain', e.target.value)} placeholder="www.example.com" />
+            <Label>
+              {t('coreEditor.mtproto.fields.fakeTlsDomains', { defaultValue: 'Fake-TLS domains' })}
+              {domains.length > 0 && <span className="text-muted-foreground ms-1 text-[11px]">({domains.length})</span>}
+            </Label>
+            <Textarea
+              value={instance.fakeTlsDomains}
+              dir="ltr"
+              rows={6}
+              className={cn('text-xs', domainError && 'border-destructive focus-visible:ring-destructive')}
+              onChange={e => set('fakeTlsDomains', e.target.value)}
+              placeholder={'example.org\nanother-site.com\nthird-one.net'}
+            />
             {domainError && <p className="text-destructive text-[0.8rem] font-medium">{domainError}</p>}
             <p className="text-muted-foreground text-[11px]">
-              {t('coreEditor.mtproto.fields.fakeTlsDomainHint', {
+              {t('coreEditor.mtproto.fields.fakeTlsDomainsHint', {
                 defaultValue:
-                  'Any real, publicly reachable domain works - it does not need to be owned by you or have any TLS certificate of its own. Every connecting client is validated against the secret alone; this domain is only used to disguise unauthenticated probes as ordinary HTTPS traffic to that site.',
+                  'One domain per line. Any real, publicly reachable domain works - it need not be yours and needs no TLS certificate, because clients are authenticated by their secret alone. Listing many domains spreads users over different cover names, so one blocked name does not take everyone down: each user is assigned one automatically and keeps it.',
               })}
             </p>
+          </div>
+        )}
+
+        {instance.mode === 'faketls' && (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>{t('coreEditor.mtproto.fields.registrationSecret', { defaultValue: 'Client secret for @MTProxybot' })}</Label>
+            <RegistrationSecret coreId={coreId} tag={instance.tag} />
           </div>
         )}
 
