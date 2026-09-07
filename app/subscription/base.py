@@ -9,6 +9,14 @@ from urllib.parse import quote, urlencode
 from app.models.subscription import SubscriptionInboundData
 
 
+def _pick_fake_tls_domain(domains: list[str], key: str) -> str:
+    if len(domains) == 1:
+        return domains[0]
+
+    digest = hashlib.sha256(key.encode("utf-8")).digest()
+    return domains[int.from_bytes(digest[:8], "big") % len(domains)]
+
+
 class BaseSubscription:
     def __init__(
         self,
@@ -329,14 +337,19 @@ class BaseSubscription:
             finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
         mtproto_data = finalmask_dict.get("mtproto", {})
         mode = mtproto_data.get("mode") or "faketls"
-        fake_tls_domain = mtproto_data.get("fake_tls_domain")
 
         if mode == "plain":
             full_secret = "dd" + raw_secret
         else:
-            if not fake_tls_domain:
+            domains = mtproto_data.get("fake_tls_domains") or []
+            if not domains:
+                single = mtproto_data.get("fake_tls_domain")
+                domains = [single] if single else []
+            if not domains:
                 return None
-            full_secret = "ee" + raw_secret + fake_tls_domain.encode("ascii").hex()
+
+            domain = _pick_fake_tls_domain(domains, str(user_id))
+            full_secret = "ee" + raw_secret + domain.encode("ascii").hex()
 
         validated_remark = self._remark_validation(remark)
         self.proxy_remarks.append(validated_remark)

@@ -18,6 +18,18 @@ def _protocols_from_inbounds_by_tag(inbounds_by_tag: dict[str, dict]) -> frozens
     )
 
 
+def _instance_domains(instance: dict) -> list[str]:
+    domains = instance.get("fake_tls_domains")
+    if isinstance(domains, list) and domains:
+        return [d for d in domains if isinstance(d, str) and d.strip()]
+
+    single = instance.get("fake_tls_domain")
+    if isinstance(single, str) and single.strip():
+        return [single]
+
+    return []
+
+
 class MTProtoConfig(dict):
     """AbstractCore implementation for MTProto (Telegram proxy).
 
@@ -111,10 +123,28 @@ class MTProtoConfig(dict):
         instance["mode"] = mode
 
         fake_tls_domain = instance.get("fake_tls_domain")
-        if mode == "faketls" and (not fake_tls_domain or not isinstance(fake_tls_domain, str)):
-            raise ValueError(f"{tag}: fake_tls_domain is required for faketls mode")
-        if mode == "plain" and instance.get("ad_tag"):
-            raise ValueError(f"{tag}: plain mode cannot be combined with ad_tag")
+        fake_tls_domains = instance.get("fake_tls_domains")
+
+        if fake_tls_domains is not None:
+            if not isinstance(fake_tls_domains, list) or not all(
+                isinstance(d, str) and d.strip() for d in fake_tls_domains
+            ):
+                raise ValueError(f"{tag}: fake_tls_domains must be a list of non-empty strings")
+            if len(set(fake_tls_domains)) != len(fake_tls_domains):
+                raise ValueError(f"{tag}: fake_tls_domains contains duplicates")
+
+        domains = _instance_domains(instance)
+
+        if mode == "faketls" and not domains:
+            raise ValueError(f"{tag}: fake_tls_domain or fake_tls_domains is required for faketls mode")
+        if mode == "plain":
+            if fake_tls_domains:
+                raise ValueError(f"{tag}: plain mode cannot set fake_tls_domains")
+            if instance.get("ad_tag"):
+                raise ValueError(f"{tag}: plain mode cannot be combined with ad_tag")
+
+        if mode == "faketls" and not fake_tls_domain:
+            instance["fake_tls_domain"] = domains[0]
 
         ad_tag = instance.get("ad_tag")
         if ad_tag:
@@ -138,13 +168,14 @@ class MTProtoConfig(dict):
             return
 
         mode = instance.get("mode") or "faketls"
+        domains = _instance_domains(instance) if mode == "faketls" else []
         metadata = {
             "tag": tag,
             "protocol": "mtproto",
             "network": "tcp",
             "tls": "tls" if mode == "faketls" else "none",
             "port": instance.get("port"),
-            "sni": instance.get("fake_tls_domain", "") if mode == "faketls" else "",
+            "sni": (domains[0] if domains else "") if mode == "faketls" else "",
             # Same generic per-inbound extra-data channel OpenVPN/Hysteria2
             # use (app.core.hosts) - carries the fake-TLS domain through to
             # _build_mtproto_components (app/subscription/base.py), which
@@ -152,7 +183,8 @@ class MTProtoConfig(dict):
             "finalmask": {
                 "mtproto": {
                     "mode": mode,
-                    "fake_tls_domain": instance.get("fake_tls_domain", "") if mode == "faketls" else "",
+                    "fake_tls_domain": domains[0] if domains else "",
+                    "fake_tls_domains": domains,
                 }
             },
         }
