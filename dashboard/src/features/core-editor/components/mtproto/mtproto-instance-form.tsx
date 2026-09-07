@@ -21,7 +21,7 @@ interface MTProtoInstanceFormProps {
 function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
   const { t } = useTranslation()
   const [secret, setSecret] = useState('')
-  const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle')
+  const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'copyFailed' | 'error'>('idle')
 
   const load = async () => {
     if (coreId === undefined || !tag.trim()) return
@@ -34,7 +34,7 @@ function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
         await navigator.clipboard.writeText(body.secret)
         setState('copied')
       } catch {
-        setState('idle')
+        setState('copyFailed')
       }
     } catch {
       setState('error')
@@ -50,14 +50,18 @@ function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
         </Button>
       </div>
       <p className="text-muted-foreground text-[11px]">
-        {state === 'error'
-          ? t('coreEditor.mtproto.fields.registrationSecretError', {
-              defaultValue: 'Could not build a secret. Save the instance first, and make sure at least one active user has MTProto access.',
+        {state === 'copyFailed'
+          ? t('coreEditor.mtproto.fields.registrationSecretCopyFailed', {
+              defaultValue: 'The secret is in the box above, but the browser refused to copy it. Select it and copy by hand.',
             })
-          : t('coreEditor.mtproto.fields.registrationSecretHint', {
-              defaultValue:
-                'Press copy to fetch a working client secret for this instance and put it on the clipboard. Send this exact value to @MTProxybot as the secret, together with your server address and the port above.',
-            })}
+          : state === 'error'
+            ? t('coreEditor.mtproto.fields.registrationSecretError', {
+                defaultValue: 'Could not build a secret. Save the instance first, and make sure at least one active user has MTProto access.',
+              })
+            : t('coreEditor.mtproto.fields.registrationSecretHint', {
+                defaultValue:
+                  'Press copy to fetch a working client secret for this instance and put it on the clipboard. Send this exact value to @MTProxybot as the secret, together with your server address and the port above.',
+              })}
       </p>
     </div>
   )
