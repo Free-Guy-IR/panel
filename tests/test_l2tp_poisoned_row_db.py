@@ -8,14 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.db.crud.bulk import get_users_for_l2tp_activation
 from app.db.models import Admin, Base, CoreConfig, Group, ProxyInbound, User
 from app.models.core import CoreType
-from app.models.proxy import ProxyTable
 from app.models.protocol import ProxyProtocol
+from app.models.proxy import ProxyTable
+from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
 from app.models.user import BulkUserFilter, UserResponse
 from app.node.user import _serialize_user_for_node
 from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.subscription.l2tp import L2TPConfiguration
-from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
 
 HEALTHY = "Ab3xyzAb3xyzAb3xyzAb"
 POISON = 'x\nattacker l2tp-de "owned" *'
@@ -179,7 +179,7 @@ async def test_the_bulk_endpoint_reads_the_real_database_and_repairs_the_poisone
 
 @pytest.mark.asyncio
 async def test_the_dry_run_counts_the_poisoned_row_without_touching_the_database(db):
-    ids = await _seed(db)
+    await _seed(db)
     operation = UserOperation.__new__(UserOperation)
     operation.operator_type = OperatorType.API
 
