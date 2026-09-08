@@ -16,6 +16,7 @@ from app.db.crud.bulk import (
     count_bulk_datalimit_targets,
     count_bulk_expire_targets,
     count_bulk_proxy_targets,
+    get_users_for_l2tp_activation,
     get_users_for_mtproto_activation,
     reset_all_users_data_usage,
     update_users_datalimit,
@@ -1953,6 +1954,38 @@ class UserOperation(BaseOperation):
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
+
+    async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
+        candidates = await get_users_for_l2tp_activation(db, bulk_model)
+
+        to_update: list[tuple[User, ProxyTable]] = []
+        for user in candidates:
+            current = ProxyTable.model_validate(user.proxy_settings)
+            if current.l2tp.password:
+                continue
+            updated = await prepare_l2tp_password(db, current, user.groups)
+            if not updated.l2tp.password:
+                continue
+            to_update.append((user, updated))
+
+        if bulk_model.dry_run:
+            return BulkOperationDryRunResponse(affected_users=len(to_update))
+
+        if not to_update:
+            if self.operator_type in (OperatorType.API, OperatorType.WEB):
+                return {"detail": "operation has been successfuly done on 0 users"}
+            return 0
+
+        for user, updated in to_update:
+            user.proxy_settings = updated.dict()
+        await db.commit()
+
+        updated_users = [user for user, _ in to_update]
+        await sync_users(updated_users)
+
+        if self.operator_type in (OperatorType.API, OperatorType.WEB):
+            return {"detail": f"operation has been successfuly done on {len(to_update)} users"}
+        return len(to_update)
 
     async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter):
         """Retroactively generate an MTProto secret for existing users matched

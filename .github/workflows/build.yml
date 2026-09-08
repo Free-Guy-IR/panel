@@ -93,7 +93,7 @@ jobs:
                   # compiled dist/ resolves imports from inside the kit, so it never reaches
                   # the dashboard's node_modules. Each kit ships its built dist/, so no
                   # TypeScript build is needed here.
-                  KITS="core-kit openvpn-config-kit mtproto-config-kit@d80ced491f8ab0ddc3620bb48ceae82f5dfa15a6 l2tp-config-kit@a6fad282569d1b2e45e8d716ce7c91b773dcd21b singbox-config-kit wireguard-config-kit"
+                  KITS="core-kit openvpn-config-kit mtproto-config-kit@d80ced491f8ab0ddc3620bb48ceae82f5dfa15a6 l2tp-config-kit@fce077c58e97ae566f20aefdbbcec13a8ff869eb singbox-config-kit wireguard-config-kit"
                   for entry in $KITS; do
                       kit="${entry%%@*}"
                       ref="${entry#*@}"
@@ -144,7 +144,7 @@ jobs:
                       exit 1
                   fi
                   echo "mtproto-config-kit verified at $got"
-                  expected_l2tp="a6fad282569d1b2e45e8d716ce7c91b773dcd21b"
+                  expected_l2tp="fce077c58e97ae566f20aefdbbcec13a8ff869eb"
                   got="$(git -C "$GITHUB_WORKSPACE/../l2tp-config-kit" rev-parse HEAD)"
                   if [ "$got" != "$expected_l2tp" ]; then
                       echo "::error::l2tp-config-kit drifted: $got != $expected_l2tp"

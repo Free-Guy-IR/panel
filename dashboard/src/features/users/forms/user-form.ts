@@ -30,6 +30,15 @@ export const wireguardSettingsSchema = z.object({
 export const mtprotoSettingsSchema = z.object({
   secret: z.string().nullable().optional(),
 })
+export const l2tpSettingsSchema = z.object({
+  password: z
+    .string()
+    .min(6, 'validation.minLength')
+    .max(64, 'validation.maxLength')
+    .regex(/^[\x21-\x7e]+$/, 'validation.invalid')
+    .nullable()
+    .optional(),
+})
 export const proxyTableInputSchema = z.object({
   vmess: vMessSettingsSchema.optional(),
   vless: vlessSettingsSchema.optional(),
@@ -38,6 +47,7 @@ export const proxyTableInputSchema = z.object({
   wireguard: wireguardSettingsSchema.optional(),
   hysteria: hysteriaSettingsSchema.optional(),
   mtproto: mtprotoSettingsSchema.optional(),
+  l2tp: l2tpSettingsSchema.optional(),
 })
 
 export const userStatusCreateEnum = z.enum(['active', 'on_hold'])
@@ -130,6 +140,9 @@ export const getDefaultUserForm = async () => {
       },
       mtproto: {
         secret: undefined,
+      },
+      l2tp: {
+        password: undefined,
       },
     },
   } satisfies UseFormValues

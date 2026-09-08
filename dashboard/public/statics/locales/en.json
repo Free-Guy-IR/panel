@@ -1949,6 +1949,7 @@
     "selectStatus": "Select status",
     "selectedTemplates": "{{count}} Template(s) selected",
     "proxySettings.mtprotoSecret": "MTProto Secret",
+    "proxySettings.l2tpPassword": "L2TP Password",
     "proxySettings.regenerate": "Regenerate"
   },
   "userSettings": {
@@ -3718,6 +3719,10 @@
       }
     },
     "mtprotoActivate": "MTProto Activation",
+    "l2tpActivate": "L2TP Activation",
+    "l2tpActivateDesc": "Generate L2TP/IPsec passwords for existing users who have L2TP access but never received one",
+    "l2tpActivateDescription": "Generates an L2TP/IPsec password for existing users who have L2TP access through their group but never received one.",
+    "l2tpActivateSafety": "Users who already have a password are never touched or regenerated, even if selected below.",
     "mtprotoActivateDesc": "Generate missing MTProto secrets for existing users",
     "mtprotoActivateDescription": "Generates an MTProto proxy secret for existing users who have MTProto access through their group but never received one - e.g. users created before MTProto was enabled on their group.",
     "mtprotoActivateSafety": "Users who already have a secret are never touched or regenerated, even if selected below."

@@ -2,7 +2,7 @@ import PageHeader from '@/components/layout/page-header'
 import { useAdmin } from '@/hooks/use-admin'
 import PageTransition from '@/components/layout/page-transition'
 import { getDocsUrl } from '@/utils/docs-url'
-import { ArrowUpDown, Calendar, Lock, Group, UserPlus, Send } from 'lucide-react'
+import { ArrowUpDown, Calendar, Lock, Group, UserPlus, Send, ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
@@ -15,6 +15,7 @@ const allTabs = [
   { id: 'data', label: 'bulk.dataLimit', icon: ArrowUpDown, url: '/bulk/data' },
   { id: 'proxy', label: 'bulk.proxySettings', icon: Lock, url: '/bulk/proxy' },
   { id: 'mtproto', label: 'bulk.mtprotoActivate', icon: Send, url: '/bulk/mtproto' },
+  { id: 'l2tp', label: 'bulk.l2tpActivate', icon: ShieldCheck, url: '/bulk/l2tp' },
 ]
 
 const BulkPage = () => {
@@ -60,6 +61,7 @@ const BulkPage = () => {
       '/bulk/data': { title: 'bulk.dataLimit', description: 'bulk.dataLimitDesc' },
       '/bulk/proxy': { title: 'bulk.proxySettings', description: 'bulk.proxySettingsDesc' },
       '/bulk/mtproto': { title: 'bulk.mtprotoActivate', description: 'bulk.mtprotoActivateDesc' },
+      '/bulk/l2tp': { title: 'bulk.l2tpActivate', description: 'bulk.l2tpActivateDesc' },
     }
 
     const header = pathToHeader[location.pathname] || pathToHeader['/bulk']

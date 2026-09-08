@@ -3427,6 +3427,7 @@
     "selectStatus": "انتخاب وضعیت",
     "selectedTemplates": "{{count}} قالب انتخاب شده",
     "proxySettings.mtprotoSecret": "سکرت پروکسی تلگرام (MTProto)",
+    "proxySettings.l2tpPassword": "رمز L2TP",
     "proxySettings.regenerate": "تغییر"
   },
   "userSettings": {
@@ -3750,6 +3751,10 @@
       }
     },
     "mtprotoActivate": "فعال‌سازی MTProto",
+    "l2tpActivate": "فعال‌سازی L2TP",
+    "l2tpActivateDesc": "ساخت رمز L2TP/IPsec برای کاربران قدیمی که دسترسی L2TP دارند ولی رمزی برایشان ساخته نشده",
+    "l2tpActivateDescription": "برای کاربرانی که از طریق گروهشان به L2TP دسترسی دارند اما تا به حال رمزی دریافت نکرده‌اند، رمز L2TP/IPsec می‌سازد.",
+    "l2tpActivateSafety": "کاربرانی که از قبل رمز دارند هرگز دست‌کاری یا رمزشان بازتولید نمی‌شود، حتی اگر پایین انتخاب شوند.",
     "mtprotoActivateDesc": "ساخت سکرت MTProto برای کاربرانی که هنوز ندارند",
     "mtprotoActivateDescription": "برای کاربرانی که از طریق گروه‌شان به پروکسی MTProto دسترسی دارند اما هنوز سکرتی دریافت نکرده‌اند (مثلاً کاربرانی که قبل از فعال شدن MTProto روی گروه‌شان ساخته شده‌اند) یک سکرت جدید می‌سازد.",
     "mtprotoActivateSafety": "کاربرانی که از قبل سکرت دارند، حتی اگر پایین انتخاب شوند، هرگز تغییر نمی‌کنند یا دوباره ساخته نمی‌شوند."
