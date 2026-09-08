@@ -1,130 +1,82 @@
 import json
 
+import pytest
+
 from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
-from app.subscription.share import client_accepts_mixed_documents
 from app.subscription.xray import XrayConfiguration
 
-XRAY_TEMPLATE = json.dumps({"log": {}, "inbounds": [], "outbounds": [{"tag": "DIRECT", "protocol": "freedom"}]})
-SINGBOX_TEMPLATE = json.dumps(
-    {
-        "log": {},
-        "outbounds": [
-            {"tag": "proxy", "type": "selector", "outbounds": []},
-            {"tag": "Best Latency", "type": "urltest", "outbounds": []},
-            {"tag": "direct", "type": "direct"},
-        ],
-        "route": {},
-    }
-)
+XRAY_TEMPLATE = json.dumps({"outbounds": [{"tag": "DIRECT", "protocol": "freedom"}]})
 USER_ID = "11111111-1111-1111-1111-111111111111"
+FINALMASK = {
+    "udp": [{"type": "salamander", "settings": {"password": "obfs-pw"}}],
+    "quicParams": {"brutalUp": "50 mbps", "brutalDown": "100 mbps"},
+}
 
 
-def _hysteria2_inbound() -> SubscriptionInboundData:
+def _inbound(protocol: str, network: str) -> SubscriptionInboundData:
     return SubscriptionInboundData(
-        remark="hy2",
-        inbound_tag="Hysteria2",
-        protocol="hysteria2",
+        remark="t",
+        inbound_tag="T",
+        protocol=protocol,
         address="histe.example.com",
         port=445,
-        network="udp",
+        network=network,
         tls_config=TLSConfig(tls="tls", sni="histe.example.com"),
         transport_config=TCPTransportConfig(),
-        finalmask={
-            "udp": [{"type": "salamander", "settings": {"password": "obfs-secret"}}],
-            "quicParams": {"brutalUp": "50 mbps", "brutalDown": "100 mbps"},
-        },
+        finalmask=FINALMASK,
         priority=0,
     )
 
 
-def _vless_inbound() -> SubscriptionInboundData:
-    return SubscriptionInboundData(
-        remark="vl",
-        inbound_tag="vless-tcp",
-        protocol="vless",
-        address="edge.example.com",
-        port=443,
-        network="tcp",
-        tls_config=TLSConfig(tls="tls", sni="edge.example.com"),
-        transport_config=TCPTransportConfig(),
-        priority=0,
-    )
-
-
-def _render(*adds, singbox_template=SINGBOX_TEMPLATE, mixed=True):
-    conf = XrayConfiguration(
-        xray_template_content=XRAY_TEMPLATE, singbox_template_content=singbox_template, mixed_documents=mixed
-    )
-    for remark, inbound, settings in adds:
-        conf.add(remark=remark, address=inbound.address, inbound=inbound, settings=settings)
+def _render(protocol: str, network: str, settings: dict, remark: str = "r"):
+    conf = XrayConfiguration(xray_template_content=XRAY_TEMPLATE)
+    conf.add(remark=remark, address="histe.example.com", inbound=_inbound(protocol, network), settings=settings)
     return json.loads(conf.render())
 
 
-def test_hysteria2_is_no_longer_dropped_from_the_xray_json_array():
-    docs = _render(("🇩🇪 Germany ⭐", _hysteria2_inbound(), {"password": "user-pass"}))
-    assert len(docs) == 1
-    doc = docs[0]
+def test_hysteria2_renders_identically_to_the_working_xray_core_hysteria_host():
+    xray_core = _render("hysteria", "hysteria", {"auth": "SECRET"})
+    singbox_core = _render("hysteria2", "tcp", {"password": "SECRET"})
+    assert singbox_core == xray_core
+    assert singbox_core[0]["outbounds"][0]["protocol"] == "hysteria"
+
+
+def test_the_hysteria2_outbound_is_schema_pure_xray():
+    outbound = _render("hysteria2", "tcp", {"password": "SECRET"})[0]["outbounds"][0]
+    assert "protocol" in outbound and "type" not in outbound
+    assert outbound["settings"]["version"] == 2
+    assert outbound["settings"]["address"] == "histe.example.com"
+    assert outbound["settings"]["port"] == 445
+    stream = outbound["streamSettings"]
+    assert stream["network"] == "hysteria"
+    assert stream["hysteriaSettings"] == {"version": 2, "auth": "SECRET"}
+    assert stream["tlsSettings"]["serverName"] == "histe.example.com"
+    assert stream["finalmask"]["udp"][0]["settings"]["password"] == "obfs-pw"
+
+
+def test_the_user_password_becomes_the_hysteria_auth():
+    outbound = _render("hysteria2", "tcp", {"password": "per-user-pass"})[0]["outbounds"][0]
+    assert outbound["streamSettings"]["hysteriaSettings"]["auth"] == "per-user-pass"
+
+
+@pytest.mark.parametrize("network", ["tcp", "udp", "hysteria", ""])
+def test_the_inbound_network_never_leaks_into_a_hysteria2_config(network):
+    outbound = _render("hysteria2", network, {"password": "p"})[0]["outbounds"][0]
+    assert outbound["streamSettings"]["network"] == "hysteria"
+
+
+def test_the_host_remark_and_template_outbounds_survive():
+    doc = _render("hysteria2", "tcp", {"password": "p"}, remark="🇩🇪 Germany ⭐")[0]
     assert doc["remarks"] == "🇩🇪 Germany ⭐"
-    hy = [o for o in doc["outbounds"] if o.get("type") == "hysteria2"]
-    assert len(hy) == 1
-    assert hy[0]["server"] == "histe.example.com"
-    assert hy[0]["server_port"] == 445
-    assert hy[0]["password"] == "user-pass"
-    assert hy[0]["obfs"] == {"type": "salamander", "password": "obfs-secret"}
-    assert hy[0]["tls"]["server_name"] == "histe.example.com"
-    assert hy[0]["up_mbps"] == 50 and hy[0]["down_mbps"] == 100
-    assert hy[0]["tag"] == "🇩🇪 Germany ⭐"
+    assert doc["outbounds"][-1]["tag"] == "DIRECT"
 
 
-def test_the_embedded_document_is_a_complete_singbox_config_not_an_xray_one():
-    doc = _render(("hy", _hysteria2_inbound(), {"password": "p"}))[0]
-    assert "route" in doc and "log" in doc
-    assert all("protocol" not in o for o in doc["outbounds"])
-    selector = next(o for o in doc["outbounds"] if o.get("type") == "selector")
-    urltest = next(o for o in doc["outbounds"] if o.get("type") == "urltest")
-    assert "hy" in selector["outbounds"]
-    assert urltest["outbounds"] == ["hy"]
+def test_legacy_hysteria_hosts_are_unchanged():
+    outbound = _render("hysteria", "hysteria", {"auth": "legacy"})[0]["outbounds"][0]
+    assert outbound["streamSettings"]["hysteriaSettings"]["auth"] == "legacy"
 
 
-def test_xray_protocols_in_the_same_subscription_are_untouched():
-    docs = _render(
-        ("vl", _vless_inbound(), {"id": USER_ID}),
-        ("hy", _hysteria2_inbound(), {"password": "p"}),
-    )
-    assert [d["remarks"] for d in docs] == ["vl", "hy"]
-    vless_doc = docs[0]
-    assert vless_doc["outbounds"][0]["protocol"] == "vless"
-    assert vless_doc["outbounds"][-1]["tag"] == "DIRECT"
-    assert all("type" not in o for o in vless_doc["outbounds"])
-
-
-def test_missing_singbox_template_still_emits_the_hysteria2_document():
-    doc = _render(("hy", _hysteria2_inbound(), {"password": "p"}), singbox_template=None)[0]
-    assert doc["remarks"] == "hy"
-    assert any(o.get("type") == "hysteria2" for o in doc["outbounds"])
-
-
-def test_legacy_hysteria_still_renders_as_an_xray_outbound():
-    legacy = _hysteria2_inbound().model_copy(update={"protocol": "hysteria", "inbound_tag": "Hysteria"})
-    doc = _render(("h1", legacy, {"auth": "auth-pass"}))[0]
-    assert doc["outbounds"][0]["protocol"] == "hysteria"
-
-
-def test_default_xray_output_stays_schema_pure_and_drops_hysteria2():
-    docs = _render(("hy", _hysteria2_inbound(), {"password": "p"}), mixed=False)
-    assert docs == []
-    docs = _render(("vl", _vless_inbound(), {"id": USER_ID}), ("hy", _hysteria2_inbound(), {"password": "p"}), mixed=False)
-    assert [d["remarks"] for d in docs] == ["vl"]
-    assert all("protocol" in o for d in docs for o in d["outbounds"])
-
-
-def test_only_dual_core_clients_get_mixed_documents():
-    assert client_accepts_mixed_documents("V2Box/2.5.0 (iOS)")
-    assert client_accepts_mixed_documents("v2box")
-    assert client_accepts_mixed_documents("Happ/1.2.3")
-    assert client_accepts_mixed_documents("Streisand/1.6")
-    assert not client_accepts_mixed_documents("v2rayN/7.0")
-    assert not client_accepts_mixed_documents("v2rayNG/1.9")
-    assert not client_accepts_mixed_documents("curl/8.0")
-    assert not client_accepts_mixed_documents("")
-    assert not client_accepts_mixed_documents(None)
+def test_other_protocols_are_untouched():
+    outbound = _render("vless", "tcp", {"id": USER_ID})[0]["outbounds"][0]
+    assert outbound["protocol"] == "vless"
+    assert outbound["settings"]["vnext"][0]["users"][0]["id"] == USER_ID
