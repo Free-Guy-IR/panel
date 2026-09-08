@@ -1711,13 +1711,19 @@
       "dnsHint": "Leave empty to use system DNS"
     },
     "openvpn": {
-      "sectionNetworkOverrides": "Network settings",
-      "dns": "DNS servers",
+      "sectionNetworkOverrides": "Network Settings",
+      "dns": "DNS Servers",
       "dnsHint": "Overrides this host's DNS for OpenVPN clients. Leave empty to use the core's default DNS.",
       "priority": "Connection priority",
       "priorityHint": "Lower numbers are tried first when the client fails over between OpenVPN hosts in the downloaded file."
     },
-    "fragmentNoiseDeprecated": "`noise` and `fragment` are being removed in newer versions — use `finalMask` instead."
+    "fragmentNoiseDeprecated": "`noise` and `fragment` are being removed in newer versions — use `finalMask` instead.",
+    "mtproto": {
+      "noExtraSettings": "MTProto hosts need no additional settings here — the fake-TLS domain and secrets are configured on the core instance and per user."
+    },
+    "l2tp": {
+      "noExtraSettings": "L2TP/IPsec hosts need no additional settings here — the pre-shared key and IPsec parameters are configured on the core instance, and credentials are per user."
+    }
   },
   "inbound": "Inbound",
   "inbounds": "Inbounds",

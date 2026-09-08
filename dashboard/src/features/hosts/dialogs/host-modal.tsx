@@ -307,7 +307,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const [wireguardOpenSection, setWireguardOpenSection] = useState<string | undefined>(undefined)
   const [openvpnOpenSection, setOpenvpnOpenSection] = useState<string | undefined>(undefined)
   const [isTransportOpen, setIsTransportOpen] = useState(false)
-  const [resolvedHostMode, setResolvedHostMode] = useState<'xray' | 'wireguard' | 'openvpn' | 'mtproto'>('xray')
+  const [resolvedHostMode, setResolvedHostMode] = useState<'xray' | 'wireguard' | 'openvpn' | 'mtproto' | 'l2tp'>('xray')
   const { t } = useTranslation()
   const dir = useDirDetection()
   const isMobile = useIsMobile()
@@ -698,11 +698,13 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   const isWireGuardInbound = selectedInbound?.protocol === 'wireguard'
   const isOpenVPNInbound = selectedInbound?.protocol === 'openvpn'
   const isMTProtoInbound = selectedInbound?.protocol === 'mtproto'
+  const isL2TPInbound = selectedInbound?.protocol === 'l2tp'
   const isHysteria2Inbound = selectedInbound?.protocol === 'hysteria2'
   const isInboundModeResolved = !isDialogOpen || !selectedInboundTag || !!selectedInbound || !isLoadingInbounds
   const shouldRenderWireGuardLayout = resolvedHostMode === 'wireguard'
   const shouldRenderOpenVPNLayout = resolvedHostMode === 'openvpn'
   const shouldRenderMTProtoLayout = resolvedHostMode === 'mtproto'
+  const shouldRenderL2TPLayout = resolvedHostMode === 'l2tp'
 
   // Update the hosts query to refetch only when needed (not on dialog open)
   const { data: hosts = [], isLoading: isLoadingHosts } = useQuery({
@@ -752,7 +754,9 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
             ? 'openvpn'
             : selectedInbound.protocol === 'mtproto'
               ? 'mtproto'
-              : 'xray',
+              : selectedInbound.protocol === 'l2tp'
+                ? 'l2tp'
+                : 'xray',
       )
       return
     }
@@ -773,7 +777,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     } else if (resolvedHostMode === 'openvpn') {
       setOpenSection(undefined)
       setWireguardOpenSection(undefined)
-    } else if (resolvedHostMode === 'mtproto') {
+    } else if (resolvedHostMode === 'mtproto' || resolvedHostMode === 'l2tp') {
       setOpenSection(undefined)
       setWireguardOpenSection(undefined)
       setOpenvpnOpenSection(undefined)
@@ -881,7 +885,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   }, [form, isOpenVPNInbound, selectedInboundTag, editingHost])
 
   useEffect(() => {
-    if (!isMTProtoInbound) {
+    if (!isMTProtoInbound && !isL2TPInbound) {
       return
     }
 
@@ -909,7 +913,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     form.setValue('noise_settings', undefined, { shouldDirty: true })
     form.setValue('mux_settings', undefined, { shouldDirty: true })
     form.setValue('transport_settings', undefined, { shouldDirty: true })
-  }, [form, isMTProtoInbound, selectedInboundTag, editingHost])
+  }, [form, isMTProtoInbound, isL2TPInbound, selectedInboundTag, editingHost])
 
   const handleOpenvpnAccordionChange = (value: string) => {
     setOpenvpnOpenSection(value || undefined)
@@ -1490,7 +1494,6 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-                  {renderCamouflageSection()}
                 </Accordion>
               ) : shouldRenderMTProtoLayout ? (
                 <div className="mb-6 flex items-start gap-2 rounded-sm border px-4 py-4">
@@ -1498,6 +1501,15 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                   <p className="text-muted-foreground text-sm">
                     {t('hostsDialog.mtproto.noExtraSettings', {
                       defaultValue: 'MTProto hosts need no additional settings here — the fake-TLS domain and secrets are configured on the core instance and per user.',
+                    })}
+                  </p>
+                </div>
+              ) : shouldRenderL2TPLayout ? (
+                <div className="mb-6 flex items-start gap-2 rounded-sm border px-4 py-4">
+                  <Info className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-muted-foreground text-sm">
+                    {t('hostsDialog.l2tp.noExtraSettings', {
+                      defaultValue: 'L2TP/IPsec hosts need no additional settings here — the pre-shared key and IPsec parameters are configured on the core instance, and credentials are per user.',
                     })}
                   </p>
                 </div>
