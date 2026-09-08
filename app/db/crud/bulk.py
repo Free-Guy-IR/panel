@@ -293,32 +293,33 @@ async def count_bulk_group_scope(db: AsyncSession, bulk_model: BulkGroup) -> int
 
 def _create_final_filter(bulk_model: BulkUserFilter):
     """Create a comprehensive SQLAlchemy filter condition from a bulk model."""
-    other_conditions = []
+    restrictions = []
     if bulk_model.status:
-        other_conditions.append(User.status.in_([i.value for i in bulk_model.status]))
+        restrictions.append(User.status.in_([i.value for i in bulk_model.status]))
     if bulk_model.expire_after:
-        other_conditions.append(User.expire >= bulk_model.expire_after)
+        restrictions.append(User.expire >= bulk_model.expire_after)
     if bulk_model.expire_before:
-        other_conditions.append(User.expire <= bulk_model.expire_before)
+        restrictions.append(User.expire <= bulk_model.expire_before)
+
+    membership = []
     if bulk_model.admins:
-        other_conditions.append(User.admin_id.in_([i for i in bulk_model.admins]))
+        membership.append(User.admin_id.in_([i for i in bulk_model.admins]))
     if bulk_model.group_ids:
-        other_conditions.append(User.groups.any(Group.id.in_(bulk_model.group_ids)))
+        membership.append(User.groups.any(Group.id.in_(bulk_model.group_ids)))
 
-    user_ids = bulk_model.users or []
+    targets = []
+    if membership:
+        targets.append(and_(*membership))
+    if bulk_model.users:
+        targets.append(User.id.in_(bulk_model.users))
 
-    filter_conditions = []
-    if user_ids:
-        filter_conditions.append(User.id.in_(user_ids))
-    if other_conditions:
-        filter_conditions.append(and_(*other_conditions))
+    conditions = list(restrictions)
+    if targets:
+        conditions.append(or_(*targets))
 
-    if len(filter_conditions) > 1:
-        return or_(*filter_conditions)
-    elif filter_conditions:
-        return filter_conditions[0]
-    else:
+    if not conditions:
         return True
+    return and_(*conditions)
 
 
 async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> tuple[list[User], int] | tuple[list, int]:
