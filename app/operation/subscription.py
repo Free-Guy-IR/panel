@@ -81,9 +81,9 @@ client_config = {
     },
     ConfigFormat.openvpn: {
         "config_format": "openvpn",
-        "media_type": "application/x-openvpn-profile",
+        "media_type": "application/zip",
         "as_base64": False,
-        "extension": ".ovpn",
+        "extension": ".zip",
     },
     ConfigFormat.l2tp: {
         "config_format": "l2tp",
@@ -299,6 +299,20 @@ class SubscriptionOperation(BaseOperation):
         # Only include headers that have values
         return {k: v for k, v in headers.items() if v}
 
+    @staticmethod
+    async def build_openvpn_files(user: UsersResponseWithInbounds) -> list[dict]:
+        """Per-protocol .ovpn files for the subscription page's download buttons."""
+        from app.subscription.share import generate_openvpn_files
+
+        files = await generate_openvpn_files(user)
+        out = []
+        for filename, content in files.items():
+            protocol = filename.rsplit("-", 1)[-1].removesuffix(".ovpn").upper()
+            remotes = [line.split()[1] for line in content.splitlines() if line.startswith("remote ")]
+            out.append({"filename": filename, "protocol": protocol, "content": content, "remotes": remotes})
+        out.sort(key=lambda f: f["protocol"])
+        return out
+
     async def fetch_config(self, user: UsersResponseWithInbounds, client_type: ConfigFormat) -> tuple[str | bytes, str]:
         # Get client configuration
         config = client_config.get(client_type, {})
@@ -456,6 +470,7 @@ class SubscriptionOperation(BaseOperation):
             is_allow_browser_config = sub_settings.allow_browser_config and not configs_hidden_by_hwid
             links = []
             has_openvpn = False
+            openvpn_configs = []
             l2tp_details = []
             if is_allow_browser_config:
                 conf, media_type = await self.fetch_config(
@@ -463,8 +478,8 @@ class SubscriptionOperation(BaseOperation):
                     ConfigFormat.links,
                 )
                 links = conf.splitlines()
-                ovpn_conf, _ = await self.fetch_config(user, ConfigFormat.openvpn)
-                has_openvpn = bool(ovpn_conf)
+                openvpn_configs = await self.build_openvpn_files(user)
+                has_openvpn = bool(openvpn_configs)
                 l2tp_conf, _ = await self.fetch_config(user, ConfigFormat.l2tp)
                 l2tp_details = json.loads(l2tp_conf) if l2tp_conf else []
 
@@ -482,6 +497,7 @@ class SubscriptionOperation(BaseOperation):
                         format_variables,
                         is_hwid_enabled,
                         has_openvpn=has_openvpn,
+                        openvpn_configs=openvpn_configs,
                         l2tp_details=l2tp_details,
                         configs_hidden_by_hwid=configs_hidden_by_hwid,
                     ),
@@ -616,6 +632,7 @@ class SubscriptionOperation(BaseOperation):
         format_variables: dict,
         is_hwid_enabled: bool,
         has_openvpn: bool = False,
+        openvpn_configs: list | None = None,
         l2tp_details: list[dict[str, Any]] | None = None,
         configs_hidden_by_hwid: bool = False,
     ) -> dict[str, Any]:
@@ -625,6 +642,7 @@ class SubscriptionOperation(BaseOperation):
             "announce": formatted_announce,
             "announce_url": sub_settings.announce_url,
             "has_openvpn": has_openvpn,
+            "openvpn_configs": openvpn_configs or [],
             "l2tp_details": l2tp_details or [],
             "configs_hidden_by_hwid": configs_hidden_by_hwid,
             "apps": self._make_apps_import_urls(

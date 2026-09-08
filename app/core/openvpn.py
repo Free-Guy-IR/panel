@@ -274,6 +274,14 @@ class OpenVPNConfig(dict):
                     "redirect_gateway": bool(instance.get("redirect_gateway", True)),
                     "ca_cert": pki.get("ca_cert", ""),
                     "tls_crypt_key": pki.get("tls_crypt_key", ""),
+                    # A relayed path carries the tunnel inside another
+                    # encapsulation, so full-size datagrams no longer fit and
+                    # are dropped - the tunnel connects and then nothing
+                    # loads. Both ends must agree on these, so whatever the
+                    # server runs with is handed to the client file too.
+                    "tun_mtu": instance.get("tun_mtu") or 0,
+                    "fragment": instance.get("fragment") or 0,
+                    "mssfix": instance.get("mssfix") or 0,
                 }
             },
         }

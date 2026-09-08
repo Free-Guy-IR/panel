@@ -297,6 +297,9 @@ class BaseSubscription:
             "address": address,
             "port": inbound.port,
             "protocol": inbound.network,  # udp/tcp, set as the L4 transport by OpenVPNConfig
+            "tun_mtu": int(ovpn_data.get("tun_mtu") or 0),
+            "fragment": int(ovpn_data.get("fragment") or 0),
+            "mssfix": int(ovpn_data.get("mssfix") or 0),
             "username": username,
             "password": password,
             "cipher": ovpn_data.get("cipher", "AES-256-GCM"),
