@@ -117,6 +117,30 @@ async def generate_subscription(
     return config
 
 
+async def generate_openvpn_files(user: UsersResponseWithInbounds) -> dict[str, str]:
+    """The same pipeline generate_subscription runs, stopped one step earlier.
+
+    The sub page needs the individual .ovpn files (one per protocol) so it can
+    offer a download button for each; the /openvpn route still gets the zip
+    that render() builds from exactly these files.
+    """
+    client_templates = await subscription_client_templates()
+    conf = OpenVPNConfiguration()
+    sub_settings = await subscription_settings()
+    custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
+    format_variables = setup_format_variables(user, sub_settings.custom_variables)
+
+    await process_inbounds_and_tags(
+        user,
+        format_variables,
+        conf,
+        client_templates,
+        randomize_order=sub_settings.randomize_order,
+        custom_variables=custom_variables,
+    )
+    return conf._files()
+
+
 def format_time_left(seconds_left: int) -> str:
     if not seconds_left or seconds_left <= 0:
         return "∞"

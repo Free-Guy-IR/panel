@@ -1,3 +1,6 @@
+import io
+import zipfile
+
 from app.models.subscription import SubscriptionInboundData
 
 from .base import BaseSubscription
@@ -49,34 +52,62 @@ class OpenVPNConfiguration(BaseSubscription):
             return
         self.components.append(component)
 
-    def render(self) -> bytes:
-        if not self.components:
-            return b""
+    def _files(self) -> dict[str, str]:
+        """One .ovpn per L4 protocol, each carrying every remote that speaks it.
 
-        primary = self.components[0]
-        primary_pki = (primary["ca_cert"], primary["tls_crypt_key"])
+        A user's OpenVPN access typically spans a direct instance and a
+        tunnelled one that reaches the same server through a relay. Both are
+        the same protocol, so they belong in ONE file as two <connection>
+        blocks - the client tries them in order and fails over on its own.
+        Splitting per protocol instead of per instance is what makes "one TCP
+        config, one UDP config" possible while still offering both routes.
+        """
+        if not self.components:
+            return {}
+
+        primary_pki = (self.components[0]["ca_cert"], self.components[0]["tls_crypt_key"])
         matching = [c for c in self.components if (c["ca_cert"], c["tls_crypt_key"]) == primary_pki]
 
-        connection_blocks = []
+        by_protocol: dict[str, list[dict]] = {}
         for component in matching:
-            connection_blocks.append(
-                "\n".join(
-                    [
-                        "<connection>",
-                        f"remote {component['address']} {component['port']} {component['protocol']}",
-                        "</connection>",
-                    ]
-                )
-            )
+            by_protocol.setdefault(str(component["protocol"]).lower(), []).append(component)
 
-        # Client-side dhcp-option DNS lines - independent of whatever the
-        # server itself pushes at connect time, so a client that keeps its
-        # own pulled options (or an admin who wants a specific host to
-        # resolve differently) still gets the right DNS. Sourced from the
-        # primary (highest-priority) host's resolved dns_servers - already
-        # host-override-or-core-default via _build_openvpn_components.
+        files = {}
+        for protocol, group in by_protocol.items():
+            files[f"openvpn-{protocol}.ovpn"] = self._render_one(group)
+        return files
+
+    def _render_one(self, components: list[dict]) -> str:
+        primary = components[0]
+        connection_blocks = [
+            "\n".join(
+                [
+                    "<connection>",
+                    f"remote {c['address']} {c['port']} {c['protocol']}",
+                    "</connection>",
+                ]
+            )
+            for c in components
+        ]
         dns_lines = [f"dhcp-option DNS {dns}" for dns in primary.get("dns_servers") or []]
 
+        # tun-mtu, fragment and mssfix are a contract between the two ends: a
+        # server running them against a client that is not will drop or refuse
+        # traffic outright. They are file-level directives, so the smallest
+        # value among this file's remotes wins - the file has to survive its
+        # most constrained path. fragment is UDP-only; OpenVPN rejects it on a
+        # TCP config, so it is emitted only when every remote here is UDP.
+        tuning = []
+        mtus = [c.get("tun_mtu") or 0 for c in components if (c.get("tun_mtu") or 0) > 0]
+        if mtus:
+            tuning.append(f"tun-mtu {min(mtus)}")
+        mss = [c.get("mssfix") or 0 for c in components if (c.get("mssfix") or 0) > 0]
+        if mss:
+            tuning.append(f"mssfix {min(mss)}")
+        if all(str(c.get("protocol", "")).lower() == "udp" for c in components):
+            frags = [c.get("fragment") or 0 for c in components if (c.get("fragment") or 0) > 0]
+            if frags:
+                tuning.append(f"fragment {min(frags)}")
         lines = [
             "client",
             "dev tun",
@@ -84,6 +115,7 @@ class OpenVPNConfiguration(BaseSubscription):
             "remote-cert-tls server",
             f"cipher {primary['cipher']}",
             f"auth {primary['auth']}",
+            *tuning,
             *dns_lines,
             "verb 3",
             "",
@@ -97,19 +129,21 @@ class OpenVPNConfiguration(BaseSubscription):
             primary["tls_crypt_key"].strip(),
             "</tls-crypt>",
             "",
-            # <auth-user-pass> inline is rejected by the classic openvpn2 CLI
-            # ("option 'auth-user-pass' is not expected to be inline"), but
-            # openvpn3 - the core used by OpenVPN Connect, the client almost
-            # every real user (especially on mobile) actually imports this
-            # file into - does support it and connects with zero prompts,
-            # verified with a live `openvpn3 session-start` against this
-            # exact renderer's output. openvpn2-CLI users are a small
-            # minority for this deployment, so this optimizes for the
-            # zero-touch import experience over openvpn2-CLI compatibility.
             "<auth-user-pass>",
             primary["username"],
             primary["password"],
             "</auth-user-pass>",
         ]
+        return "\n".join(lines) + "\n"
 
-        return ("\n".join(lines) + "\n").encode()
+    def render(self) -> bytes:
+        files = self._files()
+        if not files:
+            return b""
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, content in files.items():
+                zip_file.writestr(filename, content)
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue()
