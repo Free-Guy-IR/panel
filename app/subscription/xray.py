@@ -16,6 +16,7 @@ from app.models.subscription import (
 )
 
 from . import BaseSubscription
+from .singbox import SingBoxConfiguration
 
 
 class XrayConfiguration(BaseSubscription):
@@ -24,6 +25,7 @@ class XrayConfiguration(BaseSubscription):
         xray_template_content: str | None = None,
         user_agent_template_content: str | None = None,
         grpc_user_agent_template_content: str | None = None,
+        singbox_template_content: str | None = None,
     ):
         super().__init__(
             user_agent_template_content=user_agent_template_content,
@@ -31,6 +33,9 @@ class XrayConfiguration(BaseSubscription):
         )
         self.config = []
         self.template = json.loads(xray_template_content) if xray_template_content else {}
+        self.singbox_template_content = singbox_template_content
+        self._user_agent_template_content = user_agent_template_content
+        self._grpc_user_agent_template_content = grpc_user_agent_template_content
 
         # Registry for transport handlers
         self.transport_handlers = {
@@ -75,6 +80,12 @@ class XrayConfiguration(BaseSubscription):
         template_content: str | None = None,
     ):
         """Add outbound using registry pattern"""
+
+        if inbound.protocol == "hysteria2":
+            document = self._build_hysteria2_document(remark, address, inbound, settings)
+            if document:
+                self.config.append(document)
+            return
 
         # Get protocol handler from registry
         handler = self.protocol_handlers.get(inbound.protocol)
@@ -489,6 +500,21 @@ class XrayConfiguration(BaseSubscription):
             )
 
         return self._normalize_and_remove_none_values(outbound), extra_outbounds
+
+    def _build_hysteria2_document(
+        self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
+    ) -> dict | None:
+        inner = SingBoxConfiguration(
+            singbox_template_content=self.singbox_template_content,
+            user_agent_template_content=self._user_agent_template_content,
+            grpc_user_agent_template_content=self._grpc_user_agent_template_content,
+        )
+        inner.add(remark=remark, address=address, inbound=inbound, settings=settings)
+        document = json.loads(inner.render())
+        if not any(o.get("type") == "hysteria2" for o in document.get("outbounds", [])):
+            return None
+        document["remarks"] = remark
+        return document
 
     def _build_hysteria(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
         """Build Hysteria outbound - returns (main_outbound, extra_outbounds_list)"""
