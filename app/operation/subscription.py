@@ -452,9 +452,8 @@ class SubscriptionOperation(BaseOperation):
                 else template_settings.subscription_page_template
             )
             global_hwid_conf: HWIDSettings = await hwid_settings()
-            is_allow_browser_config = sub_settings.allow_browser_config and (
-                not is_hwid_enabled or not global_hwid_conf.require_hwid_for_manual_sub
-            )
+            configs_hidden_by_hwid = is_hwid_enabled and global_hwid_conf.require_hwid_for_manual_sub
+            is_allow_browser_config = sub_settings.allow_browser_config and not configs_hidden_by_hwid
             links = []
             has_openvpn = False
             l2tp_details = []
@@ -484,6 +483,7 @@ class SubscriptionOperation(BaseOperation):
                         is_hwid_enabled,
                         has_openvpn=has_openvpn,
                         l2tp_details=l2tp_details,
+                        configs_hidden_by_hwid=configs_hidden_by_hwid,
                     ),
                 )
             )
@@ -617,6 +617,7 @@ class SubscriptionOperation(BaseOperation):
         is_hwid_enabled: bool,
         has_openvpn: bool = False,
         l2tp_details: list[dict[str, Any]] | None = None,
+        configs_hidden_by_hwid: bool = False,
     ) -> dict[str, Any]:
         return {
             "user": SubscriptionUserResponse.model_validate(user),
@@ -625,6 +626,7 @@ class SubscriptionOperation(BaseOperation):
             "announce_url": sub_settings.announce_url,
             "has_openvpn": has_openvpn,
             "l2tp_details": l2tp_details or [],
+            "configs_hidden_by_hwid": configs_hidden_by_hwid,
             "apps": self._make_apps_import_urls(
                 sub_settings.applications,
                 format_variables,
