@@ -80,6 +80,7 @@ def _build_subscription_config(
     if config_format == "xray":
         return XrayConfiguration(
             xray_template_content=client_templates["XRAY_SUBSCRIPTION_TEMPLATE"],
+            singbox_template_content=client_templates.get("SINGBOX_SUBSCRIPTION_TEMPLATE"),
             **common_kwargs,
         )
     return None
