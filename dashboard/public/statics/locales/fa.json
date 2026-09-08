@@ -3278,6 +3278,15 @@
     },
     "minRowsBlocked": "این کار باعث حذف تعداد زیادی مورد می‌شود.",
     "singbox": {
+      "advanced": {
+        "brutalDebug": "لاگ اشکال‌زدایی Brutal",
+        "portHopping": "بازهٔ پرش پورت",
+        "title": "پیشرفته",
+        "udpFragment": "قطعه‌قطعه‌سازی UDP"
+      },
+      "bandwidth": {
+        "title": "پهنای باند"
+      },
       "emptyInbounds": "هنوز اینباندی وجود ندارد. برای ساخت یک شنونده‌ی Hysteria2 روی «افزودن اینباند» کلیک کنید.",
       "fields": {
         "downMbps": "سرعت دانلود (mbps)",
@@ -3286,24 +3295,88 @@
         "listen": "آدرس شنود",
         "listenPort": "پورت شنود",
         "masquerade": "آدرس Masquerade",
+        "protocol": "پروتکل",
         "tag": "برچسب (Tag)",
+        "udpTimeout": "زمان انتظار UDP",
         "upMbps": "سرعت آپلود (mbps)"
       },
       "hasErrors": "نیاز به بررسی دارد",
       "inboundsHint": "هر اینباند یک شنونده‌ی مجزای Hysteria2 روی این هسته‌ی sing-box است.",
+      "masquerade": {
+        "content": "بدنهٔ پاسخ",
+        "directory": "مسیر پوشه",
+        "file": "فایل‌های ایستا",
+        "headers": "هدرها (JSON)",
+        "proxy": "پروکسی معکوس",
+        "rewriteHost": "بازنویسی هدر Host",
+        "simple": "آدرس (ساده)",
+        "statusCode": "کد وضعیت",
+        "string": "پاسخ ثابت",
+        "title": "استتار (Masquerade)",
+        "type": "نوع",
+        "url": "آدرس"
+      },
       "obfs": {
         "enable": "مبهم‌سازی Salamander",
+        "enableHint": "دست‌دهی QUIC را داخل مبهم‌ساز Salamander می‌پیچد. همهٔ کلاینت‌ها باید از همین رمز عبور استفاده کنند.",
         "generate": "تولید رمز عبور",
         "password": "رمز عبور مبهم‌سازی",
         "title": "مبهم‌سازی (Obfuscation)"
       },
+      "ss": {
+        "legacyHint": "رمز عبور تک‌کاربره و قدیمی. برای حالت چندکاربره روش 2022-blake3 را ترجیح دهید.",
+        "method": "روش رمزنگاری",
+        "password": "رمز عبور",
+        "serverKey": "کلید سرور (base64)",
+        "serverKeyHint": "کلید سرور base64 برای رمزنگاری 2022. رمز عبور هر کاربر به‌صورت خودکار تزریق می‌شود.",
+        "title": "Shadowsocks"
+      },
       "tls": {
+        "acme": "ACME (گواهی خودکار)",
+        "acmeAliKeyId": "شناسهٔ کلید دسترسی",
+        "acmeAliKeySecret": "کلید مخفی دسترسی",
+        "acmeCfToken": "توکن API کلودفلر",
+        "acmeDns01": "ارائه‌دهندهٔ DNS-01",
+        "acmeDns01None": "هیچ‌کدام (چالش HTTP)",
+        "acmeDomain": "دامنه‌ها",
+        "acmeEmail": "ایمیل",
+        "acmeOwnsCert": "ACME در بخش پایین فعال است و گواهی را به‌صورت خودکار مدیریت می‌کند. فیلدهای دستی گواهی غیرفعال هستند.",
+        "acmeProvider": "ارائه‌دهندهٔ گواهی (CA)",
         "alpn": "ALPN",
         "alpnPlaceholder": "h3",
         "alwaysEnabledHint": "Hysteria2 همیشه به TLS نیاز دارد؛ برای این اینباند نمی‌توان آن را غیرفعال کرد.",
         "certificate": "گواهی (Certificate)",
+        "cipherSuites": "مجموعه رمزها (Cipher suites)",
+        "ech": "Encrypted Client Hello (ECH)",
+        "echDrs": "غیرفعال‌سازی تغییر اندازهٔ پویای رکورد",
+        "echKey": "کلید ECH",
+        "echPq": "طرح‌های امضای پساکوانتومی",
+        "enable": "فعال‌سازی TLS",
+        "maxVersion": "حداکثر نسخه",
+        "minVersion": "حداقل نسخه",
+        "reality": "REALITY",
+        "realityHandshakePort": "پورت دست‌دهی",
+        "realityHandshakeServer": "سرور دست‌دهی",
+        "realityMaxTimeDiff": "حداکثر اختلاف زمانی",
+        "realityPrivateKey": "کلید خصوصی",
+        "realityShortId": "شناسه‌های کوتاه",
+        "requiredHint": "این پروتکل همیشه به TLS نیاز دارد؛ برای این اینباند نمی‌توان آن را غیرفعال کرد.",
         "serverName": "نام سرور (SNI)",
-        "title": "TLS"
+        "title": "TLS",
+        "utls": "اثر انگشت uTLS",
+        "versionDefault": "پیش‌فرض"
+      },
+      "transport": {
+        "host": "هاست",
+        "method": "متد",
+        "path": "مسیر",
+        "serviceName": "نام سرویس",
+        "title": "ترنسپورت",
+        "type": "نوع"
+      },
+      "tuic": {
+        "congestion": "کنترل ازدحام",
+        "title": "TUIC"
       },
       "untitledInbound": "اینباند بدون عنوان"
     },
