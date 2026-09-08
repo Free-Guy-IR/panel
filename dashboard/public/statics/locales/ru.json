@@ -3216,6 +3216,15 @@
     },
     "minRowsBlocked": "Это удалит слишком много записей.",
     "singbox": {
+      "advanced": {
+        "brutalDebug": "Отладочные логи Brutal",
+        "portHopping": "Диапазон переключения портов",
+        "title": "Дополнительно",
+        "udpFragment": "Фрагментация UDP"
+      },
+      "bandwidth": {
+        "title": "Пропускная способность"
+      },
       "emptyInbounds": "Входящих соединений пока нет. Нажмите «Добавить входящее соединение», чтобы создать слушатель Hysteria2.",
       "fields": {
         "downMbps": "Скорость загрузки (Мбит/с)",
@@ -3224,24 +3233,88 @@
         "listen": "Адрес прослушивания",
         "listenPort": "Порт прослушивания",
         "masquerade": "URL маскировки",
+        "protocol": "Протокол",
         "tag": "Тег",
+        "udpTimeout": "Тайм-аут UDP",
         "upMbps": "Скорость отдачи (Мбит/с)"
       },
       "hasErrors": "Требует внимания",
       "inboundsHint": "Каждое входящее соединение — это отдельный слушатель Hysteria2 на этом ядре sing-box.",
+      "masquerade": {
+        "content": "Тело ответа",
+        "directory": "Каталог",
+        "file": "Статические файлы",
+        "headers": "Заголовки (JSON)",
+        "proxy": "Обратный прокси",
+        "rewriteHost": "Переписывать заголовок Host",
+        "simple": "URL (простой)",
+        "statusCode": "Код состояния",
+        "string": "Фиксированный ответ",
+        "title": "Маскировка",
+        "type": "Тип",
+        "url": "URL"
+      },
       "obfs": {
         "enable": "Обфускация Salamander",
+        "enableHint": "Оборачивает QUIC-рукопожатие в обфускатор Salamander. Все клиенты должны использовать тот же пароль.",
         "generate": "Сгенерировать пароль",
         "password": "Пароль обфускации",
         "title": "Обфускация"
       },
+      "ss": {
+        "legacyHint": "Устаревший однопользовательский пароль. Для многопользовательского режима выбирайте 2022-blake3.",
+        "method": "Метод шифрования",
+        "password": "Пароль",
+        "serverKey": "Ключ сервера (base64)",
+        "serverKeyHint": "Ключ сервера в base64 для шифра 2022. Пароли пользователей подставляются автоматически.",
+        "title": "Shadowsocks"
+      },
       "tls": {
+        "acme": "ACME (автоматический сертификат)",
+        "acmeAliKeyId": "Идентификатор ключа доступа",
+        "acmeAliKeySecret": "Секрет ключа доступа",
+        "acmeCfToken": "API-токен Cloudflare",
+        "acmeDns01": "Провайдер DNS-01",
+        "acmeDns01None": "Нет (HTTP-проверка)",
+        "acmeDomain": "Домены",
+        "acmeEmail": "Эл. почта",
+        "acmeOwnsCert": "ACME включён ниже и управляет сертификатом автоматически. Поля ручного сертификата отключены.",
+        "acmeProvider": "Поставщик CA",
         "alpn": "ALPN",
         "alpnPlaceholder": "h3",
         "alwaysEnabledHint": "Hysteria2 всегда требует TLS; для этого входящего соединения его нельзя отключить.",
         "certificate": "Сертификат",
+        "cipherSuites": "Наборы шифров",
+        "ech": "Encrypted Client Hello (ECH)",
+        "echDrs": "Отключить динамический размер записи",
+        "echKey": "Ключ ECH",
+        "echPq": "Постквантовые схемы подписи",
+        "enable": "Включить TLS",
+        "maxVersion": "Макс. версия",
+        "minVersion": "Мин. версия",
+        "reality": "REALITY",
+        "realityHandshakePort": "Порт рукопожатия",
+        "realityHandshakeServer": "Сервер рукопожатия",
+        "realityMaxTimeDiff": "Макс. разница во времени",
+        "realityPrivateKey": "Приватный ключ",
+        "realityShortId": "Короткие ID",
+        "requiredHint": "Этот протокол всегда требует TLS; для этого входящего соединения его нельзя отключить.",
         "serverName": "Имя сервера (SNI)",
-        "title": "TLS"
+        "title": "TLS",
+        "utls": "Отпечаток uTLS",
+        "versionDefault": "По умолчанию"
+      },
+      "transport": {
+        "host": "Хост",
+        "method": "Метод",
+        "path": "Путь",
+        "serviceName": "Имя сервиса",
+        "title": "Транспорт",
+        "type": "Тип"
+      },
+      "tuic": {
+        "congestion": "Управление перегрузкой",
+        "title": "TUIC"
       },
       "untitledInbound": "Безымянное входящее соединение"
     },

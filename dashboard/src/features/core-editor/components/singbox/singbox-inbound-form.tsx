@@ -8,7 +8,6 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import type {
   HysteriaInboundDraft,
@@ -23,7 +22,9 @@ import type {
   TransportDraftFields,
   TuicInboundDraft,
 } from '@pasarguard/singbox-config-kit'
-import { RefreshCcw } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { Cable, Dices, Gauge, KeyRound, Settings2, Shield, Shuffle, VenetianMask } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface SingBoxInboundFormProps {
@@ -41,6 +42,17 @@ const TRANSPORT_TCP = '__tcp'
 const CC_DEFAULT = '__default'
 const TLS_VERSIONS = ['1.0', '1.1', '1.2', '1.3']
 
+const BASE_LABEL_CLASS = 'text-sm font-medium'
+const SUB_LABEL_CLASS = 'text-muted-foreground text-xs font-semibold tracking-wide'
+const CONTROL_CLASS = 'h-10'
+const SELECT_TRIGGER_CLASS = 'h-10 w-full min-w-0 py-2'
+const LIST_CONTROL_CLASS = 'min-h-10'
+const SWITCH_ROW_CLASS = 'flex min-h-10 flex-row items-center justify-between gap-3 space-y-0 rounded-md border px-3 py-2'
+const GROUP_BOX_CLASS = 'space-y-3 rounded-lg border px-3 py-3 sm:col-span-2'
+const NOTE_CLASS = 'text-muted-foreground rounded-md border border-dashed px-3 py-2 text-[11px] sm:col-span-2'
+const HINT_CLASS = 'text-muted-foreground text-[11px]'
+const ERROR_CLASS = 'text-destructive text-[0.8rem] font-medium'
+
 // Protocols this editor can create. hysteria2 keeps its dedicated full form; the rest share the
 // stream (transport + TLS/REALITY) sections below, matching the Xray inbound editor's layout.
 const PROTOCOLS: readonly SingBoxProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'tuic', 'hysteria2']
@@ -50,6 +62,14 @@ const TRANSPORTS: readonly SingBoxTransportType[] = ['', 'ws', 'grpc', 'http', '
 
 /** The stream protocols that carry a V2Ray transport + full TLS/REALITY block (like Xray vless/vmess/trojan). */
 type StreamDraft = Extract<SingBoxInboundDraft, { protocol: 'vless' | 'vmess' | 'trojan' }>
+
+type TlsIdentitySlice = Pick<TlsDraftFields, 'tlsServerName' | 'tlsAlpn'>
+type TlsVersionSlice = Pick<TlsDraftFields, 'tlsMinVersion' | 'tlsMaxVersion' | 'tlsCipherSuites'>
+type CertificateSlice = Pick<TlsDraftFields, 'certMode' | 'certificateFile' | 'keyFile' | 'certificate' | 'key'>
+type EchSlice = Pick<TlsDraftFields, 'echEnabled' | 'echKey' | 'echPqSignatureSchemesEnabled' | 'echDynamicRecordSizingDisabled'>
+type AcmeSlice = Pick<TlsDraftFields, 'acmeEnabled' | 'acmeDomain' | 'acmeEmail' | 'acmeProvider' | 'acmeDns01Provider' | 'acmeDns01ApiToken' | 'acmeDns01AccessKeyId' | 'acmeDns01AccessKeySecret'>
+
+type DraftChange = SingBoxInboundFormProps['onChange']
 
 function issueFor(issues: SingBoxValidationIssue[], suffix: string): string | undefined {
   return issues.find(i => i.path.endsWith(`/${suffix}`))?.message
@@ -65,13 +85,90 @@ function randomObfsPassword(): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
 
+function SectionTitle({ icon: Icon, title }: { icon: LucideIcon; title: string }) {
+  return (
+    <div className="mb-1 flex items-center gap-2 sm:col-span-2">
+      <Icon className="text-muted-foreground h-3.5 w-3.5 shrink-0" aria-hidden />
+      <h3 className="text-sm font-semibold">{title}</h3>
+    </div>
+  )
+}
+
 function SectionHeader({ title }: { title: string }) {
   return <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{title}</h4>
 }
 
+function SectionDivider() {
+  return <Separator className="my-2 sm:col-span-2" />
+}
+
+function Field({
+  label,
+  htmlFor,
+  error,
+  hint,
+  className,
+  labelClassName,
+  children,
+}: {
+  label: ReactNode
+  htmlFor?: string
+  error?: string
+  hint?: ReactNode
+  className?: string
+  labelClassName?: string
+  children: ReactNode
+}) {
+  return (
+    <div className={cn('w-full min-w-0 space-y-2', className)}>
+      <Label htmlFor={htmlFor} className={cn('block', labelClassName ?? SUB_LABEL_CLASS)}>
+        {label}
+      </Label>
+      {children}
+      {hint ? <p className={HINT_CLASS}>{hint}</p> : null}
+      {error ? <p className={ERROR_CLASS}>{error}</p> : null}
+    </div>
+  )
+}
+
+function SwitchField({
+  id,
+  label,
+  hint,
+  checked,
+  onCheckedChange,
+  className,
+}: {
+  id: string
+  label: ReactNode
+  hint?: ReactNode
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+  className?: string
+}) {
+  return (
+    <div className={cn(SWITCH_ROW_CLASS, className)}>
+      <div className="min-w-0 space-y-0.5">
+        <Label htmlFor={id} className="cursor-pointer text-sm font-medium">
+          {label}
+        </Label>
+        {hint ? <p className={HINT_CLASS}>{hint}</p> : null}
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={c => onCheckedChange(c === true)} />
+    </div>
+  )
+}
+
+function GenerateButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={onClick} title={title}>
+      <Dices className="text-muted-foreground h-4 w-4" />
+    </Button>
+  )
+}
+
 export function SingBoxInboundForm({ inbound, issues, onChange }: SingBoxInboundFormProps) {
   const { t } = useTranslation()
-  const dir = useDirDetection()
 
   const set = <K extends keyof SingBoxInboundDraft>(key: K, value: SingBoxInboundDraft[K]) => {
     onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
@@ -79,8 +176,7 @@ export function SingBoxInboundForm({ inbound, issues, onChange }: SingBoxInbound
 
   const tagError = issueFor(issues, 'tag')
   const portError = issueFor(issues, 'listenPort')
-
-  const flipRow = cn('flex items-center gap-2', dir === 'rtl' ? 'flex-row-reverse' : 'flex-row')
+  const uid = inbound.tag || inbound.protocol
 
   const changeProtocol = (protocol: SingBoxProtocol) => {
     if (protocol === inbound.protocol) return
@@ -90,70 +186,67 @@ export function SingBoxInboundForm({ inbound, issues, onChange }: SingBoxInbound
   }
 
   return (
-    <div className="space-y-5">
-      {/* ---------------------------- Protocol + Listen ---------------------------- */}
-      <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.protocol', { defaultValue: 'Protocol' })}</Label>
-          <Select value={inbound.protocol} onValueChange={v => changeProtocol(v as SingBoxProtocol)}>
-            <SelectTrigger className="text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROTOCOLS.map(p => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <div className="grid gap-4 pb-2 sm:grid-cols-2">
+      <Field label={t('coreEditor.singbox.fields.tag', { defaultValue: 'Tag' })} labelClassName={BASE_LABEL_CLASS} error={tagError}>
+        <Input value={inbound.tag} dir="ltr" className={CONTROL_CLASS} isError={!!tagError} onChange={e => set('tag', e.target.value)} placeholder={inbound.protocol} />
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.tag', { defaultValue: 'Tag' })}</Label>
-          <Input value={inbound.tag} dir="ltr" className="text-xs" isError={!!tagError} onChange={e => set('tag', e.target.value)} placeholder={inbound.protocol} />
-          {tagError && <p className="text-destructive text-[0.8rem] font-medium">{tagError}</p>}
-        </div>
+      <Field label={t('coreEditor.singbox.fields.protocol', { defaultValue: 'Protocol' })} labelClassName={BASE_LABEL_CLASS}>
+        <Select dir="ltr" value={inbound.protocol} onValueChange={v => changeProtocol(v as SingBoxProtocol)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            {PROTOCOLS.map(p => (
+              <SelectItem key={p} value={p}>
+                {p}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.listen', { defaultValue: 'Listen address' })}</Label>
-          <Input value={inbound.listen} dir="ltr" className="text-xs" onChange={e => set('listen', e.target.value)} placeholder="::" />
-        </div>
+      <Field label={t('coreEditor.singbox.fields.listen', { defaultValue: 'Listen address' })} labelClassName={BASE_LABEL_CLASS}>
+        <Input value={inbound.listen} dir="ltr" className={CONTROL_CLASS} onChange={e => set('listen', e.target.value)} placeholder="::" />
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.listenPort', { defaultValue: 'Listen port' })}</Label>
-          <div dir="ltr" className={flipRow}>
-            <div className="min-w-0 flex-1">
-              <Input type="text" inputMode="numeric" value={String(inbound.listenPort)} className="text-xs" isError={!!portError} onChange={e => set('listenPort', e.target.value)} placeholder="8443" />
-            </div>
-            <Button type="button" size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => set('listenPort', randomPort())} title={t('coreEditor.inbound.randomPort', { defaultValue: 'Generate random port' })}>
-              <RefreshCcw className="h-3 w-3" />
-            </Button>
-          </div>
-          {portError && <p className="text-destructive text-[0.8rem] font-medium">{portError}</p>}
+      <Field label={t('coreEditor.singbox.fields.listenPort', { defaultValue: 'Listen port' })} labelClassName={BASE_LABEL_CLASS} error={portError}>
+        <div className="relative">
+          <Input
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="h-10 pr-10"
+            isError={!!portError}
+            value={String(inbound.listenPort)}
+            onChange={e => set('listenPort', e.target.value)}
+            placeholder="8443"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute top-0 right-0 h-10 px-3 hover:bg-transparent"
+            onClick={() => set('listenPort', randomPort())}
+            title={t('coreEditor.inbound.randomPort', { defaultValue: 'Generate random port' })}
+          >
+            <Dices className="text-muted-foreground h-4 w-4" />
+          </Button>
         </div>
-      </div>
+      </Field>
 
       {inbound.protocol === 'hysteria2' ? (
-        <Hysteria2Sections inbound={inbound} issues={issues} onChange={onChange} flipRow={flipRow} />
+        <Hysteria2Sections inbound={inbound} issues={issues} onChange={onChange} uid={uid} />
       ) : (
         <>
-          {inbound.protocol === 'shadowsocks' && <ShadowsocksSection inbound={inbound} issues={issues} onChange={onChange} flipRow={flipRow} />}
+          {inbound.protocol === 'shadowsocks' && <ShadowsocksSection inbound={inbound} issues={issues} onChange={onChange} />}
 
-          {(inbound.protocol === 'vless' || inbound.protocol === 'vmess' || inbound.protocol === 'trojan') && (
-            <>
-              <Separator />
-              <TransportSection inbound={inbound as StreamDraft} onChange={onChange} />
-            </>
-          )}
+          {(inbound.protocol === 'vless' || inbound.protocol === 'vmess' || inbound.protocol === 'trojan') && <TransportSection inbound={inbound as StreamDraft} onChange={onChange} />}
 
           {inbound.protocol === 'tuic' && <TuicSection inbound={inbound} onChange={onChange} />}
 
           {inbound.protocol !== 'shadowsocks' && (
-            <>
-              <Separator />
-              <TlsSection inbound={inbound as SingBoxInboundDraft & TlsDraftFields} issues={issues} onChange={onChange} required={inbound.protocol === 'tuic'} />
-            </>
+            <TlsSection inbound={inbound as SingBoxInboundDraft & TlsDraftFields} issues={issues} onChange={onChange} required={inbound.protocol === 'tuic'} uid={uid} />
           )}
         </>
       )}
@@ -280,18 +373,250 @@ function hysteria2Default(base: { tag: string; listen: string; listenPort: numbe
   }
 }
 
-// ============================ Shadowsocks ============================
-function ShadowsocksSection({
-  inbound,
-  issues,
+function TlsIdentityFields({ fields, onChange, alpnPlaceholder }: { fields: TlsIdentitySlice; onChange: DraftChange; alpnPlaceholder: string }) {
+  const { t } = useTranslation()
+  const set = <K extends keyof TlsIdentitySlice>(key: K, value: TlsIdentitySlice[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
+  const alpnLabel = t('coreEditor.singbox.tls.alpn', { defaultValue: 'ALPN' })
+  return (
+    <>
+      <Field label={t('coreEditor.singbox.tls.serverName', { defaultValue: 'Server name (SNI)' })}>
+        <Input value={fields.tlsServerName} dir="ltr" className={CONTROL_CLASS} onChange={e => set('tlsServerName', e.target.value)} placeholder="example.com" />
+      </Field>
+      <Field label={alpnLabel}>
+        <StringArrayPopoverInput
+          className={LIST_CONTROL_CLASS}
+          value={[...fields.tlsAlpn]}
+          onChange={next => set('tlsAlpn', next)}
+          placeholder={alpnPlaceholder}
+          addPlaceholder={alpnPlaceholder}
+          itemsLabel={alpnLabel}
+        />
+      </Field>
+    </>
+  )
+}
+
+function TlsVersionFields({ fields, onChange }: { fields: TlsVersionSlice; onChange: DraftChange }) {
+  const { t } = useTranslation()
+  const set = <K extends keyof TlsVersionSlice>(key: K, value: TlsVersionSlice[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
+  const defaultLabel = t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })
+  const cipherLabel = t('coreEditor.singbox.tls.cipherSuites', { defaultValue: 'Cipher suites' })
+  return (
+    <>
+      <Field label={t('coreEditor.singbox.tls.minVersion', { defaultValue: 'Min version' })}>
+        <Select dir="ltr" value={fields.tlsMinVersion || TLS_VERSION_DEFAULT} onValueChange={v => set('tlsMinVersion', v === TLS_VERSION_DEFAULT ? '' : v)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            <SelectItem value={TLS_VERSION_DEFAULT}>{defaultLabel}</SelectItem>
+            {TLS_VERSIONS.map(v => (
+              <SelectItem key={v} value={v}>
+                {v}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t('coreEditor.singbox.tls.maxVersion', { defaultValue: 'Max version' })}>
+        <Select dir="ltr" value={fields.tlsMaxVersion || TLS_VERSION_DEFAULT} onValueChange={v => set('tlsMaxVersion', v === TLS_VERSION_DEFAULT ? '' : v)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            <SelectItem value={TLS_VERSION_DEFAULT}>{defaultLabel}</SelectItem>
+            {TLS_VERSIONS.map(v => (
+              <SelectItem key={v} value={v}>
+                {v}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field className="sm:col-span-2" label={cipherLabel}>
+        <StringArrayPopoverInput
+          className={LIST_CONTROL_CLASS}
+          value={[...fields.tlsCipherSuites]}
+          onChange={next => set('tlsCipherSuites', next)}
+          placeholder="TLS_AES_128_GCM_SHA256"
+          addPlaceholder="TLS_AES_128_GCM_SHA256"
+          itemsLabel={cipherLabel}
+        />
+      </Field>
+    </>
+  )
+}
+
+function CertificateFields({ fields, onChange }: { fields: CertificateSlice; onChange: DraftChange }) {
+  const { t } = useTranslation()
+  const set = <K extends keyof CertificateSlice>(key: K, value: CertificateSlice[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
+  return (
+    <div className={GROUP_BOX_CLASS}>
+      <SectionHeader title={t('coreEditor.singbox.tls.certificate', { defaultValue: 'Certificate' })} />
+      <Tabs value={fields.certMode} onValueChange={v => set('certMode', (v === 'content' ? 'content' : 'path') as SingBoxCertMode)}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="path">{t('coreEditor.inbound.tlsCertificates.filePathTab', { defaultValue: 'File path' })}</TabsTrigger>
+          <TabsTrigger value="content">{t('coreEditor.inbound.tlsCertificates.fileContentTab', { defaultValue: 'File content' })}</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {fields.certMode === 'path' ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t('coreEditor.inbound.tlsCertificates.certificateFile', { defaultValue: 'Certificate file' })}>
+            <Input dir="ltr" className={CONTROL_CLASS} placeholder="/path/fullchain.pem" value={fields.certificateFile} onChange={e => set('certificateFile', e.target.value)} />
+          </Field>
+          <Field label={t('coreEditor.inbound.tlsCertificates.keyFile', { defaultValue: 'Key file' })}>
+            <Input dir="ltr" className={CONTROL_CLASS} placeholder="/path/key.pem" value={fields.keyFile} onChange={e => set('keyFile', e.target.value)} />
+          </Field>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t('coreEditor.inbound.tlsCertificates.certificateContent', { defaultValue: 'Certificate content' })}>
+            <Textarea dir="ltr" rows={5} className="text-xs" placeholder="-----BEGIN CERTIFICATE-----" value={fields.certificate} onChange={e => set('certificate', e.target.value)} />
+          </Field>
+          <Field label={t('coreEditor.inbound.tlsCertificates.keyContent', { defaultValue: 'Key content' })}>
+            <Textarea dir="ltr" rows={5} className="text-xs" placeholder="-----BEGIN PRIVATE KEY-----" value={fields.key} onChange={e => set('key', e.target.value)} />
+          </Field>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EchFields({ fields, onChange, uid }: { fields: EchSlice; onChange: DraftChange; uid: string }) {
+  const { t } = useTranslation()
+  const set = <K extends keyof EchSlice>(key: K, value: EchSlice[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
+  return (
+    <div className={GROUP_BOX_CLASS}>
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader title={t('coreEditor.singbox.tls.ech', { defaultValue: 'Encrypted Client Hello (ECH)' })} />
+        <Switch id={`sb-ech-${uid}`} checked={fields.echEnabled} onCheckedChange={checked => set('echEnabled', checked === true)} />
+      </div>
+      {fields.echEnabled && (
+        <div className="space-y-3">
+          <Field label={t('coreEditor.singbox.tls.echKey', { defaultValue: 'ECH key' })}>
+            <Textarea dir="ltr" rows={3} className="text-xs" placeholder="-----BEGIN ECH KEYS-----" value={fields.echKey} onChange={e => set('echKey', e.target.value)} />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SwitchField
+              id={`sb-ech-pq-${uid}`}
+              label={t('coreEditor.singbox.tls.echPq', { defaultValue: 'Post-quantum signature schemes' })}
+              checked={fields.echPqSignatureSchemesEnabled}
+              onCheckedChange={checked => set('echPqSignatureSchemesEnabled', checked)}
+            />
+            <SwitchField
+              id={`sb-ech-drs-${uid}`}
+              label={t('coreEditor.singbox.tls.echDrs', { defaultValue: 'Disable dynamic record sizing' })}
+              checked={fields.echDynamicRecordSizingDisabled}
+              onCheckedChange={checked => set('echDynamicRecordSizingDisabled', checked)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AcmeFields({
+  fields,
   onChange,
-  flipRow,
+  uid,
+  domainError,
+  tokenError,
+  keysError,
 }: {
-  inbound: ShadowsocksInboundDraft
-  issues: SingBoxValidationIssue[]
-  onChange: SingBoxInboundFormProps['onChange']
-  flipRow: string
+  fields: AcmeSlice
+  onChange: DraftChange
+  uid: string
+  domainError?: string
+  tokenError?: string
+  keysError?: string
 }) {
+  const { t } = useTranslation()
+  const set = <K extends keyof AcmeSlice>(key: K, value: AcmeSlice[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
+  const domainLabel = t('coreEditor.singbox.tls.acmeDomain', { defaultValue: 'Domains' })
+  return (
+    <div className={GROUP_BOX_CLASS}>
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader title={t('coreEditor.singbox.tls.acme', { defaultValue: 'ACME (automatic certificate)' })} />
+        <Switch id={`sb-acme-${uid}`} checked={fields.acmeEnabled} onCheckedChange={checked => set('acmeEnabled', checked === true)} />
+      </div>
+      {fields.acmeEnabled && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={domainLabel} error={domainError}>
+            <StringArrayPopoverInput
+              className={LIST_CONTROL_CLASS}
+              value={[...fields.acmeDomain]}
+              onChange={next => set('acmeDomain', next)}
+              placeholder="his.example.com"
+              addPlaceholder="his.example.com"
+              itemsLabel={domainLabel}
+            />
+          </Field>
+          <Field label={t('coreEditor.singbox.tls.acmeEmail', { defaultValue: 'Email' })}>
+            <Input dir="ltr" className={CONTROL_CLASS} placeholder="admin@example.com" value={fields.acmeEmail} onChange={e => set('acmeEmail', e.target.value)} />
+          </Field>
+          <Field label={t('coreEditor.singbox.tls.acmeDns01', { defaultValue: 'DNS-01 provider' })}>
+            <Select dir="ltr" value={fields.acmeDns01Provider || DNS01_NONE} onValueChange={v => set('acmeDns01Provider', v === DNS01_NONE ? '' : v)}>
+              <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent dir="ltr">
+                <SelectItem value={DNS01_NONE}>{t('coreEditor.singbox.tls.acmeDns01None', { defaultValue: 'None (HTTP challenge)' })}</SelectItem>
+                <SelectItem value="cloudflare">Cloudflare</SelectItem>
+                <SelectItem value="alidns">AliDNS</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label={t('coreEditor.singbox.tls.acmeProvider', { defaultValue: 'CA provider' })}>
+            <Select dir="ltr" value={fields.acmeProvider || ACME_PROVIDER_DEFAULT} onValueChange={v => set('acmeProvider', v === ACME_PROVIDER_DEFAULT ? '' : v)}>
+              <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent dir="ltr">
+                <SelectItem value={ACME_PROVIDER_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })}</SelectItem>
+                <SelectItem value="letsencrypt">Let's Encrypt</SelectItem>
+                <SelectItem value="zerossl">ZeroSSL</SelectItem>
+                <SelectItem value="google">Google</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          {fields.acmeDns01Provider === 'cloudflare' && (
+            <Field className="sm:col-span-2" label={t('coreEditor.singbox.tls.acmeCfToken', { defaultValue: 'Cloudflare API token' })} error={tokenError}>
+              <PasswordInput
+                dir="ltr"
+                autoComplete="new-password"
+                className={CONTROL_CLASS}
+                isError={!!tokenError}
+                value={fields.acmeDns01ApiToken}
+                onChange={e => set('acmeDns01ApiToken', e.target.value)}
+              />
+            </Field>
+          )}
+          {fields.acmeDns01Provider === 'alidns' && (
+            <>
+              <Field label={t('coreEditor.singbox.tls.acmeAliKeyId', { defaultValue: 'Access key id' })} error={keysError}>
+                <Input dir="ltr" className={CONTROL_CLASS} isError={!!keysError} value={fields.acmeDns01AccessKeyId} onChange={e => set('acmeDns01AccessKeyId', e.target.value)} />
+              </Field>
+              <Field label={t('coreEditor.singbox.tls.acmeAliKeySecret', { defaultValue: 'Access key secret' })}>
+                <PasswordInput
+                  dir="ltr"
+                  autoComplete="new-password"
+                  className={CONTROL_CLASS}
+                  isError={!!keysError}
+                  value={fields.acmeDns01AccessKeySecret}
+                  onChange={e => set('acmeDns01AccessKeySecret', e.target.value)}
+                />
+              </Field>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================ Shadowsocks ============================
+function ShadowsocksSection({ inbound, issues, onChange }: { inbound: ShadowsocksInboundDraft; issues: SingBoxValidationIssue[]; onChange: DraftChange }) {
   const { t } = useTranslation()
   const set = <K extends keyof ShadowsocksInboundDraft>(key: K, value: ShadowsocksInboundDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
   const methodError = issueFor(issues, 'method')
@@ -303,129 +628,111 @@ function ShadowsocksSection({
   }
   return (
     <>
-      <Separator />
-      <div className="space-y-3">
-        <SectionHeader title={t('coreEditor.singbox.ss.title', { defaultValue: 'Shadowsocks' })} />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.ss.method', { defaultValue: 'Encryption method' })}</Label>
-            <Select value={inbound.method} onValueChange={v => set('method', v)}>
-              <SelectTrigger className="text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SHADOWSOCKS_METHODS.map(m => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {methodError && <p className="text-destructive text-[0.8rem] font-medium">{methodError}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.ss.password', { defaultValue: is2022 ? 'Server key (base64)' : 'Password' })}</Label>
-            <div dir="ltr" className={flipRow}>
-              <div className="min-w-0 flex-1">
-                <PasswordInput className="text-xs" value={inbound.password} onChange={e => set('password', e.target.value)} />
-              </div>
-              <Button type="button" size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={randomPass} title={t('coreEditor.singbox.obfs.generate', { defaultValue: 'Generate password' })}>
-                <RefreshCcw className="h-3 w-3" />
-              </Button>
-            </div>
-            <p className="text-muted-foreground text-[11px]">
-              {is2022
-                ? t('coreEditor.singbox.ss.serverKeyHint', { defaultValue: 'Base64 server key for the 2022 cipher. Per-user passwords are injected automatically.' })
-                : t('coreEditor.singbox.ss.legacyHint', { defaultValue: 'Legacy single-user password. Prefer a 2022-blake3 method for multi-user.' })}
-            </p>
-          </div>
+      <SectionDivider />
+      <SectionTitle icon={KeyRound} title={t('coreEditor.singbox.ss.title', { defaultValue: 'Shadowsocks' })} />
+      <Field label={t('coreEditor.singbox.ss.method', { defaultValue: 'Encryption method' })} error={methodError}>
+        <Select dir="ltr" value={inbound.method} onValueChange={v => set('method', v)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            {SHADOWSOCKS_METHODS.map(m => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field
+        label={is2022 ? t('coreEditor.singbox.ss.serverKey', { defaultValue: 'Server key (base64)' }) : t('coreEditor.singbox.ss.password', { defaultValue: 'Password' })}
+        hint={
+          is2022
+            ? t('coreEditor.singbox.ss.serverKeyHint', { defaultValue: 'Base64 server key for the 2022 cipher. Per-user passwords are injected automatically.' })
+            : t('coreEditor.singbox.ss.legacyHint', { defaultValue: 'Legacy single-user password. Prefer a 2022-blake3 method for multi-user.' })
+        }
+      >
+        <div className="flex items-center gap-2">
+          <PasswordInput dir="ltr" autoComplete="new-password" className={CONTROL_CLASS} value={inbound.password} onChange={e => set('password', e.target.value)} />
+          <GenerateButton onClick={randomPass} title={t('coreEditor.singbox.obfs.generate', { defaultValue: 'Generate password' })} />
         </div>
-      </div>
+      </Field>
     </>
   )
 }
 
 // ============================ TUIC ============================
-function TuicSection({ inbound, onChange }: { inbound: TuicInboundDraft; onChange: SingBoxInboundFormProps['onChange'] }) {
+function TuicSection({ inbound, onChange }: { inbound: TuicInboundDraft; onChange: DraftChange }) {
   const { t } = useTranslation()
   const set = <K extends keyof TuicInboundDraft>(key: K, value: TuicInboundDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
   return (
     <>
-      <Separator />
-      <div className="space-y-3">
-        <SectionHeader title={t('coreEditor.singbox.tuic.title', { defaultValue: 'TUIC' })} />
-        <div className="space-y-1.5 sm:w-1/2">
-          <Label>{t('coreEditor.singbox.tuic.congestion', { defaultValue: 'Congestion control' })}</Label>
-          <Select value={inbound.congestionControl || CC_DEFAULT} onValueChange={v => set('congestionControl', v === CC_DEFAULT ? '' : v)}>
-            <SelectTrigger className="text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={CC_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })} (cubic)</SelectItem>
-              {TUIC_CONGESTION.map(c => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <SectionDivider />
+      <SectionTitle icon={Gauge} title={t('coreEditor.singbox.tuic.title', { defaultValue: 'TUIC' })} />
+      <Field label={t('coreEditor.singbox.tuic.congestion', { defaultValue: 'Congestion control' })}>
+        <Select dir="ltr" value={inbound.congestionControl || CC_DEFAULT} onValueChange={v => set('congestionControl', v === CC_DEFAULT ? '' : v)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            <SelectItem value={CC_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })} (cubic)</SelectItem>
+            {TUIC_CONGESTION.map(c => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
     </>
   )
 }
 
 // ============================ Transport (V2Ray) ============================
-function TransportSection({ inbound, onChange }: { inbound: StreamDraft; onChange: SingBoxInboundFormProps['onChange'] }) {
+function TransportSection({ inbound, onChange }: { inbound: StreamDraft; onChange: DraftChange }) {
   const { t } = useTranslation()
   const set = <K extends keyof StreamDraft>(key: K, value: StreamDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
   const tt = inbound.transportType
   return (
-    <div className="space-y-3">
-      <SectionHeader title={t('coreEditor.singbox.transport.title', { defaultValue: 'Transport' })} />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.transport.type', { defaultValue: 'Type' })}</Label>
-          <Select value={tt === '' ? TRANSPORT_TCP : tt} onValueChange={v => set('transportType', (v === TRANSPORT_TCP ? '' : v) as SingBoxTransportType)}>
-            <SelectTrigger className="text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TRANSPORT_TCP}>TCP</SelectItem>
-              {TRANSPORTS.filter(Boolean).map(tp => (
-                <SelectItem key={tp} value={tp as string}>
-                  {tp}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {(tt === 'ws' || tt === 'http' || tt === 'httpupgrade') && (
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.transport.path', { defaultValue: 'Path' })}</Label>
-            <Input value={inbound.transportPath} dir="ltr" className="text-xs" onChange={e => set('transportPath', e.target.value)} placeholder="/" />
-          </div>
-        )}
-        {(tt === 'ws' || tt === 'http' || tt === 'httpupgrade') && (
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.transport.host', { defaultValue: 'Host' })}</Label>
-            <Input value={inbound.transportHost} dir="ltr" className="text-xs" onChange={e => set('transportHost', e.target.value)} placeholder="example.com" />
-          </div>
-        )}
-        {tt === 'grpc' && (
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.transport.serviceName', { defaultValue: 'Service name' })}</Label>
-            <Input value={inbound.transportServiceName} dir="ltr" className="text-xs" onChange={e => set('transportServiceName', e.target.value)} placeholder="grpc" />
-          </div>
-        )}
-        {tt === 'http' && (
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.transport.method', { defaultValue: 'Method' })}</Label>
-            <Input value={inbound.transportMethod} dir="ltr" className="text-xs" onChange={e => set('transportMethod', e.target.value)} placeholder="GET" />
-          </div>
-        )}
-      </div>
-    </div>
+    <>
+      <SectionDivider />
+      <SectionTitle icon={Cable} title={t('coreEditor.singbox.transport.title', { defaultValue: 'Transport' })} />
+      <Field label={t('coreEditor.singbox.transport.type', { defaultValue: 'Type' })}>
+        <Select dir="ltr" value={tt === '' ? TRANSPORT_TCP : tt} onValueChange={v => set('transportType', (v === TRANSPORT_TCP ? '' : v) as SingBoxTransportType)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            <SelectItem value={TRANSPORT_TCP}>TCP</SelectItem>
+            {TRANSPORTS.filter(Boolean).map(tp => (
+              <SelectItem key={tp} value={tp as string}>
+                {tp}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {(tt === 'ws' || tt === 'http' || tt === 'httpupgrade') && (
+        <Field label={t('coreEditor.singbox.transport.path', { defaultValue: 'Path' })}>
+          <Input value={inbound.transportPath} dir="ltr" className={CONTROL_CLASS} onChange={e => set('transportPath', e.target.value)} placeholder="/" />
+        </Field>
+      )}
+      {(tt === 'ws' || tt === 'http' || tt === 'httpupgrade') && (
+        <Field label={t('coreEditor.singbox.transport.host', { defaultValue: 'Host' })}>
+          <Input value={inbound.transportHost} dir="ltr" className={CONTROL_CLASS} onChange={e => set('transportHost', e.target.value)} placeholder="example.com" />
+        </Field>
+      )}
+      {tt === 'grpc' && (
+        <Field label={t('coreEditor.singbox.transport.serviceName', { defaultValue: 'Service name' })}>
+          <Input value={inbound.transportServiceName} dir="ltr" className={CONTROL_CLASS} onChange={e => set('transportServiceName', e.target.value)} placeholder="grpc" />
+        </Field>
+      )}
+      {tt === 'http' && (
+        <Field label={t('coreEditor.singbox.transport.method', { defaultValue: 'Method' })}>
+          <Input value={inbound.transportMethod} dir="ltr" className={CONTROL_CLASS} onChange={e => set('transportMethod', e.target.value)} placeholder="GET" />
+        </Field>
+      )}
+    </>
   )
 }
 
@@ -435,77 +742,96 @@ function TlsSection({
   issues,
   onChange,
   required,
+  uid,
 }: {
   inbound: SingBoxInboundDraft & TlsDraftFields
   issues: SingBoxValidationIssue[]
-  onChange: SingBoxInboundFormProps['onChange']
+  onChange: DraftChange
   required: boolean
+  uid: string
 }) {
   const { t } = useTranslation()
   const set = <K extends keyof TlsDraftFields>(key: K, value: TlsDraftFields[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
   const realityKeyError = issueFor(issues, 'realityPrivateKey')
   const realityHandshakeError = issueFor(issues, 'realityHandshakeServer')
+  const acmeDomainError = issueFor(issues, 'acmeDomain')
+  const acmeTokenError = issueFor(issues, 'acmeDns01ApiToken')
+  const acmeKeysError = issueFor(issues, 'acmeDns01AccessKeyId')
   const enabled = required || inbound.tlsEnabled
+  const shortIdLabel = t('coreEditor.singbox.tls.realityShortId', { defaultValue: 'Short IDs' })
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <SectionHeader title={t('coreEditor.singbox.tls.title', { defaultValue: 'TLS' })} />
-        {!required && (
-          <div className="flex items-center gap-2">
-            <Label className="text-muted-foreground text-xs font-normal">{t('coreEditor.singbox.tls.enable', { defaultValue: 'Enable TLS' })}</Label>
-            <Switch checked={inbound.tlsEnabled} onCheckedChange={c => set('tlsEnabled', c === true)} />
-          </div>
-        )}
-      </div>
+    <>
+      <SectionDivider />
+      <SectionTitle icon={Shield} title={t('coreEditor.singbox.tls.title', { defaultValue: 'TLS' })} />
+
+      {required ? (
+        <p className={NOTE_CLASS}>{t('coreEditor.singbox.tls.requiredHint', { defaultValue: 'This protocol always requires TLS; it cannot be disabled for this inbound.' })}</p>
+      ) : (
+        <SwitchField
+          className="sm:col-span-2"
+          id={`sb-tls-${uid}`}
+          label={t('coreEditor.singbox.tls.enable', { defaultValue: 'Enable TLS' })}
+          checked={inbound.tlsEnabled}
+          onCheckedChange={checked => set('tlsEnabled', checked)}
+        />
+      )}
 
       {enabled && (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>{t('coreEditor.singbox.tls.serverName', { defaultValue: 'Server name (SNI)' })}</Label>
-              <Input value={inbound.tlsServerName} dir="ltr" className="text-xs" onChange={e => set('tlsServerName', e.target.value)} placeholder="example.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('coreEditor.singbox.tls.alpn', { defaultValue: 'ALPN' })}</Label>
-              <StringArrayPopoverInput value={[...inbound.tlsAlpn]} onChange={next => set('tlsAlpn', next)} placeholder="h2" addPlaceholder="h2" itemsLabel={t('coreEditor.singbox.tls.alpn', { defaultValue: 'ALPN' })} />
-            </div>
-          </div>
+          <TlsIdentityFields fields={inbound} onChange={onChange} alpnPlaceholder="h2" />
 
-          {/* REALITY */}
-          <div className="space-y-2 rounded-md border p-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium">{t('coreEditor.singbox.tls.reality', { defaultValue: 'REALITY' })}</Label>
-              <Switch checked={inbound.realityEnabled} onCheckedChange={c => set('realityEnabled', c === true)} />
+          <div className={GROUP_BOX_CLASS}>
+            <div className="flex items-center justify-between gap-3">
+              <SectionHeader title={t('coreEditor.singbox.tls.reality', { defaultValue: 'REALITY' })} />
+              <Switch id={`sb-reality-${uid}`} checked={inbound.realityEnabled} onCheckedChange={checked => set('realityEnabled', checked === true)} />
             </div>
             {inbound.realityEnabled && (
-              <div className="space-y-2">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.realityHandshakeServer', { defaultValue: 'Handshake server' })}</Label>
-                    <Input dir="ltr" className="text-xs" isError={!!realityHandshakeError} value={inbound.realityHandshakeServer} onChange={e => set('realityHandshakeServer', e.target.value)} placeholder="www.microsoft.com" />
-                    {realityHandshakeError && <p className="text-destructive text-[0.8rem] font-medium">{realityHandshakeError}</p>}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.realityHandshakePort', { defaultValue: 'Handshake port' })}</Label>
-                    <Input dir="ltr" type="text" inputMode="numeric" className="text-xs" value={inbound.realityHandshakePort} onChange={e => set('realityHandshakePort', e.target.value)} placeholder="443" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.realityPrivateKey', { defaultValue: 'Private key' })}</Label>
-                  <PasswordInput className="text-xs" isError={!!realityKeyError} value={inbound.realityPrivateKey} onChange={e => set('realityPrivateKey', e.target.value)} />
-                  {realityKeyError && <p className="text-destructive text-[0.8rem] font-medium">{realityKeyError}</p>}
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.realityShortId', { defaultValue: 'Short IDs' })}</Label>
-                    <StringArrayPopoverInput value={[...inbound.realityShortId]} onChange={next => set('realityShortId', next)} placeholder="0123abcd" addPlaceholder="0123abcd" itemsLabel={t('coreEditor.singbox.tls.realityShortId', { defaultValue: 'Short IDs' })} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.realityMaxTimeDiff', { defaultValue: 'Max time difference' })}</Label>
-                    <Input dir="ltr" className="text-xs" value={inbound.realityMaxTimeDifference} onChange={e => set('realityMaxTimeDifference', e.target.value)} placeholder="1m" />
-                  </div>
-                </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label={t('coreEditor.singbox.tls.realityHandshakeServer', { defaultValue: 'Handshake server' })} error={realityHandshakeError}>
+                  <Input
+                    dir="ltr"
+                    className={CONTROL_CLASS}
+                    isError={!!realityHandshakeError}
+                    value={inbound.realityHandshakeServer}
+                    onChange={e => set('realityHandshakeServer', e.target.value)}
+                    placeholder="www.microsoft.com"
+                  />
+                </Field>
+                <Field label={t('coreEditor.singbox.tls.realityHandshakePort', { defaultValue: 'Handshake port' })}>
+                  <Input
+                    dir="ltr"
+                    type="text"
+                    inputMode="numeric"
+                    className={CONTROL_CLASS}
+                    value={inbound.realityHandshakePort}
+                    onChange={e => set('realityHandshakePort', e.target.value)}
+                    placeholder="443"
+                  />
+                </Field>
+                <Field className="sm:col-span-2" label={t('coreEditor.singbox.tls.realityPrivateKey', { defaultValue: 'Private key' })} error={realityKeyError}>
+                  <PasswordInput
+                    dir="ltr"
+                    autoComplete="new-password"
+                    className={CONTROL_CLASS}
+                    isError={!!realityKeyError}
+                    value={inbound.realityPrivateKey}
+                    onChange={e => set('realityPrivateKey', e.target.value)}
+                  />
+                </Field>
+                <Field label={shortIdLabel}>
+                  <StringArrayPopoverInput
+                    className={LIST_CONTROL_CLASS}
+                    value={[...inbound.realityShortId]}
+                    onChange={next => set('realityShortId', next)}
+                    placeholder="0123abcd"
+                    addPlaceholder="0123abcd"
+                    itemsLabel={shortIdLabel}
+                  />
+                </Field>
+                <Field label={t('coreEditor.singbox.tls.realityMaxTimeDiff', { defaultValue: 'Max time difference' })}>
+                  <Input dir="ltr" className={CONTROL_CLASS} value={inbound.realityMaxTimeDifference} onChange={e => set('realityMaxTimeDifference', e.target.value)} placeholder="1m" />
+                </Field>
               </div>
             )}
           </div>
@@ -513,100 +839,42 @@ function TlsSection({
           {/* Certificate + uTLS (hidden when REALITY owns the handshake) */}
           {!inbound.realityEnabled && (
             <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label>{t('coreEditor.singbox.tls.minVersion', { defaultValue: 'Min version' })}</Label>
-                  <Select value={inbound.tlsMinVersion || TLS_VERSION_DEFAULT} onValueChange={v => set('tlsMinVersion', v === TLS_VERSION_DEFAULT ? '' : v)}>
-                    <SelectTrigger className="text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TLS_VERSION_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })}</SelectItem>
-                      {TLS_VERSIONS.map(v => (
-                        <SelectItem key={v} value={v}>
-                          {v}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t('coreEditor.singbox.tls.maxVersion', { defaultValue: 'Max version' })}</Label>
-                  <Select value={inbound.tlsMaxVersion || TLS_VERSION_DEFAULT} onValueChange={v => set('tlsMaxVersion', v === TLS_VERSION_DEFAULT ? '' : v)}>
-                    <SelectTrigger className="text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TLS_VERSION_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })}</SelectItem>
-                      {TLS_VERSIONS.map(v => (
-                        <SelectItem key={v} value={v}>
-                          {v}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t('coreEditor.singbox.tls.utls', { defaultValue: 'uTLS fingerprint' })}</Label>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={inbound.utlsEnabled} onCheckedChange={c => set('utlsEnabled', c === true)} />
-                    <Input dir="ltr" className="text-xs" disabled={!inbound.utlsEnabled} value={inbound.utlsFingerprint} onChange={e => set('utlsFingerprint', e.target.value)} placeholder="chrome" />
-                  </div>
-                </div>
-              </div>
+              <TlsVersionFields fields={inbound} onChange={onChange} />
 
-              <div className="space-y-2 rounded-md border p-3">
-                <Label className="text-xs font-medium">{t('coreEditor.singbox.tls.certificate', { defaultValue: 'Certificate' })}</Label>
-                <Tabs value={inbound.certMode} onValueChange={v => set('certMode', (v === 'content' ? 'content' : 'path') as SingBoxCertMode)}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="path">{t('coreEditor.inbound.tlsCertificates.filePathTab', { defaultValue: 'File path' })}</TabsTrigger>
-                    <TabsTrigger value="content">{t('coreEditor.inbound.tlsCertificates.fileContentTab', { defaultValue: 'File content' })}</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                {inbound.certMode === 'path' ? (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.certificateFile', { defaultValue: 'Certificate file' })}</Label>
-                      <Input dir="ltr" className="text-xs" placeholder="/path/fullchain.pem" value={inbound.certificateFile} onChange={e => set('certificateFile', e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.keyFile', { defaultValue: 'Key file' })}</Label>
-                      <Input dir="ltr" className="text-xs" placeholder="/path/key.pem" value={inbound.keyFile} onChange={e => set('keyFile', e.target.value)} />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.certificateContent', { defaultValue: 'Certificate content' })}</Label>
-                      <Textarea dir="ltr" rows={5} className="text-xs" placeholder="-----BEGIN CERTIFICATE-----" value={inbound.certificate} onChange={e => set('certificate', e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.keyContent', { defaultValue: 'Key content' })}</Label>
-                      <Textarea dir="ltr" rows={5} className="text-xs" placeholder="-----BEGIN PRIVATE KEY-----" value={inbound.key} onChange={e => set('key', e.target.value)} />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <Field className="sm:col-span-2" label={t('coreEditor.singbox.tls.utls', { defaultValue: 'uTLS fingerprint' })}>
+                <div className="flex items-center gap-3">
+                  <Switch id={`sb-utls-${uid}`} checked={inbound.utlsEnabled} onCheckedChange={checked => set('utlsEnabled', checked === true)} />
+                  <Input
+                    dir="ltr"
+                    className={CONTROL_CLASS}
+                    disabled={!inbound.utlsEnabled}
+                    value={inbound.utlsFingerprint}
+                    onChange={e => set('utlsFingerprint', e.target.value)}
+                    placeholder="chrome"
+                  />
+                </div>
+              </Field>
+
+              {inbound.acmeEnabled ? (
+                <p className={NOTE_CLASS}>
+                  {t('coreEditor.singbox.tls.acmeOwnsCert', { defaultValue: 'ACME is enabled below and manages the certificate automatically. The manual certificate fields are disabled.' })}
+                </p>
+              ) : (
+                <CertificateFields fields={inbound} onChange={onChange} />
+              )}
+
+              <EchFields fields={inbound} onChange={onChange} uid={uid} />
+              <AcmeFields fields={inbound} onChange={onChange} uid={uid} domainError={acmeDomainError} tokenError={acmeTokenError} keysError={acmeKeysError} />
             </>
           )}
         </>
       )}
-    </div>
+    </>
   )
 }
 
-// ============================ Hysteria2 (full dedicated form, unchanged) ============================
-function Hysteria2Sections({
-  inbound,
-  issues,
-  onChange,
-  flipRow,
-}: {
-  inbound: HysteriaInboundDraft
-  issues: SingBoxValidationIssue[]
-  onChange: SingBoxInboundFormProps['onChange']
-  flipRow: string
-}) {
+// ============================ Hysteria2 ============================
+function Hysteria2Sections({ inbound, issues, onChange, uid }: { inbound: HysteriaInboundDraft; issues: SingBoxValidationIssue[]; onChange: DraftChange; uid: string }) {
   const { t } = useTranslation()
   const set = <K extends keyof HysteriaInboundDraft>(key: K, value: HysteriaInboundDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
 
@@ -626,342 +894,164 @@ function Hysteria2Sections({
 
   return (
     <>
-      {/* Bandwidth + UDP timeout */}
-      <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.udpTimeout', { defaultValue: 'UDP timeout' })}</Label>
-          <Input value={inbound.udpTimeout} dir="ltr" className="text-xs" isError={!!udpTimeoutError} onChange={e => set('udpTimeout', e.target.value)} placeholder="30s" />
-          {udpTimeoutError && <p className="text-destructive text-[0.8rem] font-medium">{udpTimeoutError}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.upMbps', { defaultValue: 'Up mbps' })}</Label>
-          <Input type="text" inputMode="numeric" value={inbound.upMbps} dir="ltr" className="text-xs" isError={!!upMbpsError} onChange={e => set('upMbps', e.target.value)} placeholder="100" />
-          {upMbpsError && <p className="text-destructive text-[0.8rem] font-medium">{upMbpsError}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.fields.downMbps', { defaultValue: 'Down mbps' })}</Label>
-          <Input type="text" inputMode="numeric" value={inbound.downMbps} dir="ltr" className="text-xs" isError={!!downMbpsError} onChange={e => set('downMbps', e.target.value)} placeholder="100" />
-          {downMbpsError && <p className="text-destructive text-[0.8rem] font-medium">{downMbpsError}</p>}
-        </div>
-        <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2 sm:col-span-2">
-          <Switch id={`sb-ignore-bandwidth-${inbound.tag}`} checked={inbound.ignoreClientBandwidth} onCheckedChange={checked => set('ignoreClientBandwidth', checked === true)} />
-          <div className="grid gap-0.5 leading-tight">
-            <label htmlFor={`sb-ignore-bandwidth-${inbound.tag}`} className="cursor-pointer text-xs font-medium">
-              {t('coreEditor.singbox.fields.ignoreClientBandwidth', { defaultValue: 'Ignore client bandwidth' })}
-            </label>
-          </div>
-        </div>
-      </div>
+      <SectionDivider />
+      <SectionTitle icon={Gauge} title={t('coreEditor.singbox.bandwidth.title', { defaultValue: 'Bandwidth' })} />
+      <Field label={t('coreEditor.singbox.fields.upMbps', { defaultValue: 'Up mbps' })} error={upMbpsError}>
+        <Input type="text" inputMode="numeric" value={inbound.upMbps} dir="ltr" className={CONTROL_CLASS} isError={!!upMbpsError} onChange={e => set('upMbps', e.target.value)} placeholder="100" />
+      </Field>
+      <Field label={t('coreEditor.singbox.fields.downMbps', { defaultValue: 'Down mbps' })} error={downMbpsError}>
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={inbound.downMbps}
+          dir="ltr"
+          className={CONTROL_CLASS}
+          isError={!!downMbpsError}
+          onChange={e => set('downMbps', e.target.value)}
+          placeholder="100"
+        />
+      </Field>
+      <Field className="sm:col-span-2" label={t('coreEditor.singbox.fields.udpTimeout', { defaultValue: 'UDP timeout' })} error={udpTimeoutError}>
+        <Input value={inbound.udpTimeout} dir="ltr" className={CONTROL_CLASS} isError={!!udpTimeoutError} onChange={e => set('udpTimeout', e.target.value)} placeholder="30s" />
+      </Field>
+      <SwitchField
+        className="sm:col-span-2"
+        id={`sb-ignore-bandwidth-${uid}`}
+        label={t('coreEditor.singbox.fields.ignoreClientBandwidth', { defaultValue: 'Ignore client bandwidth' })}
+        hint={t('coreEditor.singbox.fields.ignoreClientBandwidthHint', { defaultValue: 'Ignore the bandwidth values reported by the client and always use the values above.' })}
+        checked={inbound.ignoreClientBandwidth}
+        onCheckedChange={checked => set('ignoreClientBandwidth', checked)}
+      />
 
-      <Separator />
-
-      {/* Obfuscation */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <SectionHeader title={t('coreEditor.singbox.obfs.title', { defaultValue: 'Obfuscation' })} />
+      <SectionDivider />
+      <SectionTitle icon={Shuffle} title={t('coreEditor.singbox.obfs.title', { defaultValue: 'Obfuscation' })} />
+      <SwitchField
+        className="sm:col-span-2"
+        id={`sb-obfs-enabled-${uid}`}
+        label={t('coreEditor.singbox.obfs.enable', { defaultValue: 'Salamander obfuscation' })}
+        hint={t('coreEditor.singbox.obfs.enableHint', { defaultValue: 'Wraps the QUIC handshake in the Salamander obfuscator. Every client must use the same password.' })}
+        checked={inbound.obfsEnabled}
+        onCheckedChange={checked => set('obfsEnabled', checked)}
+      />
+      {inbound.obfsEnabled && (
+        <Field className="sm:col-span-2" label={t('coreEditor.singbox.obfs.password', { defaultValue: 'Obfuscation password' })} error={obfsPasswordError}>
           <div className="flex items-center gap-2">
-            <Label htmlFor={`sb-obfs-enabled-${inbound.tag}`} className="text-muted-foreground text-xs font-normal">
-              {t('coreEditor.singbox.obfs.enable', { defaultValue: 'Salamander obfuscation' })}
-            </Label>
-            <Switch id={`sb-obfs-enabled-${inbound.tag}`} checked={inbound.obfsEnabled} onCheckedChange={checked => set('obfsEnabled', checked === true)} />
+            <PasswordInput
+              dir="ltr"
+              autoComplete="new-password"
+              className={CONTROL_CLASS}
+              isError={!!obfsPasswordError}
+              value={inbound.obfsPassword}
+              onChange={e => set('obfsPassword', e.target.value)}
+            />
+            <GenerateButton onClick={() => set('obfsPassword', randomObfsPassword())} title={t('coreEditor.singbox.obfs.generate', { defaultValue: 'Generate password' })} />
           </div>
-        </div>
-        {inbound.obfsEnabled && (
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.obfs.password', { defaultValue: 'Obfuscation password' })}</Label>
-            <div dir="ltr" className={flipRow}>
-              <div className="min-w-0 flex-1">
-                <PasswordInput className="text-xs" isError={!!obfsPasswordError} value={inbound.obfsPassword} onChange={e => set('obfsPassword', e.target.value)} />
-              </div>
-              <Button type="button" size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => set('obfsPassword', randomObfsPassword())} title={t('coreEditor.singbox.obfs.generate', { defaultValue: 'Generate password' })}>
-                <RefreshCcw className="h-3 w-3" />
-              </Button>
-            </div>
-            {obfsPasswordError && <p className="text-destructive text-[0.8rem] font-medium">{obfsPasswordError}</p>}
-          </div>
-        )}
-      </div>
+        </Field>
+      )}
 
-      <Separator />
+      <SectionDivider />
+      <SectionTitle icon={VenetianMask} title={t('coreEditor.singbox.masquerade.title', { defaultValue: 'Masquerade' })} />
+      <Field label={t('coreEditor.singbox.masquerade.type', { defaultValue: 'Type' })}>
+        <Select dir="ltr" value={masqType === '' ? MASQ_SIMPLE : masqType} onValueChange={v => set('masqueradeType', (v === MASQ_SIMPLE ? '' : v) as SingBoxMasqueradeType)}>
+          <SelectTrigger className={SELECT_TRIGGER_CLASS} dir="ltr">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent dir="ltr">
+            <SelectItem value={MASQ_SIMPLE}>{t('coreEditor.singbox.masquerade.simple', { defaultValue: 'URL (simple)' })}</SelectItem>
+            <SelectItem value="proxy">{t('coreEditor.singbox.masquerade.proxy', { defaultValue: 'Reverse proxy' })}</SelectItem>
+            <SelectItem value="file">{t('coreEditor.singbox.masquerade.file', { defaultValue: 'Static files' })}</SelectItem>
+            <SelectItem value="string">{t('coreEditor.singbox.masquerade.string', { defaultValue: 'Fixed response' })}</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      {(masqType === '' || masqType === 'proxy') && (
+        <Field label={t('coreEditor.singbox.masquerade.url', { defaultValue: 'URL' })} error={masqueradeError}>
+          <Input value={inbound.masquerade} dir="ltr" className={CONTROL_CLASS} isError={!!masqueradeError} onChange={e => set('masquerade', e.target.value)} placeholder="https://example.com" />
+        </Field>
+      )}
+      {masqType === 'file' && (
+        <Field label={t('coreEditor.singbox.masquerade.directory', { defaultValue: 'Directory' })} error={masqueradeDirectoryError}>
+          <Input
+            value={inbound.masqueradeDirectory}
+            dir="ltr"
+            className={CONTROL_CLASS}
+            isError={!!masqueradeDirectoryError}
+            onChange={e => set('masqueradeDirectory', e.target.value)}
+            placeholder="/var/www"
+          />
+        </Field>
+      )}
+      {masqType === 'proxy' && (
+        <SwitchField
+          className="sm:col-span-2"
+          id={`sb-masq-rewrite-${uid}`}
+          label={t('coreEditor.singbox.masquerade.rewriteHost', { defaultValue: 'Rewrite Host header' })}
+          checked={inbound.masqueradeRewriteHost}
+          onCheckedChange={checked => set('masqueradeRewriteHost', checked)}
+        />
+      )}
+      {masqType === 'string' && (
+        <>
+          <Field label={t('coreEditor.singbox.masquerade.statusCode', { defaultValue: 'Status code' })} error={masqueradeStatusError}>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={inbound.masqueradeStatusCode}
+              dir="ltr"
+              className={CONTROL_CLASS}
+              isError={!!masqueradeStatusError}
+              onChange={e => set('masqueradeStatusCode', e.target.value)}
+              placeholder="404"
+            />
+          </Field>
+          <Field label={t('coreEditor.singbox.masquerade.headers', { defaultValue: 'Headers (JSON)' })} error={masqueradeHeadersError}>
+            <Textarea
+              dir="ltr"
+              rows={3}
+              className={cn('font-mono text-xs', masqueradeHeadersError && 'border-destructive')}
+              value={inbound.masqueradeHeaders}
+              onChange={e => set('masqueradeHeaders', e.target.value)}
+              placeholder='{"Server": "nginx"}'
+            />
+          </Field>
+          <Field className="sm:col-span-2" label={t('coreEditor.singbox.masquerade.content', { defaultValue: 'Response body' })}>
+            <Textarea dir="ltr" rows={4} className="text-xs" value={inbound.masqueradeContent} onChange={e => set('masqueradeContent', e.target.value)} placeholder="Not Found" />
+          </Field>
+        </>
+      )}
 
-      {/* Masquerade */}
-      <div className="space-y-3">
-        <SectionHeader title={t('coreEditor.singbox.masquerade.title', { defaultValue: 'Masquerade' })} />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.masquerade.type', { defaultValue: 'Type' })}</Label>
-            <Select value={masqType === '' ? MASQ_SIMPLE : masqType} onValueChange={v => set('masqueradeType', (v === MASQ_SIMPLE ? '' : v) as SingBoxMasqueradeType)}>
-              <SelectTrigger className="text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={MASQ_SIMPLE}>{t('coreEditor.singbox.masquerade.simple', { defaultValue: 'URL (simple)' })}</SelectItem>
-                <SelectItem value="proxy">{t('coreEditor.singbox.masquerade.proxy', { defaultValue: 'Reverse proxy' })}</SelectItem>
-                <SelectItem value="file">{t('coreEditor.singbox.masquerade.file', { defaultValue: 'Static files' })}</SelectItem>
-                <SelectItem value="string">{t('coreEditor.singbox.masquerade.string', { defaultValue: 'Fixed response' })}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {(masqType === '' || masqType === 'proxy') && (
-            <div className="space-y-1.5">
-              <Label>{t('coreEditor.singbox.masquerade.url', { defaultValue: 'URL' })}</Label>
-              <Input value={inbound.masquerade} dir="ltr" className="text-xs" isError={!!masqueradeError} onChange={e => set('masquerade', e.target.value)} placeholder="https://example.com" />
-              {masqueradeError && <p className="text-destructive text-[0.8rem] font-medium">{masqueradeError}</p>}
-            </div>
-          )}
-          {masqType === 'file' && (
-            <div className="space-y-1.5">
-              <Label>{t('coreEditor.singbox.masquerade.directory', { defaultValue: 'Directory' })}</Label>
-              <Input value={inbound.masqueradeDirectory} dir="ltr" className="text-xs" isError={!!masqueradeDirectoryError} onChange={e => set('masqueradeDirectory', e.target.value)} placeholder="/var/www" />
-              {masqueradeDirectoryError && <p className="text-destructive text-[0.8rem] font-medium">{masqueradeDirectoryError}</p>}
-            </div>
-          )}
-        </div>
-        {masqType === 'proxy' && (
-          <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2">
-            <Switch id={`sb-masq-rewrite-${inbound.tag}`} checked={inbound.masqueradeRewriteHost} onCheckedChange={checked => set('masqueradeRewriteHost', checked === true)} />
-            <div className="grid gap-0.5 leading-tight">
-              <label htmlFor={`sb-masq-rewrite-${inbound.tag}`} className="cursor-pointer text-xs font-medium">
-                {t('coreEditor.singbox.masquerade.rewriteHost', { defaultValue: 'Rewrite Host header' })}
-              </label>
-            </div>
-          </div>
-        )}
-        {masqType === 'string' && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>{t('coreEditor.singbox.masquerade.statusCode', { defaultValue: 'Status code' })}</Label>
-                <Input type="text" inputMode="numeric" value={inbound.masqueradeStatusCode} dir="ltr" className="text-xs" isError={!!masqueradeStatusError} onChange={e => set('masqueradeStatusCode', e.target.value)} placeholder="404" />
-                {masqueradeStatusError && <p className="text-destructive text-[0.8rem] font-medium">{masqueradeStatusError}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('coreEditor.singbox.masquerade.headers', { defaultValue: 'Headers (JSON)' })}</Label>
-                <Textarea dir="ltr" rows={2} className={cn('text-xs font-mono', masqueradeHeadersError && 'border-destructive')} value={inbound.masqueradeHeaders} onChange={e => set('masqueradeHeaders', e.target.value)} placeholder='{"Server": "nginx"}' />
-                {masqueradeHeadersError && <p className="text-destructive text-[0.8rem] font-medium">{masqueradeHeadersError}</p>}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('coreEditor.singbox.masquerade.content', { defaultValue: 'Response body' })}</Label>
-              <Textarea dir="ltr" rows={3} className="text-xs" value={inbound.masqueradeContent} onChange={e => set('masqueradeContent', e.target.value)} placeholder="Not Found" />
-            </div>
-          </div>
-        )}
-      </div>
+      <SectionDivider />
+      <SectionTitle icon={Shield} title={t('coreEditor.singbox.tls.title', { defaultValue: 'TLS' })} />
+      <p className={NOTE_CLASS}>{t('coreEditor.singbox.tls.alwaysEnabledHint', { defaultValue: 'Hysteria2 always requires TLS; it cannot be disabled for this inbound.' })}</p>
+      <TlsIdentityFields fields={inbound} onChange={onChange} alpnPlaceholder="h3" />
+      <TlsVersionFields fields={inbound} onChange={onChange} />
+      {inbound.acmeEnabled ? (
+        <p className={NOTE_CLASS}>
+          {t('coreEditor.singbox.tls.acmeOwnsCert', { defaultValue: 'ACME is enabled below and manages the certificate automatically. The manual certificate fields are disabled.' })}
+        </p>
+      ) : (
+        <CertificateFields fields={inbound} onChange={onChange} />
+      )}
+      <EchFields fields={inbound} onChange={onChange} uid={uid} />
+      <AcmeFields fields={inbound} onChange={onChange} uid={uid} domainError={acmeDomainError} tokenError={acmeTokenError} keysError={acmeKeysError} />
 
-      <Separator />
-
-      {/* TLS (hysteria2: always on, cert/ECH/ACME, no REALITY) */}
-      <div className="space-y-3">
-        <SectionHeader title={t('coreEditor.singbox.tls.title', { defaultValue: 'TLS' })} />
-        <p className="text-muted-foreground text-[11px]">{t('coreEditor.singbox.tls.alwaysEnabledHint', { defaultValue: 'Hysteria2 always requires TLS; it cannot be disabled for this inbound.' })}</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.tls.serverName', { defaultValue: 'Server name (SNI)' })}</Label>
-            <Input value={inbound.tlsServerName} dir="ltr" className="text-xs" onChange={e => set('tlsServerName', e.target.value)} placeholder="example.com" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.tls.alpn', { defaultValue: 'ALPN' })}</Label>
-            <StringArrayPopoverInput value={[...inbound.tlsAlpn]} onChange={next => set('tlsAlpn', next)} placeholder="h3" addPlaceholder="h3" itemsLabel={t('coreEditor.singbox.tls.alpn', { defaultValue: 'ALPN' })} />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.tls.minVersion', { defaultValue: 'Min version' })}</Label>
-            <Select value={inbound.tlsMinVersion || TLS_VERSION_DEFAULT} onValueChange={v => set('tlsMinVersion', v === TLS_VERSION_DEFAULT ? '' : v)}>
-              <SelectTrigger className="text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TLS_VERSION_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })}</SelectItem>
-                {TLS_VERSIONS.map(v => (
-                  <SelectItem key={v} value={v}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.tls.maxVersion', { defaultValue: 'Max version' })}</Label>
-            <Select value={inbound.tlsMaxVersion || TLS_VERSION_DEFAULT} onValueChange={v => set('tlsMaxVersion', v === TLS_VERSION_DEFAULT ? '' : v)}>
-              <SelectTrigger className="text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TLS_VERSION_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })}</SelectItem>
-                {TLS_VERSIONS.map(v => (
-                  <SelectItem key={v} value={v}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('coreEditor.singbox.tls.cipherSuites', { defaultValue: 'Cipher suites' })}</Label>
-            <StringArrayPopoverInput value={[...inbound.tlsCipherSuites]} onChange={next => set('tlsCipherSuites', next)} placeholder="TLS_AES_128_GCM_SHA256" addPlaceholder="TLS_AES_128_GCM_SHA256" itemsLabel={t('coreEditor.singbox.tls.cipherSuites', { defaultValue: 'Cipher suites' })} />
-          </div>
-        </div>
-        {inbound.acmeEnabled ? (
-          <p className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-[11px]">
-            {t('coreEditor.singbox.tls.acmeOwnsCert', { defaultValue: 'ACME is enabled below and manages the certificate automatically. The manual certificate fields are disabled.' })}
-          </p>
-        ) : (
-          <div className="space-y-2 rounded-md border p-3">
-            <Label className="text-xs font-medium">{t('coreEditor.singbox.tls.certificate', { defaultValue: 'Certificate' })}</Label>
-            <Tabs value={inbound.certMode} onValueChange={v => set('certMode', (v === 'content' ? 'content' : 'path') as SingBoxCertMode)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="path">{t('coreEditor.inbound.tlsCertificates.filePathTab', { defaultValue: 'File path' })}</TabsTrigger>
-                <TabsTrigger value="content">{t('coreEditor.inbound.tlsCertificates.fileContentTab', { defaultValue: 'File content' })}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {inbound.certMode === 'path' ? (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.certificateFile', { defaultValue: 'Certificate file' })}</Label>
-                  <Input dir="ltr" className="text-xs" placeholder="/path/fullchain.pem" value={inbound.certificateFile} onChange={e => set('certificateFile', e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.keyFile', { defaultValue: 'Key file' })}</Label>
-                  <Input dir="ltr" className="text-xs" placeholder="/path/key.pem" value={inbound.keyFile} onChange={e => set('keyFile', e.target.value)} />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.certificateContent', { defaultValue: 'Certificate content' })}</Label>
-                  <Textarea dir="ltr" rows={5} className="text-xs" placeholder="-----BEGIN CERTIFICATE-----" value={inbound.certificate} onChange={e => set('certificate', e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.inbound.tlsCertificates.keyContent', { defaultValue: 'Key content' })}</Label>
-                  <Textarea dir="ltr" rows={5} className="text-xs" placeholder="-----BEGIN PRIVATE KEY-----" value={inbound.key} onChange={e => set('key', e.target.value)} />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">{t('coreEditor.singbox.tls.ech', { defaultValue: 'Encrypted Client Hello (ECH)' })}</Label>
-            <Switch id={`sb-ech-${inbound.tag}`} checked={inbound.echEnabled} onCheckedChange={checked => set('echEnabled', checked === true)} />
-          </div>
-          {inbound.echEnabled && (
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.echKey', { defaultValue: 'ECH key' })}</Label>
-                <Textarea dir="ltr" rows={3} className="text-xs" placeholder="-----BEGIN ECH KEYS-----" value={inbound.echKey} onChange={e => set('echKey', e.target.value)} />
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch id={`sb-ech-pq-${inbound.tag}`} checked={inbound.echPqSignatureSchemesEnabled} onCheckedChange={checked => set('echPqSignatureSchemesEnabled', checked === true)} />
-                <label htmlFor={`sb-ech-pq-${inbound.tag}`} className="cursor-pointer text-[11px] font-medium">
-                  {t('coreEditor.singbox.tls.echPq', { defaultValue: 'Post-quantum signature schemes' })}
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch id={`sb-ech-drs-${inbound.tag}`} checked={inbound.echDynamicRecordSizingDisabled} onCheckedChange={checked => set('echDynamicRecordSizingDisabled', checked === true)} />
-                <label htmlFor={`sb-ech-drs-${inbound.tag}`} className="cursor-pointer text-[11px] font-medium">
-                  {t('coreEditor.singbox.tls.echDrs', { defaultValue: 'Disable dynamic record sizing' })}
-                </label>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">{t('coreEditor.singbox.tls.acme', { defaultValue: 'ACME (automatic certificate)' })}</Label>
-            <Switch id={`sb-acme-${inbound.tag}`} checked={inbound.acmeEnabled} onCheckedChange={checked => set('acmeEnabled', checked === true)} />
-          </div>
-          {inbound.acmeEnabled && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeDomain', { defaultValue: 'Domains' })}</Label>
-                  <StringArrayPopoverInput value={[...inbound.acmeDomain]} onChange={next => set('acmeDomain', next)} placeholder="his.example.com" addPlaceholder="his.example.com" itemsLabel={t('coreEditor.singbox.tls.acmeDomain', { defaultValue: 'Domains' })} />
-                  {acmeDomainError && <p className="text-destructive text-[0.8rem] font-medium">{acmeDomainError}</p>}
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeEmail', { defaultValue: 'Email' })}</Label>
-                  <Input dir="ltr" className="text-xs" placeholder="admin@example.com" value={inbound.acmeEmail} onChange={e => set('acmeEmail', e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeDns01', { defaultValue: 'DNS-01 provider' })}</Label>
-                  <Select value={inbound.acmeDns01Provider || DNS01_NONE} onValueChange={v => set('acmeDns01Provider', v === DNS01_NONE ? '' : v)}>
-                    <SelectTrigger className="text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={DNS01_NONE}>{t('coreEditor.singbox.tls.acmeDns01None', { defaultValue: 'None (HTTP challenge)' })}</SelectItem>
-                      <SelectItem value="cloudflare">Cloudflare</SelectItem>
-                      <SelectItem value="alidns">AliDNS</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeProvider', { defaultValue: 'CA provider' })}</Label>
-                  <Select value={inbound.acmeProvider || ACME_PROVIDER_DEFAULT} onValueChange={v => set('acmeProvider', v === ACME_PROVIDER_DEFAULT ? '' : v)}>
-                    <SelectTrigger className="text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ACME_PROVIDER_DEFAULT}>{t('coreEditor.singbox.tls.versionDefault', { defaultValue: 'Default' })}</SelectItem>
-                      <SelectItem value="letsencrypt">Let's Encrypt</SelectItem>
-                      <SelectItem value="zerossl">ZeroSSL</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {inbound.acmeDns01Provider === 'cloudflare' && (
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeCfToken', { defaultValue: 'Cloudflare API token' })}</Label>
-                  <PasswordInput className="text-xs" isError={!!acmeTokenError} value={inbound.acmeDns01ApiToken} onChange={e => set('acmeDns01ApiToken', e.target.value)} />
-                  {acmeTokenError && <p className="text-destructive text-[0.8rem] font-medium">{acmeTokenError}</p>}
-                </div>
-              )}
-              {inbound.acmeDns01Provider === 'alidns' && (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeAliKeyId', { defaultValue: 'Access key id' })}</Label>
-                    <Input dir="ltr" className="text-xs" isError={!!acmeKeysError} value={inbound.acmeDns01AccessKeyId} onChange={e => set('acmeDns01AccessKeyId', e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-[11px] font-medium">{t('coreEditor.singbox.tls.acmeAliKeySecret', { defaultValue: 'Access key secret' })}</Label>
-                    <PasswordInput className="text-xs" isError={!!acmeKeysError} value={inbound.acmeDns01AccessKeySecret} onChange={e => set('acmeDns01AccessKeySecret', e.target.value)} />
-                  </div>
-                  {acmeKeysError && <p className="text-destructive text-[0.8rem] font-medium sm:col-span-2">{acmeKeysError}</p>}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Advanced */}
-      <div className="space-y-3">
-        <SectionHeader title={t('coreEditor.singbox.advanced.title', { defaultValue: 'Advanced' })} />
-        <div className="space-y-1.5">
-          <Label>{t('coreEditor.singbox.advanced.portHopping', { defaultValue: 'Port hopping range' })}</Label>
-          <Input value={inbound.portHoppingRange} dir="ltr" className="text-xs" isError={!!portHoppingError} onChange={e => set('portHoppingRange', e.target.value)} placeholder="20000-50000" />
-          {portHoppingError && <p className="text-destructive text-[0.8rem] font-medium">{portHoppingError}</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch id={`sb-udp-fragment-${inbound.tag}`} checked={inbound.udpFragment} onCheckedChange={checked => set('udpFragment', checked === true)} />
-          <label htmlFor={`sb-udp-fragment-${inbound.tag}`} className="cursor-pointer text-xs font-medium">
-            {t('coreEditor.singbox.advanced.udpFragment', { defaultValue: 'UDP fragment' })}
-          </label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch id={`sb-brutal-debug-${inbound.tag}`} checked={inbound.brutalDebug} onCheckedChange={checked => set('brutalDebug', checked === true)} />
-          <label htmlFor={`sb-brutal-debug-${inbound.tag}`} className="cursor-pointer text-xs font-medium">
-            {t('coreEditor.singbox.advanced.brutalDebug', { defaultValue: 'Brutal debug logging' })}
-          </label>
-        </div>
-      </div>
+      <SectionDivider />
+      <SectionTitle icon={Settings2} title={t('coreEditor.singbox.advanced.title', { defaultValue: 'Advanced' })} />
+      <Field className="sm:col-span-2" label={t('coreEditor.singbox.advanced.portHopping', { defaultValue: 'Port hopping range' })} error={portHoppingError}>
+        <Input value={inbound.portHoppingRange} dir="ltr" className={CONTROL_CLASS} isError={!!portHoppingError} onChange={e => set('portHoppingRange', e.target.value)} placeholder="20000-50000" />
+      </Field>
+      <SwitchField
+        id={`sb-udp-fragment-${uid}`}
+        label={t('coreEditor.singbox.advanced.udpFragment', { defaultValue: 'UDP fragment' })}
+        checked={inbound.udpFragment}
+        onCheckedChange={checked => set('udpFragment', checked)}
+      />
+      <SwitchField
+        id={`sb-brutal-debug-${uid}`}
+        label={t('coreEditor.singbox.advanced.brutalDebug', { defaultValue: 'Brutal debug logging' })}
+        checked={inbound.brutalDebug}
+        onCheckedChange={checked => set('brutalDebug', checked)}
+      />
     </>
   )
 }

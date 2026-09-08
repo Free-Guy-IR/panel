@@ -3275,6 +3275,15 @@
     },
     "minRowsBlocked": "这将删除过多的条目。",
     "singbox": {
+      "advanced": {
+        "brutalDebug": "Brutal 调试日志",
+        "portHopping": "端口跳跃范围",
+        "title": "高级",
+        "udpFragment": "UDP 分片"
+      },
+      "bandwidth": {
+        "title": "带宽"
+      },
       "emptyInbounds": "暂无入站。点击「添加入站」以创建一个 Hysteria2 监听器。",
       "fields": {
         "downMbps": "下载带宽 (Mbps)",
@@ -3283,24 +3292,88 @@
         "listen": "监听地址",
         "listenPort": "监听端口",
         "masquerade": "伪装 URL",
+        "protocol": "协议",
         "tag": "标签",
+        "udpTimeout": "UDP 超时",
         "upMbps": "上传带宽 (Mbps)"
       },
       "hasErrors": "需要处理",
       "inboundsHint": "每个入站都是此 sing-box 核心上一个独立的 Hysteria2 监听器。",
+      "masquerade": {
+        "content": "响应正文",
+        "directory": "目录",
+        "file": "静态文件",
+        "headers": "请求头 (JSON)",
+        "proxy": "反向代理",
+        "rewriteHost": "重写 Host 头",
+        "simple": "URL（简单）",
+        "statusCode": "状态码",
+        "string": "固定响应",
+        "title": "伪装",
+        "type": "类型",
+        "url": "URL"
+      },
       "obfs": {
         "enable": "Salamander 混淆",
+        "enableHint": "使用 Salamander 混淆器封装 QUIC 握手。所有客户端必须使用相同的密码。",
         "generate": "生成密码",
         "password": "混淆密码",
         "title": "混淆"
       },
+      "ss": {
+        "legacyHint": "旧版单用户密码。多用户场景请优先使用 2022-blake3 方式。",
+        "method": "加密方式",
+        "password": "密码",
+        "serverKey": "服务器密钥 (base64)",
+        "serverKeyHint": "2022 加密方式使用的 base64 服务器密钥。每个用户的密码会自动注入。",
+        "title": "Shadowsocks"
+      },
       "tls": {
+        "acme": "ACME（自动证书）",
+        "acmeAliKeyId": "Access Key ID",
+        "acmeAliKeySecret": "Access Key Secret",
+        "acmeCfToken": "Cloudflare API 令牌",
+        "acmeDns01": "DNS-01 提供商",
+        "acmeDns01None": "无（HTTP 验证）",
+        "acmeDomain": "域名",
+        "acmeEmail": "邮箱",
+        "acmeOwnsCert": "下方已启用 ACME，将自动管理证书。手动证书字段已禁用。",
+        "acmeProvider": "CA 提供商",
         "alpn": "ALPN",
         "alpnPlaceholder": "h3",
         "alwaysEnabledHint": "Hysteria2 始终需要 TLS，此入站无法禁用它。",
         "certificate": "证书",
+        "cipherSuites": "加密套件",
+        "ech": "加密客户端问候 (ECH)",
+        "echDrs": "禁用动态记录大小",
+        "echKey": "ECH 密钥",
+        "echPq": "后量子签名方案",
+        "enable": "启用 TLS",
+        "maxVersion": "最高版本",
+        "minVersion": "最低版本",
+        "reality": "REALITY",
+        "realityHandshakePort": "握手端口",
+        "realityHandshakeServer": "握手服务器",
+        "realityMaxTimeDiff": "最大时间差",
+        "realityPrivateKey": "私钥",
+        "realityShortId": "Short ID",
+        "requiredHint": "此协议始终需要 TLS，此入站无法禁用它。",
         "serverName": "服务器名称 (SNI)",
-        "title": "TLS"
+        "title": "TLS",
+        "utls": "uTLS 指纹",
+        "versionDefault": "默认"
+      },
+      "transport": {
+        "host": "主机",
+        "method": "方法",
+        "path": "路径",
+        "serviceName": "服务名称",
+        "title": "传输",
+        "type": "类型"
+      },
+      "tuic": {
+        "congestion": "拥塞控制",
+        "title": "TUIC"
       },
       "untitledInbound": "未命名入站"
     },

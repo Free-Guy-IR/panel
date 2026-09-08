@@ -2531,13 +2531,16 @@
         "upMbps": "Up mbps",
         "downMbps": "Down mbps",
         "ignoreClientBandwidth": "Ignore client bandwidth",
-        "ignoreClientBandwidthHint": "Ignore the bandwidth values reported by the client and always use the values above."
+        "ignoreClientBandwidthHint": "Ignore the bandwidth values reported by the client and always use the values above.",
+        "protocol": "Protocol",
+        "udpTimeout": "UDP timeout"
       },
       "obfs": {
         "title": "Obfuscation",
         "enable": "Salamander obfuscation",
         "password": "Obfuscation password",
-        "generate": "Generate password"
+        "generate": "Generate password",
+        "enableHint": "Wraps the QUIC handshake in the Salamander obfuscator. Every client must use the same password."
       },
       "tls": {
         "title": "TLS",
@@ -2545,7 +2548,77 @@
         "serverName": "Server name (SNI)",
         "alpn": "ALPN",
         "alpnPlaceholder": "h3",
-        "certificate": "Certificate"
+        "certificate": "Certificate",
+        "requiredHint": "This protocol always requires TLS; it cannot be disabled for this inbound.",
+        "enable": "Enable TLS",
+        "minVersion": "Min version",
+        "maxVersion": "Max version",
+        "versionDefault": "Default",
+        "cipherSuites": "Cipher suites",
+        "utls": "uTLS fingerprint",
+        "reality": "REALITY",
+        "realityHandshakeServer": "Handshake server",
+        "realityHandshakePort": "Handshake port",
+        "realityPrivateKey": "Private key",
+        "realityShortId": "Short IDs",
+        "realityMaxTimeDiff": "Max time difference",
+        "ech": "Encrypted Client Hello (ECH)",
+        "echKey": "ECH key",
+        "echPq": "Post-quantum signature schemes",
+        "echDrs": "Disable dynamic record sizing",
+        "acme": "ACME (automatic certificate)",
+        "acmeOwnsCert": "ACME is enabled below and manages the certificate automatically. The manual certificate fields are disabled.",
+        "acmeDomain": "Domains",
+        "acmeEmail": "Email",
+        "acmeDns01": "DNS-01 provider",
+        "acmeDns01None": "None (HTTP challenge)",
+        "acmeProvider": "CA provider",
+        "acmeCfToken": "Cloudflare API token",
+        "acmeAliKeyId": "Access key id",
+        "acmeAliKeySecret": "Access key secret"
+      },
+      "bandwidth": {
+        "title": "Bandwidth"
+      },
+      "masquerade": {
+        "title": "Masquerade",
+        "type": "Type",
+        "simple": "URL (simple)",
+        "proxy": "Reverse proxy",
+        "file": "Static files",
+        "string": "Fixed response",
+        "url": "URL",
+        "directory": "Directory",
+        "rewriteHost": "Rewrite Host header",
+        "statusCode": "Status code",
+        "headers": "Headers (JSON)",
+        "content": "Response body"
+      },
+      "ss": {
+        "title": "Shadowsocks",
+        "method": "Encryption method",
+        "password": "Password",
+        "serverKey": "Server key (base64)",
+        "serverKeyHint": "Base64 server key for the 2022 cipher. Per-user passwords are injected automatically.",
+        "legacyHint": "Legacy single-user password. Prefer a 2022-blake3 method for multi-user."
+      },
+      "tuic": {
+        "title": "TUIC",
+        "congestion": "Congestion control"
+      },
+      "transport": {
+        "title": "Transport",
+        "type": "Type",
+        "path": "Path",
+        "host": "Host",
+        "serviceName": "Service name",
+        "method": "Method"
+      },
+      "advanced": {
+        "title": "Advanced",
+        "portHopping": "Port hopping range",
+        "udpFragment": "UDP fragment",
+        "brutalDebug": "Brutal debug logging"
       }
     },
     "field": {
