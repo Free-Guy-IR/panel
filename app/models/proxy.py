@@ -74,7 +74,7 @@ class MTProtoSettings(BaseModel):
 
 L2TP_PASSWORD_MIN_LENGTH = 6
 L2TP_PASSWORD_MAX_LENGTH = 64
-_L2TP_PASSWORD_RE = re.compile(r"^[\x21-\x7e]+$")
+_L2TP_PASSWORD_RE = re.compile(r"[\x21-\x7e]+")
 
 
 class L2TPSettings(BaseModel):
@@ -83,10 +83,10 @@ class L2TPSettings(BaseModel):
     @field_validator("password", mode="before")
     @classmethod
     def validate_password(cls, value):
-        if value is None:
+        if value is None or value == "":
             return None
         if not isinstance(value, str):
-            raise ValueError("l2tp password must be a string")
+            raise ValueError("l2tp password must be a string")  # noqa: TRY004
         if not _L2TP_PASSWORD_RE.fullmatch(value):
             raise ValueError("l2tp password must contain only printable ASCII characters without spaces")
         if not L2TP_PASSWORD_MIN_LENGTH <= len(value) <= L2TP_PASSWORD_MAX_LENGTH:

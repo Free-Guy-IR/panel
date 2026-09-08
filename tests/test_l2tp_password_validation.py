@@ -15,7 +15,6 @@ from app.utils.l2tp import generate_l2tp_password
         "tab\there\tvalue",
         "carriage\rreturn",
         "nul\x00byte",
-        "",
     ],
 )
 def test_rejects_passwords_that_could_break_chap_secrets(password):
@@ -43,3 +42,19 @@ def test_accepts_printable_ascii_at_both_length_bounds():
 def test_proxy_table_rejects_an_injecting_password():
     with pytest.raises(ValidationError):
         ProxyTable.model_validate({"l2tp": {"password": 'x" *\nattacker l2tp-de "y'}})
+
+
+def test_empty_password_clears_the_field_instead_of_raising():
+    assert L2TPSettings(password="").password is None
+    assert ProxyTable.model_validate({"l2tp": {"password": ""}}).l2tp.password is None
+
+
+def test_stored_password_is_revalidated_before_it_reaches_a_node():
+    from app.node.user import safe_l2tp_password
+
+    good = "Ab3xyzAb3xyzAb3xyzAb"
+    assert safe_l2tp_password(good, 7) == good
+    assert safe_l2tp_password('x\nattacker l2tp-de "pw" *', 7) is None
+    assert safe_l2tp_password("", 7) is None
+    assert safe_l2tp_password(None, 7) is None
+    assert safe_l2tp_password("a" * 65, 7) is None

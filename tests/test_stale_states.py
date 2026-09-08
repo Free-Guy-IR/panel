@@ -13,10 +13,10 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import app.utils.connection_limiter as limiter
 from app.db.models import Admin, Base, Group, User, UserConnectionState
 from app.models.proxy import ProxyTable
 from app.models.settings import ConnectionLimit
-import app.utils.connection_limiter as limiter
 from app.utils.connection_limiter import prune_out_of_scope
 
 
