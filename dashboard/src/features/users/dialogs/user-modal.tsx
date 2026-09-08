@@ -1221,6 +1221,20 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
     return arr.join('')
   }
 
+  const L2TP_PASSWORD_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const L2TP_PASSWORD_LENGTH = 20
+
+  function generateL2tpPassword(): string {
+    const limit = 256 - (256 % L2TP_PASSWORD_ALPHABET.length)
+    const buf = new Uint8Array(1)
+    let out = ''
+    while (out.length < L2TP_PASSWORD_LENGTH) {
+      crypto.getRandomValues(buf)
+      if (buf[0] < limit) out += L2TP_PASSWORD_ALPHABET[buf[0] % L2TP_PASSWORD_ALPHABET.length]
+    }
+    return out
+  }
+
   // MTProto secrets are a 16-byte (32 hex char) key, matching
   // app.utils.mtproto.generate_mtproto_secret's secrets.token_hex(16) on
   // the panel backend - not the letters/numbers/underscore shape
@@ -1246,6 +1260,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         public_key: keyPair.publicKey,
       },
       mtproto: { secret: generateMtprotoSecret() },
+      l2tp: { password: generateL2tpPassword() },
     }
     form.setValue('proxy_settings', newSettings as any, { shouldDirty: true, shouldValidate: true })
     handleFieldChange('proxy_settings', newSettings)
@@ -2165,6 +2180,46 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                         field.onChange(newVal)
                                         form.trigger('proxy_settings.mtproto.secret')
                                         handleFieldChange('proxy_settings.mtproto.secret', newVal)
+                                      }}
+                                      title={t('userDialog.proxySettings.regenerate', { defaultValue: 'Regenerate' })}
+                                    >
+                                      <RefreshCcw className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="proxy_settings.l2tp.password"
+                            render={({ field }) => (
+                              <FormItem className="mb-2">
+                                <FormLabel>{t('userDialog.proxySettings.l2tpPassword', { defaultValue: 'L2TP Password' })}</FormLabel>
+                                <FormControl>
+                                  <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
+                                    <PasswordInput
+                                      {...field}
+                                      value={field.value ?? ''}
+                                      placeholder={t('userDialog.proxySettings.l2tpPassword', { defaultValue: 'L2TP Password' })}
+                                      onChange={e => {
+                                        field.onChange(e)
+                                        form.trigger('proxy_settings.l2tp.password')
+                                        handleFieldChange('proxy_settings.l2tp.password', e.target.value)
+                                      }}
+                                    />
+                                    <Button
+                                      size="icon"
+                                      type="button"
+                                      variant="ghost"
+                                      onClick={e => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const newVal = generateL2tpPassword()
+                                        field.onChange(newVal)
+                                        form.trigger('proxy_settings.l2tp.password')
+                                        handleFieldChange('proxy_settings.l2tp.password', newVal)
                                       }}
                                       title={t('userDialog.proxySettings.regenerate', { defaultValue: 'Regenerate' })}
                                     >

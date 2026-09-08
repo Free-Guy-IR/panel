@@ -14395,6 +14395,64 @@ export const useBulkActivateMtprotoSecrets = <TData = Awaited<ReturnType<typeof 
 }
 
 /**
+ * Issue an L2TP password to existing users who have L2TP access via
+their current groups but don't have one yet - e.g. users created before
+L2TP was enabled on their group.
+
+- **user_ids**: Optional list of user IDs to modify
+- **admins**: Optional list of admin IDs — their users will be targeted
+- **group_ids**: Optional list of group IDs to filter users by their group membership
+- **status**: Optional status to filter users (e.g., "expired", "active"), empty means no filtering
+- Sending no filters at all targets every user.
+
+Users who already have an L2TP password are never touched, even if they
+match the filter - this only ever fills in a *missing* password, never
+regenerates an existing one.
+ * @summary Retroactively issue L2TP passwords to existing users
+ */
+export const bulkActivateL2tpPasswords = (bulkUserFilter: BodyType<BulkUserFilter>, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/api/users/bulk/l2tp_activate`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: bulkUserFilter, signal })
+}
+
+export const getBulkActivateL2tpPasswordsMutationOptions = <
+  TData = Awaited<ReturnType<typeof bulkActivateL2tpPasswords>>,
+  TError = ErrorType<Unauthorized | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUserFilter> }, TContext>
+}) => {
+  const mutationKey = ['bulkActivateL2tpPasswords']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkActivateL2tpPasswords>>, { data: BodyType<BulkUserFilter> }> = props => {
+    const { data } = props ?? {}
+
+    return bulkActivateL2tpPasswords(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<BulkUserFilter> }, TContext>
+}
+
+export type BulkActivateL2tpPasswordsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkActivateL2tpPasswords>>>
+export type BulkActivateL2tpPasswordsMutationBody = BodyType<BulkUserFilter>
+export type BulkActivateL2tpPasswordsMutationError = ErrorType<Unauthorized | HTTPValidationError>
+
+/**
+ * @summary Retroactively issue L2TP passwords to existing users
+ */
+export const useBulkActivateL2tpPasswords = <TData = Awaited<ReturnType<typeof bulkActivateL2tpPasswords>>, TError = ErrorType<Unauthorized | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUserFilter> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<BulkUserFilter> }, TContext> => {
+  const mutationOptions = getBulkActivateL2tpPasswordsMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
  * Provides a subscription link based on the user agent (Clash, V2Ray, etc.).
  * @summary User Subscription
  */

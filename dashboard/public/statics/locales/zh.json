@@ -3390,6 +3390,7 @@
     "selectStatus": "选择状态",
     "selectedTemplates": "已选择 {{count}} 个模板",
     "proxySettings.mtprotoSecret": "MTProto 密钥",
+    "proxySettings.l2tpPassword": "L2TP 密码",
     "proxySettings.regenerate": "重新生成"
   },
   "userSettings": {
@@ -3727,6 +3728,10 @@
       }
     },
     "mtprotoActivate": "MTProto 激活",
+    "l2tpActivate": "L2TP 激活",
+    "l2tpActivateDesc": "为已有 L2TP 访问权限但从未获得密码的现有用户生成 L2TP/IPsec 密码",
+    "l2tpActivateDescription": "为通过所属群组拥有 L2TP 访问权限但从未获得密码的现有用户生成 L2TP/IPsec 密码。",
+    "l2tpActivateSafety": "已有密码的用户绝不会被修改或重新生成，即使在下方被选中。",
     "mtprotoActivateDesc": "为现有用户生成缺失的 MTProto 密钥",
     "mtprotoActivateDescription": "为通过所在分组已拥有 MTProto 访问权限、但从未获得密钥的现有用户生成 MTProto 代理密钥——例如在分组启用 MTProto 之前创建的用户。",
     "mtprotoActivateSafety": "已经拥有密钥的用户永远不会被修改或重新生成密钥，即使在下方被选中也是如此。"

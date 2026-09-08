@@ -280,6 +280,12 @@ async def get_users_for_mtproto_activation(db: AsyncSession, bulk_model: BulkUse
     return list(result.scalars().all())
 
 
+async def get_users_for_l2tp_activation(db: AsyncSession, bulk_model: BulkUserFilter) -> list[User]:
+    final_filter = _create_final_filter(bulk_model)
+    result = await db.execute(select(User).where(final_filter).options(selectinload(User.groups)))
+    return list(result.scalars().all())
+
+
 async def count_bulk_group_scope(db: AsyncSession, bulk_model: BulkGroup) -> int:
     final_filter = _create_group_filter(bulk_model)
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0

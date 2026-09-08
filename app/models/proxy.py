@@ -1,4 +1,5 @@
 import json
+import re
 from enum import StrEnum
 from ipaddress import ip_network
 from uuid import UUID, uuid4
@@ -71,8 +72,28 @@ class MTProtoSettings(BaseModel):
     secret: str | None = None
 
 
+L2TP_PASSWORD_MIN_LENGTH = 6
+L2TP_PASSWORD_MAX_LENGTH = 64
+_L2TP_PASSWORD_RE = re.compile(r"^[\x21-\x7e]+$")
+
+
 class L2TPSettings(BaseModel):
     password: str | None = None
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def validate_password(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("l2tp password must be a string")
+        if not _L2TP_PASSWORD_RE.fullmatch(value):
+            raise ValueError("l2tp password must contain only printable ASCII characters without spaces")
+        if not L2TP_PASSWORD_MIN_LENGTH <= len(value) <= L2TP_PASSWORD_MAX_LENGTH:
+            raise ValueError(
+                f"l2tp password must be between {L2TP_PASSWORD_MIN_LENGTH} and {L2TP_PASSWORD_MAX_LENGTH} characters"
+            )
+        return value
 
 
 class WireGuardPeerIPs(BaseModel):
