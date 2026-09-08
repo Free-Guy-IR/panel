@@ -1,5 +1,6 @@
 import base64
 import random
+import re
 import secrets
 from collections import defaultdict
 from datetime import UTC, datetime as dt, timedelta
@@ -32,9 +33,17 @@ SERVER_IP = "127.0.0.1"
 SERVER_IPV6 = "[::1]"
 
 
+MIXED_DOCUMENT_CLIENTS = re.compile(r"^(v2box|happ|streisand)", re.IGNORECASE)
+
+
+def client_accepts_mixed_documents(user_agent: str | None) -> bool:
+    return bool(user_agent) and MIXED_DOCUMENT_CLIENTS.match(user_agent.strip()) is not None
+
+
 def _build_subscription_config(
     config_format: str,
     client_templates: dict[str, str],
+    mixed_documents: bool = False,
 ) -> (
     StandardLinks
     | XrayConfiguration
@@ -81,6 +90,7 @@ def _build_subscription_config(
         return XrayConfiguration(
             xray_template_content=client_templates["XRAY_SUBSCRIPTION_TEMPLATE"],
             singbox_template_content=client_templates.get("SINGBOX_SUBSCRIPTION_TEMPLATE"),
+            mixed_documents=mixed_documents,
             **common_kwargs,
         )
     return None
@@ -91,10 +101,11 @@ async def generate_subscription(
     config_format: str,
     as_base64: bool,
     randomize_order: bool = False,
+    mixed_documents: bool = False,
 ) -> str | bytes:
     client_templates = await subscription_client_templates()
     xray_template_overrides = await subscription_xray_templates() if config_format == "xray" else None
-    conf = _build_subscription_config(config_format, client_templates)
+    conf = _build_subscription_config(config_format, client_templates, mixed_documents=mixed_documents)
     if conf is None:
         raise ValueError(f'Unsupported format "{config_format}"')
 
