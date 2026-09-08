@@ -1,6 +1,7 @@
 import json
 
 from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
+from app.subscription.share import client_accepts_mixed_documents
 from app.subscription.xray import XrayConfiguration
 
 XRAY_TEMPLATE = json.dumps({"log": {}, "inbounds": [], "outbounds": [{"tag": "DIRECT", "protocol": "freedom"}]})
@@ -50,8 +51,10 @@ def _vless_inbound() -> SubscriptionInboundData:
     )
 
 
-def _render(*adds, singbox_template=SINGBOX_TEMPLATE):
-    conf = XrayConfiguration(xray_template_content=XRAY_TEMPLATE, singbox_template_content=singbox_template)
+def _render(*adds, singbox_template=SINGBOX_TEMPLATE, mixed=True):
+    conf = XrayConfiguration(
+        xray_template_content=XRAY_TEMPLATE, singbox_template_content=singbox_template, mixed_documents=mixed
+    )
     for remark, inbound, settings in adds:
         conf.add(remark=remark, address=inbound.address, inbound=inbound, settings=settings)
     return json.loads(conf.render())
@@ -105,3 +108,23 @@ def test_legacy_hysteria_still_renders_as_an_xray_outbound():
     legacy = _hysteria2_inbound().model_copy(update={"protocol": "hysteria", "inbound_tag": "Hysteria"})
     doc = _render(("h1", legacy, {"auth": "auth-pass"}))[0]
     assert doc["outbounds"][0]["protocol"] == "hysteria"
+
+
+def test_default_xray_output_stays_schema_pure_and_drops_hysteria2():
+    docs = _render(("hy", _hysteria2_inbound(), {"password": "p"}), mixed=False)
+    assert docs == []
+    docs = _render(("vl", _vless_inbound(), {"id": USER_ID}), ("hy", _hysteria2_inbound(), {"password": "p"}), mixed=False)
+    assert [d["remarks"] for d in docs] == ["vl"]
+    assert all("protocol" in o for d in docs for o in d["outbounds"])
+
+
+def test_only_dual_core_clients_get_mixed_documents():
+    assert client_accepts_mixed_documents("V2Box/2.5.0 (iOS)")
+    assert client_accepts_mixed_documents("v2box")
+    assert client_accepts_mixed_documents("Happ/1.2.3")
+    assert client_accepts_mixed_documents("Streisand/1.6")
+    assert not client_accepts_mixed_documents("v2rayN/7.0")
+    assert not client_accepts_mixed_documents("v2rayNG/1.9")
+    assert not client_accepts_mixed_documents("curl/8.0")
+    assert not client_accepts_mixed_documents("")
+    assert not client_accepts_mixed_documents(None)

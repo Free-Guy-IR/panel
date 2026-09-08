@@ -26,6 +26,7 @@ class XrayConfiguration(BaseSubscription):
         user_agent_template_content: str | None = None,
         grpc_user_agent_template_content: str | None = None,
         singbox_template_content: str | None = None,
+        mixed_documents: bool = False,
     ):
         super().__init__(
             user_agent_template_content=user_agent_template_content,
@@ -34,6 +35,7 @@ class XrayConfiguration(BaseSubscription):
         self.config = []
         self.template = json.loads(xray_template_content) if xray_template_content else {}
         self.singbox_template_content = singbox_template_content
+        self.mixed_documents = mixed_documents
         self._user_agent_template_content = user_agent_template_content
         self._grpc_user_agent_template_content = grpc_user_agent_template_content
 
@@ -82,6 +84,8 @@ class XrayConfiguration(BaseSubscription):
         """Add outbound using registry pattern"""
 
         if inbound.protocol == "hysteria2":
+            if not self.mixed_documents:
+                return
             document = self._build_hysteria2_document(remark, address, inbound, settings)
             if document:
                 self.config.append(document)

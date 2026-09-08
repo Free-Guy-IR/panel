@@ -24,6 +24,7 @@ from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
 from app.settings import hwid_settings, subscription_settings
 from app.subscription.share import (
     apply_custom_format_variables,
+    client_accepts_mixed_documents,
     encode_title,
     generate_subscription,
     get_effective_custom_variables,
@@ -313,7 +314,9 @@ class SubscriptionOperation(BaseOperation):
         out.sort(key=lambda f: f["protocol"])
         return out
 
-    async def fetch_config(self, user: UsersResponseWithInbounds, client_type: ConfigFormat) -> tuple[str | bytes, str]:
+    async def fetch_config(
+        self, user: UsersResponseWithInbounds, client_type: ConfigFormat, user_agent: str = ""
+    ) -> tuple[str | bytes, str]:
         # Get client configuration
         config = client_config.get(client_type, {})
         sub_settings = await subscription_settings()
@@ -326,6 +329,7 @@ class SubscriptionOperation(BaseOperation):
                 config_format=config.get("config_format", ""),
                 as_base64=config.get("as_base64", ""),
                 randomize_order=randomize_order,
+                mixed_documents=client_accepts_mixed_documents(user_agent),
             ),
             config["media_type"],
         )
@@ -521,7 +525,7 @@ class SubscriptionOperation(BaseOperation):
 
             # Update user subscription info
             await user_sub_update(db, db_user.id, user_agent, ip=ip, hwid=x_hwid)
-            conf, media_type = await self.fetch_config(user, client_type)
+            conf, media_type = await self.fetch_config(user, client_type, user_agent=user_agent)
 
             # If disable_sub_template is True and it's a browser request, use inline to view instead of download
             inline_view = sub_settings.disable_sub_template and is_browser_request
