@@ -7,8 +7,10 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.utils.crypto import get_wireguard_public_key, validate_wireguard_key
+from app.utils.logger import get_logger
 from app.utils.system import random_password
 
+logger = get_logger("proxy-model")
 
 class VMessSettings(BaseModel):
     id: UUID = Field(default_factory=uuid4)
@@ -77,23 +79,38 @@ L2TP_PASSWORD_MAX_LENGTH = 64
 _L2TP_PASSWORD_RE = re.compile(r"[\x21-\x7e]+")
 
 
+def check_l2tp_password(value) -> str | None:
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise ValueError("l2tp password must be a string")  # noqa: TRY004
+    if not _L2TP_PASSWORD_RE.fullmatch(value):
+        raise ValueError("l2tp password must contain only printable ASCII characters without spaces")
+    if not L2TP_PASSWORD_MIN_LENGTH <= len(value) <= L2TP_PASSWORD_MAX_LENGTH:
+        raise ValueError(
+            f"l2tp password must be between {L2TP_PASSWORD_MIN_LENGTH} and {L2TP_PASSWORD_MAX_LENGTH} characters"
+        )
+    return value
+
+
 class L2TPSettings(BaseModel):
     password: str | None = None
 
     @field_validator("password", mode="before")
     @classmethod
     def validate_password(cls, value):
-        if value is None or value == "":
+        try:
+            return check_l2tp_password(value)
+        except ValueError:
+            logger.warning("Discarding an unusable stored L2TP password")
             return None
-        if not isinstance(value, str):
-            raise ValueError("l2tp password must be a string")  # noqa: TRY004
-        if not _L2TP_PASSWORD_RE.fullmatch(value):
-            raise ValueError("l2tp password must contain only printable ASCII characters without spaces")
-        if not L2TP_PASSWORD_MIN_LENGTH <= len(value) <= L2TP_PASSWORD_MAX_LENGTH:
-            raise ValueError(
-                f"l2tp password must be between {L2TP_PASSWORD_MIN_LENGTH} and {L2TP_PASSWORD_MAX_LENGTH} characters"
-            )
-        return value
+
+
+class StrictL2TPSettings(L2TPSettings):
+    @field_validator("password", mode="before")
+    @classmethod
+    def validate_password(cls, value):
+        return check_l2tp_password(value)
 
 
 class WireGuardPeerIPs(BaseModel):
@@ -178,3 +195,7 @@ class ProxyTable(BaseModel):
         if no_obj:
             return json.loads(self.model_dump_json())
         return super().model_dump(**kwargs)
+
+
+class ProxyTableInput(ProxyTable):
+    l2tp: StrictL2TPSettings = Field(default_factory=StrictL2TPSettings)

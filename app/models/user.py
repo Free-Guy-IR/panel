@@ -6,7 +6,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.db.models import DataLimitResetStrategy, UserStatus
 from app.models.admin import AdminBase, AdminContactInfo
-from app.models.proxy import ProxyTable, ShadowsocksMethods
+from app.models.proxy import ProxyTable, ProxyTableInput, ShadowsocksMethods
 from app.models.stats import Period, PeriodStartStat, StatList
 from app.utils.helpers import fix_datetime_timezone
 
@@ -78,6 +78,7 @@ class UserWithValidator(User):
 class UserCreate(UserWithValidator):
     username: str
     status: UserStatus | None = Field(default=None)
+    proxy_settings: ProxyTableInput = Field(default_factory=ProxyTableInput)
 
     @field_validator("username", check_fields=False)
     @classmethod
@@ -96,7 +97,7 @@ class UserCreate(UserWithValidator):
 
 class UserModify(UserWithValidator):
     status: UserStatus | None = Field(default=None)
-    proxy_settings: ProxyTable | None = Field(default=None)
+    proxy_settings: ProxyTableInput | None = Field(default=None)
     group_ids: list[int] | None = Field(default=None)
 
     @field_validator("status", mode="before", check_fields=False)
