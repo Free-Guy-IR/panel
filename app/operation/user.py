@@ -2015,16 +2015,24 @@ class UserOperation(BaseOperation):
         """
         candidates = await get_users_for_mtproto_activation(db, bulk_model)
 
-        to_update: list[tuple[User, ProxyTable]] = []
+        to_update: list[tuple[User, str]] = []
+        skipped: list[int] = []
         for user in candidates:
-            current = ProxyTable.model_validate(user.proxy_settings)
+            try:
+                current = ProxyTable.model_validate(user.proxy_settings)
+            except (ValidationError, ValueError):
+                skipped.append(user.id)
+                continue
             if current.mtproto.secret:
                 continue
             updated = await prepare_mtproto_secret(db, current, user.groups)
             if not updated.mtproto.secret:
                 # No MTProto access via this user's current groups - nothing to activate.
                 continue
-            to_update.append((user, updated))
+            to_update.append((user, updated.mtproto.secret))
+
+        if skipped:
+            logger.warning(f"MTProto activation skipped {len(skipped)} users with unreadable proxy settings: {skipped[:20]}")
 
         if bulk_model.dry_run:
             return BulkOperationDryRunResponse(affected_users=len(to_update))
@@ -2034,8 +2042,10 @@ class UserOperation(BaseOperation):
                 return {"detail": "operation has been successfuly done on 0 users"}
             return 0
 
-        for user, updated in to_update:
-            user.proxy_settings = updated.dict()
+        for user, secret in to_update:
+            settings = dict(user.proxy_settings or {})
+            settings["mtproto"] = {"secret": secret}
+            user.proxy_settings = settings
         await db.commit()
 
         updated_users = [user for user, _ in to_update]
