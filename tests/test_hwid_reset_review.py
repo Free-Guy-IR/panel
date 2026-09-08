@@ -10,7 +10,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Admin, Base, User, UserConnectionState, UserHWID
+from app.db.models import Admin, Base, User, UserConnectionState
 from app.models.proxy import ProxyTable
 from app.operation.hwid import _clear_connection_state
 

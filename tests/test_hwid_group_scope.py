@@ -7,7 +7,6 @@ requirement, no limit - whoever their admin happens to be.
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import Admin, Base, Group, User

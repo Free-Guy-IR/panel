@@ -63,10 +63,10 @@ def test_stored_proxy_settings_without_l2tp_do_not_regenerate_on_read():
 
 
 def test_node_serializer_emits_l2tp_credentials_only_when_allowed():
-    settings = {"l2tp": {"password": "pw123"}}
+    settings = {"l2tp": {"password": "Ab3xyzAb3xyzAb3xyzAb"}}
     allowed = _serialize_user_for_node(7, settings, ["l2tp-main"], frozenset({ProxyProtocol.l2tp}), None)
     assert allowed.proxies.l2tp.username == "7"
-    assert allowed.proxies.l2tp.password == "pw123"
+    assert allowed.proxies.l2tp.password == "Ab3xyzAb3xyzAb3xyzAb"
     assert list(allowed.inbounds) == ["l2tp-main"]
 
     denied = _serialize_user_for_node(7, settings, ["l2tp-main"], frozenset({ProxyProtocol.vless}), None)
@@ -119,8 +119,10 @@ def test_adding_l2tp_did_not_change_any_other_protocol_credential():
         ("", False),
         ("0.5.4", True),
         ("0.5.15", True),
-        ("0.6.0", False),
-        ("0.6.1", False),
+        ("0.6.0", True),
+        ("0.6.1", True),
+        ("0.6.3", True),
+        ("0.6.4", False),
         ("1.0.0", False),
         ("not-a-version", False),
         ("v0.5.4", True),

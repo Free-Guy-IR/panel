@@ -1,5 +1,6 @@
 from PasarGuardNodeBridge import create_proxy, create_user
 from PasarGuardNodeBridge.common.service_pb2 import User as ProtoUser
+from pydantic import ValidationError
 from sqlalchemy import and_, func, or_, select
 
 from app.db import AsyncSession
@@ -15,6 +16,10 @@ from app.db.models import (
     users_groups_association,
 )
 from app.models.protocol import ProxyProtocol
+from app.models.proxy import L2TPSettings
+from app.utils.logger import get_logger
+
+logger = get_logger("node-user")
 
 _ALL_PROXY_PROTOCOLS = frozenset(ProxyProtocol)
 
@@ -53,6 +58,16 @@ async def serialize_user(user: User, allowed_protocols: frozenset[ProxyProtocol]
 
     return _serialize_user_for_node(user.id, user_settings, inbounds, allowed_protocols, user.hwid_limit)
 
+
+
+def safe_l2tp_password(password, user_id) -> str | None:
+    if password is None:
+        return None
+    try:
+        return L2TPSettings(password=password).password
+    except ValidationError:
+        logger.warning(f"Dropping an unusable stored L2TP password for user {user_id}")
+        return None
 
 def _serialize_user_for_node(
     id: int,
@@ -100,7 +115,7 @@ def _serialize_user_for_node(
         proxy_kwargs["tuic_password"] = tuic_settings.get("password")
     if ProxyProtocol.l2tp in allowed_protocols:
         proxy_kwargs["l2tp_username"] = str(id)
-        proxy_kwargs["l2tp_password"] = user_settings.get("l2tp", {}).get("password")
+        proxy_kwargs["l2tp_password"] = safe_l2tp_password(user_settings.get("l2tp", {}).get("password"), id)
 
     return create_user(
         str(id),

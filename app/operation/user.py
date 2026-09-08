@@ -55,6 +55,7 @@ from app.db.crud.user import (
     revoke_user_sub,
     set_owner,
 )
+from app.db.crud.wireguard import tags_from_groups
 from app.db.models import User, UserStatus, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
@@ -113,7 +114,7 @@ from app.settings import hwid_settings, subscription_settings
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
-from app.utils.l2tp import prepare_l2tp_password
+from app.utils.l2tp import generate_l2tp_password, get_l2tp_cores, l2tp_core_tags, prepare_l2tp_password
 from app.utils.logger import get_logger
 from app.utils.mtproto import prepare_mtproto_secret
 from app.utils.openvpn import prepare_openvpn_password
@@ -1957,16 +1958,24 @@ class UserOperation(BaseOperation):
 
     async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
         candidates = await get_users_for_l2tp_activation(db, bulk_model)
+        l2tp_tags = l2tp_core_tags(await get_l2tp_cores(db))
 
-        to_update: list[tuple[User, ProxyTable]] = []
+        to_update: list[tuple[User, str]] = []
+        skipped: list[int] = []
         for user in candidates:
-            current = ProxyTable.model_validate(user.proxy_settings)
-            if current.l2tp.password:
+            try:
+                current = ProxyTable.model_validate(user.proxy_settings)
+                if current.l2tp.password:
+                    continue
+                if not l2tp_tags or not (l2tp_tags & await tags_from_groups(user.groups)):
+                    continue
+            except (ValidationError, ValueError):
+                skipped.append(user.id)
                 continue
-            updated = await prepare_l2tp_password(db, current, user.groups)
-            if not updated.l2tp.password:
-                continue
-            to_update.append((user, updated))
+            to_update.append((user, generate_l2tp_password()))
+
+        if skipped:
+            logger.warning(f"L2TP activation skipped {len(skipped)} users with unreadable proxy settings: {skipped[:20]}")
 
         if bulk_model.dry_run:
             return BulkOperationDryRunResponse(affected_users=len(to_update))
@@ -1976,8 +1985,10 @@ class UserOperation(BaseOperation):
                 return {"detail": "operation has been successfuly done on 0 users"}
             return 0
 
-        for user, updated in to_update:
-            user.proxy_settings = updated.dict()
+        for user, password in to_update:
+            settings = dict(user.proxy_settings or {})
+            settings["l2tp"] = {"password": password}
+            user.proxy_settings = settings
         await db.commit()
 
         updated_users = [user for user, _ in to_update]

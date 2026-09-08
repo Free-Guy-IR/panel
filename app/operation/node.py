@@ -80,7 +80,7 @@ CONNECT_CONCURRENCY = 10
 
 logger = get_logger("node-operation")
 
-L2TP_MIN_NODE_VERSION = "0.6.0"
+L2TP_MIN_NODE_VERSION = "0.6.4"
 
 
 def _node_lacks_l2tp(node_version: str) -> bool:
