@@ -93,7 +93,7 @@ jobs:
                   # compiled dist/ resolves imports from inside the kit, so it never reaches
                   # the dashboard's node_modules. Each kit ships its built dist/, so no
                   # TypeScript build is needed here.
-                  KITS="core-kit openvpn-config-kit mtproto-config-kit@d80ced491f8ab0ddc3620bb48ceae82f5dfa15a6 l2tp-config-kit@fce077c58e97ae566f20aefdbbcec13a8ff869eb singbox-config-kit wireguard-config-kit"
+                  KITS="core-kit@8d14f8fa5a62f422b47cbff46bd626e2a96d66b7 openvpn-config-kit@15ec50c87fd6a3d48cf7d1dc57b3eb0cddc9fab4 mtproto-config-kit@8eb84713f38e192c168b2d1cebb306fabe843795 l2tp-config-kit@fce077c58e97ae566f20aefdbbcec13a8ff869eb singbox-config-kit@4d3379787e714b32e94c83d9788a91adda674e15 wireguard-config-kit@e55aff7f46ad71e5ebc697d324f5fa0dce074dd3"
                   for entry in $KITS; do
                       kit="${entry%%@*}"
                       ref="${entry#*@}"
