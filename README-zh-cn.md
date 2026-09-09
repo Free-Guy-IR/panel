@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-white-logo.png">
-      <img width="160" height="160" src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-black-logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-white-logo.png">
+      <img width="160" height="160" src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-black-logo.png">
     </picture>
   </a>
 </p>
@@ -56,8 +56,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer" >
-    <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="PasarGuard 截图" width="600" height="auto">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer" >
+    <img src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/screenshot.png" alt="PasarGuard 截图" width="600" height="auto">
   </a>
 </p>
 
@@ -69,8 +69,6 @@
     -   [🤔 为什么要使用 PasarGuard？](#-为什么要使用-pasarguard)
         -   [✨ 功能](#-功能)
 -   [🚀 安装指南](#-安装指南)
--   [📚 文档](#-文档)
--   [💖 捐赠](#-捐赠)
 
 ---
 
@@ -210,39 +208,6 @@ pasarguard --help
 
 ---
 
-# 📚 文档
-
-<div align="left">
-
-**📖 官方文档** - 完整指南可在以下位置获得：
-
-🇺🇸 **[English](https://PasarGuard.github.io/PasarGuard)**
-
-🇮🇷 **[فارسی](https://PasarGuard.github.io/PasarGuard)**
-
-🇷🇺 **[Русский](https://PasarGuard.github.io/PasarGuard)**
-
-</div>
-
-> **贡献：** 在 [GitHub](https://github.com/PasarGuard/PasarGuard.github.io) 上帮助改进文档
-
----
-
-# 💖 捐赠
-
-<div align="left">
-
-> **支持 PasarGuard 开发**
-
-如果 PasarGuard 对您有帮助，请考虑支持其开发：
-
-[![Donate](https://img.shields.io/badge/Donate-Support%20Us-green?style=for-the-badge)](http://donate.pasarguard.org)
-
-**感谢您的支持！** 💖
-
-</div>
-
----
 
 <p align="center">
   Made with ❤️ for Internet freedom
