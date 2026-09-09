@@ -15,7 +15,7 @@ async def test_connect_nodes_bulk_local_caps_concurrency(monkeypatch: pytest.Mon
     current = 0
     peak = 0
 
-    async def _connect_node(db_node, core, users):
+    async def _connect_node(db_node, core, users, extra_cores=None):
         nonlocal current, peak
         current += 1
         peak = max(peak, current)
@@ -38,7 +38,7 @@ async def test_connect_nodes_bulk_local_caps_concurrency(monkeypatch: pytest.Mon
     monkeypatch.setattr(node_op_module.notification, "error_node", AsyncMock())
 
     nodes = [
-        SimpleNamespace(id=i, status=NodeStatus.connecting, core_config_id=1, name=f"n{i}") for i in range(25)
+        SimpleNamespace(id=i, status=NodeStatus.connecting, core_config_id=1, additional_core_config_ids=None, name=f"n{i}") for i in range(25)
     ]
     await op._connect_nodes_bulk_local(MagicMock(), nodes)
 

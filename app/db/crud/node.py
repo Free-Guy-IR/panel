@@ -98,6 +98,13 @@ async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: boo
     return node
 
 
+async def _node_ids_using_additional_core(db: AsyncSession, core_id: int) -> list[int]:
+    result = await db.execute(
+        select(Node.id, Node.additional_core_config_ids).where(Node.additional_core_config_ids.is_not(None))
+    )
+    return [node_id for node_id, extras in result.all() if extras and core_id in extras]
+
+
 async def get_nodes(
     db: AsyncSession,
     query: NodeListQuery,
@@ -130,9 +137,15 @@ async def get_nodes(
 
     if params.core_id:
         if params.core_id == 1:
-            stmt = stmt.where(or_(Node.core_config_id == params.core_id, Node.core_config_id.is_(None)))
+            primary_match = or_(Node.core_config_id == params.core_id, Node.core_config_id.is_(None))
         else:
-            stmt = stmt.where(Node.core_config_id == params.core_id)
+            primary_match = Node.core_config_id == params.core_id
+
+        extra_node_ids = await _node_ids_using_additional_core(db, params.core_id)
+        if extra_node_ids:
+            stmt = stmt.where(or_(primary_match, Node.id.in_(extra_node_ids)))
+        else:
+            stmt = stmt.where(primary_match)
 
     if params.ids:
         stmt = stmt.where(Node.id.in_(params.ids))
@@ -456,6 +469,8 @@ async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
     node_data = modify.model_dump(exclude_none=True)
     if "proxy_url" in modify.model_fields_set and modify.proxy_url is None:
         node_data["proxy_url"] = None
+    if "additional_core_config_ids" in modify.model_fields_set and modify.additional_core_config_ids is None:
+        node_data["additional_core_config_ids"] = None
 
     for key, value in node_data.items():
         setattr(db_node, key, value)

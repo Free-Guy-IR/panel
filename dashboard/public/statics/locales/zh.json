@@ -2183,7 +2183,10 @@
     "prerelease": "预发布版本",
     "loadingReleases": "正在加载版本...",
     "statusCheckFailed": "连接节点失败",
-    "statusCheckSuccess": "节点连接成功"
+    "statusCheckSuccess": "节点连接成功",
+    "additionalCores": "附加核心",
+    "additionalCoresHint": "在此节点上与主核心一起运行多个核心。此处无法添加 Xray 核心。",
+    "noAdditionalCores": "没有其他核心可以与所选的主核心一起运行。"
   },
   "theme": {
     "title": "主题",

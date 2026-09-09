@@ -2219,7 +2219,10 @@
     "updating": "Updating...",
     "updateAvailable": "Update Available",
     "prerelease": "Pre-release",
-    "loadingReleases": "Loading releases..."
+    "loadingReleases": "Loading releases...",
+    "additionalCores": "Additional cores",
+    "additionalCoresHint": "Run more cores alongside the primary one on this node. Xray cores cannot be added here.",
+    "noAdditionalCores": "No other core can run alongside the selected primary core."
   },
   "theme": {
     "title": "Theme",

@@ -83,6 +83,19 @@ async def modify_core_config(
     return db_core_config
 
 
+async def _drop_additional_core_refs(db: AsyncSession, core_ids: list[int]) -> None:
+    if not core_ids:
+        return
+
+    removed = set(core_ids)
+    result = await db.execute(select(Node).where(Node.additional_core_config_ids.is_not(None)))
+    for db_node in result.scalars().all():
+        current = db_node.additional_core_config_ids or []
+        remaining = [core_id for core_id in current if core_id not in removed]
+        if len(remaining) != len(current):
+            db_node.additional_core_config_ids = remaining or None
+
+
 async def remove_core_config(db: AsyncSession, db_core_config: CoreConfig) -> None:
     """
     Removes a core configuration from the database.
@@ -91,6 +104,7 @@ async def remove_core_config(db: AsyncSession, db_core_config: CoreConfig) -> No
         db (AsyncSession): The database session.
         db_core_config (CoreConfig): The CoreConfig object to be removed.
     """
+    await _drop_additional_core_refs(db, [db_core_config.id])
     await db.delete(db_core_config)
     await db.commit()
 
@@ -185,5 +199,6 @@ async def remove_cores(db: AsyncSession, core_ids: list[int]) -> None:
         return
 
     await db.execute(update(Node).where(Node.core_config_id.in_(core_ids)).values(core_config_id=None))
+    await _drop_additional_core_refs(db, core_ids)
     await db.execute(delete(CoreConfig).where(CoreConfig.id.in_(core_ids)))
     await db.commit()

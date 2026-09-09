@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -22,6 +24,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { LoaderButton } from '@/components/ui/loader-button'
 import type { NodeFormValues } from '@/features/nodes/forms/node-form'
 import type { CoreSimple } from '@/service/api'
+
+const MULTI_INSTANCE_CORE_TYPES = ['wg', 'singbox', 'openvpn', 'mtproto', 'l2tp']
 
 interface NodeModalProps {
   isDialogOpen: boolean
@@ -120,6 +124,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         keep_alive_unit: 'seconds',
         api_key: (node.api_key as string) || '',
         core_config_id: node.core_config_id ?? cores?.[0]?.id,
+        additional_core_config_ids: node.additional_core_config_ids ?? [],
         data_limit: dataLimitGB,
         data_limit_reset_strategy: node.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
         reset_time: node.reset_time ?? null,
@@ -176,6 +181,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
           keep_alive_unit: 'seconds',
           api_key: (nodeData.api_key as string) || '',
           core_config_id: nodeData.core_config_id ?? cores?.[0]?.id,
+          additional_core_config_ids: nodeData.additional_core_config_ids ?? [],
           data_limit: dataLimitGB,
           data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
           reset_time: nodeData.reset_time ?? null,
@@ -206,6 +212,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
               keep_alive_unit: 'seconds',
               api_key: (nodeData.api_key as string) || '',
               core_config_id: nodeData.core_config_id ?? cores?.[0]?.id,
+              additional_core_config_ids: nodeData.additional_core_config_ids ?? [],
               data_limit: dataLimitGB,
               data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
               reset_time: nodeData.reset_time ?? null,
@@ -237,6 +244,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         keep_alive_unit: 'seconds',
         api_key: '',
         core_config_id: cores?.[0]?.id,
+        additional_core_config_ids: [],
         data_limit: 0,
         data_limit_reset_strategy: DataLimitResetStrategy.no_reset,
         reset_time: -1,
@@ -357,7 +365,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
       onOpenChange(false)
       form.reset()
     } catch (error: any) {
-      const fields = ['name', 'address', 'port', 'core_config_id', 'api_key', 'keep_alive_unit', 'keep_alive', 'server_ca', 'connection_type', 'proxy_url', '']
+      const fields = ['name', 'address', 'port', 'core_config_id', 'additional_core_config_ids', 'api_key', 'keep_alive_unit', 'keep_alive', 'server_ca', 'connection_type', 'proxy_url', '']
       handleError({ error, fields, form, contextKey: 'nodes' })
     }
   }
@@ -525,6 +533,51 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                         <FormMessage />
                       </FormItem>
                     )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="additional_core_config_ids"
+                    render={({ field }) => {
+                      const primaryId = form.watch('core_config_id')
+                      const selected: number[] = field.value ?? []
+                      const selectable = (cores ?? []).filter(
+                        (core: CoreSimple) => core.id !== primaryId && MULTI_INSTANCE_CORE_TYPES.includes(core.type as string),
+                      )
+                      const toggle = (coreId: number, checked: boolean) => {
+                        field.onChange(checked ? [...selected, coreId] : selected.filter(id => id !== coreId))
+                      }
+                      return (
+                        <FormItem>
+                          <FormLabel>{t('nodeModal.additionalCores')}</FormLabel>
+                          <p className="text-xs text-muted-foreground">{t('nodeModal.additionalCoresHint')}</p>
+                          <FormControl>
+                            <div className="flex flex-col gap-2 rounded-md border p-3">
+                              {isLoadingCores ? (
+                                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  {t('loading', { defaultValue: 'Loading...' })}
+                                </span>
+                              ) : selectable.length === 0 ? (
+                                <span className="text-sm text-muted-foreground">{t('nodeModal.noAdditionalCores')}</span>
+                              ) : (
+                                selectable.map((core: CoreSimple) => (
+                                  <label key={core.id} className={cn('flex items-center gap-2 text-sm', dir === 'rtl' && 'flex-row-reverse')}>
+                                    <Checkbox
+                                      checked={selected.includes(core.id)}
+                                      onCheckedChange={checked => toggle(core.id, checked === true)}
+                                    />
+                                    <span>{core.name}</span>
+                                    <Badge variant="secondary">{core.type}</Badge>
+                                  </label>
+                                ))
+                              )}
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
                   />
 
                   <FormField
