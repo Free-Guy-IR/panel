@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-white-logo.png">
-      <img width="160" height="160" src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-black-logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-white-logo.png">
+      <img width="160" height="160" src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-black-logo.png">
     </picture>
   </a>
 </p>
@@ -37,7 +37,7 @@
     </a>
 </p>
 
-> **Примечание:** Это форк [Free-Guy-IR](https://github.com/Free-Guy-IR) оригинальной [панели PasarGuard](https://github.com/PasarGuard/panel), расширенный дополнительными типами ядра **sing-box (Hysteria2)**, **OpenVPN** и **MTProto (Telegram-прокси)** в дополнение к Xray и WireGuard.
+> **Примечание:** Это форк [Free-Guy-IR](https://github.com/Free-Guy-IR) оригинальной [панели PasarGuard](https://github.com/Free-Guy-IR/panel), расширенный дополнительными типами ядра **sing-box (Hysteria2)**, **OpenVPN** и **MTProto (Telegram-прокси)** в дополнение к Xray и WireGuard.
 
 <p align="center">
  <a href="./README.md">
@@ -58,8 +58,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer" >
-    <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="PasarGuard скриншоты" width="600" height="auto">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer" >
+    <img src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/screenshot.png" alt="PasarGuard скриншоты" width="600" height="auto">
   </a>
 </p>
 
@@ -72,8 +72,6 @@
         -   [✨ Функции](#-функции)
 -   [🚀 Руководство по установке](#-руководство-по-установке)
     -   [🖥️ Несколько нод на одном сервере](#️-несколько-нод-на-одном-сервере)
--   [📚 Документация](#-документация)
--   [💖 Пожертвования](#-пожертвования)
 
 ---
 
@@ -177,12 +175,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 
 **📁 Файлы находятся в** `/opt/pasarguard`
 
-**⚙️ Файл конфигурации:** `/opt/pasarguard/.env` (см. [Конфигурация](https://docs.pasarguard.org/ru/panel/configuration) для деталей)
+**⚙️ Файл конфигурации:** `/opt/pasarguard/.env` (см. Конфигурация для деталей)
 
 **💾 Файлы данных:** `/var/lib/pasarguard`
 
 **🔒 Важно:** Панель управления требует SSL-сертификат для безопасности
-- Получить SSL-сертификат: [Руководство](https://docs.pasarguard.org/ru/learn/ssl-certificate-cli)
+- Получить SSL-сертификат: Руководство
 - Доступ: `https://YOUR_DOMAIN:8000/dashboard/`
 
 **🔗 Для тестирования без домена:** Используйте SSH port forwarding (см. ниже)
@@ -235,39 +233,6 @@ node-eu-1 edit-env
 
 ---
 
-# 📚 Документация
-
-<div align="left">
-
-**📖 Официальная документация** - Полные руководства доступны на:
-
-🇺🇸 **[English](https://docs.pasarguard.org/en)**
-
-🇮🇷 **[فارسی](https://docs.pasarguard.org/fa)**
-
-🇷🇺 **[Русский](https://docs.pasarguard.org/ru)**
-
-</div>
-
-> **Участие:** Помогите улучшить документацию на [GitHub](https://github.com/PasarGuard/PasarGuard.github.io)
-
----
-
-# 💖 Пожертвования
-
-<div align="left">
-
-> **Поддержка разработки PasarGuard**
-
-Если PasarGuard помогает вам, рассмотрите возможность поддержки его разработки:
-
-[![Donate](https://img.shields.io/badge/Donate-Support%20Us-green?style=for-the-badge)](http://donate.pasarguard.org)
-
-**Спасибо за вашу поддержку!** 💖
-
-</div>
-
----
 
 <p align="center">
   Made with ❤️ for Internet freedom

@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-white-logo.png">
-      <img width="160" height="160" src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-black-logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-white-logo.png">
+      <img width="160" height="160" src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-black-logo.png">
     </picture>
   </a>
 </p>
@@ -37,7 +37,7 @@
     </a>
 </p>
 
-> **توجه:** این فورک [Free-Guy-IR](https://github.com/Free-Guy-IR) از [پنل اصلی پاسارگارد](https://github.com/PasarGuard/panel) است که با هسته‌های اضافه‌ی **sing-box (Hysteria2)**، **OpenVPN** و **MTProto (پروکسی تلگرام)** در کنار Xray و WireGuard گسترش داده شده.
+> **توجه:** این فورک [Free-Guy-IR](https://github.com/Free-Guy-IR) از [پنل اصلی پاسارگارد](https://github.com/Free-Guy-IR/panel) است که با هسته‌های اضافه‌ی **sing-box (Hysteria2)**، **OpenVPN** و **MTProto (پروکسی تلگرام)** در کنار Xray و WireGuard گسترش داده شده.
 
 <p align="center">
  <a href="./README.md">
@@ -58,8 +58,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer" >
-    <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="پاسارگارد اسکرین‌شات" width="600" height="auto">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer" >
+    <img src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/screenshot.png" alt="پاسارگارد اسکرین‌شات" width="600" height="auto">
   </a>
 </p>
 
@@ -72,8 +72,6 @@
         -   [✨ ویژگی‌ها](#-ویژگی‌ها)
 -   [🚀 راهنمای نصب](#-راهنمای-نصب)
     -   [🖥️ چند نود روی یک سرور](#️-چند-نود-روی-یک-سرور)
--   [📚 مستندات](#-مستندات)
--   [💖 حمایت مالی](#-حمایت-مالی)
 
 ---
 
@@ -177,12 +175,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 
 **📁 فایل‌ها در مسیر** `/opt/pasarguard` قرار دارند
 
-**⚙️ فایل پیکربندی:** `/opt/pasarguard/.env` (برای جزئیات [پیکربندی](https://docs.pasarguard.org/fa/panel/configuration) را ببینید)
+**⚙️ فایل پیکربندی:** `/opt/pasarguard/.env` (برای جزئیات پیکربندی را ببینید)
 
 **💾 فایل‌های داده:** `/var/lib/pasarguard`
 
 **🔒 مهم:** داشبورد برای امنیت نیاز به گواهی SSL دارد
-- دریافت گواهی SSL: [راهنما](https://docs.pasarguard.org/fa/learn/ssl-certificate-cli)
+- دریافت گواهی SSL: راهنما
 - دسترسی: `https://YOUR_DOMAIN:8000/dashboard/`
 
 **🔗 برای تست بدون دامنه:** از SSH port forwarding استفاده کنید (پایین را ببینید)
@@ -235,39 +233,6 @@ node-eu-1 edit-env
 
 ---
 
-# 📚 مستندات
-
-<div align="right">
-
-**📖 مستندات رسمی** - راهنماهای کامل در دسترس:
-
-🇺🇸 **[English](https://docs.pasarguard.org/en)**
-
-🇮🇷 **[فارسی](https://docs.pasarguard.org/fa)**
-
-🇷🇺 **[Русский](https://docs.pasarguard.org/ru)**
-
-</div>
-
-> **مشارکت:** در بهبود مستندات در [GitHub](https://github.com/PasarGuard/PasarGuard.github.io) کمک کنید
-
----
-
-# 💖 حمایت مالی
-
-<div align="right">
-
-> **حمایت از توسعه پاسارگارد**
-
-اگر پاسارگارد به شما کمک می‌کند، از توسعه آن حمایت کنید:
-
-[![Donate](https://img.shields.io/badge/Donate-Support%20Us-green?style=for-the-badge)](http://donate.pasarguard.org)
-
-**از حمایت شما متشکریم!** 💖
-
-</div>
-
----
 
 <p align="center">
   Made with ❤️ for Internet freedom

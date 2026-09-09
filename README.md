@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-white-logo.png">
-      <img width="160" height="160" src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-black-logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-white-logo.png">
+      <img width="160" height="160" src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/PasarGuard-black-logo.png">
     </picture>
   </a>
 </p>
@@ -15,25 +15,25 @@
 
 ---
 
-> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/PasarGuard/panel), extended with **sing-box (Hysteria2)**, **OpenVPN**, **MTProto (Telegram proxy)** and **L2TP/IPsec** as additional core types alongside Xray and WireGuard.
+> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/Free-Guy-IR/panel), extended with **sing-box (Hysteria2)**, **OpenVPN**, **MTProto (Telegram proxy)** and **L2TP/IPsec** as additional core types alongside Xray and WireGuard.
 
 ---
 
 <br/>
 <p align="center">
-    <a href="https://github.com/PasarGuard/panel/actions/workflows/build.yml" target="_blank">
+    <a href="https://github.com/Free-Guy-IR/panel/actions/workflows/build.yml" target="_blank">
         <img src="https://img.shields.io/github/actions/workflow/status/PasarGuard/panel/build.yml?style=flat-square" />
     </a>
     <a href="https://hub.docker.com/r/PasarGuard/panel" target="_blank">
         <img src="https://img.shields.io/docker/pulls/pasarguard/panel?style=flat-square&logo=docker" />
     </a>
-    <a href="https://github.com/PasarGuard/panel/blob/main/LICENSE" target="_blank">
+    <a href="https://github.com/Free-Guy-IR/panel/blob/main/LICENSE" target="_blank">
         <img src="https://img.shields.io/github/license/PasarGuard/panel?style=flat-square" />
     </a>
     <a href="https://t.me/Pasar_Guard" target="_blank">
         <img src="https://img.shields.io/badge/telegram-group-blue?style=flat-square&logo=telegram" />
     </a>
-    <a href="https://github.com/PasarGuard/panel" target="_blank">
+    <a href="https://github.com/Free-Guy-IR/panel" target="_blank">
         <img src="https://img.shields.io/github/stars/PasarGuard/panel?style=social" />
     </a>
 </p>
@@ -53,8 +53,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer" >
-    <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="PasarGuard screenshots" width="600" height="auto">
+  <a href="https://github.com/Free-Guy-IR/panel" target="_blank" rel="noopener noreferrer" >
+    <img src="https://github.com/Free-Guy-IR/panel/raw/main/docs/assets/screenshot.png" alt="PasarGuard screenshots" width="600" height="auto">
   </a>
 </p>
 
@@ -67,8 +67,6 @@
         -   [✨ Features](#-features)
 -   [🚀 Installation guide](#-installation-guide)
     -   [🖥️ Multiple Nodes on One Server](#️-multiple-nodes-on-one-server)
--   [📚 Documentation](#-documentation)
--   [💖 Donation](#-donation)
 
 ---
 
@@ -172,12 +170,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 
 **📁 Files are located at** `/opt/pasarguard`
 
-**⚙️ Config file:** `/opt/pasarguard/.env` (see [Configuration](https://docs.pasarguard.org/en/panel/configuration) for details)
+**⚙️ Config file:** `/opt/pasarguard/.env` (see Configuration for details)
 
 **💾 Data files:** `/var/lib/pasarguard`
 
 **🔒 Important:** Dashboard requires SSL certificate for security
-- Get SSL certificate: [Guide](https://docs.pasarguard.org/en/learn/ssl-certificate-cli)
+- Get SSL certificate: Guide
 - Access: `https://YOUR_DOMAIN:8000/dashboard/`
 
 **🔗 For testing without domain:** Use SSH port forwarding (see below)
@@ -228,41 +226,6 @@ You can run any other subcommand for that same node with the same prefix (`node-
 
 > ⚠️ **Important:** Never reuse ports between nodes. The connection port and every core's inbound/instance ports (Xray, sing-box, OpenVPN, MTProto, ...) attached to each node must be completely unique per node.
 
-# 📚 Documentation
-
-<div align="left">
-
-**📖 Official Documentation** - Complete guides available in:
-
-🇺🇸 **[English](https://docs.pasarguard.org/en)**
-
-🇮🇷 **[فارسی](https://docs.pasarguard.org/fa)**
-
-🇷🇺 **[Русский](https://docs.pasarguard.org/ru)**
-
-🇨🇳 **[简体中文](https://docs.pasarguard.org/zh-cn)**
-
-</div>
-
-> **Contributing:** Help improve documentation on [GitHub](https://github.com/PasarGuard/PasarGuard.github.io)
-
----
-
-# 💖 Donation
-
-<div align="left">
-
-> **Support PasarGuard Development**
-
-If PasarGuard helps you, consider supporting its development:
-
-[![Donate](https://img.shields.io/badge/Donate-Support%20Us-green?style=for-the-badge)](https://donate.pasarguard.org)
-
-**Thank you for your support!** 💖
-
-</div>
-
----
 
 <p align="center">
   Made with ❤️ for Internet freedom
