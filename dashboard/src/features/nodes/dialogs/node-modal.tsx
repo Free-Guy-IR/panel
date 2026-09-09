@@ -5,9 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
@@ -547,30 +546,77 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                       const toggle = (coreId: number, checked: boolean) => {
                         field.onChange(checked ? [...selected, coreId] : selected.filter(id => id !== coreId))
                       }
+                      const enabledCount = selectable.filter((core: CoreSimple) => selected.includes(core.id)).length
+
                       return (
                         <FormItem>
                           <FormLabel>{t('nodeModal.additionalCores')}</FormLabel>
-                          <p className="text-xs text-muted-foreground">{t('nodeModal.additionalCoresHint')}</p>
+                          <p className="text-muted-foreground text-xs">{t('nodeModal.additionalCoresHint')}</p>
                           <FormControl>
-                            <div className="flex flex-col gap-2 rounded-md border p-3">
+                            <div className="bg-background rounded-md border">
+                              <div className={cn('flex items-center justify-between gap-2 border-b px-3 py-2', dir === 'rtl' && 'flex-row-reverse')}>
+                                <div className={cn('flex min-w-0 items-center gap-2', dir === 'rtl' && 'flex-row-reverse')}>
+                                  <span className="text-sm font-medium">{t('nodeModal.additionalCores')}</span>
+                                  <span className="text-muted-foreground text-[10px]">
+                                    {enabledCount}/{selectable.length}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={selectable.length === 0}
+                                    onClick={() => field.onChange(selectable.map((core: CoreSimple) => core.id))}
+                                  >
+                                    {t('selectAll', { defaultValue: 'Select all' })}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={selected.length === 0}
+                                    onClick={() => field.onChange([])}
+                                  >
+                                    {t('deselectAll', { defaultValue: 'Clear' })}
+                                  </Button>
+                                </div>
+                              </div>
+
                               {isLoadingCores ? (
-                                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="text-muted-foreground flex items-center gap-2 px-3 py-3 text-xs">
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                   {t('loading', { defaultValue: 'Loading...' })}
-                                </span>
+                                </div>
                               ) : selectable.length === 0 ? (
-                                <span className="text-sm text-muted-foreground">{t('nodeModal.noAdditionalCores')}</span>
+                                <div className="bg-muted/40 text-muted-foreground m-2 rounded-md border border-dashed px-3 py-2 text-xs">
+                                  {t('nodeModal.noAdditionalCores')}
+                                </div>
                               ) : (
-                                selectable.map((core: CoreSimple) => (
-                                  <label key={core.id} className={cn('flex items-center gap-2 text-sm', dir === 'rtl' && 'flex-row-reverse')}>
-                                    <Checkbox
-                                      checked={selected.includes(core.id)}
-                                      onCheckedChange={checked => toggle(core.id, checked === true)}
-                                    />
-                                    <span>{core.name}</span>
-                                    <Badge variant="secondary">{core.type}</Badge>
-                                  </label>
-                                ))
+                                <div className="grid gap-2 p-2 sm:grid-cols-2">
+                                  {selectable.map((core: CoreSimple) => (
+                                    <div
+                                      key={core.id}
+                                      className={cn(
+                                        'bg-muted/40 flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2',
+                                        dir === 'rtl' && 'flex-row-reverse',
+                                      )}
+                                    >
+                                      <div className={cn('flex min-w-0 items-center gap-2', dir === 'rtl' && 'flex-row-reverse')}>
+                                        <span className="truncate text-xs font-medium">{core.name}</span>
+                                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                          {core.type}
+                                        </Badge>
+                                      </div>
+                                      <Switch
+                                        checked={selected.includes(core.id)}
+                                        onCheckedChange={checked => toggle(core.id, checked === true)}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </FormControl>
