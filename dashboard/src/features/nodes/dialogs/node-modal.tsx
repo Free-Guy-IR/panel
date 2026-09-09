@@ -604,8 +604,8 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                         dir === 'rtl' && 'flex-row-reverse',
                                       )}
                                     >
-                                      <div className={cn('flex min-w-0 items-center gap-2', dir === 'rtl' && 'flex-row-reverse')}>
-                                        <span className="truncate text-xs font-medium">{core.name}</span>
+                                      <div className={cn('flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1', dir === 'rtl' && 'flex-row-reverse')}>
+                                        <span className="text-xs font-medium break-all">{core.name}</span>
                                         <Badge variant="secondary" className="shrink-0 text-[10px]">
                                           {core.type}
                                         </Badge>
