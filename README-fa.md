@@ -163,6 +163,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
 ```
 
+**صفحهٔ اشتراک اختصاصی:**
+نصب‌کننده هنگام نصب می‌پرسد که صفحهٔ اشتراک PasarGuard نصب شود یا نه. برای نصب بدون پرسش، `--sub-template` را با یک زبان (`fa`، `en`، `ru`، `zh`) اضافه کنید:
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb --sub-template fa
+```
+
 ### 📋 پس از نصب:
 
 <div align="right">
