@@ -160,6 +160,12 @@ sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasar
 sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
 ```
 
+**自定义订阅页面：**
+安装程序会询问是否安装 PasarGuard 订阅页面。若要跳过询问直接安装，请附加 `--sub-template` 及语言（`fa`、`en`、`ru`、`zh`）：
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/Free-Guy-IR/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb --sub-template zh
+```
+
 ### 📋 安装后：
 
 <div align="left">
