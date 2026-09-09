@@ -111,6 +111,7 @@ jobs:
                           echo "$kit pinned at $got"
                       fi
                   done
+                  echo "KITS_PINNED=$KITS" >> "$GITHUB_ENV"
                   KITS="$(echo "$KITS" | tr " " "\n" | sed "s/@.*//" | tr "\n" " ")"
                   # Install only after every kit exists: core-kit resolves its
                   # siblings through file:../<kit>, so they must already be on disk.
@@ -137,20 +138,20 @@ jobs:
 
             - name: Verify pinned kits did not drift
               run: |
-                  expected_mtproto="d80ced491f8ab0ddc3620bb48ceae82f5dfa15a6"
-                  got="$(git -C "$GITHUB_WORKSPACE/../mtproto-config-kit" rev-parse HEAD)"
-                  if [ "$got" != "$expected_mtproto" ]; then
-                      echo "::error::mtproto-config-kit drifted: $got != $expected_mtproto"
-                      exit 1
-                  fi
-                  echo "mtproto-config-kit verified at $got"
-                  expected_l2tp="fce077c58e97ae566f20aefdbbcec13a8ff869eb"
-                  got="$(git -C "$GITHUB_WORKSPACE/../l2tp-config-kit" rev-parse HEAD)"
-                  if [ "$got" != "$expected_l2tp" ]; then
-                      echo "::error::l2tp-config-kit drifted: $got != $expected_l2tp"
-                      exit 1
-                  fi
-                  echo "l2tp-config-kit verified at $got"
+                  for entry in $KITS_PINNED; do
+                      kit="${entry%%@*}"
+                      ref="${entry#*@}"
+                      if [ "$ref" = "$entry" ]; then
+                          echo "::error::$kit is not pinned"
+                          exit 1
+                      fi
+                      got="$(git -C "$GITHUB_WORKSPACE/../$kit" rev-parse HEAD)"
+                      if [ "$got" != "$ref" ]; then
+                          echo "::error::$kit drifted: $got != $ref"
+                          exit 1
+                      fi
+                      echo "$kit verified at $got"
+                  done
 
             - name: Build dashboard
               run: ./build_dashboard.sh
