@@ -454,13 +454,6 @@ export type XrayMuxSettingsOutputXudpConcurrency = number | null
 
 export type XrayMuxSettingsOutputConcurrency = number | null
 
-export interface XrayMuxSettingsOutput {
-  enabled?: boolean
-  concurrency?: XrayMuxSettingsOutputConcurrency
-  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
-  xudpProxyUDP443?: Xudp
-}
-
 export type XrayMuxSettingsInputXudpConcurrency = number | null
 
 export type XrayMuxSettingsInputConcurrency = number | null
@@ -493,6 +486,13 @@ export const Xudp = {
   allow: 'allow',
   skip: 'skip',
 } as const
+
+export interface XrayMuxSettingsOutput {
+  enabled?: boolean
+  concurrency?: XrayMuxSettingsOutputConcurrency
+  xudpConcurrency?: XrayMuxSettingsOutputXudpConcurrency
+  xudpProxyUDP443?: Xudp
+}
 
 export type XMuxSettingsHKeepAlivePeriod = number | null
 
@@ -714,18 +714,6 @@ export type UsersPermissionsActivateNextPlanAnyOf = { [key: string]: PermissionS
 
 export type UsersPermissionsActivateNextPlan = boolean | UsersPermissionsActivateNextPlanAnyOf | null
 
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
-
 export type UsersPermissionsSetOwnerAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsSetOwner = boolean | UsersPermissionsSetOwnerAnyOf | null
@@ -749,6 +737,18 @@ export type UsersPermissionsUpdate = boolean | UsersPermissionsUpdateAnyOf | nul
 export type UsersPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsReadSimple = boolean | UsersPermissionsReadSimpleAnyOf | null
+
+export interface UsersPermissions {
+  create?: UsersPermissionsCreate
+  read?: UsersPermissionsRead
+  read_simple?: UsersPermissionsReadSimple
+  update?: UsersPermissionsUpdate
+  delete?: UsersPermissionsDelete
+  reset_usage?: UsersPermissionsResetUsage
+  revoke_sub?: UsersPermissionsRevokeSub
+  set_owner?: UsersPermissionsSetOwner
+  activate_next_plan?: UsersPermissionsActivateNextPlan
+}
 
 export type UsersPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -1107,7 +1107,7 @@ export type UserModifyDataLimit = number | null
 
 export type UserModifyExpire = string | number | null
 
-export type UserModifyProxySettings = ProxyTable | null
+export type UserModifyProxySettings = ProxyTableInput | null
 
 export interface UserModify {
   proxy_settings?: UserModifyProxySettings
@@ -1194,7 +1194,7 @@ export type UserCreateDataLimit = number | null
 export type UserCreateExpire = string | number | null
 
 export interface UserCreate {
-  proxy_settings?: ProxyTable
+  proxy_settings?: ProxyTableInput
   expire?: UserCreateExpire
   /** data_limit can be 0 or greater */
   data_limit?: UserCreateDataLimit
@@ -1211,23 +1211,14 @@ export interface UserCreate {
   status?: UserCreateStatus
 }
 
-export type UserCountMetricStatsListStats = { [key: string]: UserCountMetricStat[] }
-
 export type UserCountMetricStatsListPeriod = Period | null
-
-export interface UserCountMetricStatsList {
-  period?: UserCountMetricStatsListPeriod
-  start: string
-  end: string
-  metric: UserCountMetric
-  count_during_period?: number
-  stats: UserCountMetricStatsListStats
-}
 
 export interface UserCountMetricStat {
   period_start: string
   count: number
 }
+
+export type UserCountMetricStatsListStats = { [key: string]: UserCountMetricStat[] }
 
 export type UserCountMetric = (typeof UserCountMetric)[keyof typeof UserCountMetric]
 
@@ -1237,6 +1228,15 @@ export const UserCountMetric = {
   expired: 'expired',
   limited: 'limited',
 } as const
+
+export interface UserCountMetricStatsList {
+  period?: UserCountMetricStatsListPeriod
+  start: string
+  end: string
+  metric: UserCountMetric
+  count_during_period?: number
+  stats: UserCountMetricStatsListStats
+}
 
 export type UserConnectionLimitResponseUsername = string | null
 
@@ -1294,6 +1294,8 @@ export interface TrojanSettings {
 
 export type TransportSettingsWebsocketSettings = WebSocketSettings | null
 
+export type TransportSettingsTcpSettings = TcpSettings | null
+
 export type TransportSettingsKcpSettings = KCPSettings | null
 
 export type TransportSettingsGrpcSettings = GRPCSettings | null
@@ -1345,8 +1347,6 @@ export interface TcpSettings {
   request?: TcpSettingsRequest
   response?: TcpSettingsResponse
 }
-
-export type TransportSettingsTcpSettings = TcpSettings | null
 
 export interface SystemUsersStats {
   total_user: number
@@ -1482,6 +1482,14 @@ export interface SubscriptionTemplates {
 
 export type SubscriptionResponseHeaders = { [key: string]: unknown }
 
+export type SubRuleResponseHeaders = { [key: string]: unknown }
+
+export interface SubRule {
+  pattern: string
+  target: ConfigFormat
+  response_headers?: SubRuleResponseHeaders
+}
+
 export interface SubFormatEnable {
   links?: boolean
   links_base64?: boolean
@@ -1513,12 +1521,10 @@ export interface Subscription {
   custom_variables?: CustomVariable[]
 }
 
-export type SubRuleResponseHeaders = { [key: string]: unknown }
+export type StrictL2TPSettingsPassword = string | null
 
-export interface SubRule {
-  pattern: string
-  target: ConfigFormat
-  response_headers?: SubRuleResponseHeaders
+export interface StrictL2TPSettings {
+  password?: StrictL2TPSettingsPassword
 }
 
 export type SingBoxMuxSettingsBrutal = Brutal | null
@@ -1739,6 +1745,10 @@ export interface RoleAccess {
   allowed_group_ids?: RoleAccessAllowedGroupIds
 }
 
+export type ResolvedAddressCountry = string | null
+
+export type ResolvedAddressProvider = string | null
+
 export interface ResolvedAddress {
   address: string
   provider?: ResolvedAddressProvider
@@ -1749,10 +1759,6 @@ export interface ResolvedAddressesResponse {
   addresses: ResolvedAddress[]
   enabled?: boolean
 }
-
-export type ResolvedAddressCountry = string | null
-
-export type ResolvedAddressProvider = string | null
 
 export interface RemoveUsersResponse {
   users: string[]
@@ -1886,6 +1892,20 @@ export interface RealityScanRequest {
   target: string
   /** Per-probe timeout in seconds (1-20, default 10) */
   timeout?: RealityScanRequestTimeout
+}
+
+export interface ProxyTableInput {
+  vmess?: VMessSettings
+  vless?: VlessSettings
+  trojan?: TrojanSettings
+  shadowsocks?: ShadowsocksSettings
+  wireguard?: WireGuardSettings
+  hysteria?: HysteriaSettings
+  hysteria2?: Hysteria2Settings
+  openvpn?: OpenVPNSettings
+  mtproto?: MTProtoSettings
+  tuic?: TuicSettings
+  l2tp?: StrictL2TPSettings
 }
 
 export interface ProxyTable {
@@ -2164,6 +2184,13 @@ export type NodesPermissionsCreate = boolean | NodesPermissionsCreateAnyOf | nul
 
 export type NodeUsageStatsListPeriod = Period | null
 
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
+
 export interface NodeUsageStat {
   period_start: string
   uplink: number
@@ -2171,13 +2198,6 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
-
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -2236,6 +2256,8 @@ export type NodeResponseProxyUrl = string | null
 
 export type NodeResponseApiKey = string | null
 
+export type NodeResponseAdditionalCoreConfigIds = number[] | null
+
 export type NodeResponseCoreConfigId = number | null
 
 export interface NodeResponse {
@@ -2249,6 +2271,7 @@ export interface NodeResponse {
   server_ca: string
   keep_alive: number
   core_config_id: NodeResponseCoreConfigId
+  additional_core_config_ids?: NodeResponseAdditionalCoreConfigIds
   api_key: NodeResponseApiKey
   data_limit?: number
   data_limit_reset_strategy?: DataLimitResetStrategy
@@ -2327,6 +2350,8 @@ export type NodeModifyDataLimit = number | null
 
 export type NodeModifyApiKey = string | null
 
+export type NodeModifyAdditionalCoreConfigIds = number[] | null
+
 export type NodeModifyCoreConfigId = number | null
 
 export type NodeModifyKeepAlive = number | null
@@ -2353,6 +2378,7 @@ export interface NodeModify {
   server_ca?: NodeModifyServerCa
   keep_alive?: NodeModifyKeepAlive
   core_config_id?: NodeModifyCoreConfigId
+  additional_core_config_ids?: NodeModifyAdditionalCoreConfigIds
   api_key?: NodeModifyApiKey
   data_limit?: NodeModifyDataLimit
   data_limit_reset_strategy?: NodeModifyDataLimitResetStrategy
@@ -2369,6 +2395,21 @@ export interface NodeGeoFilesUpdate {
 
 export type NodeCreateProxyUrl = string | null
 
+export type NodeCreateAdditionalCoreConfigIds = number[] | null
+
+export interface NodeCoreUpdate {
+  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
+  core_version?: string
+}
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
+
 export interface NodeCreate {
   name: string
   address: string
@@ -2380,6 +2421,7 @@ export interface NodeCreate {
   server_ca: string
   keep_alive: number
   core_config_id: number
+  additional_core_config_ids?: NodeCreateAdditionalCoreConfigIds
   api_key: string
   data_limit?: number
   data_limit_reset_strategy?: DataLimitResetStrategy
@@ -2396,19 +2438,6 @@ export interface NodeCreate {
   internal_timeout?: number
   proxy_url?: NodeCreateProxyUrl
 }
-
-export interface NodeCoreUpdate {
-  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
-  core_version?: string
-}
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
 
 export type NextPlanModelExpire = number | null
 

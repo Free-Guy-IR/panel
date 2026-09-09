@@ -99,6 +99,15 @@ def _l2tp_unsupported_message(node_version: str) -> str:
     )
 
 
+_MULTI_INSTANCE_BACKENDS = {
+    CoreType.wg: service.BackendType.WIREGUARD,
+    CoreType.singbox: service.BackendType.SING_BOX,
+    CoreType.openvpn: service.BackendType.OPEN_VPN,
+    CoreType.mtproto: service.BackendType.MTPROTO,
+    CoreType.l2tp: service.BackendType.L2TP,
+}
+
+
 class NodeOperation(BaseOperation):
     def __init__(self, operator_type: OperatorType):
         super().__init__(operator_type)
@@ -232,6 +241,135 @@ class NodeOperation(BaseOperation):
             asyncio.create_task(notification.error_node(node_notif))
 
     @staticmethod
+    def _node_core_ids(db_node: Node) -> list[int]:
+        core_ids = [db_node.core_config_id or 1]
+        for core_id in db_node.additional_core_config_ids or []:
+            if core_id not in core_ids:
+                core_ids.append(core_id)
+        return core_ids
+
+    async def _validate_additional_cores(
+        self, db: AsyncSession, core_ids: list[int] | None, primary_id: int | None
+    ) -> None:
+        if not core_ids:
+            return
+
+        allowed = ", ".join(sorted(core_type.value for core_type in _MULTI_INSTANCE_BACKENDS))
+        primary_core = await self.get_validated_core_config(db, primary_id or 1)
+        taken_types = {primary_core.type: primary_core.name}
+        seen = set()
+
+        for core_id in core_ids:
+            if core_id == (primary_id or 1):
+                await self.raise_error(message="A core cannot be both the primary and an additional core", code=400)
+            if core_id in seen:
+                await self.raise_error(message=f"Core {core_id} is listed twice as an additional core", code=400)
+            seen.add(core_id)
+
+            db_core = await self.get_validated_core_config(db, core_id)
+            if db_core.type not in _MULTI_INSTANCE_BACKENDS:
+                await self.raise_error(
+                    message=f'Core "{db_core.name}" is a "{db_core.type.value}" core; only {allowed} cores can run alongside another core',
+                    code=400,
+                )
+            if db_core.type in taken_types:
+                await self.raise_error(
+                    message=f'A node can run only one "{db_core.type.value}" core, and "{taken_types[db_core.type]}" already uses it',
+                    code=400,
+                )
+            taken_types[db_core.type] = db_core.name
+
+    @staticmethod
+    async def _node_union_users(db: AsyncSession, db_node: Node) -> list:
+        core_ids = NodeOperation._node_core_ids(db_node)
+        resolved_cores = await core_manager.get_cores(set(core_ids) | {1})
+        default_core = resolved_cores.get(1)
+
+        inbound_tags, protocols = [], set()
+        for core_id in core_ids:
+            core = resolved_cores.get(core_id) or default_core
+            if core is None:
+                continue
+            inbound_tags.extend(core.inbounds)
+            protocols.update(core.protocols)
+
+        return await core_users(db=db, inbound_tags=inbound_tags, allowed_protocols=frozenset(protocols))
+
+    @staticmethod
+    def _extra_cores_for(db_node: Node, cores_by_id: dict, users_by_core: dict) -> list[tuple]:
+        primary_id = db_node.core_config_id or 1
+        return [
+            (core_id, cores_by_id.get(core_id), users_by_core.get(core_id, []))
+            for core_id in NodeOperation._node_core_ids(db_node)
+            if core_id != primary_id
+        ]
+
+    @staticmethod
+    async def _running_backend_types(pg_node: PasarGuardNode) -> set:
+        try:
+            listed = await pg_node.list_backends()
+        except Exception:
+            return set()
+        return set(listed.types) if listed is not None else set()
+
+    @staticmethod
+    async def _reconcile_extra_cores(db: AsyncSession, pg_node: PasarGuardNode, db_node: Node) -> str:
+        primary_id = db_node.core_config_id or 1
+        extra_ids = [core_id for core_id in NodeOperation._node_core_ids(db_node) if core_id != primary_id]
+        if not extra_ids:
+            return ""
+
+        cores_by_id, users_by_core = await NodeOperation._get_core_users_map(db, set(extra_ids))
+        extra_cores = [(core_id, cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in extra_ids]
+        return await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores)
+
+    @staticmethod
+    async def _add_extra_cores(pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None) -> str:
+        if not extra_cores:
+            return ""
+
+        problems = []
+        already_running = await NodeOperation._running_backend_types(pg_node)
+
+        for core_id, extra_core, extra_users in extra_cores or []:
+            if extra_core is None:
+                logger.warning(f'Extra core "{core_id}" for node "{db_node.name}" could not be resolved')
+                problems.append(f"core {core_id} not found")
+                continue
+
+            backend_type = _MULTI_INSTANCE_BACKENDS.get(extra_core.type)
+            if backend_type is None:
+                problems.append(f"core {core_id} skipped ({extra_core.type.value} cannot run alongside another core)")
+                continue
+
+            if backend_type in already_running:
+                logger.debug(f'Core "{core_id}" is already running on "{db_node.name}" node')
+                continue
+
+            if extra_core.type == CoreType.l2tp:
+                known_version = await pg_node.node_version()
+                if _node_lacks_l2tp(known_version):
+                    problems.append(f"core {core_id}: {_l2tp_unsupported_message(known_version)}")
+                    continue
+
+            try:
+                await pg_node.add_backend(
+                    config=extra_core.to_str(),
+                    backend_type=backend_type,
+                    users=extra_users,
+                )
+                already_running.add(backend_type)
+                logger.info(f'Added {extra_core.type.value} core "{core_id}" to "{db_node.name}" node')
+            except NodeAPIError as e:
+                logger.error(f'Failed to add core "{core_id}" to "{db_node.name}": {e.detail}')
+                problems.append(f"core {core_id}: {e.detail}")
+            except Exception as e:
+                logger.error(f'Failed to add core "{core_id}" to "{db_node.name}": {e}')
+                problems.append(f"core {core_id}: {e}")
+
+        return "; ".join(problems)[:1024]
+
+    @staticmethod
     async def _get_core_users_map(
         db: AsyncSession, core_ids: set[int]
     ) -> tuple[dict[int, object | None], dict[int, list]]:
@@ -305,7 +443,7 @@ class NodeOperation(BaseOperation):
         return await pg_node.start(**start_kwargs)
 
     @staticmethod
-    async def connect_node(db_node: Node, core, users: list) -> dict | None:
+    async def connect_node(db_node: Node, core, users: list, extra_cores: list[tuple] | None = None) -> dict | None:
         """
         Connect to a node and return status result (does NOT update database).
 
@@ -360,10 +498,12 @@ class NodeOperation(BaseOperation):
 
             logger.info(f'Connected to "{db_node.name}" node v{info.node_version}, core run on v{info.core_version}')
 
+            failed_extras = await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores)
+
             return {
                 "node_id": db_node.id,
                 "status": NodeStatus.connected,
-                "message": "",
+                "message": failed_extras,
                 "xray_version": info.core_version,
                 "node_version": info.node_version,
                 "old_status": old_status,
@@ -378,7 +518,7 @@ class NodeOperation(BaseOperation):
                     return {
                         "node_id": db_node.id,
                         "status": NodeStatus.connected,
-                        "message": "",
+                        "message": await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
                         "xray_version": attached.core_version,
                         "node_version": attached.node_version,
                         "old_status": old_status,
@@ -408,6 +548,7 @@ class NodeOperation(BaseOperation):
 
     async def create_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
         await self.get_validated_core_config(db, new_node.core_config_id)
+        await self._validate_additional_cores(db, new_node.additional_core_config_ids, new_node.core_config_id)
         try:
             db_node = await create_node(db, new_node)
         except IntegrityError:
@@ -430,6 +571,12 @@ class NodeOperation(BaseOperation):
         db_node = await self.get_validated_node(db=db, node_id=node_id)
         if modified_node.core_config_id is not None:
             await self.get_validated_core_config(db, modified_node.core_config_id)
+        if modified_node.additional_core_config_ids is not None:
+            await self._validate_additional_cores(
+                db,
+                modified_node.additional_core_config_ids,
+                modified_node.core_config_id if modified_node.core_config_id is not None else db_node.core_config_id,
+            )
 
         try:
             db_node = await modify_node(db, db_node, modified_node)
@@ -707,7 +854,7 @@ class NodeOperation(BaseOperation):
         if not nodes:
             return
 
-        core_ids = {node.core_config_id or 1 for node in nodes}
+        core_ids = {core_id for node in nodes for core_id in self._node_core_ids(node)}
         cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids)
         sem = asyncio.Semaphore(CONNECT_CONCURRENCY)
 
@@ -729,7 +876,12 @@ class NodeOperation(BaseOperation):
                     }
 
                 core_id = node.core_config_id or 1
-                return await self.connect_node(node, cores_by_id.get(core_id), users_by_core.get(core_id, []))
+                return await self.connect_node(
+                    node,
+                    cores_by_id.get(core_id),
+                    users_by_core.get(core_id, []),
+                    self._extra_cores_for(node, cores_by_id, users_by_core),
+                )
 
         results = await asyncio.gather(*[connect_single(node) for node in nodes])
 
@@ -788,9 +940,10 @@ class NodeOperation(BaseOperation):
             return
 
         core_id = db_node.core_config_id or 1
-        cores_by_id, users_by_core = await self._get_core_users_map(db, {core_id})
+        cores_by_id, users_by_core = await self._get_core_users_map(db, set(self._node_core_ids(db_node)))
         core = cores_by_id.get(core_id)
         users = users_by_core.get(core_id, [])
+        extra_cores = self._extra_cores_for(db_node, cores_by_id, users_by_core)
 
         # Update node manager
         try:
@@ -814,7 +967,7 @@ class NodeOperation(BaseOperation):
             return
 
         # Connect the node
-        result = await NodeOperation.connect_node(db_node, core, users)
+        result = await NodeOperation.connect_node(db_node, core, users, extra_cores)
 
         if not result:
             return
@@ -1071,9 +1224,7 @@ class NodeOperation(BaseOperation):
             await self.raise_error(message="Node is not connected", code=409)
 
         try:
-            core_id = db_node.core_config_id or 1
-            _, users_by_core = await self._get_core_users_map(db, {core_id})
-            users = users_by_core.get(core_id, [])
+            users = await self._node_union_users(db, db_node)
             if await node_manager.sync_full(node_id, users, flush_pending=flush_users) is None:
                 await self.raise_error(message="Node is not connected", code=409)
         except NodeAPIError as e:
@@ -1195,6 +1346,7 @@ class NodeOperation(BaseOperation):
             server_ca=node.server_ca,
             keep_alive=node.keep_alive,
             core_config_id=node.core_config_id,
+            additional_core_config_ids=node.additional_core_config_ids,
             api_key=node.api_key,
             data_limit=node.data_limit,
             data_limit_reset_strategy=node.data_limit_reset_strategy,
