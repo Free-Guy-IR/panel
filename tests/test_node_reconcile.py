@@ -107,3 +107,17 @@ async def test_removal_order_is_deterministic():
     await NodeOperation._remove_surplus_backends(pg, node(), [], CoreType.xray)
 
     assert pg.removed == sorted(pg.removed, key=lambda item: int(item))
+
+
+@pytest.mark.asyncio
+async def test_a_backend_type_the_panel_does_not_manage_is_left_alone():
+    class NewerNode(FakeNode):
+        async def list_backends(self):
+            return SimpleNamespace(types=[service.BackendType.XRAY, 99])
+
+    pg = NewerNode([service.BackendType.XRAY])
+
+    message = await NodeOperation._remove_surplus_backends(pg, node(), [], CoreType.xray)
+
+    assert message == ""
+    assert pg.removed == [], "a type from a newer node image must not be reaped as surplus"
