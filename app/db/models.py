@@ -58,6 +58,13 @@ users_groups_association = Table(
     fk_id_table_column("groups_id", "groups.id", primary_key=True),
 )
 
+node_additional_cores_association = Table(
+    "node_additional_cores",
+    Base.metadata,
+    fk_id_table_column("node_id", "nodes.id", primary_key=True, ondelete="CASCADE"),
+    fk_id_table_column("core_config_id", "core_configs.id", primary_key=True, ondelete="CASCADE"),
+)
+
 
 class AdminStatus(str, Enum):
     active = "active"
@@ -614,7 +621,12 @@ class Node(Base, CreatedAtUTCMixin):
     api_key: Mapped[str | None] = mapped_column(String(36))
     node_version: Mapped[str | None] = mapped_column(String(32), nullable=True, init=False)
     core_config_id: Mapped[int | None] = fk_id_column("core_configs.id", ondelete="SET NULL", nullable=True)
-    additional_core_config_ids: Mapped[list[int] | None] = mapped_column(JSON(none_as_null=True), default=None)
+    additional_cores: Mapped[list[CoreConfig]] = relationship(
+        secondary=node_additional_cores_association,
+        lazy="selectin",
+        order_by=node_additional_cores_association.c.core_config_id,
+        init=False,
+    )
     user_usages: Mapped[list[NodeUserUsage]] = relationship(
         back_populates="node", cascade="all, delete-orphan", init=False
     )
@@ -623,6 +635,10 @@ class Node(Base, CreatedAtUTCMixin):
         back_populates="node", cascade="all, delete-orphan", init=False
     )
     core_config: Mapped[CoreConfig | None] = relationship("CoreConfig", init=False)
+
+    @property
+    def additional_core_config_ids(self) -> list[int] | None:
+        return [core.id for core in self.additional_cores] or None
     stats: Mapped[list[NodeStat]] = relationship(back_populates="node", cascade="all, delete-orphan", init=False)
     status: Mapped[NodeStatus] = mapped_column(SQLEnum(NodeStatus), default=NodeStatus.connecting)
     last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), init=False)

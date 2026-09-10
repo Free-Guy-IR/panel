@@ -144,11 +144,10 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
         ):
             attached = await NodeOperation._attach_if_running(node, db_node.name)
             if attached is not None:
-                if db_node.additional_core_config_ids:
-                    async with GetDB() as extras_db:
-                        failed = await NodeOperation._reconcile_extra_cores(extras_db, node, db_node)
-                    if failed:
-                        logger.warning(f"[{db_node.name}] additional cores not fully attached: {failed}")
+                async with GetDB() as extras_db:
+                    failed = await NodeOperation._reconcile_extra_cores(extras_db, node, db_node)
+                if failed:
+                    logger.warning(f"[{db_node.name}] additional cores not fully reconciled: {failed}")
                 return
 
             _, coordinator, _ = get_bridge_memory()

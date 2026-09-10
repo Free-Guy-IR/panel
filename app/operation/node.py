@@ -107,6 +107,8 @@ _MULTI_INSTANCE_BACKENDS = {
     CoreType.l2tp: service.BackendType.L2TP,
 }
 
+_BACKEND_TYPE_BY_CORE = {CoreType.xray: service.BackendType.XRAY, **_MULTI_INSTANCE_BACKENDS}
+
 
 class NodeOperation(BaseOperation):
     def __init__(self, operator_type: OperatorType):
@@ -316,12 +318,62 @@ class NodeOperation(BaseOperation):
     async def _reconcile_extra_cores(db: AsyncSession, pg_node: PasarGuardNode, db_node: Node) -> str:
         primary_id = db_node.core_config_id or 1
         extra_ids = [core_id for core_id in NodeOperation._node_core_ids(db_node) if core_id != primary_id]
-        if not extra_ids:
+
+        cores_by_id, users_by_core = await NodeOperation._get_core_users_map(db, set(extra_ids) | {primary_id})
+        primary_core = cores_by_id.get(primary_id)
+
+        extra_cores = [(core_id, cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in extra_ids]
+
+        problems = [
+            await NodeOperation._remove_surplus_backends(
+                pg_node, db_node, extra_cores, primary_core.type if primary_core is not None else None
+            ),
+            await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
+        ]
+        return "; ".join(p for p in problems if p)[:1024]
+
+    @staticmethod
+    def _desired_extra_backends(extra_cores: list[tuple] | None) -> dict:
+        desired = {}
+        for core_id, extra_core, extra_users in extra_cores or []:
+            if extra_core is None:
+                continue
+            backend_type = _MULTI_INSTANCE_BACKENDS.get(extra_core.type)
+            if backend_type is not None:
+                desired[backend_type] = (core_id, extra_core, extra_users)
+        return desired
+
+    @staticmethod
+    async def _remove_surplus_backends(
+        pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None, primary_core_type
+    ) -> str:
+        primary_type = _BACKEND_TYPE_BY_CORE.get(primary_core_type)
+        if primary_type is None:
+            logger.warning(
+                f'Not reconciling backends on "{db_node.name}": its primary core type is unknown, '
+                f"so a surplus backend cannot be told apart from the primary one"
+            )
             return ""
 
-        cores_by_id, users_by_core = await NodeOperation._get_core_users_map(db, set(extra_ids))
-        extra_cores = [(core_id, cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in extra_ids]
-        return await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores)
+        running = await NodeOperation._running_backend_types(pg_node)
+        if not running:
+            return ""
+
+        desired = set(NodeOperation._desired_extra_backends(extra_cores))
+        problems = []
+
+        for backend_type in sorted(running, key=lambda item: int(item)):
+            if backend_type in desired or backend_type == primary_type:
+                continue
+            try:
+                await pg_node.remove_backend(backend_type=backend_type)
+                logger.info(f'Removed backend "{backend_type}" from "{db_node.name}" node; it is no longer assigned')
+            except NodeAPIError as e:
+                problems.append(f"removing {backend_type}: {e.detail}")
+            except Exception as e:
+                problems.append(f"removing {backend_type}: {e}")
+
+        return "; ".join(problems)
 
     @staticmethod
     async def _add_extra_cores(pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None) -> str:
@@ -498,7 +550,14 @@ class NodeOperation(BaseOperation):
 
             logger.info(f'Connected to "{db_node.name}" node v{info.node_version}, core run on v{info.core_version}')
 
-            failed_extras = await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores)
+            failed_extras = "; ".join(
+                p
+                for p in (
+                    await NodeOperation._remove_surplus_backends(pg_node, db_node, extra_cores, core.type),
+                    await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
+                )
+                if p
+            )[:1024]
 
             return {
                 "node_id": db_node.id,
@@ -518,7 +577,16 @@ class NodeOperation(BaseOperation):
                     return {
                         "node_id": db_node.id,
                         "status": NodeStatus.connected,
-                        "message": await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
+                        "message": "; ".join(
+                            p
+                            for p in (
+                                await NodeOperation._remove_surplus_backends(
+                                    pg_node, db_node, extra_cores, core.type
+                                ),
+                                await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
+                            )
+                            if p
+                        )[:1024],
                         "xray_version": attached.core_version,
                         "node_version": attached.node_version,
                         "old_status": old_status,
