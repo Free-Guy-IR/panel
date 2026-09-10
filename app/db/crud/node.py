@@ -8,6 +8,7 @@ from sqlalchemy.sql.functions import coalesce
 
 from app.db.compiles_types import DateDiff
 from app.db.models import (
+    CoreConfig,
     DataLimitResetStrategy,
     Node,
     NodeInboundUsage,
@@ -16,6 +17,7 @@ from app.db.models import (
     NodeUsage,
     NodeUsageResetLogs,
     NodeUserUsage,
+    node_additional_cores_association,
 )
 from app.models.node import (
     NodeCreate,
@@ -98,11 +100,15 @@ async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: boo
     return node
 
 
-async def _node_ids_using_additional_core(db: AsyncSession, core_id: int) -> list[int]:
-    result = await db.execute(
-        select(Node.id, Node.additional_core_config_ids).where(Node.additional_core_config_ids.is_not(None))
-    )
-    return [node_id for node_id, extras in result.all() if extras and core_id in extras]
+
+
+async def _resolve_additional_cores(db: AsyncSession, core_ids: list[int] | None) -> list[CoreConfig]:
+    if not core_ids:
+        return []
+    ordered = list(dict.fromkeys(core_ids))
+    result = await db.execute(select(CoreConfig).where(CoreConfig.id.in_(ordered)))
+    by_id = {core.id: core for core in result.scalars().all()}
+    return [by_id[core_id] for core_id in ordered if core_id in by_id]
 
 
 async def get_nodes(
@@ -141,11 +147,12 @@ async def get_nodes(
         else:
             primary_match = Node.core_config_id == params.core_id
 
-        extra_node_ids = await _node_ids_using_additional_core(db, params.core_id)
-        if extra_node_ids:
-            stmt = stmt.where(or_(primary_match, Node.id.in_(extra_node_ids)))
-        else:
-            stmt = stmt.where(primary_match)
+        extra_match = Node.id.in_(
+            select(node_additional_cores_association.c.node_id).where(
+                node_additional_cores_association.c.core_config_id == params.core_id
+            )
+        )
+        stmt = stmt.where(or_(primary_match, extra_match))
 
     if params.ids:
         stmt = stmt.where(Node.id.in_(params.ids))
@@ -424,7 +431,10 @@ async def create_node(db: AsyncSession, node: NodeCreate) -> Node:
     Returns:
         Node: The newly created Node object.
     """
-    db_node = Node(**node.model_dump())
+    node_payload = node.model_dump()
+    extra_core_ids = node_payload.pop("additional_core_config_ids", None)
+    db_node = Node(**node_payload)
+    db_node.additional_cores = await _resolve_additional_cores(db, extra_core_ids)
 
     db.add(db_node)
     await db.commit()
@@ -444,6 +454,9 @@ async def remove_node(db: AsyncSession, db_node: Node) -> None:
     node_id = db_node.id
 
     # Remove dependent rows explicitly to avoid ORM cascading overhead on large tables.
+    await db.execute(
+        delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id == node_id)
+    )
     await db.execute(delete(NodeUserUsage).where(NodeUserUsage.node_id == node_id))
     await db.execute(delete(NodeUsage).where(NodeUsage.node_id == node_id))
     await db.execute(delete(NodeUsageResetLogs).where(NodeUsageResetLogs.node_id == node_id))
@@ -469,11 +482,14 @@ async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
     node_data = modify.model_dump(exclude_none=True)
     if "proxy_url" in modify.model_fields_set and modify.proxy_url is None:
         node_data["proxy_url"] = None
-    if "additional_core_config_ids" in modify.model_fields_set and modify.additional_core_config_ids is None:
-        node_data["additional_core_config_ids"] = None
+
+    node_data.pop("additional_core_config_ids", None)
 
     for key, value in node_data.items():
         setattr(db_node, key, value)
+
+    if "additional_core_config_ids" in modify.model_fields_set:
+        db_node.additional_cores = await _resolve_additional_cores(db, modify.additional_core_config_ids)
 
     db_node.xray_version = None
     db_node.message = None
@@ -852,6 +868,9 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     if not node_ids:
         return
 
+    await db.execute(
+        delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id.in_(node_ids))
+    )
     await db.execute(delete(NodeUserUsage).where(NodeUserUsage.node_id.in_(node_ids)))
     await db.execute(delete(NodeUsage).where(NodeUsage.node_id.in_(node_ids)))
     await db.execute(delete(NodeUsageResetLogs).where(NodeUsageResetLogs.node_id.in_(node_ids)))
