@@ -120,3 +120,25 @@ async def test_the_response_model_emits_a_literal_null_not_an_empty_list(db, cor
     assert dumped["additional_core_config_ids"] is None, (
         "the API emitted null before this feature existed and must keep doing so"
     )
+
+
+@pytest.mark.asyncio
+async def test_the_explicit_sweep_is_what_protects_us_not_the_cascade(db, cores):
+    from sqlalchemy import text
+
+    enforced = (await db.execute(text("PRAGMA foreign_keys"))).scalar()
+    assert enforced == 0, (
+        "sqlite leaves foreign keys off, so ON DELETE CASCADE never fires here - "
+        "the explicit sweeps in remove_node/remove_core_config are the real protection"
+    )
+
+    node = await create_node(
+        db, NodeCreate(**payload("h-pragma", 64510, cores[0].id, [cores[1].id], "55555555-5555-5555-5555-555555555555"))
+    )
+    node_id = node.id
+    assert await _rows_for_node(db, node_id) == [cores[1].id]
+
+    await remove_node(db, node)
+    assert await _rows_for_node(db, node_id) == [], (
+        "with the cascade inert, the row can only be gone because the sweep removed it"
+    )
