@@ -312,7 +312,19 @@ class NodeOperation(BaseOperation):
             listed = await pg_node.list_backends()
         except Exception:
             return set()
-        return set(listed.types) if listed is not None else set()
+        if listed is None:
+            return set()
+
+        known = set(_BACKEND_TYPE_BY_CORE.values())
+        running, unknown = set(), []
+        for backend_type in listed.types:
+            if backend_type in known:
+                running.add(backend_type)
+            else:
+                unknown.append(backend_type)
+        if unknown:
+            logger.info(f"Node reports backend type(s) this panel does not manage, leaving them alone: {unknown}")
+        return running
 
     @staticmethod
     async def _reconcile_extra_cores(db: AsyncSession, pg_node: PasarGuardNode, db_node: Node) -> str:
