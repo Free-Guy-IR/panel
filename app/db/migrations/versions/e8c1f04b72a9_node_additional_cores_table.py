@@ -34,6 +34,7 @@ def upgrade() -> None:
             "core_config_id", id_type, sa.ForeignKey("core_configs.id", ondelete="CASCADE"), primary_key=True
         ),
     )
+    op.create_index("ix_node_additional_cores_core_config_id", "node_additional_cores", ["core_config_id"])
 
     rows = bind.execute(
         sa.text("SELECT id, additional_core_config_ids FROM nodes WHERE additional_core_config_ids IS NOT NULL")

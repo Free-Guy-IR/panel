@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import GetDB
+from app.db.crud.core import remove_core_config
 from app.db.crud.node import create_node, remove_node
 from app.db.models import CoreConfig, node_additional_cores_association
 from app.models.node import NodeCreate
@@ -100,3 +101,34 @@ async def test_a_reused_node_id_does_not_inherit_the_old_extras():
             assert second.additional_core_config_ids is None
         finally:
             await remove_node(db, second)
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_core_leaves_no_association_rows_behind():
+    async with GetDB() as db:
+        cores = await _first_core_ids(db, 2)
+        template = (await db.execute(select(CoreConfig).where(CoreConfig.id == cores[1]))).scalar_one()
+        spare = CoreConfig(name="assoc-spare-core", type=template.type, config=template.config)
+        db.add(spare)
+        await db.commit()
+        await db.refresh(spare)
+
+        node = await create_node(
+            db,
+            NodeCreate(**payload("assoc-core-del", 64510, cores[0], [spare.id], "55555555-5555-5555-5555-555555555555")),
+        )
+        core_id = spare.id
+        try:
+            assert node.additional_core_config_ids == [core_id]
+            await remove_core_config(db, spare)
+
+            left = (
+                await db.execute(
+                    select(node_additional_cores_association.c.node_id).where(
+                        node_additional_cores_association.c.core_config_id == core_id
+                    )
+                )
+            ).scalars().all()
+            assert left == [], "a deleted core must not leave rows that a reused core id could inherit"
+        finally:
+            await remove_node(db, node)

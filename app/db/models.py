@@ -63,6 +63,7 @@ node_additional_cores_association = Table(
     Base.metadata,
     fk_id_table_column("node_id", "nodes.id", primary_key=True, ondelete="CASCADE"),
     fk_id_table_column("core_config_id", "core_configs.id", primary_key=True, ondelete="CASCADE"),
+    Index("ix_node_additional_cores_core_config_id", "core_config_id"),
 )
 
 
