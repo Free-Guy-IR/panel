@@ -6,6 +6,8 @@ from enum import Enum
 from typing import Any, Literal
 from urllib.parse import quote, urlencode
 
+from pydantic import BaseModel
+
 from app.models.subscription import SubscriptionInboundData
 
 
@@ -191,6 +193,8 @@ class BaseSubscription:
 
         if finalmask is None:
             finalmask = {}
+        elif isinstance(finalmask, BaseModel):
+            finalmask = finalmask.model_dump(by_alias=True, exclude_none=True)
         obfs_password = ""
         quic_params: dict = finalmask.get("quicParams", {})
         if udp := finalmask.get("udp"):
