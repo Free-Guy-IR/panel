@@ -417,11 +417,12 @@ class SingBoxConfiguration(BaseSubscription):
             "reserved": reserved,
         }
 
+        wg_index = sum(1 for endpoint in self.config.get("endpoints", []) if endpoint.get("type") == "wireguard")
         endpoint = {
             "type": "wireguard",
             "tag": remark,
             "system": True,
-            "name": "wg0",
+            "name": f"wg{wg_index}",
             "mtu": inbound.wireguard_mtu,
             "address": peer_ips,
             "private_key": private_key,
