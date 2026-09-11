@@ -41,6 +41,8 @@ export interface CoreEditorFormDialogProps {
   initialData?: unknown
   /** Function that returns the current dialog data to compare against `initialData`. */
   getCurrentData?: () => unknown
+  /** Called when the user confirms discarding unsaved edits, before the dialog closes. */
+  onDiscard?: () => void
   /** Optional overrides for discard dialog texts. */
   discardTitle?: ReactNode
   discardDescription?: ReactNode
@@ -68,6 +70,7 @@ export function CoreEditorFormDialog({
   persistValidationPathPrefix,
   initialData,
   getCurrentData,
+  onDiscard,
   discardTitle,
   discardDescription,
   discardActionLabel,
@@ -140,6 +143,7 @@ export function CoreEditorFormDialog({
             <AlertDialogAction
               onClick={() => {
                 setDiscardOpen(false)
+                onDiscard?.()
                 onOpenChange(false)
               }}
             >
