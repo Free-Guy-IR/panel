@@ -457,9 +457,8 @@ async def remove_node(db: AsyncSession, db_node: Node) -> None:
     await db.execute(
         delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id == node_id)
     )
-    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.node_id == node_id))
-    await db.execute(delete(NodeUsage).where(NodeUsage.node_id == node_id))
-    await db.execute(delete(NodeUsageResetLogs).where(NodeUsageResetLogs.node_id == node_id))
+    for usage_table in (NodeUserUsage, NodeUsage, NodeInboundUsage, NodeUsageResetLogs):
+        await db.execute(update(usage_table).where(usage_table.node_id == node_id).values(node_id=None))
     await db.execute(delete(NodeStat).where(NodeStat.node_id == node_id))
     await db.execute(delete(Node).where(Node.id == node_id))
 
@@ -871,9 +870,8 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(
         delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id.in_(node_ids))
     )
-    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.node_id.in_(node_ids)))
-    await db.execute(delete(NodeUsage).where(NodeUsage.node_id.in_(node_ids)))
-    await db.execute(delete(NodeUsageResetLogs).where(NodeUsageResetLogs.node_id.in_(node_ids)))
+    for usage_table in (NodeUserUsage, NodeUsage, NodeInboundUsage, NodeUsageResetLogs):
+        await db.execute(update(usage_table).where(usage_table.node_id.in_(node_ids)).values(node_id=None))
     await db.execute(delete(NodeStat).where(NodeStat.node_id.in_(node_ids)))
     await db.execute(delete(Node).where(Node.id.in_(node_ids)))
     await db.commit()
