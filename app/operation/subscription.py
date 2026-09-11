@@ -2,8 +2,10 @@ import asyncio
 import base64
 import json
 import re
+import time
 from json import dumps as json_dumps
 from typing import Any, ClassVar
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from fastapi import Response
 from fastapi.responses import HTMLResponse
@@ -169,6 +171,43 @@ class SubscriptionOperation(BaseOperation):
             return sub_settings.announce_url
 
     @staticmethod
+    def _encode_url_header(value: str) -> str:
+        if not value or value.isascii():
+            return value
+        try:
+            parts = urlsplit(value)
+        except ValueError:
+            parts = None
+        if parts and parts.scheme and parts.netloc:
+            try:
+                host = parts.hostname or ""
+                if not host.isascii():
+                    host = host.encode("idna").decode("ascii")
+                if ":" in host and not host.startswith("["):
+                    host = f"[{host}]"
+                userinfo = ""
+                if parts.username:
+                    userinfo = quote(parts.username, safe="")
+                    if parts.password:
+                        userinfo += ":" + quote(parts.password, safe="")
+                    userinfo += "@"
+                netloc = userinfo + host
+                if parts.port is not None:
+                    netloc += f":{parts.port}"
+                return urlunsplit(
+                    (
+                        parts.scheme,
+                        netloc,
+                        quote(parts.path, safe="/%:@!$&'()*+,;="),
+                        quote(parts.query, safe="/?%:@!$&'()*+,;="),
+                        parts.fragment,
+                    )
+                )
+            except (ValueError, UnicodeError):
+                pass
+        return quote(value, safe=":/?#[]@!$&'()*+,;=%")
+
+    @staticmethod
     def create_response_headers(
         user: UsersResponseWithInbounds,
         request_url: str,
@@ -206,12 +245,12 @@ class SubscriptionOperation(BaseOperation):
         headers = {
             "content-disposition": f'{disposition}; filename="{user.username}{extension}"',
             "profile-web-page-url": request_url,
-            "support-url": support_url,
+            "support-url": SubscriptionOperation._encode_url_header(support_url),
             "profile-title": encode_title(formatted_title),
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
             "announce": encode_title(formatted_announce),
-            "announce-url": formatted_announce_url,
+            "announce-url": SubscriptionOperation._encode_url_header(formatted_announce_url),
         }
         if extra_headers:
             headers.update(extra_headers)
@@ -291,9 +330,9 @@ class SubscriptionOperation(BaseOperation):
         formatted_announce_url = SubscriptionOperation._format_announce_url(sub_settings, format_variables)
 
         headers = {
-            "support-url": support_url,
+            "support-url": SubscriptionOperation._encode_url_header(support_url),
             "announce": encode_title(formatted_announce),
-            "announce-url": formatted_announce_url,
+            "announce-url": SubscriptionOperation._encode_url_header(formatted_announce_url),
         }
 
         # Only include headers that have values
@@ -640,7 +679,7 @@ class SubscriptionOperation(BaseOperation):
             "user": SubscriptionUserResponse.model_validate(user),
             "links": links,
             "announce": formatted_announce,
-            "announce_url": sub_settings.announce_url,
+            "announce_url": self._format_announce_url(sub_settings, format_variables),
             "has_openvpn": has_openvpn,
             "openvpn_configs": openvpn_configs or [],
             "l2tp_details": l2tp_details or [],
@@ -787,7 +826,20 @@ class SubscriptionOperation(BaseOperation):
 
     _PING_SKIP_SCHEMES: ClassVar[set[str]] = {"wireguard", "wg", "openvpn", "ovpn", "block", "tg"}
     _PING_UDP_SCHEMES: ClassVar[set[str]] = {"hysteria", "hysteria2", "hy2", "tuic"}
-    _PING_MAX_HOSTS: ClassVar[int] = 80
+    _PING_MAX_HOSTS: ClassVar[int] = 20
+    _PING_MIN_INTERVAL_SECONDS: ClassVar[float] = 30.0
+    _ping_last_seen: ClassVar[dict[int, float]] = {}
+
+    async def _enforce_ping_rate_limit(self, user_id: int) -> None:
+        now = time.monotonic()
+        last = self._ping_last_seen.get(user_id)
+        if last is not None and now - last < self._PING_MIN_INTERVAL_SECONDS:
+            await self.raise_error(message="Too many ping requests", code=429)
+        self._ping_last_seen[user_id] = now
+        if len(self._ping_last_seen) > 10_000:
+            stale = [key for key, seen in self._ping_last_seen.items() if now - seen > 600]
+            for key in stale:
+                del self._ping_last_seen[key]
 
     @staticmethod
     def _parse_ping_targets(links: list[str]) -> dict[str, tuple[int, bool]]:
@@ -843,7 +895,7 @@ class SubscriptionOperation(BaseOperation):
         For UDP-based protocols (hysteria2/tuic) a fast TCP "connection refused" still
         proves the host is alive (the kernel answered with RST), so it counts as reachable.
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         start = loop.time()
         writer = None
         try:
@@ -869,6 +921,7 @@ class SubscriptionOperation(BaseOperation):
         which the subscription page renders as a live per-server status dot + ping badge.
         """
         db_user = await self.get_validated_sub(db, token=token)
+        await self._enforce_ping_rate_limit(db_user.id)
         user = await self.validated_user(db_user)
         conf, _ = await self.fetch_config(user, ConfigFormat.links)
         text = conf.decode("utf-8", "ignore") if isinstance(conf, (bytes, bytearray)) else str(conf)

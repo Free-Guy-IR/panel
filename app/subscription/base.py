@@ -6,6 +6,8 @@ from enum import Enum
 from typing import Any, Literal
 from urllib.parse import quote, urlencode
 
+from pydantic import BaseModel
+
 from app.models.host import FinalMask
 from app.models.subscription import SubscriptionInboundData
 
@@ -39,6 +41,12 @@ class BaseSubscription:
             self.grpc_user_agent_data = []
 
         del user_agent_data, grpc_user_agent_data
+
+    @staticmethod
+    def _bracket_ipv6(address: str) -> str:
+        if ":" in address and not address.startswith("["):
+            return f"[{address}]"
+        return address
 
     def _remark_validation(self, remark):
         if remark not in self.proxy_remarks:
@@ -190,9 +198,10 @@ class BaseSubscription:
             finalmask_dict = {}
         elif isinstance(finalmask, dict):
             finalmask_dict = finalmask
+        elif isinstance(finalmask, BaseModel):
+            finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
         else:
             finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
-
         obfs_password = ""
         quic_params: dict = finalmask_dict.get("quicParams", {})
         if udp := finalmask_dict.get("udp"):
@@ -254,7 +263,7 @@ class BaseSubscription:
             "peer_ips": peer_ips,
             "payload": payload,
             "uri": (
-                f"wireguard://{quote(private_key, safe='')}@{address}:{inbound.port}/"
+                f"wireguard://{quote(private_key, safe='')}@{self._bracket_ipv6(address)}:{inbound.port}/"
                 f"?{urlencode(uri_payload, quote_via=quote)}#{quote(validated_remark)}"
             ),
         }

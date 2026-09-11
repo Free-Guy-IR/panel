@@ -338,7 +338,8 @@ class SingBoxConfiguration(BaseSubscription):
         udp_hop = quic_params.get("udpHop") or {}
         hop_ports = udp_hop.get("ports")
         if hop_ports:
-            config["server_ports"] = [hop_ports] if isinstance(hop_ports, str) else hop_ports
+            ports = [hop_ports] if isinstance(hop_ports, str) else hop_ports
+            config["server_ports"] = [str(port).replace("-", ":") for port in ports]
         hop_iv = udp_hop.get("hopInterval") or udp_hop.get("interval")
         if hop_iv:
             hop_iv = str(hop_iv).rstrip("s")
@@ -416,11 +417,12 @@ class SingBoxConfiguration(BaseSubscription):
             "reserved": reserved,
         }
 
+        wg_index = sum(1 for endpoint in self.config.get("endpoints", []) if endpoint.get("type") == "wireguard")
         endpoint = {
             "type": "wireguard",
             "tag": remark,
             "system": True,
-            "name": "wg0",
+            "name": f"wg{wg_index}",
             "mtu": inbound.wireguard_mtu,
             "address": peer_ips,
             "private_key": private_key,

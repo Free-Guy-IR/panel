@@ -384,7 +384,7 @@ class ClashConfiguration(BaseSubscription):
         node["tls"] = True
         sni = tls_config.sni if isinstance(tls_config.sni, str) else ""
 
-        if protocol in ("trojan", "hysteria"):
+        if protocol in ("trojan", "hysteria", "hysteria2"):
             node["sni"] = sni
         else:
             node["servername"] = sni
@@ -499,8 +499,12 @@ class ClashConfiguration(BaseSubscription):
 
         return node
 
-    def _build_shadowsocks(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
+    def _build_shadowsocks(
+        self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
+    ) -> dict | None:
         """Build Shadowsocks node"""
+        if inbound.is_2022 or settings["method"].startswith("2022-") or inbound.method.startswith("2022-"):
+            return None
         return {
             "name": remark,
             "type": "ss",
