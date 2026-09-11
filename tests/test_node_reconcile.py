@@ -121,3 +121,33 @@ async def test_a_backend_type_the_panel_does_not_manage_is_left_alone():
 
     assert message == ""
     assert pg.removed == [], "a type from a newer node image must not be reaped as surplus"
+
+
+@pytest.mark.asyncio
+async def test_a_plain_node_on_an_upstream_daemon_reconciles_cleanly():
+    class UpstreamNode:
+        def __init__(self):
+            self.added = []
+            self.removed = []
+
+        async def list_backends(self):
+            raise RuntimeError("rpc error: code = Unimplemented desc = unknown method ListBackends")
+
+        async def remove_backend(self, backend_type, **_):
+            self.removed.append(backend_type)
+
+        async def add_backend(self, backend_type, **_):
+            self.added.append(backend_type)
+
+        async def node_version(self):
+            return "0.5.4"
+
+    pg = UpstreamNode()
+
+    remove_msg = await NodeOperation._remove_surplus_backends(pg, node(), None, CoreType.xray)
+    add_msg = await NodeOperation._add_extra_cores(pg, node(), None)
+
+    assert remove_msg == ""
+    assert add_msg == ""
+    assert pg.removed == []
+    assert pg.added == []
