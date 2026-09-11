@@ -1269,7 +1269,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
         db_user.data_limit = db_user.next_plan.user_template.data_limit + (
             0 if not db_user.next_plan.add_remaining_traffic else remaining_traffic
         )
-        if db_user.next_plan.user_template.status is UserStatus.on_hold:
+        if db_user.next_plan.user_template.status == UserStatus.on_hold:
             db_user.status = UserStatus.on_hold
             db_user.on_hold_expire_duration = db_user.next_plan.user_template.expire_duration
             db_user.on_hold_timeout = db_user.next_plan.user_template.on_hold_timeout
@@ -1295,7 +1295,8 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
     await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
     if clean_chart_data:
         await clear_user_node_usages(db, db_user.id)
-    db_user.status = UserStatus.active
+    if db_user.status is not UserStatus.on_hold:
+        db_user.status = UserStatus.active
 
     await db.commit()
     await refresh_and_load_user(db, db_user)

@@ -2071,6 +2071,37 @@ def test_reset_by_next_user_usage(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_reset_by_next_preserves_on_hold_template_status(access_token):
+    core, groups = setup_groups(access_token, 1)
+    template = create_user_template(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        status_value="on_hold",
+    )
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_next_plan_on_hold")},
+    )
+    try:
+        update = client.put(
+            f"/api/user/{user['username']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"next_plan": {"user_template_id": template["id"], "add_remaining_traffic": False}},
+        )
+        assert update.status_code == status.HTTP_200_OK
+        response = client.post(
+            f"/api/user/{user['username']}/active_next",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "on_hold"
+    finally:
+        delete_user(access_token, user["username"])
+        delete_user_template(access_token, template["id"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_revoke_user_subscription(access_token):
     """Test revoke user subscription info."""
     core, groups = setup_groups(access_token, 1)
