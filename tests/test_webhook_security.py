@@ -8,6 +8,7 @@ from fastapi import status
 
 from app.jobs.send_notifications import send_to_all_webhooks
 from app.models.settings import Telegram
+from app.notification.webhook import Notification, UserDataResetByNext, UserDataUsageReset
 from tests.api import client
 
 
@@ -79,3 +80,8 @@ def test_telegram_webhook_accepts_configured_secret(monkeypatch):
     _enable_telegram(monkeypatch, "expected-secret")
     response = client.post("/api/tghook", headers={"X-Telegram-Bot-Api-Secret-Token": "expected-secret"}, json={})
     assert response.status_code == status.HTTP_200_OK
+
+
+def test_data_reset_by_next_webhook_uses_its_own_action():
+    assert UserDataResetByNext.model_fields["action"].default == Notification.Type.data_reset_by_next
+    assert UserDataUsageReset.model_fields["action"].default == Notification.Type.data_usage_reset

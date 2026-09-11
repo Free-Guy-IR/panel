@@ -100,7 +100,7 @@ class UserDataUsageReset(UserNotification):
 
 
 class UserDataResetByNext(UserNotification):
-    action: Notification.Type = Notification.Type.data_usage_reset
+    action: Notification.Type = Notification.Type.data_reset_by_next
     user: UserNotificationResponse
 
 
