@@ -93,30 +93,29 @@ async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = No
     """
     Activate all disabled users or users under a specific admin.
 
+    Users whose expire date has passed become expired and users over their
+    data limit become limited instead of being revived to active.
+
     Args:
         db (AsyncSession): Database session.
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
-    query_for_active_users = update(User).where(User.status == UserStatus.disabled)
-    query_for_on_hold_users = update(User).where(
-        and_(
-            User.status == UserStatus.disabled,
-            User.expire.is_(None),
-            User.on_hold_expire_duration.isnot(None),
-        )
-    )
+    filters = [User.status == UserStatus.disabled]
     if admin:
-        query_for_active_users = query_for_active_users.where(User.admin_id == admin.id)
-        query_for_on_hold_users = query_for_on_hold_users.where(User.admin_id == admin.id)
+        filters.append(User.admin_id == admin.id)
+
+    status_case = case(
+        (User.is_expired, UserStatus.expired),
+        (User.is_limited, UserStatus.limited),
+        (and_(User.expire.is_(None), User.on_hold_expire_duration.isnot(None)), UserStatus.on_hold),
+        else_=UserStatus.active,
+    )
 
     await db.execute(
-        query_for_on_hold_users.values(
-            {User.status: UserStatus.on_hold, User.last_status_change: dt.now(UTC)},
-        )
-    )
-    await db.execute(
-        query_for_active_users.values(
-            {User.status: UserStatus.active, User.last_status_change: dt.now(UTC)},
+        update(User)
+        .where(and_(*filters))
+        .values(
+            {User.status: status_case, User.last_status_change: dt.now(UTC)},
         )
     )
 
