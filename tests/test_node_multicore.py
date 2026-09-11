@@ -98,3 +98,89 @@ async def test_a_missing_core_is_reported_not_skipped_silently():
 
     message = await NodeOperation._add_extra_cores(Node(), node(core_id=1, extra=[42]), [(42, None, [])])
     assert "core 42 not found" in message
+
+
+@pytest.mark.asyncio
+async def test_a_running_backend_is_replaced_when_a_restart_is_requested():
+    import PasarGuardNodeBridge.common.service_pb2 as service
+
+    calls = []
+
+    class Node:
+        async def list_backends(self):
+            return SimpleNamespace(types=[service.BackendType.SING_BOX])
+
+        async def remove_backend(self, backend_type, **_):
+            calls.append(("remove", backend_type))
+
+        async def add_backend(self, backend_type, **_):
+            calls.append(("add", backend_type))
+
+    core = SimpleNamespace(type=CoreType.singbox, to_str=lambda: "{}")
+    message = await NodeOperation._add_extra_cores(
+        Node(), node(core_id=1, extra=[2]), [(2, core, [])], restart_running=True
+    )
+    assert message == ""
+    assert calls == [("remove", service.BackendType.SING_BOX), ("add", service.BackendType.SING_BOX)]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_backend_restart_is_reported_and_not_added():
+    import PasarGuardNodeBridge.common.service_pb2 as service
+
+    added = []
+
+    class Node:
+        async def list_backends(self):
+            return SimpleNamespace(types=[service.BackendType.SING_BOX])
+
+        async def remove_backend(self, backend_type, **_):
+            raise RuntimeError("stuck")
+
+        async def add_backend(self, **kwargs):
+            added.append(kwargs)
+
+    core = SimpleNamespace(type=CoreType.singbox, to_str=lambda: "{}")
+    message = await NodeOperation._add_extra_cores(
+        Node(), node(core_id=1, extra=[2]), [(2, core, [])], restart_running=True
+    )
+    assert "core 2" in message and "stuck" in message
+    assert added == []
+
+
+@pytest.mark.asyncio
+async def test_a_healthy_node_is_force_started_instead_of_attached():
+    from PasarGuardNodeBridge.storage import LifecycleStatus
+
+    calls = []
+
+    class HealthyNode:
+        async def get_lifecycle_state(self):
+            return SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
+
+        async def info(self):
+            return SimpleNamespace(node_version="0.8.1", core_version="25.1.1")
+
+        async def connect(self, node_version, core_version):
+            calls.append("connect")
+
+        async def update_observed_lifecycle(self, observed, expected_epoch=None):
+            calls.append("observe")
+
+        async def start(self, **kwargs):
+            calls.append(("start", kwargs))
+            return SimpleNamespace(node_version="0.8.1", core_version="25.1.1")
+
+    core = SimpleNamespace(type=CoreType.xray, to_str=lambda: "{}", exclude_inbound_tags=set())
+    db_node = node(core_id=1)
+    db_node.keep_alive = 0
+
+    attached = await NodeOperation._start_or_attach_node(HealthyNode(), db_node, core, [], None)
+    assert attached.node_version == "0.8.1"
+    assert "connect" in calls and not any(isinstance(c, tuple) and c[0] == "start" for c in calls)
+
+    calls.clear()
+    started = await NodeOperation._start_or_attach_node(HealthyNode(), db_node, core, [], None, force_start=True)
+    assert started.node_version == "0.8.1"
+    assert [c[0] for c in calls if isinstance(c, tuple)] == ["start"]
+    assert "connect" not in calls
