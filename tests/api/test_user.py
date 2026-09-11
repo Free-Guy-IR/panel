@@ -2376,6 +2376,46 @@ def test_role_allowed_group_ids_blocks_template_group_assignment(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_role_allowed_group_ids_filters_user_listing(access_token):
+    core, groups = setup_groups(access_token, 2)
+    allowed_group, forbidden_group = groups
+    role = _create_group_restricted_user_role(access_token, allowed_group_ids=[allowed_group["id"]])
+    admin = create_admin(access_token, role_id=role["id"])
+    admin_token = _login(admin["username"], admin["password"])
+    visible_user = create_user(
+        access_token,
+        group_ids=[allowed_group["id"]],
+        payload={"username": unique_name("group_acl_visible")},
+    )
+    hidden_user = create_user(
+        access_token,
+        group_ids=[forbidden_group["id"]],
+        payload={"username": unique_name("group_acl_hidden")},
+    )
+
+    try:
+        response = client.get("/api/users", headers=auth_headers(admin_token))
+        assert response.status_code == status.HTTP_200_OK
+        usernames = {user["username"] for user in response.json()["users"]}
+        assert visible_user["username"] in usernames
+        assert hidden_user["username"] not in usernames
+
+        filtered = client.get(
+            "/api/users",
+            headers=auth_headers(admin_token),
+            params={"group": forbidden_group["id"]},
+        )
+        assert filtered.status_code == status.HTTP_200_OK
+        assert filtered.json()["users"] == []
+        assert filtered.json()["total"] == 0
+    finally:
+        delete_user(access_token, visible_user["username"])
+        delete_user(access_token, hidden_user["username"])
+        delete_admin(access_token, admin["username"])
+        _delete_role(access_token, role["id"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_modify_user_with_template(access_token):
     core, groups = setup_groups(access_token, 1)
     template = create_user_template(access_token, group_ids=[groups[0]["id"]])

@@ -104,8 +104,10 @@ from app.node.sync import remove_user as sync_remove_user, sync_user, sync_users
 from app.operation import BaseOperation, OperatorType
 from app.operation.permissions import (
     PermissionDenied,
+    apply_group_access,
     apply_template_access,
     enforce_permission,
+    get_allowed_group_ids,
     get_effective_limits,
     get_scope_admin_id,
     is_scope_all,
@@ -1452,6 +1454,12 @@ class UserOperation(BaseOperation):
         if scope_admin_id is not None:
             query = query.model_copy(update={"owner": [admin.username], "admin_ids": None})
 
+        if get_allowed_group_ids(admin) is not None:
+            group_ids = apply_group_access(admin, query.group_ids)
+            if not group_ids:
+                return UsersResponse(users=[], total=0)
+            query = query.model_copy(update={"group_ids": group_ids})
+
         users, count = await get_users(
             db=db,
             query=query,
@@ -1488,6 +1496,7 @@ class UserOperation(BaseOperation):
             db=db,
             query=query,
             admin=admin_filter,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
 
         # Convert tuples to Pydantic models

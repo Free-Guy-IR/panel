@@ -451,6 +451,7 @@ async def get_users_simple(
     db: AsyncSession,
     query: UserSimpleListQuery,
     admin: Admin | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> tuple[list[tuple[int, str]], int]:
     """
     Retrieves lightweight user data with only id and username.
@@ -459,6 +460,7 @@ async def get_users_simple(
         db: Database session.
         query: Structured lightweight user list filters.
         admin: Admin filter (for scope-based authorization).
+        allowed_group_ids: Restrict to users in these groups (None = no restriction).
 
     Returns:
         Tuple of (list of (id, username) tuples, total_count).
@@ -474,6 +476,8 @@ async def get_users_simple(
         filters.append(User.username.ilike(f"%{query.search}%"))
     if admin:
         filters.append(User.admin_id == admin.id)
+    if allowed_group_ids is not None:
+        filters.append(User.groups.any(Group.id.in_(allowed_group_ids)))
 
     if filters:
         stmt = stmt.where(and_(*filters))
