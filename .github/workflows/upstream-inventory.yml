@@ -1,0 +1,54 @@
+name: Upstream Inventory
+
+on:
+  pull_request:
+  schedule:
+    - cron: "24 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/PasarGuard/panel.git 2>/dev/null || \
+            git remote set-url upstream https://github.com/PasarGuard/panel.git
+          git fetch upstream main --tags
+
+      - name: Inventory report
+        run: |
+          python scripts/upstream_inventory.py \
+            --base upstream/main --head HEAD \
+            --json-file upstream-inventory.json > inventory-summary.md
+          cat inventory-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ledger gate
+        if: github.event_name == 'pull_request'
+        run: |
+          python scripts/upstream_inventory.py \
+            --base upstream/main --head HEAD \
+            --fail-on-override-outside-ledger OVERRIDES.md
+
+      - name: Upload report
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-inventory
+          path: |
+            upstream-inventory.json
+            inventory-summary.md
+          retention-days: 30
