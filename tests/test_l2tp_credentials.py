@@ -116,7 +116,7 @@ def test_adding_l2tp_did_not_change_any_other_protocol_credential():
 @pytest.mark.parametrize(
     ("node_version", "refuses"),
     [
-        ("", False),
+        ("", True),
         ("0.5.4", True),
         ("0.5.15", True),
         ("0.6.0", True),
@@ -124,14 +124,46 @@ def test_adding_l2tp_did_not_change_any_other_protocol_credential():
         ("0.6.3", True),
         ("0.6.4", False),
         ("1.0.0", False),
-        ("not-a-version", False),
+        ("not-a-version", True),
         ("v0.5.4", True),
     ],
 )
-def test_only_a_known_pre_l2tp_node_version_is_refused(node_version, refuses):
+def test_an_unknown_or_pre_l2tp_node_version_is_refused(node_version, refuses):
     from app.operation.node import _node_lacks_l2tp
 
     assert _node_lacks_l2tp(node_version) is refuses
+
+
+@pytest.mark.asyncio
+async def test_the_node_version_is_asked_from_the_daemon_when_not_yet_known():
+    from types import SimpleNamespace
+
+    from app.operation.node import _known_node_version
+
+    class FreshNode:
+        async def node_version(self):
+            return ""
+
+        async def info(self):
+            return SimpleNamespace(node_version="0.8.1")
+
+    class ConnectedNode:
+        async def node_version(self):
+            return "0.7.0"
+
+        async def info(self):
+            raise AssertionError("a connected node must not be asked again")
+
+    class SilentNode:
+        async def node_version(self):
+            return ""
+
+        async def info(self):
+            raise RuntimeError("unreachable")
+
+    assert await _known_node_version(FreshNode()) == "0.8.1"
+    assert await _known_node_version(ConnectedNode()) == "0.7.0"
+    assert await _known_node_version(SilentNode()) == ""
 
 
 def test_the_refusal_message_names_the_version_and_the_fix():

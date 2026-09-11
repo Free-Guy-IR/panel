@@ -85,18 +85,32 @@ L2TP_MIN_NODE_VERSION = "0.6.4"
 
 def _node_lacks_l2tp(node_version: str) -> bool:
     if not node_version:
-        return False
+        return True
     try:
         return Version(node_version) < Version(L2TP_MIN_NODE_VERSION)
     except InvalidVersion:
-        return False
+        return True
+
+
+async def _known_node_version(pg_node: PasarGuardNode) -> str:
+    known = await pg_node.node_version()
+    if known:
+        return known
+    try:
+        info = await pg_node.info()
+    except Exception:
+        return ""
+    if info is None:
+        return ""
+    return info.node_version or ""
 
 
 def _l2tp_unsupported_message(node_version: str) -> str:
-    return (
-        f"this node runs image v{node_version}, which has no L2TP backend. "
-        f"Rebuild and redeploy the node image (v{L2TP_MIN_NODE_VERSION} or newer), then reconnect."
-    )
+    if node_version:
+        reason = f"this node runs image v{node_version}, which has no L2TP backend"
+    else:
+        reason = "this node did not report an image version, so L2TP support cannot be confirmed"
+    return f"{reason}. Rebuild and redeploy the node image (v{L2TP_MIN_NODE_VERSION} or newer), then reconnect."
 
 
 _MULTI_INSTANCE_BACKENDS = {
@@ -411,7 +425,7 @@ class NodeOperation(BaseOperation):
                 continue
 
             if extra_core.type == CoreType.l2tp:
-                known_version = await pg_node.node_version()
+                known_version = await _known_node_version(pg_node)
                 if _node_lacks_l2tp(known_version):
                     problems.append(f"core {core_id}: {_l2tp_unsupported_message(known_version)}")
                     continue
@@ -542,7 +556,7 @@ class NodeOperation(BaseOperation):
             type = service.BackendType.XRAY
 
         if core.type == CoreType.l2tp:
-            known_version = await pg_node.node_version()
+            known_version = await _known_node_version(pg_node)
             if _node_lacks_l2tp(known_version):
                 message = _l2tp_unsupported_message(known_version)
                 logger.error(f'Refusing to start an L2TP core on "{db_node.name}": {message}')
@@ -606,7 +620,7 @@ class NodeOperation(BaseOperation):
 
             detail = e.detail[:1020] + "..." if len(e.detail) > 1024 else e.detail
             if core.type == CoreType.l2tp and "invalid backend type" in detail.lower():
-                detail = _l2tp_unsupported_message(await pg_node.node_version() or "older")
+                detail = _l2tp_unsupported_message(await _known_node_version(pg_node))
 
             logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
 
