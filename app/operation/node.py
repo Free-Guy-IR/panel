@@ -78,6 +78,15 @@ MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
 CONNECT_CONCURRENCY = 10
 
+# Serialize connects of the same node inside this worker: a sibling sync message,
+# a health-check reconnect and an admin restart must not race each other into a
+# double Start. Cross-worker races are settled by the lifecycle lease (409 -> attach).
+_CONNECT_LOCKS: dict[int, asyncio.Lock] = {}
+
+
+def _connect_lock(node_id: int) -> asyncio.Lock:
+    return _CONNECT_LOCKS.setdefault(node_id, asyncio.Lock())
+
 logger = get_logger("node-operation")
 
 L2TP_MIN_NODE_VERSION = "0.6.4"
@@ -554,6 +563,13 @@ class NodeOperation(BaseOperation):
             dict: {node_id, status, message, xray_version, node_version, old_status}
             None: if connection should be skipped
         """
+        async with _connect_lock(db_node.id):
+            return await NodeOperation._connect_node_inner(db_node, core, users, extra_cores, force_start)
+
+    @staticmethod
+    async def _connect_node_inner(
+        db_node: Node, core, users: list, extra_cores: list[tuple] | None, force_start: bool
+    ) -> dict | None:
         pg_node: PasarGuardNode | None = await node_manager.get_node(db_node.id)
         if pg_node is None:
             return None

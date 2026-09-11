@@ -261,3 +261,46 @@ async def test_a_cleanly_connected_node_raises_no_error_notification(monkeypatch
 
     assert node_op_module.notification.connect_node.call_count == 1
     assert node_op_module.notification.error_node.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_connects_of_the_same_node_never_overlap_starts(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.db.models import NodeStatus
+    from app.operation import node as node_op_module
+
+    current = 0
+    peak = 0
+
+    class SlowNode:
+        async def get_lifecycle_state(self):
+            return None
+
+        async def start(self, **kwargs):
+            nonlocal current, peak
+            current += 1
+            peak = max(peak, current)
+            await asyncio.sleep(0.02)
+            current -= 1
+            return SimpleNamespace(node_version="0.8.1", core_version="25.1.1")
+
+        async def list_backends(self):
+            return None
+
+    monkeypatch.setattr(node_op_module, "node_manager", MagicMock(get_node=AsyncMock(return_value=SlowNode())))
+
+    db_node = SimpleNamespace(
+        id=7, name="de-1", status=NodeStatus.connecting, core_config_id=1, additional_core_config_ids=None, keep_alive=0
+    )
+    core = SimpleNamespace(type=CoreType.xray, to_str=lambda: "{}", exclude_inbound_tags=set())
+
+    first, second = await asyncio.gather(
+        NodeOperation.connect_node(db_node, core, []),
+        NodeOperation.connect_node(db_node, core, []),
+    )
+
+    assert peak == 1, "two connects of one node ran their Start RPCs concurrently"
+    assert first["status"] == NodeStatus.connected
+    assert second["status"] == NodeStatus.connected
