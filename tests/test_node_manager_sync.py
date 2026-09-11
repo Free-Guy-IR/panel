@@ -115,3 +115,21 @@ async def test_handle_node_upsert(monkeypatch: pytest.MonkeyPatch):
     await handle_node_message({"action": "upsert", "node_id": 9, "origin": "other"})
     assert len(updated) == 1
     assert updated[0].id == 9
+
+
+@pytest.mark.asyncio
+async def test_router_publish_only_raises_when_asked(monkeypatch: pytest.MonkeyPatch):
+    from app.nats.message import MessageTopic
+    from app.nats.router import router
+
+    class _Client:
+        async def publish(self, subject, data):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.nats.router._router_enabled", lambda: True)
+    monkeypatch.setattr(router, "_nc", _Client())
+
+    await router.publish(MessageTopic.NODE, {})
+
+    with pytest.raises(RuntimeError):
+        await router.publish(MessageTopic.NODE, {}, raise_on_error=True)
