@@ -1,8 +1,10 @@
 import asyncio
 import os
 import re
+import time
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException, status
@@ -711,6 +713,60 @@ def test_disable_admin(access_token):
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json()["detail"] == "your account has been disabled"
     delete_admin(access_token, admin["username"])
+
+
+def _await_login_notification(mock: AsyncMock) -> None:
+    for _ in range(100):
+        if mock.await_count:
+            return
+        time.sleep(0.02)
+    raise AssertionError("admin_login notification was never sent")
+
+
+def test_failed_login_notification_never_carries_the_typed_password(monkeypatch):
+    """A failed login must report username/IP/result only — never the attempted password."""
+    login_notification = AsyncMock()
+    monkeypatch.setattr("app.notification.admin_login", login_notification)
+
+    response = client.post(
+        url="/api/admin/token",
+        data={"username": "testadmin", "password": "definitely-not-the-password", "grant_type": "password"},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    _await_login_notification(login_notification)
+    username, password, _client_ip, success = login_notification.await_args.args
+    assert username == "testadmin"
+    assert password == ""
+    assert success is False
+
+
+def test_disabled_login_notification_never_carries_the_typed_password(access_token, monkeypatch):
+    admin = create_admin(access_token)
+    password = admin["password"]
+    try:
+        disable_response = client.put(
+            url=f"/api/admin/{admin['username']}",
+            json={"password": password, "status": "disabled"},
+            headers=auth_headers(access_token),
+        )
+        assert disable_response.status_code == status.HTTP_200_OK
+
+        login_notification = AsyncMock()
+        monkeypatch.setattr("app.notification.admin_login", login_notification)
+
+        response = client.post(
+            url="/api/admin/token",
+            data={"username": admin["username"], "password": password, "grant_type": "password"},
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+        _await_login_notification(login_notification)
+        _username, notified_password, _client_ip, success = login_notification.await_args.args
+        assert notified_password == ""
+        assert success is False
+    finally:
+        delete_admin(access_token, admin["username"])
 
 
 def test_admin_delete_all_users_endpoint(access_token):
