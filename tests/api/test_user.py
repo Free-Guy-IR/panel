@@ -289,7 +289,7 @@ def _delete_role(access_token: str, role_id: int) -> None:
     client.delete(f"/api/admin-role/{role_id}", headers=auth_headers(access_token))
 
 
-def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_keeps_v2_compatibility(monkeypatch):
+def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_rejects_legacy(monkeypatch):
     secret = "test-secret"
 
     async def fake_get_secret_key():
@@ -304,9 +304,8 @@ def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_ke
     payload = asyncio.run(get_subscription_payload(token))
     assert payload["user_id"] == 123
 
-    old_v2_token = _build_v2_subscription_token(456, secret)
-    old_v2_payload = asyncio.run(get_subscription_payload(old_v2_token))
-    assert old_v2_payload["user_id"] == 456
+    legacy_token = _build_v2_subscription_token(456, secret)
+    assert asyncio.run(get_subscription_payload(legacy_token)) is None
 
 
 def test_user_create_active(access_token):
@@ -1092,7 +1091,7 @@ def test_get_users_count_metric_rejects_status_metric_node_scope(access_token):
     assert "Only online user counts" in response.json()["detail"]
 
 
-def test_subscription_url_new_token_and_legacy_compatibility(access_token):
+def test_subscription_url_new_token_accepted_legacy_rejected(access_token):
     core, groups = setup_groups(access_token, 1)
     hosts = create_hosts_for_inbounds(access_token)
     user = create_user(
@@ -1108,11 +1107,34 @@ def test_subscription_url_new_token_and_legacy_compatibility(access_token):
         legacy_token = _build_legacy_subscription_token(user["username"])
         legacy_token_url = f"{current_token_url.rsplit('/', 1)[0]}/{legacy_token}"
         legacy_links = client.get(f"{legacy_token_url}/links")
-        assert legacy_links.status_code == status.HTTP_200_OK
+        assert legacy_links.status_code == status.HTTP_404_NOT_FOUND
     finally:
         delete_user(access_token, user["username"])
         for host in hosts:
             client.delete(f"/api/host/{host['id']}", headers=auth_headers(access_token))
+        cleanup_groups(access_token, core, groups)
+
+
+def test_revoked_user_with_forged_legacy_token_rejected(access_token):
+    core, groups = setup_groups(access_token, 1)
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("forged_legacy_sub")},
+    )
+    try:
+        revoke = client.post(
+            f"/api/user/{user['username']}/revoke_sub",
+            headers=auth_headers(access_token),
+        )
+        assert revoke.status_code == status.HTTP_200_OK
+
+        forged_token = _build_legacy_subscription_token(user["username"])
+        forged_url = f"{user['subscription_url'].rsplit('/', 1)[0]}/{forged_token}"
+        forged_response = client.get(f"{forged_url}/links")
+        assert forged_response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)
 
 
@@ -2049,6 +2071,37 @@ def test_reset_by_next_user_usage(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_reset_by_next_preserves_on_hold_template_status(access_token):
+    core, groups = setup_groups(access_token, 1)
+    template = create_user_template(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        status_value="on_hold",
+    )
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_next_plan_on_hold")},
+    )
+    try:
+        update = client.put(
+            f"/api/user/{user['username']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"next_plan": {"user_template_id": template["id"], "add_remaining_traffic": False}},
+        )
+        assert update.status_code == status.HTTP_200_OK
+        response = client.post(
+            f"/api/user/{user['username']}/active_next",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "on_hold"
+    finally:
+        delete_user(access_token, user["username"])
+        delete_user_template(access_token, template["id"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_revoke_user_subscription(access_token):
     """Test revoke user subscription info."""
     core, groups = setup_groups(access_token, 1)
@@ -2318,6 +2371,46 @@ def test_role_allowed_group_ids_blocks_template_group_assignment(access_token):
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["detail"] == "Group not found"
     finally:
+        delete_admin(access_token, admin["username"])
+        _delete_role(access_token, role["id"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_role_allowed_group_ids_filters_user_listing(access_token):
+    core, groups = setup_groups(access_token, 2)
+    allowed_group, forbidden_group = groups
+    role = _create_group_restricted_user_role(access_token, allowed_group_ids=[allowed_group["id"]])
+    admin = create_admin(access_token, role_id=role["id"])
+    admin_token = _login(admin["username"], admin["password"])
+    visible_user = create_user(
+        access_token,
+        group_ids=[allowed_group["id"]],
+        payload={"username": unique_name("group_acl_visible")},
+    )
+    hidden_user = create_user(
+        access_token,
+        group_ids=[forbidden_group["id"]],
+        payload={"username": unique_name("group_acl_hidden")},
+    )
+
+    try:
+        response = client.get("/api/users", headers=auth_headers(admin_token))
+        assert response.status_code == status.HTTP_200_OK
+        usernames = {user["username"] for user in response.json()["users"]}
+        assert visible_user["username"] in usernames
+        assert hidden_user["username"] not in usernames
+
+        filtered = client.get(
+            "/api/users",
+            headers=auth_headers(admin_token),
+            params={"group": forbidden_group["id"]},
+        )
+        assert filtered.status_code == status.HTTP_200_OK
+        assert filtered.json()["users"] == []
+        assert filtered.json()["total"] == 0
+    finally:
+        delete_user(access_token, visible_user["username"])
+        delete_user(access_token, hidden_user["username"])
         delete_admin(access_token, admin["username"])
         _delete_role(access_token, role["id"])
         cleanup_groups(access_token, core, groups)

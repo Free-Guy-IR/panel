@@ -9,7 +9,7 @@ from operator import attrgetter
 
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
-from sqlalchemy import BigInteger, DateTime, and_, bindparam, func, insert, select, union_all, update
+from sqlalchemy import BigInteger, DateTime, bindparam, func, select, union_all, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -77,7 +77,7 @@ def _process_node_chunk(chunk_data: tuple) -> dict:
     users_usage = defaultdict(int)
     for param in params:
         uid = int(param["uid"])
-        value = int(param["value"] * coeff)
+        value = round(param["value"] * coeff)
         users_usage[uid] += value
     return dict(users_usage)
 
@@ -211,7 +211,7 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
             ["created_at", "user_id", "node_id", "used_traffic"],
             insert_select_stmt,
         )
-        stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + insert_source.c.used_traffic)
+        stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic)
         return [(stmt, stmt_params)]
 
     stmt = sqlite_insert(NodeUserUsage).from_select(
@@ -234,7 +234,7 @@ def build_node_usage_upsert(dialect: str, upsert_param: dict):
         upsert_param: Parameter dict with keys: node_id, created_at, up, down
 
     Returns:
-        tuple: (statements_list, params_list) - For SQLite returns 2 statements, others return 1
+        list: One (statement, params) pair for the dialect-specific upsert.
     """
     if dialect == "postgresql":
         stmt = pg_insert(NodeUsage).values(
@@ -266,77 +266,53 @@ def build_node_usage_upsert(dialect: str, upsert_param: dict):
         return [(stmt, [upsert_param])]
 
     else:  # SQLite
-        # Insert with OR IGNORE
-        insert_stmt = (
-            insert(NodeUsage)
-            .values(
-                node_id=bindparam("node_id"),
-                created_at=bindparam("created_at"),
-                uplink=0,
-                downlink=0,
-            )
-            .prefix_with("OR IGNORE")
+        stmt = sqlite_insert(NodeUsage).values(
+            node_id=bindparam("node_id"),
+            created_at=bindparam("created_at"),
+            uplink=bindparam("up"),
+            downlink=bindparam("down"),
         )
-
-        # Update with renamed bindparams to avoid conflicts
-        update_stmt = (
-            update(NodeUsage)
-            .values(
-                uplink=NodeUsage.uplink + bindparam("up"),
-                downlink=NodeUsage.downlink + bindparam("down"),
-            )
-            .where(
-                and_(
-                    NodeUsage.node_id == bindparam("b_node_id"),
-                    NodeUsage.created_at == bindparam("b_created_at"),
-                )
-            )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["created_at", "node_id"],
+            set_={
+                "uplink": NodeUsage.uplink + stmt.excluded.uplink,
+                "downlink": NodeUsage.downlink + stmt.excluded.downlink,
+            },
         )
-
-        # Remap params for update statement
-        update_param = {
-            "up": upsert_param["up"],
-            "down": upsert_param["down"],
-            "b_node_id": upsert_param["node_id"],
-            "b_created_at": upsert_param["created_at"],
-        }
-
-        return [(insert_stmt, [upsert_param]), (update_stmt, [update_param])]
+        return [(stmt, [upsert_param])]
 
 
-async def safe_execute(stmt, params=None, max_retries: int = 2):
+async def safe_execute_many(statements: list[tuple], max_retries: int = 2):
     """
-    Safely execute database operations with deadlock and connection handling.
-    Creates a fresh DB session for each retry attempt to release locks.
+    Execute multiple statements atomically in a single transaction.
 
-    Reduced retries to prevent retry amplification under load.
-    Dropping some stats is better than crashing the system.
+    Same deadlock/lock retry handling as safe_execute; on any failure the whole
+    batch rolls back so multi-table updates cannot be applied partially.
 
     Args:
-        stmt: SQLAlchemy statement to execute
-        params (list[dict], optional): Parameters for the statement
+        statements: List of (stmt, params) tuples; params may be None
         max_retries (int, optional): Maximum number of retry attempts (default: 2)
     """
-    statement = stmt
-
-    # Get dialect once before retry loop to avoid repeated DB calls
     dialect = await get_dialect()
-    if (
-        dialect == "mysql"
-        and isinstance(stmt, Insert)
-        and (not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None)
-    ):
-        # MySQL-specific IGNORE prefix - but skip if using ON DUPLICATE KEY UPDATE
-        statement = stmt.prefix_with("IGNORE")
+    prepared = []
+    for stmt, params in statements:
+        if (
+            dialect == "mysql"
+            and isinstance(stmt, Insert)
+            and (not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None)
+        ):
+            stmt = stmt.prefix_with("IGNORE")
+        prepared.append((stmt, params))
 
     for attempt in range(max_retries):
         try:
             # engine.begin() ensures commit/rollback + connection return on exit
             async with engine.begin() as conn:
-                if params is None:
-                    await conn.execute(statement)
-                else:
-                    await conn.execute(statement, params)
+                for statement, params in prepared:
+                    if params is None:
+                        await conn.execute(statement)
+                    else:
+                        await conn.execute(statement, params)
                 return
 
         except (OperationalError, DatabaseError) as err:
@@ -374,6 +350,22 @@ async def safe_execute(stmt, params=None, max_retries: int = 2):
 
             # If we've exhausted retries or it's not a retriable error, raise
             raise
+
+
+async def safe_execute(stmt, params=None, max_retries: int = 2):
+    """
+    Safely execute database operations with deadlock and connection handling.
+    Creates a fresh DB session for each retry attempt to release locks.
+
+    Reduced retries to prevent retry amplification under load.
+    Dropping some stats is better than crashing the system.
+
+    Args:
+        stmt: SQLAlchemy statement to execute
+        params (list[dict], optional): Parameters for the statement
+        max_retries (int, optional): Maximum number of retry attempts (default: 2)
+    """
+    await safe_execute_many([(stmt, params)], max_retries=max_retries)
 
 
 def _get_time_bucket(now: dt | None = None) -> dt:
@@ -419,7 +411,7 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
             upsert_params.append(
                 {
                     "uid": int(p["uid"]),
-                    "value": int(p["value"] * coeff),
+                    "value": round(p["value"] * coeff),
                     "node_id": node_id,
                     "created_at": created_at,
                 }
@@ -730,7 +722,7 @@ async def calculate_users_usage(api_params: dict, usage_coefficient: dict) -> li
         for _, params, coeff in chunks_data:
             for param in params:
                 uid = int(param["uid"])
-                value = int(param["value"] * coeff)
+                value = round(param["value"] * coeff)
                 users_usage[uid] += value
         return [{"uid": uid, "value": value} for uid, value in users_usage.items()]
 
@@ -832,7 +824,7 @@ async def _record_user_usages_impl():
             usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
         ]
 
-        # Update User table with concurrency control
+        usage_updates = []
         if valid_users_usage:
             user_stmt = (
                 update(User)
@@ -840,22 +832,24 @@ async def _record_user_usages_impl():
                 .values(used_traffic=User.used_traffic + bindparam("value"), online_at=dt.now(UTC))
                 .execution_options(synchronize_session=False)
             )
-            async with JOB_SEM:
-                await safe_execute(user_stmt, valid_users_usage)
-            logger.debug(f"Updated {len(valid_users_usage)} users")
+            usage_updates.append((user_stmt, valid_users_usage))
 
-        # Update Admin table with concurrency control
-        if admin_usage:
-            admin_data = [{"admin_id": aid, "value": val} for aid, val in admin_usage.items()]
+        admin_data = [{"admin_id": aid, "value": val} for aid, val in admin_usage.items()]
+        if admin_data:
             admin_stmt = (
                 update(Admin)
                 .where(Admin.id == bindparam("admin_id"))
                 .values(used_traffic=Admin.used_traffic + bindparam("value"))
                 .execution_options(synchronize_session=False)
             )
+            usage_updates.append((admin_stmt, admin_data))
+
+        if usage_updates:
             async with JOB_SEM:
-                await safe_execute(admin_stmt, admin_data)
-            logger.debug(f"Updated {len(admin_data)} admins")
+                await safe_execute_many(usage_updates)
+            logger.debug(f"Updated {len(valid_users_usage)} users and {len(admin_data)} admins")
+
+        if admin_data:
             try:
                 await enforce_admin_limits_now(logger=logger)
             except Exception:

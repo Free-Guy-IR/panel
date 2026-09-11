@@ -6,8 +6,8 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import bindparam, select, update
+from sqlalchemy.exc import DatabaseError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
 
@@ -235,6 +235,51 @@ async def test_record_user_usages_limits_overused_admin(monkeypatch: pytest.Monk
         assert admin_status.scalar_one() == AdminStatus.limited
 
     remove_users.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_safe_execute_many_rolls_back_whole_batch_on_error(session_factory):
+    async with session_factory() as session:
+        admin = Admin(username="admin", hashed_password="secret", role_id=3)
+        session.add(admin)
+        await session.flush()
+        admin_id = admin.id
+        user = User(username="user", admin_id=admin_id, proxy_settings=ProxyTable().dict(no_obj=True))
+        session.add(user)
+        await session.flush()
+        user_id = user.id
+        await session.commit()
+
+    user_stmt = (
+        update(User)
+        .where(User.id == bindparam("uid"))
+        .values(used_traffic=User.used_traffic + bindparam("value"))
+        .execution_options(synchronize_session=False)
+    )
+    failing_admin_stmt = (
+        update(Admin)
+        .where(Admin.id == bindparam("admin_id"))
+        .values(username=None)
+        .execution_options(synchronize_session=False)
+    )
+
+    with pytest.raises(DatabaseError):
+        await record_usages.safe_execute_many(
+            [
+                (user_stmt, [{"uid": user_id, "value": 100}]),
+                (failing_admin_stmt, [{"admin_id": admin_id}]),
+            ]
+        )
+
+    async with session_factory() as session:
+        used_traffic = await session.execute(select(User.used_traffic).where(User.id == user_id))
+        assert used_traffic.scalar_one() == 0
+
+
+@pytest.mark.asyncio
+async def test_calculate_users_usage_rounds_instead_of_truncating():
+    users_usage = await record_usages.calculate_users_usage({1: [{"uid": "5", "value": 5}]}, {1: 1.5})
+    assert users_usage == [{"uid": 5, "value": 8}]
 
 
 @pytest.mark.asyncio

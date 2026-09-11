@@ -1,4 +1,7 @@
 import asyncio
+import hashlib
+import hmac
+import json
 from datetime import UTC, datetime as dt, timedelta as td
 
 import aiohttp
@@ -31,11 +34,16 @@ async def send_to_all_webhooks(client: aiohttp.ClientSession, notifications, web
         return True
 
     payload = notifications  # Already JSON-serializable, no need for jsonable_encoder
+    body = json.dumps(payload).encode("utf-8")
 
     async def send_one(webhook):
-        webhook_headers = {"x-webhook-secret": webhook.secret} if webhook.secret else None
+        webhook_headers = {"Content-Type": "application/json"}
+        if webhook.secret:
+            webhook_headers["x-webhook-secret"] = webhook.secret
+            digest = hmac.new(webhook.secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+            webhook_headers["x-webhook-signature"] = f"sha256={digest}"
         try:
-            r = await client.post(webhook.url, json=payload, headers=webhook_headers)
+            r = await client.post(webhook.url, data=body, headers=webhook_headers)
             if r.status in (200, 201, 202, 204):
                 return True
             else:

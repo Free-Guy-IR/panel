@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -6,7 +7,7 @@ from fastapi import status
 from sqlalchemy import func, select, update
 
 from app.db.crud.node import create_node as db_create_node, remove_node as db_remove_node
-from app.db.models import Admin, AdminUsageLogs, Node
+from app.db.models import Admin, AdminUsageLogs, Node, User, UserStatus
 from app.models.node import NodeCreate
 from tests.api import TestSession, client
 from tests.api.helpers import (
@@ -427,4 +428,57 @@ def test_bulk_admin_user_actions(access_token):
     finally:
         delete_user_if_present(access_token, active_user["username"])
         delete_user_if_present(access_token, disabled_user["username"])
+        delete_admin(access_token, admin["username"])
+
+
+def test_bulk_activate_users_respects_expire_and_data_limit(access_token):
+    admin = create_admin(access_token)
+    expired_user = create_user(access_token, payload={"username": unique_name("bulk_activate_expired")})
+    limited_user = create_user(access_token, payload={"username": unique_name("bulk_activate_limited")})
+    healthy_user = create_user(access_token, payload={"username": unique_name("bulk_activate_healthy")})
+
+    async def _disable_with_states():
+        async with TestSession() as session:
+            await session.execute(
+                update(User)
+                .where(User.username == expired_user["username"])
+                .values(status=UserStatus.disabled, expire=datetime.now(UTC) - timedelta(days=1))
+            )
+            await session.execute(
+                update(User)
+                .where(User.username == limited_user["username"])
+                .values(status=UserStatus.disabled, data_limit=1024, used_traffic=2048)
+            )
+            await session.execute(
+                update(User).where(User.username == healthy_user["username"]).values(status=UserStatus.disabled)
+            )
+            await session.commit()
+
+    try:
+        for user in (expired_user, limited_user, healthy_user):
+            response = client.put(
+                f"/api/user/{user['username']}/set_owner",
+                headers=auth_headers(access_token),
+                params={"admin_username": admin["username"]},
+            )
+            assert response.status_code == status.HTTP_200_OK
+
+        asyncio.run(_disable_with_states())
+
+        response = client.post(
+            "/api/admins/bulk/users/activate",
+            headers=auth_headers(access_token),
+            json={"ids": [admin["id"]]},
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        expired_response = client.get(f"/api/user/{expired_user['username']}", headers=auth_headers(access_token))
+        limited_response = client.get(f"/api/user/{limited_user['username']}", headers=auth_headers(access_token))
+        healthy_response = client.get(f"/api/user/{healthy_user['username']}", headers=auth_headers(access_token))
+        assert expired_response.json()["status"] == "expired"
+        assert limited_response.json()["status"] == "limited"
+        assert healthy_response.json()["status"] == "active"
+    finally:
+        for user in (expired_user, limited_user, healthy_user):
+            delete_user_if_present(access_token, user["username"])
         delete_admin(access_token, admin["username"])
