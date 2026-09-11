@@ -1,5 +1,5 @@
 import json
-from asyncio import Lock
+from asyncio import Lock, sleep
 from copy import deepcopy
 from typing import ClassVar
 
@@ -183,8 +183,21 @@ class CoreManager:
             await self._reload_from_cache()
 
     async def _publish_invalidation(self, message: dict):
-        """Publish core update message via global router."""
-        await router.publish(MessageTopic.CORE, message)
+        """Publish core update message via global router.
+
+        Retries transient failures: the router swallows publish errors by default,
+        and a silently lost invalidation leaves sibling workers serving stale cores
+        until their next restart, even though the KV snapshot was already updated.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                await router.publish(MessageTopic.CORE, message, raise_on_error=True)
+                return
+            except Exception as exc:
+                last_exc = exc
+                await sleep(0.3 * (attempt + 1))
+        raise last_exc
 
     def validate_core(
         self,
@@ -281,7 +294,10 @@ class CoreManager:
         try:
             await self._publish_invalidation({"action": "update", "core": self._core_payload_from_db(db_core_config)})
         except Exception as exc:
-            self._logger.warning(f"Failed to publish core update via NATS: {exc}")
+            self._logger.error(
+                f"Core update was not broadcast to other workers after retries; "
+                f"they may serve stale core state until resynced: {exc}"
+            )
 
     async def update_core(self, db_core_config: CoreConfig, core_config: AbstractCore | None = None):
         await self._update_core_impl(db_core_config, core_config)
@@ -304,7 +320,10 @@ class CoreManager:
         try:
             await self._publish_invalidation({"action": "remove", "core_id": core_id})
         except Exception as exc:
-            self._logger.warning(f"Failed to publish core remove via NATS: {exc}")
+            self._logger.error(
+                f"Core removal was not broadcast to other workers after retries; "
+                f"they may serve stale core state until resynced: {exc}"
+            )
 
     async def remove_core(self, core_id: int):
         await self._remove_core_impl(core_id)

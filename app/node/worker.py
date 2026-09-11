@@ -171,11 +171,12 @@ class NodeWorkerService(BaseRpcService):
         # Refresh from KV before connecting to avoid stale core cache races.
         await core_manager._reload_from_cache()
         async with GetDB() as db:
-            await self._node_operator.connect_single_node(db, node_id)
+            await self._node_operator.connect_single_node(db, node_id, force_start=bool(data.get("force_start")))
 
     async def _connect_nodes_bulk(self, data: dict):
         node_ids = data.get("node_ids")
         core_id = data.get("core_id")
+        force_start = bool(data.get("force_start"))
         # Refresh from KV before bulk reconnect to avoid stale core cache races.
         await core_manager._reload_from_cache()
         async with GetDB() as db:
@@ -190,7 +191,7 @@ class NodeWorkerService(BaseRpcService):
                     ),
                     load_usage_logs=False,
                 )
-            await self._node_operator.connect_nodes_bulk(db, nodes)
+            await self._node_operator.connect_nodes_bulk(db, nodes, force_start=force_start)
 
     async def _disconnect_node(self, data: dict):
         node_id = data.get("node_id")

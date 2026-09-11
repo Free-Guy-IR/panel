@@ -78,6 +78,15 @@ MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
 CONNECT_CONCURRENCY = 10
 
+# Serialize connects of the same node inside this worker: a sibling sync message,
+# a health-check reconnect and an admin restart must not race each other into a
+# double Start. Cross-worker races are settled by the lifecycle lease (409 -> attach).
+_CONNECT_LOCKS: dict[int, asyncio.Lock] = {}
+
+
+def _connect_lock(node_id: int) -> asyncio.Lock:
+    return _CONNECT_LOCKS.setdefault(node_id, asyncio.Lock())
+
 logger = get_logger("node-operation")
 
 L2TP_MIN_NODE_VERSION = "0.6.4"
@@ -85,18 +94,32 @@ L2TP_MIN_NODE_VERSION = "0.6.4"
 
 def _node_lacks_l2tp(node_version: str) -> bool:
     if not node_version:
-        return False
+        return True
     try:
         return Version(node_version) < Version(L2TP_MIN_NODE_VERSION)
     except InvalidVersion:
-        return False
+        return True
+
+
+async def _known_node_version(pg_node: PasarGuardNode) -> str:
+    known = await pg_node.node_version()
+    if known:
+        return known
+    try:
+        info = await pg_node.info()
+    except Exception:
+        return ""
+    if info is None:
+        return ""
+    return info.node_version or ""
 
 
 def _l2tp_unsupported_message(node_version: str) -> str:
-    return (
-        f"this node runs image v{node_version}, which has no L2TP backend. "
-        f"Rebuild and redeploy the node image (v{L2TP_MIN_NODE_VERSION} or newer), then reconnect."
-    )
+    if node_version:
+        reason = f"this node runs image v{node_version}, which has no L2TP backend"
+    else:
+        reason = "this node did not report an image version, so L2TP support cannot be confirmed"
+    return f"{reason}. Rebuild and redeploy the node image (v{L2TP_MIN_NODE_VERSION} or newer), then reconnect."
 
 
 _MULTI_INSTANCE_BACKENDS = {
@@ -388,7 +411,9 @@ class NodeOperation(BaseOperation):
         return "; ".join(problems)
 
     @staticmethod
-    async def _add_extra_cores(pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None) -> str:
+    async def _add_extra_cores(
+        pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None, *, restart_running: bool = False
+    ) -> str:
         if not extra_cores:
             return ""
 
@@ -407,11 +432,21 @@ class NodeOperation(BaseOperation):
                 continue
 
             if backend_type in already_running:
-                logger.debug(f'Core "{core_id}" is already running on "{db_node.name}" node')
-                continue
+                if not restart_running:
+                    logger.debug(f'Core "{core_id}" is already running on "{db_node.name}" node')
+                    continue
+                try:
+                    await pg_node.remove_backend(backend_type=backend_type)
+                    already_running.discard(backend_type)
+                except NodeAPIError as e:
+                    problems.append(f"core {core_id}: restarting backend: {e.detail}")
+                    continue
+                except Exception as e:
+                    problems.append(f"core {core_id}: restarting backend: {e}")
+                    continue
 
             if extra_core.type == CoreType.l2tp:
-                known_version = await pg_node.node_version()
+                known_version = await _known_node_version(pg_node)
                 if _node_lacks_l2tp(known_version):
                     problems.append(f"core {core_id}: {_l2tp_unsupported_message(known_version)}")
                     continue
@@ -488,12 +523,15 @@ class NodeOperation(BaseOperation):
             return None
 
     @staticmethod
-    async def _start_or_attach_node(pg_node: PasarGuardNode, db_node: Node, core, users: list, backend_type):
-        state = await pg_node.get_lifecycle_state()
-        if state is not None and state.observed is LifecycleStatus.HEALTHY:
-            attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
-            if attached is not None:
-                return attached
+    async def _start_or_attach_node(
+        pg_node: PasarGuardNode, db_node: Node, core, users: list, backend_type, *, force_start: bool = False
+    ):
+        if not force_start:
+            state = await pg_node.get_lifecycle_state()
+            if state is not None and state.observed is LifecycleStatus.HEALTHY:
+                attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
+                if attached is not None:
+                    return attached
 
         start_kwargs = {
             "config": core.to_str(),
@@ -507,7 +545,9 @@ class NodeOperation(BaseOperation):
         return await pg_node.start(**start_kwargs)
 
     @staticmethod
-    async def connect_node(db_node: Node, core, users: list, extra_cores: list[tuple] | None = None) -> dict | None:
+    async def connect_node(
+        db_node: Node, core, users: list, extra_cores: list[tuple] | None = None, *, force_start: bool = False
+    ) -> dict | None:
         """
         Connect to a node and return status result (does NOT update database).
 
@@ -515,11 +555,21 @@ class NodeOperation(BaseOperation):
             db_node (Node): Node object from database.
             core: Pre-fetched core config for this node.
             users (list): Pre-fetched core users list.
+            extra_cores: Additional cores to run alongside the primary one.
+            force_start: Push a new Start RPC (and re-add running extra backends) even when
+                the node looks healthy, so a changed config actually reaches the daemon.
 
         Returns:
             dict: {node_id, status, message, xray_version, node_version, old_status}
             None: if connection should be skipped
         """
+        async with _connect_lock(db_node.id):
+            return await NodeOperation._connect_node_inner(db_node, core, users, extra_cores, force_start)
+
+    @staticmethod
+    async def _connect_node_inner(
+        db_node: Node, core, users: list, extra_cores: list[tuple] | None, force_start: bool
+    ) -> dict | None:
         pg_node: PasarGuardNode | None = await node_manager.get_node(db_node.id)
         if pg_node is None:
             return None
@@ -542,7 +592,7 @@ class NodeOperation(BaseOperation):
             type = service.BackendType.XRAY
 
         if core.type == CoreType.l2tp:
-            known_version = await pg_node.node_version()
+            known_version = await _known_node_version(pg_node)
             if _node_lacks_l2tp(known_version):
                 message = _l2tp_unsupported_message(known_version)
                 logger.error(f'Refusing to start an L2TP core on "{db_node.name}": {message}')
@@ -556,7 +606,9 @@ class NodeOperation(BaseOperation):
                 }
 
         try:
-            info = await NodeOperation._start_or_attach_node(pg_node, db_node, core, users, type)
+            info = await NodeOperation._start_or_attach_node(
+                pg_node, db_node, core, users, type, force_start=force_start
+            )
             if info is None:
                 return None
 
@@ -566,7 +618,9 @@ class NodeOperation(BaseOperation):
                 p
                 for p in (
                     await NodeOperation._remove_surplus_backends(pg_node, db_node, extra_cores, core.type),
-                    await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
+                    await NodeOperation._add_extra_cores(
+                        pg_node, db_node, extra_cores, restart_running=force_start
+                    ),
                 )
                 if p
             )[:1024]
@@ -595,7 +649,9 @@ class NodeOperation(BaseOperation):
                                 await NodeOperation._remove_surplus_backends(
                                     pg_node, db_node, extra_cores, core.type
                                 ),
-                                await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores),
+                                await NodeOperation._add_extra_cores(
+                                    pg_node, db_node, extra_cores, restart_running=force_start
+                                ),
                             )
                             if p
                         )[:1024],
@@ -606,7 +662,7 @@ class NodeOperation(BaseOperation):
 
             detail = e.detail[:1020] + "..." if len(e.detail) > 1024 else e.detail
             if core.type == CoreType.l2tp and "invalid backend type" in detail.lower():
-                detail = _l2tp_unsupported_message(await pg_node.node_version() or "older")
+                detail = _l2tp_unsupported_message(await _known_node_version(pg_node))
 
             logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
 
@@ -619,10 +675,10 @@ class NodeOperation(BaseOperation):
                 "old_status": old_status,
             }
 
-    async def _connect_single_node_background(self, node_id: int) -> None:
+    async def _connect_single_node_background(self, node_id: int, *, force_start: bool = False) -> None:
         try:
             async with GetDB() as db:
-                await self._connect_single_impl(db, node_id)
+                await self._connect_single_impl(db, node_id, force_start=force_start)
         except Exception as exc:
             logger.error(f"Background node connection failed for node {node_id}: {exc}")
 
@@ -668,7 +724,12 @@ class NodeOperation(BaseOperation):
         else:
             try:
                 await self._update_node_impl(db_node)
-                asyncio.create_task(self._connect_single_node_background(db_node.id))
+                force_start = (
+                    modified_node.core_config_id is not None
+                    or modified_node.additional_core_config_ids is not None
+                    or modified_node.keep_alive is not None
+                )
+                asyncio.create_task(self._connect_single_node_background(db_node.id, force_start=force_start))
             except NodeAPIError as e:
                 await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
 
@@ -730,6 +791,8 @@ class NodeOperation(BaseOperation):
         self,
         db: AsyncSession,
         nodes: list[Node],
+        *,
+        force_start: bool = False,
     ) -> None:
         """
         Connect multiple nodes and bulk update their statuses.
@@ -737,10 +800,11 @@ class NodeOperation(BaseOperation):
         Args:
             db (AsyncSession): Database session.
             nodes (list[Node]): List of nodes to connect.
+            force_start: Push a new Start RPC even to healthy nodes (config apply / restart).
         """
-        await self._connect_bulk_impl(db, nodes)
+        await self._connect_bulk_impl(db, nodes, force_start=force_start)
 
-    async def connect_single_node(self, db: AsyncSession, node_id: int) -> None:
+    async def connect_single_node(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
         """
         Connect a single node and update its status (optimized for single-node operations).
 
@@ -750,11 +814,12 @@ class NodeOperation(BaseOperation):
         Args:
             db (AsyncSession): Database session.
             node_id (int): ID of the node to connect.
+            force_start: Push a new Start RPC even when the node looks healthy.
         """
-        return await self._connect_single_impl(db, node_id)
+        return await self._connect_single_impl(db, node_id, force_start=force_start)
 
-    async def _connect_single_node_remote(self, db: AsyncSession, node_id: int) -> None:
-        await node_nats_client.publish("connect_node", {"node_id": node_id})
+    async def _connect_single_node_remote(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
+        await node_nats_client.publish("connect_node", {"node_id": node_id, "force_start": force_start})
 
     async def disconnect_single_node(self, node_id: int) -> None:
         """
@@ -769,7 +834,7 @@ class NodeOperation(BaseOperation):
         logger.info(f'Node "{node_id}" disconnected')
 
     async def restart_node(self, db: AsyncSession, node_id: int, admin: AdminDetails) -> None:
-        await self.connect_single_node(db, node_id)
+        await self.connect_single_node(db, node_id, force_start=True)
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
     async def restart_all_node(self, db: AsyncSession, admin: AdminDetails, core_id: int | None = None) -> None:
@@ -944,7 +1009,7 @@ class NodeOperation(BaseOperation):
     async def _remove_node_remote(self, node_id: int) -> None:
         await node_nats_client.publish("remove_node", {"node_id": node_id})
 
-    async def _connect_nodes_bulk_local(self, db: AsyncSession, nodes: list[Node]) -> None:
+    async def _connect_nodes_bulk_local(self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False) -> None:
         if not nodes:
             return
 
@@ -975,6 +1040,7 @@ class NodeOperation(BaseOperation):
                     cores_by_id.get(core_id),
                     users_by_core.get(core_id, []),
                     self._extra_cores_for(node, cores_by_id, users_by_core),
+                    force_start=force_start,
                 )
 
         results = await asyncio.gather(*[connect_single(node) for node in nodes])
@@ -1014,21 +1080,25 @@ class NodeOperation(BaseOperation):
         for notif in notifications_to_send:
             if notif["status"] == NodeStatus.connected:
                 asyncio.create_task(notification.connect_node(notif["node"]))
+                if notif["node"].message:
+                    asyncio.create_task(notification.error_node(notif["node"]))
             elif notif["status"] == NodeStatus.error and notif["old_status"] != NodeStatus.error:
                 asyncio.create_task(notification.error_node(notif["node"]))
 
-    async def _connect_nodes_bulk_sync(self, db: AsyncSession, nodes: list[Node]) -> None:
-        await self._connect_nodes_bulk_local(db, nodes)
+    async def _connect_nodes_bulk_sync(self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False) -> None:
+        await self._connect_nodes_bulk_local(db, nodes, force_start=force_start)
         for node in nodes:
             if node is not None and node.status not in (NodeStatus.disabled, NodeStatus.limited):
                 await publish_node_sync("connect", node.id)
 
-    async def _connect_nodes_bulk_remote(self, db: AsyncSession, nodes: list[Node]) -> None:
+    async def _connect_nodes_bulk_remote(self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False) -> None:
         if not nodes:
             return
-        await node_nats_client.publish("connect_nodes_bulk", {"node_ids": [node.id for node in nodes]})
+        await node_nats_client.publish(
+            "connect_nodes_bulk", {"node_ids": [node.id for node in nodes], "force_start": force_start}
+        )
 
-    async def _connect_single_node_local(self, db: AsyncSession, node_id: int) -> None:
+    async def _connect_single_node_local(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
         db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
         if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
             return
@@ -1061,7 +1131,7 @@ class NodeOperation(BaseOperation):
             return
 
         # Connect the node
-        result = await NodeOperation.connect_node(db_node, core, users, extra_cores)
+        result = await NodeOperation.connect_node(db_node, core, users, extra_cores, force_start=force_start)
 
         if not result:
             return
@@ -1085,6 +1155,13 @@ class NodeOperation(BaseOperation):
                 node_version=result.get("node_version"),
             )
             asyncio.create_task(notification.connect_node(node_notif))
+            if result.get("message"):
+                logger.warning(f'Node "{db_node.name}" connected but some additional cores failed: {result["message"]}')
+                asyncio.create_task(
+                    notification.error_node(
+                        NodeNotification(id=db_node.id, name=db_node.name, message=result["message"])
+                    )
+                )
         elif result["status"] == NodeStatus.error and result["old_status"] != NodeStatus.error:
             node_notif = NodeNotification(
                 id=db_node.id,
@@ -1093,8 +1170,8 @@ class NodeOperation(BaseOperation):
             )
             asyncio.create_task(notification.error_node(node_notif))
 
-    async def _connect_single_node_sync(self, db: AsyncSession, node_id: int) -> None:
-        await self._connect_single_node_local(db, node_id)
+    async def _connect_single_node_sync(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
+        await self._connect_single_node_local(db, node_id, force_start=force_start)
         await publish_node_sync("connect", node_id)
 
     async def _connect_single_node_remote(self, db: AsyncSession, node_id: int) -> None:
@@ -1119,10 +1196,10 @@ class NodeOperation(BaseOperation):
             ),
             load_usage_logs=False,
         )
-        await self.connect_nodes_bulk(db, nodes)
+        await self.connect_nodes_bulk(db, nodes, force_start=True)
 
     async def _restart_all_nodes_remote(self, db: AsyncSession, admin: AdminDetails, core_id: int | None) -> None:
-        await node_nats_client.publish("connect_nodes_bulk", {"core_id": core_id})
+        await node_nats_client.publish("connect_nodes_bulk", {"core_id": core_id, "force_start": True})
 
     async def _get_logs_local(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
         node = await node_manager.get_node(node_id)

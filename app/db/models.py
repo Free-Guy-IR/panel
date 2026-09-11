@@ -628,13 +628,9 @@ class Node(Base, CreatedAtUTCMixin):
         order_by=node_additional_cores_association.c.core_config_id,
         init=False,
     )
-    user_usages: Mapped[list[NodeUserUsage]] = relationship(
-        back_populates="node", cascade="all, delete-orphan", init=False
-    )
-    usages: Mapped[list[NodeUsage]] = relationship(back_populates="node", cascade="all, delete-orphan", init=False)
-    usage_logs: Mapped[list[NodeUsageResetLogs]] = relationship(
-        back_populates="node", cascade="all, delete-orphan", init=False
-    )
+    user_usages: Mapped[list[NodeUserUsage]] = relationship(back_populates="node", init=False)
+    usages: Mapped[list[NodeUsage]] = relationship(back_populates="node", init=False)
+    usage_logs: Mapped[list[NodeUsageResetLogs]] = relationship(back_populates="node", init=False)
     core_config: Mapped[CoreConfig | None] = relationship("CoreConfig", init=False)
 
     @property
@@ -732,8 +728,8 @@ class NodeUserUsage(Base, IdMixin):
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), unique=False)  # 10 minute per record
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
     user: Mapped[User] = relationship(back_populates="node_usages", init=False)
-    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="CASCADE")
-    node: Mapped[Node] = relationship(back_populates="user_usages", init=False)
+    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL")
+    node: Mapped[Node | None] = relationship(back_populates="user_usages", init=False)
     used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
@@ -746,8 +742,8 @@ class NodeUsage(Base, IdMixin):
         # The unique constraint already creates an index on (created_at, node_id)
     )
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), unique=False)  # 10 minute per record
-    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="CASCADE")
-    node: Mapped[Node] = relationship(back_populates="usages", init=False)
+    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL")
+    node: Mapped[Node | None] = relationship(back_populates="usages", init=False)
     uplink: Mapped[int] = mapped_column(BigInteger, default=0)
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
 
@@ -767,7 +763,7 @@ class NodeInboundUsage(Base, IdMixin):
         Index("ix_node_inbound_usages_tag_created_at", "inbound_tag", "created_at"),
     )
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), unique=False)  # 10 minute per record
-    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="CASCADE")
+    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL")
     inbound_tag: Mapped[str] = mapped_column(String(256))
     uplink: Mapped[int] = mapped_column(BigInteger, default=0)
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -779,8 +775,8 @@ class NodeUsageResetLogs(Base, CreatedAtUTCMixin):
         # Index for node-specific queries sorted by time
         Index("ix_node_usage_reset_logs_node_id_created_at", "node_id", "created_at"),
     )
-    node_id: Mapped[int] = fk_id_column("nodes.id", ondelete="CASCADE")
-    node: Mapped[Node] = relationship(back_populates="usage_logs", init=False)
+    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL")
+    node: Mapped[Node | None] = relationship(back_populates="usage_logs", init=False)
     uplink: Mapped[int] = mapped_column(BigInteger, nullable=False)
     downlink: Mapped[int] = mapped_column(BigInteger, nullable=False)
 

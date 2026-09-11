@@ -103,7 +103,7 @@ class NatsMessageRouter:
 
         self._running = False
 
-    async def publish(self, topic: MessageTopic, data: dict):
+    async def publish(self, topic: MessageTopic, data: dict, *, raise_on_error: bool = False):
         """Publish a message to NATS."""
         if not _router_enabled():
             return
@@ -117,6 +117,8 @@ class NatsMessageRouter:
             await client.publish(nats_settings.worker_sync_subject, message.model_dump_json().encode())
         except Exception as exc:
             logger.warning(f"Failed to publish NATS message: {exc}")
+            if raise_on_error:
+                raise
 
 
 # Global router instance

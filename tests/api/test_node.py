@@ -21,6 +21,7 @@ from app.db.models import (
     Group,
     Node,
     NodeConnectionType,
+    NodeInboundUsage,
     NodeStat,
     NodeStatus,
     NodeUsage,
@@ -1199,7 +1200,7 @@ async def test_get_nodes_simple_search_and_sort(access_token):
 
 
 @pytest.mark.asyncio
-async def test_remove_node_deletes_associated_usage_tables():
+async def test_remove_node_keeps_associated_usage_tables():
     async with TestSession() as session:
         node_model = NodeCreate(**node_create_payload(name=unique_name("bulk_node")))
         db_node = await db_create_node(session, node_model)
@@ -1229,6 +1230,16 @@ async def test_remove_node_deletes_associated_usage_tables():
             )
             for idx in range(550)
         ]
+        inbound_usages = [
+            NodeInboundUsage(
+                node_id=node_id,
+                created_at=now + timedelta(hours=idx),
+                inbound_tag="vless",
+                uplink=300 + idx,
+                downlink=400 + idx,
+            )
+            for idx in range(40)
+        ]
         reset_logs = [
             NodeUsageResetLogs(
                 node_id=node_id,
@@ -1249,23 +1260,41 @@ async def test_remove_node_deletes_associated_usage_tables():
             )
             for idx in range(600)
         ]
-        session.add_all([*user_usages, *node_usages, *reset_logs, *node_stats])
+        session.add_all([*user_usages, *node_usages, *inbound_usages, *reset_logs, *node_stats])
         await session.commit()
 
-        async def count_rows(model):
-            return await session.scalar(select(func.count()).select_from(model).where(model.node_id == node_id))
+        user_usage_ids = [row.id for row in user_usages]
+        node_usage_ids = [row.id for row in node_usages]
+        inbound_usage_ids = [row.id for row in inbound_usages]
+        reset_log_ids = [row.id for row in reset_logs]
+        stat_ids = [row.id for row in node_stats]
 
-        assert await count_rows(NodeUserUsage) == len(user_usages)
-        assert await count_rows(NodeUsage) == len(node_usages)
-        assert await count_rows(NodeUsageResetLogs) == len(reset_logs)
-        assert await count_rows(NodeStat) == len(node_stats)
+        async def count_rows(model, node_id_value):
+            return await session.scalar(select(func.count()).select_from(model).where(model.node_id == node_id_value))
+
+        assert await count_rows(NodeUserUsage, node_id) == len(user_usages)
+        assert await count_rows(NodeUsage, node_id) == len(node_usages)
+        assert await count_rows(NodeInboundUsage, node_id) == len(inbound_usages)
+        assert await count_rows(NodeUsageResetLogs, node_id) == len(reset_logs)
+        assert await count_rows(NodeStat, node_id) == len(node_stats)
 
         db_node = await session.get(Node, node_id)
         await db_remove_node(session, db_node)
 
-        assert await count_rows(NodeUserUsage) == 0
-        assert await count_rows(NodeUsage) == 0
-        assert await count_rows(NodeUsageResetLogs) == 0
-        assert await count_rows(NodeStat) == 0
+        assert await count_rows(NodeUserUsage, node_id) == 0
+        assert await count_rows(NodeUsage, node_id) == 0
+        assert await count_rows(NodeInboundUsage, node_id) == 0
+        assert await count_rows(NodeUsageResetLogs, node_id) == 0
+        assert (await session.execute(select(NodeStat).where(NodeStat.id.in_(stat_ids)))).scalars().all() == []
+
+        async def detached(model, ids):
+            rows = (await session.execute(select(model).where(model.id.in_(ids)))).scalars().all()
+            assert {row.id for row in rows} == set(ids)
+            assert all(row.node_id is None for row in rows)
+
+        await detached(NodeUserUsage, user_usage_ids)
+        await detached(NodeUsage, node_usage_ids)
+        await detached(NodeInboundUsage, inbound_usage_ids)
+        await detached(NodeUsageResetLogs, reset_log_ids)
         remaining_nodes = await session.scalar(select(func.count()).select_from(Node).where(Node.id == node_id))
         assert remaining_nodes == 0

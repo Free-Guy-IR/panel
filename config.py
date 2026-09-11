@@ -1,4 +1,5 @@
 from functools import cached_property
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, field_validator, model_validator
@@ -215,6 +216,20 @@ class FeatureSettings(EnvSettings):
     stop_nodes_on_shutdown: bool = Field(default=True, validation_alias="STOP_NODES_ON_SHUTDOWN")
 
 
+class SecuritySettings(EnvSettings):
+    allowed_certificate_dirs: str = Field(
+        default="/var/lib/pasarguard/certs", validation_alias="ALLOWED_CERTIFICATE_DIRS"
+    )
+
+    @cached_property
+    def certificate_dirs(self) -> list[Path]:
+        return [
+            Path(entry).expanduser().resolve()
+            for entry in (part.strip() for part in self.allowed_certificate_dirs.split(","))
+            if entry
+        ]
+
+
 database_settings = DatabaseSettings()
 server_settings = ServerSettings()
 dashboard_settings = DashboardSettings()
@@ -230,6 +245,7 @@ auth_settings = AuthSettings()
 usage_settings = UsageSettings()
 job_settings = JobSettings()
 feature_settings = FeatureSettings()
+security_settings = SecuritySettings()
 
 if not database_settings.is_postgresql:
     usage_settings.enable_recording_nodes_stats = False

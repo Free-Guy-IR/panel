@@ -3,13 +3,26 @@ from __future__ import annotations
 import base64
 import json
 from copy import deepcopy
-from pathlib import PosixPath
+from pathlib import Path, PosixPath
 
 import commentjson
 
 from app.models.core import CoreType
 from app.models.protocol import ProxyProtocol
 from app.utils.crypto import get_cert_SANs, get_x25519_public_key, validate_mldsa65_seed, validate_mldsa65_verify
+from config import security_settings
+
+
+def _resolve_allowed_cert_path(path: str, inbound_tag: str) -> Path:
+    resolved = Path(path).expanduser().resolve()
+    for base in security_settings.certificate_dirs:
+        if resolved.is_relative_to(base):
+            return resolved
+    allowed = ", ".join(str(base) for base in security_settings.certificate_dirs)
+    raise ValueError(
+        f"{inbound_tag} inbound reads {path!r}, which is outside the allowed certificate "
+        f"directories ({allowed}); move the file there or extend ALLOWED_CERTIFICATE_DIRS"
+    )
 
 
 def _protocols_from_inbounds_by_tag(inbounds_by_tag: dict[str, dict]) -> frozenset[ProxyProtocol]:
@@ -188,12 +201,14 @@ class XRayConfig(dict):
                 # prevent error on parse by xray core
                 continue
             if certificate.get("certificateFile", None):
-                with open(certificate["certificateFile"], "rb") as file:
+                cert_path = _resolve_allowed_cert_path(certificate["certificateFile"], inbound_tag)
+                with open(cert_path, "rb") as file:
                     cert = file.read()
                     settings["sni"].extend(get_cert_SANs(cert))
 
                 if certificate.get("keyFile", None):
-                    with open(certificate["keyFile"], "rb") as file:
+                    key_path = _resolve_allowed_cert_path(certificate["keyFile"], inbound_tag)
+                    with open(key_path, "rb") as file:
                         key = file.read()
                 else:
                     raise ValueError(f"{inbound_tag} inbound doesn't keyFile in tlsSettings")
