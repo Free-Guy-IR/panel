@@ -102,15 +102,19 @@ def is_scope_all(admin: AdminDetails, resource: str, action: str) -> bool:
 
 def get_scope_admin_id(admin: AdminDetails, resource: str, action: str) -> int | None:
     """
-    Return admin.id if scope=OWN, else None.
+    Return admin.id if scope=OWN, None if scope=ALL.
     Pass as admin_id to CRUD queries so the DB enforces scope.
+    Raises PermissionDenied if the action is missing or explicitly disabled.
     """
     if admin.is_owner:
         return None
-    if admin.role is None:
-        return None
     action_perm = _get_resource_action(admin, resource, action)
-    if _resolve_scope(action_perm) is PermissionScope.OWN:
+    if not action_perm:
+        raise PermissionDenied(f"Permission denied: {resource}.{action}")
+    scope = _resolve_scope(action_perm)
+    if scope is PermissionScope.NONE:
+        raise PermissionDenied(f"Permission denied: {resource}.{action}")
+    if scope is PermissionScope.OWN:
         return admin.id
     return None
 

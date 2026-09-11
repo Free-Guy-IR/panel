@@ -1,8 +1,12 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+from PasarGuardNodeBridge import Health
 from PasarGuardNodeBridge.common import service_pb2 as service
 
+from app.db.models import NodeStatus
+from app.jobs import node_checker
 from app.models.core import CoreType
 from app.operation.node import _BACKEND_TYPE_BY_CORE, _MULTI_INSTANCE_BACKENDS, NodeOperation
 
@@ -151,3 +155,31 @@ async def test_a_plain_node_on_an_upstream_daemon_reconciles_cleanly():
     assert add_msg == ""
     assert pg.removed == []
     assert pg.added == []
+
+
+@pytest.mark.asyncio
+async def test_a_healthy_connected_node_still_reconciles_extra_cores(monkeypatch):
+    reconcile = AsyncMock(return_value="")
+
+    class DummyDB:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def healthy(*_, **__):
+        return Health.HEALTHY, None, None
+
+    class HealthyNode:
+        def requires_hard_reset(self):
+            return False
+
+    monkeypatch.setattr(node_checker, "GetDB", lambda: DummyDB())
+    monkeypatch.setattr(node_checker, "verify_node_backend_health", healthy)
+    monkeypatch.setattr(node_checker.NodeOperation, "_reconcile_extra_cores", reconcile)
+
+    db_node = SimpleNamespace(id=7, name="de-1", status=NodeStatus.connected)
+    await node_checker.process_node_health_check(db_node, HealthyNode())
+
+    reconcile.assert_awaited_once()

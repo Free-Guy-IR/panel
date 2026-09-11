@@ -126,8 +126,11 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
                 await node_operator.connect_single_node(db, db_node.id)
             return
 
-        # Skip nodes that are already healthy and connected
         if health == Health.HEALTHY and db_node.status == NodeStatus.connected:
+            async with GetDB() as extras_db:
+                failed = await NodeOperation._reconcile_extra_cores(extras_db, node, db_node)
+            if failed:
+                logger.warning(f"[{db_node.name}] additional cores not fully reconciled: {failed}")
             return
 
         if health is Health.INVALID:

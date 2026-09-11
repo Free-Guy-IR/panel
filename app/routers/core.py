@@ -126,10 +126,10 @@ async def delete_core_config(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a core configuration."""
-    await core_operator.delete_core(db, core_id, admin)
+    affected_node_ids = await core_operator.delete_core(db, core_id, admin)
 
-    if restart_nodes:
-        await node_operator.restart_all_node(db=db, core_id=core_id, admin=admin)
+    if restart_nodes and affected_node_ids:
+        await node_operator.restart_nodes_by_ids(db=db, node_ids=affected_node_ids, admin=admin)
 
     return {}
 

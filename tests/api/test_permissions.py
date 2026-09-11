@@ -8,6 +8,7 @@ from app.operation.permissions import (
     enforce_permission,
     enforce_scope,
     get_effective_limits,
+    get_scope_admin_id,
 )
 
 
@@ -101,6 +102,54 @@ def test_scope_all_allows_any_user():
 def test_true_permission_no_scope_check():
     admin = _make_admin(permissions={"users": {"read": True}}, admin_id=10)
     enforce_scope(admin, "users", "read", target_admin_id=99)  # should not raise (True = no scope)
+
+
+# --- get_scope_admin_id ---
+
+
+def test_scope_admin_id_owner_gets_no_filter():
+    admin = _make_admin(is_owner=True, admin_id=1)
+    assert get_scope_admin_id(admin, "users", "read") is None
+
+
+def test_scope_admin_id_own_returns_admin_id():
+    admin = _make_admin(permissions={"users": {"read": SCOPE_OWN}}, admin_id=10)
+    assert get_scope_admin_id(admin, "users", "read") == 10
+
+
+def test_scope_admin_id_all_returns_none():
+    admin = _make_admin(permissions={"users": {"read": SCOPE_ALL}}, admin_id=10)
+    assert get_scope_admin_id(admin, "users", "read") is None
+
+
+def test_scope_admin_id_true_returns_none():
+    admin = _make_admin(permissions={"users": {"read": True}}, admin_id=10)
+    assert get_scope_admin_id(admin, "users", "read") is None
+
+
+def test_scope_admin_id_missing_action_raises():
+    admin = _make_admin(permissions={"users": {"read": True}}, admin_id=10)
+    with pytest.raises(PermissionDenied):
+        get_scope_admin_id(admin, "users", "delete")
+
+
+def test_scope_admin_id_missing_resource_raises():
+    admin = _make_admin(permissions={"users": {"read": SCOPE_ALL}}, admin_id=10)
+    with pytest.raises(PermissionDenied):
+        get_scope_admin_id(admin, "nodes", "read")
+
+
+def test_scope_admin_id_scope_none_raises():
+    admin = _make_admin(permissions={"users": {"read": SCOPE_NONE}}, admin_id=10)
+    with pytest.raises(PermissionDenied):
+        get_scope_admin_id(admin, "users", "read")
+
+
+def test_scope_admin_id_no_role_raises():
+    admin = AdminDetails(id=10, username="norole", role=None)
+    assert not admin.is_owner
+    with pytest.raises(PermissionDenied):
+        get_scope_admin_id(admin, "users", "read")
 
 
 # --- get_effective_limits ---
