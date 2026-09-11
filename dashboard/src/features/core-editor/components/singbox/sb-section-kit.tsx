@@ -103,6 +103,12 @@ export function SbListSection<T extends WireRow>(props: SbListSectionProps<T>) {
     finalizeClose()
   }, [draftRow, finalizeClose, onRowsChange, rows])
 
+  const revertEdit = useCallback(() => {
+    const original = originalRef.current
+    if (mode !== 'edit' || original == null) return
+    onRowsChange(rows.map((r, i) => (i === selected ? original : r)))
+  }, [mode, onRowsChange, rows, selected])
+
   const addMenu =
     addTypes && addTypes.length > 0 ? (
       <DropdownMenu>
@@ -144,7 +150,8 @@ export function SbListSection<T extends WireRow>(props: SbListSectionProps<T>) {
           setDraftRow(null)
           setMode('edit')
           setSelected(rowIndex)
-          originalRef.current = rows[rowIndex] ?? null
+          const original = rows[rowIndex] ?? null
+          originalRef.current = original ? (JSON.parse(JSON.stringify(original)) as T) : null
           setOpen(true)
         }}
         onRemoveRow={i => {
@@ -173,6 +180,7 @@ export function SbListSection<T extends WireRow>(props: SbListSectionProps<T>) {
         inlinePersistValidation={false}
         initialData={mode === 'add' ? initialRef.current : originalRef.current}
         getCurrentData={() => (mode === 'add' ? draftRow : row)}
+        onDiscard={revertEdit}
         leadingIcon={mode === 'add' ? <Plus className="h-5 w-5 shrink-0" /> : <Pencil className="h-5 w-5 shrink-0" />}
         title={mode === 'add' ? props.dialogTitleAdd : props.dialogTitleEdit}
         size={props.dialogSize ?? 'md'}

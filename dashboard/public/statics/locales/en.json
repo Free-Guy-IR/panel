@@ -2487,7 +2487,10 @@
       "advanced": "Advanced",
       "interface": "Interface",
       "instances": "Instances",
-      "pki": "PKI"
+      "pki": "PKI",
+      "route": "Route",
+      "ruleSets": "Rule Sets",
+      "experimental": "Experimental"
     },
     "sectionDesc": {
       "l2tpSettings": "The L2TP/IPsec server, its client address pool and its IPsec settings.",

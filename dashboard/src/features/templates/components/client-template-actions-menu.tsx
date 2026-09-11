@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Copy, EllipsisVertical, Pen, Trash2 } from 'lucide-react'
@@ -29,15 +29,15 @@ const DeleteAlertDialog = ({ template, isOpen, onClose, onConfirm }: { template:
         <AlertDialogHeader>
           <AlertDialogTitle>{t('clientTemplates.deleteTitle', { defaultValue: 'Delete Client Template' })}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span
-              dir={dir}
-              dangerouslySetInnerHTML={{
-                __html: t('clientTemplates.deletePrompt', {
-                  name: template.name,
-                  defaultValue: `Are you sure you want to delete <b>{{name}}</b>? This action cannot be undone.`,
-                }),
-              }}
-            />
+            <span dir={dir}>
+              <Trans
+                i18nKey="clientTemplates.deletePrompt"
+                values={{ name: template.name }}
+                defaults="Are you sure you want to delete <b>{{name}}</b>? This action cannot be undone."
+                components={{ b: <b /> }}
+                shouldUnescape
+              />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

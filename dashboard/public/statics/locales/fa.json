@@ -2413,7 +2413,10 @@
       "advanced": "پیشرفته",
       "interface": "رابط",
       "instances": "اینستنس‌ها",
-      "pki": "PKI"
+      "pki": "PKI",
+      "route": "مسیر",
+      "ruleSets": "مجموعه‌قوانین",
+      "experimental": "آزمایشی"
     },
     "sectionDesc": {
       "l2tpSettings": "سرور L2TP/IPsec، محدودهٔ آی‌پی کاربران و تنظیمات IPsec آن.",
