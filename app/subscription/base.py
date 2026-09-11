@@ -39,6 +39,12 @@ class BaseSubscription:
 
         del user_agent_data, grpc_user_agent_data
 
+    @staticmethod
+    def _bracket_ipv6(address: str) -> str:
+        if ":" in address and not address.startswith("["):
+            return f"[{address}]"
+        return address
+
     def _remark_validation(self, remark):
         if remark not in self.proxy_remarks:
             return remark
@@ -246,7 +252,7 @@ class BaseSubscription:
             "peer_ips": peer_ips,
             "payload": payload,
             "uri": (
-                f"wireguard://{quote(private_key, safe='')}@{address}:{inbound.port}/"
+                f"wireguard://{quote(private_key, safe='')}@{self._bracket_ipv6(address)}:{inbound.port}/"
                 f"?{urlencode(uri_payload, quote_via=quote)}#{quote(validated_remark)}"
             ),
         }

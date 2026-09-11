@@ -282,6 +282,7 @@ class StandardLinks(BaseSubscription):
             self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
 
         payload = self._normalize_and_remove_none_values(payload)
+        address = self._bracket_ipv6(address)
         return f"vless://{id}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
 
     def _build_trojan(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
@@ -304,6 +305,7 @@ class StandardLinks(BaseSubscription):
 
         payload = self._normalize_and_remove_none_values(payload)
         password = urlparse.quote(settings["password"], safe=":")
+        address = self._bracket_ipv6(address)
         return f"trojan://{password}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
 
     def _build_shadowsocks(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
@@ -317,6 +319,7 @@ class StandardLinks(BaseSubscription):
         )
 
         encoded = base64.b64encode(f"{method}:{password}".encode()).decode()
+        address = self._bracket_ipv6(address)
         return f"ss://{encoded}@{address}:{inbound.port}#{urlparse.quote(remark)}"
 
     def _build_hysteria(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
@@ -334,6 +337,7 @@ class StandardLinks(BaseSubscription):
             self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
 
         payload = self._normalize_and_remove_none_values(payload)
+        address = self._bracket_ipv6(address)
         return f"hysteria2://{settings['auth']}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
 
     def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
@@ -356,6 +360,7 @@ class StandardLinks(BaseSubscription):
             self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
         payload = self._normalize_and_remove_none_values(payload)
         password = urlparse.quote(settings["password"], safe="")
+        address = self._bracket_ipv6(address)
         return f"hysteria2://{password}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
 
     def _build_wireguard(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
