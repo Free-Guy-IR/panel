@@ -678,7 +678,7 @@ class SubscriptionOperation(BaseOperation):
             "user": SubscriptionUserResponse.model_validate(user),
             "links": links,
             "announce": formatted_announce,
-            "announce_url": sub_settings.announce_url,
+            "announce_url": self._format_announce_url(sub_settings, format_variables),
             "has_openvpn": has_openvpn,
             "openvpn_configs": openvpn_configs or [],
             "l2tp_details": l2tp_details or [],
