@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any, Literal
 from urllib.parse import quote, urlencode
 
+from app.models.host import FinalMask
 from app.models.subscription import SubscriptionInboundData
 
 
@@ -180,14 +181,21 @@ class BaseSubscription:
         parts[2] = route
         return "-".join(parts)
 
-    def _get_hysteria_data_from_finalmask(self, finalmask: dict | None) -> tuple[Any | Literal[""], Any | dict]:
+    def _get_hysteria_data_from_finalmask(
+        self, finalmask: FinalMask | dict | None
+    ) -> tuple[Any | Literal[""], Any | dict]:
         """Extract Hysteria obfuscation password and QUIC parameters from finalmask"""
 
         if finalmask is None:
-            finalmask = {}
+            finalmask_dict = {}
+        elif isinstance(finalmask, dict):
+            finalmask_dict = finalmask
+        else:
+            finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
+
         obfs_password = ""
-        quic_params: dict = finalmask.get("quicParams", {})
-        if udp := finalmask.get("udp"):
+        quic_params: dict = finalmask_dict.get("quicParams", {})
+        if udp := finalmask_dict.get("udp"):
             for i in udp:
                 if i.get("type") == "salamander":
                     obfs_password = i.get("settings", {}).get("password")
