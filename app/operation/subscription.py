@@ -4,6 +4,7 @@ import json
 import re
 from json import dumps as json_dumps
 from typing import Any, ClassVar
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from fastapi import Response
 from fastapi.responses import HTMLResponse
@@ -169,6 +170,43 @@ class SubscriptionOperation(BaseOperation):
             return sub_settings.announce_url
 
     @staticmethod
+    def _encode_url_header(value: str) -> str:
+        if not value or value.isascii():
+            return value
+        try:
+            parts = urlsplit(value)
+        except ValueError:
+            parts = None
+        if parts and parts.scheme and parts.netloc:
+            try:
+                host = parts.hostname or ""
+                if not host.isascii():
+                    host = host.encode("idna").decode("ascii")
+                if ":" in host and not host.startswith("["):
+                    host = f"[{host}]"
+                userinfo = ""
+                if parts.username:
+                    userinfo = quote(parts.username, safe="")
+                    if parts.password:
+                        userinfo += ":" + quote(parts.password, safe="")
+                    userinfo += "@"
+                netloc = userinfo + host
+                if parts.port is not None:
+                    netloc += f":{parts.port}"
+                return urlunsplit(
+                    (
+                        parts.scheme,
+                        netloc,
+                        quote(parts.path, safe="/%:@!$&'()*+,;="),
+                        quote(parts.query, safe="/?%:@!$&'()*+,;="),
+                        parts.fragment,
+                    )
+                )
+            except (ValueError, UnicodeError):
+                pass
+        return quote(value, safe=":/?#[]@!$&'()*+,;=%")
+
+    @staticmethod
     def create_response_headers(
         user: UsersResponseWithInbounds,
         request_url: str,
@@ -206,12 +244,12 @@ class SubscriptionOperation(BaseOperation):
         headers = {
             "content-disposition": f'{disposition}; filename="{user.username}{extension}"',
             "profile-web-page-url": request_url,
-            "support-url": support_url,
+            "support-url": SubscriptionOperation._encode_url_header(support_url),
             "profile-title": encode_title(formatted_title),
             "profile-update-interval": str(sub_settings.update_interval),
             "subscription-userinfo": "; ".join(f"{key}={val}" for key, val in user_info.items()),
             "announce": encode_title(formatted_announce),
-            "announce-url": formatted_announce_url,
+            "announce-url": SubscriptionOperation._encode_url_header(formatted_announce_url),
         }
         if extra_headers:
             headers.update(extra_headers)
@@ -291,9 +329,9 @@ class SubscriptionOperation(BaseOperation):
         formatted_announce_url = SubscriptionOperation._format_announce_url(sub_settings, format_variables)
 
         headers = {
-            "support-url": support_url,
+            "support-url": SubscriptionOperation._encode_url_header(support_url),
             "announce": encode_title(formatted_announce),
-            "announce-url": formatted_announce_url,
+            "announce-url": SubscriptionOperation._encode_url_header(formatted_announce_url),
         }
 
         # Only include headers that have values
