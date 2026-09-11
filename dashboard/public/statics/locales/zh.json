@@ -2450,7 +2450,10 @@
       "advanced": "高级",
       "interface": "接口",
       "instances": "实例",
-      "pki": "PKI"
+      "pki": "PKI",
+      "route": "路由",
+      "ruleSets": "规则集",
+      "experimental": "实验性"
     },
     "sectionDesc": {
       "l2tpSettings": "L2TP/IPsec 服务器、客户端地址池及其 IPsec 设置。",
@@ -4094,6 +4097,7 @@
   "settings.connectionLimit.violations.empty": "尚未对任何人采取措施。",
   "settings.connectionLimit.violations.action": "采取的措施",
   "settings.connectionLimit.violations.addresses": "当时的地址",
+  "settings.connectionLimit.violations.why": "处理原因",
   "settings.connectionLimit.violations.when": "时间",
   "settings.connectionLimit.violations.warned": "已警告",
   "settings.connectionLimit.violations.untilLifted": "直至手动解除",

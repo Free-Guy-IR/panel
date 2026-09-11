@@ -2391,7 +2391,10 @@
       "advanced": "Дополнительно",
       "interface": "Интерфейс",
       "instances": "Инстансы",
-      "pki": "PKI"
+      "pki": "PKI",
+      "route": "Маршрут",
+      "ruleSets": "Наборы правил",
+      "experimental": "Экспериментальные"
     },
     "sectionDesc": {
       "l2tpSettings": "Сервер L2TP/IPsec, пул адресов клиентов и настройки IPsec.",
@@ -4049,6 +4052,7 @@
   "settings.connectionLimit.violations.empty": "Меры ни к кому не применялись.",
   "settings.connectionLimit.violations.action": "Что было сделано",
   "settings.connectionLimit.violations.addresses": "Адреса на тот момент",
+  "settings.connectionLimit.violations.why": "Причина",
   "settings.connectionLimit.violations.when": "Когда",
   "settings.connectionLimit.violations.warned": "Предупреждение",
   "settings.connectionLimit.violations.untilLifted": "До снятия вручную",
