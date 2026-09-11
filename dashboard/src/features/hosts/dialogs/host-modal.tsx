@@ -853,6 +853,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     form.setValue('security', 'inbound_default', { shouldDirty: true })
     form.setValue('alpn', [], { shouldDirty: true })
     form.setValue('fingerprint', '', { shouldDirty: true })
+    form.setValue('cipher_suites', undefined, { shouldDirty: true })
     form.setValue('allowinsecure', false, { shouldDirty: true })
     form.setValue('random_user_agent', false, { shouldDirty: true })
     form.setValue('use_sni_as_host', false, { shouldDirty: true })
@@ -901,6 +902,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     form.setValue('security', 'inbound_default', { shouldDirty: true })
     form.setValue('alpn', [], { shouldDirty: true })
     form.setValue('fingerprint', '', { shouldDirty: true })
+    form.setValue('cipher_suites', undefined, { shouldDirty: true })
     form.setValue('allowinsecure', false, { shouldDirty: true })
     form.setValue('random_user_agent', false, { shouldDirty: true })
     form.setValue('use_sni_as_host', false, { shouldDirty: true })
@@ -942,6 +944,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.ech_query_strategy = undefined
         payload.pinned_peer_cert_sha256 = undefined
         payload.verify_peer_cert_by_name = []
+        payload.fragment_settings = undefined
+        payload.noise_settings = undefined
         payload.mux_settings = undefined
         payload.transport_settings = undefined
         if (payload.wireguard_overrides) {
@@ -968,6 +972,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.security = 'inbound_default'
         payload.alpn = []
         payload.fingerprint = ''
+        payload.cipher_suites = undefined
         payload.allowinsecure = false
         payload.random_user_agent = false
         payload.use_sni_as_host = false
@@ -976,6 +981,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.ech_query_strategy = undefined
         payload.pinned_peer_cert_sha256 = undefined
         payload.verify_peer_cert_by_name = []
+        payload.fragment_settings = undefined
+        payload.noise_settings = undefined
         payload.mux_settings = undefined
         payload.transport_settings = undefined
         if (payload.openvpn_overrides) {
@@ -988,7 +995,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.openvpn_overrides = undefined
       }
 
-      if (isMTProtoInbound) {
+      if (isMTProtoInbound || isL2TPInbound) {
         payload.host = []
         payload.sni = []
         payload.path = ''
@@ -996,6 +1003,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.security = 'inbound_default'
         payload.alpn = []
         payload.fingerprint = ''
+        payload.cipher_suites = undefined
         payload.allowinsecure = false
         payload.random_user_agent = false
         payload.use_sni_as_host = false
@@ -1004,6 +1012,8 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
         payload.ech_query_strategy = undefined
         payload.pinned_peer_cert_sha256 = undefined
         payload.verify_peer_cert_by_name = []
+        payload.fragment_settings = undefined
+        payload.noise_settings = undefined
         payload.mux_settings = undefined
         payload.transport_settings = undefined
       }
