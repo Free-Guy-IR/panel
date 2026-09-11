@@ -337,8 +337,9 @@ class StandardLinks(BaseSubscription):
             self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
 
         payload = self._normalize_and_remove_none_values(payload)
+        auth = urlparse.quote(settings["auth"], safe="")
         address = self._bracket_ipv6(address)
-        return f"hysteria2://{settings['auth']}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
+        return f"hysteria2://{auth}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
 
     def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
         """Build Hysteria2 (sing-box core) link"""
