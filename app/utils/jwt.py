@@ -13,7 +13,7 @@ from app.db.crud.general import get_jwt_secret_key
 from config import jwt_settings
 
 
-@cached()
+@cached(ttl=60)
 async def get_secret_key():
     async with GetDB() as db:
         key = await get_jwt_secret_key(db=db)
