@@ -24,6 +24,7 @@ from app.models.connection_limit import (
 )
 from app.models.settings import ConnectionLimit
 from app.operation import OperatorType
+from app.operation.permissions import get_scope_admin_id
 from app.operation.user import UserOperation
 from app.utils.connection_enforcement import active_restriction, release
 from app.utils.connection_limiter import DEFAULT_CDN_RANGES, lookup_providers
@@ -55,12 +56,15 @@ async def list_connection_states(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    admin: AdminDetails = Depends(require_permission("settings", "read")),
 ):
     """Users ordered by how many devices were last seen on them."""
     settings = await _settings(db)
+    scope_admin_id = get_scope_admin_id(admin, "users", "read")
 
     stmt = select(UserConnectionState, User.username).join(User, User.id == UserConnectionState.user_id)
+    if scope_admin_id is not None:
+        stmt = stmt.where(User.admin_id == scope_admin_id)
     if verdict:
         stmt = stmt.where(UserConnectionState.verdict == verdict)
     if min_devices is not None:
@@ -95,7 +99,7 @@ async def list_connection_states(
 async def connection_states_for_users(
     user_ids: Annotated[list[int] | None, Query()] = None,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("users", "read")),
+    admin: AdminDetails = Depends(require_permission("users", "read")),
 ):
     """States for the users on one page of the users table.
 
@@ -112,13 +116,16 @@ async def connection_states_for_users(
             monitor_only=settings.monitor_only,
         )
 
-    rows = (
-        await db.execute(
-            select(UserConnectionState, User.username)
-            .join(User, User.id == UserConnectionState.user_id)
-            .where(UserConnectionState.user_id.in_(user_ids[:500]))
-        )
-    ).all()
+    scope_admin_id = get_scope_admin_id(admin, "users", "read")
+    stmt = (
+        select(UserConnectionState, User.username)
+        .join(User, User.id == UserConnectionState.user_id)
+        .where(UserConnectionState.user_id.in_(user_ids[:500]))
+    )
+    if scope_admin_id is not None:
+        stmt = stmt.where(User.admin_id == scope_admin_id)
+
+    rows = (await db.execute(stmt)).all()
 
     states = []
     for state, username in rows:
@@ -146,12 +153,15 @@ async def list_overrides(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    admin: AdminDetails = Depends(require_permission("settings", "read")),
 ):
     """Users given their own allowance, or exempted from checking."""
     settings = await _settings(db)
+    scope_admin_id = get_scope_admin_id(admin, "users", "read")
 
     stmt = select(UserConnectionLimit, User.username).join(User, User.id == UserConnectionLimit.user_id)
+    if scope_admin_id is not None:
+        stmt = stmt.where(User.admin_id == scope_admin_id)
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = (await db.execute(stmt.order_by(User.username).limit(limit).offset(offset))).all()
 
@@ -171,10 +181,14 @@ async def set_override(
     user_id: int,
     payload: UserConnectionLimitPayload,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
     """Give one user their own allowance, or exempt them."""
-    user = (await db.execute(select(User).where(User.id == user_id))).scalar()
+    scope_admin_id = get_scope_admin_id(admin, "users", "update")
+    user_stmt = select(User).where(User.id == user_id)
+    if scope_admin_id is not None:
+        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
+    user = (await db.execute(user_stmt)).scalar()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -198,9 +212,16 @@ async def set_override(
 async def clear_override(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
     """Put a user back on the default allowance."""
+    scope_admin_id = get_scope_admin_id(admin, "users", "update")
+    user_stmt = select(User.id).where(User.id == user_id)
+    if scope_admin_id is not None:
+        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
+    if (await db.execute(user_stmt)).scalar() is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
     row = (await db.execute(select(UserConnectionLimit).where(UserConnectionLimit.user_id == user_id))).scalar()
     if row is not None:
         await db.delete(row)
@@ -211,7 +232,7 @@ async def clear_override(
 async def resolve_user_addresses(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("users", "read")),
+    admin: AdminDetails = Depends(require_permission("users", "read")),
 ):
     """Name the provider behind each address this user was last seen on.
 
@@ -220,6 +241,13 @@ async def resolve_user_addresses(
     a review only needs the handful an admin is actually looking at.
     """
     settings = await _settings(db)
+
+    scope_admin_id = get_scope_admin_id(admin, "users", "read")
+    user_stmt = select(User.id).where(User.id == user_id)
+    if scope_admin_id is not None:
+        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
+    if (await db.execute(user_stmt)).scalar() is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
     state = (await db.execute(select(UserConnectionState).where(UserConnectionState.user_id == user_id))).scalar()
     if state is None:
@@ -255,12 +283,15 @@ async def list_violations(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    admin: AdminDetails = Depends(require_permission("settings", "read")),
 ):
     """Every time the limiter acted on someone, most recent first."""
     settings = await _settings(db)
+    scope_admin_id = get_scope_admin_id(admin, "users", "read")
 
     stmt = select(ConnectionRestriction, User.username).join(User, User.id == ConnectionRestriction.user_id)
+    if scope_admin_id is not None:
+        stmt = stmt.where(User.admin_id == scope_admin_id)
     if user_id is not None:
         stmt = stmt.where(ConnectionRestriction.user_id == user_id)
     if active_only:
@@ -302,14 +333,18 @@ async def release_user(
     user_id: int,
     forget: bool = Query(default=False, description="Also drop their history, so they start from the first step"),
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "modify")),
+    admin: AdminDetails = Depends(require_permission("settings", "modify")),
 ):
     """Lift whatever is in force on this user, and put back what was there.
 
     The one that matters for the last step, which has no time on it and would
     otherwise stay until someone did this.
     """
-    user = (await db.execute(select(User).where(User.id == user_id))).scalar()
+    scope_admin_id = get_scope_admin_id(admin, "users", "update")
+    user_stmt = select(User).where(User.id == user_id)
+    if scope_admin_id is not None:
+        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
+    user = (await db.execute(user_stmt)).scalar()
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
 
