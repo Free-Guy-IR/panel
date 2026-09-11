@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Copy, Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 
@@ -93,7 +93,9 @@ export default function AdminRoleActionsMenu({ role, onEdit, onDuplicate, classN
           <AlertDialogHeader>
             <AlertDialogTitle>{t('adminRoles.deleteConfirmation', { defaultValue: 'Delete role' })}</AlertDialogTitle>
             <AlertDialogDescription>
-              <span dir={dir} dangerouslySetInnerHTML={{ __html: t('adminRoles.deleteConfirm', { name: role.name, defaultValue: 'Are you sure you want to delete role <b>{{name}}</b>?' }) }} />
+              <span dir={dir}>
+                <Trans i18nKey="adminRoles.deleteConfirm" values={{ name: role.name }} defaults="Are you sure you want to delete role <b>{{name}}</b>?" components={{ b: <b /> }} shouldUnescape />
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

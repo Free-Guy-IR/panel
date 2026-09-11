@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui/card'
 import { GroupResponse } from '@/service/api'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useRemoveGroup } from '@/service/api'
 import { toast } from 'sonner'
@@ -33,7 +33,9 @@ const DeleteAlertDialog = ({ group, isOpen, onClose, onConfirm }: { group: Group
         <AlertDialogHeader>
           <AlertDialogTitle>{t('group.deleteConfirmation')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('group.deleteConfirm', { name: group.name }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="group.deleteConfirm" values={{ name: group.name }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

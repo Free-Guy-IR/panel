@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -168,7 +168,9 @@ const DeleteAlertDialog = ({ node, isOpen, onClose, onConfirm }: { node: NodeRes
         <AlertDialogHeader>
           <AlertDialogTitle>{t('nodes.deleteNode')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('deleteNode.prompt', { name: node.name }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="deleteNode.prompt" values={{ name: node.name }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -192,7 +194,9 @@ const ResetUsageAlertDialog = ({ node, isOpen, onClose, onConfirm, isLoading }: 
         <AlertDialogHeader>
           <AlertDialogTitle>{t('nodeModal.resetUsageTitle', { defaultValue: 'Reset Node Usage' })}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('nodeModal.resetUsagePrompt', { name: node.name, defaultValue: `Are you sure you want to reset usage for node «${node.name}»?` }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="nodeModal.resetUsagePrompt" values={{ name: node.name }} defaults="Are you sure you want to reset usage for node «{{name}}»?" shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

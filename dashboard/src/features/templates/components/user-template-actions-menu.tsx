@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Copy, EllipsisVertical, Pen, Power, PowerOff, Trash2 } from 'lucide-react'
@@ -30,7 +30,9 @@ const DeleteAlertDialog = ({ userTemplate, isOpen, onClose, onConfirm }: { userT
         <AlertDialogHeader>
           <AlertDialogTitle>{t('templates.deleteUserTemplateTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('templates.deleteUserTemplatePrompt', { name: userTemplate.name }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="templates.deleteUserTemplatePrompt" values={{ name: userTemplate.name }} components={{ b: <b /> }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

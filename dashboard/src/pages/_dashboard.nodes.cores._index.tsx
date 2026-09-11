@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import Cores from '@/features/nodes/components/cores/cores-list'
 import { useGetAllCores, useDeleteCoreConfig, useCreateCoreConfig } from '@/service/api'
 import { toast } from 'sonner'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { useQueryClient } from '@tanstack/react-query'
@@ -159,7 +159,9 @@ export default function CoresIndexPage() {
               {t('settings.cores.delete')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <span dangerouslySetInnerHTML={{ __html: t('core.deleteConfirm', { name: coreToDelete }) }} />
+              <span>
+                <Trans i18nKey="core.deleteConfirm" values={{ name: coreToDelete ?? '' }} shouldUnescape />
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import type { AdminDetails } from '@/service/api'
 import {
   useActivateAllDisabledUsersById,
@@ -70,7 +70,9 @@ const DeleteAlertDialog = ({ admin, isOpen, onClose, onConfirm }: { admin: Admin
         <AlertDialogHeader>
           <AlertDialogTitle>{t('admins.deleteAdmin')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('deleteAdmin.prompt', { name: admin.username }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="deleteAdmin.prompt" values={{ name: admin.username }} components={{ b: <b /> }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -95,15 +97,15 @@ const ToggleAdminStatusModal = ({ admin, isOpen, onClose, onConfirm }: { admin: 
         <AlertDialogHeader>
           <AlertDialogTitle>{t(isDisabled ? 'admin.enable' : 'admin.disable')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span
-              dir={dir}
-              dangerouslySetInnerHTML={{
-                __html: t(isDisabled ? 'admin.enablePrompt' : 'admin.disablePrompt', {
-                  name: admin.username,
-                  defaultValue: isDisabled ? 'Are you sure you want to enable admin <b>{{name}}</b>?' : 'Are you sure you want to disable admin <b>{{name}}</b>?',
-                }),
-              }}
-            />
+            <span dir={dir}>
+              <Trans
+                i18nKey={isDisabled ? 'admin.enablePrompt' : 'admin.disablePrompt'}
+                values={{ name: admin.username }}
+                defaults={isDisabled ? 'Are you sure you want to enable admin <b>{{name}}</b>?' : 'Are you sure you want to disable admin <b>{{name}}</b>?'}
+                components={{ b: <b /> }}
+                shouldUnescape
+              />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -125,7 +127,9 @@ const ResetUsersUsageConfirmationDialog = ({ adminUsername, isOpen, onClose, onC
         <AlertDialogHeader>
           <AlertDialogTitle>{t('admins.resetUsersUsage')}</AlertDialogTitle>
           <AlertDialogDescription className="flex items-center gap-2">
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('resetUsersUsage.prompt', { name: adminUsername }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="resetUsersUsage.prompt" values={{ name: adminUsername }} components={{ b: <b /> }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -147,7 +151,9 @@ const RemoveAllUsersConfirmationDialog = ({ adminUsername, isOpen, onClose, onCo
         <AlertDialogHeader>
           <AlertDialogTitle>{t('admins.removeAllUsers')}</AlertDialogTitle>
           <AlertDialogDescription className="flex items-center gap-2">
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('removeAllUsers.prompt', { name: adminUsername }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="removeAllUsers.prompt" values={{ name: adminUsername }} components={{ b: <b /> }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -186,7 +192,9 @@ const BulkUsersStatusConfirmationDialog = ({
         <AlertDialogHeader>
           <AlertDialogTitle>{t(titleKey)}</AlertDialogTitle>
           <AlertDialogDescription className="flex items-center gap-2">
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t(promptKey, { name: adminUsername }) }} />
+            <span dir={dir}>
+              <Trans i18nKey={promptKey} values={{ name: adminUsername }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

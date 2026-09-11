@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Copy, MoreVertical, Pencil, Power, PowerOff, Trash2 } from 'lucide-react'
@@ -29,7 +29,9 @@ const DeleteAlertDialog = ({ host, isOpen, onClose, onConfirm }: { host: BaseHos
         <AlertDialogHeader>
           <AlertDialogTitle>{t('deleteHost.title')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span dir={dir} dangerouslySetInnerHTML={{ __html: t('deleteHost.prompt', { name: host.remark ?? '' }) }} />
+            <span dir={dir}>
+              <Trans i18nKey="deleteHost.prompt" values={{ name: host.remark ?? '' }} shouldUnescape />
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
