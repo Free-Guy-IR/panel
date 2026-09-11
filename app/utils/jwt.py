@@ -154,22 +154,6 @@ async def get_subscription_payload(token: str) -> dict | None:
                 return
             return _parse_subscription_data(data_str)
 
-        # Legacy format: truncated sha256(data + secret) signature, last 10 chars.
-        # ponytail: kept for backward compatibility with already-issued tokens (forgeable,
-        # ~40-bit truncated signature). Upgrade path: remove this branch once all legacy
-        # tokens have expired or been reissued in the new HMAC format.
-        u_token = token[:-10]
-        u_signature = token[-10:]
-        u_token_dec_str = _decode_b64_token(u_token)
-        if u_token_dec_str is None:
-            return
-        secret = await get_secret_key()
-        u_token_resign = b64encode(sha256((u_token + secret).encode("utf-8")).digest(), altchars=b"-_").decode("utf-8")[
-            :10
-        ]
-        u_token_hex_resign = sha256((u_token + secret).encode("utf-8")).hexdigest()[:10]
-        if u_signature in (u_token_resign, u_token_hex_resign):
-            return _parse_subscription_data(u_token_dec_str)
         return
     except jwt.exceptions.PyJWTError:
         return
