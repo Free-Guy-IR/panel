@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import re
+import time
 from json import dumps as json_dumps
 from typing import Any, ClassVar
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -825,7 +826,20 @@ class SubscriptionOperation(BaseOperation):
 
     _PING_SKIP_SCHEMES: ClassVar[set[str]] = {"wireguard", "wg", "openvpn", "ovpn", "block", "tg"}
     _PING_UDP_SCHEMES: ClassVar[set[str]] = {"hysteria", "hysteria2", "hy2", "tuic"}
-    _PING_MAX_HOSTS: ClassVar[int] = 80
+    _PING_MAX_HOSTS: ClassVar[int] = 20
+    _PING_MIN_INTERVAL_SECONDS: ClassVar[float] = 30.0
+    _ping_last_seen: ClassVar[dict[int, float]] = {}
+
+    async def _enforce_ping_rate_limit(self, user_id: int) -> None:
+        now = time.monotonic()
+        last = self._ping_last_seen.get(user_id)
+        if last is not None and now - last < self._PING_MIN_INTERVAL_SECONDS:
+            await self.raise_error(message="Too many ping requests", code=429)
+        self._ping_last_seen[user_id] = now
+        if len(self._ping_last_seen) > 10_000:
+            stale = [key for key, seen in self._ping_last_seen.items() if now - seen > 600]
+            for key in stale:
+                del self._ping_last_seen[key]
 
     @staticmethod
     def _parse_ping_targets(links: list[str]) -> dict[str, tuple[int, bool]]:
@@ -907,6 +921,7 @@ class SubscriptionOperation(BaseOperation):
         which the subscription page renders as a live per-server status dot + ping badge.
         """
         db_user = await self.get_validated_sub(db, token=token)
+        await self._enforce_ping_rate_limit(db_user.id)
         user = await self.validated_user(db_user)
         conf, _ = await self.fetch_config(user, ConfigFormat.links)
         text = conf.decode("utf-8", "ignore") if isinstance(conf, (bytes, bytearray)) else str(conf)
