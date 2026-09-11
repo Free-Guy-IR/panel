@@ -1050,6 +1050,8 @@ class NodeOperation(BaseOperation):
         for notif in notifications_to_send:
             if notif["status"] == NodeStatus.connected:
                 asyncio.create_task(notification.connect_node(notif["node"]))
+                if notif["node"].message:
+                    asyncio.create_task(notification.error_node(notif["node"]))
             elif notif["status"] == NodeStatus.error and notif["old_status"] != NodeStatus.error:
                 asyncio.create_task(notification.error_node(notif["node"]))
 
@@ -1123,6 +1125,13 @@ class NodeOperation(BaseOperation):
                 node_version=result.get("node_version"),
             )
             asyncio.create_task(notification.connect_node(node_notif))
+            if result.get("message"):
+                logger.warning(f'Node "{db_node.name}" connected but some additional cores failed: {result["message"]}')
+                asyncio.create_task(
+                    notification.error_node(
+                        NodeNotification(id=db_node.id, name=db_node.name, message=result["message"])
+                    )
+                )
         elif result["status"] == NodeStatus.error and result["old_status"] != NodeStatus.error:
             node_notif = NodeNotification(
                 id=db_node.id,

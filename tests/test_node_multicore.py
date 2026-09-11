@@ -184,3 +184,80 @@ async def test_a_healthy_node_is_force_started_instead_of_attached():
     assert started.node_version == "0.8.1"
     assert [c[0] for c in calls if isinstance(c, tuple)] == ["start"]
     assert "connect" not in calls
+
+
+@pytest.mark.asyncio
+async def test_a_connected_node_with_failed_extras_still_raises_an_error_notification(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.db.models import NodeStatus
+    from app.operation import node as node_op_module
+
+    op = NodeOperation.__new__(NodeOperation)
+
+    async def _connect_node(db_node, core, users, extra_cores=None, *, force_start: bool = False):
+        return {
+            "node_id": db_node.id,
+            "status": NodeStatus.connected,
+            "message": "core 2: boom",
+            "xray_version": "",
+            "node_version": "",
+            "old_status": NodeStatus.connecting,
+        }
+
+    monkeypatch.setattr(node_op_module, "node_manager", MagicMock(update_node=AsyncMock()))
+    monkeypatch.setattr(NodeOperation, "_get_core_users_map", AsyncMock(return_value=({1: object()}, {1: []})))
+    monkeypatch.setattr(NodeOperation, "connect_node", staticmethod(_connect_node))
+    monkeypatch.setattr(node_op_module, "bulk_update_node_status", AsyncMock())
+    monkeypatch.setattr(node_op_module.notification, "connect_node", AsyncMock())
+    monkeypatch.setattr(node_op_module.notification, "error_node", AsyncMock())
+
+    nodes = [
+        SimpleNamespace(id=1, status=NodeStatus.connecting, core_config_id=1, additional_core_config_ids=None, name="n1")
+    ]
+    await op._connect_nodes_bulk_local(MagicMock(), nodes)
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    assert node_op_module.notification.connect_node.call_count == 1
+    assert node_op_module.notification.error_node.call_count == 1
+    assert node_op_module.notification.error_node.call_args.args[0].message == "core 2: boom"
+
+
+@pytest.mark.asyncio
+async def test_a_cleanly_connected_node_raises_no_error_notification(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.db.models import NodeStatus
+    from app.operation import node as node_op_module
+
+    op = NodeOperation.__new__(NodeOperation)
+
+    async def _connect_node(db_node, core, users, extra_cores=None, *, force_start: bool = False):
+        return {
+            "node_id": db_node.id,
+            "status": NodeStatus.connected,
+            "message": "",
+            "xray_version": "",
+            "node_version": "",
+            "old_status": NodeStatus.connecting,
+        }
+
+    monkeypatch.setattr(node_op_module, "node_manager", MagicMock(update_node=AsyncMock()))
+    monkeypatch.setattr(NodeOperation, "_get_core_users_map", AsyncMock(return_value=({1: object()}, {1: []})))
+    monkeypatch.setattr(NodeOperation, "connect_node", staticmethod(_connect_node))
+    monkeypatch.setattr(node_op_module, "bulk_update_node_status", AsyncMock())
+    monkeypatch.setattr(node_op_module.notification, "connect_node", AsyncMock())
+    monkeypatch.setattr(node_op_module.notification, "error_node", AsyncMock())
+
+    nodes = [
+        SimpleNamespace(id=1, status=NodeStatus.connecting, core_config_id=1, additional_core_config_ids=None, name="n1")
+    ]
+    await op._connect_nodes_bulk_local(MagicMock(), nodes)
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    assert node_op_module.notification.connect_node.call_count == 1
+    assert node_op_module.notification.error_node.call_count == 0
