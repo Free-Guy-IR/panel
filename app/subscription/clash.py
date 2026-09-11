@@ -384,7 +384,7 @@ class ClashConfiguration(BaseSubscription):
         node["tls"] = True
         sni = tls_config.sni if isinstance(tls_config.sni, str) else ""
 
-        if protocol in ("trojan", "hysteria"):
+        if protocol in ("trojan", "hysteria", "hysteria2"):
             node["sni"] = sni
         else:
             node["servername"] = sni

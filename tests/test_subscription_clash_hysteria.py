@@ -29,6 +29,17 @@ def test_clash_meta_hysteria2_uses_sni_not_servername():
     assert "servername" not in node
 
 
+def test_clash_meta_hysteria2_protocol_uses_sni_not_servername():
+    meta = ClashMetaConfiguration()
+    meta.add("meta hysteria2", "edge.example.com", _inbound("hysteria2"), {"password": "hy2-password"})
+
+    assert len(meta.data["proxies"]) == 1
+    node = meta.data["proxies"][0]
+    assert node["type"] == "hysteria2"
+    assert node["sni"] == "cert.example.com"
+    assert "servername" not in node
+
+
 def test_clash_meta_trojan_still_uses_sni():
     meta = ClashMetaConfiguration()
     meta.add("meta trojan", "edge.example.com", _inbound("trojan"), {"password": "trojan-password"})
