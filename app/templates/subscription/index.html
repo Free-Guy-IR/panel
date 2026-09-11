@@ -576,7 +576,7 @@
 
             {% if announce %}
             <div class="announcement">
-                <span>{{ announce | replace('\n', '<br>') }}</span>
+                <span>{{ announce | e | replace('\n', '<br>' | safe) }}</span>
                 {% if announce_url %}
                 <a href="{{ announce_url }}" target="_blank">More info</a>
                 {% endif %}
