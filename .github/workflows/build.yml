@@ -8,7 +8,6 @@ on:
 permissions:
     contents: write
     packages: write
-    id-token: write
 
 env:
     IMAGE_NAME: free-guy-ir/${{ github.event.repository.name }}
@@ -214,6 +213,10 @@ jobs:
     push-manifest:
         needs: [build-images]
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+            id-token: write
         steps:
             - name: Login to GitHub Container Registry
               uses: docker/login-action@v4.6.0
