@@ -35,7 +35,7 @@ jobs:
             # compiled dist/ resolves imports from inside the kit, so it never reaches
             # the dashboard's node_modules. Each kit ships its built dist/, so no
             # TypeScript build is needed here.
-            KITS="core-kit openvpn-config-kit mtproto-config-kit singbox-config-kit wireguard-config-kit"
+            KITS="core-kit openvpn-config-kit mtproto-config-kit l2tp-config-kit singbox-config-kit wireguard-config-kit"
             for kit in $KITS; do
                 git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
             done
