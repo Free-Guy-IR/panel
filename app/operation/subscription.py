@@ -881,7 +881,7 @@ class SubscriptionOperation(BaseOperation):
         For UDP-based protocols (hysteria2/tuic) a fast TCP "connection refused" still
         proves the host is alive (the kernel answered with RST), so it counts as reachable.
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         start = loop.time()
         writer = None
         try:
