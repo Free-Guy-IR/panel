@@ -776,6 +776,20 @@ class NodeOperation(BaseOperation):
         await self._restart_all_impl(db, admin, core_id)
         logger.info(f'All nodes restarted by admin "{admin.username}"')
 
+    async def restart_nodes_by_ids(self, db: AsyncSession, node_ids: list[int], admin: AdminDetails) -> None:
+        if not node_ids:
+            return
+        nodes, _ = await get_nodes(
+            db,
+            query=NodeListQuery(
+                ids=node_ids,
+                status=[NodeStatus.connected, NodeStatus.connecting, NodeStatus.error],
+            ),
+            load_usage_logs=False,
+        )
+        await self.connect_nodes_bulk(db, nodes)
+        logger.info(f'Nodes {node_ids} restarted by admin "{admin.username}"')
+
     async def get_usage(
         self,
         db: AsyncSession,

@@ -1,8 +1,12 @@
+import asyncio
+
 from fastapi import status
 
 from app.core.xray import XRayConfig
+from app.db.models import Node
+from app.operation.node import NodeOperation
 from app.utils.crypto import generate_wireguard_keypair
-from tests.api import client
+from tests.api import TestSession, client
 from tests.api.helpers import (
     auth_headers,
     create_core,
@@ -177,6 +181,54 @@ def test_core_delete_2(access_token):
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == status.HTTP_204_NO_CONTENT
+
+
+def test_core_delete_restarts_nodes_that_used_the_core(access_token, monkeypatch):
+    """Deleting a core with restart_nodes=true must restart the nodes that used it."""
+
+    core = create_core(access_token, name=unique_name("core_delete_restart"))
+
+    async def _make_node() -> int:
+        async with TestSession() as session:
+            node = Node(
+                name=unique_name("node_core_delete"),
+                address="127.0.0.1",
+                port=8081,
+                api_port=62051,
+                server_ca="ca",
+                api_key="key",
+                core_config_id=core["id"],
+            )
+            session.add(node)
+            await session.commit()
+            return node.id
+
+    node_id = asyncio.run(_make_node())
+
+    restarted: list[int] = []
+
+    async def _fake_connect_nodes_bulk(self, db, nodes):
+        restarted.extend(n.id for n in nodes)
+
+    monkeypatch.setattr(NodeOperation, "connect_nodes_bulk", _fake_connect_nodes_bulk)
+
+    try:
+        response = client.delete(
+            url=f"/api/core/{core['id']}",
+            headers=auth_headers(access_token),
+            params={"restart_nodes": True},
+        )
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert node_id in restarted
+    finally:
+        async def _cleanup_node():
+            async with TestSession() as session:
+                node = await session.get(Node, node_id)
+                if node is not None:
+                    await session.delete(node)
+                    await session.commit()
+
+        asyncio.run(_cleanup_node())
 
 
 def test_inbounds_get(access_token):

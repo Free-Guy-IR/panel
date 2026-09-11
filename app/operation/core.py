@@ -8,6 +8,7 @@ from app.db.crud.core import (
     create_core_config,
     get_core_configs,
     get_cores_simple,
+    get_node_ids_by_core,
     modify_core_config,
     remove_core_config,
     remove_cores,
@@ -168,12 +169,14 @@ class CoreOperation(BaseOperation):
 
         return core
 
-    async def delete_core(self, db: AsyncSession, core_id: int, admin: AdminDetails) -> None:
+    async def delete_core(self, db: AsyncSession, core_id: int, admin: AdminDetails) -> list[int]:
         if core_id == 1:
             return await self.raise_error(message="Cannot delete default core config", code=403)
 
         db_core = await self.get_validated_core_config(db, core_id)
         was_wg = db_core.type == CoreType.wg
+
+        affected_node_ids = await get_node_ids_by_core(db, core_id)
 
         await remove_core_config(db, db_core)
         await core_manager.remove_core(db_core.id)
@@ -185,6 +188,8 @@ class CoreOperation(BaseOperation):
         if was_wg:
             await self._reconcile_wireguard(db)
         await self._refresh_hosts_from_db(db)
+
+        return affected_node_ids
 
     async def bulk_remove_cores(
         self, db: AsyncSession, bulk_cores: BulkCoreSelection, admin: AdminDetails
