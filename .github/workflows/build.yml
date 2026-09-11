@@ -2,12 +2,13 @@ name: Build-Docker
 
 on:
     release:
-        types: [created]
+        types: [published]
     workflow_dispatch:
 
 permissions:
     contents: write
     packages: write
+    id-token: write
 
 env:
     IMAGE_NAME: free-guy-ir/${{ github.event.repository.name }}
@@ -205,6 +206,8 @@ jobs:
                   file: ./Dockerfile
                   tags: |
                       ghcr.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-${{ matrix.arch }}
+                  provenance: mode=max
+                  sbom: true
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
 
@@ -238,3 +241,14 @@ jobs:
                     "ghcr.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-amd64" \
                     "ghcr.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-arm64"
                   docker buildx imagetools inspect "ghcr.io/${{ env.IMAGE_NAME }}:latest"
+
+            - name: Install cosign
+              uses: sigstore/cosign-installer@v3
+
+            - name: Sign the published image
+              env:
+                  IMAGE: ghcr.io/${{ env.IMAGE_NAME }}
+                  TAG: ${{ github.ref_name }}
+              run: |
+                  DIGEST="$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{.Manifest.Digest}}')"
+                  cosign sign --yes "${IMAGE}@${DIGEST}"
