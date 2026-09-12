@@ -28,6 +28,7 @@ jobs:
           git remote add upstream https://github.com/PasarGuard/panel.git 2>/dev/null || \
             git remote set-url upstream https://github.com/PasarGuard/panel.git
           git fetch upstream main --tags
+          echo "BASELINE=$(cat .upstream-baseline)" >> "$GITHUB_ENV"
 
       - name: Inventory report
         run: |
@@ -40,7 +41,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           python scripts/upstream_inventory.py \
-            --base upstream/main --head HEAD \
+            --base "$BASELINE" --head HEAD \
             --fail-on-override-outside-ledger OVERRIDES.md
 
       - name: Upload report

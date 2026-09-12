@@ -21,6 +21,16 @@ an additive section, rather than deleting the upstream implementation.
 
 The checker reads backticked file paths from this file; keep one `` `path` `` per entry.
 
+The gate measures divergence against the tag named in the .upstream-baseline file, not against
+`upstream/main`. That is deliberate: `upstream/main` moves every time PasarGuard publishes a
+release, and when v5.4.0 and v5.4.1 landed the gate went red with 76 "override" files that were
+simply upstream's own new migrations, jobs and NATS modules, none of which this fork has yet.
+A gate that turns red without anyone touching the fork is a gate people learn to ignore.
+Bumping that pin is therefore part of merging upstream, not a chore to do separately:
+merge the release, re-run the inventory, update the numbers above and the entries below, then move
+the pin. The scheduled report still runs against `upstream/main`, so how far behind the fork is
+stays visible.
+
 ## Branding & fork infrastructure (not upstreamable)
 
 - `README.md` — fork branding: logo, badges, links point to Free-Guy-IR
