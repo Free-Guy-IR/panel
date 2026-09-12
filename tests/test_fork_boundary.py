@@ -1,5 +1,6 @@
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -388,3 +389,16 @@ def test_registry_sandbox_left_no_residue():
     leaked_cores = [key for key in registry.extra_core_types() if str(key).startswith(REGISTRY_SANDBOX_PREFIX)]
     assert not leaked_routers, f"throwaway router keys still registered: {leaked_routers}"
     assert not leaked_cores, f"throwaway core types still registered: {leaked_cores}"
+
+
+def test_violation_response_accepts_the_legacy_reason_shape():
+    from app.models.connection_limit import ConnectionStateResponse, ConnectionViolationResponse
+
+    legacy = ["disabled 9 devices against a limit of 2"]
+    structured = [{"code": "over_limit", "devices": 9, "limit": 2}]
+
+    for payload in (legacy, structured, legacy + structured):
+        violation = ConnectionViolationResponse(id=1, user_id=1, created_at=datetime.now(UTC), reasons=payload)
+        assert violation.reasons == payload
+        state = ConnectionStateResponse(user_id=1, reasons=payload)
+        assert state.reasons == payload
