@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_LOCALE_RELATIVE_DIR = "dashboard/public/statics/locales"
 FORK_LOCALE_DIR = REPO_ROOT / "dashboard" / "src" / "fork" / "locales"
 LOCALE_CODES = ("en", "fa", "ru", "zh")
-UPSTREAM_REF = "upstream/main"
+UPSTREAM_REF = "v5.3.0"
 
 FORK_MODULE_PREFIX = "app.fork."
 FORK_ROUTER_MODULE_PREFIX = "app.fork.routers."
@@ -157,7 +157,7 @@ def _git(*args):
 
 
 def _require_upstream_ref():
-    if _git("rev-parse", "--verify", "--quiet", UPSTREAM_REF).returncode != 0:
+    if _git("rev-parse", "--verify", "--quiet", f"{UPSTREAM_REF}^{{commit}}").returncode != 0:
         pytest.skip(f"{UPSTREAM_REF} is not fetched in this clone")
 
 
@@ -295,6 +295,7 @@ def test_public_locale_file_is_unchanged_from_upstream(code):
     upstream_flat = _flatten_locale(json.loads(shown.stdout))
     local_flat = _flatten_locale(_load_json_file(REPO_ROOT / relative_path))
     added = sorted(set(local_flat) - set(upstream_flat))
+    assert upstream_flat, f"{code}: the pinned upstream baseline {UPSTREAM_REF} produced no keys"
     removed = sorted(set(upstream_flat) - set(local_flat))
     assert not added, (
         f"{code}: keys added to the public locale, they belong in dashboard/src/fork/locales: {added[:10]}"
