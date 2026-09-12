@@ -26,11 +26,10 @@ from app.models.settings import ConnectionLimit
 from app.operation import OperatorType
 from app.operation.permissions import get_scope_admin_id
 from app.operation.user import UserOperation
+from app.routers.authentication import require_permission
 from app.utils.connection_enforcement import active_restriction, release
 from app.utils.connection_limiter import DEFAULT_CDN_RANGES, lookup_providers
 from app.utils.logger import get_logger
-
-from .authentication import require_permission
 
 router = APIRouter(tags=["Connection Limit"], prefix="/api/connection-limit")
 logger = get_logger("connection-limit-api")

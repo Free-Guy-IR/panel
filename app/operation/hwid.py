@@ -1,21 +1,12 @@
-from sqlalchemy import delete as sa_delete
-
 from app.db import AsyncSession
 from app.db.crud.hwid import delete_user_hwid, get_user_hwids, reset_user_hwids
-from app.db.models import UserConnectionState
+from app.fork.operation.hwid_extras import clear_connection_state
 from app.models.admin import AdminDetails
 from app.models.user import UserHWIDListResponse, UserHWIDResponse
 from app.operation import BaseOperation
 
+_clear_connection_state = clear_connection_state
 
-async def _clear_connection_state(db: AsyncSession, user_id: int) -> None:
-    """Drop the device-review row so it no longer shows the devices just cleared.
-
-    The row rebuilds on the limiter's next cycle from current data; removing it
-    here just keeps the review from showing stale hardware ids in the meantime.
-    """
-    await db.execute(sa_delete(UserConnectionState).where(UserConnectionState.user_id == user_id))
-    await db.commit()
 
 
 class HWIDOperation(BaseOperation):

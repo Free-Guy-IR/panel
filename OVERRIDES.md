@@ -5,8 +5,19 @@ must be listed here with a one-line justification. The CI workflow
 upstream-inventory.yml fails the PR if an override appears in a file not listed below.
 
 Generated from `scripts/upstream_inventory.py --base upstream/main --head HEAD`
-(upstream/main @ `aebf7256`, v5.3.0). Measured: 233 diverged files — 111 fork-only,
-39 pure-addition, 72 override, 11 mechanical — 443 override lines total.
+(upstream/main @ `aebf7256`). Measured after the fork-boundary extraction:
+346 diverged files — 197 fork-only, 37 pure-addition, 100 override, 12 mechanical —
+1028 override lines, and 3144 fork lines still living inside upstream-tracked files.
+
+The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
+restored the four `dashboard/public/statics/locales/*.json` files to upstream byte-for-byte,
+which alone removed 100 override lines. Override lines nevertheless rose by 206, and 186 of
+that comes from a single file, `dashboard/src/features/hosts/dialogs/host-modal.tsx`: its
+WireGuard host layout is upstream code that now lives in `dashboard/src/fork/hosts/`, so the
+upstream-shaped file deletes 191 upstream lines. Nothing is lost at runtime, but that file is
+now the largest single merge liability in the fork. The preferred shape is the one used for
+Outline: keep the upstream file pristine and express fork behaviour as a thin subclass or
+an additive section, rather than deleting the upstream implementation.
 
 The checker reads backticked file paths from this file; keep one `` `path` `` per entry.
 
@@ -111,3 +122,46 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `build_dashboard.sh` — dashboard build command change
 - `dashboard/package.json` — @pasarguard/core-kit version bump
 - `dashboard/vite.config.mts` — emptyOutDir enabled to stop chunk pile-up
+
+## Fork boundary seam (minimum cost of the extraction)
+
+These three files are the only upstream-shaped files the boundary extraction turned from
+`pure-addition` into `override`. Each one is a hook point, not a behaviour change.
+
+- `app/routers/__init__.py` — replaces the eager five-line `api_router` assembly with a locked lazy builder that registers the fork routers before the upstream ones and refuses to publish a partially built router (5 upstream lines)
+- `app/subscription/__init__.py` — resolves `OutlineConfiguration` from the fork subscription package so the fork subclass is the active format; `app/subscription/outline.py` itself is back to upstream byte-for-byte (1 upstream line)
+- `dashboard/src/features/core-editor/kit/core-editor-change-state.ts` — delegates the fork core kinds to `@/fork/stores/change-state` (2 upstream lines)
+
+## Undocumented overrides inherited from before the extraction (pending audit)
+
+The ledger gate was already failing on these 27 files before the boundary work started;
+they carry 201 override lines between them. They are listed here so the gate reflects the
+real boundary, and each one still needs its own justification or a revert.
+
+- `dashboard/src/features/nodes/components/cores/logs.tsx` — 121 upstream lines removed, the largest inherited override; the upstream WebSocket log viewer was replaced wholesale and the reason is not recorded
+- `dashboard/src/features/admins/components/admins-table.tsx` — 14 lines; upstream's `dangerouslySetInnerHTML` confirm prompts were replaced with escaped rendering
+- `app/db/models.py` — 13 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size
+- `app/operation/permissions.py` — 4 lines, reason not recorded
+- `app/subscription/base.py` — 5 lines, reason not recorded
+- `app/notification/webhook/__init__.py` — 1 line, reason not recorded
+- `app/jobs/node_checker.py` — 1 line, reason not recorded
+- `app/jobs/send_notifications.py` — 2 lines, reason not recorded
+- `app/node/worker.py` — 2 lines, reason not recorded
+- `app/operation/core.py` — 1 line, reason not recorded
+- `app/routers/admin.py` — 2 lines, reason not recorded
+- `app/routers/system.py` — 1 line, reason not recorded
+- `app/subscription/clash.py` — 2 lines, reason not recorded
+- `app/subscription/links.py` — 1 line, reason not recorded
+- `app/subscription/singbox.py` — 2 lines, reason not recorded
+- `app/templates/subscription/index.html` — 1 line, reason not recorded
+- `dashboard/src/features/admin-roles/components/admin-role-actions-menu.tsx` — 2 lines, reason not recorded
+- `dashboard/src/features/groups/components/group-actions-menu.tsx` — 2 lines, reason not recorded
+- `dashboard/src/features/groups/components/group.tsx` — 2 lines, reason not recorded
+- `dashboard/src/features/hosts/components/host-actions-menu.tsx` — 2 lines, reason not recorded
+- `dashboard/src/features/nodes/components/node-actions-menu.tsx` — 3 lines, reason not recorded
+- `dashboard/src/features/templates/components/client-template-actions-menu.tsx` — 10 lines, reason not recorded
+- `dashboard/src/features/templates/components/user-template-actions-menu.tsx` — 2 lines, reason not recorded
+- `dashboard/src/pages/_dashboard.nodes.cores._index.tsx` — 2 lines, reason not recorded
+- `tests/api/test_bulk_entity_actions.py` — 1 line, reason not recorded
+- `tests/api/test_core.py` — 1 line, reason not recorded
+- `tests/test_record_usages.py` — 2 lines, reason not recorded

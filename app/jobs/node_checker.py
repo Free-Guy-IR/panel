@@ -12,6 +12,7 @@ from app.nats import is_multi_worker
 from app.node import node_manager
 from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory, shutdown_bridge_memory
 from app.operation import OperatorType
+from app.fork.jobs import after_healthy_node_check
 from app.operation.node import NodeOperation
 from app.utils.logger import get_logger
 from config import feature_settings, job_settings, runtime_settings, server_settings
@@ -127,10 +128,7 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
             return
 
         if health == Health.HEALTHY and db_node.status == NodeStatus.connected:
-            async with GetDB() as extras_db:
-                failed = await NodeOperation._reconcile_extra_cores(extras_db, node, db_node)
-            if failed:
-                logger.warning(f"[{db_node.name}] additional cores not fully reconciled: {failed}")
+            await after_healthy_node_check(node, db_node)
             return
 
         if health is Health.INVALID:
@@ -147,10 +145,7 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
         ):
             attached = await NodeOperation._attach_if_running(node, db_node.name)
             if attached is not None:
-                async with GetDB() as extras_db:
-                    failed = await NodeOperation._reconcile_extra_cores(extras_db, node, db_node)
-                if failed:
-                    logger.warning(f"[{db_node.name}] additional cores not fully reconciled: {failed}")
+                await after_healthy_node_check(node, db_node)
                 return
 
             _, coordinator, _ = get_bridge_memory()

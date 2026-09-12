@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.core.l2tp import L2TP_PORT, L2TPConfig, validate_psk
+from app.fork.cores.l2tp import L2TP_PORT, L2TPConfig, validate_psk
 from app.models.protocol import ProxyProtocol
 from app.utils.l2tp import (
     L2TP_PASSWORD_LENGTH,

@@ -9,6 +9,7 @@ from jdatetime import date as jd
 from app.core.hosts import host_manager
 from app.db.crud.wireguard import pick_peer_ip_for_inbound
 from app.db.models import UserStatus
+from app.fork.registry import get_subscription_format
 from app.models.status_emojis import STATUS_EMOJIS
 from app.models.subscription import SubscriptionInboundData
 from app.models.user import UsersResponseWithInbounds
@@ -73,16 +74,21 @@ def _build_subscription_config(
         return OutlineConfiguration()
     if config_format == "wireguard":
         return WireGuardConfiguration()
-    if config_format == "openvpn":
-        return OpenVPNConfiguration()
-    if config_format == "l2tp":
-        return L2TPConfiguration()
+    extra = get_subscription_format(config_format)
+    if extra is not None:
+        return extra(client_templates)
     if config_format == "xray":
         return XrayConfiguration(
             xray_template_content=client_templates["XRAY_SUBSCRIPTION_TEMPLATE"],
             **common_kwargs,
         )
     return None
+
+
+async def generate_openvpn_files(user: UsersResponseWithInbounds) -> dict[str, str]:
+    from app.fork.subscription.share import generate_openvpn_files as _generate
+
+    return await _generate(user)
 
 
 async def generate_subscription(
@@ -115,30 +121,6 @@ async def generate_subscription(
         config = base64.b64encode(config.encode()).decode()
 
     return config
-
-
-async def generate_openvpn_files(user: UsersResponseWithInbounds) -> dict[str, str]:
-    """The same pipeline generate_subscription runs, stopped one step earlier.
-
-    The sub page needs the individual .ovpn files (one per protocol) so it can
-    offer a download button for each; the /openvpn route still gets the zip
-    that render() builds from exactly these files.
-    """
-    client_templates = await subscription_client_templates()
-    conf = OpenVPNConfiguration()
-    sub_settings = await subscription_settings()
-    custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
-    format_variables = setup_format_variables(user, sub_settings.custom_variables)
-
-    await process_inbounds_and_tags(
-        user,
-        format_variables,
-        conf,
-        client_templates,
-        randomize_order=sub_settings.randomize_order,
-        custom_variables=custom_variables,
-    )
-    return conf._files()
 
 
 def format_time_left(seconds_left: int) -> str:

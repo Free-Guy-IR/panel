@@ -37,8 +37,6 @@ class OutlineConfiguration(BaseSubscription):
         """Add outbound - Outline only supports Shadowsocks"""
         if inbound.protocol != "shadowsocks":
             return
-        if self.config:
-            return
 
         outbound = self._build_shadowsocks(remark, address, inbound, settings)
         self.add_directly(outbound)

@@ -154,6 +154,19 @@ async def get_subscription_payload(token: str) -> dict | None:
                 return
             return _parse_subscription_data(data_str)
 
-        return
+        u_token = token[:-10]
+        u_signature = token[-10:]
+        u_token_dec_str = _decode_b64_token(u_token)
+        if u_token_dec_str is None:
+            return
+        secret = await get_secret_key()
+        digest = sha256((u_token + secret).encode("utf-8")).digest()
+        b64_resign = b64encode(digest, altchars=b"-_").decode("utf-8")[:10]
+        hex_resign = digest.hex()[:10]
+        if not (
+            hmac.compare_digest(u_signature, b64_resign) or hmac.compare_digest(u_signature, hex_resign)
+        ):
+            return
+        return _parse_subscription_data(u_token_dec_str)
     except jwt.exceptions.PyJWTError:
         return

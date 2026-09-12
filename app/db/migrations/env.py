@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from app.db.base import Base
+import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger
 from config import database_settings
 

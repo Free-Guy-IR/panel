@@ -1,7 +1,7 @@
 import { StringArrayPopoverInput } from '@/components/common/string-array-popover-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
-import { SbField, SbListSection, SbRawJsonField, SbSelectField, SbTextField, useSbDraft, useSbOutboundTags, type WireRow } from '@/features/core-editor/components/singbox/sb-section-kit'
+import { SbField, SbListSection, SbRawJsonField, SbSelectField, SbTextField, useSbDraft, useSbOutboundTags, type WireRow } from '@/fork/singbox/sb-section-kit'
 import { createDefaultSingBoxDnsServer, createDefaultSingBoxDnsRule } from '@pasarguard/singbox-config-kit'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useCallback, useMemo } from 'react'

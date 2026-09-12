@@ -12,12 +12,17 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
+from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
+from app.fork.operation.base_extras import restrict_users_query_by_groups
+from app.db.crud.bulk import get_users_for_l2tp_activation, get_users_for_mtproto_activation
+from app.db.crud.wireguard import tags_from_groups
+from app.utils.l2tp import generate_l2tp_password, get_l2tp_cores, l2tp_core_tags, prepare_l2tp_password
+from app.utils.mtproto import prepare_mtproto_secret
+from app.utils.openvpn import prepare_openvpn_password
 from app.db.crud.bulk import (
     count_bulk_datalimit_targets,
     count_bulk_expire_targets,
     count_bulk_proxy_targets,
-    get_users_for_l2tp_activation,
-    get_users_for_mtproto_activation,
     reset_all_users_data_usage,
     update_users_datalimit,
     update_users_expire,
@@ -55,7 +60,6 @@ from app.db.crud.user import (
     revoke_user_sub,
     set_owner,
 )
-from app.db.crud.wireguard import tags_from_groups
 from app.db.models import User, UserStatus, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
@@ -116,14 +120,10 @@ from app.settings import hwid_settings, subscription_settings
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
-from app.utils.l2tp import generate_l2tp_password, get_l2tp_cores, l2tp_core_tags, prepare_l2tp_password
 from app.utils.logger import get_logger
-from app.utils.mtproto import prepare_mtproto_secret
-from app.utils.openvpn import prepare_openvpn_password
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
 from config import subscription_env_settings, usage_settings
-
 
 def _has_permission(admin: AdminDetails, resource: str, action: str) -> bool:
     """Return True if admin has the given resource+action permission (no scope check)."""
@@ -132,7 +132,6 @@ def _has_permission(admin: AdminDetails, resource: str, action: str) -> bool:
         return True
     except PermissionDenied:
         return False
-
 
 async def _resolve_users_usage_admins_filter(
     operation: BaseOperation,
@@ -161,12 +160,10 @@ async def _resolve_users_usage_admins_filter(
 
     return admins_filter
 
-
 logger = get_logger("user-operation")
 
 _USER_AGENT_SPLIT_RE = re.compile(r"[;/\s\(\)]+")
 _VERSION_TOKEN_RE = re.compile(r"v?\d+(?:\.\d+)*", re.IGNORECASE)
-
 
 def _duplicate_wireguard_public_key_usernames(users: list[UserCreate]) -> tuple[str, list[str]] | None:
     owners: dict[str, list[str]] = {}
@@ -179,7 +176,6 @@ def _duplicate_wireguard_public_key_usernames(users: list[UserCreate]) -> tuple[
             return public_key, usernames
     return None
 
-
 def _resolve_enabled_user_status(user: User) -> UserStatus:
     now = dt.now(UTC)
     expire = user.expire
@@ -191,8 +187,7 @@ def _resolve_enabled_user_status(user: User) -> UserStatus:
         return UserStatus.on_hold
     return UserStatus.active
 
-
-class UserOperation(BaseOperation):
+class UserOperation(UserExtrasMixin, BaseOperation):
     @staticmethod
     def _is_non_blocking_sync_operator(operator_type: OperatorType) -> bool:
         return operator_type in (OperatorType.API, OperatorType.WEB)
@@ -450,9 +445,7 @@ class UserOperation(BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
             )
-            proxy_settings = await prepare_openvpn_password(db, proxy_settings, groups)
-            proxy_settings = await prepare_mtproto_secret(db, proxy_settings, groups)
-            return await prepare_l2tp_password(db, proxy_settings, groups)
+            return await prepare_fork_proxy_settings(db, proxy_settings, groups)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
 
@@ -1454,11 +1447,9 @@ class UserOperation(BaseOperation):
         if scope_admin_id is not None:
             query = query.model_copy(update={"owner": [admin.username], "admin_ids": None})
 
-        if get_allowed_group_ids(admin) is not None:
-            group_ids = apply_group_access(admin, query.group_ids)
-            if not group_ids:
-                return UsersResponse(users=[], total=0)
-            query = query.model_copy(update={"group_ids": group_ids})
+        query, empty_groups = restrict_users_query_by_groups(admin, query)
+        if empty_groups:
+            return UsersResponse(users=[], total=0)
 
         users, count = await get_users(
             db=db,
@@ -1964,105 +1955,6 @@ class UserOperation(BaseOperation):
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
-
-    async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
-        candidates = await get_users_for_l2tp_activation(db, bulk_model)
-        l2tp_tags = l2tp_core_tags(await get_l2tp_cores(db))
-
-        to_update: list[tuple[User, str]] = []
-        skipped: list[int] = []
-        for user in candidates:
-            try:
-                current = ProxyTable.model_validate(user.proxy_settings)
-                if current.l2tp.password:
-                    continue
-                if not l2tp_tags or not (l2tp_tags & await tags_from_groups(user.groups)):
-                    continue
-            except (ValidationError, ValueError):
-                skipped.append(user.id)
-                continue
-            to_update.append((user, generate_l2tp_password()))
-
-        if skipped:
-            logger.warning(f"L2TP activation skipped {len(skipped)} users with unreadable proxy settings: {skipped[:20]}")
-
-        if bulk_model.dry_run:
-            return BulkOperationDryRunResponse(affected_users=len(to_update))
-
-        if not to_update:
-            if self.operator_type in (OperatorType.API, OperatorType.WEB):
-                return {"detail": "operation has been successfuly done on 0 users"}
-            return 0
-
-        for user, password in to_update:
-            settings = dict(user.proxy_settings or {})
-            settings["l2tp"] = {"password": password}
-            user.proxy_settings = settings
-        await db.commit()
-
-        updated_users = [user for user, _ in to_update]
-        await sync_users(updated_users)
-
-        if self.operator_type in (OperatorType.API, OperatorType.WEB):
-            return {"detail": f"operation has been successfuly done on {len(to_update)} users"}
-        return len(to_update)
-
-    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter):
-        """Retroactively generate an MTProto secret for existing users matched
-        by the filter, scoped exactly like every other bulk action (specific
-        admins / specific users / everyone when nothing is selected).
-
-        Safety constraint (explicitly requested): a user who already has a
-        secret must never be touched by this action, even if untouched means
-        "skip silently" - regenerating a secret for a user whose proxy is
-        already active would change their working credential and disconnect
-        them unexpectedly. This is enforced twice: once here (skip before
-        calling prepare_mtproto_secret at all) and once inside
-        prepare_mtproto_secret itself (which never overwrites a non-empty
-        secret) - belt and suspenders around the one constraint that must
-        never regress.
-        """
-        candidates = await get_users_for_mtproto_activation(db, bulk_model)
-
-        to_update: list[tuple[User, str]] = []
-        skipped: list[int] = []
-        for user in candidates:
-            try:
-                current = ProxyTable.model_validate(user.proxy_settings)
-            except (ValidationError, ValueError):
-                skipped.append(user.id)
-                continue
-            if current.mtproto.secret:
-                continue
-            updated = await prepare_mtproto_secret(db, current, user.groups)
-            if not updated.mtproto.secret:
-                # No MTProto access via this user's current groups - nothing to activate.
-                continue
-            to_update.append((user, updated.mtproto.secret))
-
-        if skipped:
-            logger.warning(f"MTProto activation skipped {len(skipped)} users with unreadable proxy settings: {skipped[:20]}")
-
-        if bulk_model.dry_run:
-            return BulkOperationDryRunResponse(affected_users=len(to_update))
-
-        if not to_update:
-            if self.operator_type in (OperatorType.API, OperatorType.WEB):
-                return {"detail": "operation has been successfuly done on 0 users"}
-            return 0
-
-        for user, secret in to_update:
-            settings = dict(user.proxy_settings or {})
-            settings["mtproto"] = {"secret": secret}
-            user.proxy_settings = settings
-        await db.commit()
-
-        updated_users = [user for user, _ in to_update]
-        await sync_users(updated_users)
-
-        if self.operator_type in (OperatorType.API, OperatorType.WEB):
-            return {"detail": f"operation has been successfuly done on {len(updated_users)} users"}
-        return len(updated_users)
 
     async def _get_users_sub_update_list(
         self, db: AsyncSession, db_user: User, offset: int = 0, limit: int = 10

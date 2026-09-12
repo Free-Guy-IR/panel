@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, create_autospec, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -945,10 +945,14 @@ def test_realtime_node_stats(access_token, node_operator_mock):
 @pytest.mark.asyncio
 async def test_node_create_and_modify_schedule_background_reconnect(monkeypatch: pytest.MonkeyPatch):
     operator = NodeOperation(operator_type=OperatorType.API)
-    scheduled_node_ids: list[int] = []
+    scheduled: list[tuple[int, bool]] = []
 
-    async def record_background_connect(node_id: int) -> None:
-        scheduled_node_ids.append(node_id)
+    async def _record_background_connect(node_id: int, *, force_start: bool = False) -> None:
+        scheduled.append((node_id, force_start))
+
+    record_background_connect = create_autospec(
+        operator._connect_single_node_background, side_effect=_record_background_connect
+    )
 
     monkeypatch.setattr(operator, "_update_node_impl", AsyncMock())
     monkeypatch.setattr(operator, "_connect_single_node_background", record_background_connect)
@@ -977,7 +981,19 @@ async def test_node_create_and_modify_schedule_background_reconnect(monkeypatch:
             )
             await asyncio.sleep(0)
 
-            assert scheduled_node_ids == [created.id, modified.id]
+            assert [scheduled_id for scheduled_id, _ in scheduled] == [created.id, modified.id]
+            assert scheduled[1][1] is False
+
+            forced = await operator.modify_node(
+                session,
+                created.id,
+                NodeModify(keep_alive=True),
+                admin,
+            )
+            await asyncio.sleep(0)
+
+            assert [scheduled_id for scheduled_id, _ in scheduled] == [created.id, modified.id, forced.id]
+            assert scheduled[2][1] is True
         finally:
             if node_id is not None:
                 db_node = await session.get(Node, node_id)

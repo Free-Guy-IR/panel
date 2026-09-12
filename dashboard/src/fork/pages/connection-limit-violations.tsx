@@ -147,8 +147,8 @@ export default function ConnectionLimitViolations() {
                       </TableCell>
 
                       <TableCell className="align-top">
-                        <Badge variant="outline" className={cn('font-medium', stepTone(violation.disable_minutes))}>
-                          {describeStep(violation.disable_minutes, t)}
+                        <Badge variant="outline" className={cn('font-medium', stepTone(violation.disable_minutes ?? 0))}>
+                          {describeStep(violation.disable_minutes ?? 0, t)}
                         </Badge>
                         <div className="text-muted-foreground mt-1 text-[10px]">
                           {violation.active

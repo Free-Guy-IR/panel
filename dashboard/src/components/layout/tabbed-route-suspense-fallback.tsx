@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
+import { forkBulkHeaders, forkBulkTabs, forkSettingsTabs } from '@/fork/pages/tabs'
 
 type TabDef = { id: string; labelKey: string; icon: LucideIcon; url: string }
 
@@ -44,6 +45,7 @@ const SETTINGS_SUDO_TABS: TabDef[] = [
   { id: 'subscriptions', labelKey: 'settings.subscriptions.title', icon: ListTodo, url: '/settings/subscriptions' },
   { id: 'telegram', labelKey: 'settings.telegram.title', icon: Send, url: '/settings/telegram' },
   { id: 'webhook', labelKey: 'settings.webhook.title', icon: Webhook, url: '/settings/webhook' },
+  ...forkSettingsTabs.map(tab => ({ id: tab.id, labelKey: tab.label, icon: tab.icon, url: tab.url })),
   { id: 'cleanup', labelKey: 'settings.cleanup.title', icon: Database, url: '/settings/cleanup' },
   { id: 'theme', labelKey: 'theme.title', icon: Palette, url: '/settings/theme' },
 ]
@@ -56,6 +58,7 @@ const BULK_SUDO_TABS: TabDef[] = [
   { id: 'expire', labelKey: 'bulk.expireDate', icon: Calendar, url: '/bulk/expire' },
   { id: 'data', labelKey: 'bulk.dataLimit', icon: ArrowUpDown, url: '/bulk/data' },
   { id: 'proxy', labelKey: 'bulk.proxySettings', icon: Lock, url: '/bulk/proxy' },
+  ...forkBulkTabs.map(tab => ({ id: tab.id, labelKey: tab.label, icon: tab.icon, url: tab.url })),
 ]
 
 const BULK_NON_SUDO_TABS: TabDef[] = [{ id: 'create', labelKey: 'bulk.createUsers', icon: UserPlus, url: '/bulk' }]
@@ -106,6 +109,7 @@ function bulkHeader(pathname: string): { title: string; description: string } {
     '/bulk/expire': { title: 'bulk.expireDate', description: 'bulk.expireDateDesc' },
     '/bulk/data': { title: 'bulk.dataLimit', description: 'bulk.dataLimitDesc' },
     '/bulk/proxy': { title: 'bulk.proxySettings', description: 'bulk.proxySettingsDesc' },
+    ...forkBulkHeaders,
   }
   return pathToHeader[pathname] ?? pathToHeader['/bulk']!
 }

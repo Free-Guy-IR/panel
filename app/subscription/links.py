@@ -4,6 +4,7 @@ import urllib.parse as urlparse
 from random import choice
 from urllib.parse import quote
 
+from app.fork.subscription.links import register_fork_link_handlers
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -56,8 +57,8 @@ class StandardLinks(BaseSubscription):
             "hysteria": self._build_hysteria,
             "hysteria2": self._build_hysteria2,
             "wireguard": self._build_wireguard,
-            "mtproto": self._build_mtproto,
         }
+        register_fork_link_handlers(self)
 
     def add_link(self, link):
         self.links.append(link)
@@ -367,13 +368,6 @@ class StandardLinks(BaseSubscription):
     def _build_wireguard(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
         """Build WireGuard link"""
         components = self._build_wireguard_components(remark, address, inbound, settings)
-        if not components:
-            return ""
-        return components["uri"]
-
-    def _build_mtproto(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
-        """Build MTProto (tg://) link"""
-        components = self._build_mtproto_components(remark, address, inbound, settings)
         if not components:
             return ""
         return components["uri"]

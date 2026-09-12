@@ -59,12 +59,12 @@ class _Observation:
 @pytest.mark.asyncio
 async def test_a_verdict_that_has_not_held_long_enough_is_left_alone(db):
     """One cycle proves nothing - an address changes, wifi becomes mobile."""
-    from app.jobs.connection_limiter import _enforce
+    from app.fork.jobs.connection_limiter import _enforce
 
     user = await _user(db)
     settings = ConnectionLimit(enforcement_enabled=True, persistence_cycles=3, punishment_steps=[-1])
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
         await _enforce(db, [_Observation(user.id, streak=2)], settings)
 
     assert user.status == UserStatus.active
@@ -73,13 +73,13 @@ async def test_a_verdict_that_has_not_held_long_enough_is_left_alone(db):
 
 @pytest.mark.asyncio
 async def test_once_it_has_held_the_user_is_acted_on_and_the_nodes_are_told(db):
-    from app.jobs.connection_limiter import _enforce
+    from app.fork.jobs.connection_limiter import _enforce
 
     user = await _user(db)
     settings = ConnectionLimit(enforcement_enabled=True, persistence_cycles=3, punishment_steps=[-1])
     pushed = AsyncMock()
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=pushed):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=pushed):
         await _enforce(db, [_Observation(user.id, streak=3)], settings)
 
     assert user.status == UserStatus.disabled
@@ -89,12 +89,12 @@ async def test_once_it_has_held_the_user_is_acted_on_and_the_nodes_are_told(db):
 
 @pytest.mark.asyncio
 async def test_a_user_within_the_limit_is_never_acted_on(db):
-    from app.jobs.connection_limiter import _enforce
+    from app.fork.jobs.connection_limiter import _enforce
 
     user = await _user(db)
     settings = ConnectionLimit(enforcement_enabled=True, persistence_cycles=1, punishment_steps=[-1])
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
         await _enforce(db, [_Observation(user.id, streak=99, verdict="within_limit")], settings)
 
     assert user.status == UserStatus.active
@@ -104,14 +104,14 @@ async def test_a_user_within_the_limit_is_never_acted_on(db):
 async def test_turning_the_switch_off_releases_whoever_is_still_held(db):
     """The one outcome nobody would expect is being left disabled by a feature
     that is no longer running."""
-    from app.jobs.connection_limiter import _release_due
+    from app.fork.jobs.connection_limiter import _release_due
 
     user = await _user(db)
     await restrict(db, user, _Observation(user.id, 3), ConnectionLimit(punishment_steps=[-1]))
     await db.commit()
     assert user.status == UserStatus.disabled
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
         await _release_due(db, ConnectionLimit(enforcement_enabled=False))
 
     assert user.status == UserStatus.active
@@ -119,14 +119,14 @@ async def test_turning_the_switch_off_releases_whoever_is_still_held(db):
 
 @pytest.mark.asyncio
 async def test_with_the_switch_on_a_restriction_still_running_is_left_in_place(db):
-    from app.jobs.connection_limiter import _release_due
+    from app.fork.jobs.connection_limiter import _release_due
 
     user = await _user(db)
     settings = ConnectionLimit(enforcement_enabled=True, monitor_only=False, punishment_steps=[10])
     await restrict(db, user, _Observation(user.id, 3), settings)
     await db.commit()
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
         await _release_due(db, settings)
 
     assert user.status == UserStatus.disabled
@@ -134,7 +134,7 @@ async def test_with_the_switch_on_a_restriction_still_running_is_left_in_place(d
 
 @pytest.mark.asyncio
 async def test_when_its_time_is_up_it_lifts_by_itself(db):
-    from app.jobs.connection_limiter import _release_due
+    from app.fork.jobs.connection_limiter import _release_due
 
     user = await _user(db)
     settings = ConnectionLimit(enforcement_enabled=True, monitor_only=False, punishment_steps=[10])
@@ -143,7 +143,7 @@ async def test_when_its_time_is_up_it_lifts_by_itself(db):
     row.restore_at = datetime.now(UTC) - timedelta(seconds=1)
     await db.commit()
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
         await _release_due(db, settings)
 
     assert user.status == UserStatus.active

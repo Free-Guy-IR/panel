@@ -58,15 +58,6 @@ users_groups_association = Table(
     fk_id_table_column("groups_id", "groups.id", primary_key=True),
 )
 
-node_additional_cores_association = Table(
-    "node_additional_cores",
-    Base.metadata,
-    fk_id_table_column("node_id", "nodes.id", primary_key=True, ondelete="CASCADE"),
-    fk_id_table_column("core_config_id", "core_configs.id", primary_key=True, ondelete="CASCADE"),
-    Index("ix_node_additional_cores_core_config_id", "core_config_id"),
-)
-
-
 class AdminStatus(str, Enum):
     active = "active"
     disabled = "disabled"
@@ -79,6 +70,9 @@ class IdMixin:
 
 class CreatedAtUTCMixin(IdMixin):
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
+
+
+from app.fork.models.node_additional_cores import node_additional_cores_association
 
 
 class Admin(Base, CreatedAtUTCMixin):
@@ -748,27 +742,6 @@ class NodeUsage(Base, IdMixin):
     downlink: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
-class NodeInboundUsage(Base, IdMixin):
-    """Ten-minute buckets of per-inbound traffic, mirroring NodeUsage.
-
-    The tag is stored rather than a foreign key to inbounds: an inbound can be
-    renamed or removed from a core config while its recorded history stays
-    meaningful, and stats arrive from the node keyed by tag anyway.
-    """
-
-    __tablename__ = "node_inbound_usages"
-    __table_args__ = (
-        UniqueConstraint("created_at", "node_id", "inbound_tag"),
-        Index("ix_node_inbound_usages_created_at", "created_at"),
-        Index("ix_node_inbound_usages_tag_created_at", "inbound_tag", "created_at"),
-    )
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), unique=False)  # 10 minute per record
-    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL")
-    inbound_tag: Mapped[str] = mapped_column(String(256))
-    uplink: Mapped[int] = mapped_column(BigInteger, default=0)
-    downlink: Mapped[int] = mapped_column(BigInteger, default=0)
-
-
 class NodeUsageResetLogs(Base, CreatedAtUTCMixin):
     __tablename__ = "node_usage_reset_logs"
     __table_args__ = (
@@ -930,96 +903,6 @@ class Settings(Base, IdMixin):
     connection_limit: Mapped[dict | None] = mapped_column(JSON(), default=None, nullable=True)
 
 
-class UserConnectionLimit(Base, IdMixin):
-    """A user whose IP allowance differs from the default, or who is exempt.
-
-    Rows exist only for users that differ, so this stays a small table even on
-    a panel with thousands of users.
-    """
-
-    __tablename__ = "user_connection_limits"
-    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
-    # NULL with exempt=False means "use the default from settings".
-    ip_limit: Mapped[int | None] = mapped_column(default=None)
-    exempt: Mapped[bool] = mapped_column(default=False, server_default="0")
-    note: Mapped[str | None] = mapped_column(String(256), default=None)
-
-
-class ConnectionRestriction(Base, IdMixin):
-    """One restriction the limiter applied, and what is needed to undo it.
-
-    The user's groups and status before the restriction are stored here
-    because restoring has to put back exactly what was there - reconstructing
-    it afterwards is guesswork once the user has been moved.
-    """
-
-    __tablename__ = "connection_restrictions"
-    __table_args__ = (
-        Index("ix_connection_restrictions_active", "active"),
-        Index("ix_connection_restrictions_user_active", "user_id", "active"),
-    )
-    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC))
-    ip_count: Mapped[int] = mapped_column(default=0)
-    ip_limit: Mapped[int] = mapped_column(default=0)
-    # Distinct IPs seen at the moment of the violation, for the admin to review.
-    observed_ips: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
-    method: Mapped[str] = mapped_column(String(16), default="disable")
-    # Which rung of the escalation this was, and the disable it carried:
-    # zero for a warning, minutes for a timed disable, -1 for one that only a
-    # person can lift. Stored rather than derived so the row still reads
-    # correctly after the settings are changed.
-    step_applied: Mapped[int] = mapped_column(default=0, server_default="0")
-    disable_minutes: Mapped[int] = mapped_column(default=0, server_default="0")
-    previous_status: Mapped[str | None] = mapped_column(String(16), default=None)
-    previous_group_ids: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
-    reasons: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
-    restore_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
-    restored_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
-    # Only one row per user may be active; the restore job keys off this.
-    active: Mapped[bool] = mapped_column(default=True, server_default="1")
-
-
-class UserConnectionState(Base, IdMixin):
-    """The most recent judgement about how many people are using one account.
-
-    One row per user, overwritten each cycle. History is deliberately not kept
-    here - this is what the users list renders, and it has to stay small and
-    cheap to query.
-    """
-
-    __tablename__ = "user_connection_states"
-    __table_args__ = (
-        Index("ix_user_connection_states_verdict", "verdict"),
-        Index("ix_user_connection_states_checked_at", "checked_at"),
-    )
-    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
-    checked_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC))
-    # Estimated devices connected at once - the number the badge shows.
-    devices: Mapped[int] = mapped_column(default=0)
-    address_sources: Mapped[int] = mapped_column(default=0)
-    hwid_count: Mapped[int] = mapped_column(default=0)
-    node_count: Mapped[int] = mapped_column(default=0)
-    app_count: Mapped[int] = mapped_column(default=0)
-    verdict: Mapped[str] = mapped_column(String(16), default="within_limit")
-    # The allowance this verdict was made against, so a row can be read
-    # correctly later even if the default has changed since.
-    limit_applied: Mapped[int] = mapped_column(default=0)
-    # How many consecutive cycles this verdict has held; a single cycle proves
-    # nothing, so the UI only trusts a verdict once this has built up.
-    streak: Mapped[int] = mapped_column(default=0)
-    # Consecutive checks this user has been on more than one node. A client
-    # that probes every server spikes for one cycle; being genuinely spread
-    # across nodes does not go away, so the run is what tells them apart.
-    node_streak: Mapped[int] = mapped_column(default=0, server_default="0")
-    # Consecutive checks the user has been on two nodes at once. A single
-    # overlap is a node switch; only a run of them is a second device.
-    at_once_streak: Mapped[int] = mapped_column(default=0, server_default="0")
-    # The evidence behind the verdict, rendered as-is in the popover.
-    reasons: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
-    details: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
-
-
 class AdminRole(Base, CreatedAtUTCMixin):
     __tablename__ = "admin_roles"
     name: Mapped[str] = mapped_column(String(64), unique=True)
@@ -1105,3 +988,44 @@ class TempKey(Base):
     expires_at: Mapped[dt] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     used_by_ip: Mapped[str | None] = mapped_column(String(45), default=None)
+
+
+def _register_fork_model_tables() -> None:
+    """Import fork model modules after IdMixin exists so their tables register.
+
+    Import the modules, not the class names. The class modules import IdMixin
+    from this file; a `from ... import Class` here would fail if those modules
+    were already mid-import.
+    """
+    import app.fork.models.connection as _fork_connection
+    import app.fork.models.node_inbound_usage as _fork_inbound
+
+    for _name in ("ConnectionRestriction", "UserConnectionLimit", "UserConnectionState"):
+        _obj = getattr(_fork_connection, _name, None)
+        if _obj is not None:
+            globals()[_name] = _obj
+    _niu = getattr(_fork_inbound, "NodeInboundUsage", None)
+    if _niu is not None:
+        globals()["NodeInboundUsage"] = _niu
+
+
+_register_fork_model_tables()
+
+
+def __getattr__(name: str):
+    if name in {"ConnectionRestriction", "UserConnectionLimit", "UserConnectionState"}:
+        from app.fork.models.connection import ConnectionRestriction, UserConnectionLimit, UserConnectionState
+
+        exported = {
+            "ConnectionRestriction": ConnectionRestriction,
+            "UserConnectionLimit": UserConnectionLimit,
+            "UserConnectionState": UserConnectionState,
+        }
+        globals().update(exported)
+        return exported[name]
+    if name == "NodeInboundUsage":
+        from app.fork.models.node_inbound_usage import NodeInboundUsage
+
+        globals()["NodeInboundUsage"] = NodeInboundUsage
+        return NodeInboundUsage
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

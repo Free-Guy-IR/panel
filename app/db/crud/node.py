@@ -8,7 +8,6 @@ from sqlalchemy.sql.functions import coalesce
 
 from app.db.compiles_types import DateDiff
 from app.db.models import (
-    CoreConfig,
     DataLimitResetStrategy,
     Node,
     NodeInboundUsage,
@@ -28,9 +27,8 @@ from app.models.node import (
     NodeSimpleSortOption,
     UsageTable,
 )
+from app.fork.crud.node import get_inbounds_usage, resolve_additional_cores
 from app.models.stats import (
-    InboundUsageStat,
-    InboundUsageStatsList,
     NodeStats,
     NodeStatsList,
     NodeUsageStat,
@@ -99,16 +97,6 @@ async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: boo
         await load_node_attrs(node, load_usage_logs=load_usage_logs)
     return node
 
-
-
-
-async def _resolve_additional_cores(db: AsyncSession, core_ids: list[int] | None) -> list[CoreConfig]:
-    if not core_ids:
-        return []
-    ordered = list(dict.fromkeys(core_ids))
-    result = await db.execute(select(CoreConfig).where(CoreConfig.id.in_(ordered)))
-    by_id = {core.id: core for core in result.scalars().all()}
-    return [by_id[core_id] for core_id in ordered if core_id in by_id]
 
 
 async def get_nodes(
@@ -434,7 +422,7 @@ async def create_node(db: AsyncSession, node: NodeCreate) -> Node:
     node_payload = node.model_dump()
     extra_core_ids = node_payload.pop("additional_core_config_ids", None)
     db_node = Node(**node_payload)
-    db_node.additional_cores = await _resolve_additional_cores(db, extra_core_ids)
+    db_node.additional_cores = await resolve_additional_cores(db, extra_core_ids)
 
     db.add(db_node)
     await db.commit()
@@ -488,7 +476,7 @@ async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
         setattr(db_node, key, value)
 
     if "additional_core_config_ids" in modify.model_fields_set:
-        db_node.additional_cores = await _resolve_additional_cores(db, modify.additional_core_config_ids)
+        db_node.additional_cores = await resolve_additional_cores(db, modify.additional_core_config_ids)
 
     db_node.xray_version = None
     db_node.message = None
@@ -876,64 +864,3 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(delete(Node).where(Node.id.in_(node_ids)))
     await db.commit()
 
-
-async def get_inbounds_usage(
-    db: AsyncSession,
-    start: datetime,
-    end: datetime,
-    period: Period,
-    inbound_tag: str | None = None,
-    node_id: int | None = None,
-) -> InboundUsageStatsList:
-    """Per-inbound traffic grouped into complete period buckets.
-
-    Deliberately the same shape and bucketing rules as get_nodes_usage - the
-    partial first bucket is dropped the same way - so both series can be shown
-    on the same axes without one being offset against the other.
-    """
-    dialect = db.bind.dialect.name
-
-    trunc_expr = _build_trunc_expression(db, period, NodeInboundUsage.created_at, start)
-
-    start_utc = to_utc_for_filter(start)
-    end_utc = to_utc_for_filter(end)
-    conditions = [NodeInboundUsage.created_at >= start_utc, NodeInboundUsage.created_at < end_utc]
-
-    if inbound_tag:
-        conditions.append(NodeInboundUsage.inbound_tag == inbound_tag)
-    if node_id is not None:
-        conditions.append(NodeInboundUsage.node_id == node_id)
-
-    stmt = (
-        select(
-            trunc_expr.label("period_start"),
-            NodeInboundUsage.inbound_tag.label("inbound_tag"),
-            func.sum(NodeInboundUsage.downlink).label("downlink"),
-            func.sum(NodeInboundUsage.uplink).label("uplink"),
-        )
-        .where(and_(*conditions))
-        .group_by(trunc_expr, NodeInboundUsage.inbound_tag)
-        .order_by(trunc_expr, NodeInboundUsage.inbound_tag)
-    )
-
-    if start.tzinfo:
-        first_complete_bucket = _get_next_period_boundary(start, period)
-        boundary_value = first_complete_bucket.replace(tzinfo=None)
-
-        if dialect == "postgresql":
-            stmt = stmt.having(trunc_expr >= boundary_value)
-        elif dialect in ("mysql", "sqlite"):
-            format_str = MYSQL_FORMATS[period] if dialect == "mysql" else SQLITE_FORMATS[period]
-            boundary_str = boundary_value.strftime(format_str.replace("%i", "%M"))
-            stmt = stmt.having(literal_column("period_start") >= boundary_str)
-
-    result = await db.execute(stmt)
-
-    stats: dict[str, list[InboundUsageStat]] = {}
-    for row in result.mappings():
-        row_dict = dict(row)
-        tag = row_dict.pop("inbound_tag")
-        attach_timezone_to_period_start(row_dict, start.tzinfo, dialect)
-        stats.setdefault(tag, []).append(InboundUsageStat(**row_dict))
-
-    return InboundUsageStatsList(period=period, start=start, end=end, stats=stats)

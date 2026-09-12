@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-import app.jobs.connection_limiter as job
+import app.fork.jobs.connection_limiter as job
 from app.models.settings import ConnectionLimit
 
 

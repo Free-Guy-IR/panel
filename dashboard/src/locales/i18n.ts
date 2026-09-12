@@ -6,6 +6,7 @@ import HttpApi from 'i18next-http-backend'
 const BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev'
 import { initReactI18next } from 'react-i18next'
 import { joinURL } from 'ufo'
+import { mergeForkLocale } from '@/fork/locales'
 
 i18n
   .use(LanguageDetector)
@@ -30,6 +31,9 @@ i18n
         // Tied to the build, so a new one is fetched exactly once per deploy
         // rather than the browser holding on to the previous translations.
         loadPath: joinURL(import.meta.env.BASE_URL, `statics/locales/{{lng}}.json?v=${BUILD_ID}`),
+        parse(data: string, languages?: string | string[]) {
+          return mergeForkLocale(JSON.parse(data) as { [key: string]: unknown }, languages)
+        },
       },
     },
     function (err) {

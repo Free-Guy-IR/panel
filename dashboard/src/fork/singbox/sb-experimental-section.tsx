@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { SbSelectField, SbTextField, useSbDraft, type WireRow } from '@/features/core-editor/components/singbox/sb-section-kit'
+import { SbSelectField, SbTextField, useSbDraft, type WireRow } from '@/fork/singbox/sb-section-kit'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 

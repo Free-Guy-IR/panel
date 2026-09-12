@@ -1,6 +1,6 @@
 from fastapi import status
 
-from app.core.mtproto import MTProtoConfig
+from app.fork.cores.mtproto import MTProtoConfig
 from tests.api import client
 from tests.api.helpers import auth_headers, delete_core, unique_name
 

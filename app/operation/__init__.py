@@ -5,7 +5,6 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.core.manager import core_manager
 from app.db import AsyncSession
 from app.db.crud import (
     get_admin,
@@ -25,7 +24,8 @@ from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
 from app.models.user import UserCreate, UserModify
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
-from app.operation.permissions import apply_group_access, get_allowed_group_ids, get_scope_admin_id
+from app.operation.permissions import apply_group_access, get_scope_admin_id
+from app.fork.operation.base_extras import reject_disallowed_assigned_groups
 from app.utils.helpers import ensure_datetime_timezone
 from app.utils.jwt import get_subscription_payload
 
@@ -271,17 +271,7 @@ class BaseOperation:
         if missing_ids:
             await self.raise_error("Group not found", 404)
 
-        # The same allowance the group listing is filtered by, so what an admin
-        # can be offered and what they can actually assign cannot drift apart.
-        if admin is not None:
-            allowed_group_ids = get_allowed_group_ids(admin)
-            if allowed_group_ids is not None:
-                allowed = set(allowed_group_ids) | set(existing_group_ids or ())
-                forbidden = [groups_by_id[gid].name for gid in unique_ids if gid not in allowed]
-                if forbidden:
-                    await self.raise_error(
-                        f"You are not allowed to use these groups: {', '.join(sorted(forbidden))}", 403
-                    )
+        await reject_disallowed_assigned_groups(self, admin, unique_ids, groups_by_id, existing_group_ids)
 
         # Preserve the requested order and duplicate semantics.
         return [groups_by_id[group_id] for group_id in requested_group_ids]
@@ -301,6 +291,8 @@ class BaseOperation:
 
     async def check_inbound_tags(self, tags: list[str]) -> None:
         for tag in tags:
+            from app.core.manager import core_manager
+
             if tag not in await core_manager.get_inbounds():
                 await self.raise_error(f"{tag} not found", 400)
 

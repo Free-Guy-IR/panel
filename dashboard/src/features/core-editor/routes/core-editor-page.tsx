@@ -12,10 +12,6 @@ import type { SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-sec
 import { useXrayPersistValidationItems } from '@/features/core-editor/hooks/use-xray-persist-validation-items'
 import { WireGuardCoreEditor } from '@/features/core-editor/components/wg/wireguard-core-editor'
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
-import { SingBoxCoreEditor } from '@/features/core-editor/components/singbox/singbox-core-editor'
-import { OpenVPNCoreEditor } from '@/features/core-editor/components/openvpn/openvpn-core-editor'
-import { MTProtoCoreEditor } from '@/features/core-editor/components/mtproto/mtproto-core-editor'
-import { L2TPCoreEditor } from '@/features/core-editor/components/l2tp/l2tp-core-editor'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { getSingBoxPersistConfig } from '@/features/core-editor/kit/singbox-adapter'
@@ -36,6 +32,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { extraComponent } from '@/fork'
 
 type LoadingCoreKind = 'xray' | 'wg' | 'singbox' | 'openvpn' | 'mtproto' | 'l2tp'
 
@@ -926,19 +923,16 @@ export default function CoreEditorPage() {
         main={
           <div className="space-y-6">
             <ValidationSummary items={preSaveIssues} />
-            {kind === 'wg' ? (
-              <WireGuardCoreEditor />
-            ) : kind === 'singbox' ? (
-              <SingBoxCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
-            ) : kind === 'openvpn' ? (
-              <OpenVPNCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
-            ) : kind === 'mtproto' ? (
-              <MTProtoCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
-            ) : kind === 'l2tp' ? (
-              <L2TPCoreEditor />
-            ) : (
-              <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
-            )}
+            {(() => {
+              const ExtraEditor = extraComponent('core-editor', kind)
+              if (ExtraEditor) {
+                return <ExtraEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
+              }
+              if (kind === 'wg') {
+                return <WireGuardCoreEditor />
+              }
+              return <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
+            })()}
           </div>
         }
         dirty={hasActualChanges}

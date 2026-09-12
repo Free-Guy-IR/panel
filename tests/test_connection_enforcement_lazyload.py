@@ -57,7 +57,7 @@ def _what_update_user_reads(users):
 
 @pytest.mark.asyncio
 async def test_a_user_the_job_loads_cold_is_restricted_and_can_be_pushed(db):
-    from app.jobs.connection_limiter import _enforce
+    from app.fork.jobs.connection_limiter import _enforce
 
     user, group_id = await _stored_user(db)
     user_id = user.id
@@ -65,7 +65,7 @@ async def test_a_user_the_job_loads_cold_is_restricted_and_can_be_pushed(db):
     settings = ConnectionLimit(enforcement_enabled=True, persistence_cycles=3, punishment_steps=[-1])
     pushed = AsyncMock(side_effect=_what_update_user_reads)
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=pushed):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=pushed):
         await _enforce(db, [_Observation(user_id, streak=3)], settings)
 
     row = (await db.execute(select(ConnectionRestriction))).scalar()
@@ -77,14 +77,14 @@ async def test_a_user_the_job_loads_cold_is_restricted_and_can_be_pushed(db):
 
 @pytest.mark.asyncio
 async def test_a_warning_for_a_cold_loaded_user_is_written_down_too(db):
-    from app.jobs.connection_limiter import _enforce
+    from app.fork.jobs.connection_limiter import _enforce
 
     user, group_id = await _stored_user(db)
     user_id = user.id
     db.expunge_all()
     settings = ConnectionLimit(enforcement_enabled=True, persistence_cycles=1, punishment_steps=[0, 10])
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=AsyncMock()):
         await _enforce(db, [_Observation(user_id, streak=1)], settings)
 
     row = (await db.execute(select(ConnectionRestriction))).scalar()
@@ -94,7 +94,7 @@ async def test_a_warning_for_a_cold_loaded_user_is_written_down_too(db):
 
 @pytest.mark.asyncio
 async def test_a_cold_loaded_user_whose_time_is_up_is_released_and_can_be_pushed(db):
-    from app.jobs.connection_limiter import _release_due
+    from app.fork.jobs.connection_limiter import _release_due
 
     user, _ = await _stored_user(db)
     user_id = user.id
@@ -103,7 +103,7 @@ async def test_a_cold_loaded_user_whose_time_is_up_is_released_and_can_be_pushed
     db.expunge_all()
     pushed = AsyncMock(side_effect=_what_update_user_reads)
 
-    with patch("app.jobs.connection_limiter._push_to_nodes", new=pushed):
+    with patch("app.fork.jobs.connection_limiter._push_to_nodes", new=pushed):
         await _release_due(db, ConnectionLimit(enforcement_enabled=False))
 
     assert (await db.get(User, user_id)).status == UserStatus.active

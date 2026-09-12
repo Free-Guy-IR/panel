@@ -2,12 +2,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { CoreEditorDataTable } from '@/features/core-editor/components/shared/core-editor-data-table'
 import { CoreEditorFormDialog } from '@/features/core-editor/components/shared/core-editor-form-dialog'
-import { SbBindingsSection } from '@/features/core-editor/components/singbox/sb-bindings-section'
-import { SbDnsSection } from '@/features/core-editor/components/singbox/sb-dns-section'
-import { SbExperimentalSection } from '@/features/core-editor/components/singbox/sb-experimental-section'
-import { SbOutboundsSection } from '@/features/core-editor/components/singbox/sb-outbounds-section'
-import { SbRouteSection } from '@/features/core-editor/components/singbox/sb-route-section'
-import { SbRuleSetsSection } from '@/features/core-editor/components/singbox/sb-rulesets-section'
+import { forkSingboxSections } from '@/fork/singbox/sections'
 import { SingBoxInboundForm } from '@/features/core-editor/components/singbox/singbox-inbound-form'
 import { XrayAdvancedSection } from '@/features/core-editor/components/xray/xray-advanced-section'
 import { useSectionHeaderAddPulseEffect, type SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
@@ -17,7 +12,7 @@ import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-sto
 import type { SbCoreSection } from '@/features/core-editor/state/core-editor-store'
 import { cn } from '@/lib/utils'
 import { arrayMove } from '@dnd-kit/sortable'
-import { SINGBOX_BALANCER_OUTBOUND_TYPES, validateInboundDraft } from '@pasarguard/singbox-config-kit'
+import { validateInboundDraft } from '@pasarguard/singbox-config-kit'
 import type { SingBoxInboundDraft, SingBoxProtocol, SingBoxVersion } from '@pasarguard/singbox-config-kit'
 import type { ColumnDef } from '@tanstack/react-table'
 import { ChevronDown, Copy, Pencil, Plus } from 'lucide-react'
@@ -32,7 +27,6 @@ interface SingBoxCoreEditorProps {
 const ADD_PROTOCOLS: readonly SingBoxProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'tuic', 'hysteria2']
 const VERSIONS: readonly SingBoxVersion[] = ['1.11', '1.12']
 
-/** sing-box core editor: dispatches to a section by activeSection, with a core-wide version switch. */
 export function SingBoxCoreEditor({ headerAddPulse, headerAddEpoch }: SingBoxCoreEditorProps) {
   const { t } = useTranslation()
   const section = useCoreEditorStore(s => s.activeSection) as SbCoreSection
@@ -42,6 +36,7 @@ export function SingBoxCoreEditor({ headerAddPulse, headerAddEpoch }: SingBoxCor
   if (!draft) return null
   const version = draft.singboxVersion ?? '1.12'
   const setVersion = (v: SingBoxVersion) => updateSbDraft(d => ({ ...d, singboxVersion: v }))
+  const ForkSection = forkSingboxSections[section]
 
   return (
     <div className="space-y-5">
@@ -67,13 +62,7 @@ export function SingBoxCoreEditor({ headerAddPulse, headerAddEpoch }: SingBoxCor
       </div>
 
       {section === 'inbounds' && <SbInboundsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
-      {section === 'outbounds' && <SbOutboundsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} sectionId="outbounds" />}
-      {section === 'balancers' && <SbOutboundsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} sectionId="balancers" onlyTypes={SINGBOX_BALANCER_OUTBOUND_TYPES} />}
-      {section === 'route' && <SbRouteSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
-      {section === 'ruleSets' && <SbRuleSetsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
-      {section === 'dns' && <SbDnsSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />}
-      {section === 'bindings' && <SbBindingsSection />}
-      {section === 'experimental' && <SbExperimentalSection />}
+      {ForkSection ? <ForkSection headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} /> : null}
       {section === 'advanced' && <XrayAdvancedSection />}
     </div>
   )

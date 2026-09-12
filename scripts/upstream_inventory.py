@@ -30,6 +30,16 @@ GENERATED_HEADER_RE = re.compile(
 )
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@\s*(.*)$")
 LEDGER_TOKEN_RE = re.compile(r"^`?([A-Za-z0-9_./+-]+\.[A-Za-z0-9]+)`?$")
+LEDGER_DOTFILE_RE = re.compile(r"^\.[A-Za-z0-9_.-]+$")
+LEDGER_EXTENSIONLESS = {
+    "Dockerfile",
+    "Makefile",
+    "LICENSE",
+    "NOTICE",
+    "Gemfile",
+    "Procfile",
+    "Vagrantfile",
+}
 BACKTICK_RE = re.compile(r"`([^`]+)`")
 
 SYMBOL_RULES = [
@@ -283,6 +293,14 @@ def print_summary(report, top):
             print(f"  {p}")
 
 
+def is_ledger_path(token):
+    return bool(
+        LEDGER_TOKEN_RE.match(token)
+        or LEDGER_DOTFILE_RE.match(token)
+        or token in LEDGER_EXTENSIONLESS
+    )
+
+
 def load_ledger(path):
     try:
         text = Path(path).read_text()
@@ -292,9 +310,9 @@ def load_ledger(path):
     entries = set()
     for line in text.splitlines():
         for m in BACKTICK_RE.finditer(line):
-            token = LEDGER_TOKEN_RE.match(m.group(1))
-            if token:
-                entries.add(token.group(1))
+            token = m.group(1)
+            if is_ledger_path(token):
+                entries.add(token)
     return entries
 
 

@@ -12,7 +12,6 @@ from app.models.admin import AdminDetails
 from app.models.node import (
     BulkNodesActionResponse,
     BulkNodeSelection,
-    InboundUsageQuery,
     NodeClearUsageQuery,
     NodeCoreUpdate,
     NodeCreate,
@@ -32,7 +31,6 @@ from app.models.node import (
     UserIPListAll,
 )
 from app.models.stats import (
-    InboundUsageStatsList,
     NodeOutboundsLatencyResponse,
     NodeRealtimeStats,
     NodeStatsList,
@@ -50,7 +48,6 @@ from config import runtime_settings
 
 from .authentication import oauth2_scheme, require_permission, require_permission_for_request
 from .dependencies import (
-    get_inbound_usage_query,
     get_node_clear_usage_query,
     get_node_list_query,
     get_node_simple_list_query,
@@ -150,16 +147,6 @@ async def get_usage(
 ):
     """Retrieve usage statistics for nodes within a specified date range."""
     return await node_operator.get_usage(db=db, query=query)
-
-
-@router.get("/inbounds/usage", response_model=InboundUsageStatsList)
-async def get_inbounds_usage_stats(
-    query: Annotated[InboundUsageQuery, Depends(get_inbound_usage_query)],
-    db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("nodes", "stats")),
-):
-    """Retrieve per-inbound usage statistics within a specified date range."""
-    return await node_operator.get_inbounds_usage(db=db, query=query)
 
 
 @router.get("/user_counts/{metric}", response_model=UserCountMetricStatsList)

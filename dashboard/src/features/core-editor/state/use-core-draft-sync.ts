@@ -1,6 +1,7 @@
 import { debounce } from 'es-toolkit'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
+import { forkDraftSig } from '@/fork/stores/draft-sig'
 import { useCoreEditorStore } from './core-editor-store'
 
 const APPLY_DEBOUNCE_MS = 420
@@ -51,7 +52,8 @@ export function useCoreDraftMonacoSync(debounceMs = 200) {
 
   useEffect(() => {
     const unsub = useCoreEditorStore.subscribe(s => {
-      const sig = s.kind === 'wg' ? JSON.stringify(s.wgDraft) : s.kind === 'singbox' ? JSON.stringify(s.sbDraft) : s.kind === 'xray' && s.xrayProfile ? JSON.stringify(s.xrayProfile) : ''
+      const forkSig = forkDraftSig(s)
+      const sig = s.kind === 'wg' ? JSON.stringify(s.wgDraft) : s.kind === 'xray' && s.xrayProfile ? JSON.stringify(s.xrayProfile) : (forkSig ?? '')
       if (sig !== prevDraftSig.current) {
         prevDraftSig.current = sig
         if (!s.monacoDirty) debouncedSync()

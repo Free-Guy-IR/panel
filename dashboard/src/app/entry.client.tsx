@@ -1,3 +1,4 @@
+import '@/fork'
 import App from '@/app/App'
 import { installChunkLoadRecovery } from '@/utils/chunk-recovery'
 import { StrictMode } from 'react'

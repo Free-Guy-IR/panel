@@ -8,6 +8,7 @@ import { RouteErrorPage } from '@/components/layout/error-page'
 import { TabbedRouteSuspenseFallback } from '@/components/layout/tabbed-route-suspense-fallback'
 import { lazyWithChunkRecovery } from '@/utils/chunk-recovery'
 import { isAuthenticationError } from '@/utils/error-utils'
+import { forkBulkRoutes, forkSettingsRoutes } from '@/fork/pages'
 // Replace direct imports with lazy imports for route-level components
 const CoresLayout = lazyWithChunkRecovery(() => import('@/pages/_dashboard.nodes.cores'))
 const CoresIndex = lazyWithChunkRecovery(() => import('@/pages/_dashboard.nodes.cores._index'))
@@ -24,8 +25,6 @@ const BulkDataPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bul
 const BulkExpirePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.expire'))
 const BulkGroupsPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.groups'))
 const BulkProxyPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.proxy'))
-const BulkMtprotoPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.mtproto'))
-const BulkL2tpPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.l2tp'))
 const Groups = lazyWithChunkRecovery(() => import('../pages/_dashboard.groups'))
 const Hosts = lazyWithChunkRecovery(() => import('../pages/_dashboard.hosts'))
 const Nodes = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes'))
@@ -36,9 +35,6 @@ const Settings = lazyWithChunkRecovery(() => import('../pages/_dashboard.setting
 const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.cleanup'))
 const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.general'))
 const HwidSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.hwid'))
-const ConnectionLimitSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.connection-limit'))
-const ConnectionLimitReview = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.connection-limit-review'))
-const ConnectionLimitViolations = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.connection-limit-violations'))
 const NotificationSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.notifications'))
 const SubscriptionSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.subscriptions'))
 const TelegramSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.telegram'))
@@ -300,30 +296,7 @@ export const router = createHashRouter([
               </Suspense>
             ),
           },
-          {
-            path: '/settings/connection-limit',
-            element: (
-              <Suspense fallback={<LoadingSpinner />}>
-                <ConnectionLimitSettings />
-              </Suspense>
-            ),
-          },
-          {
-            path: '/settings/connection-limit/review',
-            element: (
-              <Suspense fallback={<LoadingSpinner />}>
-                <ConnectionLimitReview />
-              </Suspense>
-            ),
-          },
-          {
-            path: '/settings/connection-limit/violations',
-            element: (
-              <Suspense fallback={<LoadingSpinner />}>
-                <ConnectionLimitViolations />
-              </Suspense>
-            ),
-          },
+          ...forkSettingsRoutes,
           {
             path: '/settings/telegram',
             element: (
@@ -415,22 +388,7 @@ export const router = createHashRouter([
               </Suspense>
             ),
           },
-          {
-            path: '/bulk/l2tp',
-            element: (
-              <Suspense fallback={<LoadingSpinner />}>
-                <BulkL2tpPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: '/bulk/mtproto',
-            element: (
-              <Suspense fallback={<LoadingSpinner />}>
-                <BulkMtprotoPage />
-              </Suspense>
-            ),
-          },
+          ...forkBulkRoutes,
         ],
       },
       {

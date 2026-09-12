@@ -10,12 +10,10 @@ from nats.js.kv import KeyValue
 
 from app import on_shutdown, on_startup
 from app.core.abstract_core import AbstractCore
-from app.core.l2tp import L2TPConfig
-from app.core.mtproto import MTProtoConfig
-from app.core.openvpn import OpenVPNConfig
-from app.core.singbox import SingBoxConfig
 from app.core.wireguard import WireGuardConfig
 from app.core.xray import XRayConfig
+from app.fork.bootstrap import load_fork
+from app.fork.registry import extra_core_types
 from app.db import GetDB
 from app.db.crud.core import get_core_configs
 from app.db.models import CoreConfig, CoreType
@@ -26,6 +24,8 @@ from app.nats.message import MessageTopic
 from app.nats.router import router
 from app.utils.logger import get_logger
 
+load_fork()
+
 
 class CoreManager:
     STATE_CACHE_KEY = "state"
@@ -33,10 +33,7 @@ class CoreManager:
     CORE_CLASSES: ClassVar[dict] = {
         CoreType.xray: XRayConfig,
         CoreType.wg: WireGuardConfig,
-        CoreType.singbox: SingBoxConfig,
-        CoreType.openvpn: OpenVPNConfig,
-        CoreType.mtproto: MTProtoConfig,
-        CoreType.l2tp: L2TPConfig,
+        **extra_core_types(),
     }
 
     def __init__(self):
@@ -135,7 +132,10 @@ class CoreManager:
 
     def _get_core_class(self, type: CoreType | None):
         normalized_type = self._normalize_type(type)
-        return self.CORE_CLASSES[normalized_type]
+        core_class = extra_core_types().get(normalized_type) or self.CORE_CLASSES.get(normalized_type)
+        if core_class is None:
+            raise KeyError(normalized_type)
+        return core_class
 
     def _core_from_json(self, data: dict) -> AbstractCore:
         type = data.get("type")

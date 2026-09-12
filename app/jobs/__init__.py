@@ -16,3 +16,7 @@ for file in modules:
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
+
+from app.fork.jobs import register_fork_jobs
+
+register_fork_jobs()

@@ -289,7 +289,7 @@ def _delete_role(access_token: str, role_id: int) -> None:
     client.delete(f"/api/admin-role/{role_id}", headers=auth_headers(access_token))
 
 
-def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_rejects_legacy(monkeypatch):
+def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_accepts_signed_legacy(monkeypatch):
     secret = "test-secret"
 
     async def fake_get_secret_key():
@@ -305,7 +305,11 @@ def test_subscription_token_generation_avoids_trailing_dash_or_underscore_and_re
     assert payload["user_id"] == 123
 
     legacy_token = _build_v2_subscription_token(456, secret)
-    assert asyncio.run(get_subscription_payload(legacy_token)) is None
+    legacy_payload = asyncio.run(get_subscription_payload(legacy_token))
+    assert legacy_payload["user_id"] == 456
+
+    corrupted_legacy = legacy_token[:-10] + ("0" * 10)
+    assert asyncio.run(get_subscription_payload(corrupted_legacy)) is None
 
 
 def test_user_create_active(access_token):
@@ -1091,7 +1095,7 @@ def test_get_users_count_metric_rejects_status_metric_node_scope(access_token):
     assert "Only online user counts" in response.json()["detail"]
 
 
-def test_subscription_url_new_token_accepted_legacy_rejected(access_token):
+def test_subscription_url_new_token_and_signed_legacy_accepted(access_token):
     core, groups = setup_groups(access_token, 1)
     hosts = create_hosts_for_inbounds(access_token)
     user = create_user(
@@ -1107,7 +1111,7 @@ def test_subscription_url_new_token_accepted_legacy_rejected(access_token):
         legacy_token = _build_legacy_subscription_token(user["username"])
         legacy_token_url = f"{current_token_url.rsplit('/', 1)[0]}/{legacy_token}"
         legacy_links = client.get(f"{legacy_token_url}/links")
-        assert legacy_links.status_code == status.HTTP_404_NOT_FOUND
+        assert legacy_links.status_code == status.HTTP_200_OK
     finally:
         delete_user(access_token, user["username"])
         for host in hosts:
@@ -1115,7 +1119,7 @@ def test_subscription_url_new_token_accepted_legacy_rejected(access_token):
         cleanup_groups(access_token, core, groups)
 
 
-def test_revoked_user_with_forged_legacy_token_rejected(access_token):
+def test_unsigned_legacy_token_rejected(access_token):
     core, groups = setup_groups(access_token, 1)
     user = create_user(
         access_token,
@@ -1129,7 +1133,7 @@ def test_revoked_user_with_forged_legacy_token_rejected(access_token):
         )
         assert revoke.status_code == status.HTTP_200_OK
 
-        forged_token = _build_legacy_subscription_token(user["username"])
+        forged_token = _build_legacy_subscription_token(user["username"])[:-10] + ("0" * 10)
         forged_url = f"{user['subscription_url'].rsplit('/', 1)[0]}/{forged_token}"
         forged_response = client.get(f"{forged_url}/links")
         assert forged_response.status_code == status.HTTP_404_NOT_FOUND

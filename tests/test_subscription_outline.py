@@ -1,7 +1,7 @@
 import json
 
 from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
-from app.subscription.outline import OutlineConfiguration
+from app.subscription import OutlineConfiguration
 
 
 def _inbound(remark: str, port: int) -> SubscriptionInboundData:

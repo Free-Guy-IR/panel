@@ -1,6 +1,6 @@
 import { StringTagPicker } from '@/components/common/string-tag-picker'
 import type { SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
-import { SbField, SbListSection, SbNumberField, SbRawJsonField, SbSelectField, SbTextField, useSbDraft, type WireRow } from '@/features/core-editor/components/singbox/sb-section-kit'
+import { SbField, SbListSection, SbNumberField, SbRawJsonField, SbSelectField, SbTextField, useSbDraft, type WireRow } from '@/fork/singbox/sb-section-kit'
 import { createDefaultSingBoxOutbound, SINGBOX_OUTBOUND_TYPES, type SingBoxOutboundType } from '@pasarguard/singbox-config-kit'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useCallback, useMemo } from 'react'
