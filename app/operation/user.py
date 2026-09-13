@@ -12,17 +12,12 @@ from sqlalchemy.exc import IntegrityError
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.admin import get_admin
-from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
-from app.fork.operation.base_extras import restrict_users_query_by_groups
-from app.db.crud.bulk import get_users_for_l2tp_activation, get_users_for_mtproto_activation
-from app.db.crud.wireguard import tags_from_groups
-from app.utils.l2tp import generate_l2tp_password, get_l2tp_cores, l2tp_core_tags, prepare_l2tp_password
-from app.utils.mtproto import prepare_mtproto_secret
-from app.utils.openvpn import prepare_openvpn_password
 from app.db.crud.bulk import (
     count_bulk_datalimit_targets,
     count_bulk_expire_targets,
     count_bulk_proxy_targets,
+    get_users_for_l2tp_activation,  # noqa: F401
+    get_users_for_mtproto_activation,  # noqa: F401
     reset_all_users_data_usage,
     update_users_datalimit,
     update_users_expire,
@@ -60,7 +55,10 @@ from app.db.crud.user import (
     revoke_user_sub,
     set_owner,
 )
+from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
+from app.fork.operation.base_extras import restrict_users_query_by_groups
+from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
@@ -74,7 +72,7 @@ from app.models.stats import (
 from app.models.user import (
     BulkOperationDryRunResponse,
     BulkUser,
-    BulkUserFilter,
+    BulkUserFilter,  # noqa: F401
     BulkUsersActionResponse,
     BulkUsersApplyTemplate,
     BulkUsersCreateResponse,
@@ -108,7 +106,7 @@ from app.node.sync import remove_user as sync_remove_user, sync_user, sync_users
 from app.operation import BaseOperation, OperatorType
 from app.operation.permissions import (
     PermissionDenied,
-    apply_group_access,
+    apply_group_access,  # noqa: F401
     apply_template_access,
     enforce_permission,
     get_allowed_group_ids,
@@ -120,10 +118,14 @@ from app.settings import hwid_settings, subscription_settings
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
+from app.utils.l2tp import generate_l2tp_password, get_l2tp_cores, l2tp_core_tags, prepare_l2tp_password  # noqa: F401
 from app.utils.logger import get_logger
+from app.utils.mtproto import prepare_mtproto_secret  # noqa: F401
+from app.utils.openvpn import prepare_openvpn_password  # noqa: F401
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
 from config import subscription_env_settings, usage_settings
+
 
 def _has_permission(admin: AdminDetails, resource: str, action: str) -> bool:
     """Return True if admin has the given resource+action permission (no scope check)."""

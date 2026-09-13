@@ -2,7 +2,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import CoreConfig, Node, node_additional_cores_association
-from app.fork.crud.core import get_node_ids_by_core
+from app.fork.crud.core import get_node_ids_by_core  # noqa: F401
 from app.models.core import (
     CoreCreate,
     CoreListQuery,

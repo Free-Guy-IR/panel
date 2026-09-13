@@ -18,6 +18,7 @@ from app.db.models import (
     NodeUserUsage,
     node_additional_cores_association,
 )
+from app.fork.crud.node import get_inbounds_usage, resolve_additional_cores  # noqa: F401
 from app.models.node import (
     NodeCreate,
     NodeListQuery,
@@ -27,7 +28,6 @@ from app.models.node import (
     NodeSimpleSortOption,
     UsageTable,
 )
-from app.fork.crud.node import get_inbounds_usage, resolve_additional_cores
 from app.models.stats import (
     NodeStats,
     NodeStatsList,

@@ -12,11 +12,11 @@ from app import on_shutdown, on_startup
 from app.core.abstract_core import AbstractCore
 from app.core.wireguard import WireGuardConfig
 from app.core.xray import XRayConfig
-from app.fork.bootstrap import load_fork
-from app.fork.registry import extra_core_types
 from app.db import GetDB
 from app.db.crud.core import get_core_configs
 from app.db.models import CoreConfig, CoreType
+from app.fork.bootstrap import load_fork
+from app.fork.registry import extra_core_types
 from app.models.core import CoreListQuery
 from app.nats import is_multi_worker, is_nats_enabled
 from app.nats.client import setup_nats_kv

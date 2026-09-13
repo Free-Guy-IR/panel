@@ -2,13 +2,13 @@ name: Code Format Checker
 on:
     push:
         branches:
-            - "*"
+            - "**"
         paths:
             - "**/*.py"
 
     pull_request:
         branches:
-            - "*"
+            - "**"
         paths:
             - "**/*.py"
 

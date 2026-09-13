@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
+from app.fork.routers import connection_limit as routes
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.connection_limit import UserConnectionLimitPayload
 from app.models.settings import ConnectionLimit
-from app.fork.routers import connection_limit as routes
 
 
 def _admin(*, owner=False, admin_id=7) -> AdminDetails:

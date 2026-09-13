@@ -22,6 +22,7 @@ from app.db.crud.wireguard import (
     reconcile_wireguard_subnets,
     wg_core_subnets,
 )
+from app.fork.operation.core_extras import apply_l2tp_core_config
 from app.models.admin import AdminDetails
 from app.models.core import (
     BulkCoreSelection,
@@ -38,7 +39,6 @@ from app.models.core import (
 from app.models.reality_scan import RealityScanRequest, RealityScanResult
 from app.node.sync import sync_users
 from app.operation import BaseOperation
-from app.fork.operation.core_extras import apply_l2tp_core_config
 from app.utils.logger import get_logger
 from app.utils.reality_scan import RealityScanError, scan_reality_target
 

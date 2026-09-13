@@ -7,6 +7,7 @@ from sqlalchemy import delete
 from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.models import NotificationReminder
+from app.fork.jobs import webhook_request
 from app.models.settings import Webhook
 from app.notification.queue_manager import (
     WebhookNotification,
@@ -15,7 +16,6 @@ from app.notification.queue_manager import (
     shutdown_webhook_queue,
 )
 from app.settings import webhook_settings
-from app.fork.jobs import webhook_request
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings
 
