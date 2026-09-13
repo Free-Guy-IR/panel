@@ -51,6 +51,27 @@ def upgrade() -> None:
                 batch_op.create_foreign_key(
                     f"fk_{table}_node_id_nodes", "nodes", ["node_id"], ["id"], ondelete="SET NULL"
                 )
+    elif dialect_name == "mysql":
+        op.execute(sa.text("SET SESSION foreign_key_checks = 0"))
+        for table in TABLES:
+            fk = get_fk_name(table, ["node_id"])
+            if fk:
+                op.execute(sa.text(f"ALTER TABLE {table} DROP FOREIGN KEY {fk}"))
+            if table == "node_usage_reset_logs":
+                op.alter_column(
+                    table,
+                    "node_id",
+                    existing_type=app.db.compiles_types.SqliteCompatibleBigInteger(),
+                    nullable=True,
+                )
+            op.execute(
+                sa.text(
+                    f"ALTER TABLE {table} ADD CONSTRAINT fk_{table}_node_id_nodes "
+                    f"FOREIGN KEY (node_id) REFERENCES nodes (id) ON DELETE SET NULL, "
+                    f"ALGORITHM=INPLACE, LOCK=NONE"
+                )
+            )
+        op.execute(sa.text("SET SESSION foreign_key_checks = 1"))
     else:
         for table in TABLES:
             fk = get_fk_name(table, ["node_id"])
@@ -86,6 +107,25 @@ def downgrade() -> None:
                 batch_op.create_foreign_key(
                     f"fk_{table}_node_id_nodes", "nodes", ["node_id"], ["id"], ondelete="CASCADE"
                 )
+    elif dialect_name == "mysql":
+        op.execute(sa.text("SET SESSION foreign_key_checks = 0"))
+        for table in TABLES:
+            op.execute(sa.text(f"ALTER TABLE {table} DROP FOREIGN KEY fk_{table}_node_id_nodes"))
+            if table == "node_usage_reset_logs":
+                op.alter_column(
+                    table,
+                    "node_id",
+                    existing_type=app.db.compiles_types.SqliteCompatibleBigInteger(),
+                    nullable=False,
+                )
+            op.execute(
+                sa.text(
+                    f"ALTER TABLE {table} ADD CONSTRAINT fk_{table}_node_id_nodes "
+                    f"FOREIGN KEY (node_id) REFERENCES nodes (id) ON DELETE CASCADE, "
+                    f"ALGORITHM=INPLACE, LOCK=NONE"
+                )
+            )
+        op.execute(sa.text("SET SESSION foreign_key_checks = 1"))
     else:
         for table in TABLES:
             op.drop_constraint(f"fk_{table}_node_id_nodes", table, type_="foreignkey")
