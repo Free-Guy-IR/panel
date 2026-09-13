@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable
+from typing import ClassVar
 
 from fastapi import HTTPException
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
@@ -87,6 +88,10 @@ CONNECT_CONCURRENCY = 10
 logger = get_logger("node-operation")
 
 class NodeOperation(NodeExtraCoresMixin, BaseOperation):
+    # Local Start RPCs in progress on this process. Health checks must not fire a
+    # second Start just because pg-node still returns "core is not started yet".
+    _in_flight_connects: ClassVar[set[int]] = set()
+
     def __init__(self, operator_type: OperatorType):
         super().__init__(operator_type)
         if runtime_settings.role.runs_node:
@@ -134,7 +139,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         db: AsyncSession,
         query: NodeListQuery,
     ) -> NodesResponse:
-        db_nodes, count = await get_nodes(db=db, query=query)
+        db_nodes, count = await get_nodes(
+            db=db,
+            query=query,
+            load_usage_logs=False,
+            load_lifetime_usage=True,
+        )
         node_responses = [NodeResponse.model_validate(node) for node in db_nodes]
         return NodesResponse(nodes=node_responses, total=count)
 
@@ -199,7 +209,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         if not send_notification:
             return
 
-        if status == NodeStatus.connected:
+        if status == NodeStatus.connected and old_status != NodeStatus.connected:
             node_notif = NodeNotification(
                 id=db_node.id,
                 name=db_node.name,
@@ -260,13 +270,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 return None
 
             info = await pg_node.info()
-            if info is None or not info.node_version or not info.core_version:
+            if info is None or not info.started or not info.node_version or not info.core_version:
                 return None
 
             await pg_node.connect(info.node_version, info.core_version)
             if state is not None:
                 await pg_node.update_observed_lifecycle(LifecycleStatus.HEALTHY, expected_epoch=state.epoch)
-            logger.info(
+            logger.debug(
                 f'Attached to already-running "{node_name}" node v{info.node_version}, core v{info.core_version}'
             )
             return info
@@ -280,10 +290,18 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     ):
         if not force_start:
             state = await pg_node.get_lifecycle_state()
-            if state is not None and state.observed is LifecycleStatus.HEALTHY:
+            if state is not None and (
+                state.observed in (LifecycleStatus.HEALTHY, LifecycleStatus.STARTING)
+                or state.desired is LifecycleStatus.HEALTHY
+            ):
                 attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
                 if attached is not None:
                     return attached
+                if state.observed is LifecycleStatus.STARTING:
+                    # Another worker is already starting this node right now - don't race
+                    # it for the lease (that's a guaranteed 409 plus wasted KV round-trips).
+                    # Skip; the next retry cycle will check again once it's done.
+                    return
 
         start_kwargs = {
             "config": core.to_str(),
@@ -294,6 +312,14 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         if core.type == CoreType.xray:
             start_kwargs["exclude_inbounds"] = core.exclude_inbound_tags
 
+        if force_start:
+            try:
+                await pg_node.stop()
+            except Exception as exc:
+                logger.debug(f'Stop before force start of "{db_node.name}" skipped: {exc}')
+
+        log = logger.info if force_start else logger.debug
+        log(f'Starting "{db_node.name}" node')
         return await pg_node.start(**start_kwargs)
 
     @staticmethod
@@ -356,6 +382,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     "node_version": known_version,
                     "old_status": old_status,
                 }
+        NodeOperation._in_flight_connects.add(db_node.id)
 
         try:
             info = await NodeOperation._start_or_attach_node(
@@ -364,7 +391,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             if info is None:
                 return None
 
-            logger.info(f'Connected to "{db_node.name}" node v{info.node_version}, core run on v{info.core_version}')
+            log = logger.info if force_start or old_status != NodeStatus.connected else logger.debug
+            log(f'Connected to "{db_node.name}" node v{info.node_version}, core run on v{info.core_version}')
 
             failed_extras = "; ".join(
                 p
@@ -412,6 +440,33 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                         "old_status": old_status,
                     }
 
+                # A 409 only ever happens while another worker holds a live, unexpired
+                # lifecycle lease (a dead worker's lease always expires via TTL/heartbeat),
+                # so this is always legitimate concurrent work elsewhere - starting,
+                # stopping, or updating the node's core/geofiles - not a fault with the
+                # node itself. The attach above simply couldn't catch up mid-operation.
+                # Skip silently instead of flagging the node as errored on every other
+                # worker; the next retry cycle will reassess once that operation completes.
+                logger.debug(f'"{db_node.name}" node lifecycle lease is held by another worker, will retry')
+                return None
+
+            if e.code == -1:
+                # A timed-out Start has an ambiguous outcome: cancelling the panel-side
+                # request does not guarantee that the remote node stopped starting. Probe
+                # it before reporting an error so a late success is attached instead of
+                # being torn down by the next health-check reconnect.
+                attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
+                if attached is not None:
+                    logger.debug(f'Attached to "{db_node.name}" after its Start request timed out')
+                    return {
+                        "node_id": db_node.id,
+                        "status": NodeStatus.connected,
+                        "message": "",
+                        "xray_version": attached.core_version,
+                        "node_version": attached.node_version,
+                        "old_status": old_status,
+                    }
+
             detail = e.detail[:1020] + "..." if len(e.detail) > 1024 else e.detail
             if core.type == CoreType.l2tp and "invalid backend type" in detail.lower():
                 detail = _l2tp_unsupported_message(await _known_node_version(pg_node))
@@ -426,6 +481,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 "node_version": "",
                 "old_status": old_status,
             }
+        finally:
+            NodeOperation._in_flight_connects.discard(db_node.id)
 
     async def _connect_single_node_background(self, node_id: int, *, force_start: bool = False) -> None:
         try:
@@ -801,7 +858,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
         # Send notifications using pre-built objects
         for notif in notifications_to_send:
-            if notif["status"] == NodeStatus.connected:
+            if notif["status"] == NodeStatus.connected and notif["old_status"] != NodeStatus.connected:
                 asyncio.create_task(notification.connect_node(notif["node"]))
                 if notif["node"].message:
                     asyncio.create_task(notification.error_node(notif["node"]))
@@ -833,6 +890,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         extra_cores = self._extra_cores_for(db_node, cores_by_id, users_by_core)
 
         # Update node manager
+        old_status = db_node.status
         try:
             await node_manager.update_node(db_node)
         except NodeAPIError as e:
@@ -844,13 +902,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 message=e.detail,
             )
 
-            # Send error notification
-            node_notif = NodeNotification(
-                id=db_node.id,
-                name=db_node.name,
-                message=e.detail,
-            )
-            asyncio.create_task(notification.error_node(node_notif))
+            if old_status != NodeStatus.error:
+                node_notif = NodeNotification(
+                    id=db_node.id,
+                    name=db_node.name,
+                    message=e.detail,
+                )
+                asyncio.create_task(notification.error_node(node_notif))
             return
 
         # Connect the node
@@ -870,7 +928,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         )
 
         # Send appropriate notification
-        if result["status"] == NodeStatus.connected:
+        if result["status"] == NodeStatus.connected and result["old_status"] != NodeStatus.connected:
             node_notif = NodeNotification(
                 id=db_node.id,
                 name=db_node.name,
@@ -897,8 +955,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await self._connect_single_node_local(db, node_id, force_start=force_start)
         await publish_node_sync("connect", node_id)
 
-    async def _connect_single_node_remote(self, db: AsyncSession, node_id: int) -> None:
-        await node_nats_client.publish("connect_node", {"node_id": node_id})
+    async def _connect_single_node_remote(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
+        await node_nats_client.publish("connect_node", {"node_id": node_id, "force_start": force_start})
 
     async def _disconnect_single_node_local(self, node_id: int) -> None:
         await node_manager.remove_node(node_id)
@@ -1297,7 +1355,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     ) -> BulkNodesActionResponse:
         db_nodes = await self._get_validated_nodes(db, bulk_nodes.ids)
 
-        await self.connect_nodes_bulk(db, db_nodes)
+        await self.connect_nodes_bulk(db, db_nodes, force_start=True)
 
         for db_node in db_nodes:
             logger.info(f'Node "{db_node.name}" restarted by admin "{admin.username}"')
