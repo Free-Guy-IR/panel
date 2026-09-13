@@ -1,9 +1,5 @@
 {
   "hostsDialog": {
-    "echConfigList": "ECH 配置列表",
-    "echQueryStrategy": "ECH 查询策略",
-    "echConfigList.info": "Encrypted Client Hello (ECH) 配置列表。这是一个 base64 编码的字符串。",
-    "echConfigListPlaceholder": "输入 ECH 配置列表",
     "allowInsecure": "允许不安全连接",
     "muxEnable": "启用 Mux",
     "openvpn": {

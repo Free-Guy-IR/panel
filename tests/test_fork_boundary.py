@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_LOCALE_RELATIVE_DIR = "dashboard/public/statics/locales"
 FORK_LOCALE_DIR = REPO_ROOT / "dashboard" / "src" / "fork" / "locales"
 LOCALE_CODES = ("en", "fa", "ru", "zh")
-UPSTREAM_REF = "v5.3.0"
+UPSTREAM_REF = "v5.4.1"
 
 FORK_MODULE_PREFIX = "app.fork."
 FORK_ROUTER_MODULE_PREFIX = "app.fork.routers."

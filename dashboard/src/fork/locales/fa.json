@@ -1,10 +1,6 @@
 {
   "hostsDialog": {
     "sni.info": "SNI (Server Name Indication) برای مشخص کردن نام میزبانی که کلاینت قصد اتصال به آن را دارد استفاده می‌شود. این هنگامی که چند دامنه به یک آدرس IP اشاره می‌کنند بسیار کاربردی است.",
-    "echConfigList": "لیست پیکربندی ECH",
-    "echQueryStrategy": "راهبرد پرس‌وجوی ECH",
-    "echConfigList.info": "لیست پیکربندی Encrypted Client Hello (ECH). این یک رشته کدگذاری شده با base64 است.",
-    "echConfigListPlaceholder": "لیست پیکربندی ECH را وارد کنید",
     "openvpn": {
       "sectionNetworkOverrides": "تنظیمات شبکه",
       "dns": "سرورهای DNS",
