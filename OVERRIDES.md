@@ -4,10 +4,10 @@ Every file in this fork that **removes or changes upstream lines** (category `ov
 must be listed here with a one-line justification. The CI workflow
 upstream-inventory.yml fails the PR if an override appears in a file not listed below.
 
-Generated from `scripts/upstream_inventory.py --base v5.3.0 --head HEAD`, where the
-baseline is the upstream tag pinned in the .upstream-baseline file (v5.3.0 @ `aebf7256`).
-Current measurement: 351 diverged files — 199 fork-only, 37 pure-addition, 100 override,
-15 mechanical — 1028 override lines, and 3179 fork lines still living inside
+Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
+baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`).
+Current measurement: 358 diverged files — 205 fork-only, 37 pure-addition, 101 override,
+15 mechanical — 1227 override lines, and 3311 fork lines still living inside
 upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
@@ -125,6 +125,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `tests/api/test_user.py` — crud import updates and flow assertion
 - `tests/api/test_host.py` — settings assertion update
 - `tests/api/test_node.py` — serialize lambda signature update
+- `tests/test_review_users_unit.py` — import block re-sorted for the fork's combine-as-imports ruff config
 
 ## Build & packaging
 

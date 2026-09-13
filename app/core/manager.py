@@ -20,6 +20,7 @@ from app.fork.registry import extra_core_types
 from app.models.core import CoreListQuery
 from app.nats import is_multi_worker, is_nats_enabled
 from app.nats.client import setup_nats_kv
+from app.nats.kv_cas import is_kv_miss
 from app.nats.message import MessageTopic
 from app.nats.router import router
 from app.utils.logger import get_logger
@@ -66,9 +67,8 @@ class CoreManager:
         if not self._kv:
             return
         state = await self._snapshot_state()
-        # State is already serialized by _snapshot_state; just encode
-        state_bytes = json.dumps(state).encode("utf-8")
         try:
+            state_bytes = json.dumps(state).encode("utf-8")
             await self._kv.put(self.STATE_CACHE_KEY, state_bytes)
         except Exception as exc:
             self._logger.warning(f"Failed to persist core state to NATS KV: {exc}")
@@ -107,6 +107,9 @@ class CoreManager:
             await self.get_inbounds_by_tag.cache.clear()
             return True
         except Exception as exc:
+            if is_kv_miss(exc):
+                self._logger.debug("Core manager state cache is empty")
+                return False
             self._logger.error(f"Error loading core state from cache: {exc}")
             return False
 
