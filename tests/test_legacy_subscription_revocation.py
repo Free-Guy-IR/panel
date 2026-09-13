@@ -42,7 +42,7 @@ class _StubUser:
 
 
 def _serve_user(monkeypatch, user):
-    async def _get_user(db, username, load_admin_role=False):
+    async def _get_user(db, username, **load_kwargs):
         return user if user and user.username == username else None
 
     monkeypatch.setattr(operation_module, "get_user", _get_user, raising=False)
