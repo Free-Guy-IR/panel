@@ -1,6 +1,6 @@
 from datetime import UTC, datetime as dt
 
-from sqlalchemy import and_, case, cast, delete, func, or_, select, text, update
+from sqlalchemy import and_, case, cast, delete, func, literal, or_, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -104,11 +104,15 @@ async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = No
     if admin:
         filters.append(User.admin_id == admin.id)
 
+    status_type = User.__table__.c.status.type
     status_case = case(
-        (User.is_expired, UserStatus.expired),
-        (User.is_limited, UserStatus.limited),
-        (and_(User.expire.is_(None), User.on_hold_expire_duration.isnot(None)), UserStatus.on_hold),
-        else_=UserStatus.active,
+        (User.is_expired, literal(UserStatus.expired, status_type)),
+        (User.is_limited, literal(UserStatus.limited, status_type)),
+        (
+            and_(User.expire.is_(None), User.on_hold_expire_duration.isnot(None)),
+            literal(UserStatus.on_hold, status_type),
+        ),
+        else_=literal(UserStatus.active, status_type),
     )
 
     await db.execute(
