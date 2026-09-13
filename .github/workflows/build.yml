@@ -59,7 +59,21 @@ jobs:
               run: |
                   bunx changelogen@latest --from "${{ steps.tags.outputs.previous }}" --to "${{ steps.tags.outputs.current }}" \
                     | grep -v "Generating changelog for " \
-                    | sed -e '/^\[log\]/d' -e '/./,$!d' > CHANGELOG.md
+                    | sed -e '/^\[log\]/d' -e '/./,$!d' > CHANGELOG.raw
+                  awk '
+                    /^#+.*Contributors/ { skip=1; next }
+                    skip && /^#/        { skip=0 }
+                    skip                { next }
+                                        { print }
+                  ' CHANGELOG.raw \
+                    | sed -E 's/<[^>]*@[^>]*>//g' \
+                    | sed -E '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/d' \
+                    | cat -s > CHANGELOG.md
+                  rm -f CHANGELOG.raw
+                  if grep -qE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' CHANGELOG.md; then
+                    echo "an address survived the scrub; refusing to publish these notes"
+                    exit 1
+                  fi
 
             - name: Update release notes
               env:
