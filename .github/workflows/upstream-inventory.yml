@@ -27,7 +27,11 @@ jobs:
         run: |
           git remote add upstream https://github.com/PasarGuard/panel.git 2>/dev/null || \
             git remote set-url upstream https://github.com/PasarGuard/panel.git
-          git fetch upstream main --tags
+          git for-each-ref --format='%(objectname) %(refname)' refs/tags > "$RUNNER_TEMP/fork-tags-before"
+          git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
+          git fetch --no-tags upstream "+refs/tags/*:refs/upstream-tags/*"
+          git for-each-ref --format='%(objectname) %(refname)' refs/tags > "$RUNNER_TEMP/fork-tags-after"
+          diff "$RUNNER_TEMP/fork-tags-before" "$RUNNER_TEMP/fork-tags-after"
           echo "BASELINE=$(cat .upstream-baseline)" >> "$GITHUB_ENV"
 
       - name: Inventory report
@@ -41,7 +45,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           python scripts/upstream_inventory.py \
-            --base "$BASELINE" --head HEAD \
+            --base "refs/upstream-tags/$BASELINE" --head HEAD \
             --fail-on-override-outside-ledger OVERRIDES.md
 
       - name: Upload report
