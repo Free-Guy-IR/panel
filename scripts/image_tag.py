@@ -4,7 +4,7 @@ import re
 import sys
 
 MAX_LEN = 128
-DIGEST_LEN = 8
+DIGEST_LEN = 16
 INVALID = re.compile(r"[^a-zA-Z0-9_.-]")
 LEADING_OK = re.compile(r"[a-zA-Z0-9_]")
 
