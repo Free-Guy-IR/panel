@@ -61,16 +61,17 @@ jobs:
                     | grep -v "Generating changelog for " \
                     | sed -e '/^\[log\]/d' -e '/./,$!d' > CHANGELOG.raw
                   awk '
-                    /^#+.*Contributors/ { skip=1; next }
-                    skip && /^#/        { skip=0 }
-                    skip                { next }
-                                        { print }
+                    /^#+[[:space:]]*.*Contributors/ { skip=1; next }
+                    skip && /^#/                    { skip=0 }
+                    skip                            { next }
+                                                    { print }
                   ' CHANGELOG.raw \
-                    | sed -E 's/<[^>]*@[^>]*>//g' \
-                    | sed -E '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/d' \
+                    | sed -E 's/<[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}>/<redacted>/g' \
+                    | sed -E 's/\(?(mailto:)?[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}\)?/[redacted]/g' \
+                    | sed -E 's/[[:space:]]+$//' \
                     | cat -s > CHANGELOG.md
                   rm -f CHANGELOG.raw
-                  if grep -qE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' CHANGELOG.md; then
+                  if grep -qE '[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}' CHANGELOG.md; then
                     echo "an address survived the scrub; refusing to publish these notes"
                     exit 1
                   fi
