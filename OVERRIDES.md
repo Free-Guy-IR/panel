@@ -4,10 +4,11 @@ Every file in this fork that **removes or changes upstream lines** (category `ov
 must be listed here with a one-line justification. The CI workflow
 upstream-inventory.yml fails the PR if an override appears in a file not listed below.
 
-Generated from `scripts/upstream_inventory.py --base upstream/main --head HEAD`
-(upstream/main @ `aebf7256`). Measured after the fork-boundary extraction:
-346 diverged files — 197 fork-only, 37 pure-addition, 100 override, 12 mechanical —
-1028 override lines, and 3144 fork lines still living inside upstream-tracked files.
+Generated from `scripts/upstream_inventory.py --base v5.3.0 --head HEAD`, where the
+baseline is the upstream tag pinned in the .upstream-baseline file (v5.3.0 @ `aebf7256`).
+Current measurement: 351 diverged files — 199 fork-only, 37 pure-addition, 100 override,
+15 mechanical — 1028 override lines, and 3179 fork lines still living inside
+upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
 restored the four `dashboard/public/statics/locales/*.json` files to upstream byte-for-byte,
@@ -99,8 +100,6 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `dashboard/src/pages/_dashboard.statistics.tsx` — statistics page layout rework
 - `dashboard/src/features/statistics/components/system-statistics-section.tsx` — Mbps/MB formatting change
 - `dashboard/src/features/bulk/components/bulk-flow.tsx` — bulk flow operations UI
-- `dashboard/src/pages/_dashboard.bulk.tsx` — bulk page icon set
-- `dashboard/src/pages/_dashboard.settings.tsx` — settings page icon set
 - `dashboard/src/features/users/components/action-buttons.tsx` — protocol icons and download types
 - `dashboard/src/features/users/dialogs/user-hwids-modal.tsx` — hwid query invalidation
 - `dashboard/src/utils/subscription-config.ts` — subscription content format types
@@ -139,7 +138,7 @@ These three files are the only upstream-shaped files the boundary extraction tur
 `pure-addition` into `override`. Each one is a hook point, not a behaviour change.
 
 - `app/routers/__init__.py` — replaces the eager five-line `api_router` assembly with a locked lazy builder that registers the fork routers before the upstream ones and refuses to publish a partially built router (5 upstream lines)
-- `app/subscription/__init__.py` — resolves `OutlineConfiguration` from the fork subscription package so the fork subclass is the active format; `app/subscription/outline.py` itself is back to upstream byte-for-byte (1 upstream line)
+- `app/subscription/__init__.py` — resolves `OutlineConfiguration` from the fork subscription package so the fork subclass is the active format; the Outline subscription module itself is back to upstream byte-for-byte (1 upstream line)
 - `dashboard/src/features/core-editor/kit/core-editor-change-state.ts` — delegates the fork core kinds to `@/fork/stores/change-state` (2 upstream lines)
 
 ## Undocumented overrides inherited from before the extraction (pending audit)
