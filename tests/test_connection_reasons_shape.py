@@ -11,6 +11,7 @@ whole request down with it.
 import pytest
 from pydantic import ValidationError
 
+from app.db.models import UserConnectionState
 from app.models.connection_limit import ConnectionStateResponse, ConnectionStatesResponse
 
 LEGACY = ["4 device(s) estimated", "4 unrelated networks"]
@@ -65,3 +66,35 @@ def test_a_reason_is_still_required_to_be_one_of_the_two():
     """Reading both shapes is not the same as reading anything at all."""
     with pytest.raises(ValidationError):
         ConnectionStateResponse.model_validate(_state([{"code": "devices"}, 42]))
+
+
+def test_a_row_holding_no_reasons_or_details_still_reads():
+    state = _state(None)
+    state["details"] = None
+
+    read = ConnectionStateResponse.model_validate(state)
+
+    assert read.reasons == []
+    assert read.details == {}
+
+
+def test_a_row_off_the_orm_with_neither_column_written_still_reads():
+    read = ConnectionStateResponse.model_validate(UserConnectionState(user_id=1))
+
+    assert read.reasons == []
+    assert read.details == {}
+
+
+def test_a_page_holding_such_a_row_is_returned():
+    page = ConnectionStatesResponse.model_validate(
+        {
+            "states": [_state(None) | {"details": None}, _state(STRUCTURED)],
+            "total": 2,
+            "device_limit": 2,
+            "enabled": True,
+            "monitor_only": True,
+        }
+    )
+
+    assert [s.reasons for s in page.states] == [[], STRUCTURED]
+    assert page.states[0].details == {}

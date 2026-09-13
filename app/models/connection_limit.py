@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ConnectionStateResponse(BaseModel):
@@ -29,6 +29,16 @@ class ConnectionStateResponse(BaseModel):
     details: dict = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("reasons", mode="before")
+    @classmethod
+    def normalize_reasons(cls, value):
+        return value or []
+
+    @field_validator("details", mode="before")
+    @classmethod
+    def normalize_details(cls, value):
+        return value or {}
 
 
 class ConnectionStatesResponse(BaseModel):
