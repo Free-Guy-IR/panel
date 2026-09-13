@@ -468,4 +468,4 @@ async def update_users_proxy_settings(
 
     return ordered_refreshed_users, count_effctive_users
 
-from app.fork.crud.bulk import get_users_for_l2tp_activation, get_users_for_mtproto_activation
+from app.fork.crud.bulk import get_users_for_l2tp_activation, get_users_for_mtproto_activation  # noqa: F401
