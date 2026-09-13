@@ -70,8 +70,8 @@ _BACKEND_TYPE_BY_CORE = {CoreType.xray: service.BackendType.XRAY, **_MULTI_INSTA
 class NodeExtraCoresMixin:
     @staticmethod
     def _node_core_ids(db_node: Node) -> list[int]:
-        core_ids = [db_node.core_config_id or 1]
-        for core_id in db_node.additional_core_config_ids or []:
+        core_ids = [getattr(db_node, "core_config_id", None) or 1]
+        for core_id in getattr(db_node, "additional_core_config_ids", None) or []:
             if core_id not in core_ids:
                 core_ids.append(core_id)
         return core_ids
@@ -127,7 +127,7 @@ class NodeExtraCoresMixin:
 
     @classmethod
     def _extra_cores_for(cls, db_node: Node, cores_by_id: dict, users_by_core: dict) -> list[tuple]:
-        primary_id = db_node.core_config_id or 1
+        primary_id = getattr(db_node, "core_config_id", None) or 1
         return [
             (core_id, cores_by_id.get(core_id), users_by_core.get(core_id, []))
             for core_id in cls._node_core_ids(db_node)
@@ -156,7 +156,7 @@ class NodeExtraCoresMixin:
 
     @classmethod
     async def _reconcile_extra_cores(cls, db: AsyncSession, pg_node: PasarGuardNode, db_node: Node) -> str:
-        primary_id = db_node.core_config_id or 1
+        primary_id = getattr(db_node, "core_config_id", None) or 1
         extra_ids = [core_id for core_id in cls._node_core_ids(db_node) if core_id != primary_id]
 
         cores_by_id, users_by_core = await cls._get_core_users_map(db, set(extra_ids) | {primary_id})

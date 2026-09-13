@@ -2,10 +2,6 @@
   "hostsDialog": {
     "sniPlaceholder": "SNI (например, example.com)",
     "sni.info": "SNI (Server Name Indication) используется, чтобы указать, к какому имени хоста пытается подключиться клиент. Это особенно полезно, если на один IP-адрес указывает несколько доменов.",
-    "echConfigList": "Список конфигураций ECH",
-    "echQueryStrategy": "Стратегия ECH-запроса",
-    "echConfigList.info": "Список конфигураций Encrypted Client Hello (ECH). Это строка, закодированная в base64.",
-    "echConfigListPlaceholder": "Введите список конфигураций ECH",
     "advancedOptions": "Дополнительные параметры",
     "hos.info": "По умолчанию используется request host, заданный в конфигурации XRAY, если он указан. При необходимости здесь можно задать свой request host.",
     "host.info": "По умолчанию используется request host, заданный в конфигурации XRAY, если он указан. При необходимости здесь можно задать свой request host.",

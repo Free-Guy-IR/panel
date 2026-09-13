@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator, Callable
 from typing import ClassVar
 
 from fastapi import HTTPException
-from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
+from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
 from PasarGuardNodeBridge.storage import LifecycleStatus
 from sqlalchemy.exc import IntegrityError
@@ -355,6 +355,23 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             return None
 
         old_status = db_node.status
+        if not force_start:
+            try:
+                if await pg_node.get_health() == Health.HEALTHY:
+                    if old_status == NodeStatus.connected:
+                        return None
+                    node_version, core_version = await pg_node.get_versions()
+                    return {
+                        "node_id": db_node.id,
+                        "status": NodeStatus.connected,
+                        "message": "",
+                        "xray_version": core_version,
+                        "node_version": node_version,
+                        "old_status": old_status,
+                    }
+            except Exception:
+                pass
+
         logger.info(f'Connecting to "{db_node.name}" node')
         if core.type == CoreType.wg:
             type = service.BackendType.WIREGUARD

@@ -1,12 +1,5 @@
 {
-  "templates": {
-    "groupsExistingWarning": "You dont create any <a>Groups</a> yet."
-  },
   "hostsDialog": {
-    "echConfigList": "ECH Config List",
-    "echQueryStrategy": "ECH Query Strategy",
-    "echConfigList.info": "Encrypted Client Hello (ECH) configuration list. This is a base64 encoded string.",
-    "echConfigListPlaceholder": "Enter ECH Config List",
     "openvpn": {
       "sectionNetworkOverrides": "Network Settings",
       "dns": "DNS Servers",

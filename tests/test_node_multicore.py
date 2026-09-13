@@ -159,7 +159,7 @@ async def test_a_healthy_node_is_force_started_instead_of_attached():
             return SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
 
         async def info(self):
-            return SimpleNamespace(node_version="0.8.1", core_version="25.1.1")
+            return SimpleNamespace(started=True, node_version="0.8.1", core_version="25.1.1")
 
         async def connect(self, node_version, core_version):
             calls.append("connect")
