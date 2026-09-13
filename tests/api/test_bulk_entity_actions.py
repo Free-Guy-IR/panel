@@ -436,6 +436,7 @@ def test_bulk_activate_users_respects_expire_and_data_limit(access_token):
     expired_user = create_user(access_token, payload={"username": unique_name("bulk_activate_expired")})
     limited_user = create_user(access_token, payload={"username": unique_name("bulk_activate_limited")})
     healthy_user = create_user(access_token, payload={"username": unique_name("bulk_activate_healthy")})
+    on_hold_user = create_user(access_token, payload={"username": unique_name("bulk_activate_on_hold")})
 
     async def _disable_with_states():
         async with TestSession() as session:
@@ -452,10 +453,15 @@ def test_bulk_activate_users_respects_expire_and_data_limit(access_token):
             await session.execute(
                 update(User).where(User.username == healthy_user["username"]).values(status=UserStatus.disabled)
             )
+            await session.execute(
+                update(User)
+                .where(User.username == on_hold_user["username"])
+                .values(status=UserStatus.disabled, expire=None, on_hold_expire_duration=86400)
+            )
             await session.commit()
 
     try:
-        for user in (expired_user, limited_user, healthy_user):
+        for user in (expired_user, limited_user, healthy_user, on_hold_user):
             response = client.put(
                 f"/api/user/{user['username']}/set_owner",
                 headers=auth_headers(access_token),
@@ -475,10 +481,12 @@ def test_bulk_activate_users_respects_expire_and_data_limit(access_token):
         expired_response = client.get(f"/api/user/{expired_user['username']}", headers=auth_headers(access_token))
         limited_response = client.get(f"/api/user/{limited_user['username']}", headers=auth_headers(access_token))
         healthy_response = client.get(f"/api/user/{healthy_user['username']}", headers=auth_headers(access_token))
+        on_hold_response = client.get(f"/api/user/{on_hold_user['username']}", headers=auth_headers(access_token))
         assert expired_response.json()["status"] == "expired"
         assert limited_response.json()["status"] == "limited"
         assert healthy_response.json()["status"] == "active"
+        assert on_hold_response.json()["status"] == "on_hold"
     finally:
-        for user in (expired_user, limited_user, healthy_user):
+        for user in (expired_user, limited_user, healthy_user, on_hold_user):
             delete_user_if_present(access_token, user["username"])
         delete_admin(access_token, admin["username"])
