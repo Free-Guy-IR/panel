@@ -15,6 +15,7 @@ import time
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import notification, scheduler
 from app.db import GetDB
@@ -98,6 +99,81 @@ async def _release_due(db, settings) -> None:
     )
 
 
+RETRIABLE_WRITE_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 0.5
+
+
+def _is_retriable_db_error(err) -> bool:
+    orig = getattr(err, "orig", err)
+    args = getattr(orig, "args", ())
+    if args and args[0] in (1213, 1205):
+        return True
+    if getattr(orig, "code", None) == "40P01":
+        return True
+    message = " ".join(str(a) for a in args if isinstance(a, str)).lower() or str(orig).lower()
+    return "deadlock found" in message or "lock wait timeout" in message or "database is locked" in message
+
+
+async def _write_states(db, observations) -> None:
+    existing = {
+        state.user_id: state
+        for state in (
+            await db.execute(
+                select(UserConnectionState).where(UserConnectionState.user_id.in_([o.user_id for o in observations]))
+            )
+        )
+        .scalars()
+        .all()
+    }
+
+    now = datetime.now(UTC)
+    for obs in observations:
+        state = existing.get(obs.user_id)
+        if state is None:
+            state = UserConnectionState(user_id=obs.user_id)
+            db.add(state)
+            streak = 1
+        else:
+            # A count that keeps coming back means more than one that
+            # appeared once, so the streak is what the UI leans on.
+            streak = state.streak + 1 if state.verdict == obs.verdict else 1
+
+        state.checked_at = now
+        state.devices = obs.devices
+        state.address_sources = obs.address_sources
+        state.hwid_count = obs.hwid_count
+        state.node_count = obs.node_count
+        state.app_count = obs.app_count
+        state.verdict = obs.verdict
+        state.limit_applied = obs.limit_applied
+        state.streak = streak
+        state.node_streak = obs.node_streak
+        state.at_once_streak = obs.at_once_streak
+        obs.streak = streak
+        state.reasons = obs.reasons
+        state.details = obs.details
+
+    await db.commit()
+
+
+async def _persist_states(db, observations) -> None:
+    for attempt in range(RETRIABLE_WRITE_ATTEMPTS):
+        try:
+            await _write_states(db, observations)
+            return
+        except SQLAlchemyError as err:
+            await db.rollback()
+            if attempt == RETRIABLE_WRITE_ATTEMPTS - 1 or not _is_retriable_db_error(err):
+                raise
+            logger.warning(
+                "connection state write hit a retriable database error on attempt %d of %d, retrying: %s",
+                attempt + 1,
+                RETRIABLE_WRITE_ATTEMPTS,
+                err,
+            )
+            await asyncio.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+
+
 async def record_connection_states():
     settings = await _current_settings()
 
@@ -141,47 +217,7 @@ async def record_connection_states():
         if not observations:
             return
 
-        existing = {
-            state.user_id: state
-            for state in (
-                await db.execute(
-                    select(UserConnectionState).where(
-                        UserConnectionState.user_id.in_([o.user_id for o in observations])
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        }
-
-        now = datetime.now(UTC)
-        for obs in observations:
-            state = existing.get(obs.user_id)
-            if state is None:
-                state = UserConnectionState(user_id=obs.user_id)
-                db.add(state)
-                streak = 1
-            else:
-                # A count that keeps coming back means more than one that
-                # appeared once, so the streak is what the UI leans on.
-                streak = state.streak + 1 if state.verdict == obs.verdict else 1
-
-            state.checked_at = now
-            state.devices = obs.devices
-            state.address_sources = obs.address_sources
-            state.hwid_count = obs.hwid_count
-            state.node_count = obs.node_count
-            state.app_count = obs.app_count
-            state.verdict = obs.verdict
-            state.limit_applied = obs.limit_applied
-            state.streak = streak
-            state.node_streak = obs.node_streak
-            state.at_once_streak = obs.at_once_streak
-            obs.streak = streak
-            state.reasons = obs.reasons
-            state.details = obs.details
-
-        await db.commit()
+        await _persist_states(db, observations)
 
         if _enforcing(settings):
             await _enforce(db, observations, settings)
