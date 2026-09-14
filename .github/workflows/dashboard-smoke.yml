@@ -17,7 +17,7 @@ env:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -45,8 +45,44 @@ jobs:
         working-directory: ./dashboard
         run: VITE_BASE_API=/ bun run build --outDir build --assetsDir statics
 
-      - name: Bundle gate
-        run: python3 scripts/dashboard_smoke.py --image-bundle dashboard/build
+      - name: Prove the static gate still discriminates
+        run: |
+            set -e
+            rm -rf /tmp/smoke-positive /tmp/smoke-negative
+            mkdir -p /tmp/smoke-positive/statics /tmp/smoke-negative/statics
+            echo '<!doctype html><html><body></body></html>' > /tmp/smoke-positive/index.html
+            echo '<!doctype html><html><body></body></html>' > /tmp/smoke-negative/index.html
+            python3 - <<'EOF'
+            from pathlib import Path
+
+            conforming = "".join(
+                f"var f{index}=(e,t)=>k(g{index}(e),{{...t,method:`GET`}});"
+                for index in range(25)
+            )
+            Path("/tmp/smoke-positive/statics/api-fixture.js").write_text(conforming, encoding="utf-8")
+            broken = conforming + "var bad=(e,t)=>k({url:`/api/admin`,method:`GET`,signal:e},t);"
+            Path("/tmp/smoke-negative/statics/api-fixture.js").write_text(broken, encoding="utf-8")
+            EOF
+            if ! python3 scripts/dashboard_smoke.py --image-bundle /tmp/smoke-positive; then
+                echo "the static gate rejected a conforming client; the gate would block every green build"
+                exit 1
+            fi
+            python3 scripts/dashboard_smoke.py --image-bundle /tmp/smoke-negative > /tmp/smoke-negative.log 2>&1 && {
+                echo "the static gate accepted a client with one broken call site among 25 correct ones"
+                exit 1
+            }
+            grep -q "one-object mutator call" /tmp/smoke-negative.log || {
+                echo "the static gate failed for the wrong reason:"
+                cat /tmp/smoke-negative.log
+                exit 1
+            }
+            echo "the static gate accepts a conforming client and rejects a single one-object call site"
+
+      - name: Static gate
+        run: |
+            python3 scripts/dashboard_smoke.py \
+                --client-source dashboard/src/service/api/index.ts \
+                --image-bundle dashboard/build
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -78,26 +114,51 @@ jobs:
             nohup uv run main.py > backend.log 2>&1 &
             echo $! > backend.pid
 
-      - name: Wait for backend
+      - name: Wait for the backend to be ready
         run: |
             python3 - <<'EOF'
-            import os, socket, subprocess, sys, time
+            import os
+            import subprocess
+            import sys
+            import time
+            import urllib.error
+            import urllib.request
+
             port = int(os.environ["SMOKE_PORT"])
-            deadline = time.time() + 120
-            while time.time() < deadline:
-                try:
-                    socket.create_connection(("127.0.0.1", port), timeout=1).close()
-                    print(f"backend is listening on {port}")
-                    sys.exit(0)
-                except OSError:
+            base = f"http://127.0.0.1:{port}"
+            probes = {"/health": 200, "/api/admin": 401, "/dashboard/": 200}
+            deadline = time.time() + 180
+            pending = dict(probes)
+            last = {}
+            while time.time() < deadline and pending:
+                for path, expected in list(pending.items()):
+                    try:
+                        with urllib.request.urlopen(f"{base}{path}", timeout=3) as response:
+                            status = response.status
+                    except urllib.error.HTTPError as error:
+                        status = error.code
+                    except OSError as error:
+                        last[path] = repr(error)
+                        continue
+                    last[path] = status
+                    if status == expected:
+                        del pending[path]
+                if pending:
                     time.sleep(1)
-            print(f"backend never opened port {port}")
-            subprocess.run(["tail", "-n", "80", "backend.log"], check=False)
-            sys.exit(1)
+            if pending:
+                print(f"backend never became ready; expected {probes}, last seen {last}")
+                subprocess.run(["tail", "-n", "120", "backend.log"], check=False)
+                sys.exit(1)
+            print(f"backend is ready: {probes}")
             EOF
 
-      - name: Render gate
-        run: python3 scripts/dashboard_smoke.py --url "http://127.0.0.1:${SMOKE_PORT}/dashboard/" --backend-log backend.log --dom-out smoke-dom.html
+      - name: Behavioural gate
+        run: |
+            python3 scripts/dashboard_smoke.py \
+                --url "http://127.0.0.1:${SMOKE_PORT}/dashboard/" \
+                --backend-log backend.log \
+                --dom-out smoke-dom.html \
+                --request-log-out smoke-requests.json
 
       - name: Stop backend
         if: always()
@@ -113,6 +174,7 @@ jobs:
           name: dashboard-smoke-evidence
           path: |
             smoke-dom.html
+            smoke-requests.json
             backend.log
           if-no-files-found: ignore
           retention-days: 7
