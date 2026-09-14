@@ -421,6 +421,28 @@ class UserSubscriptionUpdate(Base, CreatedAtUTCMixin):
     hwid: Mapped[str | None] = mapped_column(String(256), nullable=True, default=None)
 
 
+class SubscriptionAccessKind(str, Enum):
+    page_view = "page_view"
+    page_config = "page_config"
+    manual = "manual"
+    raw = "raw"
+    info = "info"
+    apps = "apps"
+    usage = "usage"
+    head = "head"
+
+
+class UserSubscriptionAccess(Base, CreatedAtUTCMixin):
+    __tablename__ = "user_subscription_accesses"
+    __table_args__ = (
+        Index("idx_user_subscription_accesses_user_kind_created", "user_id", "access_kind", "created_at"),
+    )
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
+    access_kind: Mapped[str] = mapped_column(String(32))
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True, default=None)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+
+
 class UserHWID(Base, CreatedAtUTCMixin):
     __tablename__ = "user_hwids"
     __table_args__ = (

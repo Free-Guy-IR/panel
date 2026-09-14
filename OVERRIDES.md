@@ -6,8 +6,8 @@ upstream-inventory.yml fails the PR if an override appears in a file not listed 
 
 Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
 baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`).
-Current measurement: 358 diverged files — 205 fork-only, 37 pure-addition, 101 override,
-15 mechanical — 1227 override lines, and 3311 fork lines still living inside
+Current measurement: 363 diverged files — 209 fork-only, 37 pure-addition, 102 override,
+15 mechanical — 1235 override lines, and 3432 fork lines still living inside
 upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
@@ -60,7 +60,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update
 - `app/scheduler.py` — job_defaults max_instances 30 -> 1 with coalesce, so a job that does not set it cannot overlap itself
 - `app/subscription/share.py` — except-fixes plus WireGuardConfiguration union update
-- `app/operation/subscription.py` — except-fixes plus announce payload formatting
+- `app/operation/subscription.py` — except-fixes, announce payload formatting, plus subscription access-log recording on every config-revealing path
 
 ## connect_node multicore generalization (upstream PR candidate)
 
@@ -116,6 +116,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/middlewares/__init__.py` — settings import update
 - `app/routers/core.py` — fastapi import update
 - `app/routers/group.py` — require_permission import update
+- `app/routers/subscription.py` — 5 lines; the public /sub routes pass the caller's user-agent and IP down to the subscription access log so every path that hands out a config leaves a delivery record. The user-agent is read off the request headers rather than through a new FastAPI Header parameter, so no route signature and no OpenAPI shape changes; the five lines are single-line calls reflowed to take the extra keyword arguments
 - `app/templates/__init__.py` — jinja environment setup update
 - `app/subscription/xray.py` — finalmask stream settings emission
 

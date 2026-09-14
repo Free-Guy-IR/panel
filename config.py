@@ -132,6 +132,8 @@ class SubscriptionEnvSettings(EnvSettings):
     xray_path: str = Field(default="", validation_alias="XRAY_SUBSCRIPTION_PATH")
     fallback_path: str = Field(default="sub", validation_alias="SUBSCRIPTION_PATH")
     clients_limit: int = Field(default=10, validation_alias="USER_SUBSCRIPTION_CLIENTS_LIMIT")
+    access_limit: int = Field(default=10, validation_alias="USER_SUBSCRIPTION_ACCESS_LIMIT")
+    access_dedupe_seconds: int = Field(default=300, validation_alias="USER_SUBSCRIPTION_ACCESS_DEDUPE_SECONDS")
     external_config: str = Field(default="", validation_alias="EXTERNAL_CONFIG")
 
     @cached_property

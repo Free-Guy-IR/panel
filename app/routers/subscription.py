@@ -51,6 +51,7 @@ async def user_subscription_headers(
         accept_header=request.headers.get("Accept", ""),
         user_agent=user_agent,
         request_url=str(request.url),
+        ip=request.client.host if request.client else None,
     )
     return Response(headers=response_headers)
 
@@ -59,32 +60,53 @@ async def user_subscription_headers(
 async def user_subscription_info(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Retrieves detailed information about the user's subscription."""
     user_data, response_headers = await subscription_operator.user_subscription_info(
-        db, token=token, ip=request.client.host if request.client else None
+        db,
+        token=token,
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", ""),
     )
     return JSONResponse(content=user_data.model_dump(mode="json"), headers=response_headers)
 
 
 @router.get("/{token}/raw")
 async def user_subscription_raw(request: Request, token: str, db: AsyncSession = Depends(get_db)):
-    return await subscription_operator.user_subscription_raw(db, token=token, request_url=str(request.url))
+    return await subscription_operator.user_subscription_raw(
+        db,
+        token=token,
+        request_url=str(request.url),
+        user_agent=request.headers.get("user-agent", ""),
+        ip=request.client.host if request.client else None,
+    )
 
 
 @router.get("/{token}/apps", response_model=list[Application])
-async def user_subscription_apps(token: str, db: AsyncSession = Depends(get_db)):
+async def user_subscription_apps(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """
     Get applications available for user's subscription.
     """
-    return await subscription_operator.user_subscription_apps(db, token)
+    return await subscription_operator.user_subscription_apps(
+        db,
+        token,
+        user_agent=request.headers.get("user-agent", ""),
+        ip=request.client.host if request.client else None,
+    )
 
 
 @router.get("/{token}/usage", response_model=UserUsageStatsList)
 async def get_sub_user_usage(
+    request: Request,
     token: str,
     query=Depends(get_subscription_usage_query),
     db: AsyncSession = Depends(get_db),
 ):
     """Fetches the usage statistics for the user within a specified date range."""
-    return await subscription_operator.get_user_usage(db, token=token, query=query)
+    return await subscription_operator.get_user_usage(
+        db,
+        token=token,
+        query=query,
+        user_agent=request.headers.get("user-agent", ""),
+        ip=request.client.host if request.client else None,
+    )
 
 
 @router.get("/{token}/{client_type}")
@@ -101,5 +123,7 @@ async def user_subscription_with_client_type(
         token=token,
         client_type=client_type,
         request_url=str(request.url),
+        user_agent=request.headers.get("user-agent", ""),
+        ip=request.client.host if request.client else None,
         **headers.model_dump(),
     )

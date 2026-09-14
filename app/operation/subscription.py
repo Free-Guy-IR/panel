@@ -14,7 +14,7 @@ from app.db.crud.hwid import (
     register_user_hwid,
 )
 from app.db.crud.user import get_user_usages, user_sub_update
-from app.db.models import User
+from app.db.models import SubscriptionAccessKind, User
 from app.fork.operation.subscription_extras import EXTRA_CLIENT_CONFIG, SubscriptionExtrasMixin
 from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
@@ -23,6 +23,7 @@ from app.models.subscription import SubscriptionUsageQuery
 from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
 from app.settings import hwid_settings, subscription_settings
 from app.subscription import sub_update_buffer as _sub_update_buffer  # noqa: F401  # registers per-worker flush loop
+from app.subscription.access_buffer import queue_subscription_access
 from app.subscription.share import (
     apply_custom_format_variables,
     encode_title,
@@ -479,6 +480,15 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             format_variables = await self.get_format_variables(user)
             formatted_announce = self._format_announce(sub_settings, format_variables)
 
+            await queue_subscription_access(
+                db_user.id,
+                SubscriptionAccessKind.page_config
+                if (links or openvpn_configs or l2tp_details)
+                else SubscriptionAccessKind.page_view,
+                user_agent=user_agent,
+                ip=ip,
+            )
+
             return HTMLResponse(
                 render_template(
                     template,
@@ -578,6 +588,8 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         x_device_os: str | None = None,
         x_ver_os: str | None = None,
         x_device_model: str | None = None,
+        user_agent: str = "",
+        ip: str | None = None,
     ):
         """Provides a subscription link based on the specified client type (e.g., Clash, V2Ray)."""
         sub_settings: SubSettings = await subscription_settings()
@@ -612,6 +624,13 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
         conf, media_type = await self.fetch_config(user, client_type)
+
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.manual,
+            user_agent=user_agent,
+            ip=ip,
+        )
 
         # Create response headers
         return Response(content=conf, media_type=media_type, headers=response_headers)
@@ -662,7 +681,14 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             "headers": headers,
         }
 
-    async def user_subscription_raw(self, db: AsyncSession, token: str, request_url: str = ""):
+    async def user_subscription_raw(
+        self,
+        db: AsyncSession,
+        token: str,
+        request_url: str = "",
+        user_agent: str = "",
+        ip: str | None = None,
+    ):
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token, load_admin_role=True, **self._SUB_CONFIG_LOAD)
         user = await self.validated_user(db_user)
@@ -684,6 +710,13 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             response_headers = self.sanitize_response_headers(response_headers)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
+
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.raw,
+            user_agent=user_agent,
+            ip=ip,
+        )
 
         return self._build_raw_subscription_payload(
             user,
@@ -730,7 +763,11 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         return await self.user_subscription_by_user(db_user, client_type, request_url)
 
     async def user_subscription_info(
-        self, db: AsyncSession, token: str, ip: str | None = None
+        self,
+        db: AsyncSession,
+        token: str,
+        ip: str | None = None,
+        user_agent: str = "",
     ) -> tuple[SubscriptionUserResponse, dict]:
         """Retrieves detailed information about the user's subscription."""
         sub_settings: SubSettings = await subscription_settings()
@@ -745,9 +782,22 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         user_response = SubscriptionUserResponse.model_validate(db_user)
         user_response.ip = ip
 
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.info,
+            user_agent=user_agent,
+            ip=ip,
+        )
+
         return user_response, response_headers
 
-    async def user_subscription_apps(self, db: AsyncSession, token: str) -> list[Application]:
+    async def user_subscription_apps(
+        self,
+        db: AsyncSession,
+        token: str,
+        user_agent: str = "",
+        ip: str | None = None,
+    ) -> list[Application]:
         """
         Get available applications for user's subscription.
         """
@@ -756,6 +806,14 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         is_hwid_enabled = await self.is_user_hwid_enabled(db_user, db=db)
         sub_settings: SubSettings = await subscription_settings()
         format_variables = await self.get_format_variables(user)
+
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.apps,
+            user_agent=user_agent,
+            ip=ip,
+        )
+
         return self._make_apps_import_urls(
             sub_settings.applications,
             format_variables,
@@ -785,6 +843,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         accept_header: str = "",
         user_agent: str = "",
         request_url: str = "",
+        ip: str | None = None,
     ) -> dict[str, str]:
         """
         Retrieves only the headers for a subscription request, bypassing configuration generation.
@@ -832,6 +891,13 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             if "media_type" in config:
                 response_headers["content-type"] = config["media_type"]
 
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.head,
+            user_agent=user_agent,
+            ip=ip,
+        )
+
         return response_headers
 
     async def get_user_usage(
@@ -839,6 +905,8 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         db: AsyncSession,
         token: str,
         query: SubscriptionUsageQuery,
+        user_agent: str = "",
+        ip: str | None = None,
     ) -> UserUsageStatsList:
         """Fetches the usage statistics for the user within a specified date range."""
         start, end = await self.validate_dates(query.start, query.end, True)
@@ -850,6 +918,13 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             load_next_plan=False,
             load_usage_logs=False,
             load_groups=False,
+        )
+
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.usage,
+            user_agent=user_agent,
+            ip=ip,
         )
 
         return await get_user_usages(db, db_user.id, start, end, query.period)
