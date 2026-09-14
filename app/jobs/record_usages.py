@@ -19,8 +19,9 @@ from sqlalchemy.sql.expression import Insert
 from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.base import engine
-from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
+from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User, UserUsageResetLogs
 from app.fork.jobs import after_record_node_usages, apply_usage_value
+from app.fork.usage_barrier import usage_apply_barrier
 from app.node import node_manager
 from app.operation.admin_sync import enforce_admin_limits_now
 from app.utils.logger import get_logger
@@ -568,7 +569,8 @@ async def _node_usage_coefficient(node: PasarGuardNode, node_id: int) -> float:
         return cached[0]
     try:
         extra = await node.get_extra()
-        coeff = float(extra.get("usage_coefficient", 1) or 1) if extra else 1.0
+        raw_coeff = extra.get("usage_coefficient", 1) if extra else 1
+        coeff = 1.0 if raw_coeff is None else float(raw_coeff)
     except Exception as exc:
         logger.warning("Failed to get extra data for node %s: %s", node_id, exc)
         coeff = cached[0] if cached is not None else 1.0
@@ -735,6 +737,39 @@ async def calculate_users_usage(api_params: dict, usage_coefficient: dict) -> li
         return _process_usage_sync(chunks)
 
 
+async def current_reset_log_watermark() -> int:
+    async with GetDB() as db:
+        result = await db.execute(select(func.max(UserUsageResetLogs.id)))
+        return int(result.scalar_one_or_none() or 0)
+
+
+async def users_reset_since(watermark: int) -> set[int]:
+    async with GetDB() as db:
+        result = await db.execute(select(UserUsageResetLogs.user_id).where(UserUsageResetLogs.id > watermark))
+        return {int(user_id) for user_id in result.scalars().all() if user_id is not None}
+
+
+def discard_reset_users(users_usage: list, api_params: dict, reset_user_ids) -> tuple[list, dict, int, int]:
+    kept = []
+    dropped_bytes = 0
+    dropped_users = 0
+    for usage in users_usage:
+        if int(usage["uid"]) in reset_user_ids:
+            dropped_bytes += usage["value"]
+            dropped_users += 1
+        else:
+            kept.append(usage)
+
+    if not dropped_users:
+        return users_usage, api_params, 0, 0
+
+    kept_params = {
+        node_id: [param for param in params if int(param["uid"]) not in reset_user_ids]
+        for node_id, params in api_params.items()
+    }
+    return kept, kept_params, dropped_bytes, dropped_users
+
+
 async def _record_user_usages_impl():
     """
     Internal implementation of record_user_usages.
@@ -750,84 +785,101 @@ async def _record_user_usages_impl():
     logger.debug(f"Starting user usage recording for {len(nodes)} nodes")
 
     try:
-        collected = await asyncio.gather(
-            *[_collect_node_user_usage(node, node_id) for node_id, node in nodes],
-            return_exceptions=True,
-        )
-        usage_coefficient = {}
-        api_params = {}
-        for i, result in enumerate(collected):
-            node_id = nodes[i][0]
-            if isinstance(result, Exception):
-                logger.warning("Failed to collect usage for node %s: %s", node_id, result)
-                usage_coefficient[node_id] = 1.0
-                api_params[node_id] = []
-                continue
-            _, coeff, stats = result
-            usage_coefficient[node_id] = coeff
-            api_params[node_id] = stats
+        async with usage_apply_barrier.window() as usage_window:
+            usage_window.reset_log_watermark = await current_reset_log_watermark()
 
-        users_usage = await calculate_users_usage(api_params, usage_coefficient)
-        if not users_usage:
-            logger.debug("No user usage to record")
-            return
-
-        admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
-        if not valid_user_ids:
-            logger.warning("Skipping user usage recording; no matching users found for received stats")
-            return
-
-        # Filter valid users - only include users with actual non-zero traffic
-        valid_users_usage = [
-            usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
-        ]
-
-        usage_updates = []
-        if valid_users_usage:
-            valid_users_usage.sort(key=lambda item: int(item["uid"]))
-            user_stmt = (
-                update(User)
-                .where(User.id == bindparam("uid"))
-                .values(used_traffic=User.used_traffic + bindparam("value"), online_at=dt.now(UTC))
-                .execution_options(synchronize_session=False)
+            collected = await asyncio.gather(
+                *[_collect_node_user_usage(node, node_id) for node_id, node in nodes],
+                return_exceptions=True,
             )
-            usage_updates.append((user_stmt, valid_users_usage))
+            usage_coefficient = {}
+            api_params = {}
+            for i, result in enumerate(collected):
+                node_id = nodes[i][0]
+                if isinstance(result, Exception):
+                    logger.warning("Failed to collect usage for node %s: %s", node_id, result)
+                    usage_coefficient[node_id] = 1.0
+                    api_params[node_id] = []
+                    continue
+                _, coeff, stats = result
+                usage_coefficient[node_id] = coeff
+                api_params[node_id] = stats
 
-        admin_data = [{"admin_id": aid, "value": val} for aid, val in sorted(admin_usage.items())]
-        if admin_data:
-            admin_stmt = (
-                update(Admin)
-                .where(Admin.id == bindparam("admin_id"))
-                .values(used_traffic=Admin.used_traffic + bindparam("value"))
-                .execution_options(synchronize_session=False)
-            )
-            usage_updates.append((admin_stmt, admin_data))
+            users_usage = await calculate_users_usage(api_params, usage_coefficient)
+            if not users_usage:
+                logger.debug("No user usage to record")
+                return
 
-        if usage_updates:
-            async with JOB_SEM:
-                await safe_execute_many(usage_updates)
-            logger.debug(f"Updated {len(valid_users_usage)} users and {len(admin_data)} admins")
+            async with usage_apply_barrier.apply(usage_window) as marked_user_ids:
+                reset_user_ids = marked_user_ids | await users_reset_since(usage_window.reset_log_watermark)
+                if reset_user_ids:
+                    users_usage, api_params, dropped_bytes, dropped_users = discard_reset_users(
+                        users_usage, api_params, reset_user_ids
+                    )
+                    if dropped_users:
+                        logger.warning(
+                            "Discarded %s bytes of in-flight usage for %s user(s) reset mid-collection",
+                            dropped_bytes,
+                            dropped_users,
+                        )
+                    if not users_usage:
+                        logger.debug("No user usage to record after discarding reset users")
+                        return
+
+                admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
+                if not valid_user_ids:
+                    logger.warning("Skipping user usage recording; no matching users found for received stats")
+                    return
+
+                valid_users_usage = [
+                    usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
+                ]
+
+                filtered_node_params = {}
+                if not usage_settings.disable_recording_node_usage:
+                    for node_id, params in api_params.items():
+                        filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
+                        if filtered_params:
+                            filtered_node_params[node_id] = filtered_params
+
+                if filtered_node_params:
+                    await record_user_stats_batched(filtered_node_params, usage_coefficient)
+                    total_records = sum(len(params) for params in filtered_node_params.values())
+                    logger.debug(
+                        f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes"
+                    )
+
+                usage_updates = []
+                if valid_users_usage:
+                    valid_users_usage.sort(key=lambda item: int(item["uid"]))
+                    user_stmt = (
+                        update(User)
+                        .where(User.id == bindparam("uid"))
+                        .values(used_traffic=User.used_traffic + bindparam("value"), online_at=dt.now(UTC))
+                        .execution_options(synchronize_session=False)
+                    )
+                    usage_updates.append((user_stmt, valid_users_usage))
+
+                admin_data = [{"admin_id": aid, "value": val} for aid, val in sorted(admin_usage.items())]
+                if admin_data:
+                    admin_stmt = (
+                        update(Admin)
+                        .where(Admin.id == bindparam("admin_id"))
+                        .values(used_traffic=Admin.used_traffic + bindparam("value"))
+                        .execution_options(synchronize_session=False)
+                    )
+                    usage_updates.append((admin_stmt, admin_data))
+
+                if usage_updates:
+                    async with JOB_SEM:
+                        await safe_execute_many(usage_updates)
+                    logger.debug(f"Updated {len(valid_users_usage)} users and {len(admin_data)} admins")
 
         if admin_data:
             try:
                 await enforce_admin_limits_now(logger=logger)
             except Exception:
                 logger.exception("Failed to enforce admin limits after usage recording")
-        if usage_settings.disable_recording_node_usage:
-            return
-
-        # Batch all node user usage writes into single operation
-        # Filter params to only valid users
-        filtered_node_params = {}
-        for node_id, params in api_params.items():
-            filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
-            if filtered_params:
-                filtered_node_params[node_id] = filtered_params
-
-        if filtered_node_params:
-            await record_user_stats_batched(filtered_node_params, usage_coefficient)
-            total_records = sum(len(params) for params in filtered_node_params.values())
-            logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
 
         job_duration = time.time() - job_start_time
         logger.debug(
