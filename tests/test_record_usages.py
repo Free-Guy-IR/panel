@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections import defaultdict
@@ -13,11 +14,24 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
 
 from app.db import base
-from app.db.models import Admin, AdminRole, AdminStatus, Node, NodeUsage, NodeUserUsage, System, User
+from app.db.crud.bulk import reset_all_users_data_usage
+from app.db.crud.user import bulk_reset_user_data_usage, reset_user_data_usage
+from app.db.models import (
+    Admin,
+    AdminRole,
+    AdminStatus,
+    Node,
+    NodeUsage,
+    NodeUserUsage,
+    System,
+    User,
+    UserUsageResetLogs,
+)
+from app.fork.usage_barrier import UsageApplyBarrier, usage_apply_barrier
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.operation import admin_sync
-from config import database_settings
+from config import database_settings, runtime_settings
 
 
 class DummyNode:
@@ -642,3 +656,510 @@ async def test_usage_coefficient_is_cached_across_collects(monkeypatch: pytest.M
 
     assert extra_calls["n"] == 1
     assert first[1] == second[1] == 2.0
+
+
+async def _seed_billing_fixture(
+    session_factory,
+    *,
+    node_coefficients: list[float],
+    user_names: list[str],
+    admin_names: list[str] | None = None,
+):
+    admin_names = admin_names or ["billing-admin"]
+    async with session_factory() as session:
+        admins = [Admin(username=name, hashed_password="secret", role_id=3) for name in admin_names]
+        session.add_all(admins)
+        await session.flush()
+        admin_ids = [admin.id for admin in admins]
+
+        users = [
+            User(
+                username=name,
+                admin_id=admin_ids[index % len(admin_ids)],
+                proxy_settings=ProxyTable().dict(no_obj=True),
+            )
+            for index, name in enumerate(user_names)
+        ]
+        session.add_all(users)
+        await session.flush()
+        user_ids = [user.id for user in users]
+
+        nodes = [
+            Node(
+                name=f"{user_names[0]}-node-{index}",
+                address=f"10.9.{index}.1",
+                port=9000 + index * 2,
+                api_port=9001 + index * 2,
+                server_ca=f"ca{index}",
+                api_key=f"key{index}",
+                core_config_id=None,
+            )
+            for index in range(len(node_coefficients))
+        ]
+        session.add_all(nodes)
+        await session.flush()
+        node_ids = [node.id for node in nodes]
+        await session.commit()
+
+    return admin_ids, user_ids, node_ids
+
+
+def _install_nodes(monkeypatch: pytest.MonkeyPatch, node_ids, coefficients, stats_map):
+    nodes = [
+        (node_id, DummyNode(node_id, usage_coefficient=coeff)) for node_id, coeff in zip(node_ids, coefficients)
+    ]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+
+    async def fake_get_users_stats(node: DummyNode, node_id: int | None = None):
+        return stats_map[node.node_id]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    return nodes
+
+
+async def _read_totals(session_factory, user_ids, admin_ids):
+    async with session_factory() as session:
+        user_rows = (await session.execute(select(User.id, User.used_traffic).where(User.id.in_(user_ids)))).all()
+        admin_rows = (await session.execute(select(Admin.id, Admin.used_traffic).where(Admin.id.in_(admin_ids)))).all()
+        node_rows = (
+            await session.execute(select(NodeUserUsage.user_id, NodeUserUsage.node_id, NodeUserUsage.used_traffic))
+        ).all()
+    return (
+        {row.id: row.used_traffic for row in user_rows},
+        {row.id: row.used_traffic for row in admin_rows},
+        node_rows,
+    )
+
+
+def test_usage_jobs_cannot_overlap_themselves():
+    if not runtime_settings.role.runs_node:
+        pytest.skip("usage jobs are only registered on node-running roles")
+    for job_id in ("record_user_usages", "record_node_usages"):
+        job = record_usages.scheduler.get_job(job_id)
+        assert job is not None, job_id
+        assert job.max_instances == 1, job_id
+        assert job.coalesce is True, job_id
+
+
+@pytest.mark.asyncio
+async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0, 1.0],
+        user_names=[f"ordered-user-{index}" for index in range(4)],
+        admin_names=["ordered-admin-1", "ordered-admin-2"],
+    )
+
+    reversed_ids = list(reversed(user_ids))
+    stats_map = {node_id: [{"uid": str(uid), "value": 10} for uid in reversed_ids] for node_id in node_ids}
+    _install_nodes(monkeypatch, list(reversed(node_ids)), [1.0, 1.0], stats_map)
+
+    captured: dict[str, Any] = {"users": None, "admins": None, "node_batches": []}
+    real_builder = record_usages.build_node_user_usage_upsert
+
+    def capturing_builder(dialect, batch):
+        captured["node_batches"].append([(item["uid"], item["node_id"]) for item in batch])
+        return real_builder(dialect, batch)
+
+    async def capturing_execute_many(statements, max_retries=record_usages.DEADLOCK_MAX_RETRIES):
+        for stmt, params in statements:
+            table_name = getattr(getattr(stmt, "table", None), "name", "")
+            if table_name == "users":
+                captured["users"] = [item["uid"] for item in params]
+            elif table_name == "admins":
+                captured["admins"] = [item["admin_id"] for item in params]
+
+    monkeypatch.setattr(record_usages, "build_node_user_usage_upsert", capturing_builder)
+    monkeypatch.setattr(record_usages, "safe_execute_many", capturing_execute_many)
+
+    await record_usages.record_user_usages()
+
+    assert captured["users"] == sorted(user_ids)
+    assert captured["admins"] == sorted(admin_ids)
+    assert captured["node_batches"]
+    for batch in captured["node_batches"]:
+        assert batch == sorted(batch)
+
+
+@pytest.mark.asyncio
+async def test_failed_node_usage_write_leaves_no_billing(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["evidence-user"],
+        admin_names=["evidence-admin"],
+    )
+    stats_map = {node_ids[0]: [{"uid": str(user_ids[0]), "value": 500}]}
+    _install_nodes(monkeypatch, node_ids, [1.0], stats_map)
+
+    async def exploding_record_user_stats_batched(all_node_params, usage_coefficients):
+        raise RuntimeError("node_user_usages write failed")
+
+    monkeypatch.setattr(record_usages, "record_user_stats_batched", exploding_record_user_stats_batched)
+
+    with pytest.raises(RuntimeError):
+        await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_ids[0]] == 0
+    assert admin_totals[admin_ids[0]] == 0
+    assert node_rows == []
+
+
+@pytest.mark.asyncio
+async def test_zero_usage_coefficient_is_not_coerced_to_one():
+    node = DummyNode(4242, usage_coefficient=0)
+    assert await record_usages._node_usage_coefficient(node, 4242) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_zero_usage_coefficient_node_bills_nothing(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[0.0],
+        user_names=["free-user"],
+        admin_names=["free-admin"],
+    )
+    stats_map = {node_ids[0]: [{"uid": str(user_ids[0]), "value": 1000}]}
+    _install_nodes(monkeypatch, node_ids, [0.0], stats_map)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_ids[0]] == 0
+    assert admin_totals[admin_ids[0]] == 0
+    assert all(row.used_traffic == 0 for row in node_rows)
+
+
+@pytest.mark.asyncio
+async def test_fractional_usage_coefficient_is_applied(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[2.5],
+        user_names=["fractional-user"],
+        admin_names=["fractional-admin"],
+    )
+    stats_map = {node_ids[0]: [{"uid": str(user_ids[0]), "value": 100}]}
+    _install_nodes(monkeypatch, node_ids, [2.5], stats_map)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_ids[0]] == 250
+    assert admin_totals[admin_ids[0]] == 250
+    assert sum(row.used_traffic for row in node_rows) == 250
+
+
+@pytest.mark.asyncio
+async def test_user_node_and_admin_totals_stay_consistent(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[2.5, 0.5],
+        user_names=["totals-user-1", "totals-user-2"],
+        admin_names=["totals-admin"],
+    )
+    stats_map = {
+        node_ids[0]: [{"uid": str(user_ids[0]), "value": 100}, {"uid": str(user_ids[1]), "value": 40}],
+        node_ids[1]: [{"uid": str(user_ids[0]), "value": 50}],
+    }
+    _install_nodes(monkeypatch, node_ids, [2.5, 0.5], stats_map)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    per_user_node_totals: dict[int, int] = defaultdict(int)
+    for row in node_rows:
+        per_user_node_totals[row.user_id] += row.used_traffic
+
+    assert user_totals[user_ids[0]] == 275
+    assert user_totals[user_ids[1]] == 100
+    assert dict(per_user_node_totals) == user_totals
+    assert admin_totals[admin_ids[0]] == sum(user_totals.values())
+
+
+@pytest.mark.asyncio
+async def test_reset_during_collection_is_not_billed(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["reset-user", "kept-user"],
+        admin_names=["reset-admin"],
+    )
+    reset_user_id, kept_user_id = user_ids
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        async with usage_apply_barrier.reset(None, [reset_user_id]):
+            pass
+        return [{"uid": str(reset_user_id), "value": 900}, {"uid": str(kept_user_id), "value": 70}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[reset_user_id] == 0
+    assert user_totals[kept_user_id] == 70
+    assert admin_totals[admin_ids[0]] == 70
+    assert {row.user_id for row in node_rows} == {kept_user_id}
+
+
+@pytest.mark.asyncio
+async def test_reset_committed_elsewhere_during_collection_is_not_billed(
+    monkeypatch: pytest.MonkeyPatch, session_factory
+):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["log-reset-user", "log-kept-user"],
+        admin_names=["log-reset-admin"],
+    )
+    reset_user_id, kept_user_id = user_ids
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        async with session_factory() as session:
+            session.add(UserUsageResetLogs(user_id=reset_user_id, used_traffic_at_reset=123))
+            await session.commit()
+        return [{"uid": str(reset_user_id), "value": 900}, {"uid": str(kept_user_id), "value": 70}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[reset_user_id] == 0
+    assert user_totals[kept_user_id] == 70
+    assert admin_totals[admin_ids[0]] == 70
+    assert {row.user_id for row in node_rows} == {kept_user_id}
+
+
+@pytest.mark.asyncio
+async def test_usage_apply_barrier_serializes_reset_against_apply():
+    barrier = UsageApplyBarrier()
+    order: list[str] = []
+
+    async def apply_side():
+        async with barrier.window() as window:
+            await asyncio.sleep(0)
+            async with barrier.apply(window) as marked:
+                order.append("apply-start")
+                assert marked == frozenset()
+                await asyncio.sleep(0.05)
+                order.append("apply-end")
+
+    async def reset_side():
+        await asyncio.sleep(0.01)
+        async with barrier.reset(None, [1]):
+            order.append("reset")
+
+    await asyncio.gather(apply_side(), reset_side())
+
+    assert order == ["apply-start", "apply-end", "reset"]
+    assert barrier.held_user_ids == frozenset()
+
+
+@pytest.mark.asyncio
+async def test_usage_apply_barrier_marks_open_windows():
+    barrier = UsageApplyBarrier()
+    async with barrier.window() as window:
+        async with barrier.reset(None, [7, 9, None]):
+            pass
+        async with barrier.apply(window) as marked:
+            assert marked == frozenset({7, 9})
+    assert barrier.open_windows == 0
+
+
+@pytest.mark.asyncio
+async def test_usage_apply_barrier_hold_covers_windows_opened_before_commit(session_factory):
+    barrier = UsageApplyBarrier()
+    async with session_factory() as session:
+        async with barrier.reset(session, [11]):
+            await session.execute(select(User.id))
+
+        assert barrier.held_user_ids == frozenset({11})
+
+        async with barrier.window() as window, barrier.apply(window) as marked:
+            assert marked == frozenset({11})
+
+        await session.rollback()
+
+    assert barrier.held_user_ids == frozenset()
+
+
+async def _commit_external_usage(session_factory, user_id: int, amount: int) -> None:
+    async with session_factory() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(used_traffic=User.used_traffic + amount)
+        )
+        await session.commit()
+
+
+async def _read_reset_logs(session_factory, user_ids) -> dict[int, list[int]]:
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(UserUsageResetLogs.user_id, UserUsageResetLogs.used_traffic_at_reset).where(
+                    UserUsageResetLogs.user_id.in_(user_ids)
+                )
+            )
+        ).all()
+    logs: dict[int, list[int]] = defaultdict(list)
+    for row in rows:
+        logs[row.user_id].append(row.used_traffic_at_reset)
+    return dict(logs)
+
+
+@pytest.mark.asyncio
+async def test_reset_logs_and_clears_traffic_committed_outside_the_session(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["stale-reset-user"],
+        admin_names=["stale-reset-admin"],
+    )
+    user_id = user_ids[0]
+
+    async with session_factory() as session:
+        db_user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
+        await session.commit()
+        assert db_user.used_traffic == 0
+
+        await _commit_external_usage(session_factory, user_id, 500)
+
+        await reset_user_data_usage(session, db_user)
+
+    assert await _read_reset_logs(session_factory, [user_id]) == {user_id: [500]}
+    user_totals, _, _ = await _read_totals(session_factory, [user_id], [])
+    assert user_totals[user_id] == 0
+
+
+@pytest.mark.asyncio
+async def test_bulk_reset_logs_committed_used_traffic(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["bulk-reset-user-1", "bulk-reset-user-2"],
+        admin_names=["bulk-reset-admin"],
+    )
+
+    async with session_factory() as session:
+        db_users = list(
+            (await session.execute(select(User).where(User.id.in_(user_ids)).order_by(User.id))).scalars().all()
+        )
+        await session.commit()
+
+        await _commit_external_usage(session_factory, user_ids[0], 700)
+        await _commit_external_usage(session_factory, user_ids[1], 300)
+
+        await bulk_reset_user_data_usage(session, db_users)
+
+    assert await _read_reset_logs(session_factory, user_ids) == {user_ids[0]: [700], user_ids[1]: [300]}
+    user_totals, _, _ = await _read_totals(session_factory, user_ids, [])
+    assert user_totals == {user_ids[0]: 0, user_ids[1]: 0}
+
+
+@pytest.mark.asyncio
+async def test_reset_all_users_data_usage_deletes_reset_history(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["wipe-user"],
+        admin_names=["wipe-admin"],
+    )
+    user_id = user_ids[0]
+
+    async with session_factory() as session:
+        session.add(UserUsageResetLogs(user_id=user_id, used_traffic_at_reset=4096))
+        await session.commit()
+
+    await _commit_external_usage(session_factory, user_id, 900)
+
+    async with session_factory() as session:
+        await reset_all_users_data_usage(session)
+
+    assert await _read_reset_logs(session_factory, [user_id]) == {}
+    user_totals, _, _ = await _read_totals(session_factory, [user_id], [])
+    assert user_totals[user_id] == 0
+
+
+@pytest.mark.asyncio
+async def test_crud_reset_marks_an_open_usage_window(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["window-reset-user"],
+        admin_names=["window-reset-admin"],
+    )
+    user_id = user_ids[0]
+
+    async with usage_apply_barrier.window() as window:
+        async with session_factory() as session:
+            db_user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
+            await reset_user_data_usage(session, db_user)
+
+        async with usage_apply_barrier.apply(window) as marked:
+            assert user_id in marked
+
+    assert usage_apply_barrier.held_user_ids == frozenset()
+
+
+def test_scheduler_defaults_serialize_unflagged_jobs():
+    defaults = record_usages.scheduler._job_defaults
+    assert defaults["max_instances"] == 1
+    assert defaults["coalesce"] is True
+
+
+@pytest.mark.asyncio
+async def test_reset_body_does_not_hold_the_barrier_lock():
+    barrier = UsageApplyBarrier()
+    order: list[str] = []
+    reset_marked = asyncio.Event()
+
+    async def slow_reset():
+        async with barrier.reset(None, [21]):
+            order.append("reset-marked")
+            reset_marked.set()
+            await asyncio.sleep(0.05)
+            order.append("reset-committed")
+
+    async def apply_side():
+        await reset_marked.wait()
+        async with barrier.window() as window, barrier.apply(window) as marked:
+            order.append("apply")
+            assert marked == frozenset({21})
+
+    await asyncio.gather(slow_reset(), apply_side())
+
+    assert order == ["reset-marked", "apply", "reset-committed"]
+    assert barrier.held_user_ids == frozenset()
+
+
+@pytest.mark.asyncio
+async def test_apply_blocks_a_reset_from_marking_midway():
+    barrier = UsageApplyBarrier()
+    order: list[str] = []
+    apply_started = asyncio.Event()
+
+    async def apply_side():
+        async with barrier.window() as window, barrier.apply(window) as marked:
+            apply_started.set()
+            assert marked == frozenset()
+            await asyncio.sleep(0.05)
+            order.append("apply-committed")
+
+    async def reset_side():
+        await apply_started.wait()
+        async with barrier.reset(None, [33]):
+            order.append("reset-marked")
+
+    await asyncio.gather(apply_side(), reset_side())
+
+    assert order == ["apply-committed", "reset-marked"]

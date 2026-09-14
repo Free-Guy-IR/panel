@@ -15,6 +15,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
+from app.fork.usage_barrier import usage_apply_barrier
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
 
@@ -67,14 +68,16 @@ async def reset_all_users_data_usage(
         return
 
     reset_status = case((User.status == UserStatus.limited, UserStatus.active), else_=User.status)
-    await db.execute(update(User).where(User.id.in_(user_ids)).values(used_traffic=0, status=reset_status))
 
-    await db.execute(delete(UserUsageResetLogs).where(UserUsageResetLogs.user_id.in_(user_ids)))
-    if clean_chart_data:
-        await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id.in_(user_ids)))
-    await db.execute(delete(NextPlan).where(NextPlan.user_id.in_(user_ids)))
+    async with usage_apply_barrier.reset(db, user_ids):
+        await db.execute(update(User).where(User.id.in_(user_ids)).values(used_traffic=0, status=reset_status))
 
-    await db.commit()
+        await db.execute(delete(UserUsageResetLogs).where(UserUsageResetLogs.user_id.in_(user_ids)))
+        if clean_chart_data:
+            await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id.in_(user_ids)))
+        await db.execute(delete(NextPlan).where(NextPlan.user_id.in_(user_ids)))
+
+        await db.commit()
 
 
 async def disable_all_active_users(db: AsyncSession, admin: Admin | None = None):

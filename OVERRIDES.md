@@ -58,6 +58,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/utils/crypto.py`
 - `app/utils/jwt.py`
 - `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update
+- `app/scheduler.py` — job_defaults max_instances 30 -> 1 with coalesce, so a job that does not set it cannot overlap itself
 - `app/subscription/share.py` — except-fixes plus WireGuardConfiguration union update
 - `app/operation/subscription.py` — except-fixes plus announce payload formatting
 
