@@ -223,6 +223,7 @@ class User(Base, CreatedAtUTCMixin):
     )
     status: Mapped[UserStatus] = mapped_column(SQLEnum(UserStatus), default=UserStatus.active)
     used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
+    usage_epoch: Mapped[int] = mapped_column(BigInteger, server_default=text("0"), default=0, init=False)
     data_limit: Mapped[int | None] = mapped_column(BigInteger, default=None)
     data_limit_reset_strategy: Mapped[DataLimitResetStrategy] = mapped_column(
         SQLEnum(DataLimitResetStrategy),

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from collections import defaultdict
@@ -8,7 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import bindparam, select, update
+from sqlalchemy import bindparam, delete, select, update
 from sqlalchemy.exc import DatabaseError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
@@ -27,7 +26,6 @@ from app.db.models import (
     User,
     UserUsageResetLogs,
 )
-from app.fork.usage_barrier import UsageApplyBarrier, usage_apply_barrier
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.operation import admin_sync
@@ -658,6 +656,14 @@ async def test_usage_coefficient_is_cached_across_collects(monkeypatch: pytest.M
     assert first[1] == second[1] == 2.0
 
 
+class _ReplayResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+
 async def _seed_billing_fixture(
     session_factory,
     *,
@@ -755,28 +761,49 @@ async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPat
     stats_map = {node_id: [{"uid": str(uid), "value": 10} for uid in reversed_ids] for node_id in node_ids}
     _install_nodes(monkeypatch, list(reversed(node_ids)), [1.0, 1.0], stats_map)
 
-    captured: dict[str, Any] = {"users": None, "admins": None, "node_batches": []}
+    captured: dict[str, Any] = {"users": [], "admins": [], "locked": [], "node_batches": []}
     real_builder = record_usages.build_node_user_usage_upsert
+    real_transaction = record_usages.run_in_retried_transaction
 
     def capturing_builder(dialect, batch):
         captured["node_batches"].append([(item["uid"], item["node_id"]) for item in batch])
         return real_builder(dialect, batch)
 
-    async def capturing_execute_many(statements, max_retries=record_usages.DEADLOCK_MAX_RETRIES):
-        for stmt, params in statements:
-            table_name = getattr(getattr(stmt, "table", None), "name", "")
-            if table_name == "users":
-                captured["users"] = [item["uid"] for item in params]
-            elif table_name == "admins":
-                captured["admins"] = [item["admin_id"] for item in params]
+    class RecordingConnection:
+        def __init__(self, conn):
+            self._conn = conn
+
+        async def execute(self, statement, params=None):
+            table_name = getattr(getattr(statement, "table", None), "name", "")
+            if table_name == "users" and params is not None:
+                captured["users"].extend(item["uid"] for item in params)
+            elif table_name == "admins" and params is not None:
+                captured["admins"].extend(item["admin_id"] for item in params)
+            if params is None:
+                result = await self._conn.execute(statement)
+                if table_name == "":
+                    rows = result.fetchall()
+                    captured["locked"].append([row[0] for row in rows])
+                    return _ReplayResult(rows)
+                return result
+            return await self._conn.execute(statement, params)
+
+    async def capturing_transaction(operation, max_retries=record_usages.DEADLOCK_MAX_RETRIES):
+        async def wrapped(conn):
+            return await operation(RecordingConnection(conn))
+
+        return await real_transaction(wrapped, max_retries=max_retries)
 
     monkeypatch.setattr(record_usages, "build_node_user_usage_upsert", capturing_builder)
-    monkeypatch.setattr(record_usages, "safe_execute_many", capturing_execute_many)
+    monkeypatch.setattr(record_usages, "run_in_retried_transaction", capturing_transaction)
 
     await record_usages.record_user_usages()
 
     assert captured["users"] == sorted(user_ids)
     assert captured["admins"] == sorted(admin_ids)
+    assert captured["locked"]
+    for locked_batch in captured["locked"]:
+        assert locked_batch == sorted(locked_batch)
     assert captured["node_batches"]
     for batch in captured["node_batches"]:
         assert batch == sorted(batch)
@@ -878,127 +905,9 @@ async def test_user_node_and_admin_totals_stay_consistent(monkeypatch: pytest.Mo
     assert admin_totals[admin_ids[0]] == sum(user_totals.values())
 
 
-@pytest.mark.asyncio
-async def test_reset_during_collection_is_not_billed(monkeypatch: pytest.MonkeyPatch, session_factory):
-    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
-        session_factory,
-        node_coefficients=[1.0],
-        user_names=["reset-user", "kept-user"],
-        admin_names=["reset-admin"],
-    )
-    reset_user_id, kept_user_id = user_ids
-
-    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
-    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
-
-    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
-        async with usage_apply_barrier.reset(None, [reset_user_id]):
-            pass
-        return [{"uid": str(reset_user_id), "value": 900}, {"uid": str(kept_user_id), "value": 70}]
-
-    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
-
-    await record_usages.record_user_usages()
-
-    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
-    assert user_totals[reset_user_id] == 0
-    assert user_totals[kept_user_id] == 70
-    assert admin_totals[admin_ids[0]] == 70
-    assert {row.user_id for row in node_rows} == {kept_user_id}
-
-
-@pytest.mark.asyncio
-async def test_reset_committed_elsewhere_during_collection_is_not_billed(
-    monkeypatch: pytest.MonkeyPatch, session_factory
-):
-    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
-        session_factory,
-        node_coefficients=[1.0],
-        user_names=["log-reset-user", "log-kept-user"],
-        admin_names=["log-reset-admin"],
-    )
-    reset_user_id, kept_user_id = user_ids
-
-    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
-    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
-
-    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
-        async with session_factory() as session:
-            session.add(UserUsageResetLogs(user_id=reset_user_id, used_traffic_at_reset=123))
-            await session.commit()
-        return [{"uid": str(reset_user_id), "value": 900}, {"uid": str(kept_user_id), "value": 70}]
-
-    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
-
-    await record_usages.record_user_usages()
-
-    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
-    assert user_totals[reset_user_id] == 0
-    assert user_totals[kept_user_id] == 70
-    assert admin_totals[admin_ids[0]] == 70
-    assert {row.user_id for row in node_rows} == {kept_user_id}
-
-
-@pytest.mark.asyncio
-async def test_usage_apply_barrier_serializes_reset_against_apply():
-    barrier = UsageApplyBarrier()
-    order: list[str] = []
-
-    async def apply_side():
-        async with barrier.window() as window:
-            await asyncio.sleep(0)
-            async with barrier.apply(window) as marked:
-                order.append("apply-start")
-                assert marked == frozenset()
-                await asyncio.sleep(0.05)
-                order.append("apply-end")
-
-    async def reset_side():
-        await asyncio.sleep(0.01)
-        async with barrier.reset(None, [1]):
-            order.append("reset")
-
-    await asyncio.gather(apply_side(), reset_side())
-
-    assert order == ["apply-start", "apply-end", "reset"]
-    assert barrier.held_user_ids == frozenset()
-
-
-@pytest.mark.asyncio
-async def test_usage_apply_barrier_marks_open_windows():
-    barrier = UsageApplyBarrier()
-    async with barrier.window() as window:
-        async with barrier.reset(None, [7, 9, None]):
-            pass
-        async with barrier.apply(window) as marked:
-            assert marked == frozenset({7, 9})
-    assert barrier.open_windows == 0
-
-
-@pytest.mark.asyncio
-async def test_usage_apply_barrier_hold_covers_windows_opened_before_commit(session_factory):
-    barrier = UsageApplyBarrier()
-    async with session_factory() as session:
-        async with barrier.reset(session, [11]):
-            await session.execute(select(User.id))
-
-        assert barrier.held_user_ids == frozenset({11})
-
-        async with barrier.window() as window, barrier.apply(window) as marked:
-            assert marked == frozenset({11})
-
-        await session.rollback()
-
-    assert barrier.held_user_ids == frozenset()
-
-
 async def _commit_external_usage(session_factory, user_id: int, amount: int) -> None:
     async with session_factory() as session:
-        await session.execute(
-            update(User).where(User.id == user_id).values(used_traffic=User.used_traffic + amount)
-        )
+        await session.execute(update(User).where(User.id == user_id).values(used_traffic=User.used_traffic + amount))
         await session.commit()
 
 
@@ -1015,6 +924,316 @@ async def _read_reset_logs(session_factory, user_ids) -> dict[int, list[int]]:
     for row in rows:
         logs[row.user_id].append(row.used_traffic_at_reset)
     return dict(logs)
+
+
+async def _read_usage_epochs(session_factory, user_ids) -> dict[int, int]:
+    async with session_factory() as session:
+        rows = (await session.execute(select(User.id, User.usage_epoch).where(User.id.in_(user_ids)))).all()
+    return {row.id: row.usage_epoch for row in rows}
+
+
+async def _reset_user(session_factory, user_id: int) -> None:
+    async with session_factory() as session:
+        db_user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
+        await reset_user_data_usage(session, db_user)
+
+
+async def _rolled_back_reset(session_factory, user_id: int) -> None:
+    async with session_factory() as session:
+        db_user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
+        await reset_user_data_usage(session, db_user, commit=False)
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_reset_during_collection_is_not_billed(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["reset-user", "kept-user"],
+        admin_names=["reset-admin"],
+    )
+    reset_user_id, kept_user_id = user_ids
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        await _reset_user(session_factory, reset_user_id)
+        return [{"uid": str(reset_user_id), "value": 900}, {"uid": str(kept_user_id), "value": 70}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[reset_user_id] == 0
+    assert user_totals[kept_user_id] == 70
+    assert admin_totals[admin_ids[0]] == 70
+    assert {row.user_id for row in node_rows} == {kept_user_id}
+
+
+@pytest.mark.asyncio
+async def test_bulk_reset_during_collection_is_not_billed(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["bulk-wiped-user", "bulk-kept-user"],
+        admin_names=["bulk-wipe-admin"],
+    )
+    reset_user_id, kept_user_id = user_ids
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        async with session_factory() as session:
+            db_users = list((await session.execute(select(User).where(User.id == reset_user_id))).scalars().all())
+            await bulk_reset_user_data_usage(session, db_users)
+        return [{"uid": str(reset_user_id), "value": 900}, {"uid": str(kept_user_id), "value": 70}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[reset_user_id] == 0
+    assert user_totals[kept_user_id] == 70
+    assert admin_totals[admin_ids[0]] == 70
+    assert {row.user_id for row in node_rows} == {kept_user_id}
+
+
+@pytest.mark.asyncio
+async def test_reset_all_during_collection_is_not_billed(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["wipe-all-user"],
+        admin_names=["wipe-all-admin"],
+    )
+    reset_user_id = user_ids[0]
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        async with session_factory() as session:
+            await reset_all_users_data_usage(session)
+        return [{"uid": str(reset_user_id), "value": 900}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[reset_user_id] == 0
+    assert admin_totals[admin_ids[0]] == 0
+    assert node_rows == []
+
+
+@pytest.mark.asyncio
+async def test_rolled_back_reset_during_collection_still_bills(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["rollback-user"],
+        admin_names=["rollback-admin"],
+    )
+    user_id = user_ids[0]
+    epoch_before = (await _read_usage_epochs(session_factory, [user_id]))[user_id]
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        await _rolled_back_reset(session_factory, user_id)
+        return [{"uid": str(user_id), "value": 640}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, node_rows = await _read_totals(session_factory, user_ids, admin_ids)
+    assert (await _read_usage_epochs(session_factory, [user_id]))[user_id] == epoch_before
+    assert user_totals[user_id] == 640
+    assert admin_totals[admin_ids[0]] == 640
+    assert sum(row.used_traffic for row in node_rows) == 640
+    assert await _read_reset_logs(session_factory, [user_id]) == {}
+
+
+@pytest.mark.asyncio
+async def test_straddling_delta_is_counted_exactly_once(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["straddle-user"],
+        admin_names=["straddle-admin"],
+    )
+    user_id = user_ids[0]
+    await _commit_external_usage(session_factory, user_id, 400)
+
+    nodes = [(node_ids[0], DummyNode(node_ids[0]))]
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
+        await _reset_user(session_factory, user_id)
+        return [{"uid": str(user_id), "value": 900}]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", racing_get_users_stats)
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_id] == 0
+    assert admin_totals[admin_ids[0]] == 0
+    assert await _read_reset_logs(session_factory, [user_id]) == {user_id: [400]}
+
+    _install_nodes(monkeypatch, node_ids, [1.0], {node_ids[0]: [{"uid": str(user_id), "value": 150}]})
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_id] == 150
+    assert admin_totals[admin_ids[0]] == 150
+
+
+@pytest.mark.asyncio
+async def test_apply_then_reset_bills_the_delta_before_clearing_it(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_ids, user_ids, node_ids = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[1.0],
+        user_names=["ordered-user"],
+        admin_names=["ordered-admin"],
+    )
+    user_id = user_ids[0]
+    _install_nodes(monkeypatch, node_ids, [1.0], {node_ids[0]: [{"uid": str(user_id), "value": 820}]})
+
+    await record_usages.record_user_usages()
+
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_id] == 820
+    assert admin_totals[admin_ids[0]] == 820
+
+    await _reset_user(session_factory, user_id)
+
+    user_totals, _, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_id] == 0
+    assert await _read_reset_logs(session_factory, [user_id]) == {user_id: [820]}
+
+
+@pytest.mark.asyncio
+async def test_apply_fenced_user_usage_rejects_a_stale_epoch(session_factory):
+    admin_ids, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["fence-user", "fence-kept-user"],
+        admin_names=["fence-admin"],
+    )
+    stale_user_id, kept_user_id = user_ids
+    epoch_at_poll = await _read_usage_epochs(session_factory, user_ids)
+
+    await _reset_user(session_factory, stale_user_id)
+
+    user_context = await record_usages.load_user_usage_context(set(user_ids))
+    outcome = await record_usages.apply_fenced_user_usage(
+        [{"uid": stale_user_id, "value": 500}, {"uid": kept_user_id, "value": 60}],
+        user_context,
+        epoch_at_poll,
+    )
+
+    assert outcome.fenced_user_ids == [stale_user_id]
+    assert outcome.fenced_bytes == 500
+    assert outcome.applied_users == 1
+
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[stale_user_id] == 0
+    assert user_totals[kept_user_id] == 60
+    assert admin_totals[admin_ids[0]] == 60
+
+
+@pytest.mark.asyncio
+async def test_apply_fenced_user_usage_accepts_a_rolled_back_reset(session_factory):
+    admin_ids, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["fence-rollback-user"],
+        admin_names=["fence-rollback-admin"],
+    )
+    user_id = user_ids[0]
+    epoch_at_poll = await _read_usage_epochs(session_factory, user_ids)
+
+    await _rolled_back_reset(session_factory, user_id)
+
+    user_context = await record_usages.load_user_usage_context({user_id})
+    outcome = await record_usages.apply_fenced_user_usage(
+        [{"uid": user_id, "value": 275}],
+        user_context,
+        epoch_at_poll,
+    )
+
+    assert outcome.fenced_user_ids == []
+    assert outcome.applied_users == 1
+
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert user_totals[user_id] == 275
+    assert admin_totals[admin_ids[0]] == 275
+
+
+@pytest.mark.asyncio
+async def test_apply_fenced_user_usage_drops_a_deleted_user(session_factory):
+    admin_ids, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["vanishing-user"],
+        admin_names=["vanishing-admin"],
+    )
+    user_id = user_ids[0]
+    epoch_at_poll = await _read_usage_epochs(session_factory, user_ids)
+    user_context = await record_usages.load_user_usage_context({user_id})
+
+    async with session_factory() as session:
+        await session.execute(delete(User).where(User.id == user_id))
+        await session.commit()
+
+    outcome = await record_usages.apply_fenced_user_usage(
+        [{"uid": user_id, "value": 99}],
+        user_context,
+        epoch_at_poll,
+    )
+
+    assert outcome.fenced_user_ids == [user_id]
+    assert outcome.applied_users == 0
+    _, admin_totals, _ = await _read_totals(session_factory, [], admin_ids)
+    assert admin_totals[admin_ids[0]] == 0
+
+
+@pytest.mark.asyncio
+async def test_every_reset_path_bumps_the_usage_epoch(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["epoch-single", "epoch-bulk", "epoch-all"],
+        admin_names=["epoch-admin"],
+    )
+    single_id, bulk_id, all_id = user_ids
+    before = await _read_usage_epochs(session_factory, user_ids)
+
+    await _reset_user(session_factory, single_id)
+
+    async with session_factory() as session:
+        db_users = list((await session.execute(select(User).where(User.id == bulk_id))).scalars().all())
+        await bulk_reset_user_data_usage(session, db_users)
+
+    async with session_factory() as session:
+        await reset_all_users_data_usage(session)
+
+    after = await _read_usage_epochs(session_factory, user_ids)
+    assert after[single_id] == before[single_id] + 2
+    assert after[bulk_id] == before[bulk_id] + 2
+    assert after[all_id] == before[all_id] + 1
 
 
 @pytest.mark.asyncio
@@ -1090,76 +1309,7 @@ async def test_reset_all_users_data_usage_deletes_reset_history(session_factory)
     assert user_totals[user_id] == 0
 
 
-@pytest.mark.asyncio
-async def test_crud_reset_marks_an_open_usage_window(session_factory):
-    _, user_ids, _ = await _seed_billing_fixture(
-        session_factory,
-        node_coefficients=[],
-        user_names=["window-reset-user"],
-        admin_names=["window-reset-admin"],
-    )
-    user_id = user_ids[0]
-
-    async with usage_apply_barrier.window() as window:
-        async with session_factory() as session:
-            db_user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-            await reset_user_data_usage(session, db_user)
-
-        async with usage_apply_barrier.apply(window) as marked:
-            assert user_id in marked
-
-    assert usage_apply_barrier.held_user_ids == frozenset()
-
-
 def test_scheduler_defaults_serialize_unflagged_jobs():
     defaults = record_usages.scheduler._job_defaults
     assert defaults["max_instances"] == 1
     assert defaults["coalesce"] is True
-
-
-@pytest.mark.asyncio
-async def test_reset_body_does_not_hold_the_barrier_lock():
-    barrier = UsageApplyBarrier()
-    order: list[str] = []
-    reset_marked = asyncio.Event()
-
-    async def slow_reset():
-        async with barrier.reset(None, [21]):
-            order.append("reset-marked")
-            reset_marked.set()
-            await asyncio.sleep(0.05)
-            order.append("reset-committed")
-
-    async def apply_side():
-        await reset_marked.wait()
-        async with barrier.window() as window, barrier.apply(window) as marked:
-            order.append("apply")
-            assert marked == frozenset({21})
-
-    await asyncio.gather(slow_reset(), apply_side())
-
-    assert order == ["reset-marked", "apply", "reset-committed"]
-    assert barrier.held_user_ids == frozenset()
-
-
-@pytest.mark.asyncio
-async def test_apply_blocks_a_reset_from_marking_midway():
-    barrier = UsageApplyBarrier()
-    order: list[str] = []
-    apply_started = asyncio.Event()
-
-    async def apply_side():
-        async with barrier.window() as window, barrier.apply(window) as marked:
-            apply_started.set()
-            assert marked == frozenset()
-            await asyncio.sleep(0.05)
-            order.append("apply-committed")
-
-    async def reset_side():
-        await apply_started.wait()
-        async with barrier.reset(None, [33]):
-            order.append("reset-marked")
-
-    await asyncio.gather(apply_side(), reset_side())
-
-    assert order == ["apply-committed", "reset-marked"]

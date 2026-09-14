@@ -26,7 +26,6 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
-from app.fork.usage_barrier import usage_apply_barrier
 from app.models.proxy import ProxyTable
 from app.models.stats import (
     Period,
@@ -1195,6 +1194,7 @@ async def modify_user(
 
 
 COMMITTED_USED_TRAFFIC_BATCH_SIZE = 500
+USAGE_EPOCH_BUMP_BATCH_SIZE = 500
 
 
 async def _committed_used_traffic(db: AsyncSession, db_user: User) -> int:
@@ -1216,13 +1216,29 @@ async def _committed_used_traffic_map(db: AsyncSession, users: list[User]) -> di
     return committed
 
 
-async def _reset_user_traffic_and_log(db: AsyncSession, db_user: User, *, used_traffic_at_reset: int | None = None):
+async def bump_usage_epoch(db: AsyncSession, user_ids: Sequence[int]) -> None:
+    ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
+    for index in range(0, len(ids), USAGE_EPOCH_BUMP_BATCH_SIZE):
+        chunk = ids[index : index + USAGE_EPOCH_BUMP_BATCH_SIZE]
+        await db.execute(
+            update(User)
+            .where(User.id.in_(chunk))
+            .values(usage_epoch=User.usage_epoch + 1)
+            .execution_options(synchronize_session=False)
+        )
+
+
+async def _reset_user_traffic_and_log(
+    db: AsyncSession, db_user: User, *, used_traffic_at_reset: int | None = None, bump_epoch: bool = True
+):
     """Helper to reset user traffic and log the action."""
     await db_user.awaitable_attrs.next_plan
     if used_traffic_at_reset is None:
         used_traffic_at_reset = await _committed_used_traffic(db, db_user)
     if db_user.id is not None:
         set_committed_value(db_user, "used_traffic", used_traffic_at_reset)
+        if bump_epoch:
+            await bump_usage_epoch(db, [db_user.id])
     usage_log = UserUsageResetLogs(
         user_id=db_user.id,
         used_traffic_at_reset=used_traffic_at_reset,
@@ -1256,17 +1272,16 @@ async def reset_user_data_usage(
     Returns:
         User: The updated user object.
     """
-    async with usage_apply_barrier.reset(db, [db_user.id]):
-        await _reset_user_traffic_and_log(db, db_user)
-        await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
-        if clean_chart_data:
-            await clear_user_node_usages(db, db_user.id)
+    await _reset_user_traffic_and_log(db, db_user)
+    await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
+    if clean_chart_data:
+        await clear_user_node_usages(db, db_user.id)
 
-        if db_user.status == UserStatus.limited:
-            db_user.status = UserStatus.active
+    if db_user.status == UserStatus.limited:
+        db_user.status = UserStatus.active
 
-        if commit:
-            await db.commit()
+    if commit:
+        await db.commit()
 
     if commit:
         await refresh_and_load_user(db, db_user)
@@ -1286,21 +1301,22 @@ async def bulk_reset_user_data_usage(
     Returns:
         list[User]: The updated list of user objects.
     """
-    async with usage_apply_barrier.reset(db, [db_user.id for db_user in users]):
-        committed_used_traffic = await _committed_used_traffic_map(db, users)
-        for db_user in users:
-            await _reset_user_traffic_and_log(
-                db,
-                db_user,
-                used_traffic_at_reset=committed_used_traffic.get(db_user.id, db_user.used_traffic),
-            )
-            await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
-            if clean_chart_data:
-                await clear_user_node_usages(db, db_user.id)
-            if db_user.status == UserStatus.limited:
-                db_user.status = UserStatus.active
-        if commit:
-            await db.commit()
+    committed_used_traffic = await _committed_used_traffic_map(db, users)
+    await bump_usage_epoch(db, [db_user.id for db_user in users])
+    for db_user in users:
+        await _reset_user_traffic_and_log(
+            db,
+            db_user,
+            used_traffic_at_reset=committed_used_traffic.get(db_user.id, db_user.used_traffic),
+            bump_epoch=False,
+        )
+        await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
+        if clean_chart_data:
+            await clear_user_node_usages(db, db_user.id)
+        if db_user.status == UserStatus.limited:
+            db_user.status = UserStatus.active
+    if commit:
+        await db.commit()
 
     if commit:
         for user in users:
@@ -1366,15 +1382,14 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
             db_user.proxy_settings = proxy_settings
         db_user.data_limit_reset_strategy = db_user.next_plan.user_template.data_limit_reset_strategy
 
-    async with usage_apply_barrier.reset(db, [db_user.id]):
-        await _reset_user_traffic_and_log(db, db_user)
-        await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
-        if clean_chart_data:
-            await clear_user_node_usages(db, db_user.id)
-        if db_user.status is not UserStatus.on_hold:
-            db_user.status = UserStatus.active
+    await _reset_user_traffic_and_log(db, db_user)
+    await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
+    if clean_chart_data:
+        await clear_user_node_usages(db, db_user.id)
+    if db_user.status is not UserStatus.on_hold:
+        db_user.status = UserStatus.active
 
-        await db.commit()
+    await db.commit()
 
     await refresh_and_load_user(db, db_user)
     return db_user

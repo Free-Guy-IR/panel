@@ -6,6 +6,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime as dt, timedelta as td
 from operator import attrgetter
+from typing import NamedTuple
 
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
@@ -19,9 +20,8 @@ from sqlalchemy.sql.expression import Insert
 from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.base import engine
-from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User, UserUsageResetLogs
+from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
-from app.fork.usage_barrier import usage_apply_barrier
 from app.node import node_manager
 from app.operation.admin_sync import enforce_admin_limits_now
 from app.utils.logger import get_logger
@@ -44,6 +44,20 @@ USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT = {
 }
 USER_ADMIN_LOOKUP_BATCH_SIZE = 1_000
 DEADLOCK_MAX_RETRIES = 5
+FENCED_USER_LOG_SAMPLE = 20
+
+
+class UserUsageContext(NamedTuple):
+    admin_id: int | None
+    usage_epoch: int
+
+
+class FencedUsageOutcome(NamedTuple):
+    applied_users: int
+    applied_admins: int
+    fenced_user_ids: list[int]
+    fenced_bytes: int
+
 
 # Thread pool executor for I/O-bound node API calls
 # Distributes workload across threads/cores for data collection
@@ -315,28 +329,8 @@ def _is_retriable_db_error(err) -> bool:
     return "deadlock" in message or "lock wait timeout" in message or "database is locked" in message
 
 
-async def safe_execute_many(statements: list[tuple], max_retries: int = DEADLOCK_MAX_RETRIES):
-    """
-    Execute multiple statements atomically in a single transaction.
-
-    Same deadlock/lock retry handling as safe_execute; on any failure the whole
-    batch rolls back so multi-table updates cannot be applied partially.
-
-    Args:
-        statements: List of (stmt, params) tuples; params may be None
-        max_retries (int, optional): Maximum number of retry attempts
-    """
+async def run_in_retried_transaction(operation, max_retries: int = DEADLOCK_MAX_RETRIES):
     dialect = await get_dialect()
-    prepared = []
-    for stmt, params in statements:
-        if (
-            dialect == "mysql"
-            and isinstance(stmt, Insert)
-            and (not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None)
-        ):
-            stmt = stmt.prefix_with("IGNORE")
-        prepared.append((stmt, params))
-
     connectable = engine
     if dialect == "mysql" and hasattr(engine, "execution_options"):
         # READ COMMITTED avoids gap/next-key locks that amplify MySQL deadlocks
@@ -347,12 +341,7 @@ async def safe_execute_many(statements: list[tuple], max_retries: int = DEADLOCK
         try:
             # engine.begin() ensures commit/rollback + connection return on exit
             async with connectable.begin() as conn:
-                for statement, params in prepared:
-                    if params is None:
-                        await conn.execute(statement)
-                    else:
-                        await conn.execute(statement, params)
-                return
+                return await operation(conn)
 
         except (OperationalError, DatabaseError) as err:
             # Session auto-closed by context manager, locks released
@@ -380,6 +369,38 @@ async def safe_execute_many(statements: list[tuple], max_retries: int = DEADLOCK
             if attempt >= max_retries - 1 and _is_retriable_db_error(err):
                 logger.error("Usage write failed after %s attempts: %s", max_retries, err)
             raise
+
+
+async def safe_execute_many(statements: list[tuple], max_retries: int = DEADLOCK_MAX_RETRIES):
+    """
+    Execute multiple statements atomically in a single transaction.
+
+    Same deadlock/lock retry handling as safe_execute; on any failure the whole
+    batch rolls back so multi-table updates cannot be applied partially.
+
+    Args:
+        statements: List of (stmt, params) tuples; params may be None
+        max_retries (int, optional): Maximum number of retry attempts
+    """
+    dialect = await get_dialect()
+    prepared = []
+    for stmt, params in statements:
+        if (
+            dialect == "mysql"
+            and isinstance(stmt, Insert)
+            and (not hasattr(stmt, "_post_values_clause") or stmt._post_values_clause is None)
+        ):
+            stmt = stmt.prefix_with("IGNORE")
+        prepared.append((stmt, params))
+
+    async def _execute_all(conn):
+        for statement, statement_params in prepared:
+            if statement_params is None:
+                await conn.execute(statement)
+            else:
+                await conn.execute(statement, statement_params)
+
+    await run_in_retried_transaction(_execute_all, max_retries=max_retries)
 
 
 async def safe_execute(stmt, params=None, max_retries: int = DEADLOCK_MAX_RETRIES):
@@ -649,30 +670,19 @@ async def get_outbounds_stats(node: PasarGuardNode, node_id: int | None = None):
         return []
 
 
-async def calculate_admin_usage(users_usage: list) -> tuple[dict, set[int]]:
-    if not users_usage:
-        return {}, set()
-
-    # Get unique user IDs from users_usage
-    uids = {int(user_usage["uid"]) for user_usage in users_usage}
+async def load_user_usage_context(uids: set[int]) -> dict[int, UserUsageContext]:
+    context: dict[int, UserUsageContext] = {}
+    if not uids:
+        return context
 
     async with GetDB() as db:
-        # Query only relevant users' admin IDs
-        user_admin_pairs = []
-        for uid_batch in _chunked(list(uids), USER_ADMIN_LOOKUP_BATCH_SIZE):
-            stmt = select(User.id, User.admin_id).where(User.id.in_(uid_batch))
+        for uid_batch in _chunked(sorted(uids), USER_ADMIN_LOOKUP_BATCH_SIZE):
+            stmt = select(User.id, User.admin_id, User.usage_epoch).where(User.id.in_(uid_batch))
             result = await db.execute(stmt)
-            user_admin_pairs.extend(result.fetchall())
+            for user_id, admin_id, usage_epoch in result.fetchall():
+                context[int(user_id)] = UserUsageContext(admin_id=admin_id, usage_epoch=int(usage_epoch or 0))
 
-    user_admin_map = {uid: admin_id for uid, admin_id in user_admin_pairs}
-
-    admin_usage = defaultdict(int)
-    for user_usage in users_usage:
-        admin_id = user_admin_map.get(int(user_usage["uid"]))
-        if admin_id:
-            admin_usage[admin_id] += user_usage["value"]
-
-    return admin_usage, set(user_admin_map.keys())
+    return context
 
 
 async def calculate_users_usage(api_params: dict, usage_coefficient: dict) -> list:
@@ -737,16 +747,14 @@ async def calculate_users_usage(api_params: dict, usage_coefficient: dict) -> li
         return _process_usage_sync(chunks)
 
 
-async def current_reset_log_watermark() -> int:
+async def current_usage_epochs() -> dict[int, int]:
     async with GetDB() as db:
-        result = await db.execute(select(func.max(UserUsageResetLogs.id)))
-        return int(result.scalar_one_or_none() or 0)
+        result = await db.execute(select(User.id, User.usage_epoch))
+        return {int(user_id): int(usage_epoch or 0) for user_id, usage_epoch in result.fetchall()}
 
 
-async def users_reset_since(watermark: int) -> set[int]:
-    async with GetDB() as db:
-        result = await db.execute(select(UserUsageResetLogs.user_id).where(UserUsageResetLogs.id > watermark))
-        return {int(user_id) for user_id in result.scalars().all() if user_id is not None}
+def stale_epoch_user_ids(user_context: dict[int, UserUsageContext], epoch_at_poll: dict[int, int]) -> set[int]:
+    return {uid for uid, entry in user_context.items() if entry.usage_epoch != epoch_at_poll.get(uid, 0)}
 
 
 def discard_reset_users(users_usage: list, api_params: dict, reset_user_ids) -> tuple[list, dict, int, int]:
@@ -770,6 +778,67 @@ def discard_reset_users(users_usage: list, api_params: dict, reset_user_ids) -> 
     return kept, kept_params, dropped_bytes, dropped_users
 
 
+async def apply_fenced_user_usage(
+    users_usage: list,
+    user_context: dict[int, UserUsageContext],
+    epoch_at_poll: dict[int, int],
+) -> FencedUsageOutcome:
+    delta_by_user = {int(item["uid"]): int(item["value"]) for item in users_usage}
+    user_ids = sorted(delta_by_user)
+    dialect = await get_dialect()
+    batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(dialect) or len(user_ids) or 1
+    online_at = dt.now(UTC)
+
+    user_stmt = (
+        update(User)
+        .where(User.id == bindparam("uid"), User.usage_epoch == bindparam("epoch"))
+        .values(used_traffic=User.used_traffic + bindparam("value"), online_at=online_at)
+        .execution_options(synchronize_session=False)
+    )
+    admin_stmt = (
+        update(Admin)
+        .where(Admin.id == bindparam("admin_id"))
+        .values(used_traffic=Admin.used_traffic + bindparam("value"))
+        .execution_options(synchronize_session=False)
+    )
+
+    async def _apply(conn) -> FencedUsageOutcome:
+        committed_epochs: dict[int, int] = {}
+        for id_batch in _chunked(user_ids, batch_size):
+            locked = await conn.execute(
+                select(User.id, User.usage_epoch).where(User.id.in_(id_batch)).order_by(User.id).with_for_update()
+            )
+            for user_id, usage_epoch in locked.fetchall():
+                committed_epochs[int(user_id)] = int(usage_epoch or 0)
+
+        billable = []
+        fenced_user_ids = []
+        fenced_bytes = 0
+        for user_id in user_ids:
+            usage_epoch = committed_epochs.get(user_id)
+            if usage_epoch is None or usage_epoch != epoch_at_poll.get(user_id, 0):
+                fenced_user_ids.append(user_id)
+                fenced_bytes += delta_by_user[user_id]
+                continue
+            billable.append({"uid": user_id, "epoch": usage_epoch, "value": delta_by_user[user_id]})
+
+        admin_totals = defaultdict(int)
+        for item in billable:
+            entry = user_context.get(item["uid"])
+            if entry is not None and entry.admin_id:
+                admin_totals[entry.admin_id] += item["value"]
+        admin_data = [{"admin_id": admin_id, "value": value} for admin_id, value in sorted(admin_totals.items())]
+
+        for update_batch in _chunked(billable, batch_size):
+            await conn.execute(user_stmt, update_batch)
+        if admin_data:
+            await conn.execute(admin_stmt, admin_data)
+
+        return FencedUsageOutcome(len(billable), len(admin_data), fenced_user_ids, fenced_bytes)
+
+    return await run_in_retried_transaction(_apply)
+
+
 async def _record_user_usages_impl():
     """
     Internal implementation of record_user_usages.
@@ -785,97 +854,82 @@ async def _record_user_usages_impl():
     logger.debug(f"Starting user usage recording for {len(nodes)} nodes")
 
     try:
-        async with usage_apply_barrier.window() as usage_window:
-            usage_window.reset_log_watermark = await current_reset_log_watermark()
+        epoch_at_poll = await current_usage_epochs()
 
-            collected = await asyncio.gather(
-                *[_collect_node_user_usage(node, node_id) for node_id, node in nodes],
-                return_exceptions=True,
+        collected = await asyncio.gather(
+            *[_collect_node_user_usage(node, node_id) for node_id, node in nodes],
+            return_exceptions=True,
+        )
+        usage_coefficient = {}
+        api_params = {}
+        for i, result in enumerate(collected):
+            node_id = nodes[i][0]
+            if isinstance(result, Exception):
+                logger.warning("Failed to collect usage for node %s: %s", node_id, result)
+                usage_coefficient[node_id] = 1.0
+                api_params[node_id] = []
+                continue
+            _, coeff, stats = result
+            usage_coefficient[node_id] = coeff
+            api_params[node_id] = stats
+
+        users_usage = await calculate_users_usage(api_params, usage_coefficient)
+        if not users_usage:
+            logger.debug("No user usage to record")
+            return
+
+        user_context = await load_user_usage_context({int(usage["uid"]) for usage in users_usage})
+        if not user_context:
+            logger.warning("Skipping user usage recording; no matching users found for received stats")
+            return
+
+        reset_user_ids = stale_epoch_user_ids(user_context, epoch_at_poll)
+        if reset_user_ids:
+            users_usage, api_params, dropped_bytes, dropped_users = discard_reset_users(
+                users_usage, api_params, reset_user_ids
             )
-            usage_coefficient = {}
-            api_params = {}
-            for i, result in enumerate(collected):
-                node_id = nodes[i][0]
-                if isinstance(result, Exception):
-                    logger.warning("Failed to collect usage for node %s: %s", node_id, result)
-                    usage_coefficient[node_id] = 1.0
-                    api_params[node_id] = []
-                    continue
-                _, coeff, stats = result
-                usage_coefficient[node_id] = coeff
-                api_params[node_id] = stats
-
-            users_usage = await calculate_users_usage(api_params, usage_coefficient)
+            if dropped_users:
+                logger.warning(
+                    "Discarded %s bytes of in-flight usage for %s user(s) reset mid-collection",
+                    dropped_bytes,
+                    dropped_users,
+                )
             if not users_usage:
-                logger.debug("No user usage to record")
+                logger.debug("No user usage to record after discarding reset users")
                 return
 
-            async with usage_apply_barrier.apply(usage_window) as marked_user_ids:
-                reset_user_ids = marked_user_ids | await users_reset_since(usage_window.reset_log_watermark)
-                if reset_user_ids:
-                    users_usage, api_params, dropped_bytes, dropped_users = discard_reset_users(
-                        users_usage, api_params, reset_user_ids
-                    )
-                    if dropped_users:
-                        logger.warning(
-                            "Discarded %s bytes of in-flight usage for %s user(s) reset mid-collection",
-                            dropped_bytes,
-                            dropped_users,
-                        )
-                    if not users_usage:
-                        logger.debug("No user usage to record after discarding reset users")
-                        return
+        valid_user_ids = set(user_context)
+        valid_users_usage = [
+            usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
+        ]
 
-                admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
-                if not valid_user_ids:
-                    logger.warning("Skipping user usage recording; no matching users found for received stats")
-                    return
+        filtered_node_params = {}
+        if not usage_settings.disable_recording_node_usage:
+            for node_id, params in api_params.items():
+                filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
+                if filtered_params:
+                    filtered_node_params[node_id] = filtered_params
 
-                valid_users_usage = [
-                    usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
-                ]
+        if filtered_node_params:
+            await record_user_stats_batched(filtered_node_params, usage_coefficient)
+            total_records = sum(len(params) for params in filtered_node_params.values())
+            logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
 
-                filtered_node_params = {}
-                if not usage_settings.disable_recording_node_usage:
-                    for node_id, params in api_params.items():
-                        filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
-                        if filtered_params:
-                            filtered_node_params[node_id] = filtered_params
+        outcome = FencedUsageOutcome(0, 0, [], 0)
+        if valid_users_usage:
+            valid_users_usage.sort(key=lambda item: int(item["uid"]))
+            async with JOB_SEM:
+                outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll)
+            if outcome.fenced_user_ids:
+                logger.warning(
+                    "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply: %s",
+                    outcome.fenced_bytes,
+                    len(outcome.fenced_user_ids),
+                    outcome.fenced_user_ids[:FENCED_USER_LOG_SAMPLE],
+                )
+            logger.debug(f"Updated {outcome.applied_users} users and {outcome.applied_admins} admins")
 
-                if filtered_node_params:
-                    await record_user_stats_batched(filtered_node_params, usage_coefficient)
-                    total_records = sum(len(params) for params in filtered_node_params.values())
-                    logger.debug(
-                        f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes"
-                    )
-
-                usage_updates = []
-                if valid_users_usage:
-                    valid_users_usage.sort(key=lambda item: int(item["uid"]))
-                    user_stmt = (
-                        update(User)
-                        .where(User.id == bindparam("uid"))
-                        .values(used_traffic=User.used_traffic + bindparam("value"), online_at=dt.now(UTC))
-                        .execution_options(synchronize_session=False)
-                    )
-                    usage_updates.append((user_stmt, valid_users_usage))
-
-                admin_data = [{"admin_id": aid, "value": val} for aid, val in sorted(admin_usage.items())]
-                if admin_data:
-                    admin_stmt = (
-                        update(Admin)
-                        .where(Admin.id == bindparam("admin_id"))
-                        .values(used_traffic=Admin.used_traffic + bindparam("value"))
-                        .execution_options(synchronize_session=False)
-                    )
-                    usage_updates.append((admin_stmt, admin_data))
-
-                if usage_updates:
-                    async with JOB_SEM:
-                        await safe_execute_many(usage_updates)
-                    logger.debug(f"Updated {len(valid_users_usage)} users and {len(admin_data)} admins")
-
-        if admin_data:
+        if outcome.applied_admins:
             try:
                 await enforce_admin_limits_now(logger=logger)
             except Exception:
@@ -884,7 +938,7 @@ async def _record_user_usages_impl():
         job_duration = time.time() - job_start_time
         logger.debug(
             f"User usage recording completed in {job_duration:.2f}s: "
-            f"{len(valid_users_usage)} users, {len(admin_usage)} admins, "
+            f"{outcome.applied_users} users, {outcome.applied_admins} admins, "
             f"{len(filtered_node_params)} nodes"
         )
 
