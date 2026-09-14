@@ -1,0 +1,118 @@
+name: Dashboard Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SMOKE_PORT: "8123"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Fetch sibling config kits
+        run: |
+            KITS="core-kit openvpn-config-kit mtproto-config-kit l2tp-config-kit singbox-config-kit wireguard-config-kit"
+            for kit in $KITS; do
+                git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
+            done
+            for kit in $KITS; do
+                (cd "$GITHUB_WORKSPACE/../$kit" && bun install)
+            done
+
+      - name: Install dashboard dependencies
+        working-directory: ./dashboard
+        run: bun install --frozen-lockfile
+
+      - name: Build dashboard
+        working-directory: ./dashboard
+        run: VITE_BASE_API=/ bun run build --outDir build --assetsDir statics
+
+      - name: Bundle gate
+        run: python3 scripts/dashboard_smoke.py --image-bundle dashboard/build
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install backend
+        run: uv sync --frozen
+
+      - name: Run migrations
+        env:
+          SQLALCHEMY_DATABASE_URL: sqlite+aiosqlite:///./smoke.db
+        run: uv run alembic upgrade head
+
+      - name: Start backend
+        env:
+          SQLALCHEMY_DATABASE_URL: sqlite+aiosqlite:///./smoke.db
+          UVICORN_HOST: 127.0.0.1
+          UVICORN_PORT: ${{ env.SMOKE_PORT }}
+          DEBUG: "false"
+          DOCS: "false"
+          ROLE: all-in-one
+          NATS_ENABLED: "false"
+          DASHBOARD_PATH: /dashboard/
+        run: |
+            nohup uv run main.py > backend.log 2>&1 &
+            echo $! > backend.pid
+
+      - name: Wait for backend
+        run: |
+            python3 - <<'EOF'
+            import os, socket, subprocess, sys, time
+            port = int(os.environ["SMOKE_PORT"])
+            deadline = time.time() + 120
+            while time.time() < deadline:
+                try:
+                    socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                    print(f"backend is listening on {port}")
+                    sys.exit(0)
+                except OSError:
+                    time.sleep(1)
+            print(f"backend never opened port {port}")
+            subprocess.run(["tail", "-n", "80", "backend.log"], check=False)
+            sys.exit(1)
+            EOF
+
+      - name: Render gate
+        run: python3 scripts/dashboard_smoke.py --url "http://127.0.0.1:${SMOKE_PORT}/dashboard/" --backend-log backend.log --dom-out smoke-dom.html
+
+      - name: Stop backend
+        if: always()
+        run: |
+            if [ -f backend.pid ]; then
+                kill "$(cat backend.pid)" 2>/dev/null || true
+            fi
+
+      - name: Upload smoke evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-smoke-evidence
+          path: |
+            smoke-dom.html
+            backend.log
+          if-no-files-found: ignore
+          retention-days: 7
