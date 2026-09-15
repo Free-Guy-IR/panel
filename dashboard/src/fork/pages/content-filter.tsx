@@ -2,7 +2,18 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +28,7 @@ import {
   Baby,
   Bot,
   ChevronDown,
+  ChevronRight,
   Clapperboard,
   Cloud,
   Dices,
@@ -43,7 +55,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-type CatalogService = { key: string; geosite: string; domains: number }
+type CatalogService = { key: string; label: string; geosite: string | null; domains: number }
 type CatalogGroup = { key: string; geosite: string | null; domains: number; services: CatalogService[] }
 type ListEntry = { key: string; label: string; domains: number }
 type ListGroup = { key: string; domains: number; entries: ListEntry[] }
@@ -180,170 +192,163 @@ function DomainCount({ n }: { n: number }) {
   )
 }
 
-function CategoryGroupCard({
-  group,
+function PickerSheet({
+  open,
+  onOpenChange,
+  title,
+  entries,
   selected,
-  onToggleGroup,
-  onToggleService,
-}: {
-  group: CatalogGroup
-  selected: Set<string>
-  onToggleGroup: (key: string, on: boolean) => void
-  onToggleService: (key: string, on: boolean) => void
-}) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const Icon = GROUP_ICON[group.key] ?? ShieldBan
-  const umbrella = selected.has(group.key)
-  const picked = group.services.filter(s => selected.has(s.key)).length
-  const allPicked = group.services.length > 0 && picked === group.services.length
-  const whole = umbrella || allPicked
-  const partial = !whole && picked > 0
-
-  return (
-    <Card
-      className={cn(
-        'flex h-full flex-col overflow-hidden transition-colors',
-        (whole || partial) && 'border-primary/40 bg-primary/[0.03]',
-      )}
-    >
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <Icon className={cn('mt-0.5 size-5 shrink-0', GROUP_TONE[group.key])} />
-          <div className="min-w-0">
-            <CardTitle className="text-base">
-              {t(`contentFilter.groups.${group.key}`, { defaultValue: group.key })}
-            </CardTitle>
-            <CardDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <DomainCount n={group.domains} />
-              {partial ? (
-                <Badge variant="secondary" className="text-[11px]">
-                  {t('contentFilter.partial', {
-                    picked,
-                    total: group.services.length,
-                    defaultValue: '{{picked}} of {{total}}',
-                  })}
-                </Badge>
-              ) : null}
-            </CardDescription>
-          </div>
-        </div>
-        <Switch
-          checked={whole}
-          onCheckedChange={on => onToggleGroup(group.key, on)}
-          aria-label={t(`contentFilter.groups.${group.key}`, { defaultValue: group.key })}
-        />
-      </CardHeader>
-      <CardContent className="mt-auto pb-3 pt-0">
-        <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
-              <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
-              {t('contentFilter.pickIndividually', {
-                count: group.services.length,
-                defaultValue: 'Pick individually ({{count}})',
-              })}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-              {group.services.map(service => (
-                <label
-                  key={service.key}
-                  className={cn(
-                    'flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60',
-                    whole && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <Checkbox
-                      checked={umbrella || selected.has(service.key)}
-                      disabled={umbrella}
-                      onCheckedChange={on => onToggleService(service.key, on === true)}
-                    />
-                    <span className="text-sm">
-                      {t(`contentFilter.services.${service.key}`, { defaultValue: service.key })}
-                    </span>
-                  </span>
-                  <DomainCount n={service.domains} />
-                </label>
-              ))}
-            </div>
-            {umbrella ? (
-              <p className="px-2 pt-2 text-xs text-muted-foreground">
-                {t('contentFilter.wholeGroupNote', {
-                  defaultValue: 'The whole group is blocked, so every service in it is already covered.',
-                })}
-              </p>
-            ) : null}
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-    </Card>
-  )
-}
-
-function ListGroupCard({
-  group,
-  selected,
+  locked,
   onToggle,
+  onAll,
+  onNone,
 }: {
-  group: ListGroup
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  title: string
+  entries: { key: string; label: string; domains: number }[]
   selected: Set<string>
+  locked?: boolean
   onToggle: (key: string, on: boolean) => void
+  onAll: () => void
+  onNone: () => void
 }) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const Icon = GROUP_ICON[group.key] ?? ShieldBan
-  const picked = group.entries.filter(e => selected.has(e.key)).length
+  const dir = useDirDetection()
+  const [query, setQuery] = useState('')
+  const shown = entries.filter(e => e.label.toLowerCase().includes(query.trim().toLowerCase()))
+  const picked = entries.filter(e => selected.has(e.key)).length
 
   return (
-    <Card className={cn('flex h-full flex-col transition-colors', picked > 0 && 'border-primary/50 bg-primary/[0.04]')}>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <Icon className={cn('mt-0.5 size-5 shrink-0', GROUP_TONE[group.key])} />
-          <div className="min-w-0">
-            <CardTitle className="text-[15px] leading-tight">
-              {t(`contentFilter.groups.${group.key}`, { defaultValue: group.key })}
-            </CardTitle>
-            <CardDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <DomainCount n={group.domains} />
-              {picked ? (
-                <Badge variant="secondary" className="h-[18px] px-1.5 text-[10px] font-normal">
-                  {t('contentFilter.partial', { picked, total: group.entries.length, defaultValue: '{{picked}} of {{total}}' })}
-                </Badge>
-              ) : null}
-            </CardDescription>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side={dir === 'rtl' ? 'left' : 'right'} className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="space-y-3 border-b p-5">
+          <SheetTitle className="text-base">{title}</SheetTitle>
+          <div className="flex items-center gap-2">
+            <Input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={t('contentFilter.search', { defaultValue: 'Search' })}
+              className="h-9"
+            />
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="mt-auto pb-2.5 pt-0">
-        <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
-              <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
-              {t('contentFilter.showLists', { count: group.entries.length, defaultValue: 'Show the {{count}} lists' })}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-1.5">
-            {group.entries.map(entry => (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{t('contentFilter.partial', { picked, total: entries.length, defaultValue: '{{picked}} of {{total}}' })}</span>
+            <span className="flex gap-1">
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={locked} onClick={onAll}>
+                {t('contentFilter.selectAll', { defaultValue: 'All' })}
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={locked} onClick={onNone}>
+                {t('contentFilter.selectNone', { defaultValue: 'None' })}
+              </Button>
+            </span>
+          </div>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {locked ? (
+            <p className="px-3 py-4 text-sm text-muted-foreground">
+              {t('contentFilter.wholeGroupNote', { defaultValue: 'The whole group is blocked, so every service in it is already covered.' })}
+            </p>
+          ) : shown.length === 0 ? (
+            <p className="px-3 py-4 text-sm text-muted-foreground">
+              {t('contentFilter.noMatch', { defaultValue: 'Nothing matches that.' })}
+            </p>
+          ) : (
+            shown.map(entry => (
               <label
                 key={entry.key}
-                className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 hover:bg-muted/60"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 items-center gap-2.5">
                   <Checkbox checked={selected.has(entry.key)} onCheckedChange={v => onToggle(entry.key, v === true)} />
                   <span className="truncate text-sm">{entry.label}</span>
                 </span>
                 <DomainCount n={entry.domains} />
               </label>
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-    </Card>
+            ))
+          )}
+        </div>
+
+        <SheetFooter className="border-t p-4">
+          <SheetClose asChild>
+            <Button className="w-full">{t('contentFilter.done', { defaultValue: 'Done' })}</Button>
+          </SheetClose>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
+
+function GroupTile({
+  groupKey,
+  size,
+  picked,
+  total,
+  whole,
+  onWhole,
+  onOpen,
+}: {
+  groupKey: string
+  size: number
+  picked: number
+  total: number
+  whole: boolean
+  onWhole?: (v: boolean) => void
+  onOpen: () => void
+}) {
+  const { t } = useTranslation()
+  const Icon = GROUP_ICON[groupKey] ?? ShieldBan
+  const partial = !whole && picked > 0
+  const active = whole || partial
+
+  return (
+    <div
+      className={cn(
+        'group relative flex flex-col justify-between gap-3 rounded-xl border bg-card p-4 transition-all',
+        active ? 'border-primary/50 shadow-sm ring-1 ring-primary/10' : 'hover:border-foreground/20',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className={cn('mt-0.5 rounded-lg p-1.5', active ? 'bg-primary/10' : 'bg-muted')}>
+            <Icon className={cn('size-4', GROUP_TONE[groupKey])} />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-tight">
+              {t(`contentFilter.groups.${groupKey}`, { defaultValue: groupKey })}
+            </p>
+            <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+              {t('contentFilter.domainCount', { count: size, defaultValue: '{{count}} sites' })}
+            </p>
+          </div>
+        </div>
+        {onWhole ? <Switch checked={whole} onCheckedChange={onWhole} /> : null}
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        {whole ? (
+          <Badge className="h-5 border-primary/30 bg-primary/10 px-2 text-[11px] font-normal text-primary hover:bg-primary/10">
+            {t('contentFilter.allBlocked', { defaultValue: 'All blocked' })}
+          </Badge>
+        ) : partial ? (
+          <Badge variant="secondary" className="h-5 px-2 text-[11px] font-normal">
+            {t('contentFilter.partial', { picked, total, defaultValue: '{{picked}} of {{total}}' })}
+          </Badge>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">{t('contentFilter.none', { defaultValue: 'Not blocked' })}</span>
+        )}
+        {total > 0 ? (
+          <Button variant="ghost" size="sm" className="-me-1 h-7 gap-1 px-2 text-xs" onClick={onOpen}>
+            {t('contentFilter.choose', { defaultValue: 'Choose' })}
+            <ChevronRight className="size-3.5 rtl:rotate-180" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 
 function DomainList({
   label,
@@ -434,6 +439,10 @@ export default function ContentFilterPage() {
   const [activeId, setActiveId] = useState<number | null>(null)
   const [draft, setDraft] = useState<Profile | null>(null)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [nameOpen, setNameOpen] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [picker, setPicker] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope>('node-endpoint')
   const [assignNode, setAssignNode] = useState<string>('')
   const [assignInbound, setAssignInbound] = useState<string>('')
@@ -614,8 +623,8 @@ export default function ContentFilterPage() {
           size="sm"
           className="gap-1.5"
           onClick={() => {
-            const name = window.prompt(t('contentFilter.namePrompt', { defaultValue: 'Name this profile' }) as string, '')
-            if (name && name.trim()) createProfile.mutate(name.trim())
+            setNameDraft('')
+            setNameOpen(true)
           }}
         >
           <Plus className="size-4" />
@@ -644,8 +653,8 @@ export default function ContentFilterPage() {
             <Button
               className="gap-1.5"
               onClick={() => {
-                const name = window.prompt(t('contentFilter.namePrompt', { defaultValue: 'Name this profile' }) as string, '')
-                if (name && name.trim()) createProfile.mutate(name.trim())
+                setNameDraft('')
+                setNameOpen(true)
               }}
             >
               <Plus className="size-4" />
@@ -695,11 +704,7 @@ export default function ContentFilterPage() {
                   size="icon"
                   className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
                   aria-label={t('contentFilter.delete', { defaultValue: 'Delete' })}
-                  onClick={() => {
-                    if (window.confirm(t('contentFilter.confirmDelete', { defaultValue: 'Remove this profile and lift it everywhere it applies?' }) as string)) {
-                      removeProfile.mutate(draft.id)
-                    }
-                  }}
+                  onClick={() => setDeleteOpen(true)}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -712,16 +717,24 @@ export default function ContentFilterPage() {
                 })}
               />
 
-              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {(catalog.data?.groups ?? []).map(group => (
-                  <CategoryGroupCard
-                    key={group.key}
-                    group={group}
-                    selected={selected}
-                    onToggleGroup={toggleGroup}
-                    onToggleService={toggleService}
-                  />
-                ))}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {(catalog.data?.groups ?? []).map(group => {
+                  const umbrella = selected.has(group.key)
+                  const picked = group.services.filter(x => selected.has(x.key)).length
+                  const whole = umbrella || (group.services.length > 0 && picked === group.services.length)
+                  return (
+                    <GroupTile
+                      key={group.key}
+                      groupKey={group.key}
+                      size={group.domains}
+                      picked={picked}
+                      total={group.services.length}
+                      whole={whole}
+                      onWhole={on => toggleGroup(group.key, on)}
+                      onOpen={() => setPicker(`g:${group.key}`)}
+                    />
+                  )
+                })}
               </div>
 
               <SectionHeading
@@ -731,9 +744,17 @@ export default function ContentFilterPage() {
                 })}
               />
 
-              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {(catalog.data?.lists ?? []).map(group => (
-                  <ListGroupCard key={group.key} group={group} selected={selected} onToggle={toggleService} />
+                  <GroupTile
+                    key={group.key}
+                    groupKey={group.key}
+                    size={group.domains}
+                    picked={group.entries.filter(x => selected.has(x.key)).length}
+                    total={group.entries.length}
+                    whole={group.entries.length > 0 && group.entries.every(x => selected.has(x.key))}
+                    onOpen={() => setPicker(`l:${group.key}`)}
+                  />
                 ))}
               </div>
 
@@ -957,6 +978,98 @@ export default function ContentFilterPage() {
           ) : null}
         </div>
       )}
+
+      <Dialog open={nameOpen} onOpenChange={setNameOpen}>
+        <DialogContent dir={dir} className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('contentFilter.newProfile', { defaultValue: 'New profile' })}</DialogTitle>
+            <DialogDescription>
+              {t('contentFilter.namePromptBody', {
+                defaultValue: 'A short name you will recognise later, like Kids or Teen.',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={e => {
+              e.preventDefault()
+              const name = nameDraft.trim()
+              if (!name) return
+              createProfile.mutate(name)
+              setNameOpen(false)
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-new-name">{t('contentFilter.name', { defaultValue: 'Profile name' })}</Label>
+              <Input
+                id="cf-new-name"
+                autoFocus
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                maxLength={64}
+                placeholder={t('contentFilter.namePlaceholder', { defaultValue: 'Kids' })}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setNameOpen(false)}>
+                {t('contentFilter.cancel', { defaultValue: 'Cancel' })}
+              </Button>
+              <Button type="submit" disabled={!nameDraft.trim() || createProfile.isPending}>
+                {createProfile.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                {t('contentFilter.create', { defaultValue: 'Create' })}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent dir={dir}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('contentFilter.deleteTitle', { defaultValue: 'Remove this profile?' })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('contentFilter.confirmDelete', { defaultValue: 'Remove this profile and lift it everywhere it applies?' })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('contentFilter.cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (draft) removeProfile.mutate(draft.id)
+                setDeleteOpen(false)
+              }}
+            >
+              {t('contentFilter.delete', { defaultValue: 'Delete' })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {(() => {
+        if (!picker || !draft) return null
+        const [kind, key] = [picker.slice(0, 1), picker.slice(2)]
+        const group = kind === 'g' ? catalog.data?.groups.find(g => g.key === key) : undefined
+        const list = kind === 'l' ? catalog.data?.lists.find(g => g.key === key) : undefined
+        const entries = group
+          ? group.services.map(x => ({ key: x.key, label: x.label, domains: x.domains }))
+          : (list?.entries ?? [])
+        const keys = entries.map(x => x.key)
+        const locked = Boolean(group && selected.has(group.key))
+        return (
+          <PickerSheet
+            open
+            onOpenChange={v => !v && setPicker(null)}
+            title={t(`contentFilter.groups.${key}`, { defaultValue: key })}
+            entries={entries}
+            selected={selected}
+            locked={locked}
+            onToggle={toggleService}
+            onAll={() => setDraft({ ...draft, categories: [...new Set([...draft.categories, ...keys])] })}
+            onNone={() => setDraft({ ...draft, categories: draft.categories.filter(k => !keys.includes(k)) })}
+          />
+        )
+      })()}
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent dir={dir}>

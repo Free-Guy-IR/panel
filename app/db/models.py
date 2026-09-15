@@ -1058,7 +1058,7 @@ def _register_fork_model_tables() -> None:
         _obj = getattr(_fork_connection, _name, None)
         if _obj is not None:
             globals()[_name] = _obj
-    for _name in ("ContentFilterProfile", "ContentFilterAssignment"):
+    for _name in ("ContentFilterProfile", "ContentFilterAssignment", "ContentFilterSniffingOverride"):
         _obj = getattr(_fork_content_filter, _name, None)
         if _obj is not None:
             globals()[_name] = _obj
@@ -1081,10 +1081,18 @@ def __getattr__(name: str):
         }
         globals().update(exported)
         return exported[name]
-    if name in {"ContentFilterProfile", "ContentFilterAssignment"}:
-        from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterProfile
+    if name in {"ContentFilterProfile", "ContentFilterAssignment", "ContentFilterSniffingOverride"}:
+        from app.fork.models.content_filter import (
+            ContentFilterAssignment,
+            ContentFilterProfile,
+            ContentFilterSniffingOverride,
+        )
 
-        exported = {"ContentFilterProfile": ContentFilterProfile, "ContentFilterAssignment": ContentFilterAssignment}
+        exported = {
+            "ContentFilterProfile": ContentFilterProfile,
+            "ContentFilterAssignment": ContentFilterAssignment,
+            "ContentFilterSniffingOverride": ContentFilterSniffingOverride,
+        }
         globals().update(exported)
         return exported[name]
     if name == "NodeInboundUsage":

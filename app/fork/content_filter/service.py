@@ -15,7 +15,7 @@ from app.fork.content_filter.rules import (
     owns_tag,
     tag_assignment_id,
 )
-from app.fork.models.content_filter import ContentFilterAssignment
+from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterSniffingOverride
 from app.node import node_manager
 from app.utils.logger import get_logger
 
@@ -130,16 +130,44 @@ def build_core_config(existing: dict, filter_rules: list[dict]) -> dict:
     current = list(current) if isinstance(current, list) else []
     routing["rules"] = filter_rules + _strip_owned(current)
 
+    return config
+
+
+def wanted_sniffing_tags(config: dict, filter_rules: list[dict]) -> set[str]:
     scoped = _scoped_tags(filter_rules)
     whole_core = bool(filter_rules) and not scoped
-    for inbound in config.get("inbounds") or []:
-        tag = str(inbound.get("tag") or "")
-        if tag == "API_INBOUND":
+    tags = {str(i.get("tag") or "") for i in config.get("inbounds") or [] if i.get("tag")}
+    tags.discard("API_INBOUND")
+    return tags if whole_core else tags & scoped
+
+
+async def apply_sniffing_overrides(db: AsyncSession, core_id: int, config: dict, wanted: set[str]) -> dict:
+    rows = (
+        await db.execute(select(ContentFilterSniffingOverride).where(ContentFilterSniffingOverride.core_id == core_id))
+    ).scalars().all()
+    owned = {row.inbound_tag: row for row in rows}
+    by_tag = {str(i.get("tag") or ""): i for i in config.get("inbounds") or []}
+
+    for tag in wanted:
+        inbound = by_tag.get(tag)
+        if inbound is None:
             continue
-        if whole_core or tag in scoped:
-            inbound["sniffing"] = dict(SNIFFING)
-        elif inbound.get("sniffing") == SNIFFING:
-            inbound.pop("sniffing", None)
+        if tag not in owned:
+            db.add(ContentFilterSniffingOverride(core_id=core_id, inbound_tag=tag, original=inbound.get("sniffing")))
+        inbound["sniffing"] = dict(SNIFFING)
+
+    for tag, row in owned.items():
+        if tag in wanted:
+            continue
+        inbound = by_tag.get(tag)
+        if inbound is not None:
+            if row.original is None:
+                inbound.pop("sniffing", None)
+            else:
+                inbound["sniffing"] = row.original
+        await db.delete(row)
+
+    await db.flush()
     return config
 
 
@@ -155,6 +183,7 @@ async def persist_core_rules(db: AsyncSession, core_id: int, admin) -> bool:
     filter_rules = await core_rules(db, core_id)
     current = db_core.config if isinstance(db_core.config, dict) else json.loads(db_core.config or "{}")
     updated = build_core_config(current, filter_rules)
+    updated = await apply_sniffing_overrides(db, core_id, updated, wanted_sniffing_tags(updated, filter_rules))
     if updated == current:
         return False
     inbounds_changed = {

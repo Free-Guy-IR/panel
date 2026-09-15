@@ -2,6 +2,7 @@ __all__ = [
     "ConnectionRestriction",
     "ContentFilterAssignment",
     "ContentFilterProfile",
+    "ContentFilterSniffingOverride",
     "NodeInboundUsage",
     "UserConnectionLimit",
     "UserConnectionState",
@@ -18,12 +19,17 @@ def __getattr__(name):
         from app.fork.models.node_inbound_usage import NodeInboundUsage
 
         return NodeInboundUsage
-    if name in {"ContentFilterProfile", "ContentFilterAssignment"}:
-        from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterProfile
+    if name in {"ContentFilterProfile", "ContentFilterAssignment", "ContentFilterSniffingOverride"}:
+        from app.fork.models.content_filter import (
+            ContentFilterAssignment,
+            ContentFilterProfile,
+            ContentFilterSniffingOverride,
+        )
 
         return {
             "ContentFilterProfile": ContentFilterProfile,
             "ContentFilterAssignment": ContentFilterAssignment,
+            "ContentFilterSniffingOverride": ContentFilterSniffingOverride,
         }[name]
     if name in {"ConnectionRestriction", "UserConnectionLimit", "UserConnectionState"}:
         from app.fork.models.connection import ConnectionRestriction, UserConnectionLimit, UserConnectionState
