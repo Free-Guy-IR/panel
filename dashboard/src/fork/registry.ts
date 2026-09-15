@@ -4,7 +4,7 @@ import type { RouteObject } from 'react-router'
 
 export type ForkRouteParent = 'root' | 'settings' | 'bulk' | 'nodes'
 
-export type ForkNavSlot = 'settings' | 'bulk'
+export type ForkNavSlot = 'main' | 'settings' | 'bulk'
 
 export type ForkNavItem = {
   id: string
