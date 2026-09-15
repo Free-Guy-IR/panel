@@ -198,3 +198,4 @@ id_ed25519*
 *.session
 creds.json
 credentials.json
+app/fork/content_filter/pgfilter.dat

@@ -13,7 +13,7 @@ from app.fork.content_filter.catalog import catalog_payload
 from app.fork.content_filter.schemas import (
     AssignmentPayload,
     AssignmentResponse,
-    CatalogGroupOut,
+    CatalogResponse,
     DestinationTest,
     DestinationVerdict,
     ProfilePayload,
@@ -67,7 +67,7 @@ async def _load_assignment(db: AsyncSession, assignment_id: int) -> ContentFilte
     return assignment
 
 
-@router.get("/catalog", response_model=list[CatalogGroupOut])
+@router.get("/catalog", response_model=CatalogResponse)
 async def get_catalog(_: AdminDetails = Depends(require_permission("settings", "read"))):
     """The category tree the operator picks from, with how broad each entry is."""
     return catalog_payload()

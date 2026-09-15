@@ -2,33 +2,46 @@ from datetime import datetime as dt
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.fork.content_filter.catalog import unknown_keys
+from app.fork.content_filter.catalog import normalise
 
 MAX_LIST_ENTRIES = 512
 DOMAIN_MAX = 253
 
 
 def _clean_domains(values: list[str] | None) -> list[str]:
+    """Accept example.com, *.example.com and =example.com; reject anything else."""
     if not values:
         return []
     out: list[str] = []
     seen: set[str] = set()
     for raw in values:
         value = (raw or "").strip().lower().rstrip(".")
+        if not value or len(value) > DOMAIN_MAX + 2:
+            continue
+        prefix = ""
+        if value.startswith("*."):
+            prefix, value = "*.", value[2:]
+        elif value.startswith("="):
+            prefix, value = "=", value[1:]
+        value = value.strip().strip(".")
         if not value or len(value) > DOMAIN_MAX:
             continue
-        if any(ch.isspace() or ch in '"\'\\/' for ch in value):
+        if any(ch.isspace() or ch in '"\'\\/*=' for ch in value):
             continue
-        if value in seen:
+        if "." not in value:
             continue
-        seen.add(value)
-        out.append(value)
+        canonical = prefix + value
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        out.append(canonical)
     return out[:MAX_LIST_ENTRIES]
 
 
 class CatalogService(BaseModel):
     key: str
-    geosite: str
+    label: str = ""
+    geosite: str | None = None
     domains: int
 
 
@@ -37,6 +50,24 @@ class CatalogGroupOut(BaseModel):
     geosite: str | None
     domains: int
     services: list[CatalogService]
+
+
+class CatalogListEntry(BaseModel):
+    key: str
+    label: str
+    domains: int
+
+
+class CatalogListGroup(BaseModel):
+    key: str
+    domains: int
+    entries: list[CatalogListEntry]
+
+
+class CatalogResponse(BaseModel):
+    groups: list[CatalogGroupOut]
+    protection: list[CatalogListEntry] = Field(default_factory=list)
+    lists: list[CatalogListGroup] = Field(default_factory=list)
 
 
 class ProfilePayload(BaseModel):
@@ -50,11 +81,7 @@ class ProfilePayload(BaseModel):
     @field_validator("categories")
     @classmethod
     def known_categories(cls, value: list[str]) -> list[str]:
-        cleaned = [v.strip() for v in value if (v or "").strip()]
-        bad = unknown_keys(cleaned)
-        if bad:
-            raise ValueError(f"unknown categories: {', '.join(bad)}")
-        return sorted(set(cleaned))
+        return normalise([v.strip() for v in value if (v or "").strip()])
 
     @field_validator("allow_list", "block_list")
     @classmethod

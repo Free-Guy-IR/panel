@@ -109,6 +109,17 @@ def _strip_owned(rules: list[dict]) -> list[dict]:
     return [rule for rule in rules if not owns_tag(rule.get("ruleTag"))]
 
 
+SNIFFING = {"enabled": True, "destOverride": ["http", "tls", "quic"], "routeOnly": False}
+
+
+def _scoped_tags(rules: list[dict]) -> set[str]:
+    tags: set[str] = set()
+    for rule in rules:
+        for tag in rule.get("inboundTag") or []:
+            tags.add(tag)
+    return tags
+
+
 def build_core_config(existing: dict, filter_rules: list[dict]) -> dict:
     config = deepcopy(existing)
     routing = config.get("routing")
@@ -118,6 +129,15 @@ def build_core_config(existing: dict, filter_rules: list[dict]) -> dict:
     current = routing.get("rules")
     current = list(current) if isinstance(current, list) else []
     routing["rules"] = filter_rules + _strip_owned(current)
+
+    scoped = _scoped_tags(filter_rules)
+    whole_core = bool(filter_rules) and not scoped
+    for inbound in config.get("inbounds") or []:
+        tag = str(inbound.get("tag") or "")
+        if tag == "API_INBOUND":
+            continue
+        if whole_core or tag in scoped:
+            inbound["sniffing"] = dict(SNIFFING)
     return config
 
 
@@ -135,6 +155,15 @@ async def persist_core_rules(db: AsyncSession, core_id: int, admin) -> bool:
     updated = build_core_config(current, filter_rules)
     if updated == current:
         return False
+    inbounds_changed = {
+        str(i.get("tag") or "")
+        for i in updated.get("inbounds") or []
+        if i.get("sniffing")
+        != next(
+            (j.get("sniffing") for j in current.get("inbounds") or [] if str(j.get("tag") or "") == str(i.get("tag") or "")),
+            None,
+        )
+    }
 
     operator = CoreOperation(operator_type=OperatorType.SYSTEM)
     await operator.modify_core(
@@ -149,7 +178,21 @@ async def persist_core_rules(db: AsyncSession, core_id: int, admin) -> bool:
         ),
         admin,
     )
+    if inbounds_changed:
+        logger.info(f"core {core_id}: name recovery enabled on {sorted(inbounds_changed)}; nodes must reload to pick it up")
+        await _restart_core_nodes(db, core_id, admin)
     return True
+
+
+async def _restart_core_nodes(db: AsyncSession, core_id: int, admin) -> None:
+    from app.operation import OperatorType
+    from app.operation.node import NodeOperation
+
+    operator = NodeOperation(operator_type=OperatorType.SYSTEM)
+    try:
+        await operator.restart_all_node(db=db, core_id=core_id, admin=admin)
+    except Exception as exc:
+        logger.warning(f"core {core_id}: could not restart its nodes after enabling name recovery: {exc}")
 
 
 async def live_rules(node_id: int) -> list[dict]:

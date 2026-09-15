@@ -28,9 +28,24 @@ def tag_assignment_id(tag: str) -> int | None:
 
 
 def _domain_matchers(values: list[str]) -> list[str]:
+    """Turn what the operator typed into xray domain matchers.
+
+    example.com and *.example.com both cover the domain and everything under it.
+    =example.com covers that exact name and nothing beneath it.
+    """
     out: list[str] = []
     for raw in values:
         value = (raw or "").strip().lower()
+        if not value:
+            continue
+        if value.startswith("="):
+            bare = value[1:].strip().strip(".")
+            if bare:
+                out.append(f"full:{bare}")
+            continue
+        if value.startswith("*."):
+            value = value[2:]
+        value = value.strip(".")
         if not value:
             continue
         if ":" in value:
@@ -75,14 +90,17 @@ def build_rules(
             }
         )
 
-    geosites = [f"geosite:{name}" for name in expand(categories)]
-    if geosites:
+    geosites, extra_domains, externals = expand(categories)
+    matchers = [f"geosite:{name}" for name in geosites]
+    matchers += [f"ext:{ref}" for ref in externals]
+    matchers += [f"domain:{name}" for name in extra_domains]
+    if matchers:
         rules.append(
             {
                 "type": "field",
                 "ruleTag": rule_tag(assignment_id, "cat"),
                 **scope,
-                "domain": geosites,
+                "domain": matchers,
                 "outboundTag": BLOCK_OUTBOUND,
             }
         )

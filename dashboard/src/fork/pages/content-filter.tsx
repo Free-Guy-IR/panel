@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -16,17 +15,27 @@ import { fetcher } from '@/service/http'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Baby,
+  Bot,
   ChevronDown,
   Clapperboard,
+  Cloud,
+  Dices,
   Gamepad2,
+  Globe,
+  Heart,
+  Laptop,
   Loader2,
   Megaphone,
+  MessageCircle,
   Plus,
   Search,
   ShieldAlert,
   ShieldBan,
   ShieldCheck,
+  ShoppingBag,
+  Smartphone,
   Trash2,
+  Unlock,
   Users,
   X,
 } from 'lucide-react'
@@ -36,6 +45,9 @@ import { toast } from 'sonner'
 
 type CatalogService = { key: string; geosite: string; domains: number }
 type CatalogGroup = { key: string; geosite: string | null; domains: number; services: CatalogService[] }
+type ListEntry = { key: string; label: string; domains: number }
+type ListGroup = { key: string; domains: number; entries: ListEntry[] }
+type Catalog = { groups: CatalogGroup[]; protection: ListEntry[]; lists: ListGroup[] }
 type Profile = {
   id: number
   name: string
@@ -70,6 +82,23 @@ type Assignment = {
 const BASE = '/api/content-filter'
 
 const GROUP_ICON: Record<string, typeof ShieldBan> = {
+  security: ShieldAlert,
+  bypass: Unlock,
+  devices: Smartphone,
+  content: Clapperboard,
+  regional: Globe,
+  social_network: Users,
+  messenger: MessageCircle,
+  streaming: Clapperboard,
+  gaming: Gamepad2,
+  gambling: Dices,
+  dating: Heart,
+  ai: Bot,
+  shopping: ShoppingBag,
+  hosting: Cloud,
+  cdn: Cloud,
+  software: Laptop,
+  privacy: ShieldCheck,
   adult: Baby,
   social: Users,
   games: Gamepad2,
@@ -78,6 +107,23 @@ const GROUP_ICON: Record<string, typeof ShieldBan> = {
 }
 
 const GROUP_TONE: Record<string, string> = {
+  security: 'text-rose-600 dark:text-rose-400',
+  bypass: 'text-amber-600 dark:text-amber-400',
+  devices: 'text-sky-600 dark:text-sky-400',
+  content: 'text-violet-600 dark:text-violet-400',
+  regional: 'text-teal-600 dark:text-teal-400',
+  social_network: 'text-sky-600 dark:text-sky-400',
+  messenger: 'text-cyan-600 dark:text-cyan-400',
+  streaming: 'text-amber-600 dark:text-amber-400',
+  gaming: 'text-violet-600 dark:text-violet-400',
+  gambling: 'text-red-600 dark:text-red-400',
+  dating: 'text-pink-600 dark:text-pink-400',
+  ai: 'text-indigo-600 dark:text-indigo-400',
+  shopping: 'text-orange-600 dark:text-orange-400',
+  hosting: 'text-slate-600 dark:text-slate-400',
+  cdn: 'text-slate-600 dark:text-slate-400',
+  software: 'text-slate-600 dark:text-slate-400',
+  privacy: 'text-emerald-600 dark:text-emerald-400',
   adult: 'text-rose-600 dark:text-rose-400',
   social: 'text-sky-600 dark:text-sky-400',
   games: 'text-violet-600 dark:text-violet-400',
@@ -88,7 +134,7 @@ const GROUP_TONE: Record<string, string> = {
 function useCatalog() {
   return useQuery({
     queryKey: ['content-filter', 'catalog'],
-    queryFn: () => fetcher<CatalogGroup[]>(`${BASE}/catalog`),
+    queryFn: () => fetcher<Catalog>(`${BASE}/catalog`),
     staleTime: Infinity,
   })
 }
@@ -116,6 +162,15 @@ function errorText(e: unknown, fallback: string): string {
     if (first?.msg) return first.msg
   }
   return (e as Error)?.message || fallback
+}
+
+function SectionHeading({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="flex items-baseline gap-3 border-b pb-2 pt-2">
+      <h3 className="shrink-0 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      {hint ? <p className="truncate text-xs text-muted-foreground/80">{hint}</p> : null}
+    </div>
+  )
 }
 
 function DomainCount({ n }: { n: number }) {
@@ -221,6 +276,68 @@ function CategoryGroupCard({
                 })}
               </p>
             ) : null}
+          </CollapsibleContent>
+        </Collapsible>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ListGroupCard({
+  group,
+  selected,
+  onToggle,
+}: {
+  group: ListGroup
+  selected: Set<string>
+  onToggle: (key: string, on: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const Icon = GROUP_ICON[group.key] ?? ShieldBan
+  const picked = group.entries.filter(e => selected.has(e.key)).length
+
+  return (
+    <Card className={cn('flex h-full flex-col transition-colors', picked > 0 && 'border-primary/50 bg-primary/[0.04]')}>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <Icon className={cn('mt-0.5 size-5 shrink-0', GROUP_TONE[group.key])} />
+          <div className="min-w-0">
+            <CardTitle className="text-[15px] leading-tight">
+              {t(`contentFilter.groups.${group.key}`, { defaultValue: group.key })}
+            </CardTitle>
+            <CardDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <DomainCount n={group.domains} />
+              {picked ? (
+                <Badge variant="secondary" className="h-[18px] px-1.5 text-[10px] font-normal">
+                  {t('contentFilter.partial', { picked, total: group.entries.length, defaultValue: '{{picked}} of {{total}}' })}
+                </Badge>
+              ) : null}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="mt-auto pb-2.5 pt-0">
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
+              <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+              {t('contentFilter.showLists', { count: group.entries.length, defaultValue: 'Show the {{count}} lists' })}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-1.5">
+            {group.entries.map(entry => (
+              <label
+                key={entry.key}
+                className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Checkbox checked={selected.has(entry.key)} onCheckedChange={v => onToggle(entry.key, v === true)} />
+                  <span className="truncate text-sm">{entry.label}</span>
+                </span>
+                <DomainCount n={entry.domains} />
+              </label>
+            ))}
           </CollapsibleContent>
         </Collapsible>
       </CardContent>
@@ -414,7 +531,7 @@ export default function ContentFilterPage() {
 
   const toggleGroup = (key: string, on: boolean) => {
     if (!draft) return
-    const group = catalog.data?.find(g => g.key === key)
+    const group = catalog.data?.groups.find(g => g.key === key)
     const children = group?.services.map(s => s.key) ?? []
     const next = new Set(draft.categories)
     if (on) {
@@ -526,40 +643,32 @@ export default function ContentFilterPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid items-start gap-5 lg:grid-cols-[232px_minmax(0,1fr)]">
-          <div className="space-y-2 lg:sticky lg:top-4">
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-2">
             {profiles.data.map(profile => {
               const count = (assignments.data ?? []).filter(a => a.profile_id === profile.id).length
+              const active = profile.id === activeId
               return (
                 <button
                   key={profile.id}
                   onClick={() => setActiveId(profile.id)}
                   className={cn(
-                    'w-full rounded-lg border px-3 py-2.5 text-start transition-colors',
-                    profile.id === activeId ? 'border-primary bg-primary/5' : 'hover:bg-muted/60',
+                    'flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted/60',
                   )}
                 >
-                  <div className="truncate text-sm font-medium">{profile.name}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>
-                      {t('contentFilter.categoryCount', {
-                        count: profile.categories.length,
-                        defaultValue: '{{count}} categories',
-                      })}
-                    </span>
-                    {count ? (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                        {t('contentFilter.endpointCount', { count, defaultValue: '{{count}} endpoints' })}
-                      </Badge>
-                    ) : null}
-                  </div>
+                  <span className="font-medium">{profile.name}</span>
+                  <span className={cn('text-xs tabular-nums', active ? 'opacity-75' : 'text-muted-foreground')}>
+                    {profile.categories.length}
+                    {count ? ` · ${count}` : ''}
+                  </span>
                 </button>
               )
             })}
           </div>
 
           {draft ? (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
                 <Label htmlFor="cf-name" className="shrink-0 text-xs text-muted-foreground">
                   {t('contentFilter.name', { defaultValue: 'Profile name' })}
@@ -585,8 +694,15 @@ export default function ContentFilterPage() {
                 </Button>
               </div>
 
-              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
-                {(catalog.data ?? []).map(group => (
+              <SectionHeading
+                title={t('contentFilter.section.categories', { defaultValue: 'What to block' })}
+                hint={t('contentFilter.section.categoriesHint', {
+                  defaultValue: 'Switch a whole group off, or open one and pick the services inside it.',
+                })}
+              />
+
+              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {(catalog.data?.groups ?? []).map(group => (
                   <CategoryGroupCard
                     key={group.key}
                     group={group}
@@ -596,6 +712,26 @@ export default function ContentFilterPage() {
                   />
                 ))}
               </div>
+
+              <SectionHeading
+                title={t('contentFilter.section.lists', { defaultValue: 'Ready-made lists' })}
+                hint={t('contentFilter.section.listsHint', {
+                  defaultValue: 'Curated blocklists that ship with the node — picking one costs the rule nothing extra.',
+                })}
+              />
+
+              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {(catalog.data?.lists ?? []).map(group => (
+                  <ListGroupCard key={group.key} group={group} selected={selected} onToggle={toggleService} />
+                ))}
+              </div>
+
+              <SectionHeading
+                title={t('contentFilter.section.hardening', { defaultValue: 'How strict to be' })}
+                hint={t('contentFilter.section.hardeningHint', {
+                  defaultValue: 'Two settings that decide what happens beyond the categories above.',
+                })}
+              />
 
               <Card>
                 <CardHeader className="pb-3">
@@ -656,7 +792,12 @@ export default function ContentFilterPage() {
                 </Button>
               </div>
 
-              <Separator />
+              <SectionHeading
+                title={t('contentFilter.whereTitle', { defaultValue: 'Where it applies' })}
+                hint={t('contentFilter.whereBody', {
+                  defaultValue: 'Only customers whose config uses one of these endpoints are affected.',
+                })}
+              />
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
