@@ -1,6 +1,7 @@
 # Research: resolving R-1 before planning
 
 **Date**: 2026-09-15
+**Reproduce**: the scripts that produced every measurement below are committed under `specs/001-content-filtering/experiments/`. Raw captured output is in `experiments/results.md`.
 **Question**: can routing rules be changed on a *running* node, so that filtering one endpoint does not require restarting every node attached to the core?
 **Answer**: **Yes — after a one-time core change.** Everything below was measured on a disposable Xray node created for this purpose on the test panel, not inferred from source.
 
@@ -85,15 +86,32 @@ after restart    tags: [<untagged>, PG_NODE_MALFORMED_DOMAIN_GUARD, <untagged>]
 
 1. **Enabling `RoutingService` is a separate, earlier migration.** It restarts nodes, so it is scheduled once per core, deliberately, and is not part of applying a filter. A core without it must be reported as "cannot enforce" rather than silently failing.
 
-2. **Appending is only safe because rules are scoped by `inboundTag`.** A rule that matches only the restricted endpoint cannot be pre-empted by a general rule unless that general rule also matches the same inbound. The plan must check the existing rule list for anything that would match the target inbound *before* the filter, and refuse or warn rather than install a rule that will never fire. Reordering is not available: `AddRoutingRuleRequest` carries exactly one rule, and `should_reset=true` clears **all** rules and balancers, so re-ordering means tearing down and rebuilding the entire rule set on a live node — which is not acceptable.
+2. **Scoping by `inboundTag` is not by itself a defence — activation must HARD FAIL.** A rule scoped to the restricted inbound is still evaluated last, so any earlier rule that also matches that traffic wins. An unscoped catch-all — a rule with no `inboundTag` at all — matches *every* inbound, including the restricted one, and would silently defeat the filter. Reordering is unavailable: `AddRoutingRuleRequest` carries exactly one rule, and `should_reset=true` clears **all** rules and balancers, so re-ordering means tearing down and rebuilding the whole rule set on a live node.
 
-3. **Reconciliation is mandatory, not a nicety.** Because a restart wipes the rules, FR-016 through FR-020 are load-bearing: the panel must hold the desired state, re-push after any restart, and report a node as *not enforced* until the re-push has been confirmed. A filter that silently disappears is precisely the failure that hurts a parent.
+   Therefore the rule is **not** "refuse or warn". Before activating a profile the panel MUST walk the live rule list and determine whether any rule ordered before the filter could match traffic on the target inbound — including every rule that carries no `inboundTag`. If any can, **activation fails and the profile is not marked enforced.** A warning is not acceptable: a warning produces a profile the operator believes is protecting a child while it is inert. The only permitted alternatives are to fail, or to establish effective ordering safely (by making the core's boot config carry the filter rule ahead of the conflicting one, which is a core edit, not a live append).
+
+3. **Restart recovery must be fail-CLOSED, and live application alone cannot provide it.** A restart wipes the live rules, so between the moment a node comes back and the moment the panel has re-pushed and *verified*, the restricted endpoint is up and accepting traffic with no filter at all. Reporting "not enforced" describes that window; it does not close it. A child reconnecting during a node upgrade would simply be unfiltered.
+
+   So live application is the mechanism for *changing* a filter without interrupting anyone; it is **not** the mechanism for *holding* one. The filter rules must also live in the core's boot configuration, so the core comes up already enforcing them and there is no unprotected window. That gives two paths that must both be maintained:
+
+   - **persisted**: the rule is written into the core config, which is what the core loads on boot. Core edits accept `restart_nodes=false`, so persisting does not itself restart anything.
+   - **live**: the same rule is pushed with `AddRoutingRule` so the change takes effect immediately on the already-running core.
+
+   Where the two disagree, the persisted config is the source of truth and the live router is reconciled to it. If a node cannot be brought into agreement — it is offline, or the push fails — the restricted endpoint must not be left serving unfiltered traffic: the correct fail-closed action is to stop offering that endpoint (disable it, or stop its users being routed to it) until enforcement is confirmed. Reconciliation must then be proven by listing the live rules back and by a `TestRoute` probe, not by a successful call.
 
 4. **`ruleTag` is the primary key.** Duplicates are rejected, so tags must be deterministic and unique per profile-and-scope. Deletion is idempotent but gives no feedback, so the panel must verify removal by listing rather than by trusting the call.
 
 ## Bonus finding
 
 `TestRoute` does exactly what FR-025 asks for: it answers "would this destination be blocked for this endpoint?" without connecting a client. An unmatched destination surfaces as `500 common: not enough information for making a decision` — that is the *no rule matched* signal, not a failure, and the panel must translate it rather than show it as an error.
+
+## What the experiment did NOT establish
+
+Stated plainly, because the difference matters:
+
+- `TestRoute` evaluates the router's decision. It does **not** open a connection. Nothing here proves that a real client is actually blocked, that an unrestricted client keeps its connection alive across a live rule change, or that no packets slip through during reconciliation. Those need continuous traffic from a real client through the whole apply / edit / restart / recover cycle, and that test has not been run.
+- The restart test restarted the container and then re-queried. No client was connected during it, so the size of the unprotected window was observed only as "the rules are gone", not measured in seconds of exposure.
+- Offline reconciliation was observed only as a `503 backend not initialized` error on a call. The behaviour of a profile whose node is offline at activation time, and what happens when it returns, was not exercised.
 
 ## Still open
 
