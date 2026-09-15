@@ -55,7 +55,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-type CatalogService = { key: string; label: string; geosite: string | null; domains: number }
+type CatalogService = { key: string; label: string; geosite: string | null; domains: number; icon?: string }
 type CatalogGroup = { key: string; geosite: string | null; domains: number; services: CatalogService[] }
 type ListEntry = { key: string; label: string; domains: number }
 type ListGroup = { key: string; domains: number; entries: ListEntry[] }
@@ -183,18 +183,26 @@ function SectionHeading({ title, hint }: { title: string; hint?: string }) {
   )
 }
 
-function DomainCount({ n }: { n: number }) {
-  const { t } = useTranslation()
+
+type PickEntry = { key: string; label: string; domains: number; icon?: string }
+
+function ServiceIcon({ svg, active }: { svg?: string; active: boolean }) {
+  if (!svg) return <span className={cn('size-8 shrink-0 rounded-lg', active ? 'bg-primary/15' : 'bg-muted')} />
   return (
-    <span className="text-xs tabular-nums text-muted-foreground">
-      {t('contentFilter.domainCount', { count: n, defaultValue: '{{count}} sites' })}
-    </span>
+    <span
+      className={cn(
+        'flex size-8 shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors [&>svg]:size-full',
+        active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+      )}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   )
 }
 
 function PickerSheet({
   open,
   onOpenChange,
+  groupKey,
   title,
   entries,
   selected,
@@ -205,8 +213,9 @@ function PickerSheet({
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
+  groupKey: string
   title: string
-  entries: { key: string; label: string; domains: number }[]
+  entries: PickEntry[]
   selected: Set<string>
   locked?: boolean
   onToggle: (key: string, on: boolean) => void
@@ -216,24 +225,51 @@ function PickerSheet({
   const { t } = useTranslation()
   const dir = useDirDetection()
   const [query, setQuery] = useState('')
-  const shown = entries.filter(e => e.label.toLowerCase().includes(query.trim().toLowerCase()))
+  const [onlyPicked, setOnlyPicked] = useState(false)
+  const GIcon = GROUP_ICON[groupKey] ?? ShieldBan
   const picked = entries.filter(e => selected.has(e.key)).length
+  const q = query.trim().toLowerCase()
+  const shown = entries.filter(e => (!q || e.label.toLowerCase().includes(q)) && (!onlyPicked || selected.has(e.key)))
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side={dir === 'rtl' ? 'left' : 'right'} className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <SheetHeader className="space-y-3 border-b p-5">
-          <SheetTitle className="text-base">{title}</SheetTitle>
-          <div className="flex items-center gap-2">
+        <SheetHeader className="space-y-0 border-b p-5 text-start">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-primary/10 p-2.5">
+              <GIcon className={cn('size-5', GROUP_TONE[groupKey])} />
+            </span>
+            <div className="min-w-0">
+              <SheetTitle className="text-base leading-tight">{title}</SheetTitle>
+              <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                {picked === 0
+                  ? t('contentFilter.pickedNone', { total: entries.length, defaultValue: 'None of {{total}} blocked' })
+                  : picked === entries.length
+                    ? t('contentFilter.pickedAll', { total: entries.length, defaultValue: 'All {{total}} blocked' })
+                    : t('contentFilter.pickedSome', { picked, total: entries.length, defaultValue: '{{picked}} of {{total}} blocked' })}
+              </p>
+            </div>
+          </div>
+          <div className="relative mt-4">
+            <Search className="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
             <Input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder={t('contentFilter.search', { defaultValue: 'Search' })}
-              className="h-9"
+              placeholder={t('contentFilter.searchServices', { defaultValue: 'Search services' })}
+              className="h-9 ltr:pl-9 rtl:pr-9"
             />
           </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{t('contentFilter.partial', { picked, total: entries.length, defaultValue: '{{picked}} of {{total}}' })}</span>
+          <div className="mt-3 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setOnlyPicked(v => !v)}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                onlyPicked ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {t('contentFilter.onlySelected', { defaultValue: 'Selected only' })}
+            </button>
             <span className="flex gap-1">
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={locked} onClick={onAll}>
                 {t('contentFilter.selectAll', { defaultValue: 'All' })}
@@ -245,28 +281,39 @@ function PickerSheet({
           </div>
         </SheetHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {locked ? (
-            <p className="px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-3 text-sm">
               {t('contentFilter.wholeGroupNote', { defaultValue: 'The whole group is blocked, so every service in it is already covered.' })}
-            </p>
+            </div>
           ) : shown.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-muted-foreground">
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
               {t('contentFilter.noMatch', { defaultValue: 'Nothing matches that.' })}
             </p>
           ) : (
-            shown.map(entry => (
-              <label
-                key={entry.key}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 hover:bg-muted/60"
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <Checkbox checked={selected.has(entry.key)} onCheckedChange={v => onToggle(entry.key, v === true)} />
-                  <span className="truncate text-sm">{entry.label}</span>
-                </span>
-                <DomainCount n={entry.domains} />
-              </label>
-            ))
+            <div className="space-y-1">
+              {shown.map(entry => {
+                const on = selected.has(entry.key)
+                return (
+                  <label
+                    key={entry.key}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors',
+                      on ? 'border-primary/40 bg-primary/[0.05]' : 'border-transparent hover:bg-muted/60',
+                    )}
+                  >
+                    <ServiceIcon svg={entry.icon} active={on} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{entry.label}</span>
+                      <span className="block text-[11px] tabular-nums text-muted-foreground">
+                        {t('contentFilter.domainCount', { count: entry.domains, defaultValue: '{{count}} sites' })}
+                      </span>
+                    </span>
+                    <Checkbox checked={on} onCheckedChange={v => onToggle(entry.key, v === true)} className="size-5" />
+                  </label>
+                )
+              })}
+            </div>
           )}
         </div>
 
@@ -1052,7 +1099,7 @@ export default function ContentFilterPage() {
         const group = kind === 'g' ? catalog.data?.groups.find(g => g.key === key) : undefined
         const list = kind === 'l' ? catalog.data?.lists.find(g => g.key === key) : undefined
         const entries = group
-          ? group.services.map(x => ({ key: x.key, label: x.label, domains: x.domains }))
+          ? group.services.map(x => ({ key: x.key, label: x.label, domains: x.domains, icon: x.icon }))
           : (list?.entries ?? [])
         const keys = entries.map(x => x.key)
         const locked = Boolean(group && selected.has(group.key))
@@ -1060,6 +1107,7 @@ export default function ContentFilterPage() {
           <PickerSheet
             open
             onOpenChange={v => !v && setPicker(null)}
+            groupKey={key}
             title={t(`contentFilter.groups.${key}`, { defaultValue: key })}
             entries={entries}
             selected={selected}

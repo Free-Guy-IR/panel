@@ -578,5 +578,10 @@
   "contentFilter.namePromptBody": "یک نام کوتاه که بعداً بشناسیدش، مثل «بچه‌ها» یا «نوجوان».",
   "contentFilter.namePlaceholder": "بچه‌ها",
   "contentFilter.create": "ساختن",
-  "contentFilter.deleteTitle": "این پروفایل حذف شود؟"
+  "contentFilter.deleteTitle": "این پروفایل حذف شود؟",
+  "contentFilter.pickedNone": "هیچ‌کدام از {{total}} مسدود نیست",
+  "contentFilter.pickedAll": "هر {{total}} مورد مسدود است",
+  "contentFilter.pickedSome": "{{picked}} از {{total}} مسدود",
+  "contentFilter.searchServices": "جست‌وجوی سرویس",
+  "contentFilter.onlySelected": "فقط انتخاب‌شده‌ها"
 }

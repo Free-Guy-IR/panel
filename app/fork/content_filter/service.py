@@ -151,6 +151,8 @@ async def apply_sniffing_overrides(db: AsyncSession, core_id: int, config: dict,
     for tag in wanted:
         inbound = by_tag.get(tag)
         if inbound is None:
+            if tag in owned:
+                await db.delete(owned.pop(tag))
             continue
         if tag not in owned:
             db.add(ContentFilterSniffingOverride(core_id=core_id, inbound_tag=tag, original=inbound.get("sniffing")))

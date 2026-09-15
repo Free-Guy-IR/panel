@@ -531,5 +531,10 @@
   "contentFilter.namePromptBody": "A short name you will recognise later, like Kids or Teen.",
   "contentFilter.namePlaceholder": "Kids",
   "contentFilter.create": "Create",
-  "contentFilter.deleteTitle": "Remove this profile?"
+  "contentFilter.deleteTitle": "Remove this profile?",
+  "contentFilter.pickedNone": "None of {{total}} blocked",
+  "contentFilter.pickedAll": "All {{total}} blocked",
+  "contentFilter.pickedSome": "{{picked}} of {{total}} blocked",
+  "contentFilter.searchServices": "Search services",
+  "contentFilter.onlySelected": "Selected only"
 }

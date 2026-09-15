@@ -70,6 +70,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
   const canBulkUpdateUsers = hasScopeAll(admin, 'users', 'update')
+  const canManageSettings = hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
   const nodeNavItems = [
     ...(canReadNodes
       ? [
@@ -321,7 +322,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
-      ...(hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update') ? forkMainNavItems : []),
+      ...(canManageSettings ? forkMainNavItems : []),
       {
         title: 'settings.title',
         url: '/settings',
@@ -336,7 +337,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 },
               ]
             : []),
-          ...(hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
+          ...(canManageSettings
             ? [
                 {
                   title: 'settings.notifications.title',

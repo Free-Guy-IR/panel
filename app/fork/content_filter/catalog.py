@@ -40,6 +40,7 @@ class Entry:
     domains: tuple[str, ...]
     external: str | None = None
     declared_size: int = 0
+    icon: str = ""
 
     @property
     def size(self) -> int:
@@ -74,6 +75,7 @@ def _load() -> tuple[tuple[Group, ...], tuple[Entry, ...]]:
             label=service["name"],
             geosite=service.get("geosite"),
             domains=tuple(service.get("domains") or ()),
+            icon=service.get("icon") or "",
         )
         buckets.setdefault(service.get("group") or "other", []).append(entry)
 
@@ -245,7 +247,7 @@ def catalog_payload() -> dict:
                 "geosite": group.geosite,
                 "domains": group.size,
                 "services": [
-                    {"key": e.key, "label": e.label, "geosite": e.geosite, "domains": e.size}
+                    {"key": e.key, "label": e.label, "geosite": e.geosite, "domains": e.size, "icon": e.icon}
                     for e in group.entries
                 ],
             }

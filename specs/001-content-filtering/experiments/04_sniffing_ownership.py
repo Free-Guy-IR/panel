@@ -105,6 +105,47 @@ check("one override row after three applies", len([o for o in overrides() if o[0
 call("DELETE", "/api/content-filter/assignments/%d" % a["id"])
 check("cleanup: sniffing back to none", sniffing_of(TAG), None)
 
+print("\n=== case 5: an operator edit WHILE the override is active restores the pre-filter original ===")
+set_sniffing(TAG, None)
+st, a = call("POST", "/api/content-filter/assignments", {"profile_id": pid, "node_id": 5, "inbound_tag": TAG, "is_enabled": True})
+assert st == 201, ("apply", st, a)
+midway = {"enabled": True, "destOverride": ["quic"], "routeOnly": True}
+set_sniffing(TAG, midway)
+check("operator edit landed while active", sniffing_of(TAG), midway)
+call("DELETE", "/api/content-filter/assignments/%d" % a["id"])
+check("withdraw restores what was there BEFORE the filter, not the mid-edit value", sniffing_of(TAG), None)
+
+print("\n=== case 6: ownership lives in the database, not in process memory ===")
+set_sniffing(TAG, None)
+st, a = call("POST", "/api/content-filter/assignments", {"profile_id": pid, "node_id": 5, "inbound_tag": TAG, "is_enabled": True})
+assert st == 201
+check("override row is a persisted database row", [o[0] for o in overrides() if o[0] == TAG], [TAG])
+call("DELETE", "/api/content-filter/assignments/%d" % a["id"])
+
+print("\n=== case 7: an inbound that vanishes and comes back under the same tag ===")
+set_sniffing(TAG, None)
+st, a = call("POST", "/api/content-filter/assignments", {"profile_id": pid, "node_id": 5, "inbound_tag": TAG, "is_enabled": True})
+assert st == 201
+check("row recorded with original None", [o for o in overrides() if o[0] == TAG], [(TAG, None)])
+core, cfg = core_cfg()
+saved = next(i for i in cfg["inbounds"] if i.get("tag") == TAG)
+cfg["inbounds"] = [i for i in cfg["inbounds"] if i.get("tag") != TAG]
+st, _ = call("PUT", "/api/core/1?restart_nodes=false", {"name": core["name"], "config": cfg, "type": core.get("type"),
+    "exclude_inbound_tags": core.get("exclude_inbound_tags") or [], "fallbacks_inbound_tags": core.get("fallbacks_inbound_tags") or []})
+assert st == 200, ("remove inbound", st)
+call("POST", "/api/content-filter/assignments/%d/apply" % a["id"])
+check("row dropped once its inbound is gone", [o for o in overrides() if o[0] == TAG], [])
+reborn = dict(saved); reborn["sniffing"] = {"enabled": True, "destOverride": ["http"], "routeOnly": True}
+core, cfg = core_cfg(); cfg["inbounds"].append(reborn)
+st, _ = call("PUT", "/api/core/1?restart_nodes=false", {"name": core["name"], "config": cfg, "type": core.get("type"),
+    "exclude_inbound_tags": core.get("exclude_inbound_tags") or [], "fallbacks_inbound_tags": core.get("fallbacks_inbound_tags") or []})
+assert st == 200, ("re-add inbound", st)
+call("POST", "/api/content-filter/assignments/%d/apply" % a["id"])
+check("re-added inbound records ITS OWN original, not the stale one", [o for o in overrides() if o[0] == TAG], [(TAG, reborn["sniffing"])])
+call("DELETE", "/api/content-filter/assignments/%d" % a["id"])
+check("withdraw restores the re-added inbound's own sniffing", sniffing_of(TAG), reborn["sniffing"])
+set_sniffing(TAG, None)
+
 print("\n=== the real filtered endpoint is untouched by all of this ===")
 check("Shadowsocks TCP still has sniffing", sniffing_of("Shadowsocks TCP"), OURS)
 

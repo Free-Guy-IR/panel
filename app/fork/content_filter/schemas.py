@@ -42,6 +42,7 @@ class CatalogService(BaseModel):
     label: str = ""
     geosite: str | None = None
     domains: int
+    icon: str = ""
 
 
 class CatalogGroupOut(BaseModel):
