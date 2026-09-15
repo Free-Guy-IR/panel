@@ -138,6 +138,8 @@ def build_core_config(existing: dict, filter_rules: list[dict]) -> dict:
             continue
         if whole_core or tag in scoped:
             inbound["sniffing"] = dict(SNIFFING)
+        elif inbound.get("sniffing") == SNIFFING:
+            inbound.pop("sniffing", None)
     return config
 
 
