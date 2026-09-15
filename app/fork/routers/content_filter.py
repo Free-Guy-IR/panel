@@ -47,7 +47,6 @@ async def _load_profile(db: AsyncSession, profile_id: int) -> ContentFilterProfi
 
 
 async def _carriers_of(db: AsyncSession, inbound_tag: str) -> list[tuple[int, str]]:
-    """Every xray node whose core publishes an endpoint with this name, and its protocol."""
     found: list[tuple[int, str]] = []
     for node in (await db.execute(select(Node))).scalars().all():
         core = await get_core_config_by_id(db, node.core_config_id)
@@ -69,7 +68,6 @@ async def _load_assignment(db: AsyncSession, assignment_id: int) -> ContentFilte
 
 @router.get("/catalog", response_model=CatalogResponse)
 async def get_catalog(_: AdminDetails = Depends(require_permission("settings", "read"))):
-    """The category tree the operator picks from, with how broad each entry is."""
     return catalog_payload()
 
 
@@ -78,7 +76,6 @@ async def get_targets(
     db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(require_permission("settings", "read")),
 ):
-    """Every node and the endpoints on it, saying which can actually be filtered."""
     nodes = (await db.execute(select(Node))).scalars().all()
     out: list[TargetNode] = []
     for node in nodes:
@@ -331,7 +328,6 @@ async def test_destination(
     payload: DestinationTest,
     _: AdminDetails = Depends(require_permission("settings", "read")),
 ):
-    """Ask the node what it would do with one destination, without connecting a client."""
     verdict = await service.probe(payload.node_id, payload.inbound_tag, payload.domain.strip().lower())
     return DestinationVerdict(
         domain=payload.domain.strip().lower(),

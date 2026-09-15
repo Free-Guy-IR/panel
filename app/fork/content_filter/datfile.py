@@ -42,7 +42,6 @@ def _site(code: str, domains: list[str]) -> bytes:
 
 
 def build(categories: dict[str, list[str]]) -> bytes:
-    """Encode categories into the GeoSiteList shape xray reads for ext: matchers."""
     return b"".join(_site(code, domains) for code, domains in categories.items())
 
 

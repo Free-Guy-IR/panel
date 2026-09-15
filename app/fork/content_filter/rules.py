@@ -28,11 +28,6 @@ def tag_assignment_id(tag: str) -> int | None:
 
 
 def _domain_matchers(values: list[str]) -> list[str]:
-    """Turn what the operator typed into xray domain matchers.
-
-    example.com and *.example.com both cover the domain and everything under it.
-    =example.com covers that exact name and nothing beneath it.
-    """
     out: list[str] = []
     for raw in values:
         value = (raw or "").strip().lower()

@@ -169,7 +169,6 @@ LEGACY_KEYS = {
 
 
 def normalise(keys: list[str]) -> list[str]:
-    """Map keys saved under earlier catalogue names, and drop ones that no longer exist."""
     known = selectable_keys()
     out: list[str] = []
     for key in keys:
@@ -192,7 +191,6 @@ def size_of(key: str) -> int:
 
 
 def expand(keys: list[str]) -> tuple[list[str], list[str], list[str]]:
-    """Turn a selection into the geosite categories and bare domains it covers."""
     selected = set(keys)
     geosites: list[str] = []
     domains: list[str] = []

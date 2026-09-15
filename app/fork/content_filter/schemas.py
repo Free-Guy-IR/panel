@@ -9,7 +9,6 @@ DOMAIN_MAX = 253
 
 
 def _clean_domains(values: list[str] | None) -> list[str]:
-    """Accept example.com, *.example.com and =example.com; reject anything else."""
     if not values:
         return []
     out: list[str] = []
