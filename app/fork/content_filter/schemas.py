@@ -78,9 +78,16 @@ class ProfileResponse(BaseModel):
 
 class AssignmentPayload(BaseModel):
     profile_id: int
-    node_id: int
+    node_id: int | None = None
     inbound_tag: str = Field(default="", max_length=256)
     is_enabled: bool = True
+
+    @field_validator("inbound_tag")
+    @classmethod
+    def endpoint_required_without_node(cls, value: str, info) -> str:
+        if not value.strip() and info.data.get("node_id") is None:
+            raise ValueError("choose a node, an endpoint, or both")
+        return value.strip()
 
 
 class AssignmentResponse(BaseModel):
@@ -88,7 +95,7 @@ class AssignmentResponse(BaseModel):
 
     id: int
     profile_id: int
-    node_id: int
+    node_id: int | None
     inbound_tag: str
     is_enabled: bool
     enforced: bool

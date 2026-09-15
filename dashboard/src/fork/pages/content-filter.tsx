@@ -54,10 +54,12 @@ type TargetNode = {
   routing_service: boolean
   inbounds: TargetInbound[]
 }
+type Scope = 'node' | 'node-endpoint' | 'endpoint'
+
 type Assignment = {
   id: number
   profile_id: number
-  node_id: number
+  node_id: number | null
   inbound_tag: string
   is_enabled: boolean
   enforced: boolean
@@ -315,6 +317,7 @@ export default function ContentFilterPage() {
   const [activeId, setActiveId] = useState<number | null>(null)
   const [draft, setDraft] = useState<Profile | null>(null)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [scope, setScope] = useState<Scope>('node-endpoint')
   const [assignNode, setAssignNode] = useState<string>('')
   const [assignInbound, setAssignInbound] = useState<string>('')
   const [probeDomain, setProbeDomain] = useState('')
@@ -380,11 +383,12 @@ export default function ContentFilterPage() {
   })
 
   const addAssignment = useMutation({
-    mutationFn: (body: { profile_id: number; node_id: number; inbound_tag: string }) =>
+    mutationFn: (body: { profile_id: number; node_id: number | null; inbound_tag: string }) =>
       fetcher<Assignment>(`${BASE}/assignments`, { method: 'POST', body: { ...body, is_enabled: true } }),
     onSuccess: () => {
       toast.success(t('contentFilter.applied', { defaultValue: 'Applied and confirmed on the node' }))
       setAssignOpen(false)
+      setScope('node-endpoint')
       setAssignNode('')
       setAssignInbound('')
       invalidate()
@@ -435,6 +439,31 @@ export default function ContentFilterPage() {
   const profileAssignments = (assignments.data ?? []).filter(a => a.profile_id === activeId)
   const nodeById = new Map((targets.data ?? []).map(n => [n.id, n]))
   const chosenNode = assignNode ? nodeById.get(Number(assignNode)) : undefined
+
+  const fleetEndpoints = useMemo(() => {
+    const seen = new Map<string, { tag: string; protocol: string; nodes: number }>()
+    for (const node of targets.data ?? []) {
+      for (const inbound of node.inbounds) {
+        if (!inbound.filterable) continue
+        const entry = seen.get(inbound.tag)
+        if (entry) entry.nodes += 1
+        else seen.set(inbound.tag, { tag: inbound.tag, protocol: inbound.protocol, nodes: 1 })
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.tag.localeCompare(b.tag))
+  }, [targets.data])
+
+  const scopeReady =
+    scope === 'endpoint' ? Boolean(assignInbound) : scope === 'node' ? Boolean(assignNode) : Boolean(assignNode && assignInbound)
+
+  const submitScope = () => {
+    if (activeId === null) return
+    addAssignment.mutate({
+      profile_id: activeId,
+      node_id: scope === 'endpoint' ? null : Number(assignNode),
+      inbound_tag: scope === 'node' ? '' : assignInbound,
+    })
+  }
 
   const loading = catalog.isLoading || profiles.isLoading
 
@@ -659,9 +688,12 @@ export default function ContentFilterPage() {
                           <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
                             <div className="min-w-0">
                               <div className="truncate text-sm font-medium">
-                                {node?.name ?? `#${a.node_id}`}
-                                <span className="text-muted-foreground"> · </span>
-                                {a.inbound_tag || t('contentFilter.wholeNode', { defaultValue: 'whole node' })}
+                                {a.node_id === null
+                                  ? t('contentFilter.everyNodeWith', {
+                                      endpoint: a.inbound_tag,
+                                      defaultValue: '{{endpoint}} — on every node that has it',
+                                    })
+                                  : `${node?.name ?? `#${a.node_id}`} · ${a.inbound_tag || t('contentFilter.wholeNode', { defaultValue: 'whole node' })}`}
                               </div>
                               {a.last_error ? (
                                 <p className="mt-0.5 line-clamp-2 text-xs text-destructive">{a.last_error}</p>
@@ -771,55 +803,109 @@ export default function ContentFilterPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label className="text-xs text-muted-foreground">{t('contentFilter.node', { defaultValue: 'Node' })}</Label>
-              <Select
-                value={assignNode}
-                onValueChange={v => {
-                  setAssignNode(v)
-                  setAssignInbound('')
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder={t('contentFilter.pickNode', { defaultValue: 'Choose a node' })} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(targets.data ?? []).map(node => (
-                    <SelectItem key={node.id} value={String(node.id)}>
-                      {node.name}
-                      {node.routing_service ? '' : ` — ${t('contentFilter.noRouting', { defaultValue: 'cannot filter' })}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-2">
+              {(
+                [
+                  ['node-endpoint', 'contentFilter.scope.nodeEndpoint', 'One endpoint on one node'],
+                  ['node', 'contentFilter.scope.node', 'Every endpoint on one node'],
+                  ['endpoint', 'contentFilter.scope.endpoint', 'One endpoint, on every node that has it'],
+                ] as [Scope, string, string][]
+              ).map(([value, key, fallback]) => (
+                <label
+                  key={value}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors',
+                    scope === value ? 'border-primary bg-primary/5' : 'hover:bg-muted/60',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="cf-scope"
+                    className="size-4 accent-primary"
+                    checked={scope === value}
+                    onChange={() => {
+                      setScope(value)
+                      setAssignInbound('')
+                    }}
+                  />
+                  {t(key, { defaultValue: fallback })}
+                </label>
+              ))}
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">{t('contentFilter.endpoint', { defaultValue: 'Endpoint' })}</Label>
-              <Select value={assignInbound} onValueChange={setAssignInbound} disabled={!chosenNode}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder={t('contentFilter.pickEndpoint', { defaultValue: 'Choose an endpoint' })} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(chosenNode?.inbounds ?? []).map(inbound => (
-                    <SelectItem key={inbound.tag} value={inbound.tag} disabled={!inbound.filterable}>
-                      {inbound.tag} · {inbound.protocol}
-                      {inbound.filterable ? '' : ` — ${inbound.reason}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
+            {scope !== 'endpoint' ? (
+              <div>
+                <Label className="text-xs text-muted-foreground">{t('contentFilter.node', { defaultValue: 'Node' })}</Label>
+                <Select
+                  value={assignNode}
+                  onValueChange={v => {
+                    setAssignNode(v)
+                    setAssignInbound('')
+                  }}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder={t('contentFilter.pickNode', { defaultValue: 'Choose a node' })} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(targets.data ?? []).map(node => (
+                      <SelectItem key={node.id} value={String(node.id)} disabled={!node.routing_service}>
+                        {node.name}
+                        {node.routing_service ? '' : ` — ${t('contentFilter.noRouting', { defaultValue: 'cannot filter' })}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            {scope === 'node-endpoint' ? (
+              <div>
+                <Label className="text-xs text-muted-foreground">{t('contentFilter.endpoint', { defaultValue: 'Endpoint' })}</Label>
+                <Select value={assignInbound} onValueChange={setAssignInbound} disabled={!chosenNode}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder={t('contentFilter.pickEndpoint', { defaultValue: 'Choose an endpoint' })} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(chosenNode?.inbounds ?? []).map(inbound => (
+                      <SelectItem key={inbound.tag} value={inbound.tag} disabled={!inbound.filterable}>
+                        {inbound.tag} · {inbound.protocol}
+                        {inbound.filterable ? '' : ` — ${inbound.reason}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            {scope === 'endpoint' ? (
+              <div>
+                <Label className="text-xs text-muted-foreground">{t('contentFilter.endpoint', { defaultValue: 'Endpoint' })}</Label>
+                <Select value={assignInbound} onValueChange={setAssignInbound}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder={t('contentFilter.pickEndpoint', { defaultValue: 'Choose an endpoint' })} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fleetEndpoints.map(entry => (
+                      <SelectItem key={entry.tag} value={entry.tag}>
+                        {entry.tag} · {entry.protocol} ·{' '}
+                        {t('contentFilter.onNodes', { count: entry.nodes, defaultValue: 'on {{count}} nodes' })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fleetEndpoints.length === 0 ? (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {t('contentFilter.noFleetEndpoints', { defaultValue: 'No filterable endpoint exists on any node yet.' })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAssignOpen(false)}>
               {t('contentFilter.cancel', { defaultValue: 'Cancel' })}
             </Button>
-            <Button
-              disabled={!assignNode || !assignInbound || addAssignment.isPending || activeId === null}
-              onClick={() =>
-                addAssignment.mutate({ profile_id: activeId as number, node_id: Number(assignNode), inbound_tag: assignInbound })
-              }
-            >
+            <Button disabled={!scopeReady || addAssignment.isPending || activeId === null} onClick={submitScope}>
               {addAssignment.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               {t('contentFilter.apply', { defaultValue: 'Apply' })}
             </Button>

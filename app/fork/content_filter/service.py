@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import UTC, datetime as dt
 
 from PasarGuardNodeBridge import NodeAPIError
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.core import get_core_config_by_id
@@ -45,14 +45,45 @@ def assignment_rules(assignment: ContentFilterAssignment) -> list[dict]:
     )
 
 
+async def node_inbound_tags(db: AsyncSession, node_id: int) -> set[str]:
+    node = await db.get(Node, node_id)
+    if node is None:
+        return set()
+    core = await get_core_config_by_id(db, node.core_config_id)
+    if core is None:
+        return set()
+    config = core.config if isinstance(core.config, dict) else json.loads(core.config or "{}")
+    return {str(i.get("tag") or "") for i in config.get("inbounds") or [] if i.get("tag")}
+
+
 async def _assignments_for_node(db: AsyncSession, node_id: int) -> list[ContentFilterAssignment]:
     result = await db.execute(
         select(ContentFilterAssignment).where(
-            ContentFilterAssignment.node_id == node_id,
             ContentFilterAssignment.is_enabled.is_(True),
+            or_(
+                ContentFilterAssignment.node_id == node_id,
+                ContentFilterAssignment.node_id.is_(None),
+            ),
         )
     )
-    return list(result.scalars().all())
+    rows = list(result.scalars().all())
+    pinned = [a for a in rows if a.node_id is not None]
+    floating = [a for a in rows if a.node_id is None]
+    if not floating:
+        return pinned
+    tags = await node_inbound_tags(db, node_id)
+    return pinned + [a for a in floating if a.inbound_tag in tags]
+
+
+async def nodes_for_assignment(db: AsyncSession, assignment: ContentFilterAssignment) -> list[int]:
+    if assignment.node_id is not None:
+        return [assignment.node_id]
+    nodes = (await db.execute(select(Node))).scalars().all()
+    reach: list[int] = []
+    for node in nodes:
+        if assignment.inbound_tag in await node_inbound_tags(db, node.id):
+            reach.append(node.id)
+    return reach
 
 
 async def _nodes_on_core(db: AsyncSession, core_id: int) -> list[Node]:
@@ -62,9 +93,15 @@ async def _nodes_on_core(db: AsyncSession, core_id: int) -> list[Node]:
 
 async def core_rules(db: AsyncSession, core_id: int) -> list[dict]:
     rules: list[dict] = []
+    seen: set[str] = set()
     for node in await _nodes_on_core(db, core_id):
         for assignment in await _assignments_for_node(db, node.id):
-            rules.extend(assignment_rules(assignment))
+            for rule in assignment_rules(assignment):
+                tag = rule.get("ruleTag") or ""
+                if tag in seen:
+                    continue
+                seen.add(tag)
+                rules.append(rule)
     return rules
 
 
@@ -188,56 +225,70 @@ async def probe(node_id: int, inbound_tag: str, domain: str) -> str:
 
 
 async def apply_assignment(db: AsyncSession, assignment: ContentFilterAssignment, admin) -> dict:
-    node = await db.get(Node, assignment.node_id)
-    if node is None:
-        raise EnforcementError(f"node {assignment.node_id} not found", code=404)
+    node_ids = await nodes_for_assignment(db, assignment)
+    if not node_ids:
+        assignment.enforced = False
+        assignment.last_error = "no node currently carries that endpoint"
+        assignment.last_checked_at = dt.now(UTC)
+        await db.commit()
+        raise EnforcementError(assignment.last_error, code=404)
 
-    await persist_core_rules(db, node.core_config_id, admin)
+    core_ids: set[int] = set()
+    for node_id in node_ids:
+        node = await db.get(Node, node_id)
+        if node is not None:
+            core_ids.add(node.core_config_id)
+    for core_id in core_ids:
+        await persist_core_rules(db, core_id, admin)
 
     wanted = assignment_rules(assignment)
     assignment.applied_digest = digest(wanted)
+    problems: list[str] = []
+    reached = 0
 
-    try:
-        await push_live(db, assignment.node_id)
-    except EnforcementError as exc:
-        assignment.enforced = False
-        assignment.last_error = exc.detail[:1024]
-        assignment.last_checked_at = dt.now(UTC)
-        await db.commit()
-        raise
+    for node_id in node_ids:
+        try:
+            await push_live(db, node_id)
+        except EnforcementError as exc:
+            problems.append(f"node {node_id}: {exc.detail}")
+            continue
+        present = {rule["ruleTag"] for rule in await live_rules(node_id)}
+        missing = [rule["ruleTag"] for rule in wanted if rule["ruleTag"] not in present]
+        if missing:
+            problems.append(f"node {node_id}: rules did not appear ({', '.join(missing)})")
+        else:
+            reached += 1
 
-    live = await live_rules(assignment.node_id)
-    present = {rule["ruleTag"] for rule in live}
-    missing = [rule["ruleTag"] for rule in wanted if rule["ruleTag"] not in present]
-    if missing:
-        assignment.enforced = False
-        assignment.last_error = f"rules did not appear on the node: {', '.join(missing)}"[:1024]
-        assignment.last_checked_at = dt.now(UTC)
-        await db.commit()
-        raise EnforcementError(assignment.last_error, code=502)
-
-    verdict = await probe(assignment.node_id, assignment.inbound_tag, PROBE_DOMAIN)
-    assignment.enforced = True
-    assignment.last_error = None
+    assignment.enforced = reached == len(node_ids) and not problems
+    assignment.last_error = "; ".join(problems)[:1024] if problems else None
     assignment.last_checked_at = dt.now(UTC)
     await db.commit()
-    return {"rules": len(wanted), "probe": verdict}
+
+    if not assignment.enforced:
+        raise EnforcementError(assignment.last_error or "could not confirm enforcement", code=502)
+
+    verdict = await probe(node_ids[0], assignment.inbound_tag, PROBE_DOMAIN)
+    return {"rules": len(wanted), "nodes": reached, "probe": verdict}
 
 
 async def withdraw_assignment(db: AsyncSession, assignment: ContentFilterAssignment, admin) -> None:
-    node = await db.get(Node, assignment.node_id)
-    node_id = assignment.node_id
-    core_id = node.core_config_id if node else None
+    node_ids = await nodes_for_assignment(db, assignment)
+    core_ids: set[int] = set()
+    for node_id in node_ids:
+        node = await db.get(Node, node_id)
+        if node is not None:
+            core_ids.add(node.core_config_id)
 
     await db.delete(assignment)
     await db.commit()
 
-    if core_id is not None:
+    for core_id in core_ids:
         await persist_core_rules(db, core_id, admin)
-    try:
-        await push_live(db, node_id)
-    except EnforcementError as exc:
-        logger.warning(f"withdraw: live cleanup on node {node_id} failed: {exc.detail}")
+    for node_id in node_ids:
+        try:
+            await push_live(db, node_id)
+        except EnforcementError as exc:
+            logger.warning(f"withdraw: live cleanup on node {node_id} failed: {exc.detail}")
 
 
 async def reconcile_node(db: AsyncSession, node_id: int) -> str | None:

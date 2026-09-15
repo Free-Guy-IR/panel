@@ -495,5 +495,12 @@
   "contentFilter.services.primevideo": "Prime Video",
   "contentFilter.services.spotify": "Spotify",
   "contentFilter.services.soundcloud": "SoundCloud",
-  "contentFilter.services.ads_all": "Full tracker list"
+  "contentFilter.services.ads_all": "Full tracker list",
+  "contentFilter.scope.nodeEndpoint": "One endpoint on one node",
+  "contentFilter.scope.node": "Every endpoint on one node",
+  "contentFilter.scope.endpoint": "One endpoint, on every node that has it",
+  "contentFilter.onNodes_one": "on {{count}} node",
+  "contentFilter.onNodes_other": "on {{count}} nodes",
+  "contentFilter.noFleetEndpoints": "No filterable endpoint exists on any node yet.",
+  "contentFilter.everyNodeWith": "{{endpoint}} — on every node that has it"
 }

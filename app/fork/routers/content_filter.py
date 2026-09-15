@@ -46,6 +46,20 @@ async def _load_profile(db: AsyncSession, profile_id: int) -> ContentFilterProfi
     return profile
 
 
+async def _carriers_of(db: AsyncSession, inbound_tag: str) -> list[tuple[int, str]]:
+    """Every xray node whose core publishes an endpoint with this name, and its protocol."""
+    found: list[tuple[int, str]] = []
+    for node in (await db.execute(select(Node))).scalars().all():
+        core = await get_core_config_by_id(db, node.core_config_id)
+        if core is None or str(getattr(core.type, "value", core.type) or "") != "xray":
+            continue
+        config = core.config if isinstance(core.config, dict) else json.loads(core.config or "{}")
+        for inbound in config.get("inbounds") or []:
+            if str(inbound.get("tag") or "") == inbound_tag:
+                found.append((node.id, str(inbound.get("protocol") or "").lower()))
+    return found
+
+
 async def _load_assignment(db: AsyncSession, assignment_id: int) -> ContentFilterAssignment:
     assignment = await db.get(ContentFilterAssignment, assignment_id)
     if assignment is None:
@@ -219,36 +233,52 @@ async def create_assignment(
     admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
     await _load_profile(db, payload.profile_id)
-    node = await db.get(Node, payload.node_id)
-    if node is None:
-        raise HTTPException(status_code=404, detail="node not found")
 
-    core = await get_core_config_by_id(db, node.core_config_id)
-    if core is None or str(getattr(core.type, "value", core.type) or "") != "xray":
-        raise HTTPException(status_code=422, detail=NON_XRAY_REASON)
+    if payload.node_id is None:
+        carriers = await _carriers_of(db, payload.inbound_tag)
+        if not carriers:
+            raise HTTPException(status_code=404, detail="no xray node currently carries an endpoint with that name")
+        for protocol in {p for _, p in carriers}:
+            if protocol not in ROUTABLE_PROTOCOLS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{protocol or 'this'} endpoints cannot be filtered: {UNROUTABLE_REASON}",
+                )
+    else:
+        node = await db.get(Node, payload.node_id)
+        if node is None:
+            raise HTTPException(status_code=404, detail="node not found")
 
-    config = core.config if isinstance(core.config, dict) else json.loads(core.config or "{}")
-    if payload.inbound_tag:
-        match = next((i for i in config.get("inbounds") or [] if str(i.get("tag") or "") == payload.inbound_tag), None)
-        if match is None:
-            raise HTTPException(status_code=404, detail="that endpoint does not exist on this node's core")
-        protocol = str(match.get("protocol") or "").lower()
-        if protocol not in ROUTABLE_PROTOCOLS:
-            raise HTTPException(
-                status_code=422,
-                detail=f"{protocol or 'this'} endpoints cannot be filtered: {UNROUTABLE_REASON}",
+        core = await get_core_config_by_id(db, node.core_config_id)
+        if core is None or str(getattr(core.type, "value", core.type) or "") != "xray":
+            raise HTTPException(status_code=422, detail=NON_XRAY_REASON)
+
+        config = core.config if isinstance(core.config, dict) else json.loads(core.config or "{}")
+        if payload.inbound_tag:
+            match = next(
+                (i for i in config.get("inbounds") or [] if str(i.get("tag") or "") == payload.inbound_tag), None
             )
+            if match is None:
+                raise HTTPException(status_code=404, detail="that endpoint does not exist on this node's core")
+            protocol = str(match.get("protocol") or "").lower()
+            if protocol not in ROUTABLE_PROTOCOLS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{protocol or 'this'} endpoints cannot be filtered: {UNROUTABLE_REASON}",
+                )
 
+    clause = (
+        ContentFilterAssignment.node_id.is_(None)
+        if payload.node_id is None
+        else ContentFilterAssignment.node_id == payload.node_id
+    )
     duplicate = (
         await db.execute(
-            select(ContentFilterAssignment).where(
-                ContentFilterAssignment.node_id == payload.node_id,
-                ContentFilterAssignment.inbound_tag == payload.inbound_tag,
-            )
+            select(ContentFilterAssignment).where(clause, ContentFilterAssignment.inbound_tag == payload.inbound_tag)
         )
     ).scalar_one_or_none()
     if duplicate is not None:
-        raise HTTPException(status_code=409, detail="that endpoint already has a profile applied")
+        raise HTTPException(status_code=409, detail="that scope already has a profile applied")
 
     assignment = ContentFilterAssignment(
         profile_id=payload.profile_id,
