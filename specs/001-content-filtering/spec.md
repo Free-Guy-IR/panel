@@ -84,8 +84,11 @@ The operator edits a profile (adds or removes a category), moves it to a differe
 **Profiles and categories**
 
 - **FR-001**: The system MUST let an operator create, rename, edit and delete named filter profiles.
-- **FR-002**: A profile MUST consist of a selection drawn from a fixed catalogue of named content categories, each with a human-readable label and a short description of what it covers.
-- **FR-003**: The category catalogue MUST at minimum cover adult content, social media, gambling and games, and MUST be extensible without a code change to the panel.
+- **FR-002**: A profile MUST consist of a selection drawn from a supplied catalogue of named content categories, each with a human-readable label and a short description of what it covers. The operator MUST be able to build a complete, useful profile **without typing a single domain**.
+- **FR-002a**: The catalogue MUST be **two levels deep**: a group the operator recognises (Social networks, Adult, Games, Gambling, Advertising) and, beneath it, the individual services inside that group.
+- **FR-002b**: The operator MUST be able to block an entire group with one action, **or** pick individual services within it — block Instagram and TikTok while leaving WhatsApp reachable, for example. Selecting some but not all children MUST be shown as a distinct, partially-selected state, never as either fully on or fully off.
+- **FR-003**: The catalogue is derived from the category data already present on the nodes, so it stays current without a panel code change. Confirmed present in the shipped data: 1,429 categories, including individually separable `instagram`, `telegram`, `whatsapp`, `facebook`, `twitter`, `x`, `tiktok`, `youtube`, `discord`, `reddit`, `pinterest`, `linkedin`, `threads`, alongside the umbrella `category-porn`, `category-games`, `category-ads-all`, `category-social-media-!cn` and `category-communication`.
+- **FR-003a**: Because a category's breadth varies enormously — `threads` covers 2 domains, `category-porn` covers 6,635, `category-ads-all` covers 170,624 — the panel MUST show the operator the size of what they are switching on, at both group and service level, before they save.
 - **FR-004**: A profile MUST support an allow-list of individual destinations that are permitted even when a category they belong to is blocked.
 - **FR-005**: A profile MUST support a block-list of individual destinations that are blocked even when no selected category covers them.
 - **FR-006**: The system MUST show, for each category, an indication of how broad it is, so the operator understands the scope of what they are switching on before they save.
@@ -94,6 +97,7 @@ The operator edits a profile (adds or removes a category), moves it to a differe
 
 - **FR-007**: An operator MUST be able to apply a profile to a specific node.
 - **FR-008**: An operator MUST be able to narrow that application to a specific connection endpoint on that node.
+- **FR-008a**: Different endpoints MUST be able to carry **different** profiles at the same time on the same node — one endpoint blocking adult content only, another blocking adult content and all social networks — so a household can be given several tiers without needing several nodes.
 - **FR-009**: The system MUST NOT alter traffic for any customer who is not within the scope of an applied profile.
 - **FR-010**: Before saving, the system MUST show how many customers fall within the scope about to be affected.
 - **FR-011**: When two or more profiles apply to the same scope, the system MUST apply the union of their restrictions, and MUST show the operator that an overlap exists.
@@ -121,7 +125,8 @@ The operator edits a profile (adds or removes a category), moves it to a differe
 
 **Operator experience**
 
-- **FR-021**: The Filtering section MUST be reachable as its own area of the panel, not buried inside an unrelated screen.
+- **FR-021**: The Filtering section MUST live in the panel's **Platform** area as its own destination, not buried inside an unrelated screen.
+- **FR-021a**: Reaching a usable state MUST NOT require the operator to consult anything outside the screen: the categories are presented, the scopes are pickable from what already exists, and nothing has to be typed in a syntax the operator must learn. Free-text entry exists only for the per-destination exceptions in FR-004 and FR-005, which are an escape hatch, not the main path.
 - **FR-022**: The section MUST present an empty state that explains the concept and offers one clear first action.
 - **FR-023**: Every destructive action MUST state what it will affect, in customer terms, before it is confirmed.
 - **FR-024**: The operator MUST be able to see, for any customer, whether a filter applies to them and which profile it comes from.
