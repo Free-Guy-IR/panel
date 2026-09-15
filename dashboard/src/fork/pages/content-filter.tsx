@@ -835,7 +835,7 @@ export default function ContentFilterPage() {
                   ) : (
                     <div className="space-y-2">
                       {profileAssignments.map(a => {
-                        const node = nodeById.get(a.node_id)
+                        const node = a.node_id === null ? undefined : nodeById.get(a.node_id)
                         return (
                           <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
                             <div className="min-w-0">
@@ -919,13 +919,21 @@ export default function ContentFilterPage() {
                         {runProbe.isPending ? <Loader2 className="size-4 animate-spin" /> : t('contentFilter.check', { defaultValue: 'Check' })}
                       </Button>
                     </div>
-                    {!probeTarget ? (
+                    {probeTarget ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t('contentFilter.probeVia', {
+                          node: nodeById.get(probeTarget.nodeId)?.name ?? `#${probeTarget.nodeId}`,
+                          endpoint: probeTarget.tag,
+                          defaultValue: 'Asking {{node}} about {{endpoint}}.',
+                        })}
+                      </p>
+                    ) : (
                       <p className="text-xs text-muted-foreground">
                         {t('contentFilter.noProbeNode', {
                           defaultValue: 'No connected node currently carries this endpoint, so there is nothing to ask.',
                         })}
                       </p>
-                    ) : null}
+                    )}
                     {probeResult ? (
                       <div
                         className={cn(

@@ -565,5 +565,6 @@
   "contentFilter.groups.content": "محدودیت محتوا",
   "contentFilter.groups.regional": "فهرست‌های منطقه‌ای",
   "contentFilter.wildcardHint": "هم example.com و هم ‎*.example.com همهٔ زیردامنه‌ها را می‌گیرند. ‎=example.com فقط همان نام دقیق را می‌گیرد.",
-  "contentFilter.noProbeNode": "هیچ نود متصلی الان این نقطهٔ اتصال را ندارد، پس چیزی برای پرسیدن نیست."
+  "contentFilter.noProbeNode": "هیچ نود متصلی الان این نقطهٔ اتصال را ندارد، پس چیزی برای پرسیدن نیست.",
+  "contentFilter.probeVia": "از {{node}} دربارهٔ {{endpoint}} پرسیده می‌شود."
 }
