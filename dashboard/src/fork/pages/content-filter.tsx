@@ -89,7 +89,6 @@ const GROUP_ICON: Record<string, typeof ShieldBan> = {
   regional: Globe,
   social_network: Users,
   messenger: MessageCircle,
-  streaming: Clapperboard,
   gaming: Gamepad2,
   gambling: Dices,
   dating: Heart,
@@ -114,7 +113,6 @@ const GROUP_TONE: Record<string, string> = {
   regional: 'text-teal-600 dark:text-teal-400',
   social_network: 'text-sky-600 dark:text-sky-400',
   messenger: 'text-cyan-600 dark:text-cyan-400',
-  streaming: 'text-amber-600 dark:text-amber-400',
   gaming: 'text-violet-600 dark:text-violet-400',
   gambling: 'text-red-600 dark:text-red-400',
   dating: 'text-pink-600 dark:text-pink-400',
@@ -196,8 +194,10 @@ function CategoryGroupCard({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const Icon = GROUP_ICON[group.key] ?? ShieldBan
-  const whole = selected.has(group.key)
+  const umbrella = selected.has(group.key)
   const picked = group.services.filter(s => selected.has(s.key)).length
+  const allPicked = group.services.length > 0 && picked === group.services.length
+  const whole = umbrella || allPicked
   const partial = !whole && picked > 0
 
   return (
@@ -257,8 +257,8 @@ function CategoryGroupCard({
                 >
                   <span className="flex items-center gap-2">
                     <Checkbox
-                      checked={whole || selected.has(service.key)}
-                      disabled={whole}
+                      checked={umbrella || selected.has(service.key)}
+                      disabled={umbrella}
                       onCheckedChange={on => onToggleService(service.key, on === true)}
                     />
                     <span className="text-sm">
@@ -269,7 +269,7 @@ function CategoryGroupCard({
                 </label>
               ))}
             </div>
-            {whole ? (
+            {umbrella ? (
               <p className="px-2 pt-2 text-xs text-muted-foreground">
                 {t('contentFilter.wholeGroupNote', {
                   defaultValue: 'The whole group is blocked, so every service in it is already covered.',
@@ -569,6 +569,17 @@ export default function ContentFilterPage() {
     }
     return [...seen.values()].sort((a, b) => a.tag.localeCompare(b.tag))
   }, [targets.data])
+
+  const probeTarget = useMemo(() => {
+    for (const a of profileAssignments) {
+      if (a.node_id !== null) return { nodeId: a.node_id, tag: a.inbound_tag }
+      const carrier = (targets.data ?? []).find(
+        n => n.routing_service && n.inbounds.some(i => i.tag === a.inbound_tag && i.filterable),
+      )
+      if (carrier) return { nodeId: carrier.id, tag: a.inbound_tag }
+    }
+    return null
+  }, [profileAssignments, targets.data])
 
   const scopeReady =
     scope === 'endpoint' ? Boolean(assignInbound) : scope === 'node' ? Boolean(assignNode) : Boolean(assignNode && assignInbound)
@@ -891,24 +902,30 @@ export default function ContentFilterPage() {
                         placeholder={t('contentFilter.domainPlaceholder', { defaultValue: 'example.com' })}
                         className="h-9 min-w-[200px] flex-1"
                         onKeyDown={e => {
-                          if (e.key === 'Enter' && probeDomain.trim()) {
-                            const first = profileAssignments[0]
-                            runProbe.mutate({ node_id: first.node_id, inbound_tag: first.inbound_tag, domain: probeDomain.trim() })
+                          if (e.key === 'Enter' && probeDomain.trim() && probeTarget) {
+                            runProbe.mutate({ node_id: probeTarget.nodeId, inbound_tag: probeTarget.tag, domain: probeDomain.trim() })
                           }
                         }}
                       />
                       <Button
                         variant="secondary"
                         className="h-9"
-                        disabled={!probeDomain.trim() || runProbe.isPending}
+                        disabled={!probeDomain.trim() || runProbe.isPending || !probeTarget}
                         onClick={() => {
-                          const first = profileAssignments[0]
-                          runProbe.mutate({ node_id: first.node_id, inbound_tag: first.inbound_tag, domain: probeDomain.trim() })
+                          if (probeTarget)
+                            runProbe.mutate({ node_id: probeTarget.nodeId, inbound_tag: probeTarget.tag, domain: probeDomain.trim() })
                         }}
                       >
                         {runProbe.isPending ? <Loader2 className="size-4 animate-spin" /> : t('contentFilter.check', { defaultValue: 'Check' })}
                       </Button>
                     </div>
+                    {!probeTarget ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t('contentFilter.noProbeNode', {
+                          defaultValue: 'No connected node currently carries this endpoint, so there is nothing to ask.',
+                        })}
+                      </p>
+                    ) : null}
                     {probeResult ? (
                       <div
                         className={cn(

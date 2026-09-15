@@ -527,5 +527,6 @@
   "contentFilter.groups.devices": "Device trackers",
   "contentFilter.groups.content": "Content restrictions",
   "contentFilter.groups.regional": "Regional lists",
-  "contentFilter.wildcardHint": "example.com and *.example.com both cover every subdomain. =example.com covers only that exact name."
+  "contentFilter.wildcardHint": "example.com and *.example.com both cover every subdomain. =example.com covers only that exact name.",
+  "contentFilter.noProbeNode": "No connected node currently carries this endpoint, so there is nothing to ask."
 }

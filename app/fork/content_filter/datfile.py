@@ -36,9 +36,9 @@ def _domain(value: str, kind: int = TYPE_DOMAIN) -> bytes:
 
 
 def _site(code: str, domains: list[str]) -> bytes:
-    body = _bytes_field(1, code.upper().encode("utf-8"))
-    body += b"".join(_domain(d) for d in domains)
-    return _bytes_field(1, body)
+    parts = [_bytes_field(1, code.upper().encode("utf-8"))]
+    parts.extend(_domain(d) for d in domains)
+    return _bytes_field(1, b"".join(parts))
 
 
 def build(categories: dict[str, list[str]]) -> bytes:
