@@ -43,6 +43,28 @@ async def _delete_matching(db, condition, *, limit: int | None = MAX_PER_RUN, de
     return deleted, True
 
 
+ID_LOOKUP_CHUNK = 500
+
+
+async def surviving_row_ids(db, wanted: set[int]) -> set[int]:
+    found: set[int] = set()
+    ids = list(wanted)
+    for start in range(0, len(ids), ID_LOOKUP_CHUNK):
+        chunk = ids[start : start + ID_LOOKUP_CHUNK]
+        rows = await db.scalars(select(TrafficLogRecord.id).where(TrafficLogRecord.id.in_(chunk)))
+        found.update(rows.all())
+    return found
+
+
+async def reconcile_buckets(db, collector, cutoff=None, **forget) -> int:
+    surviving = await surviving_row_ids(db, collector.tracked_row_ids())
+    collector.forget_buckets(cutoff, **forget)
+    detached = collector.detach_missing_rows(surviving)
+    if detached:
+        logger.info(f"traffic log purge detached {detached} bucket(s) whose stored row is gone")
+    return detached
+
+
 async def purge_before(db, cutoff: datetime) -> tuple[int, bool]:
     return await _delete_matching(db, TrafficLogRecord.bucket_start < cutoff)
 
@@ -227,7 +249,8 @@ async def purge_traffic_log():
     incomplete = expired_incomplete or ceiling_incomplete
     collector.identity.prune()
     if expired or over_ceiling:
-        collector.forget_buckets(cutoff)
+        async with collector.suspend_flush(), GetDB() as db:
+            await reconcile_buckets(db, collector, cutoff)
     collector.note_ceiling_floor(threshold, ceiling_incomplete)
     collector.record_purge(expired, over_ceiling, over_ceiling > 0, incomplete)
 

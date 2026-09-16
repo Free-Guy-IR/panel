@@ -199,7 +199,7 @@ async def purge_records(
     body: PurgeRequest | None = None,
     admin: AdminDetails = Depends(OWNER_ONLY),
 ):
-    from app.fork.jobs.traffic_log_purge import purge_before, reclaim_storage, session_engine
+    from app.fork.jobs.traffic_log_purge import purge_before, reclaim_storage, reconcile_buckets, session_engine
     from app.fork.traffic_log import collector
 
     older_than_hours = body.older_than_hours if body is not None else None
@@ -213,13 +213,18 @@ async def purge_records(
 
     reclaimed = False
     freed_bytes: int | None = None
+    since_ingest = collector.ingest_watermark()
     async with collector.suspend_flush(), GetDB() as db:
         removed, incomplete = await purge_before(db, cutoff)
-        if older_than_hours is None:
-            collector.forget_buckets(None, keep_after=now)
-        else:
-            collector.forget_buckets(cutoff)
-        remaining = await db.scalar(select(func.count()).select_from(TrafficLogRecord))
+        remaining = int(await db.scalar(select(func.count()).select_from(TrafficLogRecord)) or 0)
+        await reconcile_buckets(
+            db,
+            collector,
+            None if older_than_hours is None else cutoff,
+            keep_after=now if older_than_hours is None else None,
+            since_ingest=since_ingest,
+            storage_emptied=remaining == 0,
+        )
         engine = session_engine(db)
 
     if wants_reclaim and not incomplete:

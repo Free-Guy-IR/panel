@@ -346,7 +346,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             try:
                 await pg_node.stop()
             except Exception as exc:
-                logger.warning(f'Could not stop "{db_node.name}" before restarting it; starting anyway: {exc}')
+                if not force_start:
+                    logger.error(
+                        f'Refusing to start "{db_node.name}": its running core could not be stopped, '
+                        f"and starting a second one would fight the first: {exc}"
+                    )
+                    raise
+                logger.debug(f'Stop before force start of "{db_node.name}" skipped: {exc}')
 
         log = logger.info if force_start else logger.debug
         log(f'Starting "{db_node.name}" node')

@@ -136,6 +136,7 @@ class Bucket:
     route: str
     row_id: int | None = None
     flushed_hits: int = 0
+    last_ingest: int = 0
 
 
 BucketKey = tuple[int | None, str | None, int, str, str, int, str, str, bool, datetime]
@@ -200,6 +201,7 @@ class TrafficCollector:
         self._ceiling_floor = 0
         self._eviction_task: asyncio.Task | None = None
         self._purge_generation = 0
+        self._ingest_seq = 0
         self._flush_task: asyncio.Task | None = None
         self._flush_lock = asyncio.Lock()
         self._attach_lock = asyncio.Lock()
@@ -248,29 +250,75 @@ class TrafficCollector:
         await self._persist_state(retention_hours=wanted)
         self.retention_hours = wanted
 
-    def forget_buckets(self, cutoff: datetime | None = None, *, keep_after: datetime | None = None) -> None:
+    def ingest_watermark(self) -> int:
+        return self._ingest_seq
+
+    def tracked_row_ids(self) -> set[int]:
+        return {bucket.row_id for bucket in self._buckets.values() if bucket.row_id is not None}
+
+    @staticmethod
+    def _carried_over(bucket: Bucket, boundary: datetime) -> Bucket:
+        return Bucket(
+            first_seen=min(max(bucket.first_seen, boundary), bucket.last_seen)
+            if bucket.row_id is None
+            else bucket.first_seen,
+            last_seen=bucket.last_seen,
+            hits=bucket.hits,
+            route=bucket.route,
+            row_id=bucket.row_id,
+            flushed_hits=bucket.flushed_hits,
+            last_ingest=bucket.last_ingest,
+        )
+
+    def detach_missing_rows(self, surviving: set[int]) -> int:
+        detached = 0
+        for bucket in self._buckets.values():
+            if bucket.row_id is not None and bucket.row_id in surviving:
+                continue
+            if bucket.row_id is not None:
+                detached += 1
+            bucket.row_id = None
+            bucket.flushed_hits = 0
+        return detached
+
+    def forget_buckets(
+        self,
+        cutoff: datetime | None = None,
+        *,
+        keep_after: datetime | None = None,
+        since_ingest: int | None = None,
+        storage_emptied: bool = False,
+    ) -> None:
         self._purge_generation += 1
         if self._eviction_task is not None and not self._eviction_task.done():
             self._eviction_task.cancel()
+
+        def survives(bucket: Bucket, boundary: datetime) -> bool:
+            if bucket.hits <= 0:
+                return False
+            if since_ingest is not None:
+                return bucket.last_ingest > since_ingest
+            return bucket.last_seen >= boundary
+
         if cutoff is None:
             survivors = {}
             if keep_after is not None:
                 for key, bucket in self._buckets.items():
-                    if bucket.last_seen >= keep_after:
-                        survivors[key] = Bucket(
-                            first_seen=max(bucket.first_seen, keep_after),
-                            last_seen=bucket.last_seen,
-                            hits=bucket.hits,
-                            route=bucket.route,
-                        )
-                survivors = {key: bucket for key, bucket in survivors.items() if bucket.hits > 0}
+                    if survives(bucket, keep_after):
+                        survivors[key] = self._carried_over(bucket, keep_after)
             self._buckets = survivors
+        else:
+            for key in [key for key in self._buckets if key[-1] < cutoff]:
+                bucket = self._buckets[key]
+                if survives(bucket, cutoff):
+                    self._buckets[key] = self._carried_over(bucket, cutoff)
+                else:
+                    self._buckets.pop(key, None)
+
+        if storage_emptied:
             self._max_row_id = 0
             self._ceiling_floor = 0
             self._seen_ids = set()
-            return
-        for key in [key for key in self._buckets if key[-1] < cutoff]:
-            self._buckets.pop(key, None)
 
     @contextlib.asynccontextmanager
     async def suspend_flush(self) -> AsyncIterator[None]:
@@ -765,10 +813,15 @@ class TrafficCollector:
             if len(self._buckets) >= BUCKET_CAP:
                 state.dropped_records += 1
                 return
-            self._buckets[key] = Bucket(first_seen=event.at, last_seen=event.at, hits=1, route=event.route)
+            self._ingest_seq += 1
+            self._buckets[key] = Bucket(
+                first_seen=event.at, last_seen=event.at, hits=1, route=event.route, last_ingest=self._ingest_seq
+            )
             return
+        self._ingest_seq += 1
         bucket.hits += 1
         bucket.last_seen = max(bucket.last_seen, event.at)
+        bucket.last_ingest = self._ingest_seq
 
     async def _flush_loop(self) -> None:
         refreshed_at = time.monotonic()

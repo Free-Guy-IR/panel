@@ -360,3 +360,42 @@ async def test_a_starting_node_whose_push_fails_is_left_to_the_worker_starting_i
     assert not [r for r in records if "Restarting" in r.getMessage()]
     assert db_node.id in NodeOperation._pending_user_sync
     NodeOperation._pending_user_sync.discard(db_node.id)
+
+
+@pytest.mark.asyncio
+async def test_a_core_that_will_not_stop_is_not_raced_with_a_second_one(monkeypatch: pytest.MonkeyPatch):
+    state = SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(return_value=state),
+        start=AsyncMock(),
+        stop=AsyncMock(side_effect=RuntimeError("the node would not stop")),
+        sync_users=AsyncMock(side_effect=RuntimeError("the node refused the user list")),
+    )
+    monkeypatch.setattr(NodeOperation, "_attach_if_running", AsyncMock(return_value=object()))
+    monkeypatch.setattr("app.operation.node.ATTACH_SYNC_BACKOFF", 0)
+    db_node = SimpleNamespace(name="de-3", id=44, keep_alive=0)
+    core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    with pytest.raises(RuntimeError, match="would not stop"):
+        await NodeOperation._start_or_attach_node(pg_node, db_node, core, [], "xray")
+
+    pg_node.start.assert_not_awaited()
+    NodeOperation._pending_user_sync.discard(db_node.id)
+
+
+@pytest.mark.asyncio
+async def test_a_force_start_still_tolerates_a_stop_that_fails(monkeypatch: pytest.MonkeyPatch):
+    started = SimpleNamespace(node_version="0.8.1", core_version="25.1.1")
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(),
+        start=AsyncMock(return_value=started),
+        stop=AsyncMock(side_effect=RuntimeError("already gone")),
+        sync_users=AsyncMock(),
+    )
+    db_node = SimpleNamespace(name="de-4", id=45, keep_alive=0)
+    core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    result = await NodeOperation._start_or_attach_node(pg_node, db_node, core, [], "xray", force_start=True)
+
+    assert result is started
+    pg_node.start.assert_awaited_once()
