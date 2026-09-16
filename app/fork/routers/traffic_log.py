@@ -205,14 +205,15 @@ async def purge_records(
     older_than_hours = body.older_than_hours if body is not None else None
     wants_reclaim = body.reclaim if body is not None else False
 
+    now = dt.now(UTC)
+    if older_than_hours is None:
+        cutoff = now + PURGE_EVERYTHING
+    else:
+        cutoff = now - timedelta(hours=min(older_than_hours, MAX_PURGE_AGE_HOURS))
+
     reclaimed = False
     freed_bytes: int | None = None
     async with collector.suspend_flush(), GetDB() as db:
-        now = dt.now(UTC)
-        if older_than_hours is None:
-            cutoff = now + PURGE_EVERYTHING
-        else:
-            cutoff = now - timedelta(hours=min(older_than_hours, MAX_PURGE_AGE_HOURS))
         removed, incomplete = await purge_before(db, cutoff)
         if older_than_hours is None:
             collector.forget_buckets(None, keep_after=now)

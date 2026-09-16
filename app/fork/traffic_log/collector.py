@@ -260,7 +260,7 @@ class TrafficCollector:
                         survivors[key] = Bucket(
                             first_seen=max(bucket.first_seen, keep_after),
                             last_seen=bucket.last_seen,
-                            hits=bucket.hits - bucket.flushed_hits,
+                            hits=bucket.hits,
                             route=bucket.route,
                         )
                 survivors = {key: bucket for key, bucket in survivors.items() if bucket.hits > 0}

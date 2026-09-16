@@ -314,6 +314,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     async def _start_or_attach_node(
         pg_node: PasarGuardNode, db_node: Node, core, users: list, backend_type, *, force_start: bool = False
     ):
+        stop_first = force_start
         if not force_start:
             state = await pg_node.get_lifecycle_state()
             if state is not None and (
@@ -321,15 +322,16 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 or state.desired is LifecycleStatus.HEALTHY
             ):
                 attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
-                if attached is not None:
-                    if await NodeOperation._push_users_after_attach(pg_node, db_node, users):
-                        return attached
-                    logger.warning(f'Restarting "{db_node.name}" because its user list could not be refreshed')
+                if attached is not None and await NodeOperation._push_users_after_attach(pg_node, db_node, users):
+                    return attached
                 if state.observed is LifecycleStatus.STARTING:
                     # Another worker is already starting this node right now - don't race
                     # it for the lease (that's a guaranteed 409 plus wasted KV round-trips).
                     # Skip; the next retry cycle will check again once it's done.
                     return
+                if attached is not None:
+                    stop_first = True
+                    logger.warning(f'Restarting "{db_node.name}" because its user list could not be refreshed')
 
         start_kwargs = {
             "config": core.to_str(),
@@ -340,11 +342,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         if core.type == CoreType.xray:
             start_kwargs["exclude_inbounds"] = core.exclude_inbound_tags
 
-        if force_start:
+        if stop_first:
             try:
                 await pg_node.stop()
             except Exception as exc:
-                logger.debug(f'Stop before force start of "{db_node.name}" skipped: {exc}')
+                logger.warning(f'Could not stop "{db_node.name}" before restarting it; starting anyway: {exc}')
 
         log = logger.info if force_start else logger.debug
         log(f'Starting "{db_node.name}" node')

@@ -66,10 +66,12 @@ def main():
     check("a bucket entirely older than the purge is dropped", "older.example" in hosts, False)
     check("a bucket that straddles the purge is KEPT", "straddling.example" in hosts, True)
     check("a bucket created after the purge is kept", "newer.example" in hosts, True)
-    check("a post-purge bucket already written to the database is dropped", "fully.flushed.example" in hosts, False)
+    check("a bucket flushed AFTER the purge began is kept, because the purge deleted its row", "fully.flushed.example" in hosts, True)
 
     straddling = collector._buckets.get(key("straddling.example"))
-    check("the straddling bucket keeps only its unwritten hits", straddling.hits if straddling else None, 5)
+    check("the straddling bucket keeps every hit, because none of them are in the database now", straddling.hits if straddling else None, 9)
+    written_after = collector._buckets.get(key("fully.flushed.example"))
+    check("and so does one whose every hit had been written", written_after.hits if written_after else None, 2)
     check("its first_seen is moved up to the purge moment", straddling.first_seen if straddling else None, watermark)
     check("its last_seen is untouched", straddling.last_seen if straddling else None, watermark + timedelta(seconds=30))
     check("every survivor starts unwritten", {b.row_id for b in collector._buckets.values()}, {None})
@@ -90,7 +92,7 @@ def main():
     }
     collector.forget_buckets(None, keep_after=watermark)
     carried = collector._buckets.get(key("attribution.example"))
-    check("nothing was written, so every hit survives the purge", carried.hits if carried else None, 9)
+    check("every hit survives the purge", carried.hits if carried else None, 9)
     check("and they are all re-dated to the purge moment", carried.first_seen if carried else None, watermark)
 
     print()

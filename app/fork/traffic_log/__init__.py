@@ -45,6 +45,11 @@ async def _hand_over(node_id: int, outbox: asyncio.Queue, item) -> None:
         await asyncio.wait_for(outbox.put(item), timeout=VIEWER_HANDOFF_TIMEOUT)
     except TimeoutError:
         collector.note_viewer_drop(node_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        collector.note_viewer_drop(node_id)
+        raise
 
 
 __all__ = ["collector", "fork_log_stream", "viewer_stream"]

@@ -1,3 +1,5 @@
+import contextlib
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,6 +20,24 @@ def test_default_timeout_allows_slow_node_startup():
 
     with pytest.raises(ValidationError):
         NodeModify(default_timeout=2)
+
+
+@contextlib.contextmanager
+def caplog_at_warning():
+    records = []
+
+    class Sink(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    sink = Sink(level=logging.WARNING)
+    log = logging.getLogger("node-operation")
+    log.addHandler(sink)
+    try:
+        yield records
+    finally:
+        log.removeHandler(sink)
+
 
 
 @pytest.mark.asyncio
@@ -271,15 +291,72 @@ async def test_attach_that_cannot_refresh_users_falls_back_to_a_clean_start(monk
         stop=AsyncMock(),
         sync_users=AsyncMock(side_effect=RuntimeError("the node refused the user list")),
     )
+    order = []
+    pg_node.stop.side_effect = lambda *a, **k: order.append("stop")
+    pg_node.start.side_effect = lambda **k: (order.append("start"), started)[1]
     monkeypatch.setattr(NodeOperation, "_attach_if_running", AsyncMock(return_value=object()))
     monkeypatch.setattr("app.operation.node.ATTACH_SYNC_BACKOFF", 0)
     db_node = SimpleNamespace(name="mtproto-tg", id=69, keep_alive=0)
     core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+    users = [{"email": "1"}]
 
-    result = await NodeOperation._start_or_attach_node(pg_node, db_node, core, [], object())
+    result = await NodeOperation._start_or_attach_node(pg_node, db_node, core, users, "xray")
 
     assert result is started
     assert pg_node.sync_users.await_count == 3
-    pg_node.start.assert_awaited_once()
+    for call in pg_node.sync_users.await_args_list:
+        assert call.args[0] is users
+        assert call.kwargs == {"flush_pending": False}
+    assert order == ["stop", "start"]
+    assert pg_node.start.await_args.kwargs["users"] is users
+    assert pg_node.start.await_args.kwargs["keep_alive"] == 0
+    assert db_node.id in NodeOperation._pending_user_sync
+    NodeOperation._pending_user_sync.discard(db_node.id)
+
+
+@pytest.mark.asyncio
+async def test_a_successful_attach_never_stops_the_running_core(monkeypatch: pytest.MonkeyPatch):
+    state = SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
+    attached = object()
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(return_value=state),
+        start=AsyncMock(),
+        stop=AsyncMock(),
+        sync_users=AsyncMock(),
+    )
+    monkeypatch.setattr(NodeOperation, "_attach_if_running", AsyncMock(return_value=attached))
+    db_node = SimpleNamespace(name="de-1", id=7, keep_alive=0)
+    core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    result = await NodeOperation._start_or_attach_node(pg_node, db_node, core, [], "xray")
+
+    assert result is attached
+    pg_node.stop.assert_not_awaited()
+    pg_node.start.assert_not_awaited()
+    pg_node.sync_users.assert_awaited_once()
+    assert db_node.id not in NodeOperation._pending_user_sync
+
+
+@pytest.mark.asyncio
+async def test_a_starting_node_whose_push_fails_is_left_to_the_worker_starting_it(monkeypatch: pytest.MonkeyPatch):
+    state = SimpleNamespace(observed=LifecycleStatus.STARTING, desired=LifecycleStatus.HEALTHY, epoch=1)
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(return_value=state),
+        start=AsyncMock(),
+        stop=AsyncMock(),
+        sync_users=AsyncMock(side_effect=RuntimeError("the node refused the user list")),
+    )
+    monkeypatch.setattr(NodeOperation, "_attach_if_running", AsyncMock(return_value=object()))
+    monkeypatch.setattr("app.operation.node.ATTACH_SYNC_BACKOFF", 0)
+    db_node = SimpleNamespace(name="de-2", id=31, keep_alive=0)
+    core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    with caplog_at_warning() as records:
+        result = await NodeOperation._start_or_attach_node(pg_node, db_node, core, [], "xray")
+
+    assert result is None
+    pg_node.stop.assert_not_awaited()
+    pg_node.start.assert_not_awaited()
+    assert not [r for r in records if "Restarting" in r.getMessage()]
     assert db_node.id in NodeOperation._pending_user_sync
     NodeOperation._pending_user_sync.discard(db_node.id)

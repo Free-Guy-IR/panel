@@ -24,8 +24,23 @@ fi
 
 NAMES=()
 CODES=()
+PROGRESS="$OUT.progress"
+: >"$PROGRESS"
 
-trap 'rm -rf "$WORK"' EXIT
+final_status() {
+    local rc=$?
+    if [ "${SUMMARY_WRITTEN:-0}" = "0" ]; then
+        echo
+        echo "############ the run ended before the summary was reached (status $rc)"
+        printf "%-34s %s\n" "step" "exit"
+        while IFS=$'\t' read -r name code; do
+            [ -n "$name" ] && printf "%-34s %s\n" "$name" "$code"
+        done <"$PROGRESS"
+        echo "RUN INCOMPLETE"
+    fi
+    rm -rf "$WORK"
+}
+trap final_status EXIT
 
 export PANEL_ROOT
 
@@ -81,6 +96,7 @@ run() {
     } >>"$OUT"
     NAMES+=("$title")
     CODES+=("$rc")
+    printf '%s\t%s\n' "$title" "$rc" >>"$PROGRESS"
     return $rc
 }
 
@@ -122,6 +138,7 @@ for i in "${!NAMES[@]}"; do
     [ "${CODES[$i]}" = "0" ] || failed=1
 done
 
+SUMMARY_WRITTEN=1
 echo
 echo "results written to $OUT"
 printf "%-34s %s\n" "step" "exit"

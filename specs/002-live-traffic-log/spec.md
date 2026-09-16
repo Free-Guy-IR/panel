@@ -188,15 +188,21 @@ oversight; closing it means putting the same owner gate on the raw viewer.
 ## What "purge everything" means for a five-minute bucket that is still open
 
 A purge deletes every stored record and then clears the collector's memory. The moment it
-starts is taken inside the same exclusive section that stops the flusher, so nothing can be
-written between the delete and the clear.
+starts is read when the request arrives, before any lock is taken, because that is when the
+operator asked. Anything the collector accepted from that instant onward survives, whether it
+arrived while the purge waited for the flusher, while it waited for a database connection, or
+while the rows were being deleted.
+
+A surviving bucket keeps every one of its hits rather than only the ones not yet written,
+because the purge has just deleted every row: after it, nothing is written any more. Keeping
+only the unwritten portion would have silently discarded any hit that happened to be flushed
+in the moments between the request arriving and the purge acquiring its lock.
 
 One imprecision remains, and it is a consequence of bucketing rather than a defect. A bucket
 is a five-minute aggregate with one first-seen and one last-seen time and no per-connection
-timestamps. If such a bucket was still open when the purge ran, and part of its hits had not
-yet been written to the database, there is no way to tell which of those unwritten hits
-happened before the purge and which after. The collector keeps all of them and re-dates the
-bucket to the purge moment.
+timestamps. If such a bucket was still open when the purge ran, there is no way to tell which
+of its hits happened before the purge and which after. The collector keeps all of them and
+re-dates the bucket to the purge moment.
 
 The alternative would be to drop the whole bucket, which discards connections that genuinely
 happened after the operator asked for a clean slate. Between showing a little more than was

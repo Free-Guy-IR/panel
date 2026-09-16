@@ -47,7 +47,7 @@ dependencies = [
 line-length = 120
 indent-width = 4
 respect-gitignore = true
-exclude = ["app/db/migrations", "specs/*/experiments"]
+exclude = ["app/db/migrations"]
 fix = true
 
 [tool.ruff.lint]
@@ -62,6 +62,24 @@ extend-immutable-calls = [
     "fastapi.params.Depends",
     "app.routers.authentication.require_permission",
     "app.routers.authentication.require_scope_all",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"specs/*/experiments/*" = [
+    "ASYNC230",
+    "ASYNC251",
+    "B023",
+    "C408",
+    "EXE001",
+    "F401",
+    "FURB162",
+    "I001",
+    "PLW1510",
+    "RUF059",
+    "RUF100",
+    "S110",
+    "SIM115",
+    "UP031",
 ]
 
 [tool.ruff.lint.isort]
