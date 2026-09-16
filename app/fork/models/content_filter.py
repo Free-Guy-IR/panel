@@ -34,7 +34,9 @@ class ContentFilterAssignment(Base, IdMixin):
         Index("ix_content_filter_assignments_node", "node_id"),
     )
 
-    profile_id: Mapped[int] = fk_id_column("content_filter_profiles.id", ondelete="CASCADE")
+    profile_id: Mapped[int] = fk_id_column(
+        "content_filter_profiles.id", ondelete="CASCADE", name="fk_content_filter_assignments_profile"
+    )
     inbound_tag: Mapped[str] = mapped_column(String(256), default=WHOLE_NODE, server_default="")
     node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="CASCADE", nullable=True, default=None)
     is_enabled: Mapped[bool] = mapped_column(default=True, server_default="1")

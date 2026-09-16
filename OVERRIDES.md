@@ -34,6 +34,7 @@ stays visible.
 
 ## Branding & fork infrastructure (not upstreamable)
 
+- `pyproject.toml` — ruff is scoped to the code it governs; the one-off probe scripts under specs are excluded alongside the generated migrations
 - `README.md` — fork branding: logo, badges, links point to Free-Guy-IR
 - `README-fa.md` — fork branding, Persian edition
 - `README-ru.md` — fork branding, Russian edition
@@ -70,6 +71,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/node/sync.py` — _serialize_user_for_node signature update
 - `app/node/user.py` — node user serialization carries vless id
 - `tests/test_connect_concurrency.py` — test updated to new connect_node signature
+- `tests/test_node_start_timeout.py` — the attach path now refreshes the user list, so the doubles carry sync_users and an id
 
 ## New proxy cores: openvpn / l2tp / mtproto / singbox
 

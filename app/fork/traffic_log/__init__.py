@@ -43,7 +43,7 @@ async def _pump(node_id: int, node, kwargs: dict, outbox: asyncio.Queue) -> None
 async def _hand_over(node_id: int, outbox: asyncio.Queue, item) -> None:
     try:
         await asyncio.wait_for(outbox.put(item), timeout=VIEWER_HANDOFF_TIMEOUT)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         collector.note_viewer_drop(node_id)
 
 

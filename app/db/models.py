@@ -35,7 +35,7 @@ PostgresJSONB = JSON().with_variant(JSONB(none_as_null=True), "postgresql")
 
 
 def fk_id_column(target: str, **column_kwargs: Any):
-    fk_kwargs = {key: column_kwargs.pop(key) for key in ("ondelete", "onupdate") if key in column_kwargs}
+    fk_kwargs = {key: column_kwargs.pop(key) for key in ("ondelete", "onupdate", "name") if key in column_kwargs}
     return mapped_column(SqliteCompatibleBigInteger, ForeignKey(target, **fk_kwargs), **column_kwargs)
 
 

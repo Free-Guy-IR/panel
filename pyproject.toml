@@ -47,7 +47,7 @@ dependencies = [
 line-length = 120
 indent-width = 4
 respect-gitignore = true
-exclude = ["app/db/migrations"]
+exclude = ["app/db/migrations", "specs/*/experiments"]
 fix = true
 
 [tool.ruff.lint]

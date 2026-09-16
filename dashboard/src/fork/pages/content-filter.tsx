@@ -117,29 +117,29 @@ const GROUP_ICON: Record<string, typeof ShieldBan> = {
   ads: Megaphone,
 }
 
-const GROUP_TONE: Record<string, string> = {
-  security: 'text-rose-600 dark:text-rose-400',
-  bypass: 'text-amber-600 dark:text-amber-400',
-  devices: 'text-sky-600 dark:text-sky-400',
-  content: 'text-violet-600 dark:text-violet-400',
-  regional: 'text-teal-600 dark:text-teal-400',
-  social_network: 'text-sky-600 dark:text-sky-400',
-  messenger: 'text-cyan-600 dark:text-cyan-400',
-  gaming: 'text-violet-600 dark:text-violet-400',
-  gambling: 'text-red-600 dark:text-red-400',
-  dating: 'text-pink-600 dark:text-pink-400',
-  ai: 'text-indigo-600 dark:text-indigo-400',
-  shopping: 'text-orange-600 dark:text-orange-400',
-  hosting: 'text-slate-600 dark:text-slate-400',
-  cdn: 'text-slate-600 dark:text-slate-400',
-  software: 'text-slate-600 dark:text-slate-400',
-  privacy: 'text-emerald-600 dark:text-emerald-400',
-  adult: 'text-rose-600 dark:text-rose-400',
-  social: 'text-sky-600 dark:text-sky-400',
-  games: 'text-violet-600 dark:text-violet-400',
-  streaming: 'text-amber-600 dark:text-amber-400',
-  ads: 'text-emerald-600 dark:text-emerald-400',
-}
+const GROUP_TONE = new Map<string, string>([
+  ['security', 'text-rose-600 dark:text-rose-400'],
+  ['bypass', 'text-amber-600 dark:text-amber-400'],
+  ['devices', 'text-sky-600 dark:text-sky-400'],
+  ['content', 'text-violet-600 dark:text-violet-400'],
+  ['regional', 'text-teal-600 dark:text-teal-400'],
+  ['social_network', 'text-sky-600 dark:text-sky-400'],
+  ['messenger', 'text-cyan-600 dark:text-cyan-400'],
+  ['gaming', 'text-violet-600 dark:text-violet-400'],
+  ['gambling', 'text-red-600 dark:text-red-400'],
+  ['dating', 'text-pink-600 dark:text-pink-400'],
+  ['ai', 'text-indigo-600 dark:text-indigo-400'],
+  ['shopping', 'text-orange-600 dark:text-orange-400'],
+  ['hosting', 'text-slate-600 dark:text-slate-400'],
+  ['cdn', 'text-slate-600 dark:text-slate-400'],
+  ['software', 'text-slate-600 dark:text-slate-400'],
+  ['privacy', 'text-emerald-600 dark:text-emerald-400'],
+  ['adult', 'text-rose-600 dark:text-rose-400'],
+  ['social', 'text-sky-600 dark:text-sky-400'],
+  ['games', 'text-violet-600 dark:text-violet-400'],
+  ['streaming', 'text-amber-600 dark:text-amber-400'],
+  ['ads', 'text-emerald-600 dark:text-emerald-400'],
+])
 
 function useCatalog() {
   return useQuery({
@@ -237,7 +237,7 @@ function PickerSheet({
         <SheetHeader className="space-y-0 border-b p-5 text-start">
           <div className="flex items-center gap-3">
             <span className="rounded-xl bg-primary/10 p-2.5">
-              <GIcon className={cn('size-5', GROUP_TONE[groupKey])} />
+              <GIcon className={cn('size-5', GROUP_TONE.get(groupKey))} />
             </span>
             <div className="min-w-0">
               <SheetTitle className="text-base leading-tight">{title}</SheetTitle>
@@ -359,7 +359,7 @@ function GroupTile({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
           <span className={cn('mt-0.5 rounded-lg p-1.5', active ? 'bg-primary/10' : 'bg-muted')}>
-            <Icon className={cn('size-4', GROUP_TONE[groupKey])} />
+            <Icon className={cn('size-4', GROUP_TONE.get(groupKey))} />
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold leading-tight">

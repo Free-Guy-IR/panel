@@ -46,14 +46,16 @@ async def test_attach_requires_remote_core_to_be_started():
 @pytest.mark.asyncio
 async def test_start_or_attach_probes_broken_desired_healthy_lifecycle(monkeypatch: pytest.MonkeyPatch):
     state = SimpleNamespace(observed=LifecycleStatus.BROKEN, desired=LifecycleStatus.HEALTHY)
-    pg_node = SimpleNamespace(get_lifecycle_state=AsyncMock(return_value=state), start=AsyncMock())
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(return_value=state), start=AsyncMock(), sync_users=AsyncMock()
+    )
     attached = object()
     attach = AsyncMock(return_value=attached)
     monkeypatch.setattr(NodeOperation, "_attach_if_running", attach)
 
     result = await NodeOperation._start_or_attach_node(
         pg_node,
-        SimpleNamespace(name="slow-node"),
+        SimpleNamespace(name="slow-node", id=11),
         object(),
         [],
         object(),
@@ -257,3 +259,27 @@ async def test_connect_node_skips_when_already_healthy(monkeypatch: pytest.Monke
     assert result is None
     start_or_attach.assert_not_awaited()
     pg_node.start.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_attach_that_cannot_refresh_users_falls_back_to_a_clean_start(monkeypatch: pytest.MonkeyPatch):
+    state = SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
+    started = SimpleNamespace(node_version="0.8.1", core_version="25.1.1")
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(return_value=state),
+        start=AsyncMock(return_value=started),
+        stop=AsyncMock(),
+        sync_users=AsyncMock(side_effect=RuntimeError("the node refused the user list")),
+    )
+    monkeypatch.setattr(NodeOperation, "_attach_if_running", AsyncMock(return_value=object()))
+    monkeypatch.setattr("app.operation.node.ATTACH_SYNC_BACKOFF", 0)
+    db_node = SimpleNamespace(name="mtproto-tg", id=69, keep_alive=0)
+    core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    result = await NodeOperation._start_or_attach_node(pg_node, db_node, core, [], object())
+
+    assert result is started
+    assert pg_node.sync_users.await_count == 3
+    pg_node.start.assert_awaited_once()
+    assert db_node.id in NodeOperation._pending_user_sync
+    NodeOperation._pending_user_sync.discard(db_node.id)

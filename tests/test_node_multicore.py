@@ -167,6 +167,9 @@ async def test_a_healthy_node_is_force_started_instead_of_attached():
         async def update_observed_lifecycle(self, observed, expected_epoch=None):
             calls.append("observe")
 
+        async def sync_users(self, users, flush_pending=False):
+            calls.append(("sync_users", len(users)))
+
         async def start(self, **kwargs):
             calls.append(("start", kwargs))
             return SimpleNamespace(node_version="0.8.1", core_version="25.1.1")

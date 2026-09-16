@@ -47,7 +47,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["profile_id"],
             ["content_filter_profiles.id"],
-            name="fk_content_filter_assignments_profile_id_content_filter_profiles",
+            name="fk_content_filter_assignments_profile",
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
