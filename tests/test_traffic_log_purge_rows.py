@@ -3,19 +3,19 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
-from app.db import GetDB
 from app.fork.jobs.traffic_log_purge import surviving_row_ids
 from app.fork.models.traffic_log import TrafficLogRecord
 from app.fork.traffic_log.collector import Bucket, TrafficCollector, bucket_start_of
+from tests.api import GetTestDB
 
 
 @pytest.fixture(autouse=True)
 async def _empty_traffic_log():
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         await db.execute(TrafficLogRecord.__table__.delete())
         await db.commit()
     yield
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         await db.execute(TrafficLogRecord.__table__.delete())
         await db.commit()
 
@@ -51,7 +51,7 @@ async def test_a_bucket_whose_row_the_purge_deleted_is_written_again_not_lost():
     start = bucket_start_of(now)
     collector = TrafficCollector()
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         row_id = await _insert(db, start, "deleted.example", 6)
         await db.commit()
 
@@ -92,7 +92,7 @@ async def test_a_bucket_whose_row_survived_is_not_written_a_second_time():
     start = bucket_start_of(now)
     collector = TrafficCollector()
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         row_id = await _insert(db, start, "survived.example", 6)
         await db.commit()
 
@@ -121,7 +121,7 @@ async def test_a_bucket_whose_row_survived_is_not_written_a_second_time():
     assert carried.row_id == row_id
     assert carried.flushed_hits == 6
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         total = await db.scalar(select(func.count()).select_from(TrafficLogRecord))
     assert total == 1
 
@@ -133,7 +133,7 @@ async def test_a_bucket_newer_than_the_cutoff_still_forgets_a_row_the_ceiling_de
     cutoff = now - timedelta(hours=48)
     collector = TrafficCollector()
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         row_id = await _insert(db, start, "ceiling.example", 5)
         await db.commit()
         collector._buckets = {
@@ -172,7 +172,7 @@ async def test_the_scheduled_purge_detaches_rows_it_deleted():
     cutoff = now - timedelta(hours=48)
     collector = TrafficCollector()
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         row_id = await _insert(db, old_start, "expired.example", 4)
         await db.commit()
 
@@ -199,7 +199,7 @@ async def test_the_scheduled_purge_detaches_rows_it_deleted():
     assert bucket.flushed_hits == 0
     assert bucket.hits == 7
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         total = await db.scalar(select(func.count()).select_from(TrafficLogRecord))
     assert total == 0
 
@@ -207,7 +207,10 @@ async def test_the_scheduled_purge_detaches_rows_it_deleted():
 @pytest.mark.asyncio
 async def test_the_job_itself_detaches_rows_it_deleted(monkeypatch: pytest.MonkeyPatch):
     from app.fork import traffic_log
+    from app.fork.jobs import traffic_log_purge as purge_module
     from app.fork.jobs.traffic_log_purge import purge_traffic_log
+
+    monkeypatch.setattr(purge_module, "GetDB", GetTestDB)
 
     now = datetime.now(UTC).replace(microsecond=0)
     old_start = bucket_start_of(now - timedelta(hours=72))
@@ -218,7 +221,7 @@ async def test_the_job_itself_detaches_rows_it_deleted(monkeypatch: pytest.Monke
 
     collector.effective_retention_hours = retention
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         row_id = await _insert(db, old_start, "job.example", 4)
         await db.commit()
 
@@ -255,7 +258,7 @@ async def test_the_flush_lock_keeps_a_concurrent_flush_out_of_the_reconciliation
     collector = TrafficCollector()
     order = []
 
-    async with GetDB() as db:
+    async with GetTestDB() as db:
         row_id = await _insert(db, old_start, "raced.example", 4)
         await db.commit()
 
@@ -272,7 +275,7 @@ async def test_the_flush_lock_keeps_a_concurrent_flush_out_of_the_reconciliation
     }
 
     async def reconcile():
-        async with collector.suspend_flush(), GetDB() as db:
+        async with collector.suspend_flush(), GetTestDB() as db:
             order.append("reconcile-start")
             await purge_before(db, cutoff)
             await asyncio.sleep(0.05)
