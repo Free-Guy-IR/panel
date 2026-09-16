@@ -28,7 +28,8 @@ UNSAFE_LOCALE_KEYS = frozenset({"__proto__", "prototype", "constructor"})
 MISSING = object()
 
 SUBSCRIPTION_PING_ENDPOINT = (f"/{subscription_env_settings.path}/{{token}}/ping", "GET")
-TOKEN_SCOPED_FORK_ROUTES = frozenset({SUBSCRIPTION_PING_ENDPOINT})
+TRAFFIC_LOG_LIVE_ENDPOINT = ("/api/traffic-log/live", "GET")
+TOKEN_SCOPED_FORK_ROUTES = frozenset({SUBSCRIPTION_PING_ENDPOINT, TRAFFIC_LOG_LIVE_ENDPOINT})
 
 CONNECTION_LIMIT_ENDPOINTS = frozenset(
     {
@@ -55,7 +56,36 @@ NON_CONNECTION_LIMIT_FORK_ENDPOINTS = frozenset(
     }
 )
 
-EXPECTED_FORK_ENDPOINTS = CONNECTION_LIMIT_ENDPOINTS | NON_CONNECTION_LIMIT_FORK_ENDPOINTS
+CONTENT_FILTER_ENDPOINTS = frozenset(
+    {
+        ("/api/content-filter/catalog", "GET"),
+        ("/api/content-filter/targets", "GET"),
+        ("/api/content-filter/profiles", "GET"),
+        ("/api/content-filter/profiles", "POST"),
+        ("/api/content-filter/profiles/{profile_id}", "PUT"),
+        ("/api/content-filter/profiles/{profile_id}", "DELETE"),
+        ("/api/content-filter/assignments", "GET"),
+        ("/api/content-filter/assignments", "POST"),
+        ("/api/content-filter/assignments/{assignment_id}", "DELETE"),
+        ("/api/content-filter/assignments/{assignment_id}/apply", "POST"),
+        ("/api/content-filter/test", "POST"),
+    }
+)
+
+TRAFFIC_LOG_ENDPOINTS = frozenset(
+    {
+        TRAFFIC_LOG_LIVE_ENDPOINT,
+        ("/api/traffic-log/history", "GET"),
+        ("/api/traffic-log/summary", "GET"),
+        ("/api/traffic-log/status", "GET"),
+        ("/api/traffic-log/settings", "PUT"),
+        ("/api/traffic-log/purge", "POST"),
+    }
+)
+
+EXPECTED_FORK_ENDPOINTS = (
+    CONNECTION_LIMIT_ENDPOINTS | NON_CONNECTION_LIMIT_FORK_ENDPOINTS | CONTENT_FILTER_ENDPOINTS | TRAFFIC_LOG_ENDPOINTS
+)
 
 AUTHENTICATION_DEPENDENCIES = frozenset(
     {

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
@@ -14,6 +14,22 @@ from app.utils import responses
 
 node_operator = NodeOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses._401, 403: responses._403})
+
+OWNER_MESSAGE = "only an admin with full panel access can read inbound usage"
+
+
+def _owner_gate(resource: str, action: str):
+    checked = require_permission(resource, action)
+
+    async def dependency(admin: AdminDetails = Depends(checked)) -> AdminDetails:
+        if not admin.is_owner:
+            raise HTTPException(status_code=403, detail=OWNER_MESSAGE)
+        return admin
+
+    return dependency
+
+
+OWNER_STATS = _owner_gate("nodes", "stats")
 
 INBOUNDS_USAGE_DESCRIPTION = """Retrieve per-inbound usage statistics within a specified date range."""
 
@@ -37,6 +53,6 @@ get_inbound_usage_query = make_query_dependency(
 async def get_inbounds_usage_stats(
     query: Annotated[InboundUsageQuery, Depends(get_inbound_usage_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("nodes", "stats")),
+    _: AdminDetails = Depends(OWNER_STATS),
 ):
     return await node_operator.get_inbounds_usage(db=db, query=query)

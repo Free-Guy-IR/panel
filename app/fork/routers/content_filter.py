@@ -28,6 +28,23 @@ from app.routers.authentication import require_permission
 from app.utils.logger import get_logger
 
 router = APIRouter(tags=["Content Filter"], prefix="/api/content-filter")
+
+OWNER_MESSAGE = "only an admin with full panel access can use the content filter"
+
+
+def _owner_gate(resource: str, action: str):
+    checked = require_permission(resource, action)
+
+    async def dependency(admin: AdminDetails = Depends(checked)) -> AdminDetails:
+        if not admin.is_owner:
+            raise HTTPException(status_code=403, detail=OWNER_MESSAGE)
+        return admin
+
+    return dependency
+
+
+OWNER_READ = _owner_gate("settings", "read")
+OWNER_WRITE = _owner_gate("settings", "update")
 logger = get_logger("content-filter-api")
 
 ROUTABLE_PROTOCOLS = frozenset({"vless", "vmess", "trojan", "shadowsocks", "socks", "http"})
@@ -67,14 +84,14 @@ async def _load_assignment(db: AsyncSession, assignment_id: int) -> ContentFilte
 
 
 @router.get("/catalog", response_model=CatalogResponse)
-async def get_catalog(_: AdminDetails = Depends(require_permission("settings", "read"))):
+async def get_catalog(_: AdminDetails = Depends(OWNER_READ)):
     return catalog_payload()
 
 
 @router.get("/targets", response_model=list[TargetNode])
 async def get_targets(
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    _: AdminDetails = Depends(OWNER_READ),
 ):
     nodes = (await db.execute(select(Node))).scalars().all()
     out: list[TargetNode] = []
@@ -115,7 +132,7 @@ async def get_targets(
 @router.get("/profiles", response_model=list[ProfileResponse])
 async def list_profiles(
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    _: AdminDetails = Depends(OWNER_READ),
 ):
     rows = (await db.execute(select(ContentFilterProfile).order_by(ContentFilterProfile.id))).scalars().all()
     return [ProfileResponse.model_validate(row) for row in rows]
@@ -125,7 +142,7 @@ async def list_profiles(
 async def create_profile(
     payload: ProfilePayload,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "update")),
+    _: AdminDetails = Depends(OWNER_WRITE),
 ):
     exists = (
         await db.execute(select(ContentFilterProfile).where(ContentFilterProfile.name == payload.name))
@@ -152,7 +169,7 @@ async def update_profile(
     profile_id: int,
     payload: ProfilePayload,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(OWNER_WRITE),
 ):
     profile = await _load_profile(db, profile_id)
     clash = (
@@ -189,7 +206,7 @@ async def update_profile(
 async def delete_profile(
     profile_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(OWNER_WRITE),
 ):
     profile = await _load_profile(db, profile_id)
     node_ids = {assignment.node_id for assignment in profile.assignments}
@@ -217,7 +234,7 @@ async def delete_profile(
 @router.get("/assignments", response_model=list[AssignmentResponse])
 async def list_assignments(
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    _: AdminDetails = Depends(OWNER_READ),
 ):
     rows = (await db.execute(select(ContentFilterAssignment).order_by(ContentFilterAssignment.id))).scalars().all()
     return [AssignmentResponse.model_validate(row) for row in rows]
@@ -227,7 +244,7 @@ async def list_assignments(
 async def create_assignment(
     payload: AssignmentPayload,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(OWNER_WRITE),
 ):
     await _load_profile(db, payload.profile_id)
 
@@ -299,7 +316,7 @@ async def create_assignment(
 async def apply_assignment(
     assignment_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(OWNER_WRITE),
 ):
     assignment = await _load_assignment(db, assignment_id)
     try:
@@ -314,7 +331,7 @@ async def apply_assignment(
 async def delete_assignment(
     assignment_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("settings", "update")),
+    admin: AdminDetails = Depends(OWNER_WRITE),
 ):
     assignment = await _load_assignment(db, assignment_id)
     try:
@@ -326,7 +343,7 @@ async def delete_assignment(
 @router.post("/test", response_model=DestinationVerdict)
 async def test_destination(
     payload: DestinationTest,
-    _: AdminDetails = Depends(require_permission("settings", "read")),
+    _: AdminDetails = Depends(OWNER_READ),
 ):
     verdict = await service.probe(payload.node_id, payload.inbound_tag, payload.domain.strip().lower())
     return DestinationVerdict(

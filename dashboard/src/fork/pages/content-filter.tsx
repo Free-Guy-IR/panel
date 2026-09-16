@@ -652,7 +652,7 @@ export default function ContentFilterPage() {
   const loading = catalog.isLoading || profiles.isLoading
 
   return (
-    <div dir={dir} className="space-y-6 pb-10">
+    <div dir={dir} className="w-full space-y-6 px-4 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold">

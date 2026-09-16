@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, useSidebar } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { REPO_URL } from '@/constants/Project'
-import { forkMainNavItems } from '@/fork/pages'
+import { forkMainNavItemsFor } from '@/fork/pages'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useSystemVersion } from '@/hooks/use-system-version'
@@ -322,7 +322,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
-      ...(canManageSettings ? forkMainNavItems : []),
+      ...(canManageSettings ? forkMainNavItemsFor(isOwner(admin)) : []),
       {
         title: 'settings.title',
         url: '/settings',

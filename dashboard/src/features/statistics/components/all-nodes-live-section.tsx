@@ -2,9 +2,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
-import { getRealtimeNodeStatsQueryOptions, NodeSimple, NodeStatus } from '@/service/api'
+import { NodeSimple, NodeStatus, RealtimeNodesStats200, useRealtimeNodesStats } from '@/service/api'
 import { formatMbpsPair } from '@/utils/formatSpeed'
-import { useQueries } from '@tanstack/react-query'
 import { Download, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,45 +30,31 @@ function getNodeStatusDotColor(status: NodeStatus) {
   }
 }
 
-/**
- * Live uplink/downlink for every node at once, plus the combined totals.
- *
- * The per-node statistics endpoint only answers for one node at a time, so
- * this issues one query per node through useQueries rather than a loop of
- * useQuery calls - the node list changes length between renders, and hooks
- * cannot be called conditionally.
- *
- * Only connected nodes are polled. A disconnected node has no live figures to
- * report, and asking anyway would fail on every interval for as long as the
- * page stays open.
- */
 export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
 
   const pollableNodes = nodes.filter(node => node.status === 'connected')
 
-  const results = useQueries({
-    queries: pollableNodes.map(node => ({
-      ...getRealtimeNodeStatsQueryOptions(node.id, {
-        query: {
-          refetchInterval: REFETCH_INTERVAL_MS,
-          staleTime: REFETCH_INTERVAL_MS,
-          refetchOnWindowFocus: true,
-          retry: false,
-        },
-      }),
-    })),
+  const { data, isLoading, error } = useRealtimeNodesStats({
+    query: {
+      refetchInterval: REFETCH_INTERVAL_MS,
+      staleTime: REFETCH_INTERVAL_MS,
+      refetchOnWindowFocus: true,
+      retry: false,
+    },
   })
 
-  const perNode = pollableNodes.map((node, index) => {
-    const result = results[index]
+  const fleet = (data as unknown as RealtimeNodesStats200 | undefined) ?? {}
+
+  const perNode = pollableNodes.map(node => {
+    const entry = fleet[String(node.id)] ?? null
     return {
       node,
-      isLoading: result?.isLoading ?? true,
-      hasError: Boolean(result?.error),
-      incoming: Number(result?.data?.incoming_bandwidth_speed ?? 0),
-      outgoing: Number(result?.data?.outgoing_bandwidth_speed ?? 0),
+      isLoading,
+      hasError: Boolean(error) || entry === null,
+      incoming: Number(entry?.incoming_bandwidth_speed ?? 0),
+      outgoing: Number(entry?.outgoing_bandwidth_speed ?? 0),
     }
   })
 

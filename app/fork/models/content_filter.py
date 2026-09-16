@@ -21,7 +21,7 @@ class ContentFilterProfile(Base, IdMixin):
     block_list: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
     strict_mode: Mapped[bool] = mapped_column(default=True, server_default="1")
     note: Mapped[str | None] = mapped_column(String(256), default=None)
-    assignments: Mapped[list["ContentFilterAssignment"]] = relationship(
+    assignments: Mapped[list["ContentFilterAssignment"]] = relationship(  # noqa: UP037
         back_populates="profile", cascade="all, delete-orphan", init=False, lazy="selectin"
     )
 

@@ -46,7 +46,7 @@ from app.utils import responses
 from app.utils.logger import get_logger
 from config import runtime_settings
 
-from .authentication import oauth2_scheme, require_permission, require_permission_for_request
+from .authentication import oauth2_scheme, require_owner, require_permission, require_permission_for_request
 from .dependencies import (
     get_node_clear_usage_query,
     get_node_list_query,
@@ -352,7 +352,7 @@ async def node_outbounds_latency(
 
 
 @router.get("s/realtime_stats", response_model=dict[int, NodeRealtimeStats | None])
-async def realtime_nodes_stats(_: AdminDetails = Depends(require_permission("nodes", "stats"))):
+async def realtime_nodes_stats(_: AdminDetails = Depends(require_owner)):
     """Retrieve nodes real-time statistics."""
     return await node_operator.get_nodes_system_stats()
 

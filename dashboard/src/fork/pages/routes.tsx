@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router'
 import { LoadingSpinner } from '@/components/common/loading-spinner'
 import { lazyWithChunkRecovery } from '@/utils/chunk-recovery'
 import { extraRoutes, registerRoute } from '../registry'
+import { OwnerOnly } from './owner-only'
 
 const ContentFilterPage = lazyWithChunkRecovery(() => import('./content-filter'))
 const ConnectionLimitSettings = lazyWithChunkRecovery(() => import('./connection-limit'))
@@ -15,7 +16,7 @@ function withSpinner(element: ReactElement) {
   return <Suspense fallback={<LoadingSpinner />}>{element}</Suspense>
 }
 
-registerRoute({ path: '/settings/content-filter', element: withSpinner(<ContentFilterPage />) }, 'settings')
+registerRoute({ path: '/settings/content-filter', element: <OwnerOnly>{withSpinner(<ContentFilterPage />)}</OwnerOnly> }, 'settings', true)
 registerRoute({ path: '/settings/connection-limit', element: withSpinner(<ConnectionLimitSettings />) }, 'settings')
 registerRoute({ path: '/settings/connection-limit/review', element: withSpinner(<ConnectionLimitReview />) }, 'settings')
 registerRoute({ path: '/settings/connection-limit/violations', element: withSpinner(<ConnectionLimitViolations />) }, 'settings')

@@ -38,8 +38,7 @@ def _domain_matchers(values: list[str]) -> list[str]:
             if bare:
                 out.append(f"full:{bare}")
             continue
-        if value.startswith("*."):
-            value = value[2:]
+        value = value.removeprefix("*.")
         value = value.strip(".")
         if not value:
             continue

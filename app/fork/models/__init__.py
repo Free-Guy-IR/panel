@@ -4,6 +4,9 @@ __all__ = [
     "ContentFilterProfile",
     "ContentFilterSniffingOverride",
     "NodeInboundUsage",
+    "TrafficLogIdentity",
+    "TrafficLogRecord",
+    "TrafficLogState",
     "UserConnectionLimit",
     "UserConnectionState",
     "node_additional_cores_association",
@@ -30,6 +33,14 @@ def __getattr__(name):
             "ContentFilterProfile": ContentFilterProfile,
             "ContentFilterAssignment": ContentFilterAssignment,
             "ContentFilterSniffingOverride": ContentFilterSniffingOverride,
+        }[name]
+    if name in {"TrafficLogRecord", "TrafficLogIdentity", "TrafficLogState"}:
+        from app.fork.models.traffic_log import TrafficLogIdentity, TrafficLogRecord, TrafficLogState
+
+        return {
+            "TrafficLogRecord": TrafficLogRecord,
+            "TrafficLogIdentity": TrafficLogIdentity,
+            "TrafficLogState": TrafficLogState,
         }[name]
     if name in {"ConnectionRestriction", "UserConnectionLimit", "UserConnectionState"}:
         from app.fork.models.connection import ConnectionRestriction, UserConnectionLimit, UserConnectionState

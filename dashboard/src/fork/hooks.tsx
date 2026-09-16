@@ -4,6 +4,7 @@ import { OpenVPNCoreEditor } from '@/features/core-editor/components/openvpn/ope
 import { SingBoxCoreEditor } from '@/fork/singbox'
 import { registerCoreEditor } from './registry'
 import './pages/routes'
+import './pages/statistics-views'
 import './pages/tabs'
 
 registerCoreEditor('singbox', SingBoxCoreEditor)

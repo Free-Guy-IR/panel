@@ -84,6 +84,8 @@ from config import runtime_settings
 MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
 CONNECT_CONCURRENCY = 10
+ATTACH_SYNC_ATTEMPTS = 3
+ATTACH_SYNC_BACKOFF = 1.0
 
 logger = get_logger("node-operation")
 
@@ -91,6 +93,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     # Local Start RPCs in progress on this process. Health checks must not fire a
     # second Start just because pg-node still returns "core is not started yet".
     _in_flight_connects: ClassVar[set[int]] = set()
+    _pending_user_sync: ClassVar[set[int]] = set()
 
     def __init__(self, operator_type: OperatorType):
         super().__init__(operator_type)
@@ -285,6 +288,29 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             return None
 
     @staticmethod
+    async def _push_users_after_attach(pg_node: PasarGuardNode, db_node: Node, users: list) -> bool:
+        delay = ATTACH_SYNC_BACKOFF
+        for attempt in range(ATTACH_SYNC_ATTEMPTS):
+            try:
+                await pg_node.sync_users(users, flush_pending=False)
+                NodeOperation._pending_user_sync.discard(db_node.id)
+                return True
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if attempt + 1 == ATTACH_SYNC_ATTEMPTS:
+                    NodeOperation._pending_user_sync.add(db_node.id)
+                    logger.error(
+                        f'Could not refresh the user list on the already-running "{db_node.name}" node after '
+                        f"{ATTACH_SYNC_ATTEMPTS} attempts: {exc}. Clients will be rejected until it succeeds; "
+                        "the next reconnect will retry it."
+                    )
+                    return False
+                await asyncio.sleep(delay)
+                delay *= 2
+        return False
+
+    @staticmethod
     async def _start_or_attach_node(
         pg_node: PasarGuardNode, db_node: Node, core, users: list, backend_type, *, force_start: bool = False
     ):
@@ -296,7 +322,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             ):
                 attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
                 if attached is not None:
-                    return attached
+                    if await NodeOperation._push_users_after_attach(pg_node, db_node, users):
+                        return attached
+                    logger.warning(f'Restarting "{db_node.name}" because its user list could not be refreshed')
                 if state.observed is LifecycleStatus.STARTING:
                     # Another worker is already starting this node right now - don't race
                     # it for the lease (that's a guaranteed 409 plus wasted KV round-trips).
@@ -1000,10 +1028,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await node_nats_client.publish("connect_nodes_bulk", {"core_id": core_id, "force_start": True})
 
     async def _get_logs_local(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
+        from app.fork.traffic_log import fork_log_stream
+
         node = await node_manager.get_node(node_id)
         if node is None:
             await self.raise_error(message="Node not found", code=404)
-        return node.stream_logs
+        return fork_log_stream(node_id, node)
 
     async def _get_logs_remote(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
         await self.raise_error(message="Node logs are only available via node-worker", code=409)

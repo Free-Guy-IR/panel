@@ -221,6 +221,10 @@ class JobSettings(EnvSettings):
     )
     # Days of per-user, per-node usage history to keep. 0 disables the cleanup.
     node_user_usages_retention_days: int = Field(default=30, validation_alias="NODE_USER_USAGES_RETENTION_DAYS")
+    traffic_log_enabled: bool = Field(default=True, validation_alias="TRAFFIC_LOG_ENABLED")
+    traffic_log_max_records: int = Field(default=2_000_000, ge=0, validation_alias="TRAFFIC_LOG_MAX_RECORDS")
+    traffic_log_flush_seconds: int = Field(default=5, ge=1, validation_alias="TRAFFIC_LOG_FLUSH_SECONDS")
+    traffic_log_purge_interval: int = Field(default=600, ge=1, validation_alias="TRAFFIC_LOG_PURGE_INTERVAL")
 
 
 class FeatureSettings(EnvSettings):

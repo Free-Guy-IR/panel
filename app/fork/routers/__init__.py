@@ -11,6 +11,7 @@ FORK_ROUTER_MODULES = (
     ("core", "fork_core"),
     ("node", "fork_node"),
     ("subscription", "fork_subscription"),
+    ("traffic_log", "traffic_log"),
     ("user", "fork_user"),
 )
 

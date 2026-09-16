@@ -3,7 +3,8 @@ import { LoadingSpinner } from '@/components/common/loading-spinner'
 import PageHeader from '@/components/layout/page-header'
 import { getDocsUrl } from '@/utils/docs-url'
 import { useAdmin } from '@/hooks/use-admin'
-import { hasPermission, hasScopeAll } from '@/utils/rbac'
+import type { AdminDetails } from '@/service/api'
+import { hasPermission, hasScopeAll, isOwner } from '@/utils/rbac'
 import { cn } from '@/lib/utils'
 import {
   ArrowUpDown,
@@ -28,7 +29,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
-import { forkBulkHeaders, forkBulkTabs, forkSettingsTabs } from '@/fork/pages/tabs'
+import { forkBulkHeaders, forkBulkTabs, forkSettingsTabs, forkSettingsTabsFor } from '@/fork/pages/tabs'
 
 type TabDef = { id: string; labelKey: string; icon: LucideIcon; url: string }
 
@@ -170,9 +171,12 @@ function NodesTabbedFallback({ pathname }: { pathname: string }) {
   )
 }
 
-function SettingsTabbedFallback({ pathname, isSudo }: { pathname: string; isSudo: boolean }) {
+function SettingsTabbedFallback({ pathname, isSudo, isPanelOwner }: { pathname: string; isSudo: boolean; isPanelOwner: boolean }) {
   const { t } = useTranslation()
-  const tabs = isSudo ? SETTINGS_SUDO_TABS : SETTINGS_NON_SUDO_TABS
+  const allowedForkTabIds = new Set(forkSettingsTabsFor(isPanelOwner).map(tab => tab.id))
+  const forkTabIds = new Set(forkSettingsTabs.map(tab => tab.id))
+  const sudoTabs = SETTINGS_SUDO_TABS.filter(tab => !forkTabIds.has(tab.id) || allowedForkTabIds.has(tab.id))
+  const tabs = isSudo ? sudoTabs : SETTINGS_NON_SUDO_TABS
   const activeId = settingsActiveTabId(pathname, tabs)
   return (
     <div className="flex w-full flex-col items-start gap-0">
@@ -230,7 +234,7 @@ export function TabbedRouteSuspenseFallback() {
     return <NodesTabbedFallback pathname={pathname} />
   }
   if (pathname.startsWith('/settings')) {
-    return <SettingsTabbedFallback pathname={pathname} isSudo={canUseSettings} />
+    return <SettingsTabbedFallback pathname={pathname} isSudo={canUseSettings} isPanelOwner={isOwner(admin as unknown as AdminDetails | null)} />
   }
   if (pathname.startsWith('/bulk')) {
     return <BulkTabbedFallback pathname={pathname} isSudo={canUseBulkAll} />

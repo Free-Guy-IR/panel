@@ -5,7 +5,7 @@ from app.fork.jobs.node_extras import after_healthy_node_check
 from app.fork.jobs.usage_coeff import apply_usage_value
 from app.fork.jobs.webhook_signing import webhook_request
 
-FORK_JOB_MODULES = ("cleanup_node_user_usages", "connection_limiter")
+FORK_JOB_MODULES = ("cleanup_node_user_usages", "connection_limiter", "traffic_log_collector", "traffic_log_purge")
 
 __all__ = [
     "FORK_JOB_MODULES",
