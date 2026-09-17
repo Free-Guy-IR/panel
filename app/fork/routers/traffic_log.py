@@ -37,6 +37,7 @@ UNKNOWN_USER_ID = -1
 OWNER_MESSAGE = "only an admin with full panel access can use the traffic log"
 PURGE_EVERYTHING = timedelta(days=3650)
 MAX_PURGE_AGE_HOURS = 87_600
+MAX_TEXT_QUERY = 255
 
 
 def require_owner():
@@ -66,7 +67,7 @@ def _encode(item) -> str:
 @router.get("/live")
 async def live_feed(
     request: Request,
-    username: str | None = Query(default=None),
+    username: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
     node_id: int | None = Query(default=None),
     token: str | None = Depends(oauth2_scheme),
 ):
@@ -125,10 +126,10 @@ async def _still_authorised(request: Request, token: str | None, admin_id: int |
 async def get_history(
     start: Annotated[dt, Query()],
     end: Annotated[dt, Query()],
-    username: str | None = Query(default=None),
+    username: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
     node_id: int | None = Query(default=None),
-    inbound: str | None = Query(default=None),
-    destination: str | None = Query(default=None),
+    inbound: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
+    destination: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
     refused: bool | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
@@ -154,10 +155,10 @@ async def get_history(
 async def get_summary(
     start: Annotated[dt, Query()],
     end: Annotated[dt, Query()],
-    username: str | None = Query(default=None),
+    username: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
     node_id: int | None = Query(default=None),
-    inbound: str | None = Query(default=None),
-    destination: str | None = Query(default=None),
+    inbound: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
+    destination: str | None = Query(default=None, max_length=MAX_TEXT_QUERY),
     refused: bool | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(OWNER_ONLY),
@@ -215,6 +216,7 @@ async def purge_records(
     freed_bytes: int | None = None
     since_ingest = collector.ingest_watermark()
     async with collector.suspend_flush(), GetDB() as db:
+        collector.mark_rows_dirty()
         removed, incomplete = await purge_before(db, cutoff)
         remaining = int(await db.scalar(select(func.count()).select_from(TrafficLogRecord)) or 0)
         await reconcile_buckets(
@@ -223,7 +225,7 @@ async def purge_records(
             None if older_than_hours is None else cutoff,
             keep_after=now if older_than_hours is None else None,
             since_ingest=since_ingest,
-            storage_emptied=remaining == 0,
+            keep_stored_rows=incomplete,
         )
         engine = session_engine(db)
 

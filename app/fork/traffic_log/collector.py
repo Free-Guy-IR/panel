@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from PasarGuardNodeBridge import Health, NodeAPIError
-from sqlalchemy import bindparam, insert, select, update
+from sqlalchemy import bindparam, delete, insert, select, update
 
 from app.db import GetDB
 from app.fork.models.traffic_log import TrafficLogRecord, TrafficLogState
@@ -203,6 +203,8 @@ class TrafficCollector:
         self._purge_generation = 0
         self._ingest_seq = 0
         self._flush_task: asyncio.Task | None = None
+        self._rows_dirty = False
+        self._adopt_until: datetime | None = bucket_start_of(datetime.now(UTC))
         self._flush_lock = asyncio.Lock()
         self._attach_lock = asyncio.Lock()
 
@@ -228,6 +230,11 @@ class TrafficCollector:
             self._started = False
             for node_id in list(self._readers):
                 await self._detach(node_id, STATE_DETACHED, "panel shutting down")
+        for node_id, pump in list(self._direct_pumps.items()):
+            pump.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await pump
+            self._direct_pumps.pop(node_id, None)
         for name in ("_flush_task", "_resolve_task", "_eviction_task"):
             task = getattr(self, name)
             if task is not None:
@@ -270,6 +277,12 @@ class TrafficCollector:
             last_ingest=bucket.last_ingest,
         )
 
+    def reseed_row_watermark(self, max_row_id: int, total_rows: int) -> None:
+        self._max_row_id = max_row_id
+        self._ceiling_floor = min(self._ceiling_floor, max_row_id)
+        if total_rows == 0:
+            self._seen_ids = set()
+
     def detach_missing_rows(self, surviving: set[int]) -> int:
         detached = 0
         for bucket in self._buckets.values():
@@ -281,23 +294,40 @@ class TrafficCollector:
             bucket.flushed_hits = 0
         return detached
 
+    def mark_rows_dirty(self) -> None:
+        self._rows_dirty = True
+
+    def clear_rows_dirty(self) -> None:
+        self._rows_dirty = False
+
+    def detach_rows(self, gone: set[int]) -> int:
+        detached = 0
+        for bucket in self._buckets.values():
+            if bucket.row_id is not None and bucket.row_id in gone:
+                bucket.row_id = None
+                bucket.flushed_hits = 0
+                detached += 1
+        return detached
+
     def forget_buckets(
         self,
         cutoff: datetime | None = None,
         *,
         keep_after: datetime | None = None,
         since_ingest: int | None = None,
-        storage_emptied: bool = False,
+        keep_stored_rows: bool = False,
     ) -> None:
         self._purge_generation += 1
         if self._eviction_task is not None and not self._eviction_task.done():
             self._eviction_task.cancel()
 
         def survives(bucket: Bucket, boundary: datetime) -> bool:
+            if keep_stored_rows and bucket.row_id is not None:
+                return True
             if bucket.hits <= 0:
                 return False
-            if since_ingest is not None:
-                return bucket.last_ingest > since_ingest
+            if since_ingest is not None and bucket.last_ingest > since_ingest:
+                return True
             return bucket.last_seen >= boundary
 
         if cutoff is None:
@@ -314,11 +344,6 @@ class TrafficCollector:
                     self._buckets[key] = self._carried_over(bucket, cutoff)
                 else:
                     self._buckets.pop(key, None)
-
-        if storage_emptied:
-            self._max_row_id = 0
-            self._ceiling_floor = 0
-            self._seen_ids = set()
 
     @contextlib.asynccontextmanager
     async def suspend_flush(self) -> AsyncIterator[None]:
@@ -526,7 +551,7 @@ class TrafficCollector:
         self._eviction_task = asyncio.create_task(self._evict(threshold), name="traffic-log-evict")
 
     async def _evict(self, threshold: int) -> None:
-        from app.fork.jobs.traffic_log_purge import enforce_ceiling
+        from app.fork.jobs.traffic_log_purge import enforce_ceiling, surviving_row_ids
 
         generation = self._purge_generation
         try:
@@ -534,7 +559,17 @@ class TrafficCollector:
                 if generation != self._purge_generation:
                     return
                 async with GetDB() as db:
+                    self._rows_dirty = True
                     removed, incomplete = await enforce_ceiling(db, threshold)
+                    tracked = {row_id for row_id in self.tracked_row_ids() if row_id <= threshold}
+                    if removed and tracked:
+                        gone = tracked - await surviving_row_ids(db, tracked)
+                        if gone:
+                            logger.info(
+                                f"traffic log ceiling eviction detached {self.detach_rows(gone)} bucket(s) "
+                                "whose stored row is gone"
+                            )
+                    self._rows_dirty = False
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -859,11 +894,110 @@ class TrafficCollector:
         async with self._flush_lock:
             await self._flush_once()
 
+    async def _resync_rows(self, db) -> None:
+        from app.fork.jobs.traffic_log_purge import surviving_row_ids
+
+        tracked = self.tracked_row_ids()
+        gone: set[int] = set()
+        if tracked:
+            gone = tracked - await surviving_row_ids(db, tracked)
+        self._rows_dirty = False
+        if gone:
+            logger.info(f"traffic log flush detached {self.detach_rows(gone)} bucket(s) whose stored row is gone")
+
+    def _adoptable(self, boundary: datetime) -> dict:
+        return {
+            key: bucket
+            for key, bucket in self._buckets.items()
+            if bucket.row_id is None and key[-1] <= boundary
+        }
+
+    @staticmethod
+    def _record_key(record: TrafficLogRecord) -> BucketKey:
+        start = record.bucket_start
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+        return (
+            record.user_id,
+            record.user_label,
+            record.node_id,
+            record.inbound_tag,
+            record.host,
+            record.port,
+            record.protocol,
+            record.route,
+            record.refused,
+            start,
+        )
+
+    @staticmethod
+    def _aware(moment: datetime) -> datetime:
+        return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+    async def _merge_duplicate_rows(self, db, grouped: dict) -> dict:
+        stored = {}
+        extras = []
+        merged_windows = set()
+        for identity, records in grouped.items():
+            records.sort(key=lambda record: record.id)
+            primary = records[0]
+            stored[identity] = primary
+            if len(records) == 1:
+                continue
+            primary.hits = sum(record.hits for record in records)
+            primary.first_seen = min(self._aware(record.first_seen) for record in records)
+            primary.last_seen = max(self._aware(record.last_seen) for record in records)
+            extras.extend(record.id for record in records[1:])
+            merged_windows.add(identity[-1])
+        if extras:
+            await db.execute(delete(TrafficLogRecord).where(TrafficLogRecord.id.in_(extras)))
+            await db.commit()
+            logger.warning(
+                f"traffic log merged {len(extras)} duplicate row(s) into the oldest row of their bucket "
+                f"in window(s) {sorted(window.isoformat() for window in merged_windows)}"
+            )
+        return stored
+
+    async def _adopt_stored_rows(self, db) -> None:
+        boundary = self._adopt_until
+        if boundary is None:
+            return
+        windows = {key[-1] for key in self._adoptable(boundary)}
+        if windows:
+            rows = await db.scalars(select(TrafficLogRecord).where(TrafficLogRecord.bucket_start.in_(windows)))
+            grouped: dict[BucketKey, list[TrafficLogRecord]] = {}
+            for record in rows.all():
+                grouped.setdefault(self._record_key(record), []).append(record)
+            stored = await self._merge_duplicate_rows(db, grouped)
+            adopted = 0
+            for key, bucket in self._adoptable(boundary).items():
+                record = stored.get(key)
+                if record is None:
+                    continue
+                bucket.row_id = record.id
+                bucket.hits += record.hits
+                bucket.flushed_hits = record.hits
+                stored_first_seen = record.first_seen
+                if stored_first_seen.tzinfo is None:
+                    stored_first_seen = stored_first_seen.replace(tzinfo=UTC)
+                bucket.first_seen = min(bucket.first_seen, stored_first_seen)
+                self._max_row_id = max(self._max_row_id, record.id)
+                adopted += 1
+            if adopted:
+                logger.info(f"traffic log flush adopted {adopted} row(s) written before this process started")
+        if bucket_start_of(datetime.now(UTC)) > boundary:
+            self._adopt_until = None
+
     async def _flush_once(self) -> None:
         seen = self._seen_ids
         self._seen_ids = set()
         wanted = seen | {key[0] for key in self._buckets if key[0] is not None}
         stale = self.identity.stale(wanted)
+        if self._rows_dirty or self._adopt_until is not None:
+            async with GetDB() as db:
+                if self._rows_dirty:
+                    await self._resync_rows(db)
+                await self._adopt_stored_rows(db)
         fresh = [(key, bucket) for key, bucket in self._buckets.items() if bucket.row_id is None]
         changed = [
             (key, bucket, bucket.hits, bucket.last_seen)

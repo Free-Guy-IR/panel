@@ -58,8 +58,12 @@ async def surviving_row_ids(db, wanted: set[int]) -> set[int]:
 
 async def reconcile_buckets(db, collector, cutoff=None, **forget) -> int:
     surviving = await surviving_row_ids(db, collector.tracked_row_ids())
-    collector.forget_buckets(cutoff, **forget)
+    max_row_id = int((await db.scalar(select(func.max(TrafficLogRecord.id)))) or 0)
+    total_rows = int((await db.scalar(select(func.count()).select_from(TrafficLogRecord))) or 0)
     detached = collector.detach_missing_rows(surviving)
+    collector.forget_buckets(cutoff, **forget)
+    collector.reseed_row_watermark(max_row_id, total_rows)
+    collector.clear_rows_dirty()
     if detached:
         logger.info(f"traffic log purge detached {detached} bucket(s) whose stored row is gone")
     return detached
@@ -224,7 +228,8 @@ async def purge_traffic_log():
     cutoff = datetime.now(UTC) - timedelta(hours=retention_hours)
     ceiling = job_settings.traffic_log_max_records
 
-    async with GetDB() as db:
+    async with collector.suspend_flush(), GetDB() as db:
+        collector.mark_rows_dirty()
         expired, expired_incomplete = await purge_before(db, cutoff)
 
         if ceiling > 0:
@@ -246,11 +251,13 @@ async def purge_traffic_log():
             logger.exception("Traffic log identity cleanup failed")
             forgotten = 0
 
+        if expired or over_ceiling:
+            await reconcile_buckets(db, collector, cutoff, keep_stored_rows=expired_incomplete or ceiling_incomplete)
+        else:
+            collector.clear_rows_dirty()
+
     incomplete = expired_incomplete or ceiling_incomplete
     collector.identity.prune()
-    if expired or over_ceiling:
-        async with collector.suspend_flush(), GetDB() as db:
-            await reconcile_buckets(db, collector, cutoff)
     collector.note_ceiling_floor(threshold, ceiling_incomplete)
     collector.record_purge(expired, over_ceiling, over_ceiling > 0, incomplete)
 

@@ -76,9 +76,10 @@ async def validate_range(start: dt, end: dt) -> tuple[dt, dt]:
         raise HTTPException(status_code=422, detail=range_message(retention_hours)) from None
     if end <= start:
         raise HTTPException(status_code=422, detail=ORDER_MESSAGE)
-    if start < dt.now(UTC) - timedelta(hours=retention_hours):
+    now = dt.now(UTC)
+    if start < now - timedelta(hours=retention_hours):
         raise HTTPException(status_code=422, detail=range_message(retention_hours))
-    return start, end
+    return start, min(end, now)
 
 
 def _clean(value: str | None) -> str | None:

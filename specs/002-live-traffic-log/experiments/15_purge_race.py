@@ -59,7 +59,8 @@ def main():
     collector._ceiling_floor = 99
 
     print("=== a full purge must not discard events that arrived while it ran ===")
-    collector.forget_buckets(None, keep_after=watermark, storage_emptied=True)
+    collector.forget_buckets(None, keep_after=watermark)
+    collector.reseed_row_watermark(0, 0)
     collector.detach_missing_rows(set())
     hosts = {k[4] for k in collector._buckets}
     print("    buckets kept: %s" % (sorted(hosts) or "<none>"))
@@ -91,7 +92,8 @@ def main():
             route="DIRECT",
         )
     }
-    collector.forget_buckets(None, keep_after=watermark, storage_emptied=True)
+    collector.forget_buckets(None, keep_after=watermark)
+    collector.reseed_row_watermark(0, 0)
     collector.detach_missing_rows(set())
     carried = collector._buckets.get(key("attribution.example"))
     check("every hit survives the purge", carried.hits if carried else None, 9)
@@ -118,6 +120,7 @@ def main():
     collector._max_row_id = 77
     collector._ceiling_floor = 11
     collector.forget_buckets(watermark)
+    collector.reseed_row_watermark(77, 5)
     collector.detach_missing_rows(set())
     aged = {k[4] for k in collector._buckets}
     check("a bucket whose last event predates the cutoff is dropped", "entirely.old.example" in aged, False)
@@ -148,7 +151,8 @@ def main():
             last_ingest=507,
         ),
     }
-    collector.forget_buckets(None, keep_after=watermark, since_ingest=500, storage_emptied=True)
+    collector.forget_buckets(None, keep_after=watermark, since_ingest=500)
+    collector.reseed_row_watermark(0, 0)
     collector.detach_missing_rows(set())
     kept = {k[4] for k in collector._buckets}
     check("a bucket last touched before the request is dropped", "before.the.request.example" in kept, False)
@@ -176,7 +180,7 @@ def main():
             last_ingest=600,
         )
     }
-    collector.forget_buckets(None, keep_after=watermark, since_ingest=500, storage_emptied=False)
+    collector.forget_buckets(None, keep_after=watermark, since_ingest=500)
     collector.detach_missing_rows({4321})
     survivor = collector._buckets.get(key("row.may.survive.example"))
     check("a bucket whose row really survived keeps pointing at it", survivor.row_id if survivor else None, 4321)
@@ -193,7 +197,8 @@ def main():
             last_ingest=600,
         )
     }
-    collector.forget_buckets(None, keep_after=watermark, since_ingest=500, storage_emptied=False)
+    collector.forget_buckets(None, keep_after=watermark, since_ingest=500)
+    collector.reseed_row_watermark(0, 0)
     collector.detach_missing_rows(set())
     orphan = collector._buckets.get(key("row.was.deleted.example"))
     check("a bucket whose row was deleted forgets it, instead of updating nothing", orphan.row_id if orphan else "gone", None)
@@ -206,7 +211,8 @@ def main():
     collector._max_row_id = 900
     collector._ceiling_floor = 800
     collector._seen_ids = {1, 2, 3}
-    collector.forget_buckets(watermark, storage_emptied=True)
+    collector.forget_buckets(watermark)
+    collector.reseed_row_watermark(0, 0)
     collector.detach_missing_rows(set())
     check("the row watermark was reset", collector._max_row_id, 0)
     check("the ceiling floor was reset", collector._ceiling_floor, 0)
@@ -217,6 +223,7 @@ def main():
     collector._max_row_id = 900
     collector._ceiling_floor = 800
     collector.forget_buckets(watermark)
+    collector.reseed_row_watermark(900, 5)
     collector.detach_missing_rows(set())
     check("the row watermark survives", collector._max_row_id, 900)
     check("the ceiling floor survives", collector._ceiling_floor, 800)
