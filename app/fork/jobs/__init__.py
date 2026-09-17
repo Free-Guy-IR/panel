@@ -9,6 +9,7 @@ FORK_JOB_MODULES = (
     "cleanup_node_stats",
     "cleanup_node_user_usages",
     "connection_limiter",
+    "content_filter_reconcile",
     "traffic_log_collector",
     "traffic_log_purge",
 )

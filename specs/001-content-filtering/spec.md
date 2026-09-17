@@ -77,6 +77,19 @@ The operator edits a profile (adds or removes a category), moves it to a differe
 - **A node restarts.** Rules applied while it was running must survive, or the panel must report them as no longer enforced.
 - **The operator applies a profile to a node but an unfiltered route to the same destination exists via another node in the same subscription.** The subscription handed to a child must not contain an unfiltered escape route.
 
+## Clarifications
+
+### Session 2026-09-17
+
+- Q: Several nodes can be attached to the same core configuration. When a profile is applied to ONE of them, what happens to its peers? → A: Nothing. FR-007 and FR-009 are absolute; a peer node is outside the scope and MUST NOT be affected.
+- Q: A rule written into a shared core configuration reaches every node on that core, so how is a node-pinned filter delivered? → A: It is delivered live to that node alone; only filters that legitimately reach every node on a core may be written into the shared configuration.
+- Q: A live-delivered rule does not survive a restart on its own. What restores it? → A: The panel re-applies it — periodically, and promptly when a node comes back — and reports the filter as unenforced until it is restored, per FR-020.
+
+- **FR-009a**: When several nodes share one core configuration, a profile applied to one of them MUST NOT reach the others. The system MUST NOT write a node-scoped restriction into a configuration that other nodes also load; only a restriction that reaches every node on that configuration may be stored there.
+- **FR-009b**: The panel MUST show the operator, before they save, exactly which nodes a choice will reach, and MUST name the peer nodes that share a configuration with the chosen node.
+- **FR-020a**: A restriction that is delivered to a node live rather than stored in its configuration MUST be re-applied automatically after that node restarts or reconnects, and MUST be reported as unenforced until it is confirmed present again.
+- **FR-020b**: Re-application MUST NOT impose a per-node cost on the routine health cycle that scales with the fleet; it runs on its own schedule and on a node's return, not on every health tick.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -197,3 +210,4 @@ These are not assumptions — they are known unknowns the plan must resolve befo
 - **R-3**: Recovering destination names (FR-013) changes how an endpoint inspects traffic. The performance and compatibility cost of enabling that on an endpoint that currently does not do it is unmeasured.
 - **R-4**: Name recovery has a hard ceiling. When the destination name is encrypted during the connection handshake, or when there is no name at all, no amount of inspection produces one. Strict mode (FR-013b) is the answer to that traffic, but its real-world cost is unknown: planning must measure how much ordinary, legitimate traffic on a protected endpoint is unclassifiable, because if that share is large, strict mode is unusable and the protection claim has to be weakened rather than the setting quietly defaulted off.
 - **R-5**: Rejecting a restricted customer's credentials on unfiltered endpoints (FR-013e) depends on how credentials are scoped today. If they are currently accepted fleet-wide, this is a larger change than the rest of the feature combined, and planning must establish that before the delivery promise stands.
+- **R-6**: Node-scoped restrictions are delivered live rather than stored, so their persistence depends entirely on re-application. If re-application is unreliable or too slow after a restart, a parent believes a child is protected during the gap. The window between a node returning and its filter being restored must be measured, not assumed.

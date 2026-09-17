@@ -227,6 +227,10 @@ class JobSettings(EnvSettings):
     traffic_log_max_records: int = Field(default=2_000_000, ge=0, validation_alias="TRAFFIC_LOG_MAX_RECORDS")
     traffic_log_flush_seconds: int = Field(default=5, ge=1, validation_alias="TRAFFIC_LOG_FLUSH_SECONDS")
     traffic_log_purge_interval: int = Field(default=600, ge=1, validation_alias="TRAFFIC_LOG_PURGE_INTERVAL")
+    content_filter_reconcile_enabled: bool = Field(default=True, validation_alias="CONTENT_FILTER_RECONCILE_ENABLED")
+    content_filter_reconcile_interval: int = Field(
+        default=300, ge=1, validation_alias="JOB_CONTENT_FILTER_RECONCILE_INTERVAL"
+    )
 
 
 class FeatureSettings(EnvSettings):

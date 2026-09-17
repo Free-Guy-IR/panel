@@ -66,6 +66,7 @@ CONTENT_FILTER_ENDPOINTS = frozenset(
         ("/api/content-filter/profiles/{profile_id}", "DELETE"),
         ("/api/content-filter/assignments", "GET"),
         ("/api/content-filter/assignments", "POST"),
+        ("/api/content-filter/assignments/bulk", "POST"),
         ("/api/content-filter/assignments/{assignment_id}", "DELETE"),
         ("/api/content-filter/assignments/{assignment_id}/apply", "POST"),
         ("/api/content-filter/test", "POST"),

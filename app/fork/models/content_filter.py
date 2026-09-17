@@ -1,9 +1,10 @@
 from datetime import UTC, datetime as dt
 
-from sqlalchemy import DateTime, Index, String, Text, UniqueConstraint
+from sqlalchemy import Computed, DateTime, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.compiles_types import SqliteCompatibleBigInteger
 from app.db.models import IdMixin, PostgresJSONB, fk_id_column
 
 WHOLE_NODE = ""
@@ -30,6 +31,7 @@ class ContentFilterAssignment(Base, IdMixin):
     __tablename__ = "content_filter_assignments"
     __table_args__ = (
         UniqueConstraint("node_id", "inbound_tag", name="uq_content_filter_assignments_node_inbound"),
+        Index("uq_content_filter_assignments_scope_inbound", "node_scope", "inbound_tag", unique=True),
         Index("ix_content_filter_assignments_profile", "profile_id"),
         Index("ix_content_filter_assignments_node", "node_id"),
     )
@@ -39,6 +41,9 @@ class ContentFilterAssignment(Base, IdMixin):
     )
     inbound_tag: Mapped[str] = mapped_column(String(256), default=WHOLE_NODE, server_default="")
     node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="CASCADE", nullable=True, default=None)
+    node_scope: Mapped[int | None] = mapped_column(
+        SqliteCompatibleBigInteger, Computed("COALESCE(node_id, 0)"), init=False
+    )
     is_enabled: Mapped[bool] = mapped_column(default=True, server_default="1")
     enforced: Mapped[bool] = mapped_column(default=False, server_default="0")
     last_checked_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
