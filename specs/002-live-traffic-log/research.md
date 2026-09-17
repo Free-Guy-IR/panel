@@ -42,7 +42,7 @@ Every item below was measured on the test fleet (1.2.3.4) or read from the repos
 ## 6. Access control
 
 - **Decision**: reuse `nodes`/`logs`.
-- **Evidence**: `app/models/admin_role.py::NodesPermissions.logs`; enforced for the raw viewer at `app/routers/node.py:322` via `require_permission_for_request(request, db, token, "nodes", "logs")`. The raw viewer already exposes these very lines to any admin with that permission, so the feature never widens exposure; it narrows it for non-sudo admins by `admin_id`.
+- **Evidence**: `app/models/admin_role.py::NodesPermissions.logs`; enforced for the raw viewer at `app/routers/node.py:322` via `require_permission_for_request(request, db, token, "nodes", "logs")`. The raw viewer already exposes these very lines to any admin with that permission, so the feature never widens exposure; it narrows it, because the shipped traffic log additionally requires full panel access and refuses every other administrator with 403.
 - **Username suggestions** reuse `GET /api/users?search=` which is already scoped per admin.
 
 ## 7. Dashboard seam and UI building blocks

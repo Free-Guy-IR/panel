@@ -84,7 +84,7 @@ Panel repository root; dashboard under `dashboard/src`; server-side proofs under
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T030 [P] Owner E: `specs/002-live-traffic-log/experiments/03_scoping.py` — create role with `nodes.logs` only and a non-sudo admin owning `demo-open`; assert `/history` and `/live` never contain `demo-kids`, `PUT /settings` → 403, an admin without `nodes.logs` → 403 on every route; delete the fixtures afterwards
+- [ ] T030 [P] Owner E: `specs/002-live-traffic-log/experiments/12_owner_only.py` — create a role granting every ordinary permission the panel offers and an administrator holding it; assert that administrator is refused 403 on every traffic-log route (`/status`, `/history`, `/summary`, `/live`, `PUT /settings`, `POST /purge`), that those routes still answer the panel owner 200, and that a route outside the owner-only set still works for them; delete the fixtures afterwards
 - [ ] T031 Owner E: re-run `specs/001-content-filtering/experiments/05_real_traffic_matrix.sh` with collection active; record 7/7 in `specs/002-live-traffic-log/experiments/results.md` together with every other experiment's output
 - [X] T032 Owner D: `cd dashboard && bun node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json` — normalised diff against the 578-error baseline must introduce 0; `bun run build` succeeds
 - [X] T033 Owner B: `ruff check app config.py` clean; rehearse `alembic upgrade head` + `downgrade -1` + `upgrade head` on a copy of the test DB before running on `/root/dev/panel`
@@ -93,19 +93,27 @@ Panel repository root; dashboard under `dashboard/src`; server-side proofs under
 
 ---
 
-## Verification evidence for the completed tasks
+## Verification status
 
-Every task below was marked complete only after the named check ran on the test server (1.2.3.4) and exited zero. Where a check could not be run, the task stays unchecked.
+**No verification output is recorded in this repository.** `experiments/results.md` — the only
+file the suite writes its evidence into — still says NOT YET CAPTURED: there is no captured
+stdout, no exit status, no summary table and no browser check for any of the checks below. An
+`[X]` above therefore records that the code for that task exists and was exercised during
+development; it is not a citation of a captured, re-readable proof, and nothing in this section
+may be quoted as one.
 
-| Tasks | Evidence |
+The table lists the check each task still owes. It becomes evidence only once `run_all.sh` has
+been run on the test server and its output lands in `experiments/results.md` (T031, T034).
+
+| Tasks | Check that must be captured |
 |---|---|
-| T001, T002, T006-T011 | `00_parse.py` ALL PASSED (line formats, IPv6, spaces in tags, non-numeric email, non-access lines, and the privacy check that no Event field carries the source address); `06_drop_paths.py` ALL PASSED (subscriber queue overflow emits a dropped control with a positive count, viewer tap overflow counted, bucket cap holds at 50 000, a scoped subscriber receives nothing while an unscoped one receives all 20 events); collector restart recovery proven by `tl_restart_recovery.py` — after restarting core 1 underneath the collector, collection resumed 35 s later with `restreams=1` and no panel restart |
-| T003-T005, T026, T027, T033 | `alembic upgrade head` to `a7d5e1f3b294` then `b8e6f2a4c517`; downgrade rehearsal on a seeded copy removed the three tables and left `users` and all four content-filter tables intact, then restored them; `ruff check --no-fix app config.py` clean |
-| T012-T014, T022, T023 | `01_live_e2e.py` ALL PASSED (events within 0.04 s against a 3 s budget, refusal marking, exact-username filter exclusivity, every contract field present, no source address); `02_history_purge.py` ALL PASSED (422 outside the window, keyset paging without duplicates, summary totals, 48 h purge, ceiling eviction, first page in 0.01 s over 300 000 rows) |
-| T015-T019, T024 | Browser check with a real login: 11/11 checks, zero console errors, the Persian tab renders and opens both Live and History; all 67 `trafficLog.*` keys present in en/fa/ru/zh |
-| T020, T021, T025, T028, T029 | `run_all.sh` on the test server: parse, live-e2e, viewer-parity and scoping all PASSED |
-| T032 | TypeScript gate against the recorded 579-error baseline: `introduced: 0 removed: 0` |
-| Retention and purge (FR-018, FR-019) | `tl_retention_test.py` exit 0 (boundary accepted at 5 h 30 m and refused at 7 h while the window was 6 h, bounds rejected, automatic purge honours the window, on-demand purge by age and in full, no resurrection after a flush); `tl_retention_multiproc.py` exit 0 (a separate process whose collector never started still honours a retention set through the API); `tl_reclaim_test.py` exit 0 (a capped purge reports `incomplete`, repeating finishes it, and reclamation freed 84 129 416 bytes in 0.7 s under three concurrent readers and a writer with zero errors) |
+| T001, T002, T006-T011 | `00_parse.py` — line formats, IPv6, spaces in tags, non-numeric email, non-access lines, and the privacy check that no Event field carries the source address; `06_drop_paths.py` — subscriber queue overflow emits a dropped control with a positive count, viewer tap overflow counted, bucket cap holds at 50,000; `10_restart_recovery.py` — collection resumes with `restreams` incremented after a core restart underneath the collector, with no panel restart |
+| T003-T005, T026, T027, T033 | `alembic upgrade head` through `a7d5e1f3b294` then `b8e6f2a4c517`, and a downgrade rehearsal on a seeded copy that removes the three traffic-log tables, leaves `users` and the content-filter tables intact, and restores them; `ruff check --no-fix app config.py` clean |
+| T012-T014, T022, T023 | `01_live_e2e.py` — events inside the 3 s budget, refusal marking, exact-username filter exclusivity, every contract field present, no source address; `02_history_purge.py` — 422 outside the retention window, keyset paging without duplicates, summary totals, retention purge, ceiling eviction, first page inside the 2 s budget at the ceiling |
+| T015-T019, T024 | A browser check against a real login: the Persian tab renders and opens both Live and History with no console errors, and every `trafficLog.*` key resolves in en/fa/ru/zh |
+| T020, T021, T025, T028, T029, T030 | `run_all.sh` on the test server, with `00_parse.py`, `01_live_e2e.py`, `05_viewer_parity.py` and `12_owner_only.py` among the steps that must exit zero |
+| T032 | The TypeScript gate against the recorded baseline: `introduced: 0` |
+| Retention and purge (FR-018, FR-019) | `07_retention_and_purge.py` — the history boundary tracks a retention set through the API, out-of-range values are rejected, the automatic purge honours the window, on-demand purge works by age and in full, and nothing is resurrected by the next flush; `08_retention_across_processes.py` — a separate process whose collector never started still honours a retention set through the API; `09_disk_reclamation.py` — a capped purge reports `incomplete`, repeating it finishes the job, and reclamation returns bytes to the filesystem under concurrent readers and a writer |
 
 ## Dependencies
 

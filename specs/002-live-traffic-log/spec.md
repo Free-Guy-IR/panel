@@ -17,7 +17,7 @@ The operator delegated every decision ("از من هیچ سوالی نکن"); ea
 - Q: When the operator types a username, is the match exact or partial? → A: The feed and history match one exact username; while typing, the box offers matching usernames to pick from so the exact name need not be remembered. (FR-004)
 - Q: Which nodes and which log lines are recorded? → A: Every connected node is attached; only lines in the destination-report format are recorded and every other line is passed through unchanged to the per-node viewer. A node that emits no destination-report lines shows "no destination reports" rather than an error. (FR-011)
 - Q: What does pausing collection stop? → A: Everything: no rows are stored and the live feed stops; the per-node viewer keeps working unchanged. (FR-013)
-- Q: Whose rows does a non-sudo administrator see when a customer has no owning administrator? → A: Nobody's: unowned customers are visible to sudo administrators only. (FR-014)
+- Q: Whose rows does a non-sudo administrator see when a customer has no owning administrator? → A: Nobody's. The shipped policy went further than the question: the traffic log is owner-only, so an administrator who is not the panel owner sees no rows at all and is refused on every route. (FR-014)
 - Q: Is the two-day retention fixed, or can the operator change it? → A: The operator (sudo) sets it from the same screen, between 1 hour and 30 days; two days remains the default. The history range the panel will answer follows whatever retention is configured. (FR-006, FR-009)
 - Q: What if storage fills before the retention window elapses? → A: The operator can purge immediately from the same screen — either everything, or everything older than a chosen age — without waiting for the scheduled cycle. (FR-018)
 - Q: What do "delivered" and "refused" mean in the outcome column? → A: "Refused" is a connection sent to the discard route that the content-filter feature installs; "delivered" names the route the connection actually left through. (FR-003)
@@ -42,7 +42,7 @@ The operator opens **Statistics** and presses **لاگ زنده ترافیک** n
 6. **Given** a monitored node goes offline, **When** the operator looks at the status strip, **Then** that node is shown as "not collecting" with the time collection stopped, never as healthy.
 7. **Given** a node emits more lines than can be captured, **When** the operator looks at the status strip, **Then** the number of dropped lines for that node is shown, so the feed is understood as best-effort rather than complete.
 8. **Given** an administrator who lacks the node-log permission, **When** they open Statistics, **Then** the button is absent and the underlying data cannot be requested.
-9. **Given** a non-sudo administrator with the permission, **When** they open the feed, **Then** only their own users' rows appear, and a username belonging to another administrator returns nothing.
+9. **Given** an administrator who holds the node-log permission but is not the panel owner, **When** they ask for the feed or any other traffic-log route, **Then** the panel refuses with 403 and returns no row.
 
 ---
 
@@ -111,7 +111,7 @@ Records older than two days disappear on their own. Beyond that, a hard ceiling 
 - **FR-011**: Collection MUST attach to every connected node by itself when the panel starts and when a node becomes healthy, MUST detach when a node becomes unreachable, and MUST show the state and time per node; only destination-report lines are recorded, every other line is passed through, and a node that never emits destination reports is shown as "no destination reports" rather than as an error.
 - **FR-012**: The panel MUST count lines it could not keep (dropped by the node or by the panel under load) and MUST show the count per node, so the operator knows the log is best-effort.
 - **FR-013**: A sudo administrator MUST be able to pause and resume collection from the same screen; while paused, nothing is stored, the live feed stops and says so, and the per-node log viewer keeps working unchanged.
-- **FR-014**: Access MUST be limited to administrators permitted to read node logs; a non-sudo administrator MUST see only rows belonging to their own users, in both the live view and history; customers without an owning administrator are visible to sudo administrators only.
+- **FR-014**: Access MUST be limited to the panel owner. A caller MUST hold the node-log permission **and** full panel access, and every route MUST answer 403 to any other administrator, however many ordinary permissions they hold. No per-administrator row scoping exists, because no non-owner reaches the data.
 - **FR-015**: Collection MUST NOT alter any node configuration, restart any core, or change what customers can reach; the existing per-node log viewer MUST continue to show the full stream while collection is active.
 - **FR-016**: The stored record MUST NOT include the customer's source address; the feature records destinations only.
 - **FR-017**: All labels MUST be provided in English and Persian, with the Persian label of the button exactly "لاگ زنده ترافیک".
@@ -135,7 +135,7 @@ Records older than two days disappear on their own. Beyond that, a hard ceiling 
 - **SC-004**: Fifteen minutes after a record passes the configured retention window, it is no longer retrievable.
 - **SC-005**: The number of stored records never exceeds the configured ceiling, verified under a synthetic load that exceeds it.
 - **SC-006**: After a panel restart, collection from every connected node resumes within 60 seconds with no operator action.
-- **SC-007**: A non-sudo administrator cannot obtain a single row of another administrator's users, in the live feed or history, across the full test matrix.
+- **SC-007**: An administrator holding every ordinary permission the panel offers, but not full panel access, is refused with 403 on every traffic-log route and obtains no row in the live feed or history.
 - **SC-008**: The existing traffic matrix (restricted vs unrestricted subscriptions) passes unchanged while collection is active, and the per-node log viewer shows the same lines it showed before the feature.
 
 ## Assumptions

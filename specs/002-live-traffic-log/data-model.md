@@ -32,7 +32,7 @@ key = (user_id, node_id, inbound, host, port, protocol, refused, bucket_start); 
 | last_event_at | datetime \| None |
 | detail | str (error text or reason) |
 
-## Tables (Alembic revision `a7d5e1f3b294`, down_revision `f6c4d0e2a183`)
+## Tables (Alembic revisions `a7d5e1f3b294` on `f6c4d0e2a183`, then `b8e6f2a4c517` adding `retention_hours`; `b8e6f2a4c517` is the current head)
 
 ### traffic_log_records
 | column | type | constraints |
@@ -71,16 +71,19 @@ Refreshed whenever a user id is seen and the cache entry is older than 60 s; `de
 |---|---|---|
 | id | Integer | PK, always 1 |
 | enabled | Boolean | NOT NULL default true |
+| retention_hours | Integer | NOT NULL, default 48, server_default "48" |
 | updated_at | DateTime(tz) | NOT NULL |
 
+Retention lives in this row rather than in code: a sudo administrator sets it through `PUT /settings` and the value is clamped to `RETENTION_MIN_HOURS`–`RETENTION_MAX_HOURS` (1–720 hours) in `collector.py`. 48 hours is the default the column ships with, not a fixed ceiling.
+
 ## Validation rules
-- History `start`/`end`: both required, `end > start`, `start ≥ now − 48 h`, else HTTP 422 with the two-day message (no clamping).
+- History `start`/`end`: both required, `start ≥ now − the configured retention`, else HTTP 422 with `history is kept for <hours> hours; choose a start within that window` (no clamping); `end ≤ start` is 422 with `the end of the range must come after its start`.
 - `username`: exact match, resolved through `users` then `traffic_log_identities`; unknown → empty result (200) not 404.
 - `limit`: 1–200, default 100. `cursor`: opaque `<last_seen_iso>|<id>`.
-- Non-sudo admins: every query joins `traffic_log_identities` and requires `admin_id = current admin`; the live feed applies the same predicate per event (via the identity cache) before enqueueing.
+- Every route is owner-only: the caller needs `nodes`/`logs` **and** full panel access (`admin.is_owner`). Any other administrator is refused with 403 before a query is built, so no per-admin row scoping is applied in practice.
 
 ## State transitions (per node)
 `detached → attaching → collecting → (error | detached)`; `paused` overrides all while `enabled = false`; `unavailable` is terminal for the process when `workers > 1`; `no_reports` is `collecting` with `events = 0` for ≥ 60 s after `lines > 0`.
 
 ## Retention and ceiling
-Purge job (`traffic_log_purge`, interval 600 s): (1) delete `bucket_start < now − 48 h` in 5,000-id chunks, ≤ 200,000 per run; (2) if `max(id) − ceiling > 0`, delete `id < max(id) − ceiling` in the same chunks. Result counters are exposed in `/status` (`last_purge_at`, `purged_expired`, `purged_over_ceiling`, `ceiling_active`).
+Purge job (`traffic_log_purge`, interval `TRAFFIC_LOG_PURGE_INTERVAL`, default 600 s): (1) delete `bucket_start < now − the configured retention` in 5,000-id chunks, at most 200,000 rows per run; (2) if `max(id) − ceiling > 0`, delete `id <= max(id) − ceiling` in the same chunks, with no per-run row cap — that phase is bounded by a 60-second time budget (`CEILING_TIME_BUDGET`) instead, and a run that hits the budget reports `incomplete` and carries on at the next cycle. Result counters are exposed in `/status` (`last_purge_at`, `purged_expired`, `purged_over_ceiling`, `ceiling_active`, `purge_incomplete`).

@@ -31,5 +31,6 @@
 
 ## Notes
 
-- Clarifications the operator delegated were resolved with documented defaults (Assumptions): fixed 48 h retention, 2,000,000-record ceiling, five-minute history buckets, receipt-time stamps, single-process deployment.
+- Clarifications the operator delegated were resolved with documented defaults (Assumptions): 48 h retention as the default of an operator-settable 1–720 hour window, 2,000,000-record ceiling, five-minute history buckets, receipt-time stamps, single-process deployment.
+- Access narrowed during implementation: the shipped feature is owner-only on every route, so the non-owner scoping the spec originally described does not exist — an administrator who is not the panel owner is refused with 403.
 - Validated 2026-09-15: all items pass; ready for `/speckit-clarify` and `/speckit-plan`.

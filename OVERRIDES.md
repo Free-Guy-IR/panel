@@ -6,8 +6,8 @@ upstream-inventory.yml fails the PR if an override appears in a file not listed 
 
 Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
 baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`).
-Current measurement: 363 diverged files — 209 fork-only, 37 pure-addition, 102 override,
-15 mechanical — 1235 override lines, and 3432 fork lines still living inside
+Current measurement: 460 diverged files — 299 fork-only, 36 pure-addition, 109 override,
+16 mechanical — 1397 override lines, and 4460 fork lines still living inside
 upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
@@ -34,7 +34,8 @@ stays visible.
 
 ## Branding & fork infrastructure (not upstreamable)
 
-- `pyproject.toml` — ruff is scoped to the code it governs; the one-off probe scripts under specs are excluded alongside the generated migrations
+- `pyproject.toml` — ruff is scoped to the code it governs: the generated migrations stay excluded and the one-off probe scripts under `specs/*/experiments/` carry their own per-file ignore list instead of bending the repository-wide rules; `[tool.uv.sources]` also pins `pasarguard-node-bridge` to the fork's own `node_bridge_py` git source, which is why the Dockerfile must keep installing git for uv to resolve it
+- `app/db/migrations/env.py` — imports `app/db/models.py` so the fork model modules register their tables on the shared declarative metadata before autogenerate reads it, and adds `MIGRATION_OWNED_TABLES` with an `_include_name` hook handed to both of alembic's context.configure calls; a table that a hand-written migration owns and deliberately has no ORM model for (`content_filter_sniffing_repairs`) is therefore skipped by autogenerate instead of being emitted as a drop. Because the hook sits on the offline and the online path alike, it changes autogenerate behaviour for the whole fork, not just for that one table
 - `README.md` — fork branding: logo, badges, links point to Free-Guy-IR
 - `README-fa.md` — fork branding, Persian edition
 - `README-ru.md` — fork branding, Russian edition
@@ -155,7 +156,7 @@ real boundary, and each one still needs its own justification or a revert.
 
 - `dashboard/src/features/nodes/components/cores/logs.tsx` — 121 upstream lines removed, the largest inherited override; the upstream WebSocket log viewer was replaced wholesale and the reason is not recorded
 - `dashboard/src/features/admins/components/admins-table.tsx` — 14 lines; upstream's `dangerouslySetInnerHTML` confirm prompts were replaced with escaped rendering
-- `app/db/models.py` — 13 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size
+- `app/db/models.py` — 14 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size, and those `node_id` foreign keys became nullable `ondelete="SET NULL"` so deleting a node no longer walks its usage rows. The file now also ends with `_register_fork_model_tables`, which imports the fork model modules so their tables join the shared declarative metadata, and `fk_id_column` forwards a `name` keyword through to `ForeignKey` so a fork table can pin a constraint name short enough for PostgreSQL's 63-character identifier limit
 - `app/operation/permissions.py` — 4 lines, reason not recorded
 - `app/subscription/base.py` — 5 lines, reason not recorded
 - `app/notification/webhook/__init__.py` — 1 line, reason not recorded
