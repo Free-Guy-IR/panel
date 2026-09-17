@@ -1180,6 +1180,8 @@ export default function TrafficLogView() {
     setSuggestOpen(false)
   }
 
+  if (!isSudo) return null
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">

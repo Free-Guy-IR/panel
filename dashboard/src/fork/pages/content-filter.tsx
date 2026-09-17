@@ -20,9 +20,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
+import type { AdminDetails } from '@/service/api'
 import { fetcher } from '@/service/http'
+import { isOwner } from '@/utils/rbac'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Baby,
@@ -477,6 +480,8 @@ export default function ContentFilterPage() {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const queryClient = useQueryClient()
+  const { admin } = useAdmin()
+  const panelOwner = isOwner(admin as unknown as AdminDetails | null)
 
   const catalog = useCatalog()
   const profiles = useProfiles()
@@ -650,6 +655,8 @@ export default function ContentFilterPage() {
   }
 
   const loading = catalog.isLoading || profiles.isLoading
+
+  if (!panelOwner) return null
 
   return (
     <div dir={dir} className="w-full space-y-6 px-4 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
