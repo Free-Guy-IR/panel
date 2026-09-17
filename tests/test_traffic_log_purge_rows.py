@@ -1,3 +1,4 @@
+import contextlib
 import importlib
 from datetime import UTC, datetime, timedelta
 
@@ -894,3 +895,111 @@ async def test_a_window_that_ends_in_the_future_is_clamped_and_one_that_starts_t
     with pytest.raises(HTTPException) as refused:
         await validate_range(now + timedelta(hours=1), now + timedelta(hours=2))
     assert refused.value.status_code == 422
+
+
+class _LoseTheCommitAcknowledgement:
+    def __init__(self, session):
+        self._session = session
+        self._armed = True
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    async def commit(self):
+        await self._session.commit()
+        if self._armed:
+            self._armed = False
+            raise RuntimeError("the commit landed but its acknowledgement was lost")
+
+
+@pytest.mark.asyncio
+async def test_a_commit_whose_answer_is_lost_does_not_become_a_second_row(monkeypatch: pytest.MonkeyPatch):
+    collector_module = importlib.import_module("app.fork.traffic_log.collector")
+
+    @contextlib.asynccontextmanager
+    async def flaky_db():
+        async with GetTestDB() as session:
+            yield _LoseTheCommitAcknowledgement(session)
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    start = bucket_start_of(now)
+    collector = TrafficCollector()
+    collector._adopt_until = None
+    collector._buckets = {
+        _key("ambiguous.example", start): Bucket(
+            first_seen=now, last_seen=now, hits=4, route="DIRECT", row_id=None, flushed_hits=0, last_ingest=1
+        )
+    }
+
+    monkeypatch.setattr(collector_module, "GetDB", flaky_db)
+    with pytest.raises(RuntimeError):
+        await collector._flush_once()
+
+    assert collector._rows_dirty is True
+
+    async with GetTestDB() as db:
+        rows = (await db.scalars(select(TrafficLogRecord))).all()
+    assert len(rows) == 1
+    stored_id = rows[0].id
+
+    monkeypatch.setattr(collector_module, "GetDB", GetTestDB)
+    collector._buckets[_key("ambiguous.example", start)].hits = 6
+    await collector._flush_once()
+
+    async with GetTestDB() as db:
+        rows = (await db.scalars(select(TrafficLogRecord))).all()
+    assert len(rows) == 1
+    assert rows[0].id == stored_id
+    assert rows[0].hits == 6
+    assert collector._rows_dirty is False
+
+
+@pytest.mark.asyncio
+async def test_an_insert_that_never_landed_is_written_again(monkeypatch: pytest.MonkeyPatch):
+    collector_module = importlib.import_module("app.fork.traffic_log.collector")
+
+    @contextlib.asynccontextmanager
+    async def rolled_back_db():
+        async with GetTestDB() as session:
+            yield _RollBackInsteadOfCommitting(session)
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    start = bucket_start_of(now)
+    collector = TrafficCollector()
+    collector._adopt_until = None
+    collector._buckets = {
+        _key("rolledback.example", start): Bucket(
+            first_seen=now, last_seen=now, hits=4, route="DIRECT", row_id=None, flushed_hits=0, last_ingest=1
+        )
+    }
+
+    monkeypatch.setattr(collector_module, "GetDB", rolled_back_db)
+    with pytest.raises(RuntimeError):
+        await collector._flush_once()
+
+    assert collector._buckets[_key("rolledback.example", start)].row_id is not None
+    assert collector._rows_dirty is True
+
+    monkeypatch.setattr(collector_module, "GetDB", GetTestDB)
+    await collector._flush_once()
+
+    async with GetTestDB() as db:
+        rows = (await db.scalars(select(TrafficLogRecord))).all()
+    assert len(rows) == 1
+    assert rows[0].hits == 4
+
+
+class _RollBackInsteadOfCommitting:
+    def __init__(self, session):
+        self._session = session
+        self._armed = True
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    async def commit(self):
+        if self._armed:
+            self._armed = False
+            await self._session.rollback()
+            raise RuntimeError("the transaction was rolled back")
+        await self._session.commit()

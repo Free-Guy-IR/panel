@@ -1041,6 +1041,11 @@ class TrafficCollector:
         if records:
             db.add_all(records)
             await db.flush()
+            self._rows_dirty = True
+            for (_, bucket), record, hits in zip(fresh, records, fresh_hits, strict=True):
+                bucket.row_id = record.id
+                bucket.flushed_hits = hits
+                self._max_row_id = max(self._max_row_id, record.id)
         if changed:
             statement = update(TrafficLogRecord.__table__).where(
                 TrafficLogRecord.__table__.c.id == bindparam("row_id")
@@ -1052,10 +1057,8 @@ class TrafficCollector:
             for start in range(0, len(rows), UPDATE_CHUNK):
                 await db.execute(statement, rows[start : start + UPDATE_CHUNK])
         await db.commit()
-        for (key, bucket), record, hits in zip(fresh, records, fresh_hits, strict=True):
-            bucket.row_id = record.id
-            bucket.flushed_hits = hits
-            self._max_row_id = max(self._max_row_id, record.id)
+        self._rows_dirty = False
+        for key, _ in fresh:
             state = self._states.get(key[2])
             if state is not None:
                 state.records += 1
