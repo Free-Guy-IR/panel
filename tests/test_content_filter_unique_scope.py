@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -33,14 +34,74 @@ def _seed_profile(connection: sa.Connection, profile_id: int, name: str) -> None
     )
 
 
-def _insert_assignment(connection: sa.Connection, node_id: int | None, inbound_tag: str, profile_id: int = 1) -> None:
+def _insert_assignment(
+    connection: sa.Connection,
+    node_id: int | None,
+    inbound_tag: str,
+    profile_id: int = 1,
+    is_enabled: bool = True,
+    enforced: bool = False,
+) -> None:
     connection.execute(
         sa.text(
             "INSERT INTO content_filter_assignments (profile_id, node_id, inbound_tag, is_enabled, enforced) "
-            "VALUES (:profile_id, :node_id, :inbound_tag, 1, 0)"
+            "VALUES (:profile_id, :node_id, :inbound_tag, :is_enabled, :enforced)"
         ),
-        {"profile_id": profile_id, "node_id": node_id, "inbound_tag": inbound_tag},
+        {
+            "profile_id": profile_id,
+            "node_id": node_id,
+            "inbound_tag": inbound_tag,
+            "is_enabled": 1 if is_enabled else 0,
+            "enforced": 1 if enforced else 0,
+        },
     )
+
+
+class _WarningCollector(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+def _migrate_capturing_warnings(db_path: Path, revision: str) -> tuple[sa.Engine, list[str]]:
+    collector = _WarningCollector()
+    migration_logger = logging.getLogger("alembic.runtime.migration")
+    previous_level = migration_logger.level
+    migration_logger.setLevel(logging.WARNING)
+    migration_logger.addHandler(collector)
+
+    engine = sa.create_engine(f"sqlite:///{db_path}")
+    config = Config()
+    config.set_main_option("script_location", str(PROJECT_ROOT / "app" / "db" / "migrations"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, revision)
+            connection.commit()
+    finally:
+        migration_logger.removeHandler(collector)
+        migration_logger.setLevel(previous_level)
+    return engine, collector.messages
+
+
+def _survivors_after_migration(db_path: Path, seed) -> list[tuple]:
+    engine = _migrate(db_path, PREVIOUS_REVISION)
+    with engine.begin() as connection:
+        _seed_profile(connection, 1, "profile-one")
+        seed(connection)
+    engine.dispose()
+
+    engine = _migrate(db_path, REVISION)
+    with engine.connect() as connection:
+        rows = connection.execute(
+            sa.text("SELECT id, node_id, inbound_tag, is_enabled, enforced FROM content_filter_assignments ORDER BY id")
+        ).fetchall()
+    engine.dispose()
+    return [tuple(row) for row in rows]
 
 
 @pytest.fixture(scope="module")
@@ -162,6 +223,72 @@ def test_the_migration_keeps_the_lowest_id_of_each_duplicated_scope(tmp_path: Pa
     with pytest.raises(IntegrityError), engine.begin() as connection:
         _insert_assignment(connection, None, "in-dup")
     engine.dispose()
+
+
+def test_the_migration_keeps_the_enabled_row_over_an_older_disabled_one(tmp_path: Path):
+    def seed(connection: sa.Connection) -> None:
+        _insert_assignment(connection, None, "in-shadowed", profile_id=1, is_enabled=False)
+        _insert_assignment(connection, None, "in-shadowed", profile_id=1, is_enabled=True)
+
+    assert _survivors_after_migration(tmp_path / "enabled-wins.db", seed) == [(2, None, "in-shadowed", 1, 0)]
+
+
+def test_a_pinned_row_sharing_the_tag_is_left_alone_while_the_fleet_wide_duplicate_is_pruned(tmp_path: Path):
+    def seed(connection: sa.Connection) -> None:
+        _insert_assignment(connection, None, "in-mixed-dup", is_enabled=False)
+        _insert_assignment(connection, 31, "in-mixed-dup", is_enabled=False)
+        _insert_assignment(connection, None, "in-mixed-dup", is_enabled=True)
+
+    assert _survivors_after_migration(tmp_path / "pinned-untouched.db", seed) == [
+        (2, 31, "in-mixed-dup", 0, 0),
+        (3, None, "in-mixed-dup", 1, 0),
+    ]
+
+
+def test_two_enabled_rows_of_one_scope_leave_the_lowest_id(tmp_path: Path):
+    def seed(connection: sa.Connection) -> None:
+        _insert_assignment(connection, None, "in-both-live")
+        _insert_assignment(connection, None, "in-both-live")
+
+    assert _survivors_after_migration(tmp_path / "lowest-id-wins.db", seed) == [(1, None, "in-both-live", 1, 0)]
+
+
+def test_an_enforced_row_outranks_an_enabled_but_unenforced_one(tmp_path: Path):
+    def seed(connection: sa.Connection) -> None:
+        _insert_assignment(connection, None, "in-enforced", is_enabled=True, enforced=False)
+        _insert_assignment(connection, None, "in-enforced", is_enabled=True, enforced=True)
+
+    assert _survivors_after_migration(tmp_path / "enforced-wins.db", seed) == [(2, None, "in-enforced", 1, 1)]
+
+
+def test_being_enabled_outranks_being_enforced(tmp_path: Path):
+    def seed(connection: sa.Connection) -> None:
+        _insert_assignment(connection, None, "in-precedence", is_enabled=False, enforced=True)
+        _insert_assignment(connection, None, "in-precedence", is_enabled=True, enforced=False)
+
+    assert _survivors_after_migration(tmp_path / "enabled-beats-enforced.db", seed) == [
+        (2, None, "in-precedence", 1, 0)
+    ]
+
+
+def test_every_dropped_row_is_named_in_a_warning(tmp_path: Path):
+    db_path = tmp_path / "logged.db"
+    engine = _migrate(db_path, PREVIOUS_REVISION)
+    with engine.begin() as connection:
+        _seed_profile(connection, 1, "profile-one")
+        _insert_assignment(connection, None, "in-logged", is_enabled=False)
+        _insert_assignment(connection, None, "in-logged", is_enabled=True)
+        _insert_assignment(connection, None, "in-logged", is_enabled=False, enforced=True)
+    engine.dispose()
+
+    engine, messages = _migrate_capturing_warnings(db_path, REVISION)
+    engine.dispose()
+
+    dropped = [message for message in messages if "dropping duplicate assignment" in message]
+    assert len(dropped) == 2
+    assert any("id=1 (keeping id=2)" in message and "is_enabled=0" in message for message in dropped)
+    assert any("id=3 (keeping id=2)" in message and "enforced=1" in message for message in dropped)
+    assert any("removed 2 duplicate assignment row(s)" in message for message in messages)
 
 
 def test_the_migration_is_reversible_and_re_appliable(tmp_path: Path):

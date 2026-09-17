@@ -105,10 +105,7 @@ async def test_the_live_feed_refuses_more_viewers_than_it_can_serve():
     collector.enabled = True
 
     async with _contextlib.AsyncExitStack() as stack:
-        queues = [
-            await stack.enter_async_context(collector.subscribe(node_id=1))
-            for _ in range(SUBSCRIBER_CAP)
-        ]
+        queues = [await stack.enter_async_context(collector.subscribe(node_id=1)) for _ in range(SUBSCRIBER_CAP)]
         assert all(queue.empty() for queue in queues)
         assert len(collector._subscribers) == SUBSCRIBER_CAP
 

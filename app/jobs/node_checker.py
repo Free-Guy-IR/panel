@@ -290,7 +290,7 @@ async def _bounded_health_check(db_node: Node, node: PasarGuardNode | None):
             await asyncio.wait_for(process_node_health_check(db_node, node), timeout=NODE_CHECK_TIMEOUT)
         except TimeoutError:
             logger.error(
-                f'[{db_node.name}] health check did not finish within {NODE_CHECK_TIMEOUT}s and was abandoned; '
+                f"[{db_node.name}] health check did not finish within {NODE_CHECK_TIMEOUT}s and was abandoned; "
                 "the next round will try again instead of the whole job staying stuck"
             )
 

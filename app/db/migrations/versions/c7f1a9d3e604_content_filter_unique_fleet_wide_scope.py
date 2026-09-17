@@ -31,6 +31,10 @@ def _scope(node_id, inbound_tag) -> tuple:
     return (FLEET_WIDE if node_id is None else node_id, inbound_tag)
 
 
+def _survivor_rank(row) -> tuple:
+    return (0 if row[4] else 1, 0 if row[5] else 1, row[0])
+
+
 def _prune_duplicate_scopes(bind) -> None:
     rows = bind.execute(
         sa.text(
@@ -39,14 +43,18 @@ def _prune_duplicate_scopes(bind) -> None:
         )
     ).fetchall()
 
+    grouped: dict[tuple, list] = {}
+    for row in rows:
+        grouped.setdefault(_scope(row[2], row[3]), []).append(row)
+
     kept: dict[tuple, int] = {}
     doomed: list[tuple] = []
-    for row in rows:
-        key = _scope(row[2], row[3])
-        if key in kept:
-            doomed.append(row)
-        else:
-            kept[key] = row[0]
+    for key, group in grouped.items():
+        survivor, *rest = sorted(group, key=_survivor_rank)
+        kept[key] = survivor[0]
+        doomed.extend(rest)
+
+    doomed.sort(key=lambda row: row[0])
 
     if not doomed:
         logger.info("content filter: no duplicate assignment scopes found in %s", TABLE)

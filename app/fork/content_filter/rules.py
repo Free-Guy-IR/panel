@@ -34,6 +34,8 @@ NON_DOMAIN_PREDICATES = ("port", "network", "protocol", "source", "sourcePort", 
 ROUTING_FIELDS = ("domain", "ip", *NON_DOMAIN_PREDICATES, "inboundTag", "balancerTag")
 PRIVATE_GEOIP = "geoip:private"
 DOMAIN_MATCHER_KINDS = ("domain", "full", "keyword", "regexp", "geosite", "ext")
+NAMED_MATCHER_KINDS = ("geosite", "ext")
+UNEXPANDABLE_MATCHER_KINDS = ("geosite", "ext", "regexp")
 CLASH_REMEDY = (
     "Edit that rule in the core config so it no longer covers this filter's traffic: give it an inboundTag that "
     "leaves out the inbounds you are filtering, or drop the matcher named above from it. Moving it is not an "
@@ -412,6 +414,16 @@ def _category_label(named: set[str]) -> str:
     return f"{ordered[0]} and {len(ordered) - 1} more"
 
 
+def _unresolvable(value: str, kind: str, tree: set[str], named: set[str]) -> str | None:
+    if named:
+        return f"{value} against {_category_label(named)}"
+    if kind in UNEXPANDABLE_MATCHER_KINDS:
+        return value
+    if kind == "keyword" and tree:
+        return value
+    return None
+
+
 def _domain_overlap(values: list[str], index: tuple[set[str], set[str], set[str]]) -> tuple[str, bool] | None:
     tree, full, named = index
     concrete = tree | full
@@ -433,13 +445,10 @@ def _domain_overlap(values: list[str], index: tuple[set[str], set[str], set[str]
         elif kind == "keyword":
             if any(rest in candidate for candidate in concrete):
                 return value, True
-        else:
+        elif kind in NAMED_MATCHER_KINDS and f"{kind}:{rest}" in named:
             return value, True
         if theoretical is None:
-            if named:
-                theoretical = f"{value} against {_category_label(named)}"
-            elif kind == "keyword" and tree:
-                theoretical = value
+            theoretical = _unresolvable(value, kind, tree, named)
     return (theoretical, False) if theoretical is not None else None
 
 

@@ -26,9 +26,7 @@ SINGBOX_INBOUND = re.compile(
     r"(?:\[(?P<host6>[^\]\s]+)\]|(?P<host>[^:\s\[\]]+)):(?P<port>\d{1,5})"
 )
 
-SINGBOX_OUTBOUND = re.compile(
-    r"\[(?P<cid>\d+)\s[^\]]*\]\s+outbound/(?P<otype>[\w-]+)\[(?P<otag>[^\]]*)\]"
-)
+SINGBOX_OUTBOUND = re.compile(r"\[(?P<cid>\d+)\s[^\]]*\]\s+outbound/(?P<otype>[\w-]+)\[(?P<otag>[^\]]*)\]")
 
 
 class SingboxFlows:

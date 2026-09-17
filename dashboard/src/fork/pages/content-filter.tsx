@@ -38,12 +38,14 @@ import {
   Gamepad2,
   Globe,
   Heart,
+  Info,
   Laptop,
   Layers,
   Loader2,
   Megaphone,
   MessageCircle,
   Plus,
+  RotateCw,
   Search,
   Server,
   ShieldAlert,
@@ -91,6 +93,13 @@ type TargetNode = {
 }
 type Delivery = 'core' | 'live'
 type OutcomeStatus = 'applied' | 'failed' | 'disabled' | 'skipped'
+type ReloadPrompt = {
+  reason: string
+  message: string
+  node_ids: number[]
+  inbound_tags: string[]
+  confirm_with: string
+}
 type AssignmentOutcome = {
   node_id: number | null
   inbound_tag: string
@@ -99,6 +108,9 @@ type AssignmentOutcome = {
   detail?: string | null
   delivery?: Delivery | null
   status?: OutcomeStatus | null
+  advisories?: string[]
+  advisory_note?: string
+  reload?: ReloadPrompt | null
 }
 type BulkResult = {
   created: number
@@ -109,6 +121,14 @@ type BulkResult = {
   skipped: number
   outcomes: AssignmentOutcome[]
 }
+
+type ApplyBody = { profile_id: number; node_ids: number[]; inbound_tags: string[] }
+type RestartRequest =
+  | { kind: 'saveProfile'; profile: Profile }
+  | { kind: 'deleteProfile'; id: number }
+  | { kind: 'deleteAssignment'; id: number }
+  | { kind: 'applyTargets'; body: ApplyBody }
+type PendingRestart = { prompt: ReloadPrompt; request: RestartRequest }
 
 type Assignment = {
   id: number
@@ -231,6 +251,37 @@ function errorText(e: unknown, fallback: string): string {
   return (e as Error)?.message || fallback
 }
 
+function reloadPromptOf(e: unknown): ReloadPrompt | null {
+  const detail = (e as { data?: { detail?: unknown } })?.data?.detail
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
+  const raw = detail as Record<string, unknown>
+  if (raw.reason !== 'reload_required') return null
+  return {
+    reason: 'reload_required',
+    message: typeof raw.message === 'string' ? raw.message : '',
+    node_ids: Array.isArray(raw.node_ids) ? raw.node_ids.filter((x): x is number => typeof x === 'number') : [],
+    inbound_tags: Array.isArray(raw.inbound_tags) ? raw.inbound_tags.filter((x): x is string => typeof x === 'string') : [],
+    confirm_with: typeof raw.confirm_with === 'string' ? raw.confirm_with : 'confirm_restart',
+  }
+}
+
+function mergePrompts(prompts: ReloadPrompt[]): ReloadPrompt | null {
+  if (!prompts.length) return null
+  const nodes = new Set<number>()
+  const tags = new Set<string>()
+  for (const prompt of prompts) {
+    prompt.node_ids.forEach(id => nodes.add(id))
+    prompt.inbound_tags.forEach(tag => tags.add(tag))
+  }
+  return {
+    reason: 'reload_required',
+    message: prompts.find(prompt => prompt.message)?.message ?? '',
+    node_ids: [...nodes].sort((a, b) => a - b),
+    inbound_tags: [...tags].sort(),
+    confirm_with: prompts[0].confirm_with || 'confirm_restart',
+  }
+}
+
 function SectionHeading({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="flex items-baseline gap-3 border-b pb-2 pt-2">
@@ -280,9 +331,66 @@ function DeliveryBadge({ delivery }: { delivery?: Delivery | null }) {
   )
 }
 
+function AdvisoryList({ advisories, note }: { advisories?: string[]; note?: string }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const all = advisories ?? []
+  const lines = all.filter(line => line.trim().length > 0)
+  if (!all.length) return null
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2"
+    >
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Info className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t('contentFilter.advisoriesTitle', { defaultValue: 'Rules already on this core' })}
+        </span>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {t('contentFilter.advisoriesCount', { count: lines.length, defaultValue: '{{count}} notes' })}
+        </span>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="ms-auto h-6 shrink-0 gap-1 px-2 text-[11px]">
+            <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+            {open
+              ? t('contentFilter.advisoriesHide', { defaultValue: 'Hide' })
+              : t('contentFilter.advisoriesShow', { defaultValue: 'Show' })}
+          </Button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent className="mt-2 space-y-2">
+        {note && note.trim() ? <p className="text-[11px] leading-snug text-muted-foreground">{note}</p> : null}
+        {lines.length ? (
+          <ul className="space-y-1">
+            {lines.map((line, index) => (
+              <li key={`${index}:${line}`} className="flex gap-2 text-xs leading-snug">
+                <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-amber-500" />
+                <span className="min-w-0 break-words">{line}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs leading-snug text-muted-foreground">
+            {t('contentFilter.advisoriesEmpty', { defaultValue: 'Nothing else to look at here.' })}
+          </p>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function OutcomeStatusBadge({ outcome }: { outcome: AssignmentOutcome }) {
   const { t } = useTranslation()
   const status = outcome.status
+  if (outcome.reload)
+    return (
+      <Badge variant="outline" className="gap-1 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+        <RotateCw className="size-3" />
+        {t('contentFilter.outcomeNeedsRestart', { defaultValue: 'Needs a restart' })}
+      </Badge>
+    )
   if (status === 'applied' || (!status && outcome.created && outcome.enforced))
     return (
       <Badge className="gap-1 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
@@ -646,6 +754,7 @@ export default function ContentFilterPage() {
   const [nodeQuery, setNodeQuery] = useState('')
   const [endpointQuery, setEndpointQuery] = useState('')
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null)
+  const [pendingRestart, setPendingRestart] = useState<PendingRestart | null>(null)
   const [probeDomain, setProbeDomain] = useState('')
   const [probeResult, setProbeResult] = useState<{ domain: string; blocked: boolean; outbound: string } | null>(null)
 
@@ -683,8 +792,8 @@ export default function ContentFilterPage() {
   })
 
   const saveProfile = useMutation({
-    mutationFn: (profile: Profile) =>
-      fetcher<Profile>(`${BASE}/profiles/${profile.id}`, {
+    mutationFn: ({ profile, confirm }: { profile: Profile; confirm: boolean }) =>
+      fetcher<Profile>(`${BASE}/profiles/${profile.id}${confirm ? '?confirm_restart=true' : ''}`, {
         method: 'PUT',
         body: {
           name: profile.name,
@@ -699,35 +808,55 @@ export default function ContentFilterPage() {
       toast.success(t('contentFilter.saved', { defaultValue: 'Saved and pushed to every endpoint it covers' }))
       invalidate()
     },
-    onError: e => toast.error(errorText(e, t('contentFilter.saveFailed', { defaultValue: 'Could not save' }))),
+    onError: (e, variables) => {
+      const prompt = reloadPromptOf(e)
+      if (prompt) {
+        setPendingRestart({ prompt, request: { kind: 'saveProfile', profile: variables.profile } })
+        return
+      }
+      toast.error(errorText(e, t('contentFilter.saveFailed', { defaultValue: 'Could not save' })))
+    },
   })
 
   const removeProfile = useMutation({
-    mutationFn: (id: number) => fetcher<void>(`${BASE}/profiles/${id}`, { method: 'DELETE' }),
+    mutationFn: ({ id, confirm }: { id: number; confirm: boolean }) =>
+      fetcher<void>(`${BASE}/profiles/${id}${confirm ? '?confirm_restart=true' : ''}`, { method: 'DELETE' }),
     onSuccess: () => {
       toast.success(t('contentFilter.profileDeleted', { defaultValue: 'Profile removed' }))
       setActiveId(null)
       invalidate()
     },
-    onError: e => toast.error(errorText(e, t('contentFilter.deleteFailed', { defaultValue: 'Could not remove' }))),
+    onError: (e, variables) => {
+      const prompt = reloadPromptOf(e)
+      if (prompt) {
+        setPendingRestart({ prompt, request: { kind: 'deleteProfile', id: variables.id } })
+        return
+      }
+      toast.error(errorText(e, t('contentFilter.deleteFailed', { defaultValue: 'Could not remove' })))
+    },
   })
 
   const applyTargets = useMutation({
-    mutationFn: (body: { profile_id: number; node_ids: number[]; inbound_tags: string[] }) =>
-      fetcher<BulkResult>(`${BASE}/assignments/bulk`, { method: 'POST', body: { ...body, is_enabled: true } }),
+    mutationFn: ({ body, confirm }: { body: ApplyBody; confirm: boolean }) =>
+      fetcher<BulkResult>(`${BASE}/assignments/bulk`, {
+        method: 'POST',
+        body: { ...body, is_enabled: true, confirm_restart: confirm },
+      }),
     onSuccess: result => {
       setBulkResult(result)
+      const held = result.outcomes.filter(outcome => outcome.reload)
       const applied = result.applied ?? 0
-      const failed = result.failed ?? 0
-      const skipped = result.skipped ?? 0
-      if (failed === 0 && skipped === 0) {
-        toast.success(
-          t('contentFilter.bulkEnforcedAll', {
-            applied,
-            defaultValue: 'In force on all {{applied}} endpoints',
+      const failed = Math.max((result.failed ?? 0) - held.filter(outcome => outcome.status === 'failed').length, 0)
+      const skipped = Math.max((result.skipped ?? 0) - held.filter(outcome => outcome.status === 'skipped').length, 0)
+      if (held.length > 0) {
+        toast.warning(
+          t('contentFilter.reloadBulkPending', {
+            count: held.length,
+            defaultValue: '{{count}} endpoints are waiting for you to confirm a restart',
           }),
         )
-      } else if (failed > 0) {
+      }
+      if (failed > 0) {
         toast.error(
           t('contentFilter.bulkSomeFailed', {
             applied,
@@ -735,7 +864,14 @@ export default function ContentFilterPage() {
             defaultValue: '{{applied}} in force, {{failed}} could not be applied',
           }),
         )
-      } else {
+      } else if (held.length === 0 && skipped === 0) {
+        toast.success(
+          t('contentFilter.bulkEnforcedAll', {
+            applied,
+            defaultValue: 'In force on all {{applied}} endpoints',
+          }),
+        )
+      } else if (held.length === 0) {
         toast.warning(
           t('contentFilter.bulkEnforcedPartly', {
             applied,
@@ -746,16 +882,31 @@ export default function ContentFilterPage() {
       }
       invalidate()
     },
-    onError: e => toast.error(errorText(e, t('contentFilter.applyFailed', { defaultValue: 'Could not apply' }))),
+    onError: (e, variables) => {
+      const prompt = reloadPromptOf(e)
+      if (prompt) {
+        setPendingRestart({ prompt, request: { kind: 'applyTargets', body: variables.body } })
+        return
+      }
+      toast.error(errorText(e, t('contentFilter.applyFailed', { defaultValue: 'Could not apply' })))
+    },
   })
 
   const removeAssignment = useMutation({
-    mutationFn: (id: number) => fetcher<void>(`${BASE}/assignments/${id}`, { method: 'DELETE' }),
+    mutationFn: ({ id, confirm }: { id: number; confirm: boolean }) =>
+      fetcher<void>(`${BASE}/assignments/${id}${confirm ? '?confirm_restart=true' : ''}`, { method: 'DELETE' }),
     onSuccess: () => {
       toast.success(t('contentFilter.lifted', { defaultValue: 'Filter lifted from that endpoint' }))
       invalidate()
     },
-    onError: e => toast.error(errorText(e, t('contentFilter.liftFailed', { defaultValue: 'Could not lift' }))),
+    onError: (e, variables) => {
+      const prompt = reloadPromptOf(e)
+      if (prompt) {
+        setPendingRestart({ prompt, request: { kind: 'deleteAssignment', id: variables.id } })
+        return
+      }
+      toast.error(errorText(e, t('contentFilter.liftFailed', { defaultValue: 'Could not lift' })))
+    },
   })
 
   const runProbe = useMutation({
@@ -904,11 +1055,33 @@ export default function ContentFilterPage() {
     return assignTags.filter(tag => !covered.has(tag))
   }, [assignTags, pickedTags, reach.rows])
 
+  const heldOutcomes = useMemo(() => (bulkResult?.outcomes ?? []).filter(outcome => outcome.reload), [bulkResult])
+
+  const bulkPrompt = useMemo(
+    () => mergePrompts(heldOutcomes.map(outcome => outcome.reload).filter((p): p is ReloadPrompt => Boolean(p))),
+    [heldOutcomes],
+  )
+
+  const bulkStats = useMemo(() => {
+    const held = (status: OutcomeStatus) => heldOutcomes.filter(outcome => outcome.status === status).length
+    return {
+      applied: Math.max((bulkResult?.applied ?? 0) - held('applied'), 0),
+      failed: Math.max((bulkResult?.failed ?? 0) - held('failed'), 0),
+      disabled: Math.max((bulkResult?.disabled ?? 0) - held('disabled'), 0),
+      skipped: Math.max((bulkResult?.skipped ?? 0) - held('skipped'), 0),
+    }
+  }, [bulkResult, heldOutcomes])
+
   const outcomeGroups = useMemo(() => {
     const order: OutcomeStatus[] = ['failed', 'skipped', 'disabled', 'applied']
     const byStatus = new Map<OutcomeStatus, AssignmentOutcome[]>()
+    const held: AssignmentOutcome[] = []
     const rest: AssignmentOutcome[] = []
     for (const outcome of bulkResult?.outcomes ?? []) {
+      if (outcome.reload) {
+        held.push(outcome)
+        continue
+      }
       const status = outcome.status
       if (status && order.includes(status)) {
         const list = byStatus.get(status) ?? []
@@ -918,14 +1091,17 @@ export default function ContentFilterPage() {
         rest.push(outcome)
       }
     }
-    const groups = order
-      .filter(status => byStatus.has(status))
-      .map(status => ({ status: status as OutcomeStatus | null, items: byStatus.get(status) ?? [] }))
+    const groups: { status: OutcomeStatus | 'reload' | null; items: AssignmentOutcome[] }[] = []
+    if (held.length) groups.push({ status: 'reload', items: held })
+    for (const status of order) {
+      if (byStatus.has(status)) groups.push({ status, items: byStatus.get(status) ?? [] })
+    }
     if (rest.length) groups.push({ status: null, items: rest })
     return groups
   }, [bulkResult])
 
-  const outcomeGroupLabel = (status: OutcomeStatus | null) => {
+  const outcomeGroupLabel = (status: OutcomeStatus | 'reload' | null) => {
+    if (status === 'reload') return t('contentFilter.reloadTitle', { defaultValue: 'Restart needed before this takes effect' })
     if (status === 'failed') return t('contentFilter.groupFailed', { defaultValue: 'Could not be applied' })
     if (status === 'skipped') return t('contentFilter.groupSkipped', { defaultValue: 'Refused before anything was saved' })
     if (status === 'disabled') return t('contentFilter.groupDisabled', { defaultValue: 'Saved but not active' })
@@ -970,8 +1146,20 @@ export default function ContentFilterPage() {
 
   const submitTargets = () => {
     if (activeId === null) return
-    applyTargets.mutate({ profile_id: activeId, node_ids: assignNodes, inbound_tags: assignTags })
+    applyTargets.mutate({ body: { profile_id: activeId, node_ids: assignNodes, inbound_tags: assignTags }, confirm: false })
   }
+
+  const runRestart = (request: RestartRequest) => {
+    if (request.kind === 'saveProfile') saveProfile.mutate({ profile: request.profile, confirm: true })
+    else if (request.kind === 'deleteProfile') removeProfile.mutate({ id: request.id, confirm: true })
+    else if (request.kind === 'deleteAssignment') removeAssignment.mutate({ id: request.id, confirm: true })
+    else applyTargets.mutate({ body: request.body, confirm: true })
+  }
+
+  const restartIsWithdrawal =
+    pendingRestart?.request.kind === 'deleteProfile' || pendingRestart?.request.kind === 'deleteAssignment'
+  const restartNodes = (pendingRestart?.prompt.node_ids ?? []).map(id => nodeLabel(id)).join(', ')
+  const restartTags = (pendingRestart?.prompt.inbound_tags ?? []).join(', ')
 
   const loading = catalog.isLoading || profiles.isLoading
 
@@ -1199,7 +1387,7 @@ export default function ContentFilterPage() {
                 </Collapsible>
 
                 <div className="flex justify-end">
-                  <Button onClick={() => saveProfile.mutate(draft)} disabled={saveProfile.isPending} className="gap-1.5">
+                  <Button onClick={() => saveProfile.mutate({ profile: draft, confirm: false })} disabled={saveProfile.isPending} className="gap-1.5">
                     {saveProfile.isPending ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
                     {t('contentFilter.save', { defaultValue: 'Save and apply' })}
                   </Button>
@@ -1279,7 +1467,7 @@ export default function ContentFilterPage() {
                                   size="icon"
                                   variant="ghost"
                                   className="size-8"
-                                  onClick={() => removeAssignment.mutate(a.id)}
+                                  onClick={() => removeAssignment.mutate({ id: a.id, confirm: false })}
                                   aria-label={t('contentFilter.remove', { defaultValue: 'Remove' })}
                                 >
                                   <Trash2 className="size-4" />
@@ -1427,7 +1615,7 @@ export default function ContentFilterPage() {
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => {
-                  if (draft) removeProfile.mutate(draft.id)
+                  if (draft) removeProfile.mutate({ id: draft.id, confirm: false })
                   setDeleteOpen(false)
                 }}
               >
@@ -1487,40 +1675,71 @@ export default function ContentFilterPage() {
                   <Badge className="gap-1 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
                     <ShieldCheck className="size-3" />
                     {t('contentFilter.bulkStatApplied', {
-                      applied: bulkResult.applied ?? 0,
+                      applied: bulkStats.applied,
                       defaultValue: 'In force: {{applied}}',
                     })}
                   </Badge>
-                  {(bulkResult.failed ?? 0) > 0 ? (
+                  {bulkStats.failed > 0 ? (
                     <Badge variant="outline" className="gap-1 border-destructive/40 bg-destructive/10 text-destructive">
                       <ShieldAlert className="size-3" />
                       {t('contentFilter.bulkStatFailed', {
-                        failed: bulkResult.failed ?? 0,
+                        failed: bulkStats.failed,
                         defaultValue: 'Failed: {{failed}}',
                       })}
                     </Badge>
                   ) : null}
-                  {(bulkResult.disabled ?? 0) > 0 ? (
+                  {bulkStats.disabled > 0 ? (
                     <Badge variant="secondary" className="gap-1 font-normal">
                       {t('contentFilter.bulkStatDisabled', {
-                        disabled: bulkResult.disabled ?? 0,
+                        disabled: bulkStats.disabled,
                         defaultValue: 'Not active: {{disabled}}',
                       })}
                     </Badge>
                   ) : null}
-                  {bulkResult.skipped > 0 ? (
+                  {bulkStats.skipped > 0 ? (
                     <Badge
                       variant="outline"
                       className="gap-1 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
                     >
                       <ShieldAlert className="size-3" />
                       {t('contentFilter.bulkStatSkipped', {
-                        skipped: bulkResult.skipped,
+                        skipped: bulkStats.skipped,
                         defaultValue: 'Skipped: {{skipped}}',
                       })}
                     </Badge>
                   ) : null}
                 </div>
+
+                {bulkPrompt ? (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2.5">
+                    <RotateCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <p className="min-w-0 flex-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
+                      {t('contentFilter.reloadBulkPending', {
+                        count: heldOutcomes.length,
+                        defaultValue: '{{count}} endpoints are waiting for you to confirm a restart',
+                      })}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
+                      disabled={activeId === null || applyTargets.isPending}
+                      onClick={() => {
+                        if (activeId === null) return
+                        setPendingRestart({
+                          prompt: bulkPrompt,
+                          request: {
+                            kind: 'applyTargets',
+                            body: { profile_id: activeId, node_ids: assignNodes, inbound_tags: assignTags },
+                          },
+                        })
+                      }}
+                    >
+                      {applyTargets.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                      {t('contentFilter.reloadConfirm', { defaultValue: 'Restart and apply' })}
+                    </Button>
+                  </div>
+                ) : null}
                 <p className="text-xs text-muted-foreground">
                   {t('contentFilter.bulkStatWrites', {
                     created: bulkResult.created,
@@ -1571,9 +1790,35 @@ export default function ContentFilterPage() {
                             </span>
                             <OutcomeStatusBadge outcome={outcome} />
                           </div>
-                          {outcome.detail ? (
+                          {outcome.detail && !outcome.reload ? (
                             <p className="mt-1 text-xs leading-snug text-muted-foreground">{outcome.detail}</p>
                           ) : null}
+                          {outcome.reload ? (
+                            <p className="mt-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
+                              {!outcome.reload.inbound_tags.length
+                                ? outcome.reload.message
+                                : outcome.status === 'disabled'
+                                  ? t('contentFilter.reloadWithdrawWhy', {
+                                      tags: outcome.reload.inbound_tags.join(', '),
+                                      defaultValue:
+                                        'Putting your own setting back on {{tags}} only takes effect once the nodes below restart, and every session on them drops.',
+                                    })
+                                  : t('contentFilter.reloadWhy', {
+                                      tags: outcome.reload.inbound_tags.join(', '),
+                                      defaultValue:
+                                        'Name recovery has to change on {{tags}}. It only takes effect once the nodes below restart, and every session on them drops.',
+                                    })}
+                            </p>
+                          ) : null}
+                          {outcome.reload && outcome.reload.node_ids.length ? (
+                            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                              {t('contentFilter.reloadNodes', {
+                                nodes: outcome.reload.node_ids.map(id => nodeLabel(id)).join(', '),
+                                defaultValue: 'Nodes that would restart: {{nodes}}',
+                              })}
+                            </p>
+                          ) : null}
+                          <AdvisoryList advisories={outcome.advisories} note={outcome.advisory_note} />
                         </div>
                       ))}
                     </div>
@@ -2057,7 +2302,7 @@ export default function ContentFilterPage() {
                   </Button>
                   <Button
                     disabled={(assignNodes.length === 0 && assignTags.length === 0) || applyTargets.isPending || activeId === null}
-                    onClick={submitTargets}
+                    onClick={() => submitTargets()}
                   >
                     {applyTargets.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
                     {t('contentFilter.apply', { defaultValue: 'Apply' })}
@@ -2067,6 +2312,65 @@ export default function ContentFilterPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog
+          open={pendingRestart !== null}
+          onOpenChange={next => {
+            if (!next) setPendingRestart(null)
+          }}
+        >
+          <AlertDialogContent dir={dir}>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <RotateCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                {t('contentFilter.reloadTitle', { defaultValue: 'Restart needed before this takes effect' })}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2">
+                  {restartTags ? (
+                    <p>
+                      {restartIsWithdrawal
+                        ? t('contentFilter.reloadWithdrawWhy', {
+                            tags: restartTags,
+                            defaultValue:
+                              'Putting your own setting back on {{tags}} only takes effect once the nodes below restart, and every session on them drops.',
+                          })
+                        : t('contentFilter.reloadWhy', {
+                            tags: restartTags,
+                            defaultValue:
+                              'Name recovery has to change on {{tags}}. It only takes effect once the nodes below restart, and every session on them drops.',
+                          })}
+                    </p>
+                  ) : null}
+                  {restartNodes ? (
+                    <p className="font-medium text-foreground">
+                      {t('contentFilter.reloadNodes', {
+                        nodes: restartNodes,
+                        defaultValue: 'Nodes that would restart: {{nodes}}',
+                      })}
+                    </p>
+                  ) : null}
+                  {!restartTags && !restartNodes && pendingRestart?.prompt.message ? (
+                    <p>{pendingRestart.prompt.message}</p>
+                  ) : null}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('contentFilter.reloadCancel', { defaultValue: 'Leave it as it is' })}</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  const request = pendingRestart?.request
+                  setPendingRestart(null)
+                  if (request) runRestart(request)
+                }}
+              >
+                {t('contentFilter.reloadConfirm', { defaultValue: 'Restart and apply' })}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   )

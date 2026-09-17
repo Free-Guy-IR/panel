@@ -865,19 +865,216 @@ def test_the_production_core_advises_rather_than_refuses_a_category_without_the_
     ]
 
 
+def _category_profile(category: str, inbound: str = "in", strict: bool = False) -> list[dict]:
+    return rules.build_rules(
+        assignment_id=1,
+        inbound_tags=[inbound],
+        categories=[category],
+        allow_list=[],
+        block_list=[],
+        strict_mode=strict,
+    )
+
+
+def _operator_rule(matcher: str, outbound: str = "DIRECT") -> list[dict]:
+    return [{"type": "field", "ruleTag": "op-1", "domain": [matcher], "outboundTag": outbound}]
+
+
 @pytest.mark.parametrize("matcher", ["geosite:google-gemini", "ext:other.dat:list", "regexp:^ads"])
-def test_their_own_unresolvable_matchers_still_refuse(matcher: str):
+def test_their_matchers_the_panel_cannot_expand_advise_instead_of_refusing(matcher: str):
+    result = rules.conflicting_rules(_operator_rule(matcher), ["in"], None, _category_profile("adult"))
+
+    assert result.clashes == []
+    assert result.advisories == [
+        f"op-1 could send a hostname matching {matcher} against geosite:category-porn to DIRECT"
+    ]
+
+
+def test_a_regexp_that_cannot_touch_the_block_list_is_not_a_blocking_clash():
+    own = _block_only(1, "in", "blocked.example")
+
+    result = rules.conflicting_rules(_operator_rule(r"regexp:^safe\.example$"), ["in"], None, own)
+
+    assert result.clashes == []
+    assert result.advisories == [r"op-1 could send a hostname matching regexp:^safe\.example$ to DIRECT"]
+
+
+def test_a_regexp_that_reads_like_the_blocked_domain_is_still_only_an_advisory():
+    own = _block_only(1, "in", "blocked.example")
+
+    result = rules.conflicting_rules(_operator_rule(r"regexp:^blocked\.example$"), ["in"], None, own)
+
+    assert result.clashes == []
+    assert result.advisories == [r"op-1 could send a hostname matching regexp:^blocked\.example$ to DIRECT"]
+
+
+def test_a_regexp_is_still_refused_where_strict_mode_proves_the_bypass():
     own = rules.build_rules(
         assignment_id=1,
         inbound_tags=["in"],
-        categories=["adult"],
+        categories=[],
         allow_list=[],
+        block_list=["blocked.example"],
+        strict_mode=True,
+    )
+
+    result = rules.conflicting_rules(_operator_rule(r"regexp:^safe\.example$"), ["in"], None, own)
+
+    assert _named(result) == ["op-1"]
+    assert result.advisories == []
+
+
+def test_the_same_geosite_on_both_sides_is_still_refused():
+    result = rules.conflicting_rules(_operator_rule("geosite:category-porn"), ["in"], None, _category_profile("adult"))
+
+    assert result.clashes == ["op-1 sends geosite:category-porn to DIRECT"]
+    assert result.advisories == []
+
+
+def test_a_geosite_the_filter_never_selected_only_advises():
+    result = rules.conflicting_rules(_operator_rule("geosite:google-gemini"), ["in"], None, _category_profile("adult"))
+
+    assert result.clashes == []
+    assert result.advisories == [
+        "op-1 could send a hostname matching geosite:google-gemini against geosite:category-porn to DIRECT"
+    ]
+
+
+def test_the_same_external_list_on_both_sides_is_still_refused():
+    own = _category_profile("pglist-1")
+
+    result = rules.conflicting_rules(_operator_rule("ext:pgfilter.dat:pglist-1"), ["in"], None, own)
+
+    assert own[0]["domain"] == ["ext:pgfilter.dat:pglist-1"]
+    assert result.clashes == ["op-1 sends ext:pgfilter.dat:pglist-1 to DIRECT"]
+    assert result.advisories == []
+
+
+def test_an_external_list_from_another_file_only_advises():
+    own = _category_profile("pglist-1")
+
+    result = rules.conflicting_rules(_operator_rule("ext:other.dat:pglist-1"), ["in"], None, own)
+
+    assert result.clashes == []
+    assert result.advisories == [
+        "op-1 could send a hostname matching ext:other.dat:pglist-1 against ext:pgfilter.dat:pglist-1 to DIRECT"
+    ]
+
+
+@pytest.mark.parametrize("matcher", ["geosite:google-gemini", "ext:other.dat:list", r"regexp:^safe\.example$"])
+def test_an_unexpandable_matcher_against_a_concrete_filter_names_only_itself(matcher: str):
+    result = rules.conflicting_rules(_operator_rule(matcher), ["in"], None, _block_only(1, "in", "blocked.example"))
+
+    assert result.clashes == []
+    assert result.advisories == [f"op-1 could send a hostname matching {matcher} to DIRECT"]
+
+
+@pytest.mark.parametrize("matcher", ["geosite:category-porn", "ext:pgfilter.dat:pglist-1", r"regexp:^allowed\."])
+def test_an_unexpandable_matcher_over_an_allow_list_advises_rather_than_refusing(matcher: str):
+    own = rules.build_rules(
+        assignment_id=1,
+        inbound_tags=["in"],
+        categories=[],
+        allow_list=["allowed.example"],
         block_list=[],
         strict_mode=False,
     )
-    existing = [{"type": "field", "ruleTag": "op-1", "domain": [matcher], "outboundTag": "DIRECT"}]
 
-    assert _named(rules.conflicting_rules(existing, ["in"], None, own)) == ["op-1"]
+    result = rules.conflicting_rules(_operator_rule(matcher, "BLOCK"), ["in"], CATCH_ALL_CORE, own)
+
+    assert result.clashes == []
+    assert result.advisories == [
+        f"op-1 sends {matcher} to BLOCK, blocking part of a destination this profile's allow list permits"
+    ]
+
+
+@pytest.mark.parametrize(
+    "matcher",
+    ["domain:blocked.example", "full:blocked.example", "domain:example", "keyword:blocked", "keyword:ocked.exam"],
+)
+def test_a_concrete_matcher_that_really_reaches_the_block_list_is_still_refused(matcher: str):
+    result = rules.conflicting_rules(_operator_rule(matcher), ["in"], None, _block_only(1, "in", "blocked.example"))
+
+    assert result.clashes == [f"op-1 sends {matcher} to DIRECT"]
+    assert result.advisories == []
+
+
+def test_a_provable_hit_later_in_the_same_rule_outranks_an_earlier_advisory():
+    existing = [
+        {
+            "type": "field",
+            "ruleTag": "op-1",
+            "domain": [r"regexp:^safe\.example$", "domain:blocked.example"],
+            "outboundTag": "DIRECT",
+        }
+    ]
+
+    result = rules.conflicting_rules(existing, ["in"], None, _block_only(1, "in", "blocked.example"))
+
+    assert result.clashes == ["op-1 sends domain:blocked.example to DIRECT"]
+    assert result.advisories == []
+
+
+GEMINI_INBOUND = "vless80"
+
+PRODUCTION_PROFILES = {
+    "block only": {"block_list": ["adult.example"]},
+    "allow-only non-strict": {"allow_list": ["allowed.example"]},
+    "strict": {"block_list": ["adult.example"], "strict_mode": True},
+    "allow+block": {"allow_list": ["allowed.example"], "block_list": ["pornhub.com"]},
+    "social category": {"categories": ["social_network"]},
+    "adult category": {"categories": ["adult"]},
+}
+
+
+def _production_verdict(shape: str, inbound: str):
+    profile = {
+        "assignment_id": 1,
+        "inbound_tags": [inbound],
+        "categories": [],
+        "allow_list": [],
+        "block_list": [],
+        "strict_mode": False,
+    }
+    profile.update(PRODUCTION_PROFILES[shape])
+
+    return rules.conflicting_rules(PRODUCTION_RULES, [inbound], PRODUCTION_CORE, rules.build_rules(**profile))
+
+
+@pytest.mark.parametrize("shape", [name for name in PRODUCTION_PROFILES if name != "strict"])
+def test_the_production_gemini_inbound_refuses_no_profile_it_cannot_prove(shape: str):
+    result = _production_verdict(shape, GEMINI_INBOUND)
+
+    assert [clash for clash in result.clashes if "gemini" in clash] == []
+    assert [advisory for advisory in result.advisories if "geosite:google-gemini" in advisory] != []
+
+
+def test_the_production_gemini_rule_still_refuses_a_strict_profile_on_its_own_inbound():
+    result = _production_verdict("strict", GEMINI_INBOUND)
+
+    assert result.clashes == [
+        "an untagged rule sends keyword:instagram to DIRECT",
+        "an untagged rule sends traffic for 100.64.0.0/10 to DIRECT",
+        "an untagged rule sends geosite:google-gemini to gemini-usa",
+    ]
+    assert result.advisories == []
+
+
+@pytest.mark.parametrize("shape", [name for name in PRODUCTION_PROFILES if name != "strict"])
+def test_the_gemini_inbound_carries_the_same_refusals_as_a_quiet_one(shape: str):
+    on_gemini = _production_verdict(shape, GEMINI_INBOUND)
+    elsewhere = _production_verdict(shape, "quiet-inbound")
+
+    assert on_gemini.clashes == elsewhere.clashes
+
+
+def test_the_only_production_shape_that_refuses_anything_is_strict_mode():
+    refusing = {shape for shape in PRODUCTION_PROFILES if _production_verdict(shape, GEMINI_INBOUND).clashes}
+
+    assert refusing == {"strict", "social category"}
+    assert _production_verdict("social category", GEMINI_INBOUND).clashes == [
+        "an untagged rule sends keyword:instagram to DIRECT"
+    ]
 
 
 def test_an_advisory_names_more_than_one_category_without_listing_them_all():
