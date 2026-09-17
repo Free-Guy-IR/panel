@@ -1,4 +1,4 @@
-import { ListChecks, Send, ShieldAlert, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
+import { ListChecks, Send, ShieldAlert, ShieldBan, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
 import { extraNavItems, registerNavItem, type ForkNavItem } from '../registry'
 
 export type ForkPageTab = {
@@ -8,6 +8,8 @@ export type ForkPageTab = {
   url: string
 }
 
+registerNavItem('settings', { id: 'content-filter', label: 'contentFilter.title', icon: ShieldBan, url: '/settings/content-filter', ownerOnly: true })
+registerNavItem('main', { id: 'content-filter-main', label: 'contentFilter.title', icon: ShieldBan, url: '/settings/content-filter', ownerOnly: true })
 registerNavItem('settings', { id: 'connection-limit', label: 'settings.connectionLimit.title', icon: Users, url: '/settings/connection-limit' })
 registerNavItem('settings', { id: 'connection-limit-review', label: 'settings.connectionLimit.review.navTitle', icon: ListChecks, url: '/settings/connection-limit/review' })
 registerNavItem('settings', { id: 'connection-limit-violations', label: 'settings.connectionLimit.violations.navTitle', icon: ShieldAlert, url: '/settings/connection-limit/violations' })
@@ -33,9 +35,27 @@ function asTab(item: ForkNavItem): ForkPageTab {
 }
 
 export const forkSettingsTabs: ForkPageTab[] = extraNavItems('settings').map(asTab)
+
+export function forkSettingsTabsFor(isPanelOwner: boolean): ForkPageTab[] {
+  return extraNavItems('settings')
+    .filter(item => isPanelOwner || !item.ownerOnly)
+    .map(asTab)
+}
 export const forkBulkTabs: ForkPageTab[] = extraNavItems('bulk').map(asTab)
 export const forkBulkHeaders: Record<string, { title: string; description: string }> = Object.fromEntries(
   extraNavItems('bulk')
     .filter(item => item.title && item.description)
     .map(item => [item.url, { title: item.title as string, description: item.description as string }]),
 )
+
+export const forkMainNavItems: { title: string; url: string; icon: LucideIcon }[] = extraNavItems('main').map(item => ({
+  title: item.label,
+  url: item.url,
+  icon: item.icon as LucideIcon,
+}))
+
+export function forkMainNavItemsFor(isPanelOwner: boolean): { title: string; url: string; icon: LucideIcon }[] {
+  return extraNavItems('main')
+    .filter(item => isPanelOwner || !item.ownerOnly)
+    .map(item => ({ title: item.label, url: item.url, icon: item.icon as LucideIcon }))
+}

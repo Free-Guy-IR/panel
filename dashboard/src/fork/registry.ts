@@ -4,7 +4,7 @@ import type { RouteObject } from 'react-router'
 
 export type ForkRouteParent = 'root' | 'settings' | 'bulk' | 'nodes'
 
-export type ForkNavSlot = 'settings' | 'bulk'
+export type ForkNavSlot = 'main' | 'settings' | 'bulk'
 
 export type ForkNavItem = {
   id: string
@@ -13,23 +13,39 @@ export type ForkNavItem = {
   icon?: LucideIcon
   title?: string
   description?: string
+  ownerOnly?: boolean
+}
+
+export type ForkStatisticsView = {
+  id: string
+  label: string
+  icon: LucideIcon
+  permission: { resource: string; action: string }
+  ownerOnly?: boolean
+  component: ComponentType<any>
 }
 
 type ForkRouteEntry = {
   parent: ForkRouteParent
   route: RouteObject
+  ownerOnly?: boolean
 }
 
 const routes: ForkRouteEntry[] = []
 const components = new Map<string, Map<string, ComponentType<any>>>()
 const navItems = new Map<ForkNavSlot, ForkNavItem[]>()
+const statisticsViews: ForkStatisticsView[] = []
 
-export function registerRoute(route: RouteObject, parent: ForkRouteParent = 'root'): void {
+export function registerRoute(route: RouteObject, parent: ForkRouteParent = 'root', ownerOnly = false): void {
   const path = route.path
   if (path && routes.some(entry => entry.parent === parent && entry.route.path === path)) {
     return
   }
-  routes.push({ parent, route })
+  routes.push({ parent, route, ownerOnly })
+}
+
+export function ownerOnlyRoutePaths(): string[] {
+  return routes.filter(entry => entry.ownerOnly && entry.route.path).map(entry => entry.route.path as string)
 }
 
 export function extraRoutes(parent?: ForkRouteParent): RouteObject[] {
@@ -83,6 +99,17 @@ export function registerNavItem(slot: ForkNavSlot, item: ForkNavItem): void {
 
 export function extraNavItems(slot: ForkNavSlot): ForkNavItem[] {
   return [...(navItems.get(slot) ?? [])]
+}
+
+export function registerStatisticsView(view: ForkStatisticsView): void {
+  if (statisticsViews.some(entry => entry.id === view.id)) {
+    return
+  }
+  statisticsViews.push(view)
+}
+
+export function extraStatisticsViews(): ForkStatisticsView[] {
+  return [...statisticsViews]
 }
 
 export const registerDashboardComponent = registerComponent

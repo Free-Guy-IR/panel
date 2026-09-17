@@ -2,17 +2,15 @@ import { Language } from '@/components/common/language'
 import Snowfall from '@/components/common/snowfall'
 import { useTheme } from '@/app/providers/theme-provider'
 import { ThemeToggle } from '@/components/common/theme-toggle'
-import { GithubStar } from '@/components/layout/github-star'
-import { GoalProgress } from '@/components/layout/goal-progress'
 import { NavMain } from '@/components/layout/nav-main'
-import { NavSecondary } from '@/components/layout/nav-secondary'
 import { NavUser } from '@/components/layout/nav-user'
 import { SidebarTriggerWithBadge } from '@/components/layout/sidebar-trigger-with-badge'
 import { VersionBadge } from '@/components/layout/version-badge'
 import { Button } from '@/components/ui/button'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, useSidebar } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
+import { REPO_URL } from '@/constants/Project'
+import { forkMainNavItemsFor } from '@/fork/pages'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useSystemVersion } from '@/hooks/use-system-version'
@@ -22,7 +20,6 @@ import { canReadResourcePage, hasPermission, hasScopeAll, isOwner } from '@/util
 import {
   ArrowUpDown,
   Bell,
-  BookOpen,
   Calendar,
   ChevronsLeft,
   ChevronsRight,
@@ -31,20 +28,17 @@ import {
   FileCode2,
   FileUser,
   Fingerprint,
-  GithubIcon,
   Group,
   Key,
   Layers,
   LayoutDashboardIcon,
   LayoutTemplate,
-  LifeBuoy,
   ListTodo,
   Lock,
   Logs,
   Network,
   Palette,
   PieChart,
-  RssIcon,
   Send,
   Settings,
   Settings2,
@@ -76,6 +70,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
   const canBulkUpdateUsers = hasScopeAll(admin, 'users', 'update')
+  const canManageSettings = hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
   const nodeNavItems = [
     ...(canReadNodes
       ? [
@@ -327,6 +322,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
+      ...(canManageSettings ? forkMainNavItemsFor(isOwner(admin)) : []),
       {
         title: 'settings.title',
         url: '/settings',
@@ -341,7 +337,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 },
               ]
             : []),
-          ...(hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
+          ...(canManageSettings
             ? [
                 {
                   title: 'settings.notifications.title',
@@ -381,34 +377,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: Palette,
           },
         ],
-      },
-    ],
-    navSecondary: [
-      {
-        title: t('supportUs'),
-        url: DONATION_URL,
-        icon: LifeBuoy,
-        target: '_blank',
-      },
-    ],
-    community: [
-      {
-        title: 'documentation',
-        url: DOCUMENTATION,
-        icon: BookOpen,
-        target: '_blank',
-      },
-      {
-        title: 'discussionGroup',
-        url: DISCUSSION_GROUP,
-        icon: RssIcon,
-        target: '_blank',
-      },
-      {
-        title: 'github',
-        url: REPO_URL,
-        icon: GithubIcon,
-        target: '_blank',
       },
     ],
   }
@@ -568,26 +536,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          {isOwner(admin) && <NavSecondary items={data.community} label={t('community')} />}
-          <NavSecondary items={data.navSecondary} className="mt-auto" />
-          <GoalProgress />
-          <div className="flex items-center justify-between px-2 [&>:first-child]:[direction:ltr]">
-            {state !== 'collapsed' && <GithubStar />}
-            {state !== 'collapsed' && (
+          <div className="mt-auto flex items-center justify-end px-2">
+            {(state !== 'collapsed' || isMobile) && (
               <div className="flex items-start gap-2">
                 <Language />
                 <ThemeToggle />
               </div>
-            )}
-            {state === 'collapsed' && isMobile && (
-              <>
-                <GithubStar />
-
-                <div className="flex items-start gap-2">
-                  <Language />
-                  <ThemeToggle />
-                </div>
-              </>
             )}
           </div>
         </SidebarContent>

@@ -4,7 +4,6 @@ import PageTransition from '@/components/layout/page-transition'
 import RouteGuard from '@/components/layout/route-guard'
 import { TopLoadingBar } from '@/components/layout/top-loading-bar'
 import { VersionUpdateBanner } from '@/components/layout/version-update-banner'
-import DonationPopup from '@/components/common/donation-popup'
 import TopbarAd from '@/components/common/topbar-ad'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
@@ -30,7 +29,6 @@ export default function DashboardLayout() {
     <SidebarProvider>
       <RouteGuard>
         <TopLoadingBar />
-        <DonationPopup />
         <CommandPalette />
         <div className="flex w-full flex-col lg:flex-row">
           <AppSidebar />

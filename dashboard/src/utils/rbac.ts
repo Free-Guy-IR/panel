@@ -1,4 +1,5 @@
 import type { AdminDetails } from '@/service/api'
+import { ownerOnlyRoutePaths } from '@/fork/registry'
 
 type PermissionValue = boolean | { scope?: number | string | null } | null | undefined
 
@@ -89,6 +90,8 @@ export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname:
   if (pathname.startsWith('/nodes/logs')) return hasPermission(admin, 'nodes', 'logs')
   if (pathname === '/nodes') return canReadResourcePage(admin, 'nodes')
   if (pathname.startsWith('/nodes')) return canReadResourcePage(admin, 'nodes')
+  const normalisedPath = pathname.toLowerCase()
+  if (ownerOnlyRoutePaths().some(path => normalisedPath.startsWith(path.toLowerCase()))) return isOwner(admin)
   if (pathname.startsWith('/settings/general')) return hasPermission(admin, 'settings', 'read_general') && hasPermission(admin, 'settings', 'update')
   if (pathname.startsWith('/settings')) {
     if (pathname === '/settings') return true

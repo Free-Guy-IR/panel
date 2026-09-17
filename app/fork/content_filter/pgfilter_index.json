@@ -1,0 +1,290 @@
+{
+ "file": "pgfilter.dat",
+ "sha256": "b20ccde20474b64de50629676a8747ffd03e78a5d88e2fd8cf6cde6122b9b268",
+ "lists": [
+  {
+   "key": "pglist-1",
+   "group": "ads",
+   "label": "AdGuard DNS filter",
+   "domains": 178876
+  },
+  {
+   "key": "pglist-27",
+   "group": "ads",
+   "label": "OISD Blocklist Big",
+   "domains": 247866
+  },
+  {
+   "key": "pglist-24",
+   "group": "ads",
+   "label": "1Hosts (Lite)",
+   "domains": 102241
+  },
+  {
+   "key": "pglist-49",
+   "group": "ads",
+   "label": "HaGeZi's Ultimate Blocklist",
+   "domains": 271702
+  },
+  {
+   "key": "pglist-3",
+   "group": "ads",
+   "label": "Peter Lowe's Blocklist",
+   "domains": 3547
+  },
+  {
+   "key": "pglist-53",
+   "group": "ads",
+   "label": "AWAvenue Ads Rule",
+   "domains": 890
+  },
+  {
+   "key": "pglist-69",
+   "group": "ads",
+   "label": "ShadowWhisperer Tracking List",
+   "domains": 115677
+  },
+  {
+   "key": "pglist-42",
+   "group": "security",
+   "label": "ShadowWhisperer's Malware List",
+   "domains": 46009
+  },
+  {
+   "key": "pglist-30",
+   "group": "security",
+   "label": "Phishing URL Blocklist (PhishTank and OpenPhish)",
+   "domains": 38950
+  },
+  {
+   "key": "pglist-12",
+   "group": "security",
+   "label": "Dandelion Sprout's Anti-Malware List",
+   "domains": 12150
+  },
+  {
+   "key": "pglist-11",
+   "group": "security",
+   "label": "Malicious URL Blocklist (URLHaus)",
+   "domains": 3784
+  },
+  {
+   "key": "pglist-10",
+   "group": "security",
+   "label": "Scam Blocklist by DurableNapkin",
+   "domains": 958
+  },
+  {
+   "key": "pglist-55",
+   "group": "security",
+   "label": "HaGeZi's Badware Hoster Blocklist",
+   "domains": 1235
+  },
+  {
+   "key": "pglist-50",
+   "group": "security",
+   "label": "uBlock₀ filters – Badware risks",
+   "domains": 2737
+  },
+  {
+   "key": "pglist-41",
+   "group": "security",
+   "label": "POL: CERT Polska List of malicious domains",
+   "domains": 107575
+  },
+  {
+   "key": "pglist-62",
+   "group": "security",
+   "label": "Ukrainian Security Filter",
+   "domains": 1727
+  },
+  {
+   "key": "pglist-52",
+   "group": "bypass",
+   "label": "HaGeZi's Encrypted DNS/VPN/TOR/Proxy Bypass",
+   "domains": 16271
+  },
+  {
+   "key": "pglist-68",
+   "group": "bypass",
+   "label": "HaGeZi's URL Shortener Blocklist",
+   "domains": 9879
+  },
+  {
+   "key": "pglist-54",
+   "group": "bypass",
+   "label": "HaGeZi's DynDNS Blocklist",
+   "domains": 1533
+  },
+  {
+   "key": "pglist-60",
+   "group": "devices",
+   "label": "HaGeZi's Xiaomi Tracker Blocklist",
+   "domains": 345
+  },
+  {
+   "key": "pglist-61",
+   "group": "devices",
+   "label": "HaGeZi's Samsung Tracker Blocklist",
+   "domains": 200
+  },
+  {
+   "key": "pglist-63",
+   "group": "devices",
+   "label": "HaGeZi's Windows/Office Tracker Blocklist",
+   "domains": 387
+  },
+  {
+   "key": "pglist-65",
+   "group": "devices",
+   "label": "HaGeZi's Vivo Tracker Blocklist",
+   "domains": 233
+  },
+  {
+   "key": "pglist-66",
+   "group": "devices",
+   "label": "HaGeZi's OPPO & Realme Tracker Blocklist",
+   "domains": 483
+  },
+  {
+   "key": "pglist-67",
+   "group": "devices",
+   "label": "HaGeZi's Apple Tracker Blocklist",
+   "domains": 108
+  },
+  {
+   "key": "pglist-7",
+   "group": "devices",
+   "label": "Perflyst and Dandelion Sprout's Smart-TV Blocklist",
+   "domains": 140
+  },
+  {
+   "key": "pglist-6",
+   "group": "devices",
+   "label": "Dandelion Sprout's Game Console Adblock List",
+   "domains": 13
+  },
+  {
+   "key": "pglist-39",
+   "group": "devices",
+   "label": "Dandelion Sprout's Anti Push Notifications",
+   "domains": 438
+  },
+  {
+   "key": "pglist-47",
+   "group": "content",
+   "label": "HaGeZi's Gambling Blocklist",
+   "domains": 422362
+  },
+  {
+   "key": "pglist-46",
+   "group": "content",
+   "label": "HaGeZi's Anti-Piracy Blocklist",
+   "domains": 49584
+  },
+  {
+   "key": "pglist-57",
+   "group": "content",
+   "label": "ShadowWhisperer's Dating List",
+   "domains": 1370
+  },
+  {
+   "key": "pglist-37",
+   "group": "content",
+   "label": "No Google",
+   "domains": 1643
+  },
+  {
+   "key": "pglist-13",
+   "group": "regional",
+   "label": "NOR: Dandelion Sprouts nordiske filtre",
+   "domains": 375
+  },
+  {
+   "key": "pglist-14",
+   "group": "regional",
+   "label": "POL: Polish filters for Pi-hole",
+   "domains": 340
+  },
+  {
+   "key": "pglist-21",
+   "group": "regional",
+   "label": "CHN: anti-AD",
+   "domains": 98935
+  },
+  {
+   "key": "pglist-22",
+   "group": "regional",
+   "label": "IDN: ABPindo",
+   "domains": 154
+  },
+  {
+   "key": "pglist-25",
+   "group": "regional",
+   "label": "KOR: filterslists-KO",
+   "domains": 375
+  },
+  {
+   "key": "pglist-29",
+   "group": "regional",
+   "label": "CHN: AdRules DNS List",
+   "domains": 198579
+  },
+  {
+   "key": "pglist-35",
+   "group": "regional",
+   "label": "HUN: Hufilter",
+   "domains": 94
+  },
+  {
+   "key": "pglist-36",
+   "group": "regional",
+   "label": "LIT: EasyList Lithuania",
+   "domains": 34
+  },
+  {
+   "key": "pglist-40",
+   "group": "regional",
+   "label": "TUR: Turkish Ad Hosts",
+   "domains": 2071
+  },
+  {
+   "key": "pglist-43",
+   "group": "regional",
+   "label": "ISR: EasyList Hebrew",
+   "domains": 178
+  }
+ ],
+ "excluded": [
+  {
+   "id": 44,
+   "label": "HaGeZi's Threat Intelligence Feeds",
+   "why": "2.36M domains, largely a union of other feeds"
+  },
+  {
+   "id": 70,
+   "label": "1Hosts (Xtra)",
+   "why": "786k domains, aggressive and prone to breaking sites"
+  },
+  {
+   "id": 34,
+   "label": "HaGeZi's Normal Blocklist",
+   "why": "96.8% already inside HaGeZi Ultimate"
+  },
+  {
+   "id": 48,
+   "label": "HaGeZi's Pro Blocklist",
+   "why": "96.1% already inside HaGeZi Ultimate"
+  },
+  {
+   "id": 51,
+   "label": "HaGeZi's Pro++ Blocklist",
+   "why": "97.6% already inside HaGeZi Ultimate"
+  },
+  {
+   "id": 5,
+   "label": "OISD Blocklist Small",
+   "why": "a subset of OISD Big"
+  }
+ ]
+}

@@ -6,8 +6,8 @@ upstream-inventory.yml fails the PR if an override appears in a file not listed 
 
 Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
 baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`).
-Current measurement: 363 diverged files — 209 fork-only, 37 pure-addition, 102 override,
-15 mechanical — 1235 override lines, and 3432 fork lines still living inside
+Current measurement: 460 diverged files — 299 fork-only, 36 pure-addition, 109 override,
+16 mechanical — 1397 override lines, and 4460 fork lines still living inside
 upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
@@ -34,6 +34,8 @@ stays visible.
 
 ## Branding & fork infrastructure (not upstreamable)
 
+- `pyproject.toml` — ruff is scoped to the code it governs: the generated migrations stay excluded and the one-off probe scripts under `specs/*/experiments/` carry their own per-file ignore list instead of bending the repository-wide rules; `[tool.uv.sources]` also pins `pasarguard-node-bridge` to the fork's own `node_bridge_py` git source, which is why the Dockerfile must keep installing git for uv to resolve it
+- `app/db/migrations/env.py` — imports `app/db/models.py` so the fork model modules register their tables on the shared declarative metadata before autogenerate reads it, and adds `MIGRATION_OWNED_TABLES` with an `_include_name` hook handed to both of alembic's context.configure calls; a table that a hand-written migration owns and deliberately has no ORM model for (`content_filter_sniffing_repairs`) is therefore skipped by autogenerate instead of being emitted as a drop. Because the hook sits on the offline and the online path alike, it changes autogenerate behaviour for the whole fork, not just for that one table
 - `README.md` — fork branding: logo, badges, links point to Free-Guy-IR
 - `README-fa.md` — fork branding, Persian edition
 - `README-ru.md` — fork branding, Russian edition
@@ -64,12 +66,13 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 
 ## connect_node multicore generalization (upstream PR candidate)
 
-- `app/operation/node.py` — connect_node generalized across cores with bounded concurrency
+- `app/operation/node.py` — connect_node generalized across cores with bounded concurrency; the local log-stream getter also returns the fork's fork_log_stream seam so the traffic-log collector stays the only reader of the node's shared log channel; attaching to an already-running core now re-pushes the user list, because without it a core that came up without users rejects every client forever
 - `app/db/crud/node.py` — core_config_id-aware node filtering
 - `app/node/manager_sync.py` — call-site update for new connect_node signature
 - `app/node/sync.py` — _serialize_user_for_node signature update
 - `app/node/user.py` — node user serialization carries vless id
 - `tests/test_connect_concurrency.py` — test updated to new connect_node signature
+- `tests/test_node_start_timeout.py` — the attach path now refreshes the user list, so the doubles carry sync_users and an id
 
 ## New proxy cores: openvpn / l2tp / mtproto / singbox
 
@@ -98,7 +101,8 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 
 ## Dashboard UI & features
 
-- `dashboard/src/pages/_dashboard.statistics.tsx` — statistics page layout rework
+- `dashboard/src/pages/_dashboard.statistics.tsx` — statistics page layout rework, plus the fork statistics-view seam and the owner-only gate on the fleet-wide views
+- `dashboard/src/pages/_dashboard.tsx` — 2 lines, the upstream donation popup is not shown to this fork's operators
 - `dashboard/src/features/statistics/components/system-statistics-section.tsx` — Mbps/MB formatting change
 - `dashboard/src/features/bulk/components/bulk-flow.tsx` — bulk flow operations UI
 - `dashboard/src/features/users/components/action-buttons.tsx` — protocol icons and download types
@@ -152,15 +156,23 @@ real boundary, and each one still needs its own justification or a revert.
 
 - `dashboard/src/features/nodes/components/cores/logs.tsx` — 121 upstream lines removed, the largest inherited override; the upstream WebSocket log viewer was replaced wholesale and the reason is not recorded
 - `dashboard/src/features/admins/components/admins-table.tsx` — 14 lines; upstream's `dangerouslySetInnerHTML` confirm prompts were replaced with escaped rendering
-- `app/db/models.py` — 13 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size
+- `app/db/models.py` — 14 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size, and those `node_id` foreign keys became nullable `ondelete="SET NULL"` so deleting a node no longer walks its usage rows. The file now also ends with `_register_fork_model_tables`, which imports the fork model modules so their tables join the shared declarative metadata, and `fk_id_column` forwards a `name` keyword through to `ForeignKey` so a fork table can pin a constraint name short enough for PostgreSQL's 63-character identifier limit
 - `app/operation/permissions.py` — 4 lines, reason not recorded
 - `app/subscription/base.py` — 5 lines, reason not recorded
 - `app/notification/webhook/__init__.py` — 1 line, reason not recorded
 - `app/jobs/node_checker.py` — 1 line, reason not recorded
 - `app/jobs/send_notifications.py` — 2 lines, reason not recorded
-- `app/node/worker.py` — 2 lines, reason not recorded
+- `app/node/worker.py` — 2 lines, the NATS log relay takes its per-node stream from the fork's fork_log_stream seam so the traffic-log collector stays the only reader of the node's shared log channel
 - `app/operation/core.py` — 1 line, reason not recorded
 - `app/routers/admin.py` — 2 lines, reason not recorded
+- `app/routers/node.py` — 2 lines, the fleet-wide realtime statistics endpoint is restricted to the panel owner at the operator's request
+- `config.py` — the four TRAFFIC_LOG_* job settings are added to JobSettings alongside the fork's existing node_user_usages_retention_days
+- `dashboard/src/components/layout/sidebar.tsx` — 1 line, fork main-nav items are taken from the owner-aware accessor so owner-only entries are never rendered for other admins
+- `dashboard/src/components/layout/tabbed-route-suspense-fallback.tsx` — the settings loading skeleton drops fork tabs the current admin may not open
+- `dashboard/src/pages/_dashboard.settings.tsx` — the settings tab list drops fork tabs the current admin may not open
+- `dashboard/src/utils/rbac.ts` — 2 lines, canAccessRoute consults the fork registry's owner-only route paths before the generic settings branch
+- `tests/test_fork_boundary.py` — the expected fork endpoint surface is extended with the content-filter and traffic-log routes
+- `dashboard/src/features/statistics/components/all-nodes-live-section.tsx` — the live fleet section now reads the single fleet endpoint instead of one request per node, so the owner-only gate on that endpoint actually protects the data
 - `app/routers/system.py` — 1 line, reason not recorded
 - `app/subscription/clash.py` — 2 lines, reason not recorded
 - `app/subscription/links.py` — 1 line, reason not recorded

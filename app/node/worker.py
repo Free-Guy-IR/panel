@@ -281,6 +281,8 @@ class NodeWorkerService(BaseRpcService):
             return await self._node_operator.update_geofiles(db, node_id, NodeGeoFilesUpdate.model_validate(payload))
 
     async def _start_logs(self, data: dict) -> dict:
+        from app.fork.traffic_log import fork_log_stream
+
         node_id = data.get("node_id")
         if not node_id:
             raise RuntimeError("node_id is required")
@@ -301,7 +303,7 @@ class NodeWorkerService(BaseRpcService):
 
         async def _stream_logs():
             try:
-                async with node.stream_logs() as log_queue:
+                async with fork_log_stream(node_id, node)() as log_queue:
                     while not stop_event.is_set():
                         log_task = asyncio.create_task(log_queue.get())
                         wait_task = asyncio.create_task(stop_event.wait())

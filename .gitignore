@@ -198,3 +198,11 @@ id_ed25519*
 *.session
 creds.json
 credentials.json
+app/fork/content_filter/pgfilter.dat
+
+.specify/init-options.json
+.specify/integration.json
+.specify/integrations/claude.manifest.json
+.specify/workflows/speckit/workflow.yml
+
+.claude/

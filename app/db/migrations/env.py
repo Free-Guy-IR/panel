@@ -36,6 +36,15 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+MIGRATION_OWNED_TABLES = {"content_filter_sniffing_repairs"}
+
+
+def _include_name(name, type_, parent_names) -> bool:
+    if type_ == "table" and name in MIGRATION_OWNED_TABLES:
+        return False
+    return True
+
+
 def _compare_type(context, inspected_column, metadata_column, inspected_type, metadata_type) -> bool | None:
     """Treat BIGINT and SqliteCompatibleBigInteger as equivalent on SQLite.
 
@@ -86,6 +95,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         render_as_batch=True,
         compare_type=_compare_type,
+        include_name=_include_name,
         dialect_opts={"paramstyle": "named"},
         transaction_per_migration=True,
         transactional_ddl=True,
@@ -99,6 +109,7 @@ def do_run_migrations(connection: Connection) -> None:
         target_metadata=target_metadata,
         render_as_batch=True,
         compare_type=_compare_type,
+        include_name=_include_name,
         transaction_per_migration=True,
         transactional_ddl=True,
     )
