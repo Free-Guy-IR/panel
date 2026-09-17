@@ -67,7 +67,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 ## connect_node multicore generalization (upstream PR candidate)
 
 - `app/operation/node.py` — connect_node generalized across cores with bounded concurrency; the local log-stream getter also returns the fork's fork_log_stream seam so the traffic-log collector stays the only reader of the node's shared log channel; attaching to an already-running core now re-pushes the user list, because without it a core that came up without users rejects every client forever
-- `app/db/crud/node.py` — core_config_id-aware node filtering
+- `app/db/crud/node.py` — core_config_id-aware node filtering, and the per-node resource-history query compares its HAVING clause against the `period_start` alias the way the usage query already did; re-emitting the truncation expression made MySQL reject the whole statement with `Unknown column 'node_stats.created_at' in 'having clause'`, which is why that endpoint answered 503 on every node
 - `app/node/manager_sync.py` — call-site update for new connect_node signature
 - `app/node/sync.py` — _serialize_user_for_node signature update
 - `app/node/user.py` — node user serialization carries vless id
@@ -160,13 +160,14 @@ real boundary, and each one still needs its own justification or a revert.
 - `app/operation/permissions.py` — 4 lines, reason not recorded
 - `app/subscription/base.py` — 5 lines, reason not recorded
 - `app/notification/webhook/__init__.py` — 1 line, reason not recorded
-- `app/jobs/node_checker.py` — 1 line, reason not recorded
+- `app/node/__init__.py` — get_healthy_nodes reports which nodes it is skipping instead of dropping them from a list comprehension in silence; an unhealthy node produces no usage rows at all, and before this there was no log line anywhere to say so while the stored status still read connected
+- `app/jobs/node_checker.py` — each node's health check is bounded by NODE_CHECK_TIMEOUT, so a node that never answers cannot leave the gathered job running forever and make the scheduler skip every later round (the panel was observed logging `maximum number of running instances reached` every ten seconds, which left the in-memory health stale and silently removed nodes from usage collection)
 - `app/jobs/send_notifications.py` — 2 lines, reason not recorded
 - `app/node/worker.py` — 2 lines, the NATS log relay takes its per-node stream from the fork's fork_log_stream seam so the traffic-log collector stays the only reader of the node's shared log channel
 - `app/operation/core.py` — 1 line, reason not recorded
 - `app/routers/admin.py` — 2 lines, reason not recorded
-- `app/routers/node.py` — 2 lines, the fleet-wide realtime statistics endpoint is restricted to the panel owner at the operator's request
-- `config.py` — the four TRAFFIC_LOG_* job settings are added to JobSettings alongside the fork's existing node_user_usages_retention_days
+- `app/routers/node.py` — the fleet-wide realtime statistics endpoint is restricted to the panel owner at the operator's request, and the node log stream is too: those lines carry every client address and destination, which is the same data the owner-only traffic log exists to protect
+- `config.py` — the four TRAFFIC_LOG_* job settings are added to JobSettings alongside the fork's existing node_user_usages_retention_days; and the node resource-sample recorder is only forced off on SQLite now rather than on everything except PostgreSQL, because the read side already speaks all three dialects, which is why node_stats had never held a single row on this MySQL panel
 - `dashboard/src/components/layout/sidebar.tsx` — 1 line, fork main-nav items are taken from the owner-aware accessor so owner-only entries are never rendered for other admins
 - `dashboard/src/components/layout/tabbed-route-suspense-fallback.tsx` — the settings loading skeleton drops fork tabs the current admin may not open
 - `dashboard/src/pages/_dashboard.settings.tsx` — the settings tab list drops fork tabs the current admin may not open

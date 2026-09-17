@@ -54,7 +54,7 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -177,11 +177,12 @@ function errorText(e: unknown, fallback: string): string {
   return (e as Error)?.message || fallback
 }
 
-function SectionHeading({ title, hint }: { title: string; hint?: string }) {
+function SectionHeading({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="flex items-baseline gap-3 border-b pb-2 pt-2">
       <h3 className="shrink-0 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       {hint ? <p className="truncate text-xs text-muted-foreground/80">{hint}</p> : null}
+      {action ? <div className="ms-auto shrink-0 self-center">{action}</div> : null}
     </div>
   )
 }
@@ -511,6 +512,10 @@ export default function ContentFilterPage() {
   }, [activeId, profiles.data])
 
   const selected = useMemo(() => new Set(draft?.categories ?? []), [draft])
+  const everyListPicked = useMemo(() => {
+    const entries = (catalog.data?.lists ?? []).flatMap(g => g.entries.map(e => e.key))
+    return entries.length > 0 && entries.every(key => selected.has(key))
+  }, [catalog.data, selected])
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['content-filter'] })
@@ -603,6 +608,23 @@ export default function ContentFilterPage() {
       next.delete(key)
       children.forEach(c => next.delete(c))
     }
+    setDraft({ ...draft, categories: [...next] })
+  }
+
+  const toggleList = (key: string, on: boolean) => {
+    if (!draft) return
+    const group = catalog.data?.lists.find(g => g.key === key)
+    const children = group?.entries.map(e => e.key) ?? []
+    const next = new Set(draft.categories)
+    children.forEach(c => (on ? next.add(c) : next.delete(c)))
+    setDraft({ ...draft, categories: [...next] })
+  }
+
+  const toggleEveryList = (on: boolean) => {
+    if (!draft) return
+    const children = (catalog.data?.lists ?? []).flatMap(g => g.entries.map(e => e.key))
+    const next = new Set(draft.categories)
+    children.forEach(c => (on ? next.add(c) : next.delete(c)))
     setDraft({ ...draft, categories: [...next] })
   }
 
@@ -796,6 +818,12 @@ export default function ContentFilterPage() {
                 hint={t('contentFilter.section.listsHint', {
                   defaultValue: 'Curated blocklists that ship with the node — picking one costs the rule nothing extra.',
                 })}
+                action={
+                  <label className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+                    {t('contentFilter.selectAll', { defaultValue: 'Select all' })}
+                    <Switch checked={everyListPicked} onCheckedChange={toggleEveryList} />
+                  </label>
+                }
               />
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -807,6 +835,7 @@ export default function ContentFilterPage() {
                     picked={group.entries.filter(x => selected.has(x.key)).length}
                     total={group.entries.length}
                     whole={group.entries.length > 0 && group.entries.every(x => selected.has(x.key))}
+                    onWhole={on => toggleList(group.key, on)}
                     onOpen={() => setPicker(`l:${group.key}`)}
                   />
                 ))}

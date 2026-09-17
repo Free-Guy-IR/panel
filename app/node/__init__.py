@@ -19,6 +19,7 @@ type_map = {
 class NodeManager:
     def __init__(self):
         self._nodes: dict[int, PasarGuardNode] = {}
+        self._reported_unhealthy: set[int] = set()
         self._node_signatures: dict[int, tuple] = {}
         self._user_sync_locks: dict[int, asyncio.Lock] = {}
         self._lock = RWLock(fast=True)
@@ -132,10 +133,28 @@ class NodeManager:
 
     async def get_healthy_nodes(self) -> list[tuple[int, PasarGuardNode]]:
         async with self._lock.reader_lock:
-            nodes: list[tuple[int, PasarGuardNode]] = [
-                (id, node) for id, node in self._nodes.items() if (await node.get_health() == Health.HEALTHY)
-            ]
-            return nodes
+            nodes: list[tuple[int, PasarGuardNode]] = []
+            skipped: list[int] = []
+            for id, node in self._nodes.items():
+                if await node.get_health() == Health.HEALTHY:
+                    nodes.append((id, node))
+                else:
+                    skipped.append(id)
+        self._report_unhealthy(skipped)
+        return nodes
+
+    def _report_unhealthy(self, skipped: list[int]) -> None:
+        current = set(skipped)
+        if current == self._reported_unhealthy:
+            return
+        self._reported_unhealthy = current
+        if current:
+            self.logger.warning(
+                f"nodes {sorted(current)} are not healthy, so their usage is not being collected; "
+                "their stored status can still read connected until the health check updates it"
+            )
+        else:
+            self.logger.info("every node is healthy again and usage collection covers the whole fleet")
 
     async def get_broken_nodes(self) -> list[tuple[int, PasarGuardNode]]:
         async with self._lock.reader_lock:

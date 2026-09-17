@@ -412,7 +412,7 @@ async def get_node_stats(
             # Format the boundary value as a string in the same format
             format_str = MYSQL_FORMATS[period] if dialect == "mysql" else SQLITE_FORMATS[period]
             boundary_str = boundary_value.strftime(format_str.replace("%i", "%M"))  # %i -> %M for Python
-            stmt = stmt.having(trunc_expr >= boundary_str)
+            stmt = stmt.having(literal_column("period_start") >= boundary_str)
 
     result = await db.execute(stmt)
 

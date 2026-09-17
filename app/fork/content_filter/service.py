@@ -309,8 +309,25 @@ async def apply_assignment(db: AsyncSession, assignment: ContentFilterAssignment
         await db.commit()
         raise EnforcementError(assignment.last_error, code=404)
 
-    core_ids: set[int] = set()
+    reachable: list[int] = []
+    problems: list[str] = []
     for node_id in node_ids:
+        try:
+            await live_rules(node_id)
+        except EnforcementError as exc:
+            problems.append(f"node {node_id}: {exc.detail}")
+            continue
+        reachable.append(node_id)
+
+    if not reachable:
+        assignment.enforced = False
+        assignment.last_error = "; ".join(problems) or "no node can accept routing rules"
+        assignment.last_checked_at = dt.now(UTC)
+        await db.commit()
+        raise EnforcementError(assignment.last_error, code=409)
+
+    core_ids: set[int] = set()
+    for node_id in reachable:
         node = await db.get(Node, node_id)
         if node is not None:
             core_ids.add(node.core_config_id)
@@ -319,10 +336,9 @@ async def apply_assignment(db: AsyncSession, assignment: ContentFilterAssignment
 
     wanted = assignment_rules(assignment)
     assignment.applied_digest = digest(wanted)
-    problems: list[str] = []
     reached = 0
 
-    for node_id in node_ids:
+    for node_id in reachable:
         try:
             await push_live(db, node_id)
         except EnforcementError as exc:

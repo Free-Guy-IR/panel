@@ -221,6 +221,8 @@ class JobSettings(EnvSettings):
     )
     # Days of per-user, per-node usage history to keep. 0 disables the cleanup.
     node_user_usages_retention_days: int = Field(default=30, validation_alias="NODE_USER_USAGES_RETENTION_DAYS")
+    cleanup_node_stats_interval: int = Field(default=3600, validation_alias="JOB_CLEANUP_NODE_STATS_INTERVAL")
+    node_stats_retention_days: int = Field(default=14, validation_alias="NODE_STATS_RETENTION_DAYS")
     traffic_log_enabled: bool = Field(default=True, validation_alias="TRAFFIC_LOG_ENABLED")
     traffic_log_max_records: int = Field(default=2_000_000, ge=0, validation_alias="TRAFFIC_LOG_MAX_RECORDS")
     traffic_log_flush_seconds: int = Field(default=5, ge=1, validation_alias="TRAFFIC_LOG_FLUSH_SECONDS")
@@ -262,7 +264,7 @@ job_settings = JobSettings()
 feature_settings = FeatureSettings()
 security_settings = SecuritySettings()
 
-if not database_settings.is_postgresql:
+if database_settings.is_sqlite:
     usage_settings.enable_recording_nodes_stats = False
 
 if runtime_settings.debug and dashboard_settings.vite_base_api == "/":
