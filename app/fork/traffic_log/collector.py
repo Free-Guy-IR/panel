@@ -938,11 +938,12 @@ class TrafficCollector:
         stored = {}
         extras = []
         merged_windows = set()
+        referenced = self.tracked_row_ids()
         for identity, records in grouped.items():
             records.sort(key=lambda record: record.id)
             primary = records[0]
             stored[identity] = primary
-            if len(records) == 1:
+            if len(records) == 1 or any(record.id in referenced for record in records):
                 continue
             primary.hits = sum(record.hits for record in records)
             primary.first_seen = min(self._aware(record.first_seen) for record in records)

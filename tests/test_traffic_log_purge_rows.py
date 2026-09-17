@@ -831,3 +831,66 @@ async def test_a_merge_survives_an_adoption_that_fails_right_after_it(monkeypatc
     assert len(rows) == 1
     assert rows[0].id == first_id
     assert rows[0].hits == 10
+
+
+@pytest.mark.asyncio
+async def test_a_merge_never_deletes_a_row_a_live_bucket_still_points_at(monkeypatch: pytest.MonkeyPatch):
+    collector_module = importlib.import_module("app.fork.traffic_log.collector")
+    monkeypatch.setattr(collector_module, "GetDB", GetTestDB)
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    start = bucket_start_of(now)
+    collector = TrafficCollector()
+
+    async with GetTestDB() as db:
+        first_id = await _insert(db, start, "attached.example", 3)
+        second_id = await _insert(db, start, "attached.example", 5)
+        await db.commit()
+
+    collector._buckets = {
+        _key("attached.example", start): Bucket(
+            first_seen=now, last_seen=now, hits=6, route="DIRECT", row_id=second_id, flushed_hits=5, last_ingest=1
+        ),
+        _key("fresh.example", start): Bucket(
+            first_seen=now, last_seen=now, hits=2, route="DIRECT", row_id=None, flushed_hits=0, last_ingest=2
+        ),
+    }
+
+    await collector._flush_once()
+
+    async with GetTestDB() as db:
+        rows = {row.id: row for row in (await db.scalars(select(TrafficLogRecord))).all()}
+
+    assert len(rows) == 3
+    assert rows[first_id].host == "attached.example"
+    assert rows[first_id].hits == 3
+    assert rows[second_id].host == "attached.example"
+    assert rows[second_id].hits == 6
+    fresh = [row for row in rows.values() if row.host == "fresh.example"]
+    assert len(fresh) == 1
+    assert fresh[0].hits == 2
+    assert collector._buckets[_key("attached.example", start)].row_id == second_id
+
+
+@pytest.mark.asyncio
+async def test_a_window_that_ends_in_the_future_is_clamped_and_one_that_starts_there_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from fastapi import HTTPException
+
+    from app.fork.traffic_log import collector as live_collector
+    from app.fork.traffic_log.service import validate_range
+
+    async def retention():
+        return 48
+
+    monkeypatch.setattr(live_collector, "effective_retention_hours", retention)
+
+    now = datetime.now(UTC)
+    start, end = await validate_range(now - timedelta(hours=1), now + timedelta(days=3650))
+    assert end <= datetime.now(UTC)
+    assert start < end
+
+    with pytest.raises(HTTPException) as refused:
+        await validate_range(now + timedelta(hours=1), now + timedelta(hours=2))
+    assert refused.value.status_code == 422
