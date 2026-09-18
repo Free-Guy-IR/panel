@@ -914,8 +914,8 @@ async def test_a_clash_while_switching_a_filter_off_is_reported_in_full(db, monk
 
 
 ADVISORIES = (
-    "core 1: an untagged rule could send a hostname matching keyword:instagram to DIRECT",
-    "node 7: an untagged rule could send a hostname matching keyword:fbcdn to DIRECT",
+    "core 1: a rule that applies to every inbound could send a hostname matching keyword:instagram to DIRECT",
+    "node 7: a rule that applies to every inbound could send a hostname matching keyword:fbcdn to DIRECT",
 )
 
 
