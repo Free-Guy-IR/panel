@@ -46,7 +46,7 @@ async def test_a_core_is_never_rewritten_when_no_node_can_accept_rules(monkeypat
     async def refuses(node_id):
         raise service.EnforcementError("this node's core does not publish RoutingService", code=409)
 
-    async def persist(db, core_id, admin, allow_restart=False, advisories=None):
+    async def persist(db, core_id, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         persisted.append(core_id)
         return True
 
@@ -78,7 +78,7 @@ async def test_a_reachable_node_still_gets_its_core_rewritten(monkeypatch: pytes
     async def accepts(node_id):
         return [{"ruleTag": "pgcf-1-cat", "outboundTag": "BLOCK"}]
 
-    async def persist(db, core_id, admin, allow_restart=False, advisories=None):
+    async def persist(db, core_id, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         persisted.append(core_id)
         return True
 

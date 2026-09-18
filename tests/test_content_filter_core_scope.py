@@ -4,7 +4,7 @@ import pytest
 from PasarGuardNodeBridge import NodeAPIError
 
 from app.db.models import CoreType, Node
-from app.fork.content_filter import service
+from app.fork.content_filter import capability, service
 from app.fork.content_filter.rules import tag_assignment_id
 from app.fork.models.content_filter import ContentFilterSniffingOverride
 
@@ -33,11 +33,20 @@ class _Assignment:
 
 
 class _Node:
-    def __init__(self, node_id: int, core_id: int, extra_cores: list[int] | None = None, status: str = "connected"):
+    def __init__(
+        self,
+        node_id: int,
+        core_id: int,
+        extra_cores: list[int] | None = None,
+        status: str = "connected",
+        node_version: str = capability.MIN_NODE_VERSION,
+    ):
         self.id = node_id
+        self.name = f"node-{node_id}"
         self.core_config_id = core_id
         self.extra_cores = list(extra_cores or [])
         self.status = status
+        self.node_version = node_version
 
 
 class _Core:

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.base import Base
 from app.db.models import CoreConfig, Node, NodeStatus, node_additional_cores_association
-from app.fork.content_filter import rules, service
+from app.fork.content_filter import capability, rules, service
 from app.fork.content_filter.schemas import (
     MAX_LIST_ENTRIES,
     AssignmentBulkPayload,
@@ -50,7 +50,14 @@ async def _core(db, name: str, tags: list[str], routing: bool = True) -> CoreCon
     return core
 
 
-async def _node(db, name: str, core: CoreConfig, port: int = 62050) -> Node:
+async def _node(
+    db,
+    name: str,
+    core: CoreConfig,
+    port: int = 62050,
+    status: NodeStatus = NodeStatus.connected,
+    node_version: str = capability.MIN_NODE_VERSION,
+) -> Node:
     node = Node(
         name=name,
         address="127.0.0.1",
@@ -59,7 +66,9 @@ async def _node(db, name: str, core: CoreConfig, port: int = 62050) -> Node:
         server_ca="ca",
         api_key=None,
         core_config_id=core.id,
+        status=status,
     )
+    node.node_version = node_version
     db.add(node)
     await db.flush()
     return node
@@ -302,7 +311,7 @@ async def test_deleting_a_profile_cleans_every_node_a_fleet_wide_filter_reached(
     rewritten: list[int] = []
     cleaned: list[int] = []
 
-    async def persist(session, core_id, admin, allow_restart=False):
+    async def persist(session, core_id, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         rewritten.append(core_id)
         return True
 
@@ -333,7 +342,7 @@ async def test_a_profile_pinned_to_a_disabled_node_still_clears_that_nodes_core(
     rewritten: list[int] = []
     cleaned: list[int] = []
 
-    async def persist(session, target_core, admin, allow_restart=False):
+    async def persist(session, target_core, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         rewritten.append(target_core)
         return True
 
@@ -362,7 +371,7 @@ async def test_switching_a_filter_off_in_bulk_takes_the_rules_off_the_nodes(db, 
     rewritten: list[int] = []
     cleaned: list[int] = []
 
-    async def persist(session, target_core, admin, allow_restart=False):
+    async def persist(session, target_core, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         rewritten.append(target_core)
         return True
 
@@ -641,7 +650,7 @@ async def test_an_endpoint_on_an_attached_core_counts_as_the_nodes_own(db, monke
     assert str(first.id) in targets[second.id].scope_note
     rewritten: list[int] = []
 
-    async def persist(session, core_id, admin, allow_restart=False):
+    async def persist(session, core_id, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         rewritten.append(core_id)
         return True
 
@@ -671,7 +680,9 @@ async def test_a_node_with_no_core_of_its_own_is_grouped_with_the_default_core(d
         server_ca="ca",
         api_key=None,
         core_config_id=None,
+        status=NodeStatus.connected,
     )
+    orphan.node_version = capability.MIN_NODE_VERSION
     db.add(orphan)
     await db.flush()
     profile = await _profile(db)
@@ -688,7 +699,7 @@ async def test_a_node_with_no_core_of_its_own_is_grouped_with_the_default_core(d
     assert targets[orphan.id].core_config_id == service.DEFAULT_CORE_ID
     rewritten: list[int] = []
 
-    async def persist(session, core_id, admin, allow_restart=False):
+    async def persist(session, core_id, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         rewritten.append(core_id)
         return True
 
@@ -891,7 +902,7 @@ async def test_a_clash_while_switching_a_filter_off_is_reported_in_full(db, monk
     await db.commit()
     verbose = CLASH + " " + "y" * 1400
 
-    async def persist(session, core_id, admin, allow_restart=False):
+    async def persist(session, core_id, admin, allow_restart=False, advisories=None, drop_unsupported=False):
         return True
 
     async def refuses(session, node_id):

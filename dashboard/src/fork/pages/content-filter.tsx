@@ -62,6 +62,13 @@ import {
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import {
+  asCapabilityReason,
+  useCapabilityIndex,
+  useCapabilityReasonText,
+  useContentFilterCapability,
+  type CapabilityReason,
+} from './content-filter-capability'
 
 type CatalogService = { key: string; label: string; geosite: string | null; domains: number; icon?: string }
 type CatalogGroup = { key: string; geosite: string | null; domains: number; services: CatalogService[] }
@@ -110,6 +117,7 @@ type AssignmentOutcome = {
   status?: OutcomeStatus | null
   advisories?: string[]
   advisory_note?: string
+  reason?: string | null
   reload?: ReloadPrompt | null
 }
 type BulkResult = {
@@ -149,6 +157,9 @@ type FleetEndpoint = {
   blockedNodeIds: number[]
   blockedReason: string | null
 }
+
+type SkippedNode = { id: number; reason: CapabilityReason | null }
+type SkippedEndpoint = { tag: string; nodes: number; reason: CapabilityReason | null }
 
 type ReachRow = {
   nodeId: number
@@ -295,6 +306,7 @@ function ScopeLine({
   endpoints,
   fleetWide,
   spill,
+  skipped,
   pickedNodes,
   pickedTags,
 }: {
@@ -302,6 +314,7 @@ function ScopeLine({
   endpoints: number
   fleetWide: boolean
   spill: number
+  skipped: number
   pickedNodes: number
   pickedTags: number
 }) {
@@ -327,6 +340,14 @@ function ScopeLine({
           {t('contentFilter.scopeSpill', {
             spill,
             defaultValue: '{{spill}} of them are included only because they share a configuration.',
+          })}
+        </span>
+      ) : null}
+      {skipped > 0 ? (
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t('contentFilter.scopeSkipped', {
+            skipped,
+            defaultValue: '{{skipped}} of them are skipped because their node cannot enforce this filter.',
           })}
         </span>
       ) : null}
@@ -853,6 +874,9 @@ export default function ContentFilterPage() {
   const profiles = useProfiles()
   const targets = useTargets()
   const assignments = useAssignments()
+  const capability = useContentFilterCapability(BASE)
+  const caps = useCapabilityIndex(capability.data)
+  const reasonText = useCapabilityReasonText()
 
   const [activeId, setActiveId] = useState<number | null>(null)
   const [draft, setDraft] = useState<Profile | null>(null)
@@ -867,6 +891,7 @@ export default function ContentFilterPage() {
   const [endpointQuery, setEndpointQuery] = useState('')
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null)
   const [bulkRequest, setBulkRequest] = useState<ApplyBody | null>(null)
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const [pendingRestart, setPendingRestart] = useState<PendingRestart | null>(null)
   const [probeDomain, setProbeDomain] = useState('')
   const [probeResult, setProbeResult] = useState<{ domain: string; blocked: boolean; outbound: string } | null>(null)
@@ -879,6 +904,18 @@ export default function ContentFilterPage() {
     const found = profiles.data?.find(p => p.id === activeId) ?? null
     setDraft(found ? { ...found, categories: [...found.categories], allow_list: [...found.allow_list], block_list: [...found.block_list] } : null)
   }, [activeId, profiles.data])
+
+  useEffect(() => {
+    if (!caps.available) return
+    setAssignNodes(prev => {
+      const next = prev.filter(id => caps.nodeSupport(id).supported)
+      return next.length === prev.length ? prev : next
+    })
+    setAssignTags(prev => {
+      const next = prev.filter(tag => caps.tagSupport(tag).supported)
+      return next.length === prev.length ? prev : next
+    })
+  }, [caps])
 
   const selected = useMemo(() => new Set(draft?.categories ?? []), [draft])
   const everyListPicked = useMemo(() => {
@@ -1115,10 +1152,62 @@ export default function ContentFilterPage() {
     )
   }, [fleetEndpoints, endpointQuery])
 
-  const selectableNodes = useMemo(() => visibleNodes.filter(node => !node.reason), [visibleNodes])
-  const selectableEndpoints = useMemo(() => visibleEndpoints.filter(entry => entry.nodeIds.length > 0), [visibleEndpoints])
+  const selectableNodes = useMemo(
+    () => visibleNodes.filter(node => !node.reason && caps.nodeSupport(node.id).supported),
+    [visibleNodes, caps],
+  )
+  const selectableEndpoints = useMemo(
+    () => visibleEndpoints.filter(entry => entry.nodeIds.length > 0 && caps.tagSupport(entry.tag).supported),
+    [visibleEndpoints, caps],
+  )
   const everyNodePicked = selectableNodes.length > 0 && selectableNodes.every(node => pickedNodes.has(node.id))
   const everyEndpointPicked = selectableEndpoints.length > 0 && selectableEndpoints.every(entry => pickedTags.has(entry.tag))
+
+  const skippedCarriers = useCallback(
+    (tag: string, nodeIds: readonly number[]) => {
+      const tagCap = caps.tagSupport(tag)
+      const unsupported = new Set(tagCap.unsupportedNodeIds)
+      const ids = nodeIds.filter(id => unsupported.has(id) || !caps.nodeSupport(id).supported)
+      const reason = ids.length ? (tagCap.reason ?? ids.map(id => caps.nodeSupport(id).reason).find(Boolean) ?? null) : null
+      return { ids, reason }
+    },
+    [caps],
+  )
+
+  const applySkips = useMemo(() => {
+    const empty = { nodes: [] as SkippedNode[], endpoints: [] as SkippedEndpoint[], total: 0 }
+    if (!caps.available) return empty
+    if (!assignNodes.length && !assignTags.length) return empty
+    const nodeFilter = assignNodes.length ? pickedNodes : null
+    const tagFilter = assignTags.length ? pickedTags : null
+    const nodes = new Map<number, CapabilityReason | null>()
+    const endpoints = new Map<string, { nodes: number; reason: CapabilityReason | null }>()
+    let total = 0
+    for (const node of targets.data ?? []) {
+      if (node.reason) continue
+      if (nodeFilter && !nodeFilter.has(node.id)) continue
+      const nodeCap = caps.nodeSupport(node.id)
+      for (const inbound of node.inbounds) {
+        if (!inbound.filterable) continue
+        if (tagFilter && !tagFilter.has(inbound.tag)) continue
+        const tagCap = caps.tagSupport(inbound.tag)
+        const blocked = !nodeCap.supported || !tagCap.supported || tagCap.unsupportedNodeIds.includes(node.id)
+        if (!blocked) continue
+        const reason = nodeCap.supported ? (tagCap.reason ?? nodeCap.reason) : nodeCap.reason
+        total += 1
+        if (!nodes.has(node.id)) nodes.set(node.id, reason)
+        const row = endpoints.get(inbound.tag) ?? { nodes: 0, reason }
+        row.nodes += 1
+        if (!row.reason) row.reason = reason
+        endpoints.set(inbound.tag, row)
+      }
+    }
+    return {
+      nodes: [...nodes.entries()].map(([id, reason]) => ({ id, reason })),
+      endpoints: [...endpoints.entries()].map(([tag, row]) => ({ tag, nodes: row.nodes, reason: row.reason })),
+      total,
+    }
+  }, [caps, assignNodes, assignTags, pickedNodes, pickedTags, targets.data])
 
   const reach = useMemo(() => {
     const all = targets.data ?? []
@@ -1257,6 +1346,14 @@ export default function ContentFilterPage() {
     return t('contentFilter.groupOther', { defaultValue: 'Other outcomes' })
   }
 
+  const outcomeSkipReason = (outcome: AssignmentOutcome): string | null => {
+    if (outcome.reload) return null
+    if (outcome.status === 'applied' || (!outcome.status && outcome.created && outcome.enforced)) return null
+    const known = asCapabilityReason(outcome.reason)
+    if (known) return reasonText(known)
+    return typeof outcome.reason === 'string' && outcome.reason.trim() ? outcome.reason.trim() : null
+  }
+
   const unreachedNodes = useMemo(() => {
     if (!assignNodes.length) return [] as string[]
     const reached = new Set(reach.rows.map(row => row.nodeId))
@@ -1278,6 +1375,7 @@ export default function ContentFilterPage() {
     setBulkRequest(null)
     setNodeQuery('')
     setEndpointQuery('')
+    setSkipConfirmOpen(false)
   }
 
   const probeTarget = useMemo(() => {
@@ -1293,9 +1391,18 @@ export default function ContentFilterPage() {
 
   const targetCount = reach.endpoints
 
-  const submitTargets = () => {
+  const sendTargets = () => {
     if (activeId === null) return
     applyTargets.mutate({ body: { profile_id: activeId, node_ids: assignNodes, inbound_tags: assignTags }, confirm: false })
+  }
+
+  const submitTargets = () => {
+    if (activeId === null) return
+    if (applySkips.total > 0) {
+      setSkipConfirmOpen(true)
+      return
+    }
+    sendTargets()
   }
 
   const runRestart = (request: RestartRequest) => {
@@ -1944,6 +2051,14 @@ export default function ContentFilterPage() {
                           {outcome.detail && !outcome.reload ? (
                             <p className="mt-1 text-xs leading-snug text-muted-foreground">{outcome.detail}</p>
                           ) : null}
+                          {outcomeSkipReason(outcome) ? (
+                            <p className="mt-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
+                              {t('contentFilter.outcomeSkipReason', {
+                                reason: outcomeSkipReason(outcome),
+                                defaultValue: 'Left out — {{reason}}',
+                              })}
+                            </p>
+                          ) : null}
                           {outcome.reload ? (
                             <p className="mt-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
                               {!outcome.reload.inbound_tags.length
@@ -1983,6 +2098,7 @@ export default function ContentFilterPage() {
                   endpoints={reach.endpoints}
                   fleetWide={reach.fleetWide}
                   spill={reach.spill.length}
+                  skipped={applySkips.total}
                   pickedNodes={assignNodes.length}
                   pickedTags={assignTags.length}
                 />
@@ -2025,7 +2141,9 @@ export default function ContentFilterPage() {
                       </p>
                     ) : (
                       visibleNodes.map(node => {
-                        const blocked = Boolean(node.reason)
+                        const support = caps.nodeSupport(node.id)
+                        const blocked = Boolean(node.reason) || !support.supported
+                        const blockedText = node.reason ?? reasonText(support.reason)
                         const on = pickedNodes.has(node.id)
                         const peers = node.shares_core_with ?? []
                         const filterable = node.inbounds.filter(inbound => inbound.filterable).length
@@ -2090,7 +2208,10 @@ export default function ContentFilterPage() {
                               </div>
                               <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                                 {blocked
-                                  ? node.reason
+                                  ? t('contentFilter.capBlockedNode', {
+                                      reason: blockedText ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                                      defaultValue: 'Cannot be used — {{reason}}',
+                                    })
                                   : t('contentFilter.nodeFilterableCount', {
                                       filterable,
                                       total: node.inbounds.length,
@@ -2145,7 +2266,9 @@ export default function ContentFilterPage() {
                     ) : (
                       visibleEndpoints.map((entry, index) => {
                         const on = pickedTags.has(entry.tag)
-                        const usable = entry.nodeIds.length > 0
+                        const tagCap = caps.tagSupport(entry.tag)
+                        const usable = entry.nodeIds.length > 0 && tagCap.supported
+                        const partial = usable ? skippedCarriers(entry.tag, entry.nodeIds) : null
                         const elsewhere = on && assignNodes.length > 0 && !entry.nodeIds.some(id => pickedNodes.has(id))
                         const rowId = `cf-endpoint-${index}`
                         return (
@@ -2218,7 +2341,17 @@ export default function ContentFilterPage() {
                                   </Button>
                                 ) : null}
                               </div>
-                              {!usable ? (
+                              {!usable && !tagCap.supported ? (
+                                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                                  {t('contentFilter.capBlockedEndpoint', {
+                                    reason:
+                                      reasonText(tagCap.reason) ??
+                                      entry.blockedReason ??
+                                      t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                                    defaultValue: 'Cannot be filtered — {{reason}}',
+                                  })}
+                                </p>
+                              ) : !usable ? (
                                 <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
                                   {t('contentFilter.endpointBlocked', {
                                     reason: entry.blockedReason ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
@@ -2231,6 +2364,17 @@ export default function ContentFilterPage() {
                                     nodes: entry.blockedNodeIds.length,
                                     reason: entry.blockedReason ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
                                     defaultValue: '{{nodes}} nodes that carry it are left out — {{reason}}',
+                                  })}
+                                </p>
+                              ) : null}
+                              {partial && partial.ids.length ? (
+                                <p className="mt-0.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                                  {t('contentFilter.endpointCapPartly', {
+                                    nodes: partial.ids.length,
+                                    reason:
+                                      reasonText(partial.reason) ??
+                                      t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                                    defaultValue: '{{nodes}} of its nodes will be skipped — {{reason}}',
                                   })}
                                 </p>
                               ) : null}
@@ -2435,6 +2579,93 @@ export default function ContentFilterPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={skipConfirmOpen} onOpenChange={setSkipConfirmOpen}>
+          <AlertDialogContent dir={dir}>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <ShieldAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                {t('contentFilter.skipConfirmTitle', { defaultValue: 'Some targets will be skipped' })}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    {t('contentFilter.skipConfirmBody', {
+                      count: applySkips.nodes.length,
+                      endpoints: applySkips.total,
+                      defaultValue:
+                        '{{count}} nodes cannot enforce this filter, so {{endpoints}} endpoints on them are left out. Everything else is applied.',
+                    })}
+                  </p>
+                  {applySkips.nodes.length ? (
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {t('contentFilter.skipConfirmNodes', { defaultValue: 'Nodes left out' })}
+                      </p>
+                      {applySkips.nodes.slice(0, 8).map(item => (
+                        <p key={item.id} className="text-xs leading-snug text-foreground">
+                          {t('contentFilter.skipNodeRow', {
+                            name: nodeLabel(item.id),
+                            id: item.id,
+                            reason:
+                              reasonText(item.reason) ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                            defaultValue: '{{name}} (id {{id}}) — {{reason}}',
+                          })}
+                        </p>
+                      ))}
+                      {applySkips.nodes.length > 8 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t('contentFilter.andMore', {
+                            rest: applySkips.nodes.length - 8,
+                            defaultValue: '+{{rest}} more',
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {applySkips.endpoints.length ? (
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {t('contentFilter.skipConfirmEndpoints', { defaultValue: 'Endpoints that lose nodes' })}
+                      </p>
+                      {applySkips.endpoints.slice(0, 8).map(item => (
+                        <p key={item.tag} className="text-xs leading-snug text-foreground">
+                          {t('contentFilter.skipEndpointRow', {
+                            tag: item.tag,
+                            nodes: item.nodes,
+                            reason:
+                              reasonText(item.reason) ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                            defaultValue: '{{tag}} — {{nodes}} of its nodes are skipped ({{reason}})',
+                          })}
+                        </p>
+                      ))}
+                      {applySkips.endpoints.length > 8 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t('contentFilter.andMore', {
+                            rest: applySkips.endpoints.length - 8,
+                            defaultValue: '+{{rest}} more',
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('contentFilter.cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={activeId === null || applyTargets.isPending}
+                onClick={() => {
+                  setSkipConfirmOpen(false)
+                  sendTargets()
+                }}
+              >
+                {t('contentFilter.skipConfirmAction', { defaultValue: 'Apply to the rest' })}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog
           open={pendingRestart !== null}

@@ -7,7 +7,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.core import get_core_config_by_id
-from app.db.models import Node
+from app.db.models import CoreConfig, Node
+from app.fork.content_filter import capability
 from app.fork.content_filter.rules import (
     ADVISORY_NOTE,
     BLOCK_OUTBOUND,
@@ -23,11 +24,13 @@ from app.fork.content_filter.rules import (
     direct_outbound_tags,
     owns_tag,
     parse_tag,
+    pre_routed_inbound_tags,
     resolve_outbound_tags,
     strict_mode_effective,
     tag_assignment_id,
     tag_identity,
 )
+from app.fork.content_filter.schemas import CapabilityReport, InboundCapability, NodeCapability
 from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterSniffingOverride
 from app.fork.models.node_additional_cores import node_additional_cores_association
 from app.node import node_manager
@@ -54,6 +57,12 @@ _UNREACHABLE_CORE = (
     "the endpoints it serves from core {core} are filtered only by that core's own config, which takes effect "
     "when the core reloads; the panel can install live rules into a node's main core only"
 )
+API_INBOUND_TAG = "API_INBOUND"
+UNSUPPORTED_CORE = (
+    "core {core} is also run by {count} node(s) that cannot resolve this filter, and a rule stored there would "
+    "stop their core from starting the next time it reloads: {who}. Upgrade or detach those nodes, or move this "
+    "filter to a core they do not run. Nothing was written."
+)
 
 
 class EnforcementError(Exception):
@@ -68,6 +77,13 @@ class ReloadRequired(EnforcementError):
         super().__init__(detail, code=409)
         self.node_ids = node_ids
         self.inbound_tags = inbound_tags
+
+
+class UnsupportedNodes(EnforcementError):
+    def __init__(self, detail: str, core_id: int, blockers: list[NodeCapability]):
+        super().__init__(detail, code=409)
+        self.core_id = core_id
+        self.blockers = list(blockers)
 
 
 def nothing_to_enforce(assignment: ContentFilterAssignment) -> str | None:
@@ -342,6 +358,112 @@ async def _nodes_on_core(db: AsyncSession, core_id: int) -> list[Node]:
     return list(result.scalars().all())
 
 
+def node_status(node: Node) -> str:
+    return str(getattr(node.status, "value", node.status) or "")
+
+
+def node_version_of(node: Node) -> str:
+    return str(getattr(node, "node_version", "") or "")
+
+
+async def core_type_of(db: AsyncSession, core_id: int) -> str:
+    core = await get_core_config_by_id(db, core_id)
+    return "" if core is None else str(getattr(core.type, "value", core.type) or "")
+
+
+async def node_capability(db: AsyncSession, node: Node) -> NodeCapability:
+    core_id = core_id_of(node)
+    core_type = await core_type_of(db, core_id)
+    status = node_status(node)
+    version = node_version_of(node)
+    reason = capability.node_reason(status, core_type, version)
+    return NodeCapability(
+        id=node.id,
+        name=str(getattr(node, "name", "") or ""),
+        core_config_id=core_id,
+        core_type=core_type,
+        node_version=version,
+        status=status,
+        supported=reason is None,
+        reason=reason,
+    )
+
+
+async def unsupported_on_core(db: AsyncSession, core_id: int) -> list[NodeCapability]:
+    found: list[NodeCapability] = []
+    for node in await _nodes_on_core(db, core_id):
+        if not _reachable(node):
+            continue
+        entry = await node_capability(db, node)
+        if not entry.supported:
+            found.append(entry)
+    return found
+
+
+def _core_payload(core: CoreConfig) -> tuple[str, dict]:
+    config = core.config if isinstance(core.config, dict) else json.loads(core.config or "{}")
+    return str(getattr(core.type, "value", core.type) or ""), config
+
+
+def _named_inbounds(config: dict) -> set[str]:
+    tags = {str(entry.get("tag") or "") for entry in config.get("inbounds") or [] if isinstance(entry, dict)}
+    tags.discard("")
+    tags.discard(API_INBOUND_TAG)
+    return tags
+
+
+async def capability_report(db: AsyncSession) -> CapabilityReport:
+    cores = {core.id: _core_payload(core) for core in (await db.execute(select(CoreConfig))).scalars().all()}
+    tags_of_core = {core_id: _named_inbounds(config) for core_id, (_, config) in cores.items()}
+    pre_routed = {core_id: pre_routed_inbound_tags(config) for core_id, (_, config) in cores.items()}
+
+    nodes = list((await db.execute(select(Node).order_by(Node.id))).scalars().all())
+    cores_of = {node.id: await node_core_ids(db, node) for node in nodes}
+    node_caps = [await node_capability(db, node) for node in nodes]
+    by_id = {entry.id: entry for entry in node_caps}
+
+    serving: dict[str, list[int]] = {}
+    for node in nodes:
+        for core_id in cores_of[node.id]:
+            for tag in tags_of_core.get(core_id, set()):
+                carriers = serving.setdefault(tag, [])
+                if node.id not in carriers:
+                    carriers.append(node.id)
+
+    inbounds: list[InboundCapability] = []
+    for tag in sorted({tag for tags in tags_of_core.values() for tag in tags}):
+        carriers = serving.get(tag, [])
+        if not carriers:
+            inbounds.append(InboundCapability(tag=tag, supported=False, reason=capability.NO_NODES))
+            continue
+        supported_ids: list[int] = []
+        unsupported_ids: list[int] = []
+        reasons: list[str | None] = []
+        for node_id in carriers:
+            reason = by_id[node_id].reason
+            if reason is None and _tag_pre_routed(tag, cores_of[node_id], tags_of_core, pre_routed):
+                reason = capability.PRE_ROUTED
+            (supported_ids if reason is None else unsupported_ids).append(node_id)
+            reasons.append(reason)
+        inbounds.append(
+            InboundCapability(
+                tag=tag,
+                supported=bool(supported_ids),
+                supported_node_ids=sorted(supported_ids),
+                unsupported_node_ids=sorted(unsupported_ids),
+                reason=None if supported_ids else capability.leading_reason(reasons),
+            )
+        )
+    return CapabilityReport(nodes=node_caps, inbound_tags=inbounds)
+
+
+def _tag_pre_routed(
+    tag: str, core_ids: list[int], tags_of_core: dict[int, set[str]], pre_routed: dict[int, set[str]]
+) -> bool:
+    carrying = [core_id for core_id in core_ids if tag in tags_of_core.get(core_id, set())]
+    return bool(carrying) and all(tag in pre_routed.get(core_id, set()) for core_id in carrying)
+
+
 async def _core_delivered_assignments(db: AsyncSession, core_id: int) -> list[ContentFilterAssignment]:
     delivered: dict[int, ContentFilterAssignment] = {}
     for node in await _nodes_on_core(db, core_id):
@@ -598,8 +720,44 @@ async def _commit_sniffing_plan(db: AsyncSession, plan: SniffingPlan) -> None:
     await db.flush()
 
 
+def _stored_rule_tags(config: dict) -> set[str]:
+    stored = (config.get("routing") or {}).get("rules") or []
+    return {str(rule.get("ruleTag") or "") for rule in stored if isinstance(rule, dict)}
+
+
+def _added_rule_tags(config: dict, filter_rules: list[dict]) -> list[str]:
+    stored = _stored_rule_tags(config)
+    return [str(rule.get("ruleTag") or "") for rule in filter_rules if str(rule.get("ruleTag") or "") not in stored]
+
+
+async def _screen_unsupported_nodes(
+    db: AsyncSession,
+    core_id: int,
+    current: dict,
+    filter_rules: list[dict],
+    drop_unsupported: bool,
+    advisories: list[str] | None,
+) -> list[dict]:
+    if not _added_rule_tags(current, filter_rules):
+        return filter_rules
+    blockers = await unsupported_on_core(db, core_id)
+    if not blockers:
+        return filter_rules
+    detail = UNSUPPORTED_CORE.format(core=core_id, count=len(blockers), who=capability.blocker_summary(blockers))
+    if not drop_unsupported:
+        raise UnsupportedNodes(detail, core_id, blockers)
+    stored = _stored_rule_tags(current)
+    _collect_advisories(f"core {core_id}", [detail], advisories)
+    return [rule for rule in filter_rules if str(rule.get("ruleTag") or "") in stored]
+
+
 async def persist_core_rules(
-    db: AsyncSession, core_id: int, admin, allow_restart: bool = False, advisories: list[str] | None = None
+    db: AsyncSession,
+    core_id: int,
+    admin,
+    allow_restart: bool = False,
+    advisories: list[str] | None = None,
+    drop_unsupported: bool = False,
 ) -> bool:
     from app.models.core import CoreCreate
     from app.operation import OperatorType
@@ -616,6 +774,7 @@ async def persist_core_rules(
         await _record(db, assignment, False, [f"core {core_id}: {detail}"])
     current = db_core.config if isinstance(db_core.config, dict) else json.loads(db_core.config or "{}")
     filter_rules = resolved_rules(current, filter_rules, f"core {core_id}")
+    filter_rules = await _screen_unsupported_nodes(db, core_id, current, filter_rules, drop_unsupported, advisories)
     if filter_rules:
         existing_rules = _strip_owned((current.get("routing") or {}).get("rules") or [])
         scope_tags = sorted(_scoped_tags(filter_rules))
@@ -851,13 +1010,25 @@ async def cores_of_assignment(db: AsyncSession, assignment: ContentFilterAssignm
 
 
 async def _rebuild_cores_by_id(
-    db: AsyncSession, core_ids: list[int], admin, allow_restart: bool, advisories: list[str] | None = None
+    db: AsyncSession,
+    core_ids: list[int],
+    admin,
+    allow_restart: bool,
+    advisories: list[str] | None = None,
+    drop_unsupported: bool = False,
 ) -> list[str]:
     problems: list[str] = []
     for core_id in core_ids:
         try:
-            await persist_core_rules(db, core_id, admin, allow_restart=allow_restart, advisories=advisories)
-        except ReloadRequired:
+            await persist_core_rules(
+                db,
+                core_id,
+                admin,
+                allow_restart=allow_restart,
+                advisories=advisories,
+                drop_unsupported=drop_unsupported,
+            )
+        except ReloadRequired, UnsupportedNodes:
             raise
         except EnforcementError as exc:
             problems.append(f"core {core_id}: {exc.detail}")
@@ -921,7 +1092,11 @@ async def apply_assignment(
         raise EnforcementError(assignment.last_error or "no node can accept routing rules", code=409)
 
     advisories: list[str] = []
-    problems.extend(await _rebuild_cores(db, reachable, admin, allow_restart, advisories))
+    try:
+        problems.extend(await _rebuild_cores(db, reachable, admin, allow_restart, advisories))
+    except UnsupportedNodes as exc:
+        await _record(db, assignment, False, [*problems, exc.detail])
+        raise
 
     assignment.applied_digest = digest(per_node[reachable[0]])
     reached = 0
@@ -969,7 +1144,7 @@ async def withdraw_assignment(
     assignment.is_enabled = False
     await db.commit()
 
-    problems = await _rebuild_cores_by_id(db, core_ids, admin, allow_restart)
+    problems = await _rebuild_cores_by_id(db, core_ids, admin, allow_restart, drop_unsupported=True)
     for node_id in node_ids:
         try:
             await push_live(db, node_id)

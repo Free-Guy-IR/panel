@@ -705,3 +705,29 @@ def conflicting_rules(
         seen.add(message)
         (clashes if blocking else advisories).append(message)
     return RuleOverlap(clashes, advisories)
+
+
+MATCHER_FIELDS = ("domain", "ip", *NON_DOMAIN_PREDICATES)
+
+
+def routes_whole_inbound(rule: dict) -> bool:
+    if not isinstance(rule, dict):
+        return False
+    if owns_tag(str(_field(rule, "ruleTag") or "")):
+        return False
+    destination = str(_field(rule, "outboundTag") or "").strip() or str(_field(rule, "balancerTag") or "").strip()
+    if not destination:
+        return False
+    return not any(_values(rule, name) for name in MATCHER_FIELDS)
+
+
+def pre_routed_inbound_tags(config: dict | None) -> set[str]:
+    inbounds = config.get("inbounds") if isinstance(config, dict) else None
+    present = {str(entry.get("tag") or "") for entry in inbounds or [] if isinstance(entry, dict) and entry.get("tag")}
+    covered: set[str] = set()
+    for rule in _core_rules(config):
+        if not routes_whole_inbound(rule):
+            continue
+        bound = {str(value) for value in _values(rule, "inboundTag")}
+        covered |= (bound & present) if bound else present
+    return covered
