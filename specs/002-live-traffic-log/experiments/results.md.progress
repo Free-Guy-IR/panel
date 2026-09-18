@@ -1,0 +1,20 @@
+proxies.sh up	0
+16_filter_fixture.py	0
+00_parse.py	0
+11_bucket_key.py	0
+01_live_e2e.py	0
+05_viewer_parity.py	0
+04_controls.py	0
+12_owner_only.py	0
+13_cleanup_faults.py	0
+14_single_reader.py	0
+15_purge_race.py	0
+02_history_purge.py	0
+03_pause_restart.sh	0
+06_drop_paths.py	0
+07_retention_and_purge.py	0
+08_retention_across_processes.py	0
+09_disk_reclamation.py	0
+10_restart_recovery.py (restarts the core)	0
+proxies.sh down	0
+001/05_real_traffic_matrix.sh	0
