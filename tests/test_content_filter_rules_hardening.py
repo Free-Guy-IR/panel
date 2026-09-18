@@ -687,7 +687,7 @@ def test_a_keyword_that_a_category_expands_to_a_real_domain_for_still_blocks():
 
     assert _named(result) == ["op-kw"]
     assert result.advisories == []
-    assert "instagram.com" in _own_concrete_domains(own)
+    assert _own_concrete_domains(own).issuperset({"instagram.com"})
 
 
 def test_a_keyword_is_still_decided_exactly_against_an_exact_match_filter():
