@@ -453,7 +453,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
             )
-            return await prepare_fork_proxy_settings(db, proxy_settings, groups)
+            return await prepare_fork_proxy_settings(db, proxy_settings, groups, exclude_user_id=exclude_user_id)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
 
