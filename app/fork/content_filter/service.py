@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 from datetime import UTC, datetime as dt
+from typing import NamedTuple
 
 from PasarGuardNodeBridge import NodeAPIError
 from sqlalchemy import or_, select
@@ -13,19 +14,23 @@ from app.fork.content_filter.rules import (
     ADVISORY_NOTE,
     BLOCK_OUTBOUND,
     BLOCKING_PROTOCOL,
+    CATEGORY_RULE_LIMIT,
     CLASH_REMEDY,
     DIRECT_OUTBOUND,
     DIRECT_PROTOCOL,
+    DOMAIN_MATCHER_LIMIT,
     RuleValueError,
-    build_rules,
+    build_shared_rules,
     conflicting_rules,
     core_outbound_tags,
     digest,
     direct_outbound_tags,
+    names_a_category,
     owns_tag,
     parse_tag,
     pre_routed_inbound_tags,
     resolve_outbound_tags,
+    rule_set_cost,
     strict_mode_effective,
     tag_assignment_id,
     tag_identity,
@@ -110,25 +115,28 @@ def blocks_everything(assignment: ContentFilterAssignment) -> str | None:
     return BLOCKS_EVERYTHING.format(name=name)
 
 
-def assignment_rules(assignment: ContentFilterAssignment, inbound_tags: list[str] | None = None) -> list[dict]:
-    profile = assignment.profile
-    if assignment.inbound_tag:
-        tags = [assignment.inbound_tag]
-    else:
-        tags = list(inbound_tags or [])
-        if not tags:
-            return []
+def profile_rules(assignment_ids: list[int], inbound_tags: list[str], profile, where: str) -> list[dict]:
     try:
-        return build_rules(
-            assignment_id=assignment.id,
-            inbound_tags=tags,
+        return build_shared_rules(
+            assignment_ids=assignment_ids,
+            inbound_tags=inbound_tags,
             categories=list(profile.categories or []),
             allow_list=list(profile.allow_list or []),
             block_list=list(profile.block_list or []),
             strict_mode=bool(profile.strict_mode),
         )
     except RuleValueError as exc:
-        raise EnforcementError(f"assignment {assignment.id}: {exc}", code=422) from exc
+        raise EnforcementError(f"{where}: {exc}", code=422) from exc
+
+
+def assignment_rules(assignment: ContentFilterAssignment, inbound_tags: list[str] | None = None) -> list[dict]:
+    if assignment.inbound_tag:
+        tags = [assignment.inbound_tag]
+    else:
+        tags = list(inbound_tags or [])
+        if not tags:
+            return []
+    return profile_rules([assignment.id], tags, assignment.profile, f"assignment {assignment.id}")
 
 
 def _is_strict(rule: dict) -> bool:
@@ -265,19 +273,97 @@ def _dedup(rules: list[dict]) -> list[dict]:
     return out
 
 
-async def rules_in_core(db: AsyncSession, assignment: ContentFilterAssignment, core_id: int) -> list[dict]:
+async def core_scope_tags(db: AsyncSession, assignment: ContentFilterAssignment, core_id: int) -> list[str]:
     if not await core_is_xray(db, core_id):
         return []
     if assignment.inbound_tag:
         if assignment.inbound_tag not in await core_inbound_tags(db, core_id):
             return []
-        return assignment_rules(assignment)
+        return [assignment.inbound_tag]
     if assignment.node_id is None:
         return []
     node = await db.get(Node, assignment.node_id)
     if node is None or core_id not in await node_core_ids(db, node):
         return []
-    return assignment_rules(assignment, await core_filterable_tags(db, core_id))
+    return await core_filterable_tags(db, core_id)
+
+
+async def rules_in_core(db: AsyncSession, assignment: ContentFilterAssignment, core_id: int) -> list[dict]:
+    tags = await core_scope_tags(db, assignment, core_id)
+    if not tags:
+        return []
+    return assignment_rules(assignment) if assignment.inbound_tag else assignment_rules(assignment, tags)
+
+
+class RulePlan(NamedTuple):
+    rules: list[dict]
+    owners: dict[str, tuple[int, ...]]
+    labels: dict[str, str]
+    failures: dict[int, str]
+
+
+EMPTY_PLAN = RulePlan([], {}, {}, {})
+
+
+def _profile_key(assignment: ContentFilterAssignment) -> tuple:
+    profile = getattr(assignment, "profile", None)
+    for value in (getattr(assignment, "profile_id", None), getattr(profile, "id", None)):
+        if value is not None:
+            return ("profile", value)
+    return ("object", id(profile))
+
+
+def _profile_label(assignment: ContentFilterAssignment) -> str:
+    name = str(getattr(getattr(assignment, "profile", None), "name", "") or "").strip()
+    return name or f"the profile of assignment {assignment.id}"
+
+
+async def core_rule_plan(db: AsyncSession, core_id: int, assignments: list[ContentFilterAssignment]) -> RulePlan:
+    order: list[tuple] = []
+    scoped: dict[tuple, list[str]] = {}
+    owned: dict[tuple, list[int]] = {}
+    carrier: dict[tuple, ContentFilterAssignment] = {}
+
+    for assignment in assignments:
+        tags = await core_scope_tags(db, assignment, core_id)
+        if not tags:
+            continue
+        key = _profile_key(assignment)
+        if key not in scoped:
+            order.append(key)
+            scoped[key] = []
+            owned[key] = []
+            carrier[key] = assignment
+        owned[key].append(assignment.id)
+        for tag in tags:
+            if tag not in scoped[key]:
+                scoped[key].append(tag)
+
+    rules: list[dict] = []
+    owners: dict[str, tuple[int, ...]] = {}
+    labels: dict[str, str] = {}
+    failures: dict[int, str] = {}
+
+    for key in order:
+        ids = sorted(set(owned[key]))
+        lead = carrier[key]
+        where = f"assignment {ids[0]}" if len(ids) == 1 else f"assignments {', '.join(str(value) for value in ids)}"
+        try:
+            built = profile_rules(ids, scoped[key], lead.profile, where)
+        except EnforcementError as exc:
+            for assignment_id in ids:
+                failures[assignment_id] = exc.detail
+            continue
+        label = _profile_label(lead)
+        for rule in built:
+            tag = str(rule.get("ruleTag") or "")
+            if tag in owners:
+                continue
+            owners[tag] = tuple(ids)
+            labels[tag] = label
+            rules.append(rule)
+
+    return RulePlan(rules, owners, labels, failures)
 
 
 async def node_core_rules(db: AsyncSession, assignment: ContentFilterAssignment, node_id: int) -> dict[int, list[dict]]:
@@ -292,9 +378,25 @@ async def node_core_rules(db: AsyncSession, assignment: ContentFilterAssignment,
     return out
 
 
+def _plan_share(plan: RulePlan, assignment_id: int) -> list[dict]:
+    return [rule for rule in plan.rules if assignment_id in plan.owners.get(str(rule.get("ruleTag") or ""), ())]
+
+
 async def rules_for_node(db: AsyncSession, assignment: ContentFilterAssignment, node_id: int) -> list[dict]:
-    mapping = await node_core_rules(db, assignment, node_id)
-    return _dedup([rule for core_rules in mapping.values() for rule in core_rules])
+    node = await db.get(Node, node_id)
+    if node is None:
+        return []
+    reaching = await _assignments_for_node(db, node_id)
+    if all(row.id != assignment.id for row in reaching):
+        reaching = [*reaching, assignment]
+    out: list[dict] = []
+    for core_id in await node_core_ids(db, node):
+        plan = await core_rule_plan(db, core_id, reaching)
+        detail = plan.failures.get(assignment.id)
+        if detail is not None:
+            raise EnforcementError(detail, code=422)
+        out.extend(_plan_share(plan, assignment.id))
+    return _dedup(out)
 
 
 async def unreachable_cores(db: AsyncSession, assignment: ContentFilterAssignment, node_id: int) -> list[int]:
@@ -485,29 +587,34 @@ async def _core_persisted_assignments(db: AsyncSession, core_id: int) -> list[Co
     return [shared[key] for key in sorted(shared)]
 
 
+def _absorb_failures(
+    core_id: int,
+    plan: RulePlan,
+    assignments: list[ContentFilterAssignment],
+    broken: list[tuple[ContentFilterAssignment, str]] | None,
+) -> None:
+    if not plan.failures:
+        return
+    by_id = {assignment.id: assignment for assignment in assignments}
+    for assignment_id in sorted(plan.failures):
+        detail = plan.failures[assignment_id]
+        logger.warning(f"core {core_id}: assignment {assignment_id} left out of the config: {detail}")
+        assignment = by_id.get(assignment_id)
+        if broken is None or assignment is None:
+            continue
+        if all(row is not assignment for row, _ in broken):
+            broken.append((assignment, detail))
+
+
 async def _rules_of(
     db: AsyncSession,
     core_id: int,
     assignments: list[ContentFilterAssignment],
     broken: list[tuple[ContentFilterAssignment, str]] | None = None,
 ) -> list[dict]:
-    rules: list[dict] = []
-    seen: set[str] = set()
-    for assignment in assignments:
-        try:
-            built = await rules_in_core(db, assignment, core_id)
-        except EnforcementError as exc:
-            logger.warning(f"core {core_id}: assignment {assignment.id} left out of the config: {exc.detail}")
-            if broken is not None and all(row is not assignment for row, _ in broken):
-                broken.append((assignment, exc.detail))
-            continue
-        for rule in built:
-            tag = rule.get("ruleTag") or ""
-            if tag in seen:
-                continue
-            seen.add(tag)
-            rules.append(rule)
-    return rules
+    plan = await core_rule_plan(db, core_id, assignments)
+    _absorb_failures(core_id, plan, assignments, broken)
+    return plan.rules
 
 
 async def core_persisted_rules(
@@ -520,6 +627,11 @@ async def core_delivered_rules(
     db: AsyncSession, core_id: int, broken: list[tuple[ContentFilterAssignment, str]] | None = None
 ) -> list[dict]:
     return await _rules_of(db, core_id, await _core_delivered_assignments(db, core_id), broken)
+
+
+async def core_persisted_owners(db: AsyncSession, core_id: int) -> set[int]:
+    plan = await core_rule_plan(db, core_id, await _core_persisted_assignments(db, core_id))
+    return {owner for ids in plan.owners.values() for owner in ids}
 
 
 async def _reaches(db: AsyncSession, assignment: ContentFilterAssignment, node_id: int) -> bool:
@@ -725,6 +837,44 @@ def _stored_rule_tags(config: dict) -> set[str]:
     return {str(rule.get("ruleTag") or "") for rule in stored if isinstance(rule, dict)}
 
 
+def _stored_owned_rules(config: dict) -> list[dict]:
+    stored = (config.get("routing") or {}).get("rules") or []
+    return [rule for rule in stored if isinstance(rule, dict) and owns_tag(str(rule.get("ruleTag") or ""))]
+
+
+def _named_profiles(rules: list[dict], labels: dict[str, str]) -> str:
+    names: list[str] = []
+    for rule in rules:
+        label = labels.get(str(rule.get("ruleTag") or "")) or "an unnamed profile"
+        if label not in names:
+            names.append(label)
+    return ", ".join(f'"{name}"' for name in names) or "an unnamed profile"
+
+
+def guard_rule_size(where: str, filter_rules: list[dict], stored: list[dict], labels: dict[str, str]) -> None:
+    categories, matchers = rule_set_cost(filter_rules)
+    held_categories, held_matchers = rule_set_cost(stored)
+
+    if categories > CATEGORY_RULE_LIMIT and categories > held_categories:
+        named = _named_profiles([rule for rule in filter_rules if names_a_category(rule)], labels)
+        raise EnforcementError(
+            f"{where} would carry {categories} rules that each pull in a whole category list, over the limit of "
+            f"{CATEGORY_RULE_LIMIT}: {named}. The node expands every one of those to its full list before the core "
+            f"reads it, and {categories} of them is enough to stop xray from starting and take the node down. Put "
+            "those endpoints under one profile, take some of these profiles off this core, or spread them over "
+            "more cores. Nothing was written.",
+            code=409,
+        )
+
+    if matchers > DOMAIN_MATCHER_LIMIT and matchers > held_matchers:
+        raise EnforcementError(
+            f"{where} would carry {matchers} domain matchers, over the limit of {DOMAIN_MATCHER_LIMIT}: "
+            f"{_named_profiles(filter_rules, labels)}. Shorten the block and allow lists on those profiles, or "
+            "spread them over more cores. Nothing was written.",
+            code=409,
+        )
+
+
 def _added_rule_tags(config: dict, filter_rules: list[dict]) -> list[str]:
     stored = _stored_rule_tags(config)
     return [str(rule.get("ruleTag") or "") for rule in filter_rules if str(rule.get("ruleTag") or "") not in stored]
@@ -768,13 +918,17 @@ async def persist_core_rules(
         raise EnforcementError(f"core {core_id} not found", code=404)
 
     broken: list[tuple[ContentFilterAssignment, str]] = []
-    filter_rules = await core_persisted_rules(db, core_id, broken)
+    persisted = await _core_persisted_assignments(db, core_id)
+    plan = await core_rule_plan(db, core_id, persisted)
+    _absorb_failures(core_id, plan, persisted, broken)
+    filter_rules = plan.rules
     delivered_rules = await core_delivered_rules(db, core_id, broken)
     for assignment, detail in broken:
         await _record(db, assignment, False, [f"core {core_id}: {detail}"])
     current = db_core.config if isinstance(db_core.config, dict) else json.loads(db_core.config or "{}")
     filter_rules = resolved_rules(current, filter_rules, f"core {core_id}")
     filter_rules = await _screen_unsupported_nodes(db, core_id, current, filter_rules, drop_unsupported, advisories)
+    guard_rule_size(f"core {core_id}", filter_rules, _stored_owned_rules(current), plan.labels)
     if filter_rules:
         existing_rules = _strip_owned((current.get("routing") or {}).get("rules") or [])
         scope_tags = sorted(_scoped_tags(filter_rules))
@@ -925,16 +1079,17 @@ async def push_live(db: AsyncSession, node_id: int, advisories: list[str] | None
     row = await db.get(Node, node_id)
     live_core = None if row is None else core_id_of(row)
     config = await node_core_config(db, node_id)
-    wanted: list[dict] = []
-    for assignment in await _assignments_for_node(db, node_id):
-        try:
-            mapping = await node_core_rules(db, assignment, node_id)
-        except EnforcementError as exc:
-            logger.warning(f"node {node_id}: assignment {assignment.id} left out of this push: {exc.detail}")
-            await _record(db, assignment, False, [f"node {node_id}: {exc.detail}"])
-            continue
-        wanted.extend(resolved_rules(config, mapping.get(live_core) or [], f"core {live_core} on node {node_id}"))
-    wanted = _dedup(wanted)
+    reaching = await _assignments_for_node(db, node_id)
+    plan = EMPTY_PLAN if live_core is None else await core_rule_plan(db, live_core, reaching)
+    by_id = {assignment.id: assignment for assignment in reaching}
+    for assignment_id in sorted(plan.failures):
+        detail = plan.failures[assignment_id]
+        logger.warning(f"node {node_id}: assignment {assignment_id} left out of this push: {detail}")
+        assignment = by_id.get(assignment_id)
+        if assignment is not None:
+            await _record(db, assignment, False, [f"node {node_id}: {detail}"])
+    wanted = _dedup(resolved_rules(config, plan.rules, f"core {live_core} on node {node_id}"))
+    guard_rule_size(f"node {node_id}", wanted, _stored_owned_rules(config), plan.labels)
     existing = await live_rules(node_id)
 
     if wanted:
@@ -1084,7 +1239,12 @@ async def apply_assignment(
         live_core = None if row is None else core_id_of(row)
         for core_id in sorted(core_id for core_id in mapping if core_id != live_core):
             problems.append(f"node {node_id}: {_UNREACHABLE_CORE.format(core=core_id)}")
-        per_node[node_id] = mapping.get(live_core) or []
+        alone = mapping.get(live_core) or []
+        if live_core is None:
+            per_node[node_id] = alone
+        else:
+            plan = await core_rule_plan(db, live_core, await _assignments_for_node(db, node_id))
+            per_node[node_id] = _plan_share(plan, assignment.id) or alone
         reachable.append(node_id)
 
     if not reachable:

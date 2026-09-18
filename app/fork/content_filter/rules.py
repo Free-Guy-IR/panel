@@ -58,6 +58,8 @@ IDENTITY_LEN = 10
 CHECKSUM_LEN = 8
 TOKEN_EXTRA_CHARS = "-_.@"
 LABEL_EXTRA_CHARS = "-_"
+CATEGORY_RULE_LIMIT = 4
+DOMAIN_MATCHER_LIMIT = 4000
 
 
 class RuleValueError(ValueError):
@@ -281,25 +283,39 @@ def resolve_outbound_tags(config: dict) -> dict[str, str]:
     return found
 
 
-def build_rules(
-    assignment_id: int,
+def _ordered(values: list[str]) -> list[str]:
+    seen: list[str] = []
+    for value in values or []:
+        text = str(value)
+        if text not in seen:
+            seen.append(text)
+    return seen
+
+
+def build_shared_rules(
+    assignment_ids: list[int],
     inbound_tags: list[str],
     categories: list[str],
     allow_list: list[str],
     block_list: list[str],
     strict_mode: bool,
 ) -> list[dict]:
-    bound = [str(tag) for tag in inbound_tags or []]
+    owners = sorted({int(value) for value in assignment_ids or []})
+    if not owners:
+        raise RuleValueError("a filter rule has to belong to at least one assignment")
+    bound = _ordered(inbound_tags)
     allow = _list_matchers(allow_list, "allow list")
     blocked_domains = _list_matchers(block_list, "block list")
     category_domains = _category_matchers(categories or [])
     strict = bool(strict_mode)
 
+    seed = owners[0] if len(owners) == 1 else owners
     identity = _short_digest(
         "identity",
-        _canonical([int(assignment_id), bound, allow, blocked_domains, category_domains, strict]),
+        _canonical([seed, bound, allow, blocked_domains, category_domains, strict]),
         IDENTITY_LEN,
     )
+    lead = owners[0]
     scope: dict = {"inboundTag": bound} if bound else {}
     built: list[dict] = []
 
@@ -307,7 +323,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "allow", identity),
+                "ruleTag": rule_tag(lead, "allow", identity),
                 **scope,
                 "domain": allow,
                 "outboundTag": DIRECT_OUTBOUND,
@@ -318,7 +334,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "block", identity),
+                "ruleTag": rule_tag(lead, "block", identity),
                 **scope,
                 "domain": blocked_domains,
                 "outboundTag": BLOCK_OUTBOUND,
@@ -329,7 +345,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "cat", identity),
+                "ruleTag": rule_tag(lead, "cat", identity),
                 **scope,
                 "domain": category_domains,
                 "outboundTag": BLOCK_OUTBOUND,
@@ -340,7 +356,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "strict", identity),
+                "ruleTag": rule_tag(lead, "strict", identity),
                 **scope,
                 "ip": list(ANY_IP),
                 "outboundTag": BLOCK_OUTBOUND,
@@ -348,6 +364,24 @@ def build_rules(
         )
 
     return built
+
+
+def build_rules(
+    assignment_id: int,
+    inbound_tags: list[str],
+    categories: list[str],
+    allow_list: list[str],
+    block_list: list[str],
+    strict_mode: bool,
+) -> list[dict]:
+    return build_shared_rules(
+        assignment_ids=[assignment_id],
+        inbound_tags=inbound_tags,
+        categories=categories,
+        allow_list=allow_list,
+        block_list=block_list,
+        strict_mode=strict_mode,
+    )
 
 
 def digest(rules: list[dict]) -> str:
@@ -387,6 +421,23 @@ def _split_matcher(value: str) -> tuple[str, str]:
 def _suffixes(value: str) -> list[str]:
     parts = value.split(".")
     return [".".join(parts[index:]) for index in range(len(parts))]
+
+
+def names_a_category(rule: dict) -> bool:
+    return any(_split_matcher(value)[0] in NAMED_MATCHER_KINDS for value in _values(rule, "domain"))
+
+
+def rule_set_cost(rules: list[dict]) -> tuple[int, int]:
+    category_rules = 0
+    matchers = 0
+    for rule in rules or []:
+        if not isinstance(rule, dict):
+            continue
+        domains = _values(rule, "domain")
+        matchers += len(domains)
+        if any(_split_matcher(value)[0] in NAMED_MATCHER_KINDS for value in domains):
+            category_rules += 1
+    return category_rules, matchers
 
 
 def _own_domain_index(filter_rules: list[dict], allow: bool) -> tuple[set[str], set[str], set[str]]:
