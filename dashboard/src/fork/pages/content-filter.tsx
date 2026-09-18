@@ -158,8 +158,9 @@ type FleetEndpoint = {
   blockedReason: string | null
 }
 
-type SkippedNode = { id: number; reason: CapabilityReason | null }
+type SkippedNode = { id: number; reason: CapabilityReason | null; lost: number; kept: number }
 type SkippedEndpoint = { tag: string; nodes: number; reason: CapabilityReason | null }
+type UnfilterableEndpoint = { tag: string; targets: number; reason: CapabilityReason | null }
 
 type ReachRow = {
   nodeId: number
@@ -306,7 +307,8 @@ function ScopeLine({
   endpoints,
   fleetWide,
   spill,
-  skipped,
+  skippedByNode,
+  skippedByEndpoint,
   pickedNodes,
   pickedTags,
 }: {
@@ -314,7 +316,8 @@ function ScopeLine({
   endpoints: number
   fleetWide: boolean
   spill: number
-  skipped: number
+  skippedByNode: number
+  skippedByEndpoint: number
   pickedNodes: number
   pickedTags: number
 }) {
@@ -343,11 +346,19 @@ function ScopeLine({
           })}
         </span>
       ) : null}
-      {skipped > 0 ? (
-        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-          {t('contentFilter.scopeSkipped', {
-            skipped,
-            defaultValue: '{{skipped}} of them are skipped because their node cannot enforce this filter.',
+      {skippedByEndpoint > 0 ? (
+        <span className="break-words text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t('contentFilter.scopeSkippedEndpoints', {
+            count: skippedByEndpoint,
+            defaultValue: '{{count}} of them are skipped because no node anywhere can filter that endpoint.',
+          })}
+        </span>
+      ) : null}
+      {skippedByNode > 0 ? (
+        <span className="break-words text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t('contentFilter.scopeSkippedNodes', {
+            count: skippedByNode,
+            defaultValue: '{{count}} of them are skipped because the node itself cannot enforce this filter.',
           })}
         </span>
       ) : null}
@@ -494,7 +505,7 @@ function AdvisoryList({ advisories, note }: { advisories?: string[]; note?: stri
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent className="mt-2 space-y-2">
-        {note && note.trim() ? <p className="text-[11px] leading-snug text-muted-foreground">{note}</p> : null}
+        {note && note.trim() ? <p className="break-words text-[11px] leading-snug text-muted-foreground">{note}</p> : null}
         {lines.length ? (
           <ul className="space-y-1">
             {lines.map((line, index) => (
@@ -514,48 +525,162 @@ function AdvisoryList({ advisories, note }: { advisories?: string[]; note?: stri
   )
 }
 
-function OutcomeStatusBadge({ outcome }: { outcome: AssignmentOutcome }) {
-  const { t } = useTranslation()
+type RollupState = 'reload' | 'failed' | 'unconfirmed' | 'skipped' | 'disabled' | 'applied'
+type RollupEndpoint = { tag: string; state: RollupState; outcome: AssignmentOutcome }
+type RollupGroup = { state: RollupState; items: RollupEndpoint[] }
+type RollupReload = { message: string; tags: string[]; nodeIds: number[]; withdraw: boolean }
+type NodeRollup = {
+  key: string
+  nodeId: number | null
+  name: string
+  status: string | null
+  delivery: Delivery | null
+  endpoints: RollupEndpoint[]
+  groups: RollupGroup[]
+  worst: RollupState
+  sole: RollupState | null
+  attention: RollupEndpoint[]
+  advisories: string[]
+  advisoryNote: string | undefined
+  reload: RollupReload | null
+}
+
+const ROLLUP_ORDER: RollupState[] = ['reload', 'failed', 'unconfirmed', 'skipped', 'disabled', 'applied']
+
+const ROLLUP_ROW: Record<RollupState, string> = {
+  reload: 'border-s-amber-500 bg-amber-500/[0.07]',
+  failed: 'border-s-destructive bg-destructive/[0.07]',
+  unconfirmed: 'border-s-destructive bg-destructive/[0.07]',
+  skipped: 'border-s-amber-500 bg-amber-500/[0.07]',
+  disabled: 'border-s-muted-foreground/40 bg-muted/40',
+  applied: 'border-s-emerald-500/50 bg-muted/30',
+}
+
+const ROLLUP_CHIP: Record<RollupState, string> = {
+  reload: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  failed: 'border-destructive/40 bg-destructive/10 text-destructive',
+  unconfirmed: 'border-destructive/40 bg-destructive/10 text-destructive',
+  skipped: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  disabled: 'border-border bg-muted text-muted-foreground',
+  applied: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+}
+
+const ROLLUP_TAG: Record<RollupState, string> = {
+  reload: 'border-amber-500/40 text-amber-700 dark:text-amber-400',
+  failed: 'border-destructive/40 text-destructive',
+  unconfirmed: 'border-destructive/40 text-destructive',
+  skipped: 'border-amber-500/40 text-amber-700 dark:text-amber-400',
+  disabled: 'border-border text-muted-foreground',
+  applied: 'border-border text-foreground',
+}
+
+const ROLLUP_TEXT: Record<RollupState, string> = {
+  reload: 'text-amber-700 dark:text-amber-400',
+  failed: 'text-destructive',
+  unconfirmed: 'text-destructive',
+  skipped: 'text-amber-700 dark:text-amber-400',
+  disabled: 'text-muted-foreground',
+  applied: 'text-muted-foreground',
+}
+
+function outcomeState(outcome: AssignmentOutcome): RollupState {
+  if (outcome.reload) return 'reload'
   const status = outcome.status
-  if (outcome.reload)
-    return (
-      <Badge variant="outline" className="gap-1 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-        <RotateCw className="size-3" />
-        {t('contentFilter.outcomeNeedsRestart', { defaultValue: 'Needs a restart' })}
-      </Badge>
-    )
-  if (status === 'applied' || (!status && outcome.created && outcome.enforced))
-    return (
-      <Badge className="gap-1 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
-        <ShieldCheck className="size-3" />
-        {t('contentFilter.enforced', { defaultValue: 'In force' })}
-      </Badge>
-    )
-  if (status === 'failed')
-    return (
-      <Badge variant="outline" className="gap-1 border-destructive/40 bg-destructive/10 text-destructive">
-        <ShieldAlert className="size-3" />
-        {t('contentFilter.outcomeFailed', { defaultValue: 'Failed' })}
-      </Badge>
-    )
-  if (status === 'disabled')
-    return (
-      <Badge variant="secondary" className="gap-1 text-[11px] font-normal">
-        {t('contentFilter.outcomeDisabled', { defaultValue: 'Not active' })}
-      </Badge>
-    )
-  if (status === 'skipped' || (!status && !outcome.created))
-    return (
-      <Badge variant="secondary" className="gap-1 text-[11px] font-normal">
-        {t('contentFilter.bulkSkippedOne', { defaultValue: 'Skipped' })}
-      </Badge>
-    )
-  return (
-    <Badge variant="outline" className="gap-1 border-destructive/40 bg-destructive/10 text-destructive">
-      <ShieldAlert className="size-3" />
-      {t('contentFilter.notEnforced', { defaultValue: 'Not confirmed' })}
-    </Badge>
-  )
+  if (status === 'applied' || (!status && outcome.created && outcome.enforced)) return 'applied'
+  if (status === 'failed') return 'failed'
+  if (status === 'disabled') return 'disabled'
+  if (status === 'skipped' || (!status && !outcome.created)) return 'skipped'
+  return 'unconfirmed'
+}
+
+type RollupDraft = {
+  nodeId: number | null
+  endpoints: RollupEndpoint[]
+  deliveries: Set<Delivery>
+  advisories: string[]
+  advisoryNote: string | undefined
+  reloadTags: Set<string>
+  reloadNodes: Set<number>
+  reloadMessage: string
+  reloadWithdraw: boolean
+  hasReload: boolean
+}
+
+function buildNodeRollups(
+  outcomes: readonly AssignmentOutcome[],
+  nodeName: (id: number) => string,
+  nodeStatus: (id: number) => string | null,
+  fleetName: string,
+  wholeNodeName: string,
+): NodeRollup[] {
+  const drafts = new Map<string, RollupDraft>()
+  for (const outcome of outcomes) {
+    const key = outcome.node_id === null ? 'fleet' : String(outcome.node_id)
+    const draft: RollupDraft = drafts.get(key) ?? {
+      nodeId: outcome.node_id,
+      endpoints: [],
+      deliveries: new Set<Delivery>(),
+      advisories: [],
+      advisoryNote: undefined,
+      reloadTags: new Set<string>(),
+      reloadNodes: new Set<number>(),
+      reloadMessage: '',
+      reloadWithdraw: true,
+      hasReload: false,
+    }
+    draft.endpoints.push({ tag: outcome.inbound_tag || wholeNodeName, state: outcomeState(outcome), outcome })
+    if (outcome.delivery === 'core' || outcome.delivery === 'live') draft.deliveries.add(outcome.delivery)
+    for (const line of outcome.advisories ?? []) {
+      const text = line.trim()
+      if (text && !draft.advisories.includes(text)) draft.advisories.push(text)
+    }
+    if (!draft.advisoryNote && outcome.advisory_note && outcome.advisory_note.trim()) {
+      draft.advisoryNote = outcome.advisory_note
+    }
+    if (outcome.reload) {
+      draft.hasReload = true
+      outcome.reload.inbound_tags.forEach(tag => draft.reloadTags.add(tag))
+      outcome.reload.node_ids.forEach(id => draft.reloadNodes.add(id))
+      if (!draft.reloadMessage && outcome.reload.message) draft.reloadMessage = outcome.reload.message
+      if (outcome.status !== 'disabled') draft.reloadWithdraw = false
+    }
+    drafts.set(key, draft)
+  }
+
+  const rollups: NodeRollup[] = []
+  for (const [key, draft] of drafts) {
+    const present = ROLLUP_ORDER.filter(state => draft.endpoints.some(item => item.state === state))
+    const worst = present[0] ?? 'applied'
+    rollups.push({
+      key,
+      nodeId: draft.nodeId,
+      name: draft.nodeId === null ? fleetName : nodeName(draft.nodeId),
+      status: draft.nodeId === null ? null : nodeStatus(draft.nodeId),
+      delivery: draft.deliveries.size === 1 ? [...draft.deliveries][0] : null,
+      endpoints: draft.endpoints,
+      groups: present.map(state => ({ state, items: draft.endpoints.filter(item => item.state === state) })),
+      worst,
+      sole: present.length === 1 ? worst : null,
+      attention: ROLLUP_ORDER.flatMap(state =>
+        state === 'applied' ? [] : draft.endpoints.filter(item => item.state === state),
+      ),
+      advisories: draft.advisories,
+      advisoryNote: draft.advisoryNote,
+      reload: draft.hasReload
+        ? {
+            message: draft.reloadMessage,
+            tags: [...draft.reloadTags].sort(),
+            nodeIds: [...draft.reloadNodes].sort((a, b) => a - b),
+            withdraw: draft.reloadWithdraw,
+          }
+        : null,
+    })
+  }
+  rollups.sort((a, b) => {
+    const rank = ROLLUP_ORDER.indexOf(a.worst) - ROLLUP_ORDER.indexOf(b.worst)
+    return rank !== 0 ? rank : a.name.localeCompare(b.name)
+  })
+  return rollups
 }
 
 function NodeStatusDot({ status }: { status: string }) {
@@ -571,6 +696,296 @@ function NodeStatusDot({ status }: { status: string }) {
       </TooltipTrigger>
       <TooltipContent>{t('contentFilter.nodeStatus', { status, defaultValue: 'Status: {{status}}' })}</TooltipContent>
     </Tooltip>
+  )
+}
+
+function useOutcomeSkipReason() {
+  const reasonText = useCapabilityReasonText()
+  return useCallback(
+    (outcome: AssignmentOutcome): string | null => {
+      if (outcome.reload) return null
+      if (outcome.status === 'applied' || (!outcome.status && outcome.created && outcome.enforced)) return null
+      const known = asCapabilityReason(outcome.reason)
+      if (known) return reasonText(known)
+      return typeof outcome.reason === 'string' && outcome.reason.trim() ? outcome.reason.trim() : null
+    },
+    [reasonText],
+  )
+}
+
+function detailLines(items: readonly RollupEndpoint[], pick: (outcome: AssignmentOutcome) => string | null) {
+  const found = new Map<string, string[]>()
+  for (const item of items) {
+    const value = pick(item.outcome)
+    if (!value) continue
+    const tags = found.get(value) ?? []
+    tags.push(item.tag)
+    found.set(value, tags)
+  }
+  return [...found.entries()].map(([text, tags]) => ({ text, tags, all: tags.length === items.length }))
+}
+
+function RollupCountChip({ state, count, sole }: { state: RollupState; count: number; sole: boolean }) {
+  const { t } = useTranslation()
+  const label = () => {
+    switch (state) {
+      case 'reload':
+        return sole
+          ? t('contentFilter.rollupAllReload', { count, defaultValue: 'All {{count}} endpoints need a restart' })
+          : t('contentFilter.rollupSomeReload', { count, defaultValue: '{{count}} need a restart' })
+      case 'failed':
+        return sole
+          ? t('contentFilter.rollupAllFailed', { count, defaultValue: 'All {{count}} endpoints failed' })
+          : t('contentFilter.rollupSomeFailed', { count, defaultValue: '{{count}} failed' })
+      case 'unconfirmed':
+        return sole
+          ? t('contentFilter.rollupAllUnconfirmed', {
+              count,
+              defaultValue: 'All {{count}} endpoints not confirmed',
+            })
+          : t('contentFilter.rollupSomeUnconfirmed', { count, defaultValue: '{{count}} not confirmed' })
+      case 'skipped':
+        return sole
+          ? t('contentFilter.rollupAllSkipped', { count, defaultValue: 'All {{count}} endpoints skipped' })
+          : t('contentFilter.rollupSomeSkipped', { count, defaultValue: '{{count}} skipped' })
+      case 'disabled':
+        return sole
+          ? t('contentFilter.rollupAllDisabled', { count, defaultValue: 'All {{count}} endpoints not active' })
+          : t('contentFilter.rollupSomeDisabled', { count, defaultValue: '{{count}} not active' })
+      case 'applied':
+        return sole
+          ? t('contentFilter.rollupAllApplied', { count, defaultValue: 'All {{count}} endpoints in force' })
+          : t('contentFilter.rollupSomeApplied', { count, defaultValue: '{{count}} in force' })
+    }
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[11px] font-normal tabular-nums',
+        ROLLUP_CHIP[state],
+      )}
+    >
+      {label()}
+    </span>
+  )
+}
+
+function useRollupGroupLabel() {
+  const { t } = useTranslation()
+  return (state: RollupState): string => {
+    switch (state) {
+      case 'reload':
+        return t('contentFilter.reloadTitle', { defaultValue: 'Restart needed before this takes effect' })
+      case 'failed':
+        return t('contentFilter.groupFailed', { defaultValue: 'Could not be applied' })
+      case 'unconfirmed':
+        return t('contentFilter.groupUnconfirmed', { defaultValue: 'Saved but not confirmed' })
+      case 'skipped':
+        return t('contentFilter.groupSkipped', { defaultValue: 'Refused before anything was saved' })
+      case 'disabled':
+        return t('contentFilter.groupDisabled', { defaultValue: 'Saved but not active' })
+      case 'applied':
+        return t('contentFilter.groupApplied', { defaultValue: 'In force on the node' })
+    }
+  }
+}
+
+const ROLLUP_EXCEPTION_LIMIT = 3
+
+function RollupNodeRow({
+  rollup,
+  open,
+  onOpenChange,
+  nodeLabel,
+  fleetNodesLabel,
+}: {
+  rollup: NodeRollup
+  open: boolean
+  onOpenChange: (next: boolean) => void
+  nodeLabel: (id: number) => string
+  fleetNodesLabel: string
+}) {
+  const { t } = useTranslation()
+  const skipReason = useOutcomeSkipReason()
+  const groupLabel = useRollupGroupLabel()
+
+  const summaryOf = (outcome: AssignmentOutcome): string | null => outcome.detail?.trim() || skipReason(outcome)
+
+  const shown = rollup.attention.slice(0, ROLLUP_EXCEPTION_LIMIT)
+  const hidden = rollup.attention.length - shown.length
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className={cn('rounded-lg border-y border-e border-s-2 px-3 py-2 transition-colors', ROLLUP_ROW[rollup.worst])}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-ms-1.5 size-6 shrink-0"
+            aria-label={
+              open
+                ? t('contentFilter.rollupCollapseNode', { defaultValue: 'Hide the endpoints on this node' })
+                : t('contentFilter.rollupExpandNode', { defaultValue: 'Show the endpoints on this node' })
+            }
+          >
+            <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
+          </Button>
+        </CollapsibleTrigger>
+        {rollup.nodeId === null ? (
+          <Server className="size-3.5 shrink-0 text-muted-foreground" />
+        ) : (
+          <NodeStatusDot status={rollup.status ?? 'disabled'} />
+        )}
+        <span title={rollup.name} className="min-w-0 truncate text-sm font-medium">{rollup.name}</span>
+        <span
+          className={cn(
+            'shrink-0 text-[11px] tabular-nums',
+            rollup.nodeId === null ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+          )}
+        >
+          {rollup.nodeId !== null
+            ? t('contentFilter.nodeIdLabel', { id: rollup.nodeId, defaultValue: 'id {{id}}' })
+            : fleetNodesLabel}
+        </span>
+        <DeliveryBadge delivery={rollup.delivery} />
+        <span className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+          {rollup.groups.map(group => (
+            <RollupCountChip
+              key={group.state}
+              state={group.state}
+              count={group.items.length}
+              sole={rollup.sole === group.state}
+            />
+          ))}
+        </span>
+      </div>
+
+      {!open && rollup.attention.length ? (
+        <div className="mt-1.5 space-y-0.5">
+          {rollup.sole && rollup.sole !== 'applied' ? (
+            detailLines(rollup.endpoints, summaryOf).map(line => (
+              <p key={line.text} className={cn('break-words text-[11px] leading-snug', ROLLUP_TEXT[rollup.worst])}>
+                {line.all
+                  ? line.text
+                  : t('contentFilter.rollupDetailFor', {
+                      endpoints: line.tags.join(' · '),
+                      detail: line.text,
+                      defaultValue: '{{endpoints}} — {{detail}}',
+                    })}
+              </p>
+            ))
+          ) : (
+            <>
+              {shown.map((item, index) => (
+                <p key={`${index}:${item.tag}`} className={cn('break-words text-[11px] leading-snug', ROLLUP_TEXT[item.state])}>
+                  {t('contentFilter.rollupDetailFor', {
+                    endpoints: item.tag,
+                    detail: summaryOf(item.outcome) ?? groupLabel(item.state),
+                    defaultValue: '{{endpoints}} — {{detail}}',
+                  })}
+                </p>
+              ))}
+              {hidden > 0 ? (
+                <p className="break-words text-[11px] leading-snug text-muted-foreground">
+                  {t('contentFilter.rollupMoreExceptions', {
+                    hidden,
+                    defaultValue: '{{hidden}} more endpoints here still need a look',
+                  })}
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+
+      <CollapsibleContent className="ms-1 mt-2 space-y-2.5 border-s-2 ps-3">
+        {rollup.groups.map(group => (
+          <div key={group.state} className="space-y-1">
+            <p
+              className={cn(
+                'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide',
+                ROLLUP_TEXT[group.state],
+              )}
+            >
+              {groupLabel(group.state)}
+              <span className="font-normal tabular-nums">{group.items.length}</span>
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {group.items.map((item, index) => (
+                <span
+                  key={`${index}:${item.tag}`}
+                  title={item.tag}
+                  className={cn(
+                    'inline-flex h-5 max-w-full items-center rounded border bg-background/60 px-1.5 text-[11px] font-normal',
+                    ROLLUP_TAG[group.state],
+                  )}
+                >
+                  <span className="min-w-0 truncate">{item.tag}</span>
+                </span>
+              ))}
+            </div>
+            {detailLines(group.items, outcome => outcome.detail?.trim() || null).map(line => (
+              <p key={line.text} className="text-xs leading-snug text-muted-foreground">
+                {line.all
+                  ? line.text
+                  : t('contentFilter.rollupDetailFor', {
+                      endpoints: line.tags.join(' · '),
+                      detail: line.text,
+                      defaultValue: '{{endpoints}} — {{detail}}',
+                    })}
+              </p>
+            ))}
+            {detailLines(group.items, skipReason).map(line => (
+              <p key={line.text} className="text-xs leading-snug text-amber-700 dark:text-amber-400">
+                {t('contentFilter.outcomeSkipReason', {
+                  reason: line.all
+                    ? line.text
+                    : t('contentFilter.rollupDetailFor', {
+                        endpoints: line.tags.join(' · '),
+                        detail: line.text,
+                        defaultValue: '{{endpoints}} — {{detail}}',
+                      }),
+                  defaultValue: 'Left out — {{reason}}',
+                })}
+              </p>
+            ))}
+          </div>
+        ))}
+        {rollup.reload ? (
+          <div className="space-y-0.5">
+            <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
+              {!rollup.reload.tags.length
+                ? rollup.reload.message
+                : rollup.reload.withdraw
+                  ? t('contentFilter.reloadWithdrawWhy', {
+                      tags: rollup.reload.tags.join(', '),
+                      defaultValue:
+                        'Putting your own setting back on {{tags}} only takes effect once the nodes below restart, and every session on them drops.',
+                    })
+                  : t('contentFilter.reloadWhy', {
+                      tags: rollup.reload.tags.join(', '),
+                      defaultValue:
+                        'Name recovery has to change on {{tags}}. It only takes effect once the nodes below restart, and every session on them drops.',
+                    })}
+            </p>
+            {rollup.reload.nodeIds.length ? (
+              <p className="text-xs leading-snug text-muted-foreground">
+                {t('contentFilter.reloadNodes', {
+                  nodes: rollup.reload.nodeIds.map(id => nodeLabel(id)).join(', '),
+                  defaultValue: 'Nodes that would restart: {{nodes}}',
+                })}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <AdvisoryList advisories={rollup.advisories} note={rollup.advisoryNote} />
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -891,6 +1306,7 @@ export default function ContentFilterPage() {
   const [endpointQuery, setEndpointQuery] = useState('')
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null)
   const [bulkRequest, setBulkRequest] = useState<ApplyBody | null>(null)
+  const [rollupOpen, setRollupOpen] = useState<Record<string, boolean>>({})
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const [pendingRestart, setPendingRestart] = useState<PendingRestart | null>(null)
   const [probeDomain, setProbeDomain] = useState('')
@@ -1175,14 +1591,23 @@ export default function ContentFilterPage() {
   )
 
   const applySkips = useMemo(() => {
-    const empty = { nodes: [] as SkippedNode[], endpoints: [] as SkippedEndpoint[], total: 0 }
+    const empty = {
+      nodes: [] as SkippedNode[],
+      endpoints: [] as SkippedEndpoint[],
+      unfilterable: [] as UnfilterableEndpoint[],
+      nodeTargets: 0,
+      unfilterableTargets: 0,
+      total: 0,
+    }
     if (!caps.available) return empty
     if (!assignNodes.length && !assignTags.length) return empty
     const nodeFilter = assignNodes.length ? pickedNodes : null
     const tagFilter = assignTags.length ? pickedTags : null
-    const nodes = new Map<number, CapabilityReason | null>()
+    const nodes = new Map<number, { reason: CapabilityReason | null; lost: number; kept: number }>()
     const endpoints = new Map<string, { nodes: number; reason: CapabilityReason | null }>()
-    let total = 0
+    const unfilterable = new Map<string, { targets: number; reason: CapabilityReason | null }>()
+    let nodeTargets = 0
+    let unfilterableTargets = 0
     for (const node of targets.data ?? []) {
       if (node.reason) continue
       if (nodeFilter && !nodeFilter.has(node.id)) continue
@@ -1191,11 +1616,26 @@ export default function ContentFilterPage() {
         if (!inbound.filterable) continue
         if (tagFilter && !tagFilter.has(inbound.tag)) continue
         const tagCap = caps.tagSupport(inbound.tag)
-        const blocked = !nodeCap.supported || !tagCap.supported || tagCap.unsupportedNodeIds.includes(node.id)
-        if (!blocked) continue
-        const reason = nodeCap.supported ? (tagCap.reason ?? nodeCap.reason) : nodeCap.reason
-        total += 1
-        if (!nodes.has(node.id)) nodes.set(node.id, reason)
+        if (!tagCap.supported) {
+          unfilterableTargets += 1
+          const row = unfilterable.get(inbound.tag) ?? { targets: 0, reason: tagCap.reason }
+          row.targets += 1
+          if (!row.reason) row.reason = tagCap.reason
+          unfilterable.set(inbound.tag, row)
+          continue
+        }
+        const entry = nodes.get(node.id) ?? { reason: null as CapabilityReason | null, lost: 0, kept: 0 }
+        const blockedByNode = !nodeCap.supported
+        if (!blockedByNode && !tagCap.unsupportedNodeIds.includes(node.id)) {
+          entry.kept += 1
+          nodes.set(node.id, entry)
+          continue
+        }
+        const reason = blockedByNode ? nodeCap.reason : (tagCap.reason ?? nodeCap.reason)
+        nodeTargets += 1
+        entry.lost += 1
+        if (!entry.reason) entry.reason = reason
+        nodes.set(node.id, entry)
         const row = endpoints.get(inbound.tag) ?? { nodes: 0, reason }
         row.nodes += 1
         if (!row.reason) row.reason = reason
@@ -1203,9 +1643,14 @@ export default function ContentFilterPage() {
       }
     }
     return {
-      nodes: [...nodes.entries()].map(([id, reason]) => ({ id, reason })),
+      nodes: [...nodes.entries()]
+        .filter(([, row]) => row.lost > 0)
+        .map(([id, row]) => ({ id, reason: row.reason, lost: row.lost, kept: row.kept })),
       endpoints: [...endpoints.entries()].map(([tag, row]) => ({ tag, nodes: row.nodes, reason: row.reason })),
-      total,
+      unfilterable: [...unfilterable.entries()].map(([tag, row]) => ({ tag, targets: row.targets, reason: row.reason })),
+      nodeTargets,
+      unfilterableTargets,
+      total: nodeTargets + unfilterableTargets,
     }
   }, [caps, assignNodes, assignTags, pickedNodes, pickedTags, targets.data])
 
@@ -1309,50 +1754,130 @@ export default function ContentFilterPage() {
     }
   }, [bulkResult, heldOutcomes])
 
-  const outcomeGroups = useMemo(() => {
-    const order: OutcomeStatus[] = ['failed', 'skipped', 'disabled', 'applied']
-    const byStatus = new Map<OutcomeStatus, AssignmentOutcome[]>()
-    const held: AssignmentOutcome[] = []
-    const rest: AssignmentOutcome[] = []
-    for (const outcome of bulkResult?.outcomes ?? []) {
-      if (outcome.reload) {
-        held.push(outcome)
+  const outcomeRollups = useMemo(
+    () =>
+      buildNodeRollups(
+        bulkResult?.outcomes ?? [],
+        id => nodeById.get(id)?.name ?? `#${id}`,
+        id => nodeById.get(id)?.status ?? null,
+        t('contentFilter.rollupFleetNode', { defaultValue: 'Every node that carries it' }),
+        t('contentFilter.wholeNode', { defaultValue: 'whole node' }),
+      ),
+    [bulkResult, nodeById, t],
+  )
+
+  const carriersOfTag = useCallback(
+    (tag: string): number[] | null => {
+      const supported = caps.tagSupport(tag).supportedNodeIds
+      if (supported.length) return supported
+      const entry = fleetEndpoints.find(item => item.tag === tag)
+      return entry ? entry.nodeIds : null
+    },
+    [caps, fleetEndpoints],
+  )
+
+  const outcomeTotals = useMemo(() => {
+    const pinned = new Set<number>()
+    const fleetNodes = new Set<number>()
+    let endpoints = 0
+    let fleetTargets = 0
+    let fleetUnresolved = 0
+    for (const rollup of outcomeRollups) {
+      endpoints += rollup.endpoints.length
+      if (rollup.nodeId !== null) {
+        pinned.add(rollup.nodeId)
         continue
       }
-      const status = outcome.status
-      if (status && order.includes(status)) {
-        const list = byStatus.get(status) ?? []
-        list.push(outcome)
-        byStatus.set(status, list)
-      } else {
-        rest.push(outcome)
+      fleetTargets += rollup.endpoints.length
+      for (const item of rollup.endpoints) {
+        const tag = item.outcome.inbound_tag
+        const carriers = tag ? carriersOfTag(tag) : null
+        if (carriers === null) {
+          fleetUnresolved += 1
+          continue
+        }
+        carriers.forEach(id => fleetNodes.add(id))
       }
     }
-    const groups: { status: OutcomeStatus | 'reload' | null; items: AssignmentOutcome[] }[] = []
-    if (held.length) groups.push({ status: 'reload', items: held })
-    for (const status of order) {
-      if (byStatus.has(status)) groups.push({ status, items: byStatus.get(status) ?? [] })
+    const resolution: 'known' | 'partial' | 'unknown' =
+      fleetTargets === 0 || fleetUnresolved === 0 ? 'known' : fleetNodes.size > 0 ? 'partial' : 'unknown'
+    return {
+      endpoints,
+      nodes: new Set([...pinned, ...fleetNodes]).size,
+      pinnedNodes: pinned.size,
+      fleetTargets,
+      fleetNodes: fleetNodes.size,
+      fleetUnresolved,
+      resolution,
     }
-    if (rest.length) groups.push({ status: null, items: rest })
-    return groups
+  }, [outcomeRollups, carriersOfTag])
+
+  const outcomeTotalsText =
+    outcomeTotals.resolution === 'known'
+      ? t('contentFilter.rollupTotals', {
+          endpoints: outcomeTotals.endpoints,
+          nodes: outcomeTotals.nodes,
+          defaultValue: '{{endpoints}} endpoints on {{nodes}} nodes',
+        })
+      : outcomeTotals.resolution === 'partial'
+        ? t('contentFilter.rollupTotalsPartial', {
+            endpoints: outcomeTotals.endpoints,
+            nodes: outcomeTotals.nodes,
+            defaultValue: '{{endpoints}} endpoints on at least {{nodes}} nodes — the panel cannot resolve the rest',
+          })
+        : outcomeTotals.pinnedNodes > 0
+          ? t('contentFilter.rollupTotalsMixedOpen', {
+              endpoints: outcomeTotals.endpoints,
+              nodes: outcomeTotals.pinnedNodes,
+              defaultValue: '{{endpoints}} endpoints — {{nodes}} nodes by name, plus every node that carries the rest',
+            })
+          : t('contentFilter.rollupTotalsOpen', {
+              count: outcomeTotals.endpoints,
+              defaultValue: '{{count}} endpoints, on every node that carries them',
+            })
+
+  const fleetSpanText =
+    outcomeTotals.resolution === 'known'
+      ? t('contentFilter.rollupFleetSpan', {
+          count: outcomeTotals.fleetTargets,
+          nodes: outcomeTotals.fleetNodes,
+          defaultValue:
+            '{{count}} of them are pinned to no node — they apply on every node that carries them, {{nodes}} right now.',
+        })
+      : outcomeTotals.resolution === 'partial'
+        ? t('contentFilter.rollupFleetPartial', {
+            count: outcomeTotals.fleetTargets,
+            nodes: outcomeTotals.fleetNodes,
+            defaultValue:
+              '{{count}} of them are pinned to no node — they apply on every node that carries them, at least {{nodes}} right now, and the panel cannot resolve the rest.',
+          })
+        : t('contentFilter.rollupFleetOpen', {
+            count: outcomeTotals.fleetTargets,
+            defaultValue:
+              '{{count}} of them are pinned to no node — they apply on every node that carries them, and the panel cannot say how many that is.',
+          })
+
+  const fleetNodesLabel =
+    outcomeTotals.resolution === 'known'
+      ? t('contentFilter.rollupFleetNodes', { count: outcomeTotals.fleetNodes, defaultValue: '{{count}} nodes right now' })
+      : outcomeTotals.resolution === 'partial'
+        ? t('contentFilter.rollupFleetNodesAtLeast', {
+            count: outcomeTotals.fleetNodes,
+            defaultValue: 'at least {{count}} nodes right now',
+          })
+        : t('contentFilter.rollupFleetNodesOpen', { defaultValue: 'node count unknown' })
+
+  useEffect(() => {
+    setRollupOpen(prev => (Object.keys(prev).length ? {} : prev))
   }, [bulkResult])
 
-  const outcomeGroupLabel = (status: OutcomeStatus | 'reload' | null) => {
-    if (status === 'reload') return t('contentFilter.reloadTitle', { defaultValue: 'Restart needed before this takes effect' })
-    if (status === 'failed') return t('contentFilter.groupFailed', { defaultValue: 'Could not be applied' })
-    if (status === 'skipped') return t('contentFilter.groupSkipped', { defaultValue: 'Refused before anything was saved' })
-    if (status === 'disabled') return t('contentFilter.groupDisabled', { defaultValue: 'Saved but not active' })
-    if (status === 'applied') return t('contentFilter.groupApplied', { defaultValue: 'In force on the node' })
-    return t('contentFilter.groupOther', { defaultValue: 'Other outcomes' })
-  }
+  const rollupIsOpen = (rollup: NodeRollup) => rollupOpen[rollup.key] ?? rollup.sole !== 'applied'
 
-  const outcomeSkipReason = (outcome: AssignmentOutcome): string | null => {
-    if (outcome.reload) return null
-    if (outcome.status === 'applied' || (!outcome.status && outcome.created && outcome.enforced)) return null
-    const known = asCapabilityReason(outcome.reason)
-    if (known) return reasonText(known)
-    return typeof outcome.reason === 'string' && outcome.reason.trim() ? outcome.reason.trim() : null
-  }
+  const setEveryRollup = (next: boolean) =>
+    setRollupOpen(Object.fromEntries(outcomeRollups.map(rollup => [rollup.key, next])))
+
+  const everyRollupOpen = outcomeRollups.length > 0 && outcomeRollups.every(rollup => rollupIsOpen(rollup))
+  const everyRollupClosed = outcomeRollups.length > 0 && outcomeRollups.every(rollup => !rollupIsOpen(rollup))
 
   const unreachedNodes = useMemo(() => {
     if (!assignNodes.length) return [] as string[]
@@ -1696,7 +2221,7 @@ export default function ContentFilterPage() {
                                   <DeliveryBadge delivery={a.delivery} />
                                 </div>
                                 {peers.length ? (
-                                  <p className="mt-0.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                                  <p className="mt-0.5 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
                                     {t('contentFilter.alsoEnforcedOn', {
                                       names: peers.map(id => nodeLabel(id)).join(', '),
                                       defaultValue: 'Shared configuration, so it is enforced on {{names}} as well.',
@@ -1914,10 +2439,13 @@ export default function ContentFilterPage() {
             if (!next) resetAssign()
           }}
         >
-          <DialogContent dir={dir} className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
+          <DialogContent
+            dir={dir}
+            className="flex max-h-[85vh] w-[calc(100vw_-_1.5rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw_-_4rem)] lg:max-w-5xl xl:max-w-6xl"
+          >
+            <DialogHeader className="shrink-0 border-b px-5 pb-4 pe-12 pt-5">
               <DialogTitle>{t('contentFilter.bulkTitle', { defaultValue: 'Apply to nodes and endpoints' })}</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="break-words">
                 {t('contentFilter.bulkBody', {
                   defaultValue:
                     'Tick as many nodes and endpoints as you like. Nodes with nothing ticked in the endpoint list take every endpoint they carry, and endpoints with no node ticked apply on every node that has them.',
@@ -1925,6 +2453,7 @@ export default function ContentFilterPage() {
               </DialogDescription>
             </DialogHeader>
 
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">
             {bulkResult ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
@@ -2005,89 +2534,49 @@ export default function ContentFilterPage() {
                     defaultValue: '{{created}} new and {{updated}} updated in the database',
                   })}
                 </p>
-                <div className="max-h-72 space-y-3 overflow-y-auto pe-1">
-                  {outcomeGroups.map(group => (
-                    <div key={group.status ?? 'other'} className="space-y-1">
-                      <p
-                        className={cn(
-                          'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide',
-                          group.status === 'failed' ? 'text-destructive' : 'text-muted-foreground',
-                        )}
-                      >
-                        {outcomeGroupLabel(group.status)}
-                        <span className="font-normal tabular-nums">{group.items.length}</span>
-                      </p>
-                      {group.items.map((outcome, index) => (
-                        <div
-                          key={`${outcome.node_id ?? 'fleet'}:${outcome.inbound_tag}:${index}`}
-                          className={cn(
-                            'rounded-lg border px-3 py-2',
-                            group.status === 'failed'
-                              ? 'border-destructive/40 bg-destructive/[0.07]'
-                              : group.status === 'applied'
-                                ? 'border-transparent bg-muted/40'
-                                : 'border-amber-500/40 bg-amber-500/[0.07]',
-                          )}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                              <span className="min-w-0 truncate text-sm font-medium">
-                                {outcome.node_id === null
-                                  ? t('contentFilter.everyNodeWith', {
-                                      endpoint: outcome.inbound_tag,
-                                      defaultValue: '{{endpoint}} — on every node that has it',
-                                    })
-                                  : `${nodeById.get(outcome.node_id)?.name ?? `#${outcome.node_id}`} · ${outcome.inbound_tag || t('contentFilter.wholeNode', { defaultValue: 'whole node' })}`}
-                              </span>
-                              {outcome.node_id === null ? null : (
-                                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                                  {t('contentFilter.nodeIdLabel', { id: outcome.node_id, defaultValue: 'id {{id}}' })}
-                                </span>
-                              )}
-                              <DeliveryBadge delivery={outcome.delivery} />
-                            </span>
-                            <OutcomeStatusBadge outcome={outcome} />
-                          </div>
-                          {outcome.detail && !outcome.reload ? (
-                            <p className="mt-1 text-xs leading-snug text-muted-foreground">{outcome.detail}</p>
-                          ) : null}
-                          {outcomeSkipReason(outcome) ? (
-                            <p className="mt-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
-                              {t('contentFilter.outcomeSkipReason', {
-                                reason: outcomeSkipReason(outcome),
-                                defaultValue: 'Left out — {{reason}}',
-                              })}
-                            </p>
-                          ) : null}
-                          {outcome.reload ? (
-                            <p className="mt-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
-                              {!outcome.reload.inbound_tags.length
-                                ? outcome.reload.message
-                                : outcome.status === 'disabled'
-                                  ? t('contentFilter.reloadWithdrawWhy', {
-                                      tags: outcome.reload.inbound_tags.join(', '),
-                                      defaultValue:
-                                        'Putting your own setting back on {{tags}} only takes effect once the nodes below restart, and every session on them drops.',
-                                    })
-                                  : t('contentFilter.reloadWhy', {
-                                      tags: outcome.reload.inbound_tags.join(', '),
-                                      defaultValue:
-                                        'Name recovery has to change on {{tags}}. It only takes effect once the nodes below restart, and every session on them drops.',
-                                    })}
-                            </p>
-                          ) : null}
-                          {outcome.reload && outcome.reload.node_ids.length ? (
-                            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                              {t('contentFilter.reloadNodes', {
-                                nodes: outcome.reload.node_ids.map(id => nodeLabel(id)).join(', '),
-                                defaultValue: 'Nodes that would restart: {{nodes}}',
-                              })}
-                            </p>
-                          ) : null}
-                          <AdvisoryList advisories={outcome.advisories} note={outcome.advisory_note} />
-                        </div>
-                      ))}
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="break-words text-xs tabular-nums text-muted-foreground">{outcomeTotalsText}</span>
+                    {outcomeTotals.fleetTargets > 0 ? (
+                      <span className="break-words text-xs font-medium text-amber-700 dark:text-amber-400">
+                        {fleetSpanText}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="inline-flex shrink-0 overflow-hidden rounded-md border">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 rounded-none px-2.5 text-xs"
+                      disabled={everyRollupOpen}
+                      onClick={() => setEveryRollup(true)}
+                    >
+                      {t('contentFilter.rollupExpandAll', { defaultValue: 'Expand all' })}
+                    </Button>
+                    <span aria-hidden className="w-px self-stretch bg-border" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 rounded-none px-2.5 text-xs"
+                      disabled={everyRollupClosed}
+                      onClick={() => setEveryRollup(false)}
+                    >
+                      {t('contentFilter.rollupCollapseAll', { defaultValue: 'Collapse all' })}
+                    </Button>
+                  </div>
+                </div>
+                <div className="max-h-72 space-y-1.5 overflow-y-auto pe-1">
+                  {outcomeRollups.map(rollup => (
+                    <RollupNodeRow
+                      key={rollup.key}
+                      rollup={rollup}
+                      open={rollupIsOpen(rollup)}
+                      onOpenChange={next => setRollupOpen(prev => ({ ...prev, [rollup.key]: next }))}
+                      nodeLabel={nodeLabel}
+                      fleetNodesLabel={fleetNodesLabel}
+                    />
                   ))}
                 </div>
               </div>
@@ -2098,13 +2587,14 @@ export default function ContentFilterPage() {
                   endpoints={reach.endpoints}
                   fleetWide={reach.fleetWide}
                   spill={reach.spill.length}
-                  skipped={applySkips.total}
+                  skippedByNode={applySkips.nodeTargets}
+                  skippedByEndpoint={applySkips.unfilterableTargets}
                   pickedNodes={assignNodes.length}
                   pickedTags={assignTags.length}
                 />
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                <section className="space-y-2 rounded-xl border bg-card/40 p-3">
+                <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                <section className="min-w-0 space-y-2 rounded-xl border bg-card/40 p-3">
                   <PickerHeader
                     title={t('contentFilter.bulkNodes', { defaultValue: 'Nodes' })}
                     picked={assignNodes.length}
@@ -2122,12 +2612,12 @@ export default function ContentFilterPage() {
                     })}
                   </p>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
+                    <Search className="pointer-events-none absolute start-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       value={nodeQuery}
                       onChange={e => setNodeQuery(e.target.value)}
                       placeholder={t('contentFilter.searchNodes', { defaultValue: 'Search nodes by name or id' })}
-                      className="h-8 text-xs ltr:pl-9 rtl:pr-9"
+                      className="h-8 w-full min-w-0 ps-9 text-xs"
                     />
                   </div>
                   <div className="h-64 space-y-0.5 overflow-y-auto pe-1">
@@ -2172,6 +2662,7 @@ export default function ContentFilterPage() {
                                 <NodeStatusDot status={node.status} />
                                 <label
                                   htmlFor={rowId}
+                                  title={node.name}
                                   className={cn(
                                     'min-w-0 truncate text-sm font-medium',
                                     blocked ? 'cursor-not-allowed' : 'cursor-pointer',
@@ -2206,7 +2697,7 @@ export default function ContentFilterPage() {
                                   </Tooltip>
                                 ) : null}
                               </div>
-                              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                              <p className="mt-0.5 break-words text-xs leading-snug text-muted-foreground">
                                 {blocked
                                   ? t('contentFilter.capBlockedNode', {
                                       reason: blockedText ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
@@ -2226,7 +2717,7 @@ export default function ContentFilterPage() {
                   </div>
                 </section>
 
-                <section className="space-y-2 rounded-xl border bg-card/40 p-3">
+                <section className="min-w-0 space-y-2 rounded-xl border bg-card/40 p-3">
                   <PickerHeader
                     title={t('contentFilter.bulkEndpoints', { defaultValue: 'Endpoints' })}
                     picked={assignTags.length}
@@ -2246,12 +2737,12 @@ export default function ContentFilterPage() {
                     })}
                   </p>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
+                    <Search className="pointer-events-none absolute start-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       value={endpointQuery}
                       onChange={e => setEndpointQuery(e.target.value)}
                       placeholder={t('contentFilter.searchEndpoints', { defaultValue: 'Search endpoints by tag or protocol' })}
-                      className="h-8 text-xs ltr:pl-9 rtl:pr-9"
+                      className="h-8 w-full min-w-0 ps-9 text-xs"
                     />
                   </div>
                   <div className="h-64 space-y-0.5 overflow-y-auto pe-1">
@@ -2294,6 +2785,7 @@ export default function ContentFilterPage() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <label
                                   htmlFor={rowId}
+                                  title={entry.tag}
                                   className={cn(
                                     'min-w-0 truncate text-sm font-medium',
                                     usable ? 'cursor-pointer' : 'cursor-not-allowed',
@@ -2342,7 +2834,7 @@ export default function ContentFilterPage() {
                                 ) : null}
                               </div>
                               {!usable && !tagCap.supported ? (
-                                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                                <p className="mt-0.5 break-words text-[11px] leading-snug text-muted-foreground">
                                   {t('contentFilter.capBlockedEndpoint', {
                                     reason:
                                       reasonText(tagCap.reason) ??
@@ -2352,14 +2844,14 @@ export default function ContentFilterPage() {
                                   })}
                                 </p>
                               ) : !usable ? (
-                                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                                <p className="mt-0.5 break-words text-[11px] leading-snug text-muted-foreground">
                                   {t('contentFilter.endpointBlocked', {
                                     reason: entry.blockedReason ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
                                     defaultValue: 'No node can filter this endpoint — {{reason}}',
                                   })}
                                 </p>
                               ) : entry.blockedNodeIds.length ? (
-                                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                                <p className="mt-0.5 break-words text-[11px] leading-snug text-muted-foreground">
                                   {t('contentFilter.endpointPartlyBlocked', {
                                     nodes: entry.blockedNodeIds.length,
                                     reason: entry.blockedReason ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
@@ -2368,7 +2860,7 @@ export default function ContentFilterPage() {
                                 </p>
                               ) : null}
                               {partial && partial.ids.length ? (
-                                <p className="mt-0.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                                <p className="mt-0.5 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
                                   {t('contentFilter.endpointCapPartly', {
                                     nodes: partial.ids.length,
                                     reason:
@@ -2379,7 +2871,7 @@ export default function ContentFilterPage() {
                                 </p>
                               ) : null}
                               {elsewhere ? (
-                                <p className="mt-0.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                                <p className="mt-0.5 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
                                   {t('contentFilter.endpointOffPicked', {
                                     defaultValue: 'None of the ticked nodes carries this endpoint, so it will be skipped.',
                                   })}
@@ -2427,7 +2919,7 @@ export default function ContentFilterPage() {
                           <div key={row.nodeId} className="rounded-md border bg-background px-2.5 py-1.5">
                             <div className="flex flex-wrap items-center gap-2">
                               <NodeStatusDot status={row.status} />
-                              <span className="min-w-0 truncate text-xs font-medium">{row.name}</span>
+                              <span title={row.name} className="min-w-0 truncate text-xs font-medium">{row.name}</span>
                               <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                                 {t('contentFilter.nodeIdLabel', { id: row.nodeId, defaultValue: 'id {{id}}' })}
                               </span>
@@ -2436,18 +2928,18 @@ export default function ContentFilterPage() {
                                 {t('contentFilter.endpointCount', { count: row.tags.length, defaultValue: '{{count}} endpoints' })}
                               </span>
                             </div>
-                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.tags.join(' · ')}</p>
+                            <p title={row.tags.join(' · ')} className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.tags.join(' · ')}</p>
                             {row.note ? (
                               <p
                                 className={cn(
-                                  'mt-0.5 text-[11px] leading-snug',
+                                  'mt-0.5 break-words text-[11px] leading-snug',
                                   row.delivery === 'core' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
                                 )}
                               >
                                 {row.note}
                               </p>
                             ) : row.peers.length ? (
-                              <p className="mt-0.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                              <p className="mt-0.5 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
                                 {t('contentFilter.reachCoreSpill', {
                                   names: row.peers.map(peer => peer.name).join(', '),
                                   defaultValue: 'Goes into a configuration shared with {{names}}, so they enforce it as well.',
@@ -2455,7 +2947,7 @@ export default function ContentFilterPage() {
                               </p>
                             ) : null}
                             {row.delivery === null ? (
-                              <p className="mt-0.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                              <p className="mt-0.5 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
                                 {t('contentFilter.reachUnknown', {
                                   defaultValue:
                                     'The panel cannot tell whether this stays on this node, so treat every node on the same core configuration as affected.',
@@ -2475,7 +2967,7 @@ export default function ContentFilterPage() {
                       <ShieldAlert className="size-4 shrink-0" />
                       {t('contentFilter.sharedCoreTitle', { defaultValue: 'This reaches nodes you did not tick' })}
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-amber-800/90 dark:text-amber-300/90">
+                    <p className="mt-1 break-words text-xs leading-relaxed text-amber-800/90 dark:text-amber-300/90">
                       {t('contentFilter.sharedCoreBody', {
                         sources: [...new Set(reach.spill.flatMap(peer => peer.causes))].join(', '),
                         defaultValue:
@@ -2484,7 +2976,7 @@ export default function ContentFilterPage() {
                     </p>
                     <div className="mt-1.5 space-y-0.5">
                       {reach.spill.slice(0, 8).map(peer => (
-                        <p key={peer.id} className="text-[11px] font-medium leading-snug text-amber-800 dark:text-amber-300">
+                        <p key={peer.id} className="break-words text-[11px] font-medium leading-snug text-amber-800 dark:text-amber-300">
                           {t('contentFilter.spillRow', {
                             name: peer.name,
                             id: peer.id,
@@ -2503,7 +2995,7 @@ export default function ContentFilterPage() {
                 ) : null}
 
                 {reach.unknown.length ? (
-                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed break-words text-amber-800 dark:text-amber-300">
                     {t('contentFilter.reachUnknownNodes', {
                       names: reach.unknown.join(', '),
                       defaultValue:
@@ -2513,7 +3005,7 @@ export default function ContentFilterPage() {
                 ) : null}
 
                 {unreachedTags.length ? (
-                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed break-words text-amber-800 dark:text-amber-300">
                     {t('contentFilter.unreachedTags', {
                       tags: unreachedTags.join(', '),
                       defaultValue: 'No ticked node carries {{tags}}, so nothing is applied for it.',
@@ -2522,7 +3014,7 @@ export default function ContentFilterPage() {
                 ) : null}
 
                 {unreachedNodes.length ? (
-                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed break-words text-amber-800 dark:text-amber-300">
                     {t('contentFilter.unreachedNodes', {
                       names: unreachedNodes.join(', '),
                       defaultValue: 'Nothing lands on {{names}} — they carry none of the ticked endpoints.',
@@ -2550,8 +3042,9 @@ export default function ContentFilterPage() {
                 </div>
               </div>
             )}
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="shrink-0 gap-2 border-t bg-muted/30 px-5 py-4 sm:items-center">
               {bulkResult ? (
                 <>
                   <Button variant="ghost" onClick={() => {
@@ -2581,36 +3074,88 @@ export default function ContentFilterPage() {
         </Dialog>
 
         <AlertDialog open={skipConfirmOpen} onOpenChange={setSkipConfirmOpen}>
-          <AlertDialogContent dir={dir}>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
+          <AlertDialogContent
+            dir={dir}
+            className="flex max-h-[85vh] w-[calc(100vw_-_1.5rem)] flex-col gap-4 overflow-hidden sm:w-full"
+          >
+            <AlertDialogHeader className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <AlertDialogTitle className="flex items-center gap-2 break-words">
                 <ShieldAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 {t('contentFilter.skipConfirmTitle', { defaultValue: 'Some targets will be skipped' })}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-3">
-                  <p>
+                  <p className="break-words">
                     {t('contentFilter.skipConfirmBody', {
-                      count: applySkips.nodes.length,
-                      endpoints: applySkips.total,
+                      count: applySkips.total,
                       defaultValue:
-                        '{{count}} nodes cannot enforce this filter, so {{endpoints}} endpoints on them are left out. Everything else is applied.',
+                        '{{count}} of the targets you ticked will not be applied. Everything else is applied.',
                     })}
                   </p>
-                  {applySkips.nodes.length ? (
-                    <div className="space-y-0.5">
+                  {applySkips.unfilterable.length ? (
+                    <div className="space-y-0.5 rounded-lg border bg-muted/30 px-3 py-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {t('contentFilter.skipConfirmNodes', { defaultValue: 'Nodes left out' })}
+                        {t('contentFilter.skipConfirmUnfilterable', { defaultValue: 'Endpoints no node can filter' })}
                       </p>
-                      {applySkips.nodes.slice(0, 8).map(item => (
-                        <p key={item.id} className="text-xs leading-snug text-foreground">
-                          {t('contentFilter.skipNodeRow', {
-                            name: nodeLabel(item.id),
-                            id: item.id,
+                      <p className="break-words pb-1 text-xs leading-snug text-muted-foreground">
+                        {t('contentFilter.skipConfirmUnfilterableBody', {
+                          count: applySkips.unfilterable.length,
+                          defaultValue:
+                            'No node anywhere can filter these, so they are left out everywhere. This is not a problem with any node.',
+                        })}
+                      </p>
+                      {applySkips.unfilterable.slice(0, 8).map(item => (
+                        <p key={item.tag} className="break-words text-xs leading-snug text-foreground">
+                          {t('contentFilter.skipUnfilterableRow', {
+                            tag: item.tag,
                             reason:
                               reasonText(item.reason) ?? t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
-                            defaultValue: '{{name}} (id {{id}}) — {{reason}}',
+                            defaultValue: '{{tag}} — {{reason}}',
                           })}
+                        </p>
+                      ))}
+                      {applySkips.unfilterable.length > 8 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t('contentFilter.andMore', {
+                            rest: applySkips.unfilterable.length - 8,
+                            defaultValue: '+{{rest}} more',
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {applySkips.nodes.length ? (
+                    <div className="space-y-0.5 rounded-lg border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                        {t('contentFilter.skipConfirmNodes', { defaultValue: 'Nodes that are the obstacle' })}
+                      </p>
+                      <p className="break-words pb-1 text-xs leading-snug text-muted-foreground">
+                        {t('contentFilter.skipConfirmNodesBody', {
+                          defaultValue: 'These nodes are what stands in the way, so fixing them brings their endpoints back.',
+                        })}
+                      </p>
+                      {applySkips.nodes.slice(0, 8).map(item => (
+                        <p key={item.id} className="break-words text-xs leading-snug text-foreground">
+                          {item.kept > 0
+                            ? t('contentFilter.skipNodeRowKept', {
+                                name: nodeLabel(item.id),
+                                id: item.id,
+                                lost: item.lost,
+                                kept: item.kept,
+                                reason:
+                                  reasonText(item.reason) ??
+                                  t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                                defaultValue:
+                                  '{{name}} (id {{id}}) — loses {{lost}} endpoints ({{reason}}) and still gets the other {{kept}}',
+                              })
+                            : t('contentFilter.skipNodeRow', {
+                                name: nodeLabel(item.id),
+                                id: item.id,
+                                reason:
+                                  reasonText(item.reason) ??
+                                  t('contentFilter.noRouting', { defaultValue: 'cannot filter' }),
+                                defaultValue: '{{name}} (id {{id}}) — {{reason}}, so it gets none of the ticked endpoints',
+                              })}
                         </p>
                       ))}
                       {applySkips.nodes.length > 8 ? (
@@ -2629,7 +3174,7 @@ export default function ContentFilterPage() {
                         {t('contentFilter.skipConfirmEndpoints', { defaultValue: 'Endpoints that lose nodes' })}
                       </p>
                       {applySkips.endpoints.slice(0, 8).map(item => (
-                        <p key={item.tag} className="text-xs leading-snug text-foreground">
+                        <p key={item.tag} className="break-words text-xs leading-snug text-foreground">
                           {t('contentFilter.skipEndpointRow', {
                             tag: item.tag,
                             nodes: item.nodes,
@@ -2652,7 +3197,7 @@ export default function ContentFilterPage() {
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="shrink-0">
               <AlertDialogCancel>{t('contentFilter.cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
               <AlertDialogAction
                 disabled={activeId === null || applyTargets.isPending}
@@ -2673,14 +3218,17 @@ export default function ContentFilterPage() {
             if (!next) setPendingRestart(null)
           }}
         >
-          <AlertDialogContent dir={dir}>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
+          <AlertDialogContent
+            dir={dir}
+            className="flex max-h-[85vh] w-[calc(100vw_-_1.5rem)] flex-col gap-4 overflow-hidden sm:w-full"
+          >
+            <AlertDialogHeader className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <AlertDialogTitle className="flex items-center gap-2 break-words">
                 <RotateCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 {t('contentFilter.reloadTitle', { defaultValue: 'Restart needed before this takes effect' })}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-2">
+                <div className="space-y-2 break-words">
                   {restartStale ? (
                     <p className="font-medium text-amber-700 dark:text-amber-400">
                       {t('contentFilter.reloadStaleRequest', {
@@ -2718,7 +3266,7 @@ export default function ContentFilterPage() {
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="shrink-0">
               <AlertDialogCancel>{t('contentFilter.reloadCancel', { defaultValue: 'Leave it as it is' })}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
