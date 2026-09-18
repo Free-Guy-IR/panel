@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, create_autospec
 from uuid import UUID, uuid4
 
@@ -73,6 +74,7 @@ async def test_node_logs_closes_auth_db_before_stream(monkeypatch: pytest.Monkey
         events.append("auth_checked")
         assert resource == "nodes"
         assert action == "logs"
+        return SimpleNamespace(is_owner=True, username="owner")
 
     async def fake_node_logs_handler(node_id, request):
         events.append("stream_started")

@@ -12,7 +12,7 @@ from sqlalchemy import bindparam, delete, insert, select, update
 from app.db import GetDB
 from app.fork.models.traffic_log import TrafficLogRecord, TrafficLogState
 from app.fork.traffic_log.identity import IdentityCache
-from app.fork.traffic_log.parse import Event, parse_access_line
+from app.fork.traffic_log.parse import Event, SingboxFlows, parse_access_line, parse_singbox_line
 from app.node import node_manager
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings, server_settings
@@ -23,6 +23,7 @@ logger = get_logger("traffic-log")
 STREAM_QUEUE_SIZE = 5_000
 TAP_QUEUE_SIZE = 2_000
 SUBSCRIBER_QUEUE_SIZE = 1_000
+SUBSCRIBER_CAP = 32
 BUCKET_CAP = 50_000
 SEEN_IDS_CAP = 50_000
 BUCKET_MINUTES = 5
@@ -84,6 +85,7 @@ class NodeState:
     node: Any = None
     core_boot: float | None = None
     baseline_retry: bool = False
+    flows: SingboxFlows = field(default_factory=SingboxFlows)
 
     def transition(self, state: str, detail: str | None = None) -> None:
         self.state = state
@@ -162,7 +164,9 @@ class TrafficCollector:
     def __init__(self):
         if server_settings.workers > 1:
             self.available = False
-            self.unavailable_reason = "the panel runs more than one web worker, so no single process owns the node log streams"
+            self.unavailable_reason = (
+                "the panel runs more than one web worker, so no single process owns the node log streams"
+            )
         elif not runtime_settings.role.runs_node:
             self.available = False
             self.unavailable_reason = "this process does not run nodes, so it cannot read their log streams"
@@ -500,6 +504,15 @@ class TrafficCollector:
         subscriber = Subscriber(
             queue=asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_SIZE), user_id=user_id, node_id=node_id, admin_id=admin_id
         )
+        if len(self._subscribers) >= SUBSCRIBER_CAP:
+            subscriber.queue.put_nowait(
+                {
+                    "control": "too_many_viewers",
+                    "reason": f"{SUBSCRIBER_CAP} live views are already open; close one before opening another",
+                }
+            )
+            yield subscriber.queue
+            return
         if not self.available:
             subscriber.queue.put_nowait({"control": "unavailable", "reason": self.unavailable_reason})
         elif not self.enabled:
@@ -733,7 +746,10 @@ class TrafficCollector:
     def _ingest(self, state: NodeState, line: str) -> None:
         state.lines += 1
         self._push_taps(state.node_id, line, state)
-        event = parse_access_line(line, state.node_id, datetime.now(UTC))
+        seen_at = datetime.now(UTC)
+        event = parse_access_line(line, state.node_id, seen_at)
+        if event is None:
+            event = parse_singbox_line(line, state.node_id, seen_at, state.flows)
         if event is None:
             return
         state.events += 1
@@ -906,11 +922,7 @@ class TrafficCollector:
             logger.info(f"traffic log flush detached {self.detach_rows(gone)} bucket(s) whose stored row is gone")
 
     def _adoptable(self, boundary: datetime) -> dict:
-        return {
-            key: bucket
-            for key, bucket in self._buckets.items()
-            if bucket.row_id is None and key[-1] <= boundary
-        }
+        return {key: bucket for key, bucket in self._buckets.items() if bucket.row_id is None and key[-1] <= boundary}
 
     @staticmethod
     def _record_key(record: TrafficLogRecord) -> BucketKey:
@@ -1047,9 +1059,7 @@ class TrafficCollector:
                 bucket.flushed_hits = hits
                 self._max_row_id = max(self._max_row_id, record.id)
         if changed:
-            statement = update(TrafficLogRecord.__table__).where(
-                TrafficLogRecord.__table__.c.id == bindparam("row_id")
-            )
+            statement = update(TrafficLogRecord.__table__).where(TrafficLogRecord.__table__.c.id == bindparam("row_id"))
             rows = [
                 {"row_id": bucket.row_id, "hits": hits, "last_seen": last_seen}
                 for _, bucket, hits, last_seen in changed
@@ -1072,7 +1082,8 @@ class TrafficCollector:
         expired = [
             key
             for key, bucket in self._buckets.items()
-            if key[-1] < cutoff or (key[-1] < current and bucket.row_id is not None and bucket.hits == bucket.flushed_hits)
+            if key[-1] < cutoff
+            or (key[-1] < current and bucket.row_id is not None and bucket.hits == bucket.flushed_hits)
         ]
         for key in expired:
             bucket = self._buckets.pop(key)

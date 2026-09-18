@@ -107,7 +107,6 @@ async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: boo
     return node
 
 
-
 async def get_nodes(
     db: AsyncSession,
     query: NodeListQuery,
@@ -412,7 +411,7 @@ async def get_node_stats(
             # Format the boundary value as a string in the same format
             format_str = MYSQL_FORMATS[period] if dialect == "mysql" else SQLITE_FORMATS[period]
             boundary_str = boundary_value.strftime(format_str.replace("%i", "%M"))  # %i -> %M for Python
-            stmt = stmt.having(trunc_expr >= boundary_str)
+            stmt = stmt.having(literal_column("period_start") >= boundary_str)
 
     result = await db.execute(stmt)
 
@@ -882,4 +881,3 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(delete(NodeStat).where(NodeStat.node_id.in_(node_ids)))
     await db.execute(delete(Node).where(Node.id.in_(node_ids)))
     await db.commit()
-

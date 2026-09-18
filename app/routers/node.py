@@ -57,6 +57,10 @@ from .dependencies import (
 
 node_operator = NodeOperation(operator_type=OperatorType.API)
 logger = get_logger("node-router")
+
+NODE_LOGS_OWNER_MESSAGE = (
+    "node logs carry every client address and destination, so only an admin with full panel access can read them"
+)
 router = APIRouter(tags=["Node"], prefix="/api/node", responses={401: responses._401, 403: responses._403})
 
 
@@ -319,7 +323,10 @@ async def node_logs(node_id: int, request: Request, token: str | None = Depends(
     Stream logs for a specific node as Server-Sent Events.
     """
     async with GetDB() as db:
-        await require_permission_for_request(request, db, token, "nodes", "logs")
+        admin = await require_permission_for_request(request, db, token, "nodes", "logs")
+
+    if not getattr(admin, "is_owner", False):
+        raise HTTPException(status_code=403, detail=NODE_LOGS_OWNER_MESSAGE)
 
     return await _node_logs_handler(node_id, request)
 
