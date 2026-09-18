@@ -476,10 +476,7 @@ def matcher_weight(value: str) -> int:
     kind = head.lower() if separator else ""
     body = rest.strip().lower()
     if kind == "geosite":
-        for group in catalog.groups():
-            if group.geosite and group.geosite.lower() == body:
-                return group.size or LITERAL_MATCHER_WEIGHT
-        return catalog.size_of(body) or LITERAL_MATCHER_WEIGHT
+        return catalog.geosite_size(body) or catalog.size_of(body) or LITERAL_MATCHER_WEIGHT
     if kind in ("ext", "ext-domain", "ext-ip"):
         return catalog.size_of(body.rsplit(":", 1)[-1]) or LITERAL_MATCHER_WEIGHT
     return LITERAL_MATCHER_WEIGHT

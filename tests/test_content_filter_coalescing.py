@@ -919,7 +919,7 @@ def test_the_cost_of_a_rule_set_sees_a_category_named_by_address():
 
 def test_the_cost_of_a_rule_set_sees_the_other_domain_list_spellings():
     heavy = catalog.size_of("pglist-1")
-    ads = next(group.size for group in catalog.groups() if group.geosite == "category-ads-all")
+    ads = catalog.geosite_size("category-ads-all")
 
     assert rule_set_cost([{"domain": ["ext-domain:pgfilter.dat:pglist-1"]}]) == (heavy, 1)
     assert rule_set_cost([{"domains": ["geosite:category-ads-all"]}]) == (ads, 1)

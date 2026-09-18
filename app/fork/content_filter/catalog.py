@@ -81,7 +81,10 @@ def _load() -> tuple[tuple[Group, ...], tuple[Entry, ...]]:
 
     groups: list[Group] = []
     for key, geosite, size in GEOSITE_GROUPS:
-        groups.append(Group(key=key, geosite=geosite, size=size, entries=()))
+        merged = tuple(sorted(buckets.pop(key, []), key=lambda e: e.label.lower()))
+        groups.append(
+            Group(key=key, geosite=geosite, size=size + sum(e.size for e in merged), entries=merged)
+        )
     for key, entries in buckets.items():
         ordered = tuple(sorted(entries, key=lambda e: e.label.lower()))
         groups.append(
@@ -185,6 +188,13 @@ def unknown_keys(keys: list[str]) -> list[str]:
     return sorted({k for k in keys if k not in known and LEGACY_KEYS.get(k) not in known})
 
 
+def geosite_size(name: str) -> int:
+    for _, geosite, size in GEOSITE_GROUPS:
+        if geosite and geosite.lower() == name.strip().lower():
+            return size
+    return 0
+
+
 def size_of(key: str) -> int:
     found = _index().get(key)
     if found is None:
@@ -222,7 +232,6 @@ def expand(keys: list[str]) -> tuple[list[str], list[str], list[str]]:
         whole = group.key in selected
         if whole and group.geosite:
             take_geo(group.geosite)
-            continue
         for entry in group.entries:
             if whole or entry.key in selected:
                 take_entry(entry)
