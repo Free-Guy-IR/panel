@@ -38,10 +38,11 @@ NAMED_MATCHER_KINDS = ("geosite", "ext")
 UNEXPANDABLE_MATCHER_KINDS = ("geosite", "ext", "regexp")
 CLASH_REMEDY = (
     "Edit that rule in the core config so it no longer covers this filter's traffic. If it applies to every "
-    "inbound, give it an inboundTag that leaves out the inbounds you are filtering. If it already names them, "
-    "take those inbounds out of its inboundTag. Either way you can instead drop the matcher named above from it. "
-    "Moving it is not an option, because the panel always appends its filter rules after the ones already in "
-    "the core."
+    "inbound, give it an inboundTag that leaves out the inbounds you are filtering. If it already names them "
+    "alongside others, take those inbounds out of its inboundTag - but if they are the only ones it names, "
+    "emptying the list makes it apply to every inbound instead, so remove the rule or narrow its matchers "
+    "rather than its inboundTag. Either way you can instead drop the matcher named above from it. Moving it is "
+    "not an option, because the panel always appends its filter rules after the ones already in the core."
 )
 ADVISORY_NOTE = (
     "These do not stop the filter and it has been applied. Each names a rule that could carry, or partly block, "

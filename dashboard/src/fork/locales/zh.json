@@ -571,6 +571,7 @@
   "contentFilter.selectedCount": "已选 {{picked}} 个",
   "contentFilter.scopeEmpty": "尚未选择任何内容，因此此过滤器不会生效。",
   "contentFilter.scopeReach": "覆盖 {{nodes}} 个节点上的 {{endpoints}} 个接入点。",
+  "contentFilter.scopeSpill": "其中 {{spill}} 个仅因共用同一配置而被包含。",
   "contentFilter.scopeFleetWide": "之后开始承载它们的节点也会被覆盖。",
   "contentFilter.bulkSelectScope": "「全选」和「全不选」只作用于当前列出的行。",
   "contentFilter.searchNodes": "按名称或 ID 搜索节点",

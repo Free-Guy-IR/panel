@@ -294,12 +294,14 @@ function ScopeLine({
   nodes,
   endpoints,
   fleetWide,
+  spill,
   pickedNodes,
   pickedTags,
 }: {
   nodes: number
   endpoints: number
   fleetWide: boolean
+  spill: number
   pickedNodes: number
   pickedTags: number
 }) {
@@ -316,10 +318,18 @@ function ScopeLine({
       <span className="text-sm text-foreground">
         {t('contentFilter.scopeReach', {
           endpoints,
-          nodes,
+          nodes: nodes + spill,
           defaultValue: 'Covers {{endpoints}} endpoints on {{nodes}} nodes.',
         })}
       </span>
+      {spill > 0 ? (
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t('contentFilter.scopeSpill', {
+            spill,
+            defaultValue: '{{spill}} of them are included only because they share a configuration.',
+          })}
+        </span>
+      ) : null}
       {fleetWide ? (
         <span className="text-xs text-muted-foreground">
           {t('contentFilter.scopeFleetWide', {
@@ -1972,6 +1982,7 @@ export default function ContentFilterPage() {
                   nodes={reach.rows.length}
                   endpoints={reach.endpoints}
                   fleetWide={reach.fleetWide}
+                  spill={reach.spill.length}
                   pickedNodes={assignNodes.length}
                   pickedTags={assignTags.length}
                 />

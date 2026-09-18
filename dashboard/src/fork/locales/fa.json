@@ -618,6 +618,7 @@
   "contentFilter.selectedCount": "{{picked}} مورد انتخاب شده",
   "contentFilter.scopeEmpty": "هنوز چیزی انتخاب نشده، پس این فیلتر جایی اعمال نمی‌شود.",
   "contentFilter.scopeReach": "{{endpoints}} نقطهٔ اتصال روی {{nodes}} نود را پوشش می‌دهد.",
+  "contentFilter.scopeSpill": "{{spill}} تای آن‌ها فقط به این دلیل وارد شده‌اند که پیکربندی مشترک دارند.",
   "contentFilter.scopeFleetWide": "هر نودی که بعداً این‌ها را بگیرد هم پوشش داده می‌شود.",
   "contentFilter.bulkSelectScope": "«همه» و «هیچ‌کدام» فقط روی ردیف‌هایی اثر دارند که همین حالا نمایش داده شده‌اند.",
   "contentFilter.searchNodes": "جست‌وجوی نود بر اساس نام یا شناسه",

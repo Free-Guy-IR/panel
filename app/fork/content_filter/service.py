@@ -38,6 +38,7 @@ logger = get_logger("content-filter")
 UNMATCHED_MARKER = "not enough information"
 PROBE_DOMAIN = "www.pornhub.com"
 DEFAULT_CORE_ID = 1
+WHOLE_NODE_PROBE = "*"
 ROUTABLE_PROTOCOLS = frozenset({"vless", "vmess", "trojan", "shadowsocks", "socks", "http"})
 NO_FILTERABLE_ENDPOINT = "this node has no endpoint whose protocol can carry destination rules"
 NOTHING_TO_ENFORCE = (
@@ -70,10 +71,8 @@ class ReloadRequired(EnforcementError):
 
 
 def nothing_to_enforce(assignment: ContentFilterAssignment) -> str | None:
-    if not assignment.inbound_tag:
-        return None
     try:
-        built = assignment_rules(assignment)
+        built = assignment_rules(assignment, [assignment.inbound_tag or WHOLE_NODE_PROBE])
         name = assignment.profile.name
     except Exception as exc:
         logger.debug(f"assignment {assignment.id}: cannot tell whether its profile is empty: {exc!r}")
@@ -86,7 +85,7 @@ def blocks_everything(assignment: ContentFilterAssignment) -> str | None:
         profile = assignment.profile
         if not profile.strict_mode or list(profile.allow_list or []):
             return None
-        if not assignment_rules(assignment):
+        if not assignment_rules(assignment, [assignment.inbound_tag or WHOLE_NODE_PROBE]):
             return None
         name = profile.name
     except Exception as exc:
