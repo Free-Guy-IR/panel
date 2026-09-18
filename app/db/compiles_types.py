@@ -28,7 +28,7 @@ def compile_cs_postgresql(element, compiler, **kw):
     return f'VARCHAR({element.length}) COLLATE "C"'  # "C" collation is case-sensitive
 
 
-@compiles(CaseSensitiveString, "mysql")
+@compiles(CaseSensitiveString, "mysql", "mariadb")
 def compile_cs_mysql(element, compiler, **kw):
     return f"VARCHAR({element.length}) COLLATE utf8mb4_bin"  # utf8mb4_bin is case-sensitive
 
@@ -96,7 +96,7 @@ def compile_days_diff_postgresql(element, compiler, **kw):
     return f"EXTRACT(EPOCH FROM ({col} - CURRENT_TIMESTAMP)) / 86400"
 
 
-@compiles(DaysDiff, "mysql")
+@compiles(DaysDiff, "mysql", "mariadb")
 def compile_days_diff_mysql(element, compiler, **kw):
     col = compiler.process(element.column)
     return f"DATEDIFF({col}, UTC_TIMESTAMP())"
@@ -124,7 +124,7 @@ def compile_date_diff_postgresql(element, compiler, **kw):
     return f"EXTRACT(EPOCH FROM ({compiler.process(element.date1)} - {compiler.process(element.date2)})) / 86400"
 
 
-@compiles(DateDiff, "mysql")
+@compiles(DateDiff, "mysql", "mariadb")
 def compile_date_diff_mysql(element, compiler, **kw):
     return f"DATEDIFF({compiler.process(element.date1)}, {compiler.process(element.date2)})"
 
