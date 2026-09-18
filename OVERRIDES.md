@@ -34,7 +34,6 @@ stays visible.
 
 ## Branding & fork infrastructure (not upstreamable)
 
-- `pyproject.toml` — ruff is scoped to the code it governs: the generated migrations stay excluded and the one-off probe scripts under `specs/*/experiments/` carry their own per-file ignore list instead of bending the repository-wide rules; `[tool.uv.sources]` also pins `pasarguard-node-bridge` to the fork's own `node_bridge_py` git source, which is why the Dockerfile must keep installing git for uv to resolve it
 - `app/db/migrations/env.py` — imports `app/db/models.py` so the fork model modules register their tables on the shared declarative metadata before autogenerate reads it, and adds `MIGRATION_OWNED_TABLES` with an `_include_name` hook handed to both of alembic's context.configure calls; a table that a hand-written migration owns and deliberately has no ORM model for (`content_filter_sniffing_repairs`) is therefore skipped by autogenerate instead of being emitted as a drop. Because the hook sits on the offline and the online path alike, it changes autogenerate behaviour for the whole fork, not just for that one table
 - `README.md` — fork branding: logo, badges, links point to Free-Guy-IR
 - `README-fa.md` — fork branding, Persian edition
@@ -123,6 +122,9 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/routers/subscription.py` — 5 lines; the public /sub routes pass the caller's user-agent and IP down to the subscription access log so every path that hands out a config leaves a delivery record. The user-agent is read off the request headers rather than through a new FastAPI Header parameter, so no route signature and no OpenAPI shape changes; the five lines are single-line calls reflowed to take the extra keyword arguments
 - `app/templates/__init__.py` — jinja environment setup update
 - `app/subscription/xray.py` — finalmask stream settings emission
+- `app/db/compiles_types.py` — registers the MySQL compilation of `CaseSensitiveString`, `DaysDiff` and `DateDiff` for the `mariadb` dialect name as well. SQLAlchemy gives a `mariadb://` URL its own dialect name, which upstream's `mysql`-only hooks never match, so on MariaDB the collation was dropped silently and the two date helpers raised `UnsupportedCompilationError` in the `days_left` expression and the usage-reset queries. `config.py` accepts those URLs, so this is a supported configuration the fork has to make work
+- `app/db/crud/settings.py` — 1 line; `get_settings` is annotated `Settings | None`, which is what `scalar_one_or_none` has always returned. The upstream annotation promised a row that may not exist and every caller believed it
+- `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`
 
 ## Tests
 
@@ -171,9 +173,6 @@ real boundary, and each one still needs its own justification or a revert.
 - `dashboard/src/components/layout/sidebar.tsx` — 1 line, fork main-nav items are taken from the owner-aware accessor so owner-only entries are never rendered for other admins
 - `dashboard/src/components/layout/tabbed-route-suspense-fallback.tsx` — the settings loading skeleton drops fork tabs the current admin may not open
 - `dashboard/src/pages/_dashboard.settings.tsx` — the settings tab list drops fork tabs the current admin may not open
-- `dashboard/src/utils/rbac.ts` — 2 lines, canAccessRoute consults the fork registry's owner-only route paths before the generic settings branch
-- `tests/test_fork_boundary.py` — the expected fork endpoint surface is extended with the content-filter and traffic-log routes
-- `dashboard/src/features/statistics/components/all-nodes-live-section.tsx` — the live fleet section now reads the single fleet endpoint instead of one request per node, so the owner-only gate on that endpoint actually protects the data
 - `app/routers/system.py` — 1 line, reason not recorded
 - `app/subscription/clash.py` — 2 lines, reason not recorded
 - `app/subscription/links.py` — 1 line, reason not recorded
