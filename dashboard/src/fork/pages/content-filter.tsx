@@ -754,6 +754,7 @@ export default function ContentFilterPage() {
   const [nodeQuery, setNodeQuery] = useState('')
   const [endpointQuery, setEndpointQuery] = useState('')
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null)
+  const [bulkRequest, setBulkRequest] = useState<ApplyBody | null>(null)
   const [pendingRestart, setPendingRestart] = useState<PendingRestart | null>(null)
   const [probeDomain, setProbeDomain] = useState('')
   const [probeResult, setProbeResult] = useState<{ domain: string; blocked: boolean; outbound: string } | null>(null)
@@ -842,8 +843,9 @@ export default function ContentFilterPage() {
         method: 'POST',
         body: { ...body, is_enabled: true, confirm_restart: confirm },
       }),
-    onSuccess: result => {
+    onSuccess: (result, variables) => {
       setBulkResult(result)
+      setBulkRequest(variables.body)
       const held = result.outcomes.filter(outcome => outcome.reload)
       const applied = result.applied ?? 0
       const failed = Math.max((result.failed ?? 0) - held.filter(outcome => outcome.status === 'failed').length, 0)
@@ -1127,6 +1129,7 @@ export default function ContentFilterPage() {
     setAssignNodes([])
     setAssignTags([])
     setBulkResult(null)
+    setBulkRequest(null)
     setNodeQuery('')
     setEndpointQuery('')
   }
@@ -1723,15 +1726,12 @@ export default function ContentFilterPage() {
                       size="sm"
                       variant="secondary"
                       className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
-                      disabled={activeId === null || applyTargets.isPending}
+                      disabled={!bulkRequest || applyTargets.isPending}
                       onClick={() => {
-                        if (activeId === null) return
+                        if (!bulkRequest) return
                         setPendingRestart({
                           prompt: bulkPrompt,
-                          request: {
-                            kind: 'applyTargets',
-                            body: { profile_id: activeId, node_ids: assignNodes, inbound_tags: assignTags },
-                          },
+                          request: { kind: 'applyTargets', body: bulkRequest },
                         })
                       }}
                     >
@@ -2290,7 +2290,10 @@ export default function ContentFilterPage() {
             <DialogFooter>
               {bulkResult ? (
                 <>
-                  <Button variant="ghost" onClick={() => setBulkResult(null)}>
+                  <Button variant="ghost" onClick={() => {
+                      setBulkResult(null)
+                      setBulkRequest(null)
+                    }}>
                     {t('contentFilter.bulkAgain', { defaultValue: 'Pick more targets' })}
                   </Button>
                   <Button onClick={() => setAssignOpen(false)}>{t('contentFilter.done', { defaultValue: 'Done' })}</Button>
