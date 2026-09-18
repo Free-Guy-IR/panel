@@ -538,7 +538,7 @@ async def test_the_list_endpoint_reads_each_core_once_however_many_filters_exist
 
     persisted_for: list[int] = []
     delivery_calls: list[int] = []
-    real_persisted = service.core_persisted_rules
+    real_persisted = service.core_persisted_owners
     real_delivery = service.assignment_delivery
 
     async def counted_persisted(session, core_id):
@@ -549,7 +549,7 @@ async def test_the_list_endpoint_reads_each_core_once_however_many_filters_exist
         delivery_calls.append(assignment.id)
         return await real_delivery(session, assignment)
 
-    monkeypatch.setattr(service, "core_persisted_rules", counted_persisted)
+    monkeypatch.setattr(service, "core_persisted_owners", counted_persisted)
     monkeypatch.setattr(service, "assignment_delivery", counted_delivery)
 
     rows = await router.list_assignments(db=db, _=None)

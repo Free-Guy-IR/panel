@@ -11,7 +11,7 @@ from app.db.crud.core import get_core_config_by_id
 from app.db.models import Node
 from app.fork.content_filter import capability, service
 from app.fork.content_filter.catalog import catalog_payload
-from app.fork.content_filter.rules import RuleValueError, tag_assignment_id
+from app.fork.content_filter.rules import RuleValueError
 from app.fork.content_filter.schemas import (
     AssignmentBulkPayload,
     AssignmentBulkResult,
@@ -174,15 +174,6 @@ async def _withdraw_rules(
     return reported, prompt
 
 
-def _rule_owners(rules: list[dict]) -> set[int]:
-    owners: set[int] = set()
-    for rule in rules:
-        owner = tag_assignment_id(str(rule.get("ruleTag") or ""))
-        if owner is not None:
-            owners.add(owner)
-    return owners
-
-
 def _reaches(assignment: ContentFilterAssignment, node: Node, tags: set[str]) -> bool:
     if not assignment.is_enabled:
         return False
@@ -206,7 +197,7 @@ async def _delivery_map(db: AsyncSession, assignments: list[ContentFilterAssignm
     cores_of: dict[int, list[int]] = {node.id: await service.node_core_ids(db, node) for node in nodes}
     persisted: dict[int, set[int]] = {}
     for core_id in {core_id for ids in cores_of.values() for core_id in ids}:
-        persisted[core_id] = _rule_owners(await _readable(service.core_persisted_rules(db, core_id)))
+        persisted[core_id] = await _readable(service.core_persisted_owners(db, core_id))
 
     out: dict[int, str] = {}
     for assignment in assignments:

@@ -36,6 +36,24 @@ PRIVATE_GEOIP = "geoip:private"
 DOMAIN_MATCHER_KINDS = ("domain", "full", "keyword", "regexp", "geosite", "ext")
 NAMED_MATCHER_KINDS = ("geosite", "ext")
 UNEXPANDABLE_MATCHER_KINDS = ("geosite", "ext", "regexp")
+NAMED_DOMAIN_LIST_KINDS = ("geosite", "ext", "ext-domain")
+NAMED_ADDRESS_LIST_KINDS = ("geoip", "ext", "ext-ip")
+CASE_SENSITIVE_MATCHER_KINDS = ("regexp", "ext", "ext-domain", "ext-ip")
+DOMAIN_LIST_FIELDS = ("domain", "domains")
+ADDRESS_LIST_FIELDS = ("ip", "source", "sourceIP", "localIP")
+RESTRICTION_LIST_FIELDS = ("source", "sourceIP", "localIP")
+DESTINATION_LIST_FIELDS = ("ip",)
+COVERAGE_STRUCTURE_FIELDS = (
+    "type",
+    "ruleTag",
+    "outboundTag",
+    "balancerTag",
+    "inboundTag",
+    *DOMAIN_LIST_FIELDS,
+    *DESTINATION_LIST_FIELDS,
+)
+ANY_INBOUND = None
+ANY_TRAFFIC = "*"
 CLASH_REMEDY = (
     "Edit that rule in the core config so it no longer covers this filter's traffic. If it applies to every "
     "inbound, give it an inboundTag that leaves out the inbounds you are filtering. If it already names them "
@@ -58,6 +76,8 @@ IDENTITY_LEN = 10
 CHECKSUM_LEN = 8
 TOKEN_EXTRA_CHARS = "-_.@"
 LABEL_EXTRA_CHARS = "-_"
+CATEGORY_RULE_LIMIT = 4
+DOMAIN_MATCHER_LIMIT = 4000
 
 
 class RuleValueError(ValueError):
@@ -281,25 +301,39 @@ def resolve_outbound_tags(config: dict) -> dict[str, str]:
     return found
 
 
-def build_rules(
-    assignment_id: int,
+def _ordered(values: list[str]) -> list[str]:
+    seen: list[str] = []
+    for value in values or []:
+        text = str(value)
+        if text not in seen:
+            seen.append(text)
+    return seen
+
+
+def build_shared_rules(
+    assignment_ids: list[int],
     inbound_tags: list[str],
     categories: list[str],
     allow_list: list[str],
     block_list: list[str],
     strict_mode: bool,
 ) -> list[dict]:
-    bound = [str(tag) for tag in inbound_tags or []]
+    owners = sorted({int(value) for value in assignment_ids or []})
+    if not owners:
+        raise RuleValueError("a filter rule has to belong to at least one assignment")
+    bound = _ordered(inbound_tags)
     allow = _list_matchers(allow_list, "allow list")
     blocked_domains = _list_matchers(block_list, "block list")
     category_domains = _category_matchers(categories or [])
     strict = bool(strict_mode)
 
+    seed = owners[0] if len(owners) == 1 else owners
     identity = _short_digest(
         "identity",
-        _canonical([int(assignment_id), bound, allow, blocked_domains, category_domains, strict]),
+        _canonical([seed, bound, allow, blocked_domains, category_domains, strict]),
         IDENTITY_LEN,
     )
+    lead = owners[0]
     scope: dict = {"inboundTag": bound} if bound else {}
     built: list[dict] = []
 
@@ -307,7 +341,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "allow", identity),
+                "ruleTag": rule_tag(lead, "allow", identity),
                 **scope,
                 "domain": allow,
                 "outboundTag": DIRECT_OUTBOUND,
@@ -318,7 +352,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "block", identity),
+                "ruleTag": rule_tag(lead, "block", identity),
                 **scope,
                 "domain": blocked_domains,
                 "outboundTag": BLOCK_OUTBOUND,
@@ -329,7 +363,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "cat", identity),
+                "ruleTag": rule_tag(lead, "cat", identity),
                 **scope,
                 "domain": category_domains,
                 "outboundTag": BLOCK_OUTBOUND,
@@ -340,7 +374,7 @@ def build_rules(
         built.append(
             {
                 "type": "field",
-                "ruleTag": rule_tag(assignment_id, "strict", identity),
+                "ruleTag": rule_tag(lead, "strict", identity),
                 **scope,
                 "ip": list(ANY_IP),
                 "outboundTag": BLOCK_OUTBOUND,
@@ -348,6 +382,24 @@ def build_rules(
         )
 
     return built
+
+
+def build_rules(
+    assignment_id: int,
+    inbound_tags: list[str],
+    categories: list[str],
+    allow_list: list[str],
+    block_list: list[str],
+    strict_mode: bool,
+) -> list[dict]:
+    return build_shared_rules(
+        assignment_ids=[assignment_id],
+        inbound_tags=inbound_tags,
+        categories=categories,
+        allow_list=allow_list,
+        block_list=block_list,
+        strict_mode=strict_mode,
+    )
 
 
 def digest(rules: list[dict]) -> str:
@@ -387,6 +439,107 @@ def _split_matcher(value: str) -> tuple[str, str]:
 def _suffixes(value: str) -> list[str]:
     parts = value.split(".")
     return [".".join(parts[index:]) for index in range(len(parts))]
+
+
+def _list_prefix(value: str) -> str:
+    head, separator, _ = (value or "").strip().lower().partition(":")
+    return head if separator else ""
+
+
+def _gathered(rule: dict, fields: tuple[str, ...]) -> list[str]:
+    found: list[str] = []
+    for field in fields:
+        found.extend(_values(rule, field))
+    return found
+
+
+def domain_matchers(rule: dict) -> list[str]:
+    return _gathered(rule, DOMAIN_LIST_FIELDS)
+
+
+def address_matchers(rule: dict) -> list[str]:
+    return _gathered(rule, ADDRESS_LIST_FIELDS)
+
+
+def names_a_category(rule: dict) -> bool:
+    if not isinstance(rule, dict):
+        return False
+    if any(_list_prefix(value) in NAMED_DOMAIN_LIST_KINDS for value in domain_matchers(rule)):
+        return True
+    return any(_list_prefix(value) in NAMED_ADDRESS_LIST_KINDS for value in address_matchers(rule))
+
+
+def rule_set_cost(rules: list[dict]) -> tuple[int, int]:
+    category_rules = 0
+    matchers = 0
+    for rule in rules or []:
+        if not isinstance(rule, dict):
+            continue
+        matchers += len(domain_matchers(rule))
+        if names_a_category(rule):
+            category_rules += 1
+    return category_rules, matchers
+
+
+def _condition_sets(rule: dict) -> tuple[tuple[str, frozenset[str]], ...]:
+    gathered = []
+    for name in sorted(rule):
+        if name in COVERAGE_STRUCTURE_FIELDS:
+            continue
+        values = _values(rule, name)
+        if values:
+            gathered.append((name, frozenset(str(value).strip() for value in values)))
+    for name in (*DOMAIN_LIST_FIELDS, *DESTINATION_LIST_FIELDS):
+        values = _values(rule, name)
+        if values:
+            gathered.append((name, frozenset(_coverage_value(value) for value in values)))
+    return tuple(sorted(gathered))
+
+
+RuleCoverage = tuple[str, str | None, tuple[tuple[str, frozenset[str]], ...]]
+
+
+def _coverage_value(value) -> str:
+    text = str(value).strip()
+    head, separator, body = text.partition(":")
+    if not separator:
+        return text.lower()
+    kind = head.strip().lower()
+    if kind in CASE_SENSITIVE_MATCHER_KINDS:
+        return f"{kind}:{body}"
+    return text.lower()
+
+
+def rule_coverage(rules: list[dict]) -> set[RuleCoverage]:
+    covered: set[RuleCoverage] = set()
+    for rule in rules or []:
+        if not isinstance(rule, dict):
+            continue
+        parsed = parse_tag(str(_field(rule, "ruleTag") or ""))
+        part = parsed[1] if parsed is not None else "unclaimed"
+        conditions = _condition_sets(rule)
+        tags = _ordered(_values(rule, "inboundTag"))
+        for tag in tags or [ANY_INBOUND]:
+            covered.add((part, tag, conditions))
+    return covered
+
+
+def _covers(held: RuleCoverage, wanted: RuleCoverage) -> bool:
+    held_part, held_tag, held_conditions = held
+    part, tag, conditions = wanted
+    if held_part != part:
+        return False
+    if held_tag is not ANY_INBOUND and held_tag != tag:
+        return False
+    narrower = dict(conditions)
+    for name, values in held_conditions:
+        if name not in narrower or not narrower[name] <= values:
+            return False
+    return True
+
+
+def within_coverage(held: set[RuleCoverage], rules: list[dict]) -> bool:
+    return all(any(_covers(entry, wanted) for entry in held) for wanted in rule_coverage(rules))
 
 
 def _own_domain_index(filter_rules: list[dict], allow: bool) -> tuple[set[str], set[str], set[str]]:
