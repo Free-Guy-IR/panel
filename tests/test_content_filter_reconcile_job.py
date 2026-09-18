@@ -263,7 +263,7 @@ async def test_one_failing_node_does_not_keep_the_others_from_being_reconciled(m
 async def test_a_hanging_node_is_abandoned_and_the_rest_still_run(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(job, "GetDB", _FakeGetDB)
     monkeypatch.setattr(job, "nodes_to_reconcile", _nodes(1, 2, 3))
-    monkeypatch.setattr(job, "RECONCILE_TIMEOUT", 0.05)
+    monkeypatch.setattr(job.job_settings, "content_filter_reconcile_timeout", 0.05)
     _attach_all(monkeypatch)
     reconciled: list[int] = []
 
@@ -287,7 +287,7 @@ async def test_queued_nodes_keep_their_whole_budget_because_the_semaphore_is_tak
 ):
     monkeypatch.setattr(job, "GetDB", _FakeGetDB)
     monkeypatch.setattr(job, "nodes_to_reconcile", _nodes(1, 2, 100, 101, 102))
-    monkeypatch.setattr(job, "RECONCILE_TIMEOUT", 0.2)
+    monkeypatch.setattr(job.job_settings, "content_filter_reconcile_timeout", 0.2)
     monkeypatch.setattr(job, "RECONCILE_LIMIT", 2)
     _attach_all(monkeypatch)
     reconciled: list[int] = []

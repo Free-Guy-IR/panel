@@ -231,6 +231,9 @@ class JobSettings(EnvSettings):
     content_filter_reconcile_interval: int = Field(
         default=300, ge=1, validation_alias="JOB_CONTENT_FILTER_RECONCILE_INTERVAL"
     )
+    content_filter_reconcile_timeout: int = Field(
+        default=180, ge=5, validation_alias="JOB_CONTENT_FILTER_RECONCILE_TIMEOUT"
+    )
 
 
 class FeatureSettings(EnvSettings):

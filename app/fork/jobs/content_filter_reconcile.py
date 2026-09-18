@@ -14,7 +14,6 @@ from config import job_settings, runtime_settings
 logger = get_logger("jobs")
 
 RECONCILE_LIMIT = 5
-RECONCILE_TIMEOUT = 30
 
 _in_flight: set[int] = set()
 _pending: set[asyncio.Task] = set()
@@ -70,14 +69,15 @@ async def _reconcile_one(node_id: int) -> None:
         return
 
     _in_flight.add(node_id)
+    limit = job_settings.content_filter_reconcile_timeout
     try:
         async with budget:
             try:
                 async with GetDB() as db:
-                    error = await asyncio.wait_for(service.reconcile_node(db, node_id), timeout=RECONCILE_TIMEOUT)
+                    error = await asyncio.wait_for(service.reconcile_node(db, node_id), timeout=limit)
             except TimeoutError:
                 logger.warning(
-                    f"Content filter reconcile on node {node_id} did not finish within {RECONCILE_TIMEOUT}s "
+                    f"Content filter reconcile on node {node_id} did not finish within {limit}s "
                     "and was abandoned; the next run will try again"
                 )
                 return
