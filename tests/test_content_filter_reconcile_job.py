@@ -411,6 +411,30 @@ async def test_a_reconcile_survives_the_state_an_earlier_event_loop_left_behind(
 
 
 @pytest.mark.asyncio
+async def test_the_health_seam_still_reconciles_on_a_worker_that_is_not_the_job_leader(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.nats import leader as nats_leader
+    from config import nats_settings
+
+    monkeypatch.setattr(nats_settings, "enabled", True)
+    monkeypatch.setattr(nats_leader.server_settings, "workers", 2)
+    monkeypatch.setattr(nats_leader, "_is_leader", False)
+    assert nats_leader.needs_job_leader() and not nats_leader.is_job_leader()
+
+    monkeypatch.setattr(job, "GetDB", _FakeGetDB)
+    _attach_all(monkeypatch)
+    _quiet_seam(monkeypatch)
+    seen = _record_reconciles(monkeypatch)
+
+    db_node = SimpleNamespace(id=55, name="follower", last_status_change=datetime(2026, 9, 17, 11, 0, tzinfo=UTC))
+    await node_extras.after_healthy_node_check(object(), db_node)
+    await _drain_pending()
+
+    assert seen == [55]
+
+
+@pytest.mark.asyncio
 async def test_the_health_seam_does_nothing_while_the_off_switch_is_off(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(job, "GetDB", _FakeGetDB)
     monkeypatch.setattr(job.job_settings, "content_filter_reconcile_enabled", False)

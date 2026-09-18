@@ -7,7 +7,6 @@ from app.db import GetDB
 from app.db.models import Node, NodeStatus
 from app.fork.content_filter import service
 from app.fork.models.content_filter import ContentFilterAssignment
-from app.nats.leader import is_job_leader, needs_job_leader
 from app.node import node_manager
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings
@@ -103,9 +102,6 @@ def _spawn(node_id: int) -> None:
 
 async def reconcile_after_reconnect(db_node) -> None:
     if not job_settings.content_filter_reconcile_enabled:
-        return
-
-    if needs_job_leader() and not is_job_leader():
         return
 
     marker = db_node.last_status_change
