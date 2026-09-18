@@ -290,6 +290,110 @@ function mergePrompts(prompts: ReloadPrompt[]): ReloadPrompt | null {
   }
 }
 
+function ScopeLine({
+  nodes,
+  endpoints,
+  fleetWide,
+  spill,
+  pickedNodes,
+  pickedTags,
+}: {
+  nodes: number
+  endpoints: number
+  fleetWide: boolean
+  spill: number
+  pickedNodes: number
+  pickedTags: number
+}) {
+  const { t } = useTranslation()
+  if (!pickedNodes && !pickedTags) {
+    return (
+      <p className="rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground">
+        {t('contentFilter.scopeEmpty', { defaultValue: 'Nothing is picked yet, so this filter would go nowhere.' })}
+      </p>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-primary/30 bg-primary/[0.04] px-3 py-2.5">
+      <span className="text-sm text-foreground">
+        {t('contentFilter.scopeReach', {
+          endpoints,
+          nodes: nodes + spill,
+          defaultValue: 'Covers {{endpoints}} endpoints on {{nodes}} nodes.',
+        })}
+      </span>
+      {spill > 0 ? (
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t('contentFilter.scopeSpill', {
+            spill,
+            defaultValue: '{{spill}} of them are included only because they share a configuration.',
+          })}
+        </span>
+      ) : null}
+      {fleetWide ? (
+        <span className="text-xs text-muted-foreground">
+          {t('contentFilter.scopeFleetWide', {
+            defaultValue: 'Any node that starts carrying them later is covered too.',
+          })}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function PickerHeader({
+  title,
+  picked,
+  onAll,
+  onNone,
+  allDisabled,
+  noneDisabled,
+}: {
+  title: string
+  picked: number
+  onAll: () => void
+  onNone: () => void
+  allDisabled: boolean
+  noneDisabled: boolean
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <h4 className="truncate text-sm font-semibold text-foreground">{title}</h4>
+        {picked > 0 ? (
+          <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-xs font-normal tabular-nums">
+            {picked}
+          </Badge>
+        ) : null}
+      </div>
+      <div className="inline-flex shrink-0 overflow-hidden rounded-md border">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 rounded-none px-2.5 text-xs"
+          disabled={allDisabled}
+          onClick={onAll}
+        >
+          {t('contentFilter.selectAll', { defaultValue: 'All' })}
+        </Button>
+        <span aria-hidden className="w-px self-stretch bg-border" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 rounded-none px-2.5 text-xs"
+          disabled={noneDisabled}
+          onClick={onNone}
+        >
+          {t('contentFilter.selectNone', { defaultValue: 'None' })}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function SectionHeading({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="flex items-baseline gap-3 border-b pb-2 pt-2">
@@ -1873,39 +1977,27 @@ export default function ContentFilterPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {t('contentFilter.bulkNodes', { defaultValue: 'Nodes' })}
-                    </h4>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="me-1 text-[11px] tabular-nums text-muted-foreground">
-                        {t('contentFilter.selectedCount', { picked: assignNodes.length, defaultValue: '{{picked}} selected' })}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        disabled={selectableNodes.length === 0 || everyNodePicked}
-                        onClick={() => addCarriers(selectableNodes.map(node => node.id))}
-                      >
-                        {t('contentFilter.selectAll', { defaultValue: 'All' })}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        disabled={assignNodes.length === 0}
-                        onClick={() => setAssignNodes([])}
-                      >
-                        {t('contentFilter.selectNone', { defaultValue: 'None' })}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground/80">
+              <div className="space-y-4">
+                <ScopeLine
+                  nodes={reach.rows.length}
+                  endpoints={reach.endpoints}
+                  fleetWide={reach.fleetWide}
+                  spill={reach.spill.length}
+                  pickedNodes={assignNodes.length}
+                  pickedTags={assignTags.length}
+                />
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                <section className="space-y-2 rounded-xl border bg-card/40 p-3">
+                  <PickerHeader
+                    title={t('contentFilter.bulkNodes', { defaultValue: 'Nodes' })}
+                    picked={assignNodes.length}
+                    onAll={() => addCarriers(selectableNodes.map(node => node.id))}
+                    onNone={() => setAssignNodes([])}
+                    allDisabled={selectableNodes.length === 0 || everyNodePicked}
+                    noneDisabled={assignNodes.length === 0}
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     {t('contentFilter.bulkNodesHint', {
                       defaultValue: 'A ticked node with no endpoint ticked below covers every endpoint it carries.',
                     })}{' '}
@@ -1922,7 +2014,7 @@ export default function ContentFilterPage() {
                       className="h-8 text-xs ltr:pl-9 rtl:pr-9"
                     />
                   </div>
-                  <div className="max-h-56 space-y-1 overflow-y-auto pe-1">
+                  <div className="h-64 space-y-0.5 overflow-y-auto pe-1">
                     {(targets.data ?? []).length === 0 ? (
                       <p className="py-4 text-center text-sm text-muted-foreground">
                         {t('contentFilter.noNodes', { defaultValue: 'No node is registered yet.' })}
@@ -1942,12 +2034,12 @@ export default function ContentFilterPage() {
                           <div
                             key={node.id}
                             className={cn(
-                              'flex items-start gap-3 rounded-lg border px-3 py-2 transition-colors',
+                              'flex items-start gap-3 rounded-md border-s-2 px-3 py-2 transition-colors',
                               blocked
-                                ? 'border-transparent opacity-60'
+                                ? 'border-s-transparent opacity-55'
                                 : on
-                                  ? 'border-primary/40 bg-primary/[0.05]'
-                                  : 'border-transparent hover:bg-muted/60',
+                                  ? 'border-s-primary bg-primary/[0.06]'
+                                  : 'border-s-transparent hover:border-s-border hover:bg-muted/50',
                             )}
                           >
                             <Checkbox
@@ -1969,7 +2061,7 @@ export default function ContentFilterPage() {
                                 >
                                   {node.name}
                                 </label>
-                                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                   {t('contentFilter.nodeIdLabel', { id: node.id, defaultValue: 'id {{id}}' })}
                                 </span>
                                 {peers.length ? (
@@ -1996,7 +2088,7 @@ export default function ContentFilterPage() {
                                   </Tooltip>
                                 ) : null}
                               </div>
-                              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                                 {blocked
                                   ? node.reason
                                   : t('contentFilter.nodeFilterableCount', {
@@ -2011,40 +2103,20 @@ export default function ContentFilterPage() {
                       })
                     )}
                   </div>
-                </div>
+                </section>
 
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {t('contentFilter.bulkEndpoints', { defaultValue: 'Endpoints' })}
-                    </h4>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="me-1 text-[11px] tabular-nums text-muted-foreground">
-                        {t('contentFilter.selectedCount', { picked: assignTags.length, defaultValue: '{{picked}} selected' })}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        disabled={selectableEndpoints.length === 0 || everyEndpointPicked}
-                        onClick={() => setAssignTags(prev => [...new Set([...prev, ...selectableEndpoints.map(entry => entry.tag)])])}
-                      >
-                        {t('contentFilter.selectAll', { defaultValue: 'All' })}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        disabled={assignTags.length === 0}
-                        onClick={() => setAssignTags([])}
-                      >
-                        {t('contentFilter.selectNone', { defaultValue: 'None' })}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground/80">
+                <section className="space-y-2 rounded-xl border bg-card/40 p-3">
+                  <PickerHeader
+                    title={t('contentFilter.bulkEndpoints', { defaultValue: 'Endpoints' })}
+                    picked={assignTags.length}
+                    onAll={() =>
+                      setAssignTags(prev => [...new Set([...prev, ...selectableEndpoints.map(entry => entry.tag)])])
+                    }
+                    onNone={() => setAssignTags([])}
+                    allDisabled={selectableEndpoints.length === 0 || everyEndpointPicked}
+                    noneDisabled={assignTags.length === 0}
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     {t('contentFilter.bulkEndpointsHint', {
                       defaultValue: 'With no node ticked above, each endpoint here is filtered on every node that carries it.',
                     })}{' '}
@@ -2061,7 +2133,7 @@ export default function ContentFilterPage() {
                       className="h-8 text-xs ltr:pl-9 rtl:pr-9"
                     />
                   </div>
-                  <div className="max-h-56 space-y-1 overflow-y-auto pe-1">
+                  <div className="h-64 space-y-0.5 overflow-y-auto pe-1">
                     {fleetEndpoints.length === 0 ? (
                       <p className="py-4 text-center text-sm text-muted-foreground">
                         {t('contentFilter.noFleetEndpoints', { defaultValue: 'No filterable endpoint exists on any node yet.' })}
@@ -2080,12 +2152,12 @@ export default function ContentFilterPage() {
                           <div
                             key={entry.tag}
                             className={cn(
-                              'flex items-start gap-3 rounded-lg border px-3 py-2 transition-colors',
+                              'flex items-start gap-3 rounded-md border-s-2 px-3 py-2 transition-colors',
                               !usable
-                                ? 'border-transparent opacity-60'
+                                ? 'border-s-transparent opacity-55'
                                 : on
-                                  ? 'border-primary/40 bg-primary/[0.05]'
-                                  : 'border-transparent hover:bg-muted/60',
+                                  ? 'border-s-primary bg-primary/[0.06]'
+                                  : 'border-s-transparent hover:border-s-border hover:bg-muted/50',
                             )}
                           >
                             <Checkbox
@@ -2175,6 +2247,7 @@ export default function ContentFilterPage() {
                       })
                     )}
                   </div>
+                </section>
                 </div>
 
                 <div className="rounded-lg border bg-muted/30 px-3 py-3">

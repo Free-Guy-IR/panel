@@ -37,9 +37,12 @@ DOMAIN_MATCHER_KINDS = ("domain", "full", "keyword", "regexp", "geosite", "ext")
 NAMED_MATCHER_KINDS = ("geosite", "ext")
 UNEXPANDABLE_MATCHER_KINDS = ("geosite", "ext", "regexp")
 CLASH_REMEDY = (
-    "Edit that rule in the core config so it no longer covers this filter's traffic: give it an inboundTag that "
-    "leaves out the inbounds you are filtering, or drop the matcher named above from it. Moving it is not an "
-    "option, because the panel always appends its filter rules after the ones already in the core."
+    "Edit that rule in the core config so it no longer covers this filter's traffic. If it applies to every "
+    "inbound, give it an inboundTag that leaves out the inbounds you are filtering. If it already names them "
+    "alongside others, take those inbounds out of its inboundTag - but if they are the only ones it names, "
+    "emptying the list makes it apply to every inbound instead, so remove the rule or narrow its matchers "
+    "rather than its inboundTag. Either way you can instead drop the matcher named above from it. Moving it is "
+    "not an option, because the panel always appends its filter rules after the ones already in the core."
 )
 ADVISORY_NOTE = (
     "These do not stop the filter and it has been applied. Each names a rule that could carry, or partly block, "
@@ -452,6 +455,18 @@ def _domain_overlap(values: list[str], index: tuple[set[str], set[str], set[str]
     return (theoretical, False) if theoretical is not None else None
 
 
+def _rule_label(body: dict, bound: frozenset, scope: set) -> str:
+    named = str(_field(body, "ruleTag") or "")
+    if named:
+        return named
+    if not bound:
+        return "a rule that applies to every inbound"
+    covered = sorted(bound & scope) if scope else sorted(bound)
+    if not covered:
+        return "a rule that applies to every inbound"
+    return "a rule whose inboundTag already names " + ", ".join(covered)
+
+
 def _destination(outbound: str, body: dict) -> str:
     if outbound:
         return outbound
@@ -673,7 +688,7 @@ def conflicting_rules(
         if verdict is None:
             continue
         reason, blocking, overrides_allow = verdict
-        label = str(_field(body, "ruleTag") or "") or "an untagged rule"
+        label = _rule_label(body, bound, scope)
         destination = _destination(outbound, body)
         if overrides_allow:
             scale = "" if blocking else "part of "

@@ -21,6 +21,7 @@ depends_on: str | Sequence[str] | None = None
 logger = logging.getLogger("alembic.runtime.migration")
 
 CASE_SENSITIVE = "utf8mb4_bin"
+MYSQL_FAMILY = ("mysql", "mariadb")
 COLUMNS = (("nodes", "name", 256), ("users", "username", 128))
 
 
@@ -34,9 +35,19 @@ def _collation(bind, table: str, column: str) -> str | None:
     ).scalar()
 
 
+def _case_collisions(bind, table: str, column: str) -> list[str]:
+    rows = bind.execute(
+        sa.text(
+            f"SELECT LOWER(`{column}`) AS folded, COUNT(*) AS hits "  # noqa: S608
+            f"FROM `{table}` GROUP BY folded HAVING hits > 1"
+        )
+    ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
 def upgrade() -> None:
     bind = op.get_bind()
-    if bind.dialect.name not in ("mysql", "mariadb"):
+    if bind.dialect.name not in MYSQL_FAMILY:
         return
 
     for table, column, length in COLUMNS:
@@ -46,6 +57,18 @@ def upgrade() -> None:
         if current == CASE_SENSITIVE:
             logger.info(f"content filter: {table}.{column} is already {CASE_SENSITIVE}")
             continue
+
+        collisions = _case_collisions(bind, table, column)
+        if collisions:
+            shown = ", ".join(sorted(collisions)[:5])
+            raise RuntimeError(
+                f"{table}.{column} is {current}, which treats names differing only in case as the same, and this "
+                f"database already holds {len(collisions)} such group(s): {shown}. Making the column "
+                f"{CASE_SENSITIVE} would keep every one of those rows, but the unique index on the column would "
+                "be rebuilt and the rows would stop being duplicates, which is a change of meaning rather than a "
+                "collation repair. Rename them so each one differs by more than case, then run this migration "
+                "again."
+            )
 
         logger.warning(
             f"content filter: {table}.{column} is {current}, so names differing only in case cannot coexist; "
@@ -61,17 +84,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    if bind.dialect.name not in ("mysql", "mariadb"):
+    if op.get_bind().dialect.name not in MYSQL_FAMILY:
         return
-
-    for table, column, length in COLUMNS:
-        if _collation(bind, table, column) is None:
-            continue
-        op.alter_column(
-            table,
-            column,
-            existing_type=mysql.VARCHAR(length=length, charset="utf8mb4", collation=CASE_SENSITIVE),
-            type_=sa.String(length=length),
-            existing_nullable=False,
-        )
+    logger.warning(
+        "content filter: leaving the column collations alone. This migration only repairs columns whose "
+        "collation had drifted from the model, and it does not record which ones it touched, so stripping the "
+        "collation here would also strip it from columns that were already correct before it ran."
+    )

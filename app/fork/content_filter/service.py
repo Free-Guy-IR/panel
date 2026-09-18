@@ -38,8 +38,18 @@ logger = get_logger("content-filter")
 UNMATCHED_MARKER = "not enough information"
 PROBE_DOMAIN = "www.pornhub.com"
 DEFAULT_CORE_ID = 1
+WHOLE_NODE_PROBE = "*"
 ROUTABLE_PROTOCOLS = frozenset({"vless", "vmess", "trojan", "shadowsocks", "socks", "http"})
 NO_FILTERABLE_ENDPOINT = "this node has no endpoint whose protocol can carry destination rules"
+NOTHING_TO_ENFORCE = (
+    'profile "{name}" has no categories, no blocked domains and no allow list, so there is nothing to apply'
+)
+BLOCKS_EVERYTHING = (
+    'profile "{name}" has strict mode on and an empty allow list. Strict mode blocks everything the profile does '
+    "not explicitly allow, so applying it would cut every connection on the endpoints you selected, not just the "
+    "traffic you meant to filter. Put the destinations that must keep working in the allow list, or turn strict "
+    "mode off and let the blocked categories do the filtering."
+)
 _UNREACHABLE_CORE = (
     "the endpoints it serves from core {core} are filtered only by that core's own config, which takes effect "
     "when the core reloads; the panel can install live rules into a node's main core only"
@@ -58,6 +68,30 @@ class ReloadRequired(EnforcementError):
         super().__init__(detail, code=409)
         self.node_ids = node_ids
         self.inbound_tags = inbound_tags
+
+
+def nothing_to_enforce(assignment: ContentFilterAssignment) -> str | None:
+    try:
+        built = assignment_rules(assignment, [assignment.inbound_tag or WHOLE_NODE_PROBE])
+        name = assignment.profile.name
+    except Exception as exc:
+        logger.debug(f"assignment {assignment.id}: cannot tell whether its profile is empty: {exc!r}")
+        return None
+    return None if built else NOTHING_TO_ENFORCE.format(name=name)
+
+
+def blocks_everything(assignment: ContentFilterAssignment) -> str | None:
+    try:
+        profile = assignment.profile
+        if not profile.strict_mode or list(profile.allow_list or []):
+            return None
+        if not assignment_rules(assignment, [assignment.inbound_tag or WHOLE_NODE_PROBE]):
+            return None
+        name = profile.name
+    except Exception as exc:
+        logger.debug(f"assignment {assignment.id}: cannot tell whether it blocks everything: {exc!r}")
+        return None
+    return BLOCKS_EVERYTHING.format(name=name)
 
 
 def assignment_rules(assignment: ContentFilterAssignment, inbound_tags: list[str] | None = None) -> list[dict]:
@@ -848,6 +882,11 @@ async def _record(db: AsyncSession, assignment: ContentFilterAssignment, enforce
 async def apply_assignment(
     db: AsyncSession, assignment: ContentFilterAssignment, admin, allow_restart: bool = False
 ) -> dict:
+    for refusal in (nothing_to_enforce(assignment), blocks_everything(assignment)):
+        if refusal is not None:
+            await _record(db, assignment, False, [refusal])
+            raise EnforcementError(refusal, code=409)
+
     node_ids = await nodes_for_assignment(db, assignment)
     if not node_ids:
         await _record(db, assignment, False, ["no node currently carries that endpoint"])
@@ -958,7 +997,8 @@ async def _node_problems(db: AsyncSession, assignment: ContentFilterAssignment, 
     except EnforcementError as exc:
         return [f"node {node_id}: {exc.detail}"]
     if not wanted:
-        return [f"node {node_id}: {NO_FILTERABLE_ENDPOINT}"]
+        empty = nothing_to_enforce(assignment)
+        return [empty] if empty is not None else [f"node {node_id}: {NO_FILTERABLE_ENDPOINT}"]
     problems = [f"node {node_id}: {_UNREACHABLE_CORE.format(core=core_id)}" for core_id in unreachable]
     try:
         live = await live_rules(node_id)

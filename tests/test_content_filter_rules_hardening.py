@@ -752,7 +752,7 @@ def test_an_untagged_live_rule_is_still_matched_against_the_saved_rules_that_acc
     result = rules.conflicting_rules(stubs, ["quiet-inbound"], PRODUCTION_CORE, own)
 
     assert not any("unidentified" in clash for clash in _quiet(result))
-    assert _named(result) == ["an untagged rule"]
+    assert _named(result) == ["a rule that applies to every inbound"]
 
 
 def test_a_surplus_untagged_live_rule_is_reported_even_on_the_production_core():
@@ -828,7 +828,7 @@ def test_the_production_core_lets_an_unrelated_filter_through_with_an_advisory()
     result = rules.conflicting_rules(PRODUCTION_RULES, ["quiet-inbound"], PRODUCTION_CORE, own)
 
     assert result.clashes == []
-    assert result.advisories == ["an untagged rule could send a hostname matching keyword:instagram to DIRECT"]
+    assert result.advisories == ["a rule that applies to every inbound could send a hostname matching keyword:instagram to DIRECT"]
 
 
 def test_the_production_core_still_refuses_a_category_that_really_contains_the_keyword():
@@ -843,7 +843,7 @@ def test_the_production_core_still_refuses_a_category_that_really_contains_the_k
 
     result = rules.conflicting_rules(PRODUCTION_RULES, ["quiet-inbound"], PRODUCTION_CORE, own)
 
-    assert result.clashes == ["an untagged rule sends keyword:instagram to DIRECT"]
+    assert result.clashes == ["a rule that applies to every inbound sends keyword:instagram to DIRECT"]
     assert result.advisories == []
 
 
@@ -861,7 +861,7 @@ def test_the_production_core_advises_rather_than_refuses_a_category_without_the_
 
     assert result.clashes == []
     assert result.advisories == [
-        "an untagged rule could send a hostname matching keyword:instagram against geosite:category-porn to DIRECT"
+        "a rule that applies to every inbound could send a hostname matching keyword:instagram against geosite:category-porn to DIRECT"
     ]
 
 
@@ -1053,9 +1053,9 @@ def test_the_production_gemini_rule_still_refuses_a_strict_profile_on_its_own_in
     result = _production_verdict("strict", GEMINI_INBOUND)
 
     assert result.clashes == [
-        "an untagged rule sends keyword:instagram to DIRECT",
-        "an untagged rule sends traffic for 100.64.0.0/10 to DIRECT",
-        "an untagged rule sends geosite:google-gemini to gemini-usa",
+        "a rule that applies to every inbound sends keyword:instagram to DIRECT",
+        "a rule that applies to every inbound sends traffic for 100.64.0.0/10 to DIRECT",
+        "a rule whose inboundTag already names vless80 sends geosite:google-gemini to gemini-usa",
     ]
     assert result.advisories == []
 
@@ -1073,7 +1073,7 @@ def test_the_only_production_shape_that_refuses_anything_is_strict_mode():
 
     assert refusing == {"strict", "social category"}
     assert _production_verdict("social category", GEMINI_INBOUND).clashes == [
-        "an untagged rule sends keyword:instagram to DIRECT"
+        "a rule that applies to every inbound sends keyword:instagram to DIRECT"
     ]
 
 
@@ -1108,8 +1108,8 @@ def test_the_production_core_under_strict_mode_reports_both_direct_rules():
     result = rules.conflicting_rules(PRODUCTION_RULES, ["quiet-inbound"], PRODUCTION_CORE, own)
 
     assert result.clashes == [
-        "an untagged rule sends keyword:instagram to DIRECT",
-        "an untagged rule sends traffic for 100.64.0.0/10 to DIRECT",
+        "a rule that applies to every inbound sends keyword:instagram to DIRECT",
+        "a rule that applies to every inbound sends traffic for 100.64.0.0/10 to DIRECT",
     ]
     assert result.advisories == []
 
@@ -1667,7 +1667,7 @@ def test_an_unidentified_stub_is_measured_against_every_saved_rule_sharing_its_o
 
     result = rules.conflicting_rules(stubs, ["in"], core, _block_only(1, "in", "pornhub.com"))
 
-    assert result.clashes == ["an untagged rule sends domain:pornhub.com to DIRECT"]
+    assert result.clashes == ["a rule that applies to every inbound sends domain:pornhub.com to DIRECT"]
 
 
 STRICT_CAPABLE_STRATEGIES = ["IPIfNonMatch", "ipifnonmatch", "IPOnDemand", "ipondemand", " IPOnDemand "]

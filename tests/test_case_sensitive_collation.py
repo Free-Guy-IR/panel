@@ -1,3 +1,4 @@
+import pytest
 import sqlalchemy as sa
 from sqlalchemy import Column, literal_column
 from sqlalchemy.dialects import mysql, postgresql, sqlite
@@ -76,3 +77,75 @@ def test_the_migration_leaves_other_backends_alone(monkeypatch):
     migration.downgrade()
 
     assert touched == []
+
+
+def _migration():
+    from app.db.migrations.versions import d8b2c4f60a17_restore_case_sensitive_collation as migration
+
+    return migration
+
+
+class _Bind:
+    def __init__(self, name, collations, collisions):
+        self.dialect = type("d", (), {"name": name})()
+        self._collations = collations
+        self._collisions = collisions
+        self.queries: list[str] = []
+
+    def execute(self, statement, params=None):
+        text = str(statement)
+        self.queries.append(text)
+        if "information_schema.COLUMNS" in text:
+            return type("r", (), {"scalar": lambda _self, p=params: self._collations.get(p["column"])})()
+        rows = [(name, 2) for name in self._collisions.get(text.split("FROM `")[1].split("`")[0], [])]
+        return type("r", (), {"fetchall": lambda _self: rows})()
+
+
+def test_a_column_that_is_already_correct_is_never_altered(monkeypatch):
+    migration = _migration()
+    bind = _Bind("mysql", {"name": "utf8mb4_bin", "username": "utf8mb4_bin"}, {})
+    altered: list[str] = []
+    monkeypatch.setattr(migration.op, "get_bind", lambda: bind)
+    monkeypatch.setattr(migration.op, "alter_column", lambda *a, **k: altered.append(a[0]))
+
+    migration.upgrade()
+
+    assert altered == []
+
+
+def test_only_the_drifted_column_is_altered(monkeypatch):
+    migration = _migration()
+    bind = _Bind("mysql", {"name": "utf8mb4_unicode_ci", "username": "utf8mb4_bin"}, {})
+    altered: list[str] = []
+    monkeypatch.setattr(migration.op, "get_bind", lambda: bind)
+    monkeypatch.setattr(migration.op, "alter_column", lambda *a, **k: altered.append(a[0]))
+
+    migration.upgrade()
+
+    assert altered == ["nodes"]
+
+
+def test_existing_case_variants_abort_before_any_alter(monkeypatch):
+    migration = _migration()
+    bind = _Bind("mysql", {"name": "utf8mb4_unicode_ci", "username": "utf8mb4_bin"}, {"nodes": ["relay"]})
+    altered: list[str] = []
+    monkeypatch.setattr(migration.op, "get_bind", lambda: bind)
+    monkeypatch.setattr(migration.op, "alter_column", lambda *a, **k: altered.append(a[0]))
+
+    with pytest.raises(RuntimeError) as raised:
+        migration.upgrade()
+
+    assert "relay" in str(raised.value)
+    assert altered == []
+
+
+def test_the_downgrade_never_strips_a_collation(monkeypatch):
+    migration = _migration()
+    bind = _Bind("mysql", {"name": "utf8mb4_bin", "username": "utf8mb4_bin"}, {})
+    altered: list[str] = []
+    monkeypatch.setattr(migration.op, "get_bind", lambda: bind)
+    monkeypatch.setattr(migration.op, "alter_column", lambda *a, **k: altered.append(a[0]))
+
+    migration.downgrade()
+
+    assert altered == []
