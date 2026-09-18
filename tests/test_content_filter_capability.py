@@ -529,3 +529,24 @@ async def test_the_reason_reported_for_a_node_follows_one_order():
     assert capability.node_reason("connected", "singbox", OUTDATED) == capability.CORE_NOT_XRAY
     assert capability.node_reason("connected", "xray", OUTDATED) == capability.NODE_OUTDATED
     assert capability.node_reason("connected", "xray", CURRENT) is None
+
+
+def test_a_disconnected_node_does_not_mask_why_an_endpoint_cannot_be_filtered():
+    from app.fork.content_filter import capability
+
+    mixed = [capability.NODE_DISCONNECTED, capability.PRE_ROUTED, capability.PRE_ROUTED]
+    assert capability.leading_reason(mixed) == capability.PRE_ROUTED
+
+    assert (
+        capability.leading_reason([capability.NODE_DISCONNECTED, capability.NODE_OUTDATED]) == capability.NODE_OUTDATED
+    )
+    assert (
+        capability.leading_reason([capability.NODE_DISCONNECTED, capability.CORE_NOT_XRAY]) == capability.CORE_NOT_XRAY
+    )
+
+
+def test_a_disconnected_node_is_still_the_reason_when_it_is_the_only_one():
+    from app.fork.content_filter import capability
+
+    assert capability.leading_reason([capability.NODE_DISCONNECTED]) == capability.NODE_DISCONNECTED
+    assert capability.leading_reason([None, None]) is None

@@ -46,8 +46,9 @@ def node_reason(status: str | None, core_type: str | None, node_version: str | N
 
 def leading_reason(reasons) -> str | None:
     present = {reason for reason in reasons if reason}
+    speaking = present - {NODE_DISCONNECTED}
     for reason in REASONS:
-        if reason in present:
+        if reason in (speaking or present):
             return reason
     return None
 
