@@ -492,7 +492,7 @@ def test_an_operator_rule_matching_only_an_allow_list_domain_is_not_reported():
 CARRIES_THE_FILTERS_TRAFFIC = [
     ("op-https", {"port": "443"}),
     ("op-quic", {"network": "udp"}),
-    ("op-public-ip", {"ip": ["1.2.3.0/24"]}),
+    ("op-public-ip", {"ip": ["192.88.99.0/24"]}),
     ("op-geoip", {"ip": ["geoip:ir"]}),
     ("op-source", {"source": ["10.0.0.0/8"]}),
     ("op-user", {"user": ["someone@example.com"]}),
@@ -547,7 +547,7 @@ def test_a_rule_carrying_every_https_connection_names_the_port_it_matches():
 
 
 def test_a_mixed_predicate_rule_is_dismissed_only_when_its_addresses_are_all_unreachable():
-    reachable = [{"type": "field", "ruleTag": "op-1", "ip": ["10.0.0.0/8", "1.2.3.0/24"], "outboundTag": "DIRECT"}]
+    reachable = [{"type": "field", "ruleTag": "op-1", "ip": ["10.0.0.0/8", "192.88.99.0/24"], "outboundTag": "DIRECT"}]
     unreachable = [
         {"type": "field", "ruleTag": "op-2", "ip": ["10.0.0.0/8", "192.168.0.0/16"], "outboundTag": "DIRECT"}
     ]
@@ -1187,7 +1187,7 @@ ALLOW_GUARD_CORE = {"outbounds": [{"tag": "BLOCK", "protocol": "blackhole"}, {"t
 
 SWALLOWS_THE_ALLOW_LIST = [
     ("catch-all", {}),
-    ("public addresses", {"ip": ["1.2.3.0/24"]}),
+    ("public addresses", {"ip": ["192.88.99.0/24"]}),
     ("client subnet", {"source": ["10.0.0.0/8"]}),
 ]
 
@@ -1570,7 +1570,7 @@ def test_a_clean_freedom_outbound_is_still_exempt_from_the_allow_list_check():
     assert _quiet(rules.conflicting_rules(existing, ["in"], MIXED_FREEDOM_CORE, _allowing_profile())) == []
 
 
-@pytest.mark.parametrize("redirect", ["1.2.3.4:443", "1.2.3.4:0", ":8080", "[::1]:443", "nonsense"])
+@pytest.mark.parametrize("redirect", ["192.88.99.1:443", "192.88.99.1:0", ":8080", "[::1]:443", "nonsense"])
 def test_a_redirect_that_changes_address_or_port_counts_as_a_rewrite(redirect: str):
     assert rules.rewrites_destination({"protocol": "freedom", "settings": {"redirect": redirect}}) is True
 
