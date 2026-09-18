@@ -488,3 +488,39 @@ async def test_the_off_switch_stops_the_job_from_touching_anything(monkeypatch: 
     await job.reconcile_content_filter()
 
     assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_node_does_not_hold_a_fleet_wide_assignment_back(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(job, "GetDB", GetTestDB)
+    _attach_all(monkeypatch)
+
+    async with GetTestDB() as db:
+        core_id = await _core(db, "in")
+        live_node = await _node(db, core_id)
+        await _node(db, core_id, status=NodeStatus.disabled)
+        assignment_id = await _assignment(db, None, "in")
+        await db.commit()
+
+    async with GetTestDB() as db:
+        wanted = service.assignment_rules(await db.get(ContentFilterAssignment, assignment_id))
+
+    live = [{"ruleTag": rule["ruleTag"], "outboundTag": rule["outboundTag"]} for rule in wanted]
+
+    async def live_rules(target_id):
+        if target_id != live_node:
+            raise service.EnforcementError(f"node {target_id} is not attached to this panel", code=404)
+        return list(live)
+
+    async def push_live(db, target_id):
+        return list(wanted)
+
+    monkeypatch.setattr(service, "live_rules", live_rules)
+    monkeypatch.setattr(service, "push_live", push_live)
+
+    await job.reconcile_content_filter()
+
+    async with GetTestDB() as db:
+        assignment = await db.get(ContentFilterAssignment, assignment_id)
+        assert assignment.enforced is True
+        assert assignment.last_error is None

@@ -661,11 +661,11 @@ async def _reaches(db: AsyncSession, assignment: ContentFilterAssignment, node_i
 async def _nodes_reached(db: AsyncSession, assignment: ContentFilterAssignment) -> list[Node]:
     if assignment.node_id is not None:
         node = await db.get(Node, assignment.node_id)
-        if node is None or not await _reaches(db, assignment, node.id):
+        if node is None or not _reachable(node) or not await _reaches(db, assignment, node.id):
             return []
         return [node]
     nodes = (await db.execute(select(Node))).scalars().all()
-    return [node for node in nodes if await _reaches(db, assignment, node.id)]
+    return [node for node in nodes if _reachable(node) and await _reaches(db, assignment, node.id)]
 
 
 async def assignment_delivery(db: AsyncSession, assignment: ContentFilterAssignment) -> str:
@@ -1081,12 +1081,13 @@ async def live_rules(node_id: int) -> list[dict]:
     return [{"ruleTag": rule.rule_tag or "", "outboundTag": rule.outbound_tag or ""} for rule in (response.rules or [])]
 
 
-async def _remove_owned(node, tags: list[str]) -> None:
+async def _remove_owned(node, tags: list[str], listed: set[str] | None = None) -> None:
     for tag in tags:
         try:
             await node.remove_routing_rule(rule_tag=tag)
         except NodeAPIError as exc:
-            logger.warning(f"could not remove routing rule {tag}: {exc.detail}")
+            if listed is None or tag in listed:
+                logger.warning(f"could not remove routing rule {tag}: {exc.detail}")
 
 
 async def push_live(db: AsyncSession, node_id: int, advisories: list[str] | None = None) -> list[dict]:
@@ -1134,7 +1135,10 @@ async def push_live(db: AsyncSession, node_id: int, advisories: list[str] | None
     if [rule["ruleTag"] for rule in installed] == [rule["ruleTag"] for rule in wanted] and not rerouted:
         return wanted
 
-    await _remove_owned(node, [rule["ruleTag"] for rule in installed])
+    held = [rule["ruleTag"] for rule in installed]
+    listed = set(held)
+    loaded = {str(rule.get("ruleTag") or "") for rule in _stored_owned_rules(config)}
+    await _remove_owned(node, [*held, *(tag for tag in by_tag if tag in loaded and tag not in listed)], listed)
     for rule in wanted:
         try:
             await node.add_routing_rule(rule=json.dumps(rule), should_reset=False)
