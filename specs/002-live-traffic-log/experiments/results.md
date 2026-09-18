@@ -3,6 +3,12 @@
 Captured verbatim by `run_all.sh` on 2026-09-17 01:31:44 UTC from the test panel.
 Every success criterion in `../spec.md` traces to one of the blocks below.
 
+Blocks appear in the order `run_all.sh` lists its steps, which is not the order
+they ran in, and a step that waits on a scheduled job prints its parts out of
+order too. Read the timestamps inside a block rather than its position: in
+`02_history_purge.py`, for example, a `last_purge_at` of 01:51:12 is printed
+before one of 01:41:11.
+
 | step | covers |
 |---|---|
 | 00_parse.py | FR-003, FR-016 — the access-line parser and the absence of any source address |
