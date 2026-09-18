@@ -30,10 +30,12 @@ from app.fork.content_filter.rules import (
     parse_tag,
     pre_routed_inbound_tags,
     resolve_outbound_tags,
+    rule_coverage,
     rule_set_cost,
     strict_mode_effective,
     tag_assignment_id,
     tag_identity,
+    within_coverage,
 )
 from app.fork.content_filter.schemas import CapabilityReport, InboundCapability, NodeCapability
 from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterSniffingOverride
@@ -318,38 +320,58 @@ def _profile_label(assignment: ContentFilterAssignment) -> str:
     return name or f"the profile of assignment {assignment.id}"
 
 
+class _Share:
+    def __init__(self, key: tuple, carrier: ContentFilterAssignment):
+        self.key = key
+        self.carrier = carrier
+        self.ids: list[int] = []
+        self.tags: list[str] = []
+
+    def take(self, assignment: ContentFilterAssignment, tags: list[str]) -> None:
+        self.ids.append(assignment.id)
+        for tag in tags:
+            if tag not in self.tags:
+                self.tags.append(tag)
+
+
+def _keeps_precedence(later: list[_Share], tags: list[str]) -> bool:
+    joining = set(tags)
+    return all(not joining & set(share.tags) for share in later)
+
+
+def _placed(shares: list[_Share], key: tuple, tags: list[str]) -> int | None:
+    for index in range(len(shares) - 1, -1, -1):
+        if shares[index].key != key:
+            continue
+        return index if _keeps_precedence(shares[index + 1 :], tags) else None
+    return None
+
+
 async def core_rule_plan(db: AsyncSession, core_id: int, assignments: list[ContentFilterAssignment]) -> RulePlan:
-    order: list[tuple] = []
-    scoped: dict[tuple, list[str]] = {}
-    owned: dict[tuple, list[int]] = {}
-    carrier: dict[tuple, ContentFilterAssignment] = {}
+    shares: list[_Share] = []
 
     for assignment in assignments:
         tags = await core_scope_tags(db, assignment, core_id)
         if not tags:
             continue
         key = _profile_key(assignment)
-        if key not in scoped:
-            order.append(key)
-            scoped[key] = []
-            owned[key] = []
-            carrier[key] = assignment
-        owned[key].append(assignment.id)
-        for tag in tags:
-            if tag not in scoped[key]:
-                scoped[key].append(tag)
+        index = _placed(shares, key, tags)
+        if index is None:
+            shares.append(_Share(key, assignment))
+            index = len(shares) - 1
+        shares[index].take(assignment, tags)
 
     rules: list[dict] = []
     owners: dict[str, tuple[int, ...]] = {}
     labels: dict[str, str] = {}
     failures: dict[int, str] = {}
 
-    for key in order:
-        ids = sorted(set(owned[key]))
-        lead = carrier[key]
+    for share in shares:
+        ids = sorted(set(share.ids))
+        lead = share.carrier
         where = f"assignment {ids[0]}" if len(ids) == 1 else f"assignments {', '.join(str(value) for value in ids)}"
         try:
-            built = profile_rules(ids, scoped[key], lead.profile, where)
+            built = profile_rules(ids, share.tags, lead.profile, where)
         except EnforcementError as exc:
             for assignment_id in ids:
                 failures[assignment_id] = exc.detail
@@ -832,14 +854,15 @@ async def _commit_sniffing_plan(db: AsyncSession, plan: SniffingPlan) -> None:
     await db.flush()
 
 
-def _stored_rule_tags(config: dict) -> set[str]:
+def _stored_rules(config: dict) -> list[dict]:
+    if not isinstance(config, dict):
+        return []
     stored = (config.get("routing") or {}).get("rules") or []
-    return {str(rule.get("ruleTag") or "") for rule in stored if isinstance(rule, dict)}
+    return [rule for rule in stored if isinstance(rule, dict)]
 
 
 def _stored_owned_rules(config: dict) -> list[dict]:
-    stored = (config.get("routing") or {}).get("rules") or []
-    return [rule for rule in stored if isinstance(rule, dict) and owns_tag(str(rule.get("ruleTag") or ""))]
+    return [rule for rule in _stored_rules(config) if owns_tag(str(rule.get("ruleTag") or ""))]
 
 
 def _named_profiles(rules: list[dict], labels: dict[str, str]) -> str:
@@ -851,33 +874,54 @@ def _named_profiles(rules: list[dict], labels: dict[str, str]) -> str:
     return ", ".join(f'"{name}"' for name in names) or "an unnamed profile"
 
 
-def guard_rule_size(where: str, filter_rules: list[dict], stored: list[dict], labels: dict[str, str]) -> None:
-    categories, matchers = rule_set_cost(filter_rules)
-    held_categories, held_matchers = rule_set_cost(stored)
+def _blamed(held: int, own: int, named: str) -> str:
+    parts: list[str] = []
+    if held:
+        parts.append(f"{held} already in the core config outside the filter")
+    if own:
+        parts.append(f"{own} from {named}")
+    return " and ".join(parts) or named
+
+
+def guard_rule_size(where: str, filter_rules: list[dict], current: list[dict], labels: dict[str, str]) -> None:
+    kept = _strip_owned(current)
+    categories, matchers = rule_set_cost([*kept, *filter_rules])
+    held_categories, held_matchers = rule_set_cost(current)
 
     if categories > CATEGORY_RULE_LIMIT and categories > held_categories:
-        named = _named_profiles([rule for rule in filter_rules if names_a_category(rule)], labels)
+        own = [rule for rule in filter_rules if names_a_category(rule)]
+        blamed = _blamed(
+            len([rule for rule in kept if names_a_category(rule)]),
+            len(own),
+            _named_profiles(own, labels),
+        )
         raise EnforcementError(
             f"{where} would carry {categories} rules that each pull in a whole category list, over the limit of "
-            f"{CATEGORY_RULE_LIMIT}: {named}. The node expands every one of those to its full list before the core "
-            f"reads it, and {categories} of them is enough to stop xray from starting and take the node down. Put "
-            "those endpoints under one profile, take some of these profiles off this core, or spread them over "
-            "more cores. Nothing was written.",
+            f"{CATEGORY_RULE_LIMIT}: {blamed}. The node expands every one of those to its full list before the "
+            f"core reads it, and {categories} of them is enough to stop xray from starting and take the node "
+            "down. Put those endpoints under one profile, take some of these profiles off this core, spread them "
+            "over more cores, or drop one of the category rules the core config carries on its own. Nothing was "
+            "written.",
             code=409,
         )
 
     if matchers > DOMAIN_MATCHER_LIMIT and matchers > held_matchers:
+        blamed = _blamed(
+            rule_set_cost(kept)[1],
+            rule_set_cost(filter_rules)[1],
+            _named_profiles(filter_rules, labels),
+        )
         raise EnforcementError(
-            f"{where} would carry {matchers} domain matchers, over the limit of {DOMAIN_MATCHER_LIMIT}: "
-            f"{_named_profiles(filter_rules, labels)}. Shorten the block and allow lists on those profiles, or "
-            "spread them over more cores. Nothing was written.",
+            f"{where} would carry {matchers} domain matchers, over the limit of {DOMAIN_MATCHER_LIMIT}: {blamed}. "
+            "Shorten the block and allow lists on those profiles, spread them over more cores, or shorten the "
+            "matchers the core config carries on its own. Nothing was written.",
             code=409,
         )
 
 
-def _added_rule_tags(config: dict, filter_rules: list[dict]) -> list[str]:
-    stored = _stored_rule_tags(config)
-    return [str(rule.get("ruleTag") or "") for rule in filter_rules if str(rule.get("ruleTag") or "") not in stored]
+def _broadening_rules(current: dict, filter_rules: list[dict]) -> list[dict]:
+    held = rule_coverage(_stored_owned_rules(current))
+    return [rule for rule in filter_rules if not within_coverage(held, [rule])]
 
 
 async def _screen_unsupported_nodes(
@@ -888,7 +932,8 @@ async def _screen_unsupported_nodes(
     drop_unsupported: bool,
     advisories: list[str] | None,
 ) -> list[dict]:
-    if not _added_rule_tags(current, filter_rules):
+    broadening = _broadening_rules(current, filter_rules)
+    if not broadening:
         return filter_rules
     blockers = await unsupported_on_core(db, core_id)
     if not blockers:
@@ -896,9 +941,8 @@ async def _screen_unsupported_nodes(
     detail = UNSUPPORTED_CORE.format(core=core_id, count=len(blockers), who=capability.blocker_summary(blockers))
     if not drop_unsupported:
         raise UnsupportedNodes(detail, core_id, blockers)
-    stored = _stored_rule_tags(current)
     _collect_advisories(f"core {core_id}", [detail], advisories)
-    return [rule for rule in filter_rules if str(rule.get("ruleTag") or "") in stored]
+    return [rule for rule in filter_rules if all(rule is not dropped for dropped in broadening)]
 
 
 async def persist_core_rules(
@@ -928,7 +972,7 @@ async def persist_core_rules(
     current = db_core.config if isinstance(db_core.config, dict) else json.loads(db_core.config or "{}")
     filter_rules = resolved_rules(current, filter_rules, f"core {core_id}")
     filter_rules = await _screen_unsupported_nodes(db, core_id, current, filter_rules, drop_unsupported, advisories)
-    guard_rule_size(f"core {core_id}", filter_rules, _stored_owned_rules(current), plan.labels)
+    guard_rule_size(f"core {core_id}", filter_rules, _stored_rules(current), plan.labels)
     if filter_rules:
         existing_rules = _strip_owned((current.get("routing") or {}).get("rules") or [])
         scope_tags = sorted(_scoped_tags(filter_rules))
@@ -1089,7 +1133,7 @@ async def push_live(db: AsyncSession, node_id: int, advisories: list[str] | None
         if assignment is not None:
             await _record(db, assignment, False, [f"node {node_id}: {detail}"])
     wanted = _dedup(resolved_rules(config, plan.rules, f"core {live_core} on node {node_id}"))
-    guard_rule_size(f"node {node_id}", wanted, _stored_owned_rules(config), plan.labels)
+    guard_rule_size(f"node {node_id}", wanted, _stored_rules(config), plan.labels)
     existing = await live_rules(node_id)
 
     if wanted:
