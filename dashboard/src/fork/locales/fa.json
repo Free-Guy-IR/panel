@@ -660,6 +660,7 @@
   "contentFilter.reloadNodes": "نودهایی که ری‌استارت می‌شوند و اتصال‌های فعلی کاربرانشان قطع می‌شود: {{nodes}}",
   "contentFilter.reloadConfirm": "ری‌استارت کن و ادامه بده",
   "contentFilter.reloadStale": "انتخاب شما بعد از این نتیجه تغییر کرده است. برای گرفتن تأیید ری‌استارتِ تازه، دوباره اعمال کنید.",
+  "contentFilter.reloadStaleRequest": "آنچه روی صفحه دارید بعد از این درخواست تغییر کرده است. این را ببندید و دوباره انجام دهید تا تأیید ری‌استارتِ تازه بگیرید.",
   "contentFilter.reloadCancel": "همین‌طور که هست بماند",
   "contentFilter.reloadBulkPending_one": "{{count}} مورد از این‌ها پیش از اعمال‌شدن به ری‌استارت نیاز دارد",
   "contentFilter.reloadBulkPending_other": "{{count}} مورد از این‌ها پیش از اعمال‌شدن به ری‌استارت نیاز دارند",

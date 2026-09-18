@@ -613,6 +613,7 @@
   "contentFilter.reloadNodes": "以下节点会重启，用户当前的连接会被中断：{{nodes}}",
   "contentFilter.reloadConfirm": "重启并继续",
   "contentFilter.reloadStale": "此结果之后你的选择已更改。请重新应用以获取新的重启确认。",
+  "contentFilter.reloadStaleRequest": "此请求之后你屏幕上的内容已更改。请关闭此窗口并重新操作，以获取新的重启确认。",
   "contentFilter.reloadCancel": "保持现状",
   "contentFilter.reloadBulkPending_one": "其中 {{count}} 项需要先重启才能应用",
   "contentFilter.reloadBulkPending_other": "其中 {{count}} 项需要先重启才能应用",

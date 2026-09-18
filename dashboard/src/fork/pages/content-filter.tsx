@@ -59,7 +59,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -239,6 +239,14 @@ function useAssignments() {
     queryKey: ['content-filter', 'assignments'],
     queryFn: () => fetcher<Assignment[]>(`${BASE}/assignments`),
   })
+}
+
+function sameList(a: readonly string[] | readonly number[], b: readonly string[] | readonly number[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i])
+}
+
+function sortedCopy<T>(values: readonly T[]): T[] {
+  return [...values].sort()
 }
 
 function errorText(e: unknown, fallback: string): string {
@@ -1059,16 +1067,39 @@ export default function ContentFilterPage() {
 
   const heldOutcomes = useMemo(() => (bulkResult?.outcomes ?? []).filter(outcome => outcome.reload), [bulkResult])
 
-  const bulkSnapshotStale = useMemo(() => {
-    if (!bulkRequest) return false
-    const same = (a: number[] | string[], b: number[] | string[]) =>
-      a.length === b.length && a.every((v, i) => v === b[i])
-    return (
-      bulkRequest.profile_id !== activeId ||
-      !same([...bulkRequest.node_ids].sort(), [...assignNodes].sort()) ||
-      !same([...bulkRequest.inbound_tags].sort(), [...assignTags].sort())
-    )
-  }, [activeId, assignNodes, assignTags, bulkRequest])
+  const applyBodyStale = useCallback(
+    (body: ApplyBody) =>
+      body.profile_id !== activeId ||
+      !sameList(sortedCopy(body.node_ids), sortedCopy(assignNodes)) ||
+      !sameList(sortedCopy(body.inbound_tags), sortedCopy(assignTags)),
+    [activeId, assignNodes, assignTags],
+  )
+
+  const profileStale = useCallback(
+    (profile: Profile) =>
+      !draft ||
+      draft.id !== profile.id ||
+      draft.name !== profile.name ||
+      draft.strict_mode !== profile.strict_mode ||
+      (draft.note ?? '') !== (profile.note ?? '') ||
+      !sameList(sortedCopy(draft.categories), sortedCopy(profile.categories)) ||
+      !sameList(sortedCopy(draft.allow_list), sortedCopy(profile.allow_list)) ||
+      !sameList(sortedCopy(draft.block_list), sortedCopy(profile.block_list)),
+    [draft],
+  )
+
+  const bulkSnapshotStale = useMemo(
+    () => (bulkRequest ? applyBodyStale(bulkRequest) : false),
+    [applyBodyStale, bulkRequest],
+  )
+
+  const restartStale = useMemo(() => {
+    const request = pendingRestart?.request
+    if (!request) return false
+    if (request.kind === 'applyTargets') return applyBodyStale(request.body)
+    if (request.kind === 'saveProfile') return profileStale(request.profile)
+    return false
+  }, [applyBodyStale, pendingRestart, profileStale])
 
   const bulkPrompt = useMemo(
     () => mergePrompts(heldOutcomes.map(outcome => outcome.reload).filter((p): p is ReloadPrompt => Boolean(p))),
@@ -2346,6 +2377,14 @@ export default function ContentFilterPage() {
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-2">
+                  {restartStale ? (
+                    <p className="font-medium text-amber-700 dark:text-amber-400">
+                      {t('contentFilter.reloadStaleRequest', {
+                        defaultValue:
+                          'What you have on screen changed after this request. Close this and do it again to get a fresh restart confirmation.',
+                      })}
+                    </p>
+                  ) : null}
                   {restartTags ? (
                     <p>
                       {restartIsWithdrawal
@@ -2379,10 +2418,12 @@ export default function ContentFilterPage() {
               <AlertDialogCancel>{t('contentFilter.reloadCancel', { defaultValue: 'Leave it as it is' })}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={restartStale}
                 onClick={() => {
                   const request = pendingRestart?.request
+                  if (!request || restartStale) return
                   setPendingRestart(null)
-                  if (request) runRestart(request)
+                  runRestart(request)
                 }}
               >
                 {t('contentFilter.reloadConfirm', { defaultValue: 'Restart and apply' })}

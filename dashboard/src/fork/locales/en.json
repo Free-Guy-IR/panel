@@ -587,6 +587,7 @@
   "contentFilter.reloadNodes": "Nodes that will restart and drop their current sessions: {{nodes}}",
   "contentFilter.reloadConfirm": "Restart and continue",
   "contentFilter.reloadStale": "Your selection changed since this result. Apply again to get a fresh restart confirmation.",
+  "contentFilter.reloadStaleRequest": "What you have on screen changed after this request. Close this and do it again to get a fresh restart confirmation.",
   "contentFilter.reloadCancel": "Leave it as it is",
   "contentFilter.reloadBulkPending_one": "{{count}} of these needs a restart before it can be applied",
   "contentFilter.reloadBulkPending_other": "{{count}} of these need a restart before they can be applied",
