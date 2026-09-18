@@ -206,6 +206,404 @@
    ]
   },
   {
+   "id": "ads_adcolony",
+   "name": "AdColony",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adc3-launch.adcolony.com",
+    "ads30.adcolony.com",
+    "events3alt.adcolony.com",
+    "wd.adcolony.com"
+   ]
+  },
+  {
+   "id": "ads_amazon",
+   "name": "Amazon ads and analytics",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adtago.s3.amazonaws.com",
+    "advice-ads.s3.amazonaws.com",
+    "analytics.s3.amazonaws.com",
+    "analyticsengine.s3.amazonaws.com"
+   ]
+  },
+  {
+   "id": "ads_apple",
+   "name": "Apple ads and analytics",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "api-adservices.apple.com",
+    "books-analytics-events.apple.com",
+    "iadsdk.apple.com",
+    "metrics.icloud.com",
+    "metrics.mzstatic.com",
+    "notes-analytics-events.apple.com",
+    "weather-analytics-events.apple.com"
+   ]
+  },
+  {
+   "id": "ads_bugsnag",
+   "name": "Bugsnag",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "api.bugsnag.com",
+    "app.bugsnag.com",
+    "notify.bugsnag.com",
+    "sessions.bugsnag.com"
+   ]
+  },
+  {
+   "id": "ads_doubleclick",
+   "name": "DoubleClick",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ad.doubleclick.net",
+    "m.doubleclick.net",
+    "mediavisor.doubleclick.net",
+    "static.doubleclick.net",
+    "stats.g.doubleclick.net"
+   ]
+  },
+  {
+   "id": "ads_facebook",
+   "name": "Facebook trackers",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "an.facebook.com",
+    "pixel.facebook.com"
+   ]
+  },
+  {
+   "id": "ads_freshworks",
+   "name": "Freshworks",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "claritybt.freshmarketer.com",
+    "freshmarketer.com",
+    "fwtracks.freshmarketer.com"
+   ]
+  },
+  {
+   "id": "ads_google_ads",
+   "name": "Google Ads",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adservice.google.com",
+    "afs.googlesyndication.com",
+    "pagead2.googleadservices.com",
+    "pagead2.googlesyndication.com"
+   ]
+  },
+  {
+   "id": "ads_google_analytics",
+   "name": "Google Analytics",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "analytics.google.com",
+    "click.googleanalytics.com",
+    "google-analytics.com",
+    "ssl.google-analytics.com"
+   ]
+  },
+  {
+   "id": "ads_hotjar",
+   "name": "Hotjar",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adm.hotjar.com",
+    "careers.hotjar.com",
+    "events.hotjar.io",
+    "identify.hotjar.com",
+    "insights.hotjar.com",
+    "script.hotjar.com",
+    "surveys.hotjar.com"
+   ]
+  },
+  {
+   "id": "ads_huawei",
+   "name": "Huawei telemetry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "grs.hicloud.com",
+    "logbak.hicloud.com",
+    "logservice.hicloud.com",
+    "logservice1.hicloud.com",
+    "metrics.data.hicloud.com",
+    "metrics2.data.hicloud.com"
+   ]
+  },
+  {
+   "id": "ads_linkedin",
+   "name": "LinkedIn trackers",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ads.linkedin.com",
+    "analytics.pointdrive.linkedin.com"
+   ]
+  },
+  {
+   "id": "ads_luckyorange",
+   "name": "Lucky Orange",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "api.luckyorange.com",
+    "cdn.luckyorange.com",
+    "cs.luckyorange.net",
+    "luckyorange.com",
+    "realtime.luckyorange.com",
+    "settings.luckyorange.net",
+    "upload.luckyorange.net",
+    "w1.luckyorange.com"
+   ]
+  },
+  {
+   "id": "ads_media_net",
+   "name": "Media.net",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adservetx.media.net",
+    "media.net",
+    "static.media.net"
+   ]
+  },
+  {
+   "id": "ads_mouseflow",
+   "name": "Mouseflow",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "api.mouseflow.com",
+    "cdn-test.mouseflow.com",
+    "cdn.mouseflow.com",
+    "gtm.mouseflow.com",
+    "mouseflow.com",
+    "o2.mouseflow.com",
+    "tools.mouseflow.com"
+   ]
+  },
+  {
+   "id": "ads_oneplus",
+   "name": "OnePlus telemetry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "click.oneplus.cn"
+   ]
+  },
+  {
+   "id": "ads_oppo",
+   "name": "Oppo telemetry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adsfs.oppomobile.com",
+    "adx.ads.oppomobile.com",
+    "ck.ads.oppomobile.com",
+    "data.ads.oppomobile.com"
+   ]
+  },
+  {
+   "id": "ads_pinterest",
+   "name": "Pinterest trackers",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ads.pinterest.com",
+    "log.pinterest.com",
+    "trk.pinterest.com"
+   ]
+  },
+  {
+   "id": "ads_realme",
+   "name": "Realme telemetry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "bdapi-ads.realmemobile.com",
+    "bdapi-in-ads.realmemobile.com",
+    "iot-eu-logser.realme.com",
+    "iot-logser.realme.com"
+   ]
+  },
+  {
+   "id": "ads_reddit",
+   "name": "Reddit trackers",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "events.reddit.com",
+    "events.redditmedia.com"
+   ]
+  },
+  {
+   "id": "ads_samsung",
+   "name": "Samsung ads and telemetry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "analytics-api.samsunghealthcn.com",
+    "nmetrics.samsung.com",
+    "samsung-com.112.2o7.net",
+    "samsungads.com",
+    "smetrics.samsung.com"
+   ]
+  },
+  {
+   "id": "ads_sentry",
+   "name": "Sentry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "app.getsentry.com",
+    "browser.sentry-cdn.com"
+   ]
+  },
+  {
+   "id": "ads_tiktok",
+   "name": "TikTok trackers",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ads-api.tiktok.com",
+    "ads-sg.tiktok.com",
+    "ads.tiktok.com",
+    "analytics-sg.tiktok.com",
+    "analytics.tiktok.com",
+    "business-api.tiktok.com",
+    "log.byteoversea.com"
+   ]
+  },
+  {
+   "id": "ads_twitter",
+   "name": "Twitter trackers",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ads-api.twitter.com",
+    "static.ads-twitter.com"
+   ]
+  },
+  {
+   "id": "ads_unity",
+   "name": "Unity Ads",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adserver.unityads.unity3d.com",
+    "auction.unityads.unity3d.com",
+    "config.unityads.unity3d.com",
+    "webview.unityads.unity3d.com"
+   ]
+  },
+  {
+   "id": "ads_wordpress_stats",
+   "name": "WordPress Stats",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "stats.wp.com"
+   ]
+  },
+  {
+   "id": "ads_xiaomi",
+   "name": "Xiaomi ads and telemetry",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "api.ad.xiaomi.com",
+    "data.mistat.india.xiaomi.com",
+    "data.mistat.rus.xiaomi.com",
+    "data.mistat.xiaomi.com",
+    "sdkconfig.ad.intl.xiaomi.com",
+    "sdkconfig.ad.xiaomi.com",
+    "tracking.rus.miui.com"
+   ]
+  },
+  {
+   "id": "ads_yahoo",
+   "name": "Yahoo ads and analytics",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ads.yahoo.com",
+    "adtech.yahooinc.com",
+    "analytics.query.yahoo.com",
+    "analytics.yahoo.com",
+    "gemini.yahoo.com",
+    "geo.yahoo.com",
+    "log.fc.yahoo.com",
+    "partnerads.ysm.yahoo.com",
+    "udcm.yahoo.com"
+   ]
+  },
+  {
+   "id": "ads_yandex",
+   "name": "Yandex ads and metrics",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adfox.yandex.ru",
+    "adfstat.yandex.ru",
+    "appmetrica.yandex.ru",
+    "extmaps-api.yandex.net",
+    "metrika.yandex.ru",
+    "offerwall.yandex.net"
+   ]
+  },
+  {
+   "id": "ads_youtube",
+   "name": "YouTube ads",
+   "group": "ads",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ads.youtube.com"
+   ]
+  },
+  {
    "id": "aha",
    "name": "aha",
    "group": "streaming",

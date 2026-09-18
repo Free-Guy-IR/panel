@@ -248,7 +248,7 @@ async def test_one_profile_on_sixteen_endpoints_becomes_one_rule_not_sixteen(mon
 
     assert len(rules) == 1
     assert len(_category_rules(rules)) == 1
-    assert rules[0]["domain"] == [ADS_MATCHER]
+    assert ADS_MATCHER in rules[0]["domain"]
     assert rules[0]["inboundTag"] == [assignment.inbound_tag for assignment in assignments]
     assert len(rules[0]["inboundTag"]) == 16
 
@@ -563,7 +563,7 @@ async def test_a_withdrawal_keeps_the_other_endpoints_filtered_on_a_core_with_a_
     assert len(written[0]["inboundTag"]) == 15
     assert assignments[7].inbound_tag not in written[0]["inboundTag"]
     assert written[0]["ruleTag"] != stored[0]["ruleTag"]
-    assert written[0]["domain"] == [ADS_MATCHER]
+    assert ADS_MATCHER in written[0]["domain"]
 
 
 @pytest.mark.asyncio
@@ -876,7 +876,7 @@ async def test_a_profile_behind_another_one_still_collapses_to_one_rule(monkeypa
     assert len(rules) == 2
     assert len(rules[0]["inboundTag"]) == 16
     assert len(rules[1]["inboundTag"]) == 16
-    assert rules[1]["domain"] == [ADS_MATCHER]
+    assert ADS_MATCHER in rules[1]["domain"]
 
 
 def test_the_cost_of_a_rule_set_sees_a_category_named_by_address():
