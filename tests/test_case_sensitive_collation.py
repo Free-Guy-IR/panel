@@ -125,6 +125,20 @@ def test_only_the_drifted_column_is_altered(monkeypatch):
     assert altered == ["nodes"]
 
 
+def test_the_preflight_asks_about_the_target_collation_not_a_case_fold(monkeypatch):
+    migration = _migration()
+    bind = _Bind("mysql", {"name": "utf8mb4_unicode_ci", "username": "utf8mb4_bin"}, {})
+    monkeypatch.setattr(migration.op, "get_bind", lambda: bind)
+    monkeypatch.setattr(migration.op, "alter_column", lambda *a, **k: None)
+
+    migration.upgrade()
+
+    preflight = [q for q in bind.queries if "GROUP BY folded" in q]
+    assert preflight, "the upgrade never ran a preflight"
+    assert migration.CASE_SENSITIVE in preflight[0]
+    assert "LOWER(" not in preflight[0]
+
+
 def test_existing_case_variants_abort_before_any_alter(monkeypatch):
     migration = _migration()
     bind = _Bind("mysql", {"name": "utf8mb4_unicode_ci", "username": "utf8mb4_bin"}, {"nodes": ["relay"]})

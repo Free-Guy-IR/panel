@@ -35,11 +35,11 @@ def _collation(bind, table: str, column: str) -> str | None:
     ).scalar()
 
 
-def _case_collisions(bind, table: str, column: str) -> list[str]:
+def _target_collisions(bind, table: str, column: str) -> list[str]:
     rows = bind.execute(
         sa.text(
-            f"SELECT LOWER(`{column}`) AS folded, COUNT(*) AS hits "  # noqa: S608
-            f"FROM `{table}` GROUP BY folded HAVING hits > 1"
+            f"SELECT CONVERT(`{column}` USING utf8mb4) COLLATE {CASE_SENSITIVE} AS folded, "  # noqa: S608
+            f"COUNT(*) AS hits FROM `{table}` GROUP BY folded HAVING hits > 1"
         )
     ).fetchall()
     return [str(row[0]) for row in rows]
@@ -58,16 +58,13 @@ def upgrade() -> None:
             logger.info(f"content filter: {table}.{column} is already {CASE_SENSITIVE}")
             continue
 
-        collisions = _case_collisions(bind, table, column)
+        collisions = _target_collisions(bind, table, column)
         if collisions:
             shown = ", ".join(sorted(collisions)[:5])
             raise RuntimeError(
-                f"{table}.{column} is {current}, which treats names differing only in case as the same, and this "
-                f"database already holds {len(collisions)} such group(s): {shown}. Making the column "
-                f"{CASE_SENSITIVE} would keep every one of those rows, but the unique index on the column would "
-                "be rebuilt and the rows would stop being duplicates, which is a change of meaning rather than a "
-                "collation repair. Rename them so each one differs by more than case, then run this migration "
-                "again."
+                f"{table}.{column} already holds {len(collisions)} group(s) of rows that {CASE_SENSITIVE} would "
+                f"read as the same value: {shown}. Rebuilding the unique index under that collation would fail on "
+                "them, so nothing has been changed. Make those values differ, then run this migration again."
             )
 
         logger.warning(
