@@ -20,10 +20,14 @@ def _fresh_module_state():
     job._in_flight.clear()
     job._pending.clear()
     job._last_status_change.clear()
+    job._sem = None
+    job._sem_loop = None
     yield
     job._in_flight.clear()
     job._pending.clear()
     job._last_status_change.clear()
+    job._sem = None
+    job._sem_loop = None
 
 
 @pytest.fixture(autouse=True)
@@ -284,7 +288,7 @@ async def test_queued_nodes_keep_their_whole_budget_because_the_semaphore_is_tak
     monkeypatch.setattr(job, "GetDB", _FakeGetDB)
     monkeypatch.setattr(job, "nodes_to_reconcile", _nodes(1, 2, 100, 101, 102))
     monkeypatch.setattr(job, "RECONCILE_TIMEOUT", 0.2)
-    monkeypatch.setattr(job, "RECONCILE_SEM", asyncio.Semaphore(2))
+    monkeypatch.setattr(job, "RECONCILE_LIMIT", 2)
     _attach_all(monkeypatch)
     reconciled: list[int] = []
 
@@ -354,7 +358,9 @@ def _quiet_seam(monkeypatch: pytest.MonkeyPatch):
 
 async def _drain_pending():
     while job._pending:
-        await asyncio.gather(*list(job._pending), return_exceptions=True)
+        for outcome in await asyncio.gather(*list(job._pending), return_exceptions=True):
+            if isinstance(outcome, BaseException):
+                raise outcome
 
 
 @pytest.mark.asyncio
@@ -380,6 +386,28 @@ async def test_the_health_seam_reconciles_once_after_a_reconnect_and_not_on_ever
         await _drain_pending()
 
     assert seen == [42, 42]
+
+
+@pytest.mark.asyncio
+async def test_a_reconcile_survives_the_state_an_earlier_event_loop_left_behind(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(job, "GetDB", _FakeGetDB)
+    _attach_all(monkeypatch)
+    seen = _record_reconciles(monkeypatch)
+
+    abandoned = asyncio.new_event_loop()
+    abandoned.close()
+    job._sem = asyncio.Semaphore(0)
+    job._sem_loop = abandoned
+    job._in_flight.add(11)
+
+    job._spawn(11)
+    await _drain_pending()
+
+    assert seen == [11]
+    assert job._sem_loop is asyncio.get_running_loop()
+    assert 11 not in job._in_flight
 
 
 @pytest.mark.asyncio

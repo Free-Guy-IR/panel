@@ -14,13 +14,25 @@ from config import job_settings, runtime_settings
 
 logger = get_logger("jobs")
 
-RECONCILE_SEM = asyncio.Semaphore(5)
+RECONCILE_LIMIT = 5
 RECONCILE_TIMEOUT = 30
 
 _in_flight: set[int] = set()
 _pending: set[asyncio.Task] = set()
 _last_status_change: dict[int, object] = {}
 _UNSEEN = object()
+_sem: asyncio.Semaphore | None = None
+_sem_loop: asyncio.AbstractEventLoop | None = None
+
+
+def reconcile_budget() -> asyncio.Semaphore:
+    global _sem, _sem_loop
+    loop = asyncio.get_running_loop()
+    if _sem is None or _sem_loop is not loop:
+        _sem = asyncio.Semaphore(RECONCILE_LIMIT)
+        _sem_loop = loop
+        _in_flight.clear()
+    return _sem
 
 
 async def nodes_to_reconcile(db) -> list[int]:
@@ -48,6 +60,8 @@ async def nodes_to_reconcile(db) -> list[int]:
 
 
 async def _reconcile_one(node_id: int) -> None:
+    budget = reconcile_budget()
+
     if node_id in _in_flight:
         logger.debug(f"Content filter reconcile skipped node {node_id}: one is already running for it")
         return
@@ -58,7 +72,7 @@ async def _reconcile_one(node_id: int) -> None:
 
     _in_flight.add(node_id)
     try:
-        async with RECONCILE_SEM:
+        async with budget:
             try:
                 async with GetDB() as db:
                     error = await asyncio.wait_for(service.reconcile_node(db, node_id), timeout=RECONCILE_TIMEOUT)
@@ -71,6 +85,9 @@ async def _reconcile_one(node_id: int) -> None:
             except Exception as exc:
                 logger.warning(f"Content filter reconcile on node {node_id} failed: {exc!r}")
                 return
+    except Exception as exc:
+        logger.warning(f"Content filter reconcile on node {node_id} could not be started: {exc!r}")
+        return
     finally:
         _in_flight.discard(node_id)
 
