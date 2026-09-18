@@ -989,6 +989,434 @@ function RollupNodeRow({
   )
 }
 
+type AssignMember = {
+  key: string
+  label: string
+  state: RollupState
+  assignmentId: number | null
+  nodeId: number | null
+  status: string | null
+  error: string | null
+}
+
+type AssignGroup = {
+  key: string
+  kind: 'node' | 'endpoint'
+  name: string
+  nodeId: number | null
+  status: string | null
+  delivery: Delivery | null
+  peers: string[]
+  error: string | null
+  members: AssignMember[]
+  groups: { state: RollupState; items: AssignMember[] }[]
+  worst: RollupState
+  sole: RollupState | null
+  attention: AssignMember[]
+  assignmentIds: number[]
+  nodeCount: number | null
+}
+
+const ASSIGN_ORDER: RollupState[] = ['failed', 'unconfirmed', 'applied']
+
+function assignmentState(a: Assignment): RollupState {
+  if (a.last_error && a.last_error.trim()) return 'failed'
+  return a.enforced ? 'applied' : 'unconfirmed'
+}
+
+function buildAssignmentGroups(
+  assignments: readonly Assignment[],
+  nodeOf: (id: number) => TargetNode | undefined,
+  nodeName: (id: number) => string,
+  carriersOf: (tag: string) => number[] | null,
+  wholeNodeName: string,
+): AssignGroup[] {
+  type NodeDraft = { nodeId: number; members: AssignMember[]; deliveries: Set<Delivery>; peers: string[] }
+  const pinned = new Map<number, NodeDraft>()
+  const endpointRows: AssignGroup[] = []
+
+  for (const a of assignments) {
+    const state = assignmentState(a)
+    const error = a.last_error && a.last_error.trim() ? a.last_error.trim() : null
+
+    if (a.node_id !== null) {
+      const draft: NodeDraft = pinned.get(a.node_id) ?? {
+        nodeId: a.node_id,
+        members: [],
+        deliveries: new Set<Delivery>(),
+        peers: [],
+      }
+      draft.members.push({
+        key: `a:${a.id}`,
+        label: a.inbound_tag || wholeNodeName,
+        state,
+        assignmentId: a.id,
+        nodeId: a.node_id,
+        status: null,
+        error,
+      })
+      if (a.delivery === 'core' || a.delivery === 'live') draft.deliveries.add(a.delivery)
+      if (a.delivery === 'core') {
+        for (const peer of nodeOf(a.node_id)?.shares_core_with ?? []) {
+          const name = nodeName(peer)
+          if (!draft.peers.includes(name)) draft.peers.push(name)
+        }
+      }
+      pinned.set(a.node_id, draft)
+      continue
+    }
+
+    const carriers = a.inbound_tag ? carriersOf(a.inbound_tag) : null
+    const reached = new Set(carriers ?? [])
+    const members: AssignMember[] = (carriers ?? [])
+      .map(id => ({
+        key: `a:${a.id}:n:${id}`,
+        label: nodeName(id),
+        state,
+        assignmentId: null,
+        nodeId: id,
+        status: nodeOf(id)?.status ?? null,
+        error: null,
+      }))
+      .sort((x, y) => x.label.localeCompare(y.label))
+    const peers: string[] = []
+    if (a.delivery === 'core') {
+      for (const id of carriers ?? []) {
+        for (const peer of nodeOf(id)?.shares_core_with ?? []) {
+          if (reached.has(peer)) continue
+          const name = nodeName(peer)
+          if (!peers.includes(name)) peers.push(name)
+        }
+      }
+    }
+    endpointRows.push({
+      key: `e:${a.id}`,
+      kind: 'endpoint',
+      name: a.inbound_tag || wholeNodeName,
+      nodeId: null,
+      status: null,
+      delivery: a.delivery ?? null,
+      peers,
+      error,
+      members,
+      groups: [{ state, items: members }],
+      worst: state,
+      sole: state,
+      attention: state === 'applied' ? [] : members,
+      assignmentIds: [a.id],
+      nodeCount: carriers === null ? null : carriers.length,
+    })
+  }
+
+  const nodeRows: AssignGroup[] = []
+  for (const draft of pinned.values()) {
+    draft.members.sort((x, y) => x.label.localeCompare(y.label))
+    const present = ASSIGN_ORDER.filter(state => draft.members.some(member => member.state === state))
+    const worst = present[0] ?? 'applied'
+    nodeRows.push({
+      key: `n:${draft.nodeId}`,
+      kind: 'node',
+      name: nodeName(draft.nodeId),
+      nodeId: draft.nodeId,
+      status: nodeOf(draft.nodeId)?.status ?? null,
+      delivery: draft.deliveries.size === 1 ? [...draft.deliveries][0] : null,
+      peers: draft.peers,
+      error: null,
+      members: draft.members,
+      groups: present.map(state => ({ state, items: draft.members.filter(member => member.state === state) })),
+      worst,
+      sole: present.length === 1 ? worst : null,
+      attention: ASSIGN_ORDER.flatMap(state =>
+        state === 'applied' ? [] : draft.members.filter(member => member.state === state),
+      ),
+      assignmentIds: draft.members.flatMap(member => (member.assignmentId === null ? [] : [member.assignmentId])),
+      nodeCount: null,
+    })
+  }
+
+  return [...nodeRows, ...endpointRows].sort((a, b) => {
+    const rank = ASSIGN_ORDER.indexOf(a.worst) - ASSIGN_ORDER.indexOf(b.worst)
+    return rank !== 0 ? rank : a.name.localeCompare(b.name)
+  })
+}
+
+function assignErrorLines(items: readonly AssignMember[]) {
+  const found = new Map<string, string[]>()
+  for (const item of items) {
+    if (!item.error) continue
+    const names = found.get(item.error) ?? []
+    names.push(item.label)
+    found.set(item.error, names)
+  }
+  return [...found.entries()].map(([text, names]) => ({ text, names, all: names.length === items.length }))
+}
+
+function useAssignStateLabel() {
+  const { t } = useTranslation()
+  return (state: RollupState): string => {
+    if (state === 'failed') return t('contentFilter.assignFailed', { defaultValue: 'Failed' })
+    if (state === 'applied') return t('contentFilter.enforced', { defaultValue: 'In force' })
+    return t('contentFilter.notEnforced', { defaultValue: 'Not confirmed' })
+  }
+}
+
+function AssignmentGroupRow({
+  row,
+  open,
+  onOpenChange,
+  onRemoveMember,
+  onRemoveAll,
+}: {
+  row: AssignGroup
+  open: boolean
+  onOpenChange: (next: boolean) => void
+  onRemoveMember: (id: number) => void
+  onRemoveAll: () => void
+}) {
+  const { t } = useTranslation()
+  const groupLabel = useRollupGroupLabel()
+  const stateLabel = useAssignStateLabel()
+  const isNode = row.kind === 'node'
+  const shown = row.attention.slice(0, ROLLUP_EXCEPTION_LIMIT)
+  const hidden = row.attention.length - shown.length
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className={cn('rounded-lg border-y border-e border-s-2 px-3 py-2 transition-colors', ROLLUP_ROW[row.worst])}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-ms-1.5 size-6 shrink-0"
+            aria-label={
+              isNode
+                ? open
+                  ? t('contentFilter.rollupCollapseNode', { defaultValue: 'Hide the endpoints on this node' })
+                  : t('contentFilter.rollupExpandNode', { defaultValue: 'Show the endpoints on this node' })
+                : open
+                  ? t('contentFilter.assignCollapseEndpoint', { defaultValue: 'Hide the nodes this endpoint reaches' })
+                  : t('contentFilter.assignExpandEndpoint', { defaultValue: 'Show the nodes this endpoint reaches' })
+            }
+          >
+            <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
+          </Button>
+        </CollapsibleTrigger>
+        {isNode ? (
+          <NodeStatusDot status={row.status ?? 'disabled'} />
+        ) : (
+          <Globe className="size-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+        )}
+        <span title={row.name} className="min-w-0 truncate text-sm font-medium">
+          {row.name}
+        </span>
+        <span
+          className={cn(
+            'inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[11px] font-normal',
+            isNode ? 'border-border text-muted-foreground' : 'border-amber-500/40 text-amber-700 dark:text-amber-400',
+          )}
+        >
+          {isNode
+            ? t('contentFilter.assignKindNode', { defaultValue: 'Node' })
+            : t('contentFilter.assignKindEndpoint', { defaultValue: 'Endpoint' })}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 text-[11px] tabular-nums',
+            isNode ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400',
+          )}
+        >
+          {isNode && row.nodeId !== null
+            ? t('contentFilter.nodeIdLabel', { id: row.nodeId, defaultValue: 'id {{id}}' })
+            : row.nodeCount === null
+              ? t('contentFilter.rollupFleetNodesOpen', { defaultValue: 'node count unknown' })
+              : t('contentFilter.rollupFleetNodes', { count: row.nodeCount, defaultValue: '{{count}} nodes right now' })}
+        </span>
+        <DeliveryBadge delivery={row.delivery} />
+        <span className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+          {isNode ? (
+            row.groups.map(group => (
+              <RollupCountChip
+                key={group.state}
+                state={group.state}
+                count={group.items.length}
+                sole={row.sole === group.state}
+              />
+            ))
+          ) : (
+            <span
+              className={cn(
+                'inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[11px] font-normal',
+                ROLLUP_CHIP[row.worst],
+              )}
+            >
+              {stateLabel(row.worst)}
+            </span>
+          )}
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="-me-1 size-7 shrink-0"
+            onClick={onRemoveAll}
+            aria-label={
+              isNode
+                ? t('contentFilter.assignLiftNodeAria', {
+                    name: row.name,
+                    defaultValue: 'Lift this profile from every endpoint on {{name}}',
+                  })
+                : t('contentFilter.assignLiftEndpointAria', {
+                    name: row.name,
+                    defaultValue: 'Lift this profile from {{name}} on every node',
+                  })
+            }
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </span>
+      </div>
+
+      {row.peers.length ? (
+        <p className="mt-1 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+          {t('contentFilter.alsoEnforcedOn', {
+            names: row.peers.join(', '),
+            defaultValue: 'Shared configuration, so it is enforced on {{names}} as well.',
+          })}
+        </p>
+      ) : null}
+
+      {!open && row.worst !== 'applied' ? (
+        <div className="mt-1.5 space-y-0.5">
+          {isNode ? (
+            <>
+              {shown.map(member => (
+                <p key={member.key} className={cn('break-words text-[11px] leading-snug', ROLLUP_TEXT[member.state])}>
+                  {t('contentFilter.rollupDetailFor', {
+                    endpoints: member.label,
+                    detail: member.error ?? stateLabel(member.state),
+                    defaultValue: '{{endpoints}} — {{detail}}',
+                  })}
+                </p>
+              ))}
+              {hidden > 0 ? (
+                <p className="break-words text-[11px] leading-snug text-muted-foreground">
+                  {t('contentFilter.rollupMoreExceptions', {
+                    hidden,
+                    defaultValue: '{{hidden}} more endpoints here still need a look',
+                  })}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className={cn('break-words text-[11px] leading-snug', ROLLUP_TEXT[row.worst])}>
+              {row.error ?? stateLabel(row.worst)}
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      <CollapsibleContent className="ms-1 mt-2 space-y-2.5 border-s-2 ps-3">
+        {isNode ? (
+          row.groups.map(group => (
+            <div key={group.state} className="space-y-1">
+              <p
+                className={cn(
+                  'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide',
+                  ROLLUP_TEXT[group.state],
+                )}
+              >
+                {groupLabel(group.state)}
+                <span className="font-normal tabular-nums">{group.items.length}</span>
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {group.items.map(member => (
+                  <span
+                    key={member.key}
+                    title={member.label}
+                    className={cn(
+                      'inline-flex h-6 max-w-full items-center gap-0.5 rounded border bg-background/60 ps-1.5 text-[11px] font-normal',
+                      ROLLUP_TAG[group.state],
+                    )}
+                  >
+                    <span className="min-w-0 truncate">{member.label}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-5 shrink-0 rounded-sm"
+                      disabled={member.assignmentId === null}
+                      onClick={() => {
+                        if (member.assignmentId !== null) onRemoveMember(member.assignmentId)
+                      }}
+                      aria-label={t('contentFilter.assignLiftMemberAria', {
+                        name: member.label,
+                        defaultValue: 'Lift this profile from {{name}}',
+                      })}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </span>
+                ))}
+              </div>
+              {assignErrorLines(group.items).map(line => (
+                <p key={line.text} className="break-words text-xs leading-snug text-destructive">
+                  {line.all
+                    ? line.text
+                    : t('contentFilter.rollupDetailFor', {
+                        endpoints: line.names.join(' · '),
+                        detail: line.text,
+                        defaultValue: '{{endpoints}} — {{detail}}',
+                      })}
+                </p>
+              ))}
+            </div>
+          ))
+        ) : (
+          <div className="space-y-1">
+            <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('contentFilter.assignReaches', { defaultValue: 'Nodes it reaches' })}
+              {row.nodeCount === null ? null : <span className="font-normal tabular-nums">{row.nodeCount}</span>}
+            </p>
+            {row.members.length ? (
+              <div className="flex flex-wrap gap-1">
+                {row.members.map(member => (
+                  <span
+                    key={member.key}
+                    title={member.label}
+                    className={cn(
+                      'inline-flex h-5 max-w-full items-center gap-1 rounded border bg-background/60 px-1.5 text-[11px] font-normal',
+                      ROLLUP_TAG[row.worst],
+                    )}
+                  >
+                    {member.status ? <NodeStatusDot status={member.status} /> : null}
+                    <span className="min-w-0 truncate">{member.label}</span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="break-words text-xs leading-snug text-muted-foreground">
+                {t('contentFilter.assignReachesUnknown', {
+                  defaultValue: 'The panel cannot say which nodes carry this endpoint right now.',
+                })}
+              </p>
+            )}
+            {row.error ? <p className="break-words text-xs leading-snug text-destructive">{row.error}</p> : null}
+            <p className="break-words text-xs leading-snug text-muted-foreground">
+              {t('contentFilter.assignEndpointWhole', {
+                defaultValue: 'Pinned to no node, so it is lifted from every node at once.',
+              })}
+            </p>
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 type PickEntry = { key: string; label: string; domains: number; icon?: string }
 
 function ServiceIcon({ svg, active }: { svg?: string; active: boolean }) {
@@ -1307,6 +1735,13 @@ export default function ContentFilterPage() {
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null)
   const [bulkRequest, setBulkRequest] = useState<ApplyBody | null>(null)
   const [rollupOpen, setRollupOpen] = useState<Record<string, boolean>>({})
+  const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({})
+  const [liftGroup, setLiftGroup] = useState<{
+    kind: 'node' | 'endpoint'
+    name: string
+    ids: number[]
+    nodes: number | null
+  } | null>(null)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const [pendingRestart, setPendingRestart] = useState<PendingRestart | null>(null)
   const [probeDomain, setProbeDomain] = useState('')
@@ -1867,6 +2302,83 @@ export default function ContentFilterPage() {
           })
         : t('contentFilter.rollupFleetNodesOpen', { defaultValue: 'node count unknown' })
 
+  const assignGroups = useMemo(
+    () =>
+      buildAssignmentGroups(
+        profileAssignments,
+        id => nodeById.get(id),
+        id => nodeById.get(id)?.name ?? `#${id}`,
+        carriersOfTag,
+        t('contentFilter.wholeNode', { defaultValue: 'whole node' }),
+      ),
+    [profileAssignments, nodeById, carriersOfTag, t],
+  )
+
+  const assignTotals = useMemo(() => {
+    const pinnedNodes = new Set<number>()
+    const fleetNodes = new Set<number>()
+    let endpoints = 0
+    let fleetTargets = 0
+    let fleetUnresolved = 0
+    for (const row of assignGroups) {
+      if (row.kind === 'node') {
+        endpoints += row.members.length
+        if (row.nodeId !== null) pinnedNodes.add(row.nodeId)
+        continue
+      }
+      endpoints += 1
+      fleetTargets += 1
+      if (row.nodeCount === null) {
+        fleetUnresolved += 1
+        continue
+      }
+      for (const member of row.members) if (member.nodeId !== null) fleetNodes.add(member.nodeId)
+    }
+    const resolution: 'known' | 'partial' | 'unknown' =
+      fleetTargets === 0 || fleetUnresolved === 0 ? 'known' : fleetNodes.size > 0 ? 'partial' : 'unknown'
+    return {
+      endpoints,
+      nodes: new Set([...pinnedNodes, ...fleetNodes]).size,
+      pinnedNodes: pinnedNodes.size,
+      resolution,
+    }
+  }, [assignGroups])
+
+  const assignTotalsText =
+    assignTotals.resolution === 'known'
+      ? t('contentFilter.rollupTotals', {
+          endpoints: assignTotals.endpoints,
+          nodes: assignTotals.nodes,
+          defaultValue: '{{endpoints}} endpoints on {{nodes}} nodes',
+        })
+      : assignTotals.resolution === 'partial'
+        ? t('contentFilter.rollupTotalsPartial', {
+            endpoints: assignTotals.endpoints,
+            nodes: assignTotals.nodes,
+            defaultValue: '{{endpoints}} endpoints on at least {{nodes}} nodes — the panel cannot resolve the rest',
+          })
+        : assignTotals.pinnedNodes > 0
+          ? t('contentFilter.rollupTotalsMixedOpen', {
+              endpoints: assignTotals.endpoints,
+              nodes: assignTotals.pinnedNodes,
+              defaultValue: '{{endpoints}} endpoints — {{nodes}} nodes by name, plus every node that carries the rest',
+            })
+          : t('contentFilter.rollupTotalsOpen', {
+              count: assignTotals.endpoints,
+              defaultValue: '{{count}} endpoints, on every node that carries them',
+            })
+
+  useEffect(() => {
+    setGroupOpen(prev => (Object.keys(prev).length ? {} : prev))
+  }, [activeId])
+
+  const groupIsOpen = (row: AssignGroup) => groupOpen[row.key] ?? row.worst !== 'applied'
+
+  const setEveryGroup = (next: boolean) => setGroupOpen(Object.fromEntries(assignGroups.map(row => [row.key, next])))
+
+  const everyGroupOpen = assignGroups.length > 0 && assignGroups.every(row => groupIsOpen(row))
+  const everyGroupClosed = assignGroups.length > 0 && assignGroups.every(row => !groupIsOpen(row))
+
   useEffect(() => {
     setRollupOpen(prev => (Object.keys(prev).length ? {} : prev))
   }, [bulkResult])
@@ -2197,66 +2709,54 @@ export default function ContentFilterPage() {
                         })}
                       </p>
                     ) : (
-                      <div className="space-y-2">
-                        {profileAssignments.map(a => {
-                          const node = a.node_id === null ? undefined : nodeById.get(a.node_id)
-                          const peers = a.delivery === 'core' ? (node?.shares_core_with ?? []) : []
-                          return (
-                            <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="min-w-0 truncate text-sm font-medium">
-                                    {a.node_id === null
-                                      ? t('contentFilter.everyNodeWith', {
-                                          endpoint: a.inbound_tag,
-                                          defaultValue: '{{endpoint}} — on every node that has it',
-                                        })
-                                      : `${node?.name ?? `#${a.node_id}`} · ${a.inbound_tag || t('contentFilter.wholeNode', { defaultValue: 'whole node' })}`}
-                                  </span>
-                                  {a.node_id === null ? null : (
-                                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                                      {t('contentFilter.nodeIdLabel', { id: a.node_id, defaultValue: 'id {{id}}' })}
-                                    </span>
-                                  )}
-                                  <DeliveryBadge delivery={a.delivery} />
-                                </div>
-                                {peers.length ? (
-                                  <p className="mt-0.5 break-words text-[11px] leading-snug text-amber-700 dark:text-amber-400">
-                                    {t('contentFilter.alsoEnforcedOn', {
-                                      names: peers.map(id => nodeLabel(id)).join(', '),
-                                      defaultValue: 'Shared configuration, so it is enforced on {{names}} as well.',
-                                    })}
-                                  </p>
-                                ) : null}
-                                {a.last_error ? (
-                                  <p className="mt-0.5 line-clamp-2 text-xs text-destructive">{a.last_error}</p>
-                                ) : null}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {a.enforced ? (
-                                  <Badge className="gap-1 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
-                                    <ShieldCheck className="size-3" />
-                                    {t('contentFilter.enforced', { defaultValue: 'In force' })}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="gap-1 border-destructive/40 bg-destructive/10 text-destructive">
-                                    <ShieldAlert className="size-3" />
-                                    {t('contentFilter.notEnforced', { defaultValue: 'Not confirmed' })}
-                                  </Badge>
-                                )}
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-8"
-                                  onClick={() => removeAssignment.mutate({ id: a.id, confirm: false })}
-                                  aria-label={t('contentFilter.remove', { defaultValue: 'Remove' })}
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          )
-                        })}
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="break-words text-xs tabular-nums text-muted-foreground">
+                            {assignTotalsText}
+                          </span>
+                          <div className="inline-flex shrink-0 overflow-hidden rounded-md border">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 rounded-none px-2.5 text-xs"
+                              disabled={everyGroupOpen}
+                              onClick={() => setEveryGroup(true)}
+                            >
+                              {t('contentFilter.rollupExpandAll', { defaultValue: 'Expand all' })}
+                            </Button>
+                            <span aria-hidden className="w-px self-stretch bg-border" />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 rounded-none px-2.5 text-xs"
+                              disabled={everyGroupClosed}
+                              onClick={() => setEveryGroup(false)}
+                            >
+                              {t('contentFilter.rollupCollapseAll', { defaultValue: 'Collapse all' })}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          {assignGroups.map(row => (
+                            <AssignmentGroupRow
+                              key={row.key}
+                              row={row}
+                              open={groupIsOpen(row)}
+                              onOpenChange={next => setGroupOpen(prev => ({ ...prev, [row.key]: next }))}
+                              onRemoveMember={id => removeAssignment.mutate({ id, confirm: false })}
+                              onRemoveAll={() =>
+                                setLiftGroup({
+                                  kind: row.kind,
+                                  name: row.name,
+                                  ids: row.assignmentIds,
+                                  nodes: row.nodeCount,
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -2401,6 +2901,53 @@ export default function ContentFilterPage() {
                 }}
               >
                 {t('contentFilter.delete', { defaultValue: 'Delete' })}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={liftGroup !== null}
+          onOpenChange={next => {
+            if (!next) setLiftGroup(null)
+          }}
+        >
+          <AlertDialogContent dir={dir}>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="break-words">
+                {t('contentFilter.assignLiftTitle', {
+                  name: liftGroup?.name ?? '',
+                  defaultValue: 'Lift this profile from {{name}}?',
+                })}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="break-words">
+                {liftGroup?.kind === 'node'
+                  ? t('contentFilter.assignLiftNodeBody', {
+                      count: liftGroup?.ids.length ?? 0,
+                      defaultValue: '{{count}} endpoints on this node lose the filter. Nothing else is touched.',
+                    })
+                  : liftGroup?.nodes === null || liftGroup?.nodes === undefined
+                    ? t('contentFilter.assignLiftEndpointBodyOpen', {
+                        defaultValue:
+                          'This endpoint loses the filter on every node that carries it, and the panel cannot say how many that is. Nothing else is touched.',
+                      })
+                    : t('contentFilter.assignLiftEndpointBody', {
+                        count: liftGroup.nodes,
+                        defaultValue:
+                          'This endpoint loses the filter on every node that carries it — {{count}} nodes right now. Nothing else is touched.',
+                      })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('contentFilter.cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  for (const id of liftGroup?.ids ?? []) removeAssignment.mutate({ id, confirm: false })
+                  setLiftGroup(null)
+                }}
+              >
+                {t('contentFilter.remove', { defaultValue: 'Remove' })}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
