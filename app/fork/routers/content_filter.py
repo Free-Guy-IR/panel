@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.db.crud.core import get_core_config_by_id
 from app.db.models import Node
-from app.fork.content_filter import service
+from app.fork.content_filter import capability, service
 from app.fork.content_filter.catalog import catalog_payload
 from app.fork.content_filter.rules import RuleValueError, tag_assignment_id
 from app.fork.content_filter.schemas import (
@@ -18,6 +18,7 @@ from app.fork.content_filter.schemas import (
     AssignmentOutcome,
     AssignmentPayload,
     AssignmentResponse,
+    CapabilityReport,
     CatalogResponse,
     DestinationTest,
     DestinationVerdict,
@@ -154,7 +155,7 @@ async def _withdraw_rules(
     prompt: ReloadPrompt | None = None
     for core_id in await service.cores_of_assignment(db, assignment):
         try:
-            await service.persist_core_rules(db, core_id, admin, allow_restart=confirmed)
+            await service.persist_core_rules(db, core_id, admin, allow_restart=confirmed, drop_unsupported=True)
         except ReloadRequired as exc:
             prompt = prompt or _reload_prompt(exc)
             problems.append(f"core {core_id}: {exc.detail}")
@@ -247,6 +248,14 @@ async def _assignment_view(
 @router.get("/catalog", response_model=CatalogResponse)
 async def get_catalog(_: AdminDetails = Depends(OWNER_READ)):
     return catalog_payload()
+
+
+@router.get("/capability", response_model=CapabilityReport)
+async def get_capability(
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(OWNER_READ),
+):
+    return await service.capability_report(db)
 
 
 def _scope_note(usable: bool, sharing: list[int]) -> str:
@@ -428,7 +437,7 @@ async def delete_profile(
 
     for core_id in core_ids:
         try:
-            await service.persist_core_rules(db, core_id, admin, allow_restart=confirm_restart)
+            await service.persist_core_rules(db, core_id, admin, allow_restart=confirm_restart, drop_unsupported=True)
         except (EnforcementError, RuleValueError) as exc:
             logger.warning(f"delete profile {profile_id}: core {core_id} not updated: {exc}")
     for node_id in node_ids:
@@ -553,6 +562,29 @@ async def _target_problem(db: AsyncSession, node_id: int, inbound_tag: str) -> s
     return None
 
 
+def _skipped(node_id: int | None, tag: str, reason: str, detail: str) -> AssignmentOutcome:
+    return AssignmentOutcome(
+        node_id=node_id, inbound_tag=tag, created=False, status="skipped", reason=reason, detail=detail
+    )
+
+
+def _unsupported_target(node_id, tag, node_support, tag_support) -> AssignmentOutcome | None:
+    if node_id is None:
+        carrier = tag_support.get(tag)
+        if carrier is None:
+            return _skipped(None, tag, capability.NO_NODES, capability.tag_note(tag, capability.NO_NODES))
+        if not carrier.supported:
+            return _skipped(None, tag, carrier.reason, capability.tag_note(tag, carrier.reason))
+        return None
+    node = node_support.get(node_id)
+    if node is not None and not node.supported:
+        return _skipped(node_id, tag, node.reason, capability.node_note(node.id, node.name, node.reason))
+    carrier = tag_support.get(tag) if tag else None
+    if carrier is not None and node_id in carrier.unsupported_node_ids:
+        return _skipped(node_id, tag, capability.PRE_ROUTED, capability.tag_note(tag, capability.PRE_ROUTED))
+    return None
+
+
 @router.post("/assignments/bulk", response_model=AssignmentBulkResult, status_code=201)
 async def create_assignments_bulk(
     payload: AssignmentBulkPayload,
@@ -570,9 +602,17 @@ async def create_assignments_bulk(
         for tag in dict.fromkeys(payload.inbound_tags):
             pairs.append((None, tag))
 
+    report = await service.capability_report(db)
+    node_support = {entry.id: entry for entry in report.nodes}
+    tag_support = {entry.tag: entry for entry in report.inbound_tags}
+
     outcomes: list[AssignmentOutcome] = []
     pending: list[tuple[ContentFilterAssignment, AssignmentOutcome, bool]] = []
     for node_id, tag in pairs:
+        unsupported = _unsupported_target(node_id, tag, node_support, tag_support)
+        if unsupported is not None:
+            outcomes.append(unsupported)
+            continue
         if node_id is not None:
             problem = await _target_problem(db, node_id, tag)
             if problem is not None:
@@ -657,6 +697,12 @@ async def create_assignments_bulk(
             outcome.enforced = False
             outcome.detail = exc.detail
             outcome.reload = _reload_prompt(exc)
+            continue
+        except service.UnsupportedNodes as exc:
+            outcome.status = "skipped"
+            outcome.enforced = False
+            outcome.detail = exc.detail
+            outcome.reason = capability.leading_reason(entry.reason for entry in exc.blockers)
             continue
         except EnforcementError as exc:
             outcome.enforced = False

@@ -198,6 +198,7 @@ class AssignmentOutcome(BaseModel):
     enforced: bool = False
     delivery: str | None = None
     detail: str | None = None
+    reason: str | None = None
     advisories: list[str] = Field(default_factory=list)
     advisory_note: str = ""
     reload: ReloadPrompt | None = None
@@ -247,6 +248,30 @@ class TargetNode(BaseModel):
     would_also_affect: list[int] = Field(default_factory=list)
     scope_note: str = ""
     inbounds: list[TargetInbound]
+
+
+class NodeCapability(BaseModel):
+    id: int
+    name: str
+    core_config_id: int
+    core_type: str
+    node_version: str
+    status: str
+    supported: bool
+    reason: str | None = None
+
+
+class InboundCapability(BaseModel):
+    tag: str
+    supported: bool
+    supported_node_ids: list[int] = Field(default_factory=list)
+    unsupported_node_ids: list[int] = Field(default_factory=list)
+    reason: str | None = None
+
+
+class CapabilityReport(BaseModel):
+    nodes: list[NodeCapability] = Field(default_factory=list)
+    inbound_tags: list[InboundCapability] = Field(default_factory=list)
 
 
 class DestinationTest(BaseModel):
