@@ -694,7 +694,7 @@
   "contentFilter.assignLiftEndpointBody_other": "This endpoint loses the filter on every node that carries it — {{count}} nodes right now.",
   "contentFilter.assignLiftEndpointBodyOpen": "This endpoint loses the filter on every node that carries it, and the panel cannot say how many that is.",
   "contentFilter.assignLiftNothingElse": "Nothing else is touched.",
-  "contentFilter.assignLiftAlsoLoses": "Its core config is shared, so {{names}} lose this filter too.",
+  "contentFilter.assignLiftAlsoLoses": "Its core config is shared, so {{names}} may lose this filter too.",
   "trafficLog.refused": "Refused",
   "trafficLog.delivered": "Delivered",
   "trafficLog.status.title": "Collection",

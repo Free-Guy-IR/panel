@@ -767,7 +767,7 @@
   "contentFilter.assignLiftEndpointBody_other": "این نقطهٔ اتصال روی هر نودی که دارَدش فیلتر را از دست می‌دهد — در حال حاضر {{count}} نود.",
   "contentFilter.assignLiftEndpointBodyOpen": "این نقطهٔ اتصال روی هر نودی که دارَدش فیلتر را از دست می‌دهد و پنل نمی‌تواند بگوید چند نود است.",
   "contentFilter.assignLiftNothingElse": "چیز دیگری دست نمی‌خورد.",
-  "contentFilter.assignLiftAlsoLoses": "پیکربندی هستهٔ آن مشترک است، پس {{names}} هم این فیلتر را از دست می‌دهند.",
+  "contentFilter.assignLiftAlsoLoses": "پیکربندی هستهٔ آن مشترک است، پس ممکن است {{names}} هم این فیلتر را از دست بدهند.",
   "trafficLog.refused": "ردشده",
   "trafficLog.delivered": "تحویل‌شده",
   "trafficLog.status.title": "جمع‌آوری",

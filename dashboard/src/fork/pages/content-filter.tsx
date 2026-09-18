@@ -2941,7 +2941,7 @@ export default function ContentFilterPage() {
                 {liftGroup?.peers.length
                   ? t('contentFilter.assignLiftAlsoLoses', {
                       names: liftGroup.peers.join(', '),
-                      defaultValue: 'Its core config is shared, so {{names}} lose this filter too.',
+                      defaultValue: 'Its core config is shared, so {{names}} may lose this filter too.',
                     })
                   : t('contentFilter.assignLiftNothingElse', { defaultValue: 'Nothing else is touched.' })}
               </AlertDialogDescription>
