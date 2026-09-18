@@ -1059,6 +1059,17 @@ export default function ContentFilterPage() {
 
   const heldOutcomes = useMemo(() => (bulkResult?.outcomes ?? []).filter(outcome => outcome.reload), [bulkResult])
 
+  const bulkSnapshotStale = useMemo(() => {
+    if (!bulkRequest) return false
+    const same = (a: number[] | string[], b: number[] | string[]) =>
+      a.length === b.length && a.every((v, i) => v === b[i])
+    return (
+      bulkRequest.profile_id !== activeId ||
+      !same([...bulkRequest.node_ids].sort(), [...assignNodes].sort()) ||
+      !same([...bulkRequest.inbound_tags].sort(), [...assignTags].sort())
+    )
+  }, [activeId, assignNodes, assignTags, bulkRequest])
+
   const bulkPrompt = useMemo(
     () => mergePrompts(heldOutcomes.map(outcome => outcome.reload).filter((p): p is ReloadPrompt => Boolean(p))),
     [heldOutcomes],
@@ -1717,18 +1728,23 @@ export default function ContentFilterPage() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2.5">
                     <RotateCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <p className="min-w-0 flex-1 text-xs leading-snug text-amber-700 dark:text-amber-400">
-                      {t('contentFilter.reloadBulkPending', {
-                        count: heldOutcomes.length,
-                        defaultValue: '{{count}} endpoints are waiting for you to confirm a restart',
-                      })}
+                      {bulkSnapshotStale
+                        ? t('contentFilter.reloadStale', {
+                            defaultValue:
+                              'Your selection changed since this result. Apply again to get a fresh restart confirmation.',
+                          })
+                        : t('contentFilter.reloadBulkPending', {
+                            count: heldOutcomes.length,
+                            defaultValue: '{{count}} endpoints are waiting for you to confirm a restart',
+                          })}
                     </p>
                     <Button
                       size="sm"
                       variant="secondary"
                       className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
-                      disabled={!bulkRequest || applyTargets.isPending}
+                      disabled={!bulkRequest || bulkSnapshotStale || applyTargets.isPending}
                       onClick={() => {
-                        if (!bulkRequest) return
+                        if (!bulkRequest || bulkSnapshotStale) return
                         setPendingRestart({
                           prompt: bulkPrompt,
                           request: { kind: 'applyTargets', body: bulkRequest },

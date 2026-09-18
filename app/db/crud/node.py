@@ -107,7 +107,6 @@ async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: boo
     return node
 
 
-
 async def get_nodes(
     db: AsyncSession,
     query: NodeListQuery,
@@ -882,4 +881,3 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(delete(NodeStat).where(NodeStat.node_id.in_(node_ids)))
     await db.execute(delete(Node).where(Node.id.in_(node_ids)))
     await db.commit()
-

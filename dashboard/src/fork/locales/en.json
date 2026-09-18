@@ -586,6 +586,7 @@
   "contentFilter.reloadWithdrawWhy": "Removing this filter puts the original name-recovery setting back on {{tags}}.",
   "contentFilter.reloadNodes": "Nodes that will restart and drop their current sessions: {{nodes}}",
   "contentFilter.reloadConfirm": "Restart and continue",
+  "contentFilter.reloadStale": "Your selection changed since this result. Apply again to get a fresh restart confirmation.",
   "contentFilter.reloadCancel": "Leave it as it is",
   "contentFilter.reloadBulkPending_one": "{{count}} of these needs a restart before it can be applied",
   "contentFilter.reloadBulkPending_other": "{{count}} of these need a restart before they can be applied",

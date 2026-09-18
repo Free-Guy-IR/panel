@@ -54,9 +54,8 @@ def _compare_type(context, inspected_column, metadata_column, inspected_type, me
     """
     if context.dialect.name == "sqlite":
         sqlite_bigint_equivalent = (
-            (isinstance(inspected_type, BigInteger) and isinstance(metadata_type, SqliteCompatibleBigInteger))
-            or (isinstance(inspected_type, SqliteCompatibleBigInteger) and isinstance(metadata_type, BigInteger))
-        )
+            isinstance(inspected_type, BigInteger) and isinstance(metadata_type, SqliteCompatibleBigInteger)
+        ) or (isinstance(inspected_type, SqliteCompatibleBigInteger) and isinstance(metadata_type, BigInteger))
         if sqlite_bigint_equivalent:
             return False
 
@@ -103,6 +102,8 @@ def run_migrations_offline() -> None:
 
     with context.begin_transaction():
         context.run_migrations()
+
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,

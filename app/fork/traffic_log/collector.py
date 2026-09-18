@@ -164,7 +164,9 @@ class TrafficCollector:
     def __init__(self):
         if server_settings.workers > 1:
             self.available = False
-            self.unavailable_reason = "the panel runs more than one web worker, so no single process owns the node log streams"
+            self.unavailable_reason = (
+                "the panel runs more than one web worker, so no single process owns the node log streams"
+            )
         elif not runtime_settings.role.runs_node:
             self.available = False
             self.unavailable_reason = "this process does not run nodes, so it cannot read their log streams"
@@ -920,11 +922,7 @@ class TrafficCollector:
             logger.info(f"traffic log flush detached {self.detach_rows(gone)} bucket(s) whose stored row is gone")
 
     def _adoptable(self, boundary: datetime) -> dict:
-        return {
-            key: bucket
-            for key, bucket in self._buckets.items()
-            if bucket.row_id is None and key[-1] <= boundary
-        }
+        return {key: bucket for key, bucket in self._buckets.items() if bucket.row_id is None and key[-1] <= boundary}
 
     @staticmethod
     def _record_key(record: TrafficLogRecord) -> BucketKey:
@@ -1061,9 +1059,7 @@ class TrafficCollector:
                 bucket.flushed_hits = hits
                 self._max_row_id = max(self._max_row_id, record.id)
         if changed:
-            statement = update(TrafficLogRecord.__table__).where(
-                TrafficLogRecord.__table__.c.id == bindparam("row_id")
-            )
+            statement = update(TrafficLogRecord.__table__).where(TrafficLogRecord.__table__.c.id == bindparam("row_id"))
             rows = [
                 {"row_id": bucket.row_id, "hits": hits, "last_seen": last_seen}
                 for _, bucket, hits, last_seen in changed
@@ -1086,7 +1082,8 @@ class TrafficCollector:
         expired = [
             key
             for key, bucket in self._buckets.items()
-            if key[-1] < cutoff or (key[-1] < current and bucket.row_id is not None and bucket.hits == bucket.flushed_hits)
+            if key[-1] < cutoff
+            or (key[-1] < current and bucket.row_id is not None and bucket.hits == bucket.flushed_hits)
         ]
         for key in expired:
             bucket = self._buckets.pop(key)

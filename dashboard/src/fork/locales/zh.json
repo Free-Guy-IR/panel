@@ -612,6 +612,7 @@
   "contentFilter.reloadWithdrawWhy": "移除此过滤规则会把 {{tags}} 的目标名称识别恢复为原来的设置。",
   "contentFilter.reloadNodes": "以下节点会重启，用户当前的连接会被中断：{{nodes}}",
   "contentFilter.reloadConfirm": "重启并继续",
+  "contentFilter.reloadStale": "此结果之后你的选择已更改。请重新应用以获取新的重启确认。",
   "contentFilter.reloadCancel": "保持现状",
   "contentFilter.reloadBulkPending_one": "其中 {{count}} 项需要先重启才能应用",
   "contentFilter.reloadBulkPending_other": "其中 {{count}} 项需要先重启才能应用",

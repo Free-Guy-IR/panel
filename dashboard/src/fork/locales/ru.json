@@ -632,6 +632,7 @@
   "contentFilter.reloadWithdrawWhy": "Снятие этого фильтра вернёт исходную настройку распознавания имени назначения на {{tags}}.",
   "contentFilter.reloadNodes": "Узлы, которые будут перезапущены и оборвут текущие сессии клиентов: {{nodes}}",
   "contentFilter.reloadConfirm": "Перезапустить и продолжить",
+  "contentFilter.reloadStale": "Ваш выбор изменился после этого результата. Примените заново, чтобы получить новое подтверждение перезапуска.",
   "contentFilter.reloadCancel": "Оставить как есть",
   "contentFilter.reloadBulkPending_one": "{{count}} из них требует перезапуска, прежде чем его можно будет применить",
   "contentFilter.reloadBulkPending_few": "{{count}} из них требуют перезапуска, прежде чем их можно будет применить",
