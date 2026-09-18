@@ -14,18 +14,16 @@ from app.fork.content_filter.rules import (
     ADVISORY_NOTE,
     BLOCK_OUTBOUND,
     BLOCKING_PROTOCOL,
-    CATEGORY_RULE_LIMIT,
     CLASH_REMEDY,
     DIRECT_OUTBOUND,
     DIRECT_PROTOCOL,
-    DOMAIN_MATCHER_LIMIT,
+    DOMAIN_BUDGET,
     RuleValueError,
     build_shared_rules,
     conflicting_rules,
     core_outbound_tags,
     digest,
     direct_outbound_tags,
-    names_a_category,
     owns_tag,
     parse_tag,
     pre_routed_inbound_tags,
@@ -874,49 +872,25 @@ def _named_profiles(rules: list[dict], labels: dict[str, str]) -> str:
     return ", ".join(f'"{name}"' for name in names) or "an unnamed profile"
 
 
-def _blamed(held: int, own: int, named: str) -> str:
-    parts: list[str] = []
-    if held:
-        parts.append(f"{held} already in the core config outside the filter")
-    if own:
-        parts.append(f"{own} from {named}")
-    return " and ".join(parts) or named
-
-
 def guard_rule_size(where: str, filter_rules: list[dict], current: list[dict], labels: dict[str, str]) -> None:
     kept = _strip_owned(current)
-    categories, matchers = rule_set_cost([*kept, *filter_rules])
-    held_categories, held_matchers = rule_set_cost(current)
+    weight, _ = rule_set_cost([*kept, *filter_rules])
+    held_weight, _ = rule_set_cost(current)
 
-    if categories > CATEGORY_RULE_LIMIT and categories > held_categories:
-        own = [rule for rule in filter_rules if names_a_category(rule)]
-        blamed = _blamed(
-            len([rule for rule in kept if names_a_category(rule)]),
-            len(own),
-            _named_profiles(own, labels),
-        )
-        raise EnforcementError(
-            f"{where} would carry {categories} rules that each pull in a whole category list, over the limit of "
-            f"{CATEGORY_RULE_LIMIT}: {blamed}. The node expands every one of those to its full list before the "
-            f"core reads it, and {categories} of them is enough to stop xray from starting and take the node "
-            "down. Put those endpoints under one profile, take some of these profiles off this core, spread them "
-            "over more cores, or drop one of the category rules the core config carries on its own. Nothing was "
-            "written.",
-            code=409,
-        )
+    if weight <= DOMAIN_BUDGET or weight <= held_weight:
+        return
 
-    if matchers > DOMAIN_MATCHER_LIMIT and matchers > held_matchers:
-        blamed = _blamed(
-            rule_set_cost(kept)[1],
-            rule_set_cost(filter_rules)[1],
-            _named_profiles(filter_rules, labels),
-        )
-        raise EnforcementError(
-            f"{where} would carry {matchers} domain matchers, over the limit of {DOMAIN_MATCHER_LIMIT}: {blamed}. "
-            "Shorten the block and allow lists on those profiles, spread them over more cores, or shorten the "
-            "matchers the core config carries on its own. Nothing was written.",
-            code=409,
-        )
+    own_weight, _ = rule_set_cost(filter_rules)
+    kept_weight, _ = rule_set_cost(kept)
+    named = _named_profiles(filter_rules, labels)
+    raise EnforcementError(
+        f"{where} would have to load {weight:,} destinations before its core can start, over the ceiling of "
+        f"{DOMAIN_BUDGET:,}. {own_weight:,} of those come from {named} and {kept_weight:,} from the rules the "
+        "core config already carries. A core that has to expand this many lists takes longer to start than the "
+        "panel waits for it, and the node goes down. Take some categories off those profiles, move one of them "
+        "to a different core, or drop a list the core carries on its own. Nothing was written.",
+        code=409,
+    )
 
 
 def _broadening_rules(current: dict, filter_rules: list[dict]) -> list[dict]:

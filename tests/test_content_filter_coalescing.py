@@ -4,10 +4,10 @@ import re
 import pytest
 
 from app.db.models import CoreType, Node
-from app.fork.content_filter import capability, service
+from app.fork.content_filter import capability, catalog, service
 from app.fork.content_filter.rules import (
-    CATEGORY_RULE_LIMIT,
-    DOMAIN_MATCHER_LIMIT,
+    DOMAIN_BUDGET,
+    LITERAL_MATCHER_WEIGHT,
     build_rules,
     names_a_category,
     owns_tag,
@@ -370,7 +370,7 @@ async def test_a_whole_node_filter_keeps_an_endpoint_its_own_scope_cannot_reach(
 
 @pytest.mark.asyncio
 async def test_the_size_guard_refuses_a_runaway_block_list(monkeypatch: pytest.MonkeyPatch):
-    blocked = [f"blocked-{index}.example" for index in range(DOMAIN_MATCHER_LIMIT + 1)]
+    blocked = [f"blocked-{index}.example" for index in range(DOMAIN_BUDGET + 1)]
     core = _Core(78, ["in-a"])
     profile = _Profile(7, "huge", blocked=blocked)
     db = _fleet(monkeypatch, [core], [_Node(780, 78)], [_Assignment(96, profile, "in-a", node_id=780)])
@@ -381,7 +381,7 @@ async def test_the_size_guard_refuses_a_runaway_block_list(monkeypatch: pytest.M
         await service.persist_core_rules(db, 78, admin=object(), allow_restart=True)
 
     assert refused.value.code == 409
-    assert f"{DOMAIN_MATCHER_LIMIT + 1} domain matchers" in refused.value.detail
+    assert f"{DOMAIN_BUDGET + 1:,} destinations" in refused.value.detail
     assert '"huge"' in refused.value.detail
     assert "config" not in captured
 
@@ -403,10 +403,10 @@ async def test_different_profiles_on_one_core_keep_their_own_rules(monkeypatch: 
 
 
 @pytest.mark.asyncio
-async def test_the_size_guard_refuses_a_core_that_would_carry_too_many_category_rules(
+async def test_the_size_guard_refuses_a_core_that_would_load_too_many_destinations(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    count = CATEGORY_RULE_LIMIT + 1
+    count = 13
     tags = [f"in-{index}" for index in range(count)]
     core = _Core(72, tags)
     assignments = [
@@ -421,8 +421,7 @@ async def test_the_size_guard_refuses_a_core_that_would_carry_too_many_category_
         await service.persist_core_rules(db, 72, admin=object(), allow_restart=True)
 
     assert refused.value.code == 409
-    assert f"{count} rules" in refused.value.detail
-    assert str(CATEGORY_RULE_LIMIT) in refused.value.detail
+    assert f"{DOMAIN_BUDGET:,}" in refused.value.detail
     assert '"profile-0"' in refused.value.detail
     assert "Nothing was written" in refused.value.detail
     assert "config" not in captured
@@ -430,7 +429,7 @@ async def test_the_size_guard_refuses_a_core_that_would_carry_too_many_category_
 
 @pytest.mark.asyncio
 async def test_the_size_guard_stops_the_live_push_as_well(monkeypatch: pytest.MonkeyPatch):
-    count = CATEGORY_RULE_LIMIT + 1
+    count = 13
     tags = [f"in-{index}" for index in range(count)]
     core = _Core(73, tags)
     assignments = [
@@ -479,7 +478,7 @@ async def test_a_poisoned_core_can_still_be_emptied(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_the_guard_never_blocks_a_write_that_shrinks_an_oversized_core(monkeypatch: pytest.MonkeyPatch):
-    count = CATEGORY_RULE_LIMIT + 1
+    count = 13
     tags = [f"in-{index}" for index in range(count)]
     held = [build_rules(300 + index, [tag], ["ads"], [], [], False)[0] for index, tag in enumerate([*tags, "in-extra"])]
     core = _Core(76, tags, routing=held)
@@ -517,6 +516,42 @@ def _operator_address_category(index: int) -> dict:
         "ip": [f"geoip:list-{index}"],
         "outboundTag": "BLOCK",
     }
+
+
+def _operator_categories_weighing(target: int) -> list[dict]:
+    from app.fork.content_filter.rules import rule_set_cost
+
+    built: list[dict] = []
+    for index in range(1, 43):
+        candidate = _operator_domain_category(index)
+        if rule_set_cost([*built, candidate])[0] > target:
+            continue
+        built.append(candidate)
+    return built
+
+
+def _operator_address_categories_weighing(target: int) -> list[dict]:
+
+    built = _operator_categories_weighing(target)
+    return [*built, *(_operator_address_category(index) for index in range(len(built)))]
+
+
+def _operator_bulk_to(target: int, held: list[dict]) -> list[dict]:
+    from app.fork.content_filter.rules import rule_set_cost
+
+    short = target - rule_set_cost(held)[0]
+    if short <= 0:
+        return held
+    return [
+        *held,
+        {
+            "type": "field",
+            "ruleTag": "op-bulk",
+            "inboundTag": list(OPERATOR_SCOPE),
+            "domain": [f"top-up-{index}.example" for index in range(short)],
+            "outboundTag": "BLOCK",
+        },
+    ]
 
 
 async def _persist_dropping(monkeypatch, db, core_id) -> dict:
@@ -655,7 +690,7 @@ async def test_a_wider_matcher_on_the_same_endpoint_still_counts_as_an_addition(
 
 @pytest.mark.asyncio
 async def test_the_size_guard_counts_the_category_rules_the_operator_wrote(monkeypatch: pytest.MonkeyPatch):
-    held = [_operator_domain_category(index) for index in range(CATEGORY_RULE_LIMIT)]
+    held = _operator_bulk_to(DOMAIN_BUDGET - 1, _operator_categories_weighing(DOMAIN_BUDGET - 1))
     core = _Core(89, ["in-a"], routing=held)
     profile = _Profile(52, "ads", categories=["ads"])
     db = _fleet(monkeypatch, [core], [_Node(890, 89)], [_Assignment(490, profile, "in-a", node_id=890)])
@@ -666,16 +701,16 @@ async def test_the_size_guard_counts_the_category_rules_the_operator_wrote(monke
         await service.persist_core_rules(db, 89, admin=object(), allow_restart=True)
 
     assert refused.value.code == 409
-    assert f"{CATEGORY_RULE_LIMIT + 1} rules" in refused.value.detail
-    assert f"{CATEGORY_RULE_LIMIT} already in the core config outside the filter" in refused.value.detail
-    assert '1 from "ads"' in refused.value.detail
+    assert "destinations" in refused.value.detail
+    assert "the rules the core config already carries" in refused.value.detail
+    assert '"ads"' in refused.value.detail
     assert "Nothing was written" in refused.value.detail
     assert "config" not in captured
 
 
 @pytest.mark.asyncio
 async def test_the_size_guard_counts_a_category_the_operator_named_by_address(monkeypatch: pytest.MonkeyPatch):
-    held = [_operator_address_category(index) for index in range(CATEGORY_RULE_LIMIT)]
+    held = _operator_bulk_to(DOMAIN_BUDGET - 1, _operator_address_categories_weighing(DOMAIN_BUDGET - 1))
     core = _Core(90, ["in-a"], routing=held)
     profile = _Profile(53, "ads", categories=["ads"])
     db = _fleet(monkeypatch, [core], [_Node(900, 90)], [_Assignment(500, profile, "in-a", node_id=900)])
@@ -686,14 +721,14 @@ async def test_the_size_guard_counts_a_category_the_operator_named_by_address(mo
         await service.persist_core_rules(db, 90, admin=object(), allow_restart=True)
 
     assert refused.value.code == 409
-    assert f"{CATEGORY_RULE_LIMIT + 1} rules" in refused.value.detail
-    assert f"{CATEGORY_RULE_LIMIT} already in the core config outside the filter" in refused.value.detail
+    assert "destinations" in refused.value.detail
+    assert "the rules the core config already carries" in refused.value.detail
     assert "config" not in captured
 
 
 @pytest.mark.asyncio
 async def test_the_size_guard_counts_the_operator_rules_on_the_live_push(monkeypatch: pytest.MonkeyPatch):
-    held = [_operator_domain_category(index) for index in range(CATEGORY_RULE_LIMIT)]
+    held = _operator_bulk_to(DOMAIN_BUDGET - 1, _operator_categories_weighing(DOMAIN_BUDGET - 1))
     core = _Core(91, ["in-a"], routing=held)
     profile = _Profile(54, "ads", categories=["ads"])
     db = _fleet(monkeypatch, [core], [_Node(910, 91)], [_Assignment(510, profile, "in-a", node_id=910)])
@@ -707,16 +742,7 @@ async def test_the_size_guard_counts_the_operator_rules_on_the_live_push(monkeyp
 
 @pytest.mark.asyncio
 async def test_the_operator_matcher_count_is_carried_into_the_domain_limit(monkeypatch: pytest.MonkeyPatch):
-    bulk = [f"held-{index}.example" for index in range(DOMAIN_MATCHER_LIMIT)]
-    held = [
-        {
-            "type": "field",
-            "ruleTag": "op-bulk",
-            "inboundTag": list(OPERATOR_SCOPE),
-            "domain": bulk,
-            "outboundTag": "BLOCK",
-        }
-    ]
+    held = _operator_bulk_to(DOMAIN_BUDGET, _operator_categories_weighing(DOMAIN_BUDGET))
     core = _Core(92, ["in-a"], routing=held)
     profile = _Profile(55, "small", blocked=["one.example"])
     db = _fleet(monkeypatch, [core], [_Node(920, 92)], [_Assignment(520, profile, "in-a", node_id=920)])
@@ -727,9 +753,9 @@ async def test_the_operator_matcher_count_is_carried_into_the_domain_limit(monke
         await service.persist_core_rules(db, 92, admin=object(), allow_restart=True)
 
     assert refused.value.code == 409
-    assert f"{DOMAIN_MATCHER_LIMIT + 1} domain matchers" in refused.value.detail
-    assert f"{DOMAIN_MATCHER_LIMIT} already in the core config outside the filter" in refused.value.detail
-    assert '1 from "small"' in refused.value.detail
+    assert "destinations" in refused.value.detail
+    assert "the rules the core config already carries" in refused.value.detail
+    assert '1 of those come from "small"' in refused.value.detail
     assert "config" not in captured
 
 
@@ -737,7 +763,7 @@ async def test_the_operator_matcher_count_is_carried_into_the_domain_limit(monke
 async def test_a_withdrawal_still_works_on_a_core_the_operator_pushed_over_the_limit(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    held = [_operator_domain_category(index) for index in range(CATEGORY_RULE_LIMIT + 1)]
+    held = _operator_categories_weighing(DOMAIN_BUDGET)
     core = _Core(93, ["in-a", "in-b"], routing=held)
     profile = _Profile(56, "ads", categories=["ads"])
     assignments = [_Assignment(530, profile, "in-a", node_id=930), _Assignment(531, profile, "in-b", node_id=930)]
@@ -757,7 +783,7 @@ async def test_a_withdrawal_still_works_on_a_core_the_operator_pushed_over_the_l
 async def test_disabling_a_filter_still_works_on_a_core_the_operator_pushed_over_the_limit(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    held = [_operator_domain_category(index) for index in range(CATEGORY_RULE_LIMIT + 1)]
+    held = _operator_categories_weighing(DOMAIN_BUDGET)
     core = _Core(94, ["in-a"], routing=held)
     profile = _Profile(57, "ads", categories=["ads"])
     assignment = _Assignment(540, profile, "in-a", node_id=940)
@@ -768,14 +794,14 @@ async def test_disabling_a_filter_still_works_on_a_core_the_operator_pushed_over
     captured = await _persist_dropping(monkeypatch, db, 94)
 
     assert _written(captured["config"]) == []
-    assert len(captured["config"]["routing"]["rules"]) == CATEGORY_RULE_LIMIT + 1
+    assert len(captured["config"]["routing"]["rules"]) == len(held)
 
 
 @pytest.mark.asyncio
 async def test_deleting_the_profile_still_works_on_a_core_the_operator_pushed_over_the_limit(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    held = [_operator_domain_category(index) for index in range(CATEGORY_RULE_LIMIT + 1)]
+    held = _operator_categories_weighing(DOMAIN_BUDGET)
     core = _Core(95, ["in-a"], routing=held)
     profile = _Profile(58, "ads", categories=["ads"])
     db = _fleet(monkeypatch, [core], [_Node(950, 95)], [_Assignment(550, profile, "in-a", node_id=950)])
@@ -785,14 +811,14 @@ async def test_deleting_the_profile_still_works_on_a_core_the_operator_pushed_ov
     captured = await _persist_dropping(monkeypatch, db, 95)
 
     assert _written(captured["config"]) == []
-    assert len(captured["config"]["routing"]["rules"]) == CATEGORY_RULE_LIMIT + 1
+    assert len(captured["config"]["routing"]["rules"]) == len(held)
 
 
 @pytest.mark.asyncio
 async def test_a_poisoned_core_the_operator_also_loaded_can_still_be_cleaned(monkeypatch: pytest.MonkeyPatch):
     tags = [f"in-{index}" for index in range(16)]
     poisoned = [build_rules(600 + index, [tag], ["ads"], [], [], False)[0] for index, tag in enumerate(tags)]
-    held = [_operator_domain_category(index) for index in range(CATEGORY_RULE_LIMIT + 1)]
+    held = _operator_categories_weighing(DOMAIN_BUDGET)
     core = _Core(96, tags, routing=[*held, *poisoned])
     profile = _Profile(59, "ads", categories=["ads"])
     assignments = [_Assignment(600 + index, profile, tag, node_id=960) for index, tag in enumerate(tags)]
@@ -880,20 +906,26 @@ async def test_a_profile_behind_another_one_still_collapses_to_one_rule(monkeypa
 
 
 def test_the_cost_of_a_rule_set_sees_a_category_named_by_address():
-    assert rule_set_cost([{"ip": ["geoip:cn"]}]) == (1, 0)
-    assert rule_set_cost([{"ip": ["ext:pgfilter.dat:pglist-1"]}]) == (1, 0)
-    assert rule_set_cost([{"ip": ["ext-ip:pgfilter.dat:pglist-1"]}]) == (1, 0)
-    assert rule_set_cost([{"source": ["geoip:ir"]}]) == (1, 0)
-    assert rule_set_cost([{"ip": ["0.0.0.0/0", "::/0"]}]) == (0, 0)
+    heavy = catalog.size_of("pglist-1")
+
+    assert heavy > LITERAL_MATCHER_WEIGHT
+    assert rule_set_cost([{"ip": ["geoip:cn"]}]) == (1, 1)
+    assert rule_set_cost([{"ip": ["ext:pgfilter.dat:pglist-1"]}]) == (heavy, 1)
+    assert rule_set_cost([{"ip": ["ext-ip:pgfilter.dat:pglist-1"]}]) == (heavy, 1)
+    assert rule_set_cost([{"source": ["geoip:ir"]}]) == (1, 1)
+    assert rule_set_cost([{"ip": ["0.0.0.0/0", "::/0"]}]) == (2, 2)
     assert names_a_category({"ip": ["geoip:private"]}) is True
 
 
 def test_the_cost_of_a_rule_set_sees_the_other_domain_list_spellings():
-    assert rule_set_cost([{"domain": ["ext-domain:pgfilter.dat:pglist-1"]}]) == (1, 1)
-    assert rule_set_cost([{"domains": ["geosite:category-ads-all"]}]) == (1, 1)
-    assert rule_set_cost([{"domain": ["GEOSITE:category-ads-all"]}]) == (1, 1)
-    assert rule_set_cost([{"domain": ["regexp:^ads\\."]}]) == (0, 1)
-    assert rule_set_cost([{"domain": ["ads.example"]}]) == (0, 1)
+    heavy = catalog.size_of("pglist-1")
+    ads = next(group.size for group in catalog.groups() if group.geosite == "category-ads-all")
+
+    assert rule_set_cost([{"domain": ["ext-domain:pgfilter.dat:pglist-1"]}]) == (heavy, 1)
+    assert rule_set_cost([{"domains": ["geosite:category-ads-all"]}]) == (ads, 1)
+    assert rule_set_cost([{"domain": ["GEOSITE:category-ads-all"]}]) == (ads, 1)
+    assert rule_set_cost([{"domain": ["regexp:^ads\\."]}]) == (1, 1)
+    assert rule_set_cost([{"domain": ["ads.example"]}]) == (1, 1)
 
 
 def test_coverage_says_a_shrunken_rewrite_adds_nothing():
@@ -1029,3 +1061,48 @@ def test_coverage_still_ignores_case_where_the_core_does():
 
     assert within_coverage(rule_coverage([mixed]), [plain]) is True
     assert within_coverage(rule_coverage([plain]), [mixed]) is True
+
+
+def test_a_rules_cost_is_the_destinations_it_makes_a_node_load():
+    from app.fork.content_filter.rules import matcher_weight
+
+    assert matcher_weight("geosite:category-ads-all") == 170624
+    assert matcher_weight("geosite:category-porn") == 6635
+    assert matcher_weight("ext:pgfilter.dat:pglist-1") == 178876
+    assert matcher_weight("domain:example.com") == 1
+    assert matcher_weight("geoip:private") == 1
+
+
+def test_two_real_profiles_fit_where_sixteen_copies_of_one_do_not():
+    from app.fork.content_filter import service
+    from app.fork.content_filter.rules import build_rules
+
+    operator = [{"type": "field", "ip": ["geoip:private"], "outboundTag": "BLOCK"}]
+    ads = build_rules(6, ["spof 401"], ["ads"], [], [], False)
+    kids = build_rules(8, ["spof 402"], ["ads", "adult"], [], [], False)
+    sixteen = [
+        rule for index in range(16) for rule in build_rules(100 + index, [f"tag{index}"], ["ads"], [], [], False)
+    ]
+
+    service.guard_rule_size("node 10", [*ads, *kids], [*operator, *ads], {})
+
+    with pytest.raises(service.EnforcementError) as refused:
+        service.guard_rule_size("node 10", sixteen, operator, {})
+    assert refused.value.code == 409
+
+
+def test_an_oversized_core_can_always_be_shrunk():
+    from app.fork.content_filter import service
+    from app.fork.content_filter.rules import build_rules
+
+    operator = [{"type": "field", "ip": ["geoip:private"], "outboundTag": "BLOCK"}]
+    sixteen = [
+        rule for index in range(16) for rule in build_rules(100 + index, [f"tag{index}"], ["ads"], [], [], False)
+    ]
+    poisoned = [*operator, *sixteen]
+
+    service.guard_rule_size("node 10", [], poisoned, {})
+    service.guard_rule_size("node 10", build_rules(6, ["spof 401"], ["ads"], [], [], False), poisoned, {})
+
+    with pytest.raises(service.EnforcementError):
+        service.guard_rule_size("node 10", [*sixteen, *build_rules(6, ["x"], ["ads"], [], [], False)], poisoned, {})

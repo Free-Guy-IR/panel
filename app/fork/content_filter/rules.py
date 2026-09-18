@@ -76,8 +76,8 @@ IDENTITY_LEN = 10
 CHECKSUM_LEN = 8
 TOKEN_EXTRA_CHARS = "-_.@"
 LABEL_EXTRA_CHARS = "-_"
-CATEGORY_RULE_LIMIT = 4
-DOMAIN_MATCHER_LIMIT = 4000
+DOMAIN_BUDGET = 2_000_000
+LITERAL_MATCHER_WEIGHT = 1
 
 
 class RuleValueError(ValueError):
@@ -469,16 +469,32 @@ def names_a_category(rule: dict) -> bool:
     return any(_list_prefix(value) in NAMED_ADDRESS_LIST_KINDS for value in address_matchers(rule))
 
 
+def matcher_weight(value: str) -> int:
+    from app.fork.content_filter import catalog
+
+    head, separator, rest = str(value or "").strip().partition(":")
+    kind = head.lower() if separator else ""
+    body = rest.strip().lower()
+    if kind == "geosite":
+        for group in catalog.groups():
+            if group.geosite and group.geosite.lower() == body:
+                return group.size or LITERAL_MATCHER_WEIGHT
+        return catalog.size_of(body) or LITERAL_MATCHER_WEIGHT
+    if kind in ("ext", "ext-domain", "ext-ip"):
+        return catalog.size_of(body.rsplit(":", 1)[-1]) or LITERAL_MATCHER_WEIGHT
+    return LITERAL_MATCHER_WEIGHT
+
+
 def rule_set_cost(rules: list[dict]) -> tuple[int, int]:
-    category_rules = 0
+    weight = 0
     matchers = 0
     for rule in rules or []:
         if not isinstance(rule, dict):
             continue
-        matchers += len(domain_matchers(rule))
-        if names_a_category(rule):
-            category_rules += 1
-    return category_rules, matchers
+        values = [*domain_matchers(rule), *address_matchers(rule)]
+        matchers += len(values)
+        weight += sum(matcher_weight(value) for value in values)
+    return weight, matchers
 
 
 def _condition_sets(rule: dict) -> tuple[tuple[str, frozenset[str]], ...]:
