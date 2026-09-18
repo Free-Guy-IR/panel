@@ -1741,6 +1741,7 @@ export default function ContentFilterPage() {
     name: string
     ids: number[]
     nodes: number | null
+    peers: string[]
   } | null>(null)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const [pendingRestart, setPendingRestart] = useState<PendingRestart | null>(null)
@@ -2752,6 +2753,7 @@ export default function ContentFilterPage() {
                                   name: row.name,
                                   ids: row.assignmentIds,
                                   nodes: row.nodeCount,
+                                  peers: row.peers,
                                 })
                               }
                             />
@@ -2924,18 +2926,24 @@ export default function ContentFilterPage() {
                 {liftGroup?.kind === 'node'
                   ? t('contentFilter.assignLiftNodeBody', {
                       count: liftGroup?.ids.length ?? 0,
-                      defaultValue: '{{count}} endpoints on this node lose the filter. Nothing else is touched.',
+                      defaultValue: '{{count}} endpoints on this node lose the filter.',
                     })
                   : liftGroup?.nodes === null || liftGroup?.nodes === undefined
                     ? t('contentFilter.assignLiftEndpointBodyOpen', {
                         defaultValue:
-                          'This endpoint loses the filter on every node that carries it, and the panel cannot say how many that is. Nothing else is touched.',
+                          'This endpoint loses the filter on every node that carries it, and the panel cannot say how many that is.',
                       })
                     : t('contentFilter.assignLiftEndpointBody', {
                         count: liftGroup.nodes,
                         defaultValue:
-                          'This endpoint loses the filter on every node that carries it — {{count}} nodes right now. Nothing else is touched.',
-                      })}
+                          'This endpoint loses the filter on every node that carries it — {{count}} nodes right now.',
+                      })}{' '}
+                {liftGroup?.peers.length
+                  ? t('contentFilter.assignLiftAlsoLoses', {
+                      names: liftGroup.peers.join(', '),
+                      defaultValue: 'Its core config is shared, so {{names}} lose this filter too.',
+                    })
+                  : t('contentFilter.assignLiftNothingElse', { defaultValue: 'Nothing else is touched.' })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
