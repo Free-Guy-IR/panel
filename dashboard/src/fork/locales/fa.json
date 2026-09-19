@@ -873,6 +873,7 @@
   "trafficLog.purge.description": "رکوردهای حذف‌شده برنمی‌گردند. انتخاب کنید چه چیزی حذف شود.",
   "trafficLog.purge.scope": "چه چیزی حذف شود",
   "trafficLog.purge.all": "همهٔ رکوردها",
+  "trafficLog.purge.h1": "قدیمی‌تر از ۱ ساعت",
   "trafficLog.purge.h6": "قدیمی‌تر از ۶ ساعت",
   "trafficLog.purge.d1": "قدیمی‌تر از ۱ روز",
   "trafficLog.purge.d2": "قدیمی‌تر از ۲ روز",

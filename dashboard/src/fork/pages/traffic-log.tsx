@@ -133,7 +133,7 @@ type PurgeResult = {
 
 type PurgeRequest = { hours: number | null; reclaim: boolean }
 
-type PurgeScopeId = 'all' | 'h6' | 'd1' | 'd2' | 'd7'
+type PurgeScopeId = 'all' | 'h1' | 'h6' | 'd1' | 'd2' | 'd7'
 
 type PresetId = '15m' | '1h' | '6h' | '24h' | '48h' | 'custom'
 
@@ -171,6 +171,7 @@ const RETENTION_CHOICES: { hours: number; label: string; fallback: string }[] = 
 
 const PURGE_CHOICES: { id: PurgeScopeId; hours: number | null; label: string; fallback: string }[] = [
   { id: 'all', hours: null, label: 'trafficLog.purge.all', fallback: 'Everything' },
+  { id: 'h1', hours: 1, label: 'trafficLog.purge.h1', fallback: 'Older than 1 hour' },
   { id: 'h6', hours: 6, label: 'trafficLog.purge.h6', fallback: 'Older than 6 hours' },
   { id: 'd1', hours: 24, label: 'trafficLog.purge.d1', fallback: 'Older than 1 day' },
   { id: 'd2', hours: 48, label: 'trafficLog.purge.d2', fallback: 'Older than 2 days' },

@@ -800,6 +800,7 @@
   "trafficLog.purge.description": "Removed records cannot be brought back. Choose what to remove.",
   "trafficLog.purge.scope": "What to remove",
   "trafficLog.purge.all": "Everything",
+  "trafficLog.purge.h1": "Older than 1 hour",
   "trafficLog.purge.h6": "Older than 6 hours",
   "trafficLog.purge.d1": "Older than 1 day",
   "trafficLog.purge.d2": "Older than 2 days",
