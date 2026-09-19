@@ -240,7 +240,6 @@
    "domains": [
     "api-adservices.apple.com",
     "books-analytics-events.apple.com",
-    "iadsdk.apple.com",
     "metrics.icloud.com",
     "metrics.mzstatic.com",
     "notes-analytics-events.apple.com",
@@ -346,7 +345,6 @@
    "geosite": null,
    "icon": "",
    "domains": [
-    "grs.hicloud.com",
     "logbak.hicloud.com",
     "logservice.hicloud.com",
     "logservice1.hicloud.com",
@@ -8597,6 +8595,978 @@
    "domains": [
     "zynga.com",
     "zyngawithfriends.com"
+   ]
+  },
+  {
+   "id": "pars90",
+   "name": "Pars90",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "pars90.com"
+   ]
+  },
+  {
+   "id": "hotbet",
+   "name": "HotBet (Donya Jahanbakht)",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "donyabet.xyz",
+    "hotbet.click",
+    "hotbet.org",
+    "hotbet.website",
+    "hotbetdonya.org"
+   ]
+  },
+  {
+   "id": "abt90",
+   "name": "ABT90 (Sasha Sobhani)",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "abt-sasha.com",
+    "abt90.co",
+    "abt90.com",
+    "sashasobhani.org"
+   ]
+  },
+  {
+   "id": "shirbet",
+   "name": "ShirBet",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "shirbet.com",
+    "shirbet.info"
+   ]
+  },
+  {
+   "id": "betmajic",
+   "name": "BetMajic",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "betmajic.co",
+    "betmajic.com"
+   ]
+  },
+  {
+   "id": "riverpoker",
+   "name": "River Poker",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "riverpoker.games"
+   ]
+  },
+  {
+   "id": "betball90",
+   "name": "BetBall90",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "betball90.com",
+    "betball90.org"
+   ]
+  },
+  {
+   "id": "ace90bet",
+   "name": "Ace90Bet",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ace90bet.com"
+   ]
+  },
+  {
+   "id": "betyek",
+   "name": "BetYek",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "betyek.com"
+   ]
+  },
+  {
+   "id": "betfa",
+   "name": "BetFa",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "bet-fa.xyz",
+    "betfa.bet",
+    "betfa.bio",
+    "betfa.cam",
+    "betfa.com",
+    "betfa.org"
+   ]
+  },
+  {
+   "id": "bet303",
+   "name": "Bet303",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "bet303.com",
+    "bet303iran.bet"
+   ]
+  },
+  {
+   "id": "betfido",
+   "name": "BetFido",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "betfido.club",
+    "betfido.com",
+    "betfido90.com"
+   ]
+  },
+  {
+   "id": "hazarat",
+   "name": "Hazarat",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "hazarat.game",
+    "hazarat.world",
+    "myhazarat.com"
+   ]
+  },
+  {
+   "id": "dancebet",
+   "name": "DanceBet",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "dancebet.com"
+   ]
+  },
+  {
+   "id": "delbet",
+   "name": "DelBet",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "delbet.com"
+   ]
+  },
+  {
+   "id": "mahbet",
+   "name": "MahBet",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "mahbet.com"
+   ]
+  },
+  {
+   "id": "betboro",
+   "name": "Betboro",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "betboro.com"
+   ]
+  },
+  {
+   "id": "betlahze",
+   "name": "BetLahze",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "betlahze.com"
+   ]
+  },
+  {
+   "id": "enfejar_bet",
+   "name": "Enfejar Bet",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "enfejarbet.com"
+   ]
+  },
+  {
+   "id": "enfejar_portals",
+   "name": "Enfejar crash-game portals",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "behtarin-siteshartbandienfejar.com",
+    "enfejar.games",
+    "enfejar.pro",
+    "enfejar.vip",
+    "enfejar777.com",
+    "enfejaria.com",
+    "iranenfejar.info",
+    "vorod-enfejar.com"
+   ]
+  },
+  {
+   "id": "crash_bandicoot_info",
+   "name": "Crash-Bandicoot.info (Enfejar portal, not the video game)",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "crash-bandicoot.info"
+   ]
+  },
+  {
+   "id": "fa_betting_portals",
+   "name": "Persian betting portals and directories",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "bakht.org",
+    "betnews.vip",
+    "farsbet.org",
+    "iranbetinfo.com",
+    "iranshartbandi.com",
+    "pars-bet.com",
+    "persianbt.com",
+    "shartbaz.com",
+    "shartchi.com",
+    "topbetiran.vip"
+   ]
+  },
+  {
+   "id": "jetbet",
+   "name": "Jetbet (Turkey)",
+   "group": "gambling",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "jetbet.com"
+   ]
+  },
+  {
+   "id": "fansly",
+   "name": "Fansly",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "fansly.com"
+   ]
+  },
+  {
+   "id": "fanvue",
+   "name": "Fanvue",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "fanvue.com"
+   ]
+  },
+  {
+   "id": "loyalfans",
+   "name": "LoyalFans",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "loyalfans.com"
+   ]
+  },
+  {
+   "id": "justforfans",
+   "name": "JustFor.Fans",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "justfor.fans"
+   ]
+  },
+  {
+   "id": "pocketstars",
+   "name": "PocketStars / Fansify",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "fansify.co.uk",
+    "pocketstars.com"
+   ]
+  },
+  {
+   "id": "unlockd",
+   "name": "Unlockd",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "unlockd.me"
+   ]
+  },
+  {
+   "id": "sheer",
+   "name": "Sheer",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "sheer.com"
+   ]
+  },
+  {
+   "id": "iwantclips",
+   "name": "iWantClips",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "iwantclips.com"
+   ]
+  },
+  {
+   "id": "feetfinder",
+   "name": "FeetFinder",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "feetfinder.com"
+   ]
+  },
+  {
+   "id": "niteflirt",
+   "name": "NiteFlirt",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "niteflirt.com"
+   ]
+  },
+  {
+   "id": "sextpanther",
+   "name": "SextPanther",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "sextpanther.com"
+   ]
+  },
+  {
+   "id": "arousr",
+   "name": "Arousr",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "arousr.com"
+   ]
+  },
+  {
+   "id": "adultwork",
+   "name": "AdultWork",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adultwork.com"
+   ]
+  },
+  {
+   "id": "slixa",
+   "name": "Slixa",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "slixa.com"
+   ]
+  },
+  {
+   "id": "skipthegames",
+   "name": "SkipTheGames",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "skipthegames.com"
+   ]
+  },
+  {
+   "id": "listcrawler",
+   "name": "ListCrawler",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "listcrawler.com",
+    "listcrawler.eu"
+   ]
+  },
+  {
+   "id": "eros",
+   "name": "Eros",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "eros.com"
+   ]
+  },
+  {
+   "id": "leolist",
+   "name": "LeoList",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "leolist.cc"
+   ]
+  },
+  {
+   "id": "camversity",
+   "name": "CamVersity",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "camversity.com"
+   ]
+  },
+  {
+   "id": "dreamcam",
+   "name": "Dreamcam",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "dreamcam.com"
+   ]
+  },
+  {
+   "id": "cherry_tv",
+   "name": "Cherry.tv",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "cherry.tv"
+   ]
+  },
+  {
+   "id": "stripchat",
+   "name": "Stripchat",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "doppiocdn.com",
+    "stripcash.com",
+    "stripchat.global"
+   ]
+  },
+  {
+   "id": "adultfriendfinder",
+   "name": "AdultFriendFinder",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "adultfriendfinder.com"
+   ]
+  },
+  {
+   "id": "lovense",
+   "name": "Lovense",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "lovense.com"
+   ]
+  },
+  {
+   "id": "candy_ai",
+   "name": "Candy.ai",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "candy.ai"
+   ]
+  },
+  {
+   "id": "crushon_ai",
+   "name": "CrushOn.AI",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "crushon.ai"
+   ]
+  },
+  {
+   "id": "spicychat",
+   "name": "SpicyChat",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "spicychat.ai"
+   ]
+  },
+  {
+   "id": "janitor_ai",
+   "name": "Janitor AI",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "janitorai.com"
+   ]
+  },
+  {
+   "id": "muah_ai",
+   "name": "Muah.AI",
+   "group": "adult",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "muah.ai"
+   ]
+  },
+  {
+   "id": "bumble",
+   "name": "Bumble",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "bumbcdn.com",
+    "bumble.com"
+   ]
+  },
+  {
+   "id": "badoo",
+   "name": "Badoo",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "badoo.com",
+    "badoocdn.com"
+   ]
+  },
+  {
+   "id": "hotornot",
+   "name": "Hot or Not",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "hotornot.com"
+   ]
+  },
+  {
+   "id": "hinge",
+   "name": "Hinge",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "hinge.co",
+    "hingeaws.net",
+    "hingenexus.com"
+   ]
+  },
+  {
+   "id": "okcupid",
+   "name": "OkCupid",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "okccdn.com",
+    "okcupid.com"
+   ]
+  },
+  {
+   "id": "match_com",
+   "name": "Match.com",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "match.com"
+   ]
+  },
+  {
+   "id": "zoosk",
+   "name": "Zoosk",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "zoosk.com"
+   ]
+  },
+  {
+   "id": "eharmony",
+   "name": "eharmony",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "eharmony.co.uk",
+    "eharmony.com"
+   ]
+  },
+  {
+   "id": "happn",
+   "name": "happn",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "happn.com",
+    "happn.fr"
+   ]
+  },
+  {
+   "id": "meetme",
+   "name": "MeetMe",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "meetme.com"
+   ]
+  },
+  {
+   "id": "skout",
+   "name": "Skout",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "skout.com"
+   ]
+  },
+  {
+   "id": "tagged",
+   "name": "Tagged",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "tagged.com"
+   ]
+  },
+  {
+   "id": "coffee_meets_bagel",
+   "name": "Coffee Meets Bagel",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "coffeemeetsbagel.com"
+   ]
+  },
+  {
+   "id": "muzz",
+   "name": "Muzz",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "muzz.com"
+   ]
+  },
+  {
+   "id": "hily",
+   "name": "Hily",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "hily.com"
+   ]
+  },
+  {
+   "id": "lovoo",
+   "name": "LOVOO",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "lovoo.com"
+   ]
+  },
+  {
+   "id": "jaumo",
+   "name": "Jaumo",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "jaumo.com"
+   ]
+  },
+  {
+   "id": "mamba",
+   "name": "Mamba",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "mamba.ru"
+   ]
+  },
+  {
+   "id": "waplog",
+   "name": "Waplog",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "waplog.com"
+   ]
+  },
+  {
+   "id": "fruitz",
+   "name": "Fruitz",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "fruitz.io"
+   ]
+  },
+  {
+   "id": "chispa",
+   "name": "Chispa",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "chispa-app.com"
+   ]
+  },
+  {
+   "id": "feeld",
+   "name": "Feeld",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "feeld.co"
+   ]
+  },
+  {
+   "id": "pure_app",
+   "name": "PURE",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "pure.app"
+   ]
+  },
+  {
+   "id": "ashley_madison",
+   "name": "Ashley Madison",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "ashleymadison.com"
+   ]
+  },
+  {
+   "id": "seeking",
+   "name": "Seeking",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "seeking.com"
+   ]
+  },
+  {
+   "id": "sniffies",
+   "name": "Sniffies",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "sniffies.com"
+   ]
+  },
+  {
+   "id": "scruff",
+   "name": "SCRUFF",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "scruff.com"
+   ]
+  },
+  {
+   "id": "hornet",
+   "name": "Hornet",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "hornet.com"
+   ]
+  },
+  {
+   "id": "jackd",
+   "name": "Jack'd",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "jackd.com",
+    "jackdapp.com"
+   ]
+  },
+  {
+   "id": "romeo",
+   "name": "ROMEO",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "planetromeo.com",
+    "romeo.com"
+   ]
+  },
+  {
+   "id": "taimi",
+   "name": "Taimi",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "taimi.com"
+   ]
+  },
+  {
+   "id": "her_dating",
+   "name": "HER",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "weareher.com"
+   ]
+  },
+  {
+   "id": "hamdam",
+   "name": "Hamdam",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "hamdamapp.ir"
+   ]
+  },
+  {
+   "id": "momo",
+   "name": "Momo",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "immomo.com"
+   ]
+  },
+  {
+   "id": "tantan",
+   "name": "Tantan",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "tantanapp.com",
+    "thetantanapp.com"
+   ]
+  },
+  {
+   "id": "azar",
+   "name": "Azar (random video chat)",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "azarlive.com"
+   ]
+  },
+  {
+   "id": "holla",
+   "name": "HOLLA (random video chat)",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "holla.world"
+   ]
+  },
+  {
+   "id": "chatroulette",
+   "name": "Chatroulette (random video chat)",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "chatroulette.com"
+   ]
+  },
+  {
+   "id": "monkey",
+   "name": "Monkey (random video chat)",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "monkey.app",
+    "monkey.cool"
+   ]
+  },
+  {
+   "id": "litmatch",
+   "name": "Litmatch (anonymous stranger chat)",
+   "group": "dating",
+   "geosite": null,
+   "icon": "",
+   "domains": [
+    "litatom.com",
+    "litmatchapp.com"
    ]
   }
  ]
