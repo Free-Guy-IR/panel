@@ -16,6 +16,7 @@ logger = get_logger("jobs")
 DELETE_CHUNK = 5_000
 MAX_PER_RUN = 200_000
 CEILING_TIME_BUDGET = 60.0
+MANUAL_TIME_BUDGET = 300.0
 RECLAIM_TIME_BUDGET = 300.0
 SQLITE_RECLAIM_STATEMENTS = ("PRAGMA wal_checkpoint(TRUNCATE)", "VACUUM", "PRAGMA wal_checkpoint(TRUNCATE)")
 SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm")
@@ -69,8 +70,11 @@ async def reconcile_buckets(db, collector, cutoff=None, **forget) -> int:
     return detached
 
 
-async def purge_before(db, cutoff: datetime) -> tuple[int, bool]:
-    return await _delete_matching(db, TrafficLogRecord.bucket_start < cutoff)
+async def purge_before(db, cutoff: datetime, *, budget: float | None = None) -> tuple[int, bool]:
+    condition = TrafficLogRecord.bucket_start < cutoff
+    if budget is None:
+        return await _delete_matching(db, condition)
+    return await _delete_matching(db, condition, limit=None, deadline=time.monotonic() + budget)
 
 
 async def enforce_ceiling(db, threshold: int):

@@ -200,7 +200,13 @@ async def purge_records(
     body: PurgeRequest | None = None,
     admin: AdminDetails = Depends(OWNER_ONLY),
 ):
-    from app.fork.jobs.traffic_log_purge import purge_before, reclaim_storage, reconcile_buckets, session_engine
+    from app.fork.jobs.traffic_log_purge import (
+        MANUAL_TIME_BUDGET,
+        purge_before,
+        reclaim_storage,
+        reconcile_buckets,
+        session_engine,
+    )
     from app.fork.traffic_log import collector
 
     older_than_hours = body.older_than_hours if body is not None else None
@@ -217,7 +223,7 @@ async def purge_records(
     since_ingest = collector.ingest_watermark()
     async with collector.suspend_flush(), GetDB() as db:
         collector.mark_rows_dirty()
-        removed, incomplete = await purge_before(db, cutoff)
+        removed, incomplete = await purge_before(db, cutoff, budget=MANUAL_TIME_BUDGET)
         remaining = int(await db.scalar(select(func.count()).select_from(TrafficLogRecord)) or 0)
         await reconcile_buckets(
             db,

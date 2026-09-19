@@ -1003,3 +1003,75 @@ class _RollBackInsteadOfCommitting:
             await self._session.rollback()
             raise RuntimeError("the transaction was rolled back")
         await self._session.commit()
+
+
+@pytest.mark.asyncio
+async def test_the_scheduled_purge_stops_at_its_row_cap():
+    from app.fork.jobs import traffic_log_purge as purge_module
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    old_start = bucket_start_of(now - timedelta(hours=72))
+    cutoff = now - timedelta(hours=48)
+
+    async with GetTestDB() as db:
+        for index in range(8):
+            await _insert(db, old_start, f"capped-{index}.example", 1)
+        await db.commit()
+
+        chunk = purge_module.DELETE_CHUNK
+        purge_module.DELETE_CHUNK = 2
+        try:
+            removed, incomplete = await purge_module._delete_matching(
+                db, TrafficLogRecord.bucket_start < cutoff, limit=4
+            )
+            left = await db.scalar(
+                select(func.count()).select_from(TrafficLogRecord).where(TrafficLogRecord.bucket_start < cutoff)
+            )
+        finally:
+            purge_module.DELETE_CHUNK = chunk
+
+    assert removed == 4
+    assert incomplete is True
+    assert left == 4
+
+
+@pytest.mark.asyncio
+async def test_a_purge_given_a_budget_clears_everything_the_cap_would_have_left():
+    from app.fork.jobs.traffic_log_purge import purge_before
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    old_start = bucket_start_of(now - timedelta(hours=72))
+    cutoff = now - timedelta(hours=48)
+
+    async with GetTestDB() as db:
+        for index in range(7):
+            await _insert(db, old_start, f"budgeted-{index}.example", 1)
+        await db.commit()
+
+        removed, incomplete = await purge_before(db, cutoff, budget=30.0)
+        left = await db.scalar(
+            select(func.count()).select_from(TrafficLogRecord).where(TrafficLogRecord.bucket_start < cutoff)
+        )
+
+    assert removed == 7
+    assert incomplete is False
+    assert left == 0
+
+
+@pytest.mark.asyncio
+async def test_a_spent_budget_reports_the_purge_as_incomplete():
+    from app.fork.jobs.traffic_log_purge import purge_before
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    old_start = bucket_start_of(now - timedelta(hours=72))
+    cutoff = now - timedelta(hours=48)
+
+    async with GetTestDB() as db:
+        for index in range(4):
+            await _insert(db, old_start, f"expired-budget-{index}.example", 1)
+        await db.commit()
+
+        removed, incomplete = await purge_before(db, cutoff, budget=-1.0)
+
+    assert removed == 0
+    assert incomplete is True
