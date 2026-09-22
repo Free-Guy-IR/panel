@@ -636,17 +636,36 @@ async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str
 
 
 async def drain_usage_jobs(timeout: float | None = None) -> None:
-    runs = {run for run in _usage_job_runs if not run.done()}
-    if not runs:
-        return
     grace = USAGE_SHUTDOWN_GRACE_S if timeout is None else timeout
-    logger.info("Waiting up to %ss for %s running usage tick(s) to persist what they already read", grace, len(runs))
-    _, unfinished = await asyncio.wait(runs, timeout=grace)
-    if unfinished:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + grace
+    runs = {run for run in _usage_job_runs if not run.done()}
+    if runs:
+        logger.info(
+            "Waiting up to %ss for %s running usage tick(s) to persist what they already read", grace, len(runs)
+        )
+        _, unfinished = await asyncio.wait(runs, timeout=grace)
+        if unfinished:
+            logger.error(
+                "%s usage tick(s) still running after %ss of shutdown grace; bytes they already read may be lost",
+                len(unfinished),
+                grace,
+            )
+            return
+    if not _retained_cohorts:
+        return
+    remaining = deadline - loop.time()
+    if remaining > 0:
+        flush = asyncio.ensure_future(_flush_retained_cohorts())
+        _, unfinished = await asyncio.wait({flush}, timeout=remaining)
+        if unfinished:
+            logger.error("Kept usage was still being written when the %ss shutdown grace ran out", grace)
+            return
+    if _retained_cohorts:
         logger.error(
-            "%s usage tick(s) still running after %ss of shutdown grace; bytes they already read may be lost",
-            len(unfinished),
-            grace,
+            "Shutting down with %s raw bytes from node(s) %s that could not be written; they are lost with this process",
+            sum(_raw_bytes(cohort.api_params) for cohort in _retained_cohorts),
+            sorted({node_id for cohort in _retained_cohorts for node_id in cohort.api_params}),
         )
 
 
@@ -1183,6 +1202,29 @@ async def _persist_retained_cohorts(persist) -> bool:
             _keep_or_abandon_retained(cohort, progress)
             return False
     return True
+
+
+async def _flush_retained_cohorts() -> None:
+    applied_admins = 0
+
+    async def persist(cohort: UsageCohort, progress: PersistProgress | None = None) -> Exception | None:
+        nonlocal applied_admins
+        try:
+            outcome, _ = await _persist_collected_usage(
+                cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, progress=progress
+            )
+        except Exception as exc:
+            logger.exception("Failed to persist kept usage for node(s) %s", sorted(cohort.api_params))
+            return exc
+        applied_admins += outcome.applied_admins
+        return None
+
+    await _persist_retained_cohorts(persist)
+    if applied_admins:
+        try:
+            await enforce_admin_limits_now(logger=logger)
+        except Exception:
+            logger.exception("Failed to enforce admin limits after persisting kept usage")
 
 
 async def _record_user_usages_impl():
