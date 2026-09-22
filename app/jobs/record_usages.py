@@ -4,6 +4,7 @@ import random
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from datetime import UTC, datetime as dt, timedelta as td
 from operator import attrgetter
 from typing import NamedTuple
@@ -37,6 +38,7 @@ USAGE_PERSIST_COHORT_SIZE = 8
 USAGE_PERSIST_MAX_VOLATILE_S = 5.0
 USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES = 2
 USAGE_JOB_LATENESS_TOLERANCE_S = 5.0
+USAGE_RETAINED_MAX_ATTEMPTS = 10
 NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 1_000,
     "sqlite": 400,
@@ -62,6 +64,18 @@ class FencedUsageOutcome(NamedTuple):
     applied_admins: int
     fenced_user_ids: list[int]
     fenced_bytes: int
+
+
+class UsageCohort(NamedTuple):
+    api_params: dict
+    usage_coefficient: dict
+    epoch_at_poll: dict[int, int]
+    attempts: int = 0
+
+
+class PersistProgress:
+    def __init__(self) -> None:
+        self.writes_started = False
 
 
 # Thread pool executor for I/O-bound node API calls
@@ -130,6 +144,8 @@ _unknown_uid_total_count = 0
 _unknown_uid_total_bytes = 0
 _unknown_uid_last_log_at: float | None = None
 _unknown_uid_suppressed_reports = 0
+_retained_cohorts: list[UsageCohort] = []
+_stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset_issued", default=None)
 
 
 def _chunked(items: list, size: int):
@@ -688,6 +704,9 @@ async def get_users_stats(node: PasarGuardNode, node_id: int | None = None):
     """Fetch and fold user stats from one node. Dict folding stays on the event loop."""
     node_label = node_id if node_id is not None else getattr(node, "node_id", "unknown")
     try:
+        reset_issued = _stats_reset_issued.get()
+        if reset_issued is not None and node_id is not None:
+            reset_issued.add(node_id)
         # Caller holds API_SEM so extra+stats can share one slot without deadlock.
         stats_response = await node.get_stats(stat_type=StatType.UsersStat, reset=True, timeout=30)
         validated_params, invalid_uids = _process_users_stats_response(stats_response)
@@ -978,6 +997,7 @@ async def _persist_collected_usage(
     api_params: dict,
     usage_coefficient: dict,
     epoch_at_poll: dict[int, int],
+    progress: PersistProgress | None = None,
 ) -> tuple[FencedUsageOutcome, int]:
     users_usage = await calculate_users_usage(api_params, usage_coefficient)
     if not users_usage:
@@ -1016,6 +1036,8 @@ async def _persist_collected_usage(
                 filtered_node_params[node_id] = filtered_params
 
     if filtered_node_params:
+        if progress is not None:
+            progress.writes_started = True
         await record_user_stats_batched(filtered_node_params, usage_coefficient)
         total_records = sum(len(params) for params in filtered_node_params.values())
         logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
@@ -1023,6 +1045,8 @@ async def _persist_collected_usage(
     outcome = FencedUsageOutcome(0, 0, [], 0)
     if valid_users_usage:
         valid_users_usage.sort(key=lambda item: int(item["uid"]))
+        if progress is not None:
+            progress.writes_started = True
         async with JOB_SEM:
             outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll)
         if outcome.fenced_user_ids:
@@ -1037,6 +1061,102 @@ async def _persist_collected_usage(
     return outcome, len(filtered_node_params)
 
 
+def _cohort_from_tasks(tasks, node_by_task: dict, epoch_at_poll: dict[int, int]) -> UsageCohort:
+    usage_coefficient = {}
+    api_params = {}
+    for task in tasks:
+        node_id = node_by_task[task]
+        failure = asyncio.CancelledError() if task.cancelled() else task.exception()
+        if failure is not None:
+            logger.warning("Failed to collect usage for node %s: %s", node_id, failure)
+            usage_coefficient[node_id] = 1.0
+            api_params[node_id] = []
+            continue
+        _, coeff, stats = task.result()
+        usage_coefficient[node_id] = coeff
+        api_params[node_id] = stats
+    return UsageCohort(api_params, usage_coefficient, epoch_at_poll)
+
+
+def _raw_bytes(api_params: dict) -> int:
+    return sum(int(param["value"]) for params in api_params.values() for param in params)
+
+
+def _retain_finished_collections(tasks, node_by_task: dict, epoch_at_poll: dict[int, int]) -> None:
+    finished = [task for task in tasks if task.done() and not task.cancelled() and task.exception() is None]
+    if not finished:
+        return
+    cohort = _cohort_from_tasks(finished, node_by_task, epoch_at_poll)
+    read_params = {node_id: params for node_id, params in cohort.api_params.items() if params}
+    if not read_params:
+        return
+    _retained_cohorts.append(
+        UsageCohort(
+            read_params,
+            {node_id: cohort.usage_coefficient[node_id] for node_id in read_params},
+            epoch_at_poll,
+        )
+    )
+    logger.warning(
+        "Kept %s raw bytes already read and reset on node(s) %s for the next cycle",
+        _raw_bytes(read_params),
+        sorted(read_params),
+    )
+
+
+async def _settle_collection(
+    node_by_task: dict, reset_issued: set[int], processed: set, epoch_at_poll: dict[int, int]
+) -> None:
+    for task, node_id in node_by_task.items():
+        if not task.done() and node_id not in reset_issued:
+            task.cancel()
+    unfinished = [task for task in node_by_task if not task.done()]
+    try:
+        if unfinished:
+            await asyncio.wait(unfinished)
+    finally:
+        _retain_finished_collections(
+            [task for task in node_by_task if task not in processed], node_by_task, epoch_at_poll
+        )
+
+
+def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) -> None:
+    attempts = cohort.attempts + 1
+    if not progress.writes_started and attempts < USAGE_RETAINED_MAX_ATTEMPTS:
+        _retained_cohorts.insert(0, cohort._replace(attempts=attempts))
+        logger.warning(
+            "Still holding %s raw bytes from node(s) %s after %s failed attempt(s); nothing was written",
+            _raw_bytes(cohort.api_params),
+            sorted(cohort.api_params),
+            attempts,
+        )
+        return
+    logger.error(
+        "Gave up on %s raw bytes read from node(s) %s after %s attempt(s); %s",
+        _raw_bytes(cohort.api_params),
+        sorted(cohort.api_params),
+        attempts,
+        "a write had already started, so a retry could count them twice"
+        if progress.writes_started
+        else "the retry limit was reached",
+    )
+
+
+async def _persist_retained_cohorts(persist) -> bool:
+    while _retained_cohorts:
+        cohort = _retained_cohorts.pop(0)
+        progress = PersistProgress()
+        try:
+            failure = await persist(cohort, progress)
+        except BaseException:
+            _keep_or_abandon_retained(cohort, progress)
+            raise
+        if failure is not None:
+            _keep_or_abandon_retained(cohort, progress)
+            return False
+    return True
+
+
 async def _record_user_usages_impl():
     """
     Internal implementation of record_user_usages.
@@ -1045,7 +1165,7 @@ async def _record_user_usages_impl():
     job_start_time = time.time()
     nodes: tuple[int, PasarGuardNode] = await node_manager.get_healthy_nodes()
 
-    if not nodes:
+    if not nodes and not _retained_cohorts:
         logger.debug("No healthy nodes found, skipping user usage recording")
         return
 
@@ -1054,63 +1174,63 @@ async def _record_user_usages_impl():
     try:
         epoch_at_poll = await current_usage_epochs()
 
-        node_by_task = {}
-        for node_id, node in nodes:
-            node_by_task[asyncio.ensure_future(_collect_node_user_usage(node, node_id))] = node_id
-
         applied_users = 0
         applied_admins = 0
         recorded_nodes = 0
         persist_failure: Exception | None = None
         consecutive_persist_failures = 0
-        try:
-            async for batch in _drain_node_collection(
-                list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
-            ):
-                usage_coefficient = {}
-                api_params = {}
-                for task in batch:
-                    node_id = node_by_task[task]
-                    failure = asyncio.CancelledError() if task.cancelled() else task.exception()
-                    if failure is not None:
-                        logger.warning("Failed to collect usage for node %s: %s", node_id, failure)
-                        usage_coefficient[node_id] = 1.0
-                        api_params[node_id] = []
-                        continue
-                    _, coeff, stats = task.result()
-                    usage_coefficient[node_id] = coeff
-                    api_params[node_id] = stats
 
-                try:
-                    outcome, persisted_nodes = await _persist_collected_usage(
-                        api_params, usage_coefficient, epoch_at_poll
-                    )
-                except Exception as exc:
-                    if persist_failure is None:
-                        persist_failure = exc
-                    consecutive_persist_failures += 1
-                    logger.exception("Failed to persist usage for node(s) %s", sorted(api_params))
-                    if (
-                        _is_retriable_db_error(exc)
-                        and consecutive_persist_failures < USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES
-                    ):
-                        continue
-                    logger.error(
-                        "Stopping collection after %s consecutive persistence failure(s); "
-                        "nodes not yet polled keep their counters for the next cycle",
-                        consecutive_persist_failures,
-                    )
-                    break
-                consecutive_persist_failures = 0
-                applied_users += outcome.applied_users
-                applied_admins += outcome.applied_admins
-                recorded_nodes += persisted_nodes
-        finally:
-            leftovers = [task for task in node_by_task if not task.done()]
-            for task in leftovers:
-                task.cancel()
-            if leftovers:
-                await asyncio.gather(*leftovers, return_exceptions=True)
+        async def persist(cohort: UsageCohort, progress: PersistProgress | None = None) -> Exception | None:
+            nonlocal applied_users, applied_admins, recorded_nodes, persist_failure, consecutive_persist_failures
+            try:
+                outcome, persisted_nodes = await _persist_collected_usage(
+                    cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, progress=progress
+                )
+            except Exception as exc:
+                if persist_failure is None:
+                    persist_failure = exc
+                consecutive_persist_failures += 1
+                logger.exception("Failed to persist usage for node(s) %s", sorted(cohort.api_params))
+                return exc
+            consecutive_persist_failures = 0
+            applied_users += outcome.applied_users
+            applied_admins += outcome.applied_admins
+            recorded_nodes += persisted_nodes
+            return None
+
+        def must_stop(failure: Exception | None) -> bool:
+            if failure is None or (
+                _is_retriable_db_error(failure)
+                and consecutive_persist_failures < USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES
+            ):
+                return False
+            logger.error(
+                "Stopping collection after %s consecutive persistence failure(s); "
+                "nodes not yet polled keep their counters for the next cycle",
+                consecutive_persist_failures,
+            )
+            return True
+
+        if await _persist_retained_cohorts(persist) and nodes:
+            reset_issued: set[int] = set()
+            token = _stats_reset_issued.set(reset_issued)
+            try:
+                node_by_task = {
+                    asyncio.ensure_future(_collect_node_user_usage(node, node_id)): node_id for node_id, node in nodes
+                }
+            finally:
+                _stats_reset_issued.reset(token)
+
+            processed: set = set()
+            try:
+                async for batch in _drain_node_collection(
+                    list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
+                ):
+                    processed.update(batch)
+                    if must_stop(await persist(_cohort_from_tasks(batch, node_by_task, epoch_at_poll))):
+                        break
+            finally:
+                await _settle_collection(node_by_task, reset_issued, processed, epoch_at_poll)
 
         if applied_admins:
             try:
