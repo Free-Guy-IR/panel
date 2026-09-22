@@ -8,7 +8,7 @@ from alembic.command import upgrade
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
@@ -48,6 +48,13 @@ if IS_SQLITE:
         poolclass=StaticPool,
         # echo=True,
     )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _enforce_sqlite_foreign_keys(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 else:
     engine = create_async_engine(
         DATABASE_URL,
