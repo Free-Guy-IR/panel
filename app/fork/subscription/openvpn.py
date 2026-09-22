@@ -41,9 +41,10 @@ class OpenVPNConfiguration(BaseSubscription):
     embedded in the file.
     """
 
-    def __init__(self):
+    def __init__(self, *, refuse_unissued_secret: bool = True):
         self.proxy_remarks = []
         self.components: list[dict] = []
+        self.refuse_unissued_secret = refuse_unissued_secret
 
     def add(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict):
         component = self._build_openvpn_components(remark, address, inbound, settings)
@@ -138,6 +139,7 @@ class OpenVPNConfiguration(BaseSubscription):
     def render(self) -> bytes:
         files = self._files()
         if not files:
+            self._refuse_unissued_secret("openvpn")
             return b""
 
         zip_buffer = io.BytesIO()

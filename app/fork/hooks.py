@@ -29,4 +29,4 @@ if "l2tp" not in extra_subscription_formats():
         "app.fork.subscription.l2tp",
         "app.subscription.l2tp",
     )
-    register_subscription_format("l2tp", lambda _templates=None: L2TPConfiguration())
+    register_subscription_format("l2tp", lambda _templates=None: L2TPConfiguration(refuse_unissued_secret=True))

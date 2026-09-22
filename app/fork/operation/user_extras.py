@@ -1,7 +1,9 @@
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from app.db import AsyncSession
 from app.db.models import User
+from app.fork.operation.entitled_secrets import issue_missing_entitled_secrets, load_users_for_sync
 from app.fork.proxy_secrets import (
     BulkRepairProxySecrets,
     ReservedSecrets,
@@ -12,6 +14,7 @@ from app.fork.proxy_secrets import (
     specs_for,
     write_stored_secret,
 )
+from app.fork.proxy_secrets.entitled import EntitledSecretField
 from app.models.proxy import ProxyTable
 from app.models.user import BulkOperationDryRunResponse, BulkUserFilter
 from app.operation import OperatorType
@@ -147,47 +150,35 @@ class UserExtrasMixin:
             return {"detail": f"operation has been successfuly done on {len(updated_users)} users"}
         return len(updated_users)
 
-    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter):
+    async def _bulk_activate_entitled_secret(
+        self, db: AsyncSession, bulk_model: BulkUserFilter, secret_field: EntitledSecretField
+    ):
+        from app.db.crud.bulk import _create_final_filter
+
         user_mod = _user_mod()
-        candidates = await user_mod.get_users_for_mtproto_activation(db, bulk_model)
-
-        to_update: list[tuple[User, str]] = []
-        skipped: list[int] = []
-        for user in candidates:
-            try:
-                current = ProxyTable.model_validate(user.proxy_settings)
-            except (ValidationError, ValueError):
-                skipped.append(user.id)
-                continue
-            if current.mtproto.secret:
-                continue
-            updated = await user_mod.prepare_mtproto_secret(db, current, user.groups)
-            if not updated.mtproto.secret:
-                continue
-            to_update.append((user, updated.mtproto.secret))
-
-        if skipped:
-            logger.warning(
-                f"MTProto activation skipped {len(skipped)} users with unreadable proxy settings: {skipped[:20]}"
-            )
+        candidate_ids = (await db.execute(select(User.id).where(_create_final_filter(bulk_model)))).scalars().all()
+        run = await issue_missing_entitled_secrets(
+            db,
+            secret_field,
+            load_users=load_users_for_sync,
+            sync_users=user_mod.sync_users,
+            candidate_ids=candidate_ids,
+            dry_run=bulk_model.dry_run,
+        )
 
         if bulk_model.dry_run:
-            return BulkOperationDryRunResponse(affected_users=len(to_update))
+            return BulkOperationDryRunResponse(affected_users=run.missing)
 
-        if not to_update:
-            if self.operator_type in (OperatorType.API, OperatorType.WEB):
-                return {"detail": "operation has been successfuly done on 0 users"}
-            return 0
-
-        for user, secret in to_update:
-            settings = dict(user.proxy_settings or {})
-            settings["mtproto"] = {"secret": secret}
-            user.proxy_settings = settings
-        await db.commit()
-
-        updated_users = [user for user, _ in to_update]
-        await user_mod.sync_users(updated_users)
-
+        logger.info(
+            f"{secret_field.value} activation: {run.granted} of {run.entitled} entitled user(s) in scope "
+            "were missing a value and received one"
+        )
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
-            return {"detail": f"operation has been successfuly done on {len(updated_users)} users"}
-        return len(updated_users)
+            return {"detail": f"operation has been successfuly done on {run.granted} users"}
+        return run.granted
+
+    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter):
+        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.mtproto_secret)
+
+    async def bulk_activate_openvpn_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
+        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.openvpn_password)

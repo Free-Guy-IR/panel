@@ -16,6 +16,7 @@ from app.db.crud.group import (
 from app.db.crud.user import get_users
 from app.db.crud.wireguard import sync_users_allocations
 from app.db.models import Admin
+from app.fork.proxy_secrets.entitled import grant_entitled_secrets
 from app.models.group import (
     BulkGroup,
     BulkGroupsActionResponse,
@@ -53,6 +54,7 @@ class GroupOperation(BaseOperation):
     async def _sync_users_allocations(self, db: AsyncSession, users) -> None:
         try:
             await sync_users_allocations(db, users)
+            await grant_entitled_secrets(db, users)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
 

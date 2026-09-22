@@ -41,6 +41,23 @@ match the filter - this only ever fills in a *missing* password, never
 regenerates an existing one."""
 
 
+BULK_OPENVPN_ACTIVATE_DESCRIPTION = """Issue an OpenVPN password to existing users who are entitled to OpenVPN
+through their current groups (an enabled group gives them an inbound served
+by an OpenVPN core) but have none yet - e.g. users who reached OpenVPN
+through a group or core change made after they were created.
+
+- **users**: Optional list of user IDs to consider
+- **admins**: Optional list of admin IDs — their users will be considered
+- **group_ids**: Optional list of group IDs to filter users by their group membership
+- **status**: Optional status to filter users (e.g., "expired", "active"), empty means no filtering
+- **dry_run**: Report how many users would receive a password and change nothing.
+- Sending no filters at all considers every user.
+
+Users who are not entitled to OpenVPN are never given a password, whatever
+the filter says. Users who already have one are never touched - this only
+fills in a *missing* password, never regenerates an existing one."""
+
+
 BULK_REPAIR_DUPLICATE_SECRETS_DESCRIPTION = """Give every user who shares a proxy secret with another user a fresh,
 unique one. A secret supplied by an API client (a sales bot, a script) can
 be handed to many users; for password-authenticated protocols such as
@@ -103,3 +120,17 @@ async def bulk_repair_duplicate_proxy_secrets(
     _: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
     return await user_operator.bulk_repair_duplicate_proxy_secrets(db, bulk_model)
+
+
+@router.post(
+    "s/bulk/openvpn_activate",
+    summary="Retroactively issue OpenVPN passwords to entitled users",
+    description=BULK_OPENVPN_ACTIVATE_DESCRIPTION,
+    response_description="Success confirmation",
+)
+async def bulk_activate_openvpn_passwords(
+    bulk_model: BulkUserFilter,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_scope_all("users", "update")),
+):
+    return await user_operator.bulk_activate_openvpn_passwords(db, bulk_model)

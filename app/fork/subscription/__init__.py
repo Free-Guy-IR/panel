@@ -4,7 +4,7 @@ from app.fork.subscription.openvpn import OpenVPNConfiguration
 from app.fork.subscription.outline import OutlineConfiguration
 
 register_subscription_format("openvpn", lambda _templates=None: OpenVPNConfiguration())
-register_subscription_format("l2tp", lambda _templates=None: L2TPConfiguration())
+register_subscription_format("l2tp", lambda _templates=None: L2TPConfiguration(refuse_unissued_secret=True))
 
 
 def fork_subscription_formats() -> dict:

@@ -84,6 +84,12 @@ class SubscriptionExtrasMixin:
         out.sort(key=lambda f: f["protocol"])
         return out
 
+    @staticmethod
+    async def build_l2tp_details(user: UsersResponseWithInbounds) -> list[dict]:
+        from app.fork.subscription.share import generate_l2tp_details
+
+        return await generate_l2tp_details(user)
+
     async def _enforce_ping_rate_limit(self, user_id: int) -> None:
         now = time.monotonic()
         last = self._ping_last_seen.get(user_id)
