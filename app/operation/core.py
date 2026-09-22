@@ -114,7 +114,6 @@ class CoreOperation(BaseOperation):
             await self.raise_error(message=e, code=400, db=db)
 
         await core_manager.update_core(db_core, validated_core)
-        await grant_entitled_secrets_for_core(self, db, db_core)
         logger.info(f'Core config "{db_core.id}" created by admin "{admin.username}"')
 
         core = CoreResponse.model_validate(db_core)
@@ -123,6 +122,7 @@ class CoreOperation(BaseOperation):
         if new_core.type == CoreType.wg:
             await self._ensure_wireguard_pools(db)
         await self._refresh_hosts_from_db(db)
+        await grant_entitled_secrets_for_core(self, db, db_core)
 
         return core
 
@@ -159,7 +159,6 @@ class CoreOperation(BaseOperation):
             await self.raise_error(message=e, code=400, db=db)
 
         await core_manager.update_core(db_core, validated_core)
-        await grant_entitled_secrets_for_core(self, db, db_core)
 
         logger.info(f'Core config "{db_core.name}" modified by admin "{admin.username}"')
 
@@ -169,6 +168,7 @@ class CoreOperation(BaseOperation):
         if was_wg or modified_core.type == CoreType.wg:
             await self._reconcile_wireguard(db)
         await self._refresh_hosts_from_db(db)
+        await grant_entitled_secrets_for_core(self, db, db_core)
 
         return core
 

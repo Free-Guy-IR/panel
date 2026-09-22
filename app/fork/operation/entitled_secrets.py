@@ -146,14 +146,16 @@ async def grant_entitled_secrets_for_core(operation, db: AsyncSession, core) -> 
             run=run,
         )
     except (ProxySecretUniquenessError, SQLAlchemyError) as exc:
+        core_id = core.id
         logger.error(
-            f"core {core.id} ({spec.label}): issued {run.granted} of the {run.missing} missing {spec.field.value} "
+            f"core {core_id} ({spec.label}): issued {run.granted} of the {run.missing} missing {spec.field.value} "
             f"value(s) found so far among {run.entitled} entitled user(s), then failed: {exc}"
         )
         await operation.raise_error(
             message=(
-                f"Core saved, but {spec.label} credentials could not be issued to every entitled user "
-                f"({run.granted} issued before the failure); run the {spec.label} activation to finish: {exc}"
+                f"Core {core_id} is saved and live, so do not create it again. {spec.label} credentials were issued "
+                f"to {run.granted} entitled user(s) before issuing failed ({exc}); run "
+                f"POST /api/users/bulk/{spec.protocol}_activate to finish."
             ),
             code=500,
             db=db,
