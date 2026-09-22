@@ -11,12 +11,15 @@ from app.db import AsyncSession
 from app.db.crud.user import get_users_by_ids
 from app.db.crud.wireguard import get_users_accessible_tags_by_inbound_tags
 from app.db.models import User
-from app.fork.proxy_secrets import ProxySecretUniquenessError, ReservedSecrets, write_stored_secret
+from app.fork.proxy_secrets import ProxySecretUniquenessError, ReservedSecrets
 from app.fork.proxy_secrets.entitled import (
     ENTITLED_SPEC_BY_FIELD,
     EntitledSecretField,
+    UnguardableValue,
     entitled_core_tags,
     issue_unique_secrets,
+    put_entitled_secret,
+    replaceable_value,
     spec_for_core_type,
     stored_secret,
 )
@@ -37,6 +40,7 @@ class EntitledSecretRun:
     entitled: int = 0
     missing: int = 0
     granted: int = 0
+    set_meanwhile: int = 0
     unreadable: list[int] = dataclass_field(default_factory=list)
 
 
@@ -49,16 +53,18 @@ def _chunks(values: list[int], size: int) -> Iterable[list[int]]:
         yield values[start : start + size]
 
 
-async def _ids_without_secret(db: AsyncSession, spec, user_ids: list[int], run: EntitledSecretRun) -> list[int]:
+async def _missing_in_chunk(
+    db: AsyncSession, spec, user_ids: list[int], run: EntitledSecretRun
+) -> list[tuple[int, str | None]]:
     rows = (await db.execute(select(User.id, User.proxy_settings).where(User.id.in_(user_ids)))).all()
     missing = []
     for user_id, proxy_settings in rows:
         try:
             if stored_secret(proxy_settings, spec) is None:
-                missing.append(user_id)
-        except ValidationError:
+                missing.append((user_id, replaceable_value(proxy_settings, spec)))
+        except ValidationError, UnguardableValue:
             run.unreadable.append(user_id)
-    return sorted(missing)
+    return sorted(missing, key=lambda entry: entry[0])
 
 
 async def issue_missing_entitled_secrets(
@@ -91,27 +97,32 @@ async def issue_missing_entitled_secrets(
 
     reserved: ReservedSecrets = {}
     for chunk in _chunks(ordered_ids, chunk_size):
-        missing_ids = await _ids_without_secret(db, spec, chunk, run)
-        if dry_run:
-            run.missing += len(missing_ids)
-            continue
-        if not missing_ids:
+        missing = await _missing_in_chunk(db, spec, chunk, run)
+        run.missing += len(missing)
+        if dry_run or not missing:
             continue
 
-        users = [user for user in await load_users(db, missing_ids) if stored_secret(user.proxy_settings, spec) is None]
-        run.missing += len(users)
-        if not users:
-            continue
-
-        values = await issue_unique_secrets(db, spec, len(users), reserved)
-        for user, value in zip(users, values, strict=True):
-            user.proxy_settings = write_stored_secret(user.proxy_settings, spec, value)
+        values = await issue_unique_secrets(db, spec, len(missing), reserved)
+        written = []
+        for (user_id, expected), value in zip(missing, values, strict=True):
+            if await put_entitled_secret(db, spec, user_id, expected, value):
+                written.append(user_id)
+            else:
+                run.set_meanwhile += 1
         await db.commit()
-        run.granted += len(users)
+        if not written:
+            continue
+
+        run.granted += len(written)
+        users = await load_users(db, written)
         await sync_users(users)
         for user in users:
             db.expunge(user)
 
+    if run.set_meanwhile:
+        logger.info(
+            f"{spec.field.value}: {run.set_meanwhile} value(s) were set by someone else meanwhile and were left as they are"
+        )
     if run.unreadable:
         logger.warning(
             f"{spec.field.value}: left {len(run.unreadable)} unreadable stored value(s) untouched: {run.unreadable[:20]}"
