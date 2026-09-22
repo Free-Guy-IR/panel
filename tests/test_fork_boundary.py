@@ -52,6 +52,7 @@ NON_CONNECTION_LIMIT_FORK_ENDPOINTS = frozenset(
         ("/api/node/inbounds/usage", "GET"),
         ("/api/users/bulk/mtproto_activate", "POST"),
         ("/api/users/bulk/l2tp_activate", "POST"),
+        ("/api/users/bulk/openvpn_activate", "POST"),
         ("/api/users/bulk/repair_duplicate_secrets", "POST"),
         SUBSCRIPTION_PING_ENDPOINT,
     }

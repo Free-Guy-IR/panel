@@ -1,7 +1,44 @@
 import hashlib
+import time
 from urllib.parse import quote
 
+from fastapi import HTTPException
+
 from app.models.subscription import SubscriptionInboundData
+from app.utils.logger import get_logger
+
+logger = get_logger("subscription")
+
+UNISSUED_SECRET_LABELS = {"openvpn": "OpenVPN", "l2tp": "L2TP", "mtproto": "MTProto"}
+UNISSUED_WARNING_INTERVAL_SECONDS = 3600.0
+UNISSUED_WARNING_MEMORY = 10_000
+_unissued_warned_at: dict[tuple[object, str], float] = {}
+
+
+def _warn_unissued_secret(protocol: str, user_id, inbound_tag: str) -> None:
+    now = time.monotonic()
+    key = (user_id, protocol)
+    last = _unissued_warned_at.get(key)
+    if last is not None and now - last < UNISSUED_WARNING_INTERVAL_SECONDS:
+        return
+    _unissued_warned_at[key] = now
+    if len(_unissued_warned_at) > UNISSUED_WARNING_MEMORY:
+        for stale in [k for k, seen in _unissued_warned_at.items() if now - seen >= UNISSUED_WARNING_INTERVAL_SECONDS]:
+            del _unissued_warned_at[stale]
+    logger.warning(
+        f"user {user_id} can reach {protocol} inbound {inbound_tag!r} but holds no {protocol} secret, "
+        "so nothing was rendered for it; run the entitled activation for this protocol"
+    )
+
+
+class UnissuedSecretError(HTTPException):
+    def __init__(self, protocol: str):
+        self.protocol = protocol
+        label = UNISSUED_SECRET_LABELS.get(protocol, protocol)
+        super().__init__(
+            status_code=409,
+            detail=f"{label} has not been activated for this user yet; ask the administrator to activate it",
+        )
 
 
 def _pick_fake_tls_domain(domains: list[str], key: str) -> str:
@@ -13,6 +50,19 @@ def _pick_fake_tls_domain(domains: list[str], key: str) -> str:
 
 
 class ForkSubscriptionHelpers:
+    refuse_unissued_secret: bool = False
+    unissued_secret_protocols: frozenset[str] = frozenset()
+
+    def _note_unissued_secret(self, protocol: str, user_id, inbound: SubscriptionInboundData) -> None:
+        if inbound.protocol != protocol:
+            return
+        self.unissued_secret_protocols = self.unissued_secret_protocols | {protocol}
+        _warn_unissued_secret(protocol, user_id, inbound.inbound_tag)
+
+    def _refuse_unissued_secret(self, protocol: str) -> None:
+        if self.refuse_unissued_secret and protocol in self.unissued_secret_protocols:
+            raise UnissuedSecretError(protocol)
+
     def _build_openvpn_components(
         self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
     ) -> dict | None:
@@ -27,7 +77,10 @@ class ForkSubscriptionHelpers:
         """
         user_id = settings.get("_user_id")
         password = settings.get("password")
-        if user_id is None or not password:
+        if user_id is None:
+            return None
+        if not password:
+            self._note_unissued_secret("openvpn", user_id, inbound)
             return None
         username = str(user_id)  # matches app.node.user._serialize_user_for_node's str(id) convention
 
@@ -76,7 +129,10 @@ class ForkSubscriptionHelpers:
     ) -> dict | None:
         user_id = settings.get("_user_id")
         password = settings.get("password")
-        if user_id is None or not password:
+        if user_id is None:
+            return None
+        if not password:
+            self._note_unissued_secret("l2tp", user_id, inbound)
             return None
 
         finalmask = inbound.finalmask
@@ -123,7 +179,10 @@ class ForkSubscriptionHelpers:
         """
         user_id = settings.get("_user_id")
         raw_secret = settings.get("secret")
-        if user_id is None or not raw_secret:
+        if user_id is None:
+            return None
+        if not raw_secret:
+            self._note_unissued_secret("mtproto", user_id, inbound)
             return None
 
         finalmask = inbound.finalmask

@@ -1,4 +1,3 @@
-import json
 import re
 from datetime import UTC, datetime as dt
 from json import dumps as json_dumps
@@ -480,8 +479,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
                 links = conf.splitlines()
                 openvpn_configs = await self.build_openvpn_files(user)
                 has_openvpn = bool(openvpn_configs)
-                l2tp_conf, _ = await self.fetch_config(user, ConfigFormat.l2tp)
-                l2tp_details = json.loads(l2tp_conf) if l2tp_conf else []
+                l2tp_details = await self.build_l2tp_details(user)
 
             format_variables = await self.get_format_variables(user)
             formatted_announce = self._format_announce(sub_settings, format_variables)

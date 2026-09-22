@@ -23,6 +23,7 @@ from app.db.crud.wireguard import (
     wg_core_subnets,
 )
 from app.fork.operation.core_extras import apply_l2tp_core_config, guard_singbox_user_accounting
+from app.fork.operation.entitled_secrets import grant_entitled_secrets_for_core
 from app.models.admin import AdminDetails
 from app.models.core import (
     BulkCoreSelection,
@@ -113,6 +114,7 @@ class CoreOperation(BaseOperation):
             await self.raise_error(message=e, code=400, db=db)
 
         await core_manager.update_core(db_core, validated_core)
+        await grant_entitled_secrets_for_core(self, db, db_core)
         logger.info(f'Core config "{db_core.id}" created by admin "{admin.username}"')
 
         core = CoreResponse.model_validate(db_core)
@@ -157,6 +159,7 @@ class CoreOperation(BaseOperation):
             await self.raise_error(message=e, code=400, db=db)
 
         await core_manager.update_core(db_core, validated_core)
+        await grant_entitled_secrets_for_core(self, db, db_core)
 
         logger.info(f'Core config "{db_core.name}" modified by admin "{admin.username}"')
 
