@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.db.crud.user import reset_user_data_usage
 from app.db.models import NodeUserUsage, User
@@ -105,3 +106,85 @@ async def test_a_fenced_user_leaves_no_empty_chart_row(monkeypatch: pytest.Monke
     async with recorder_db() as session:
         rows = (await session.execute(select(NodeUserUsage.id).where(NodeUserUsage.user_id == user_id))).all()
     assert rows == []
+
+
+class _Deadlock(Exception):
+    args = (1213, "Deadlock found when trying to get lock; try restarting transaction")
+
+
+@pytest.mark.asyncio
+async def test_a_retried_billing_transaction_withdraws_fenced_chart_bytes_exactly_once(
+    monkeypatch: pytest.MonkeyPatch, recorder_db
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=2, node_count=1)
+    reset_user_id, kept_user_id = user_ids
+    node = CountingNode(node_ids[0], {reset_user_id: 600, kept_user_id: 45})
+    monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=[(node.node_id, node)]))
+    _reset_during(monkeypatch, recorder_db, "after_chart_write", reset_user_id, clean_chart_data=False)
+    real_withdraw = record_usages._withdraw_fenced_chart_rows
+    attempts = {"n": 0}
+
+    async def withdraw_then_deadlock(*args, **kwargs):
+        attempts["n"] += 1
+        withdrawn = await real_withdraw(*args, **kwargs)
+        if attempts["n"] == 1:
+            raise OperationalError("stmt", {}, _Deadlock())
+        return withdrawn
+
+    monkeypatch.setattr(record_usages, "_withdraw_fenced_chart_rows", withdraw_then_deadlock)
+    billed_before, charted_before = await usage_snapshot(recorder_db, user_ids)
+
+    await record_usages._record_user_usages_impl()
+
+    assert attempts["n"] == 2
+    billed_after, charted_after = await usage_snapshot(recorder_db, user_ids)
+    assert _delta(charted_after, charted_before) == {reset_user_id: 0, kept_user_id: 45}
+    assert _delta(billed_after, billed_before)[kept_user_id] == 45
+    assert billed_after[reset_user_id] == 0
+
+
+@pytest.mark.asyncio
+async def test_withdrawal_leaves_the_fenced_users_other_chart_rows_untouched(
+    monkeypatch: pytest.MonkeyPatch, recorder_db
+):
+    monkeypatch.setattr(record_usages, "_get_time_bucket", lambda now=None: FROZEN_BUCKET)
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=2)
+    user_id = user_ids[0]
+    home_node_id, other_node_id = node_ids
+    async with recorder_db() as session:
+        session.add(
+            NodeUserUsage(
+                created_at=FROZEN_BUCKET - timedelta(minutes=10),
+                user_id=user_id,
+                node_id=home_node_id,
+                used_traffic=55,
+            )
+        )
+        await session.commit()
+    home = CountingNode(home_node_id, {user_id: 100})
+    other = CountingNode(other_node_id, {user_id: 40})
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(home.node_id, home), (other.node_id, other)]),
+    )
+
+    await record_usages._record_user_usages_impl()
+    rows_before = await _chart_rows(recorder_db, user_id)
+    assert sorted(rows_before.values()) == [40, 55, 100]
+
+    home.add(user_id, 900)
+    _reset_during(monkeypatch, recorder_db, "after_chart_write", user_id, clean_chart_data=False)
+    await record_usages._record_user_usages_impl()
+
+    assert await _chart_rows(recorder_db, user_id) == rows_before
+
+
+async def _chart_rows(session_factory, user_id: int) -> dict[int, int]:
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(NodeUserUsage.id, NodeUserUsage.used_traffic).where(NodeUserUsage.user_id == user_id)
+            )
+        ).all()
+    return {row_id: int(value) for row_id, value in rows}
