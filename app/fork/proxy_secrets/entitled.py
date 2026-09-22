@@ -5,7 +5,8 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import StrEnum
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import Text, and_, case, cast, func, literal, or_, select, update
+from sqlalchemy import String, Text, and_, case, cast, func, literal, or_, select, update
+from sqlalchemy.dialects.mysql import BINARY as MySQLBinary
 from sqlalchemy.dialects.postgresql import JSON as PostgresJSON, JSONB
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -146,7 +147,10 @@ def _mysql_put(column, spec: EntitledSecretSpec, expected: str | None, value: st
     if expected is None:
         guard = func.coalesce(current_type, "NULL") == "NULL"
     else:
-        guard = and_(current_type == "STRING", func.json_unquote(current) == expected)
+        guard = and_(
+            current_type == "STRING",
+            cast(func.json_unquote(current), MySQLBinary()) == cast(literal(expected, String), MySQLBinary()),
+        )
     new_document = case(
         (func.json_type(func.json_extract(column, section_path)) == "OBJECT", func.json_set(column, key_path, value)),
         else_=func.json_set(column, section_path, func.json_object(spec.attribute, value)),

@@ -303,6 +303,32 @@ async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_
     assert pushed[0]["mtproto"] == committed["mtproto"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_value", "expected_value"),
+    [("bad value ", "bad value"), ("bad value", "bad value ")],
+    ids=["stored-has-trailing-space", "expected-has-trailing-space"],
+)
+async def test_the_old_value_guard_is_byte_exact_about_trailing_spaces(sessions, stored_value, expected_value):
+    from app.fork.proxy_secrets.entitled import EntitledSecretField, put_entitled_secret
+
+    user_id = await _seed(sessions, extra={"l2tp": {"password": stored_value}})
+    spec = entitled_module.ENTITLED_SPEC_BY_FIELD[EntitledSecretField.l2tp_password]
+
+    async with sessions() as db:
+        near_miss = await put_entitled_secret(db, spec, user_id, expected_value, "NewPassw0rd12345678")
+        await db.commit()
+    after_near_miss = await _stored(sessions)
+    async with sessions() as db:
+        exact = await put_entitled_secret(db, spec, user_id, stored_value, "NewPassw0rd12345678")
+        await db.commit()
+
+    assert near_miss is False
+    assert after_near_miss["l2tp"] == {"password": stored_value}
+    assert exact is True
+    assert (await _stored(sessions))["l2tp"] == {"password": "NewPassw0rd12345678"}
+
+
 def _compiled(dialect_name, expected):
     from sqlalchemy.dialects import mysql, postgresql
 
@@ -326,7 +352,9 @@ def test_the_mysql_statement_sets_one_key_and_is_guarded():
     assert {"$.openvpn", "$.openvpn.password", "OBJECT", "NULL", "fresh", 7} <= set(params.values())
 
     guarded, guarded_params = _compiled("mysql", "old-value")
-    assert "json_unquote(json_extract(users.proxy_settings" in guarded.lower()
+    assert (
+        "cast(json_unquote(json_extract(users.proxy_settings, %s)) as binary) = cast(%s as binary)" in guarded.lower()
+    )
     assert {"STRING", "old-value"} <= set(guarded_params.values())
 
 
