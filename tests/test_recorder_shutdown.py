@@ -155,6 +155,7 @@ async def _keep_one_cohort(monkeypatch: pytest.MonkeyPatch, recorder_db, raw_byt
         calls["n"] += 1
         if calls["n"] == 1:
             await asyncio.sleep(0.3)
+            kwargs["progress"].writes_started = True
             raise OperationalError("stmt", {}, _ConnectionGone())
         return await real_persist(*args, **kwargs)
 
