@@ -81,6 +81,8 @@ extend-immutable-calls = [
     "SIM115",
     "UP031",
 ]
+"tests/test_cleanup_window_timezone.py" = ["DTZ001"]
+"tests/test_clear_usage_data_window.py" = ["DTZ001"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
