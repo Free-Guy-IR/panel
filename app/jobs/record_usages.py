@@ -1227,6 +1227,13 @@ async def _settle_collection(
 
 
 def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) -> None:
+    read_params = {node_id: params for node_id, params in cohort.api_params.items() if params}
+    if not read_params:
+        return
+    cohort = cohort._replace(
+        api_params=read_params,
+        usage_coefficient={node_id: cohort.usage_coefficient.get(node_id, 1.0) for node_id in read_params},
+    )
     attempts = cohort.attempts + 1
     if not progress.writes_started and attempts < USAGE_RETAINED_MAX_ATTEMPTS:
         _retained_cohorts.insert(0, cohort._replace(attempts=attempts))
@@ -1355,8 +1362,18 @@ async def _record_user_usages_impl():
                 async for batch in _drain_node_collection(
                     list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
                 ):
+                    cohort = _cohort_from_tasks(batch, node_by_task, epoch_at_poll)
+                    progress = PersistProgress()
+                    try:
+                        failure = await persist(cohort, progress)
+                    except BaseException:
+                        if progress.writes_started:
+                            processed.update(batch)
+                        raise
                     processed.update(batch)
-                    if must_stop(await persist(_cohort_from_tasks(batch, node_by_task, epoch_at_poll))):
+                    if failure is not None:
+                        _keep_or_abandon_retained(cohort, progress)
+                    if must_stop(failure):
                         break
             finally:
                 await _settle_collection(node_by_task, reset_issued, processed, epoch_at_poll)
