@@ -319,18 +319,22 @@ async def apply_secret_plan(
         return []
     await db.flush()
 
-    holders: dict[EntitledSecretField, list[tuple[User, str | None]]] = {}
-    for user, missing in plan.grants:
-        for spec, expected in missing:
-            holders.setdefault(spec.field, []).append((user, expected))
+    ordered = sorted(plan.grants, key=lambda grant: grant[0].id)
+    holders: dict[EntitledSecretField, list[int]] = {}
+    for user, missing in ordered:
+        for spec, _ in missing:
+            holders.setdefault(spec.field, []).append(user.id)
+
+    issued: dict[tuple[int, EntitledSecretField], str] = {}
+    for secret_field, user_ids in holders.items():
+        values = await issue_unique_secrets(db, ENTITLED_SPEC_BY_FIELD[secret_field], len(user_ids), reserved)
+        issued.update(zip(((user_id, secret_field) for user_id in user_ids), values, strict=True))
 
     written: set[int] = set()
     skipped = 0
-    for secret_field, entries in holders.items():
-        spec = ENTITLED_SPEC_BY_FIELD[secret_field]
-        values = await issue_unique_secrets(db, spec, len(entries), reserved)
-        for (user, expected), value in zip(entries, values, strict=True):
-            if await put_entitled_secret(db, spec, user.id, expected, value):
+    for user, missing in ordered:
+        for spec, expected in missing:
+            if await put_entitled_secret(db, spec, user.id, expected, issued[(user.id, spec.field)]):
                 written.add(user.id)
             else:
                 skipped += 1

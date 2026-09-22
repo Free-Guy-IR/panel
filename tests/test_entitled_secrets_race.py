@@ -42,10 +42,10 @@ USERNAME = "racer"
 
 async def _purge(engine):
     async with engine.begin() as conn:
-        user_ids = select(User.id).where(User.username == USERNAME).scalar_subquery()
+        user_ids = select(User.id).where(User.username.like(f"{USERNAME}%")).scalar_subquery()
         group_ids = select(Group.id).where(Group.name.like(f"{PREFIX}%")).scalar_subquery()
         await conn.execute(delete(users_groups_association).where(users_groups_association.c.user_id.in_(user_ids)))
-        await conn.execute(delete(User.__table__).where(User.username == USERNAME))
+        await conn.execute(delete(User.__table__).where(User.username.like(f"{USERNAME}%")))
         await conn.execute(
             delete(inbounds_groups_association).where(inbounds_groups_association.c.group_id.in_(group_ids))
         )
@@ -327,6 +327,42 @@ async def test_the_old_value_guard_is_byte_exact_about_trailing_spaces(sessions,
     assert after_near_miss["l2tp"] == {"password": stored_value}
     assert exact is True
     assert (await _stored(sessions))["l2tp"] == {"password": "NewPassw0rd12345678"}
+
+
+@pytest.mark.asyncio
+async def test_a_group_change_takes_its_row_locks_in_ascending_user_id_order(sessions, monkeypatch):
+    first_id = await _seed(sessions)
+    async with sessions() as db:
+        template = await db.get(User, first_id)
+        group = (await db.execute(select(Group).where(Group.name == f"{PREFIX}vpn"))).scalar_one()
+        for index, openvpn in enumerate(["already-issued", None, None]):
+            settings = dict(template.proxy_settings)
+            settings["openvpn"] = {"password": openvpn}
+            extra = User(username=f"{USERNAME}{index}", proxy_settings=settings, admin_id=template.admin_id)
+            extra.groups = [group]
+            db.add(extra)
+        await db.commit()
+
+    original = entitled_module.put_entitled_secret
+    order = []
+
+    async def record(db, spec, user_id, expected, value):
+        order.append(user_id)
+        return await original(db, spec, user_id, expected, value)
+
+    monkeypatch.setattr(entitled_module, "put_entitled_secret", record)
+    async with sessions() as db:
+        users = list(
+            (await db.execute(select(User).where(User.username.like(f"{USERNAME}%")).order_by(User.id.desc())))
+            .scalars()
+            .all()
+        )
+        changed = await entitled_module.grant_entitled_secrets(db, users)
+        await db.commit()
+
+    assert len(order) == 7
+    assert order == sorted(order)
+    assert len(changed) == 4
 
 
 def _compiled(dialect_name, expected):
