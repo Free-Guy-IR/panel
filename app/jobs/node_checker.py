@@ -8,6 +8,7 @@ from app.db import GetDB
 from app.db.crud.node import get_limited_nodes, get_nodes
 from app.db.models import Node, NodeStatus
 from app.fork.jobs import after_healthy_node_check
+from app.fork.node_health import hold_for_usage_collection
 from app.models.node import NodeListQuery, NodeNotification
 from app.nats import is_multi_worker
 from app.node import node_manager
@@ -158,6 +159,10 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
         # For other errors, reconnect
         async with GetDB() as db:
             await node_operator.connect_single_node(db, db_node.id)
+        return
+
+    if await hold_for_usage_collection(db_node, health):
+        await after_healthy_node_check(node, db_node)
         return
 
     if health == Health.HEALTHY and db_node.status == NodeStatus.connected:
