@@ -4,13 +4,14 @@ import random
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from datetime import UTC, datetime as dt, timedelta as td
 from operator import attrgetter
 from typing import NamedTuple
 
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
-from sqlalchemy import BigInteger, DateTime, bindparam, func, select, union_all, update
+from sqlalchemy import BigInteger, DateTime, bindparam, delete, func, select, union_all, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -37,6 +38,8 @@ USAGE_PERSIST_COHORT_SIZE = 8
 USAGE_PERSIST_MAX_VOLATILE_S = 5.0
 USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES = 2
 USAGE_JOB_LATENESS_TOLERANCE_S = 5.0
+USAGE_RETAINED_MAX_ATTEMPTS = 10
+USAGE_SHUTDOWN_GRACE_S = 8.0
 NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 1_000,
     "sqlite": 400,
@@ -62,6 +65,19 @@ class FencedUsageOutcome(NamedTuple):
     applied_admins: int
     fenced_user_ids: list[int]
     fenced_bytes: int
+    withdrawn_chart_bytes: int = 0
+
+
+class UsageCohort(NamedTuple):
+    api_params: dict
+    usage_coefficient: dict
+    epoch_at_poll: dict[int, int]
+    attempts: int = 0
+
+
+class PersistProgress:
+    def __init__(self) -> None:
+        self.writes_started = False
 
 
 # Thread pool executor for I/O-bound node API calls
@@ -87,11 +103,11 @@ async def _cleanup_thread_pool():
     """Cleanup thread pool on shutdown (thread-safe)."""
     global _thread_pool
     async with _thread_pool_lock:
-        if _thread_pool is not None:
-            logger.debug("Shutting down ThreadPoolExecutor...")
-            _thread_pool.shutdown(wait=True)
-            _thread_pool = None
-            logger.debug("ThreadPoolExecutor shut down successfully")
+        pool, _thread_pool = _thread_pool, None
+    if pool is not None:
+        logger.debug("Shutting down ThreadPoolExecutor...")
+        await asyncio.to_thread(pool.shutdown, wait=True)
+        logger.debug("ThreadPoolExecutor shut down successfully")
 
 
 # Helper functions for threading (lightweight operations that release GIL)
@@ -130,6 +146,9 @@ _unknown_uid_total_count = 0
 _unknown_uid_total_bytes = 0
 _unknown_uid_last_log_at: float | None = None
 _unknown_uid_suppressed_reports = 0
+_retained_cohorts: list[UsageCohort] = []
+_usage_job_runs: set[asyncio.Task] = set()
+_stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset_issued", default=None)
 
 
 def _chunked(items: list, size: int):
@@ -446,7 +465,7 @@ def _get_time_bucket(now: dt | None = None) -> dt:
     return now.replace(minute=(now.minute // 10) * 10, second=0, microsecond=0)
 
 
-async def record_user_stats_batched(all_node_params: dict, usage_coefficients: dict):
+async def record_user_stats_batched(all_node_params: dict, usage_coefficients: dict) -> list[dict]:
     """
     Record user statistics for ALL nodes in a single batched UPSERT operation.
     This eliminates per-node write amplification and reduces lock contention.
@@ -456,7 +475,7 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
         usage_coefficients: Dict mapping node_id -> usage coefficient
     """
     if not all_node_params:
-        return
+        return []
 
     # Aggregate all params across all nodes into single list
     created_at = _get_time_bucket()
@@ -479,7 +498,7 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
             )
 
     if not upsert_params:
-        return
+        return []
 
     # Consistent lock order reduces InnoDB deadlocks across overlapping writers
     upsert_params.sort(key=lambda item: (item["uid"], item["node_id"]))
@@ -500,6 +519,7 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
             queries = build_node_user_usage_upsert(dialect, batch)
             for stmt, stmt_params in queries:
                 await safe_execute(stmt, stmt_params)
+    return upsert_params
 
 
 async def record_node_stats_batched(all_node_params: dict):
@@ -591,10 +611,21 @@ async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str
                 gap,
                 interval,
             )
+    run = asyncio.ensure_future(impl())
+    _usage_job_runs.add(run)
+    run.add_done_callback(_usage_job_runs.discard)
     try:
-        await impl()
+        await asyncio.shield(run)
     except asyncio.CancelledError:
-        logger.warning("%s was cancelled", job_name)
+        if run.done():
+            logger.warning("%s was cancelled", job_name)
+        else:
+            logger.warning(
+                "%s was cancelled; letting the running tick finish so bytes it already read are kept", job_name
+            )
+            await asyncio.wait({run})
+            if not run.cancelled() and run.exception() is not None:
+                logger.error("%s failed after its scheduler job was cancelled", job_name, exc_info=run.exception())
     elapsed = time.monotonic() - start
     if interval > 0 and elapsed > interval:
         logger.warning(
@@ -603,6 +634,40 @@ async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str
             elapsed,
             interval,
             _usage_job_hint(interval_env, interval),
+        )
+
+
+async def drain_usage_jobs(timeout: float | None = None) -> None:
+    grace = USAGE_SHUTDOWN_GRACE_S if timeout is None else timeout
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + grace
+    runs = {run for run in _usage_job_runs if not run.done()}
+    if runs:
+        logger.info(
+            "Waiting up to %ss for %s running usage tick(s) to persist what they already read", grace, len(runs)
+        )
+        _, unfinished = await asyncio.wait(runs, timeout=grace)
+        if unfinished:
+            logger.error(
+                "%s usage tick(s) still running after %ss of shutdown grace; bytes they already read may be lost",
+                len(unfinished),
+                grace,
+            )
+            return
+    if not _retained_cohorts:
+        return
+    remaining = deadline - loop.time()
+    if remaining > 0:
+        flush = asyncio.ensure_future(_flush_retained_cohorts())
+        _, unfinished = await asyncio.wait({flush}, timeout=remaining)
+        if unfinished:
+            logger.error("Kept usage was still being written when the %ss shutdown grace ran out", grace)
+            return
+    if _retained_cohorts:
+        logger.error(
+            "Shutting down with %s raw bytes from node(s) %s that could not be written; they are lost with this process",
+            sum(_raw_bytes(cohort.api_params) for cohort in _retained_cohorts),
+            sorted({node_id for cohort in _retained_cohorts for node_id in cohort.api_params}),
         )
 
 
@@ -688,6 +753,9 @@ async def get_users_stats(node: PasarGuardNode, node_id: int | None = None):
     """Fetch and fold user stats from one node. Dict folding stays on the event loop."""
     node_label = node_id if node_id is not None else getattr(node, "node_id", "unknown")
     try:
+        reset_issued = _stats_reset_issued.get()
+        if reset_issued is not None and node_id is not None:
+            reset_issued.add(node_id)
         # Caller holds API_SEM so extra+stats can share one slot without deadlock.
         stats_response = await node.get_stats(stat_type=StatType.UsersStat, reset=True, timeout=30)
         validated_params, invalid_uids = _process_users_stats_response(stats_response)
@@ -837,10 +905,60 @@ def discard_reset_users(users_usage: list, api_params: dict, reset_user_ids) -> 
     return kept, kept_params, dropped_bytes, dropped_users
 
 
+def _as_naive_utc(moment: dt) -> dt:
+    return moment.astimezone(UTC).replace(tzinfo=None) if moment.tzinfo else moment
+
+
+async def _withdraw_fenced_chart_rows(conn, chart_rows: list[dict], fenced_user_ids: list[int]) -> int:
+    fenced = set(fenced_user_ids)
+    owed: dict[tuple[int, int, dt], int] = defaultdict(int)
+    for row in chart_rows:
+        uid = int(row["uid"])
+        if uid in fenced and row["value"]:
+            owed[(uid, row["node_id"], _as_naive_utc(row["created_at"]))] += int(row["value"])
+    if not owed:
+        return 0
+
+    oldest_bucket = min(row["created_at"] for row in chart_rows if int(row["uid"]) in fenced)
+    candidates = await conn.execute(
+        select(NodeUserUsage.id, NodeUserUsage.user_id, NodeUserUsage.node_id, NodeUserUsage.created_at)
+        .where(
+            NodeUserUsage.user_id.in_(sorted({uid for uid, _, _ in owed})),
+            NodeUserUsage.created_at >= oldest_bucket - td(minutes=10),
+        )
+        .order_by(NodeUserUsage.id)
+    )
+    withdrawals = []
+    for row_id, user_id, node_id, created_at in candidates.fetchall():
+        value = owed.get((int(user_id), node_id, _as_naive_utc(created_at)))
+        if value:
+            withdrawals.append({"row_id": row_id, "withdrawn": value})
+    if not withdrawals:
+        return 0
+
+    await conn.execute(
+        update(NodeUserUsage)
+        .where(NodeUserUsage.id == bindparam("row_id"))
+        .values(used_traffic=NodeUserUsage.used_traffic - bindparam("withdrawn"))
+        .execution_options(synchronize_session=False),
+        withdrawals,
+    )
+    await conn.execute(
+        delete(NodeUserUsage)
+        .where(
+            NodeUserUsage.id.in_([item["row_id"] for item in withdrawals]),
+            NodeUserUsage.used_traffic <= 0,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    return sum(item["withdrawn"] for item in withdrawals)
+
+
 async def apply_fenced_user_usage(
     users_usage: list,
     user_context: dict[int, UserUsageContext],
     epoch_at_poll: dict[int, int],
+    chart_rows: list[dict] | None = None,
 ) -> FencedUsageOutcome:
     delta_by_user = {int(item["uid"]): int(item["value"]) for item in users_usage}
     user_ids = sorted(delta_by_user)
@@ -881,6 +999,10 @@ async def apply_fenced_user_usage(
                 continue
             billable.append({"uid": user_id, "epoch": usage_epoch, "value": delta_by_user[user_id]})
 
+        withdrawn_chart_bytes = 0
+        if fenced_user_ids and chart_rows:
+            withdrawn_chart_bytes = await _withdraw_fenced_chart_rows(conn, chart_rows, fenced_user_ids)
+
         admin_totals = defaultdict(int)
         for item in billable:
             entry = user_context.get(item["uid"])
@@ -893,7 +1015,7 @@ async def apply_fenced_user_usage(
         if admin_data:
             await conn.execute(admin_stmt, admin_data)
 
-        return FencedUsageOutcome(len(billable), len(admin_data), fenced_user_ids, fenced_bytes)
+        return FencedUsageOutcome(len(billable), len(admin_data), fenced_user_ids, fenced_bytes, withdrawn_chart_bytes)
 
     return await run_in_retried_transaction(_apply)
 
@@ -978,6 +1100,7 @@ async def _persist_collected_usage(
     api_params: dict,
     usage_coefficient: dict,
     epoch_at_poll: dict[int, int],
+    progress: PersistProgress | None = None,
 ) -> tuple[FencedUsageOutcome, int]:
     users_usage = await calculate_users_usage(api_params, usage_coefficient)
     if not users_usage:
@@ -1015,26 +1138,152 @@ async def _persist_collected_usage(
             if filtered_params:
                 filtered_node_params[node_id] = filtered_params
 
+    chart_rows: list[dict] = []
     if filtered_node_params:
-        await record_user_stats_batched(filtered_node_params, usage_coefficient)
+        if progress is not None:
+            progress.writes_started = True
+        chart_rows = await record_user_stats_batched(filtered_node_params, usage_coefficient) or []
         total_records = sum(len(params) for params in filtered_node_params.values())
         logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
 
     outcome = FencedUsageOutcome(0, 0, [], 0)
     if valid_users_usage:
         valid_users_usage.sort(key=lambda item: int(item["uid"]))
+        if progress is not None:
+            progress.writes_started = True
         async with JOB_SEM:
-            outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll)
+            outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll, chart_rows)
         if outcome.fenced_user_ids:
             logger.warning(
-                "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply: %s",
+                "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply and withdrew %s of them "
+                "from the chart: %s",
                 outcome.fenced_bytes,
                 len(outcome.fenced_user_ids),
+                outcome.withdrawn_chart_bytes,
                 outcome.fenced_user_ids[:FENCED_USER_LOG_SAMPLE],
             )
         logger.debug(f"Updated {outcome.applied_users} users and {outcome.applied_admins} admins")
 
     return outcome, len(filtered_node_params)
+
+
+def _cohort_from_tasks(tasks, node_by_task: dict, epoch_at_poll: dict[int, int]) -> UsageCohort:
+    usage_coefficient = {}
+    api_params = {}
+    for task in tasks:
+        node_id = node_by_task[task]
+        failure = asyncio.CancelledError() if task.cancelled() else task.exception()
+        if failure is not None:
+            logger.warning("Failed to collect usage for node %s: %s", node_id, failure)
+            usage_coefficient[node_id] = 1.0
+            api_params[node_id] = []
+            continue
+        _, coeff, stats = task.result()
+        usage_coefficient[node_id] = coeff
+        api_params[node_id] = stats
+    return UsageCohort(api_params, usage_coefficient, epoch_at_poll)
+
+
+def _raw_bytes(api_params: dict) -> int:
+    return sum(int(param["value"]) for params in api_params.values() for param in params)
+
+
+def _retain_finished_collections(tasks, node_by_task: dict, epoch_at_poll: dict[int, int]) -> None:
+    finished = [task for task in tasks if task.done() and not task.cancelled() and task.exception() is None]
+    if not finished:
+        return
+    cohort = _cohort_from_tasks(finished, node_by_task, epoch_at_poll)
+    read_params = {node_id: params for node_id, params in cohort.api_params.items() if params}
+    if not read_params:
+        return
+    _retained_cohorts.append(
+        UsageCohort(
+            read_params,
+            {node_id: cohort.usage_coefficient[node_id] for node_id in read_params},
+            epoch_at_poll,
+        )
+    )
+    logger.warning(
+        "Kept %s raw bytes already read and reset on node(s) %s for the next cycle",
+        _raw_bytes(read_params),
+        sorted(read_params),
+    )
+
+
+async def _settle_collection(
+    node_by_task: dict, reset_issued: set[int], processed: set, epoch_at_poll: dict[int, int]
+) -> None:
+    for task, node_id in node_by_task.items():
+        if not task.done() and node_id not in reset_issued:
+            task.cancel()
+    unfinished = [task for task in node_by_task if not task.done()]
+    try:
+        if unfinished:
+            await asyncio.wait(unfinished)
+    finally:
+        _retain_finished_collections(
+            [task for task in node_by_task if task not in processed], node_by_task, epoch_at_poll
+        )
+
+
+def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) -> None:
+    attempts = cohort.attempts + 1
+    if not progress.writes_started and attempts < USAGE_RETAINED_MAX_ATTEMPTS:
+        _retained_cohorts.insert(0, cohort._replace(attempts=attempts))
+        logger.warning(
+            "Still holding %s raw bytes from node(s) %s after %s failed attempt(s); nothing was written",
+            _raw_bytes(cohort.api_params),
+            sorted(cohort.api_params),
+            attempts,
+        )
+        return
+    logger.error(
+        "Gave up on %s raw bytes read from node(s) %s after %s attempt(s); %s",
+        _raw_bytes(cohort.api_params),
+        sorted(cohort.api_params),
+        attempts,
+        "a write had already started, so a retry could count them twice"
+        if progress.writes_started
+        else "the retry limit was reached",
+    )
+
+
+async def _persist_retained_cohorts(persist) -> bool:
+    while _retained_cohorts:
+        cohort = _retained_cohorts.pop(0)
+        progress = PersistProgress()
+        try:
+            failure = await persist(cohort, progress)
+        except BaseException:
+            _keep_or_abandon_retained(cohort, progress)
+            raise
+        if failure is not None:
+            _keep_or_abandon_retained(cohort, progress)
+            return False
+    return True
+
+
+async def _flush_retained_cohorts() -> None:
+    applied_admins = 0
+
+    async def persist(cohort: UsageCohort, progress: PersistProgress | None = None) -> Exception | None:
+        nonlocal applied_admins
+        try:
+            outcome, _ = await _persist_collected_usage(
+                cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, progress=progress
+            )
+        except Exception as exc:
+            logger.exception("Failed to persist kept usage for node(s) %s", sorted(cohort.api_params))
+            return exc
+        applied_admins += outcome.applied_admins
+        return None
+
+    await _persist_retained_cohorts(persist)
+    if applied_admins:
+        try:
+            await enforce_admin_limits_now(logger=logger)
+        except Exception:
+            logger.exception("Failed to enforce admin limits after persisting kept usage")
 
 
 async def _record_user_usages_impl():
@@ -1045,7 +1294,7 @@ async def _record_user_usages_impl():
     job_start_time = time.time()
     nodes: tuple[int, PasarGuardNode] = await node_manager.get_healthy_nodes()
 
-    if not nodes:
+    if not nodes and not _retained_cohorts:
         logger.debug("No healthy nodes found, skipping user usage recording")
         return
 
@@ -1054,63 +1303,63 @@ async def _record_user_usages_impl():
     try:
         epoch_at_poll = await current_usage_epochs()
 
-        node_by_task = {}
-        for node_id, node in nodes:
-            node_by_task[asyncio.ensure_future(_collect_node_user_usage(node, node_id))] = node_id
-
         applied_users = 0
         applied_admins = 0
         recorded_nodes = 0
         persist_failure: Exception | None = None
         consecutive_persist_failures = 0
-        try:
-            async for batch in _drain_node_collection(
-                list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
-            ):
-                usage_coefficient = {}
-                api_params = {}
-                for task in batch:
-                    node_id = node_by_task[task]
-                    failure = asyncio.CancelledError() if task.cancelled() else task.exception()
-                    if failure is not None:
-                        logger.warning("Failed to collect usage for node %s: %s", node_id, failure)
-                        usage_coefficient[node_id] = 1.0
-                        api_params[node_id] = []
-                        continue
-                    _, coeff, stats = task.result()
-                    usage_coefficient[node_id] = coeff
-                    api_params[node_id] = stats
 
-                try:
-                    outcome, persisted_nodes = await _persist_collected_usage(
-                        api_params, usage_coefficient, epoch_at_poll
-                    )
-                except Exception as exc:
-                    if persist_failure is None:
-                        persist_failure = exc
-                    consecutive_persist_failures += 1
-                    logger.exception("Failed to persist usage for node(s) %s", sorted(api_params))
-                    if (
-                        _is_retriable_db_error(exc)
-                        and consecutive_persist_failures < USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES
-                    ):
-                        continue
-                    logger.error(
-                        "Stopping collection after %s consecutive persistence failure(s); "
-                        "nodes not yet polled keep their counters for the next cycle",
-                        consecutive_persist_failures,
-                    )
-                    break
-                consecutive_persist_failures = 0
-                applied_users += outcome.applied_users
-                applied_admins += outcome.applied_admins
-                recorded_nodes += persisted_nodes
-        finally:
-            leftovers = [task for task in node_by_task if not task.done()]
-            for task in leftovers:
-                task.cancel()
-            if leftovers:
-                await asyncio.gather(*leftovers, return_exceptions=True)
+        async def persist(cohort: UsageCohort, progress: PersistProgress | None = None) -> Exception | None:
+            nonlocal applied_users, applied_admins, recorded_nodes, persist_failure, consecutive_persist_failures
+            try:
+                outcome, persisted_nodes = await _persist_collected_usage(
+                    cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, progress=progress
+                )
+            except Exception as exc:
+                if persist_failure is None:
+                    persist_failure = exc
+                consecutive_persist_failures += 1
+                logger.exception("Failed to persist usage for node(s) %s", sorted(cohort.api_params))
+                return exc
+            consecutive_persist_failures = 0
+            applied_users += outcome.applied_users
+            applied_admins += outcome.applied_admins
+            recorded_nodes += persisted_nodes
+            return None
+
+        def must_stop(failure: Exception | None) -> bool:
+            if failure is None or (
+                _is_retriable_db_error(failure)
+                and consecutive_persist_failures < USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES
+            ):
+                return False
+            logger.error(
+                "Stopping collection after %s consecutive persistence failure(s); "
+                "nodes not yet polled keep their counters for the next cycle",
+                consecutive_persist_failures,
+            )
+            return True
+
+        if await _persist_retained_cohorts(persist) and nodes:
+            reset_issued: set[int] = set()
+            token = _stats_reset_issued.set(reset_issued)
+            try:
+                node_by_task = {
+                    asyncio.ensure_future(_collect_node_user_usage(node, node_id)): node_id for node_id, node in nodes
+                }
+            finally:
+                _stats_reset_issued.reset(token)
+
+            processed: set = set()
+            try:
+                async for batch in _drain_node_collection(
+                    list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
+                ):
+                    processed.update(batch)
+                    if must_stop(await persist(_cohort_from_tasks(batch, node_by_task, epoch_at_poll))):
+                        break
+            finally:
+                await _settle_collection(node_by_task, reset_issued, processed, epoch_at_poll)
 
         if applied_admins:
             try:

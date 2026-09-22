@@ -319,7 +319,12 @@ def _register_scheduler_hooks():
         await _cancel_reclaim_task()
         if scheduler.running:
             scheduler.shutdown()
-        await stop_job_leader()
+        try:
+            from app.jobs.record_usages import drain_usage_jobs
+
+            await drain_usage_jobs()
+        finally:
+            await stop_job_leader()
 
     on_shutdown(_stop_scheduler_and_leader)
 
