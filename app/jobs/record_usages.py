@@ -39,6 +39,7 @@ USAGE_PERSIST_MAX_VOLATILE_S = 5.0
 USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES = 2
 USAGE_JOB_LATENESS_TOLERANCE_S = 5.0
 USAGE_RETAINED_MAX_ATTEMPTS = 10
+USAGE_SHUTDOWN_GRACE_S = 8.0
 NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 1_000,
     "sqlite": 400,
@@ -101,11 +102,11 @@ async def _cleanup_thread_pool():
     """Cleanup thread pool on shutdown (thread-safe)."""
     global _thread_pool
     async with _thread_pool_lock:
-        if _thread_pool is not None:
-            logger.debug("Shutting down ThreadPoolExecutor...")
-            _thread_pool.shutdown(wait=True)
-            _thread_pool = None
-            logger.debug("ThreadPoolExecutor shut down successfully")
+        pool, _thread_pool = _thread_pool, None
+    if pool is not None:
+        logger.debug("Shutting down ThreadPoolExecutor...")
+        await asyncio.to_thread(pool.shutdown, wait=True)
+        logger.debug("ThreadPoolExecutor shut down successfully")
 
 
 # Helper functions for threading (lightweight operations that release GIL)
@@ -145,6 +146,7 @@ _unknown_uid_total_bytes = 0
 _unknown_uid_last_log_at: float | None = None
 _unknown_uid_suppressed_reports = 0
 _retained_cohorts: list[UsageCohort] = []
+_usage_job_runs: set[asyncio.Task] = set()
 _stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset_issued", default=None)
 
 
@@ -607,10 +609,21 @@ async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str
                 gap,
                 interval,
             )
+    run = asyncio.ensure_future(impl())
+    _usage_job_runs.add(run)
+    run.add_done_callback(_usage_job_runs.discard)
     try:
-        await impl()
+        await asyncio.shield(run)
     except asyncio.CancelledError:
-        logger.warning("%s was cancelled", job_name)
+        if run.done():
+            logger.warning("%s was cancelled", job_name)
+        else:
+            logger.warning(
+                "%s was cancelled; letting the running tick finish so bytes it already read are kept", job_name
+            )
+            await asyncio.wait({run})
+            if not run.cancelled() and run.exception() is not None:
+                logger.error("%s failed after its scheduler job was cancelled", job_name, exc_info=run.exception())
     elapsed = time.monotonic() - start
     if interval > 0 and elapsed > interval:
         logger.warning(
@@ -619,6 +632,21 @@ async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str
             elapsed,
             interval,
             _usage_job_hint(interval_env, interval),
+        )
+
+
+async def drain_usage_jobs(timeout: float | None = None) -> None:
+    runs = {run for run in _usage_job_runs if not run.done()}
+    if not runs:
+        return
+    grace = USAGE_SHUTDOWN_GRACE_S if timeout is None else timeout
+    logger.info("Waiting up to %ss for %s running usage tick(s) to persist what they already read", grace, len(runs))
+    _, unfinished = await asyncio.wait(runs, timeout=grace)
+    if unfinished:
+        logger.error(
+            "%s usage tick(s) still running after %ss of shutdown grace; bytes they already read may be lost",
+            len(unfinished),
+            grace,
         )
 
 

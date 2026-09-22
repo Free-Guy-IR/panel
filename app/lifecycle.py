@@ -2,6 +2,10 @@ import asyncio
 import inspect
 from contextlib import asynccontextmanager
 
+from app.utils.logger import get_logger
+
+logger = get_logger("lifecycle")
+
 startup_functions = []
 shutdown_functions = []
 
@@ -41,6 +45,10 @@ async def _invoke(func, app):
             func()
 
 
+def _callback_name(func) -> str:
+    return getattr(func, "__qualname__", None) or repr(func)
+
+
 @asynccontextmanager
 async def lifespan(app):
     for func in startup_functions:
@@ -48,4 +56,7 @@ async def lifespan(app):
     yield
 
     for func in shutdown_functions:
-        await _invoke(func, app)
+        try:
+            await _invoke(func, app)
+        except Exception:
+            logger.exception("Shutdown callback %s failed; running the remaining callbacks", _callback_name(func))
