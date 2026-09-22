@@ -5,7 +5,8 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import StrEnum
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
+from sqlalchemy import Text, and_, case, cast, func, literal, or_, select, update
+from sqlalchemy.dialects.postgresql import JSON as PostgresJSON, JSONB
 
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
@@ -15,7 +16,6 @@ from app.fork.proxy_secrets.uniqueness import (
     ProxySecretUniquenessError,
     ReservedSecrets,
     secret_column,
-    write_stored_secret,
 )
 from app.models.proxy import L2TPSettings, MTProtoSettings, OpenVPNSettings
 from app.utils.l2tp import generate_l2tp_password, l2tp_core_tags
@@ -110,6 +110,95 @@ def stored_secret(proxy_settings, spec: EntitledSecretSpec) -> str | None:
     return str(value) if value else None
 
 
+class UnguardableValue(ValueError):
+    pass
+
+
+def replaceable_value(proxy_settings, spec: EntitledSecretSpec) -> str | None:
+    section = proxy_settings.get(spec.protocol) if isinstance(proxy_settings, dict) else None
+    raw = section.get(spec.attribute) if isinstance(section, dict) else None
+    if raw is not None and not isinstance(raw, str):
+        raise UnguardableValue(spec.field.value)
+    return raw
+
+
+def _sqlite_put(column, spec: EntitledSecretSpec, expected: str | None, value: str):
+    section_path = f"$.{spec.protocol}"
+    key_path = f"{section_path}.{spec.attribute}"
+    current_type = func.json_type(column, key_path)
+    if expected is None:
+        guard = or_(current_type.is_(None), current_type == "null")
+    else:
+        guard = and_(current_type == "text", func.json_extract(column, key_path) == expected)
+    new_document = case(
+        (func.json_type(column, section_path) == "object", func.json_set(column, key_path, value)),
+        else_=func.json_set(column, section_path, func.json_object(spec.attribute, value)),
+    )
+    return guard, new_document
+
+
+def _mysql_put(column, spec: EntitledSecretSpec, expected: str | None, value: str):
+    section_path = f"$.{spec.protocol}"
+    key_path = f"{section_path}.{spec.attribute}"
+    current = func.json_extract(column, key_path)
+    current_type = func.json_type(current)
+    if expected is None:
+        guard = func.coalesce(current_type, "NULL") == "NULL"
+    else:
+        guard = and_(current_type == "STRING", func.json_unquote(current) == expected)
+    new_document = case(
+        (func.json_type(func.json_extract(column, section_path)) == "OBJECT", func.json_set(column, key_path, value)),
+        else_=func.json_set(column, section_path, func.json_object(spec.attribute, value)),
+    )
+    return guard, new_document
+
+
+def _postgresql_put(column, spec: EntitledSecretSpec, expected: str | None, value: str):
+    document = cast(column, JSONB)
+    section = document.op("->", return_type=JSONB)(literal(spec.protocol, Text))
+    current = section.op("->", return_type=JSONB)(literal(spec.attribute, Text))
+    if expected is None:
+        guard = or_(current.is_(None), func.jsonb_typeof(current) == "null")
+    else:
+        guard = and_(
+            func.jsonb_typeof(current) == "string",
+            section.op("->>", return_type=Text)(literal(spec.attribute, Text)) == expected,
+        )
+    base = case((func.jsonb_typeof(section) == "object", section), else_=func.jsonb_build_object(type_=JSONB))
+    new_section = base.op("||", return_type=JSONB)(
+        func.jsonb_build_object(literal(spec.attribute, Text), cast(literal(value, Text), Text), type_=JSONB)
+    )
+    new_document = document.op("||", return_type=JSONB)(
+        func.jsonb_build_object(literal(spec.protocol, Text), new_section, type_=JSONB)
+    )
+    return guard, cast(new_document, PostgresJSON)
+
+
+_PUT_BUILDERS = {
+    "sqlite": _sqlite_put,
+    "mysql": _mysql_put,
+    "mariadb": _mysql_put,
+    "postgresql": _postgresql_put,
+}
+
+
+def conditional_secret_update(dialect_name: str, spec: EntitledSecretSpec, user_id: int, expected, value: str):
+    builder = _PUT_BUILDERS.get(dialect_name)
+    if builder is None:
+        raise NotImplementedError(f"no conditional JSON update is defined for the {dialect_name!r} dialect")
+    table = User.__table__
+    guard, new_document = builder(table.c.proxy_settings, spec, expected, value)
+    return update(table).where(table.c.id == user_id, guard).values(proxy_settings=new_document)
+
+
+async def put_entitled_secret(
+    db: AsyncSession, spec: EntitledSecretSpec, user_id: int, expected: str | None, value: str
+) -> bool:
+    statement = conditional_secret_update(db.get_bind().dialect.name, spec, user_id, expected, value)
+    result = await db.execute(statement)
+    return result.rowcount == 1
+
+
 async def entitled_core_tags(
     db: AsyncSession, specs: Sequence[EntitledSecretSpec]
 ) -> dict[EntitledSecretField, set[str]]:
@@ -168,7 +257,7 @@ async def issue_unique_secrets(
 
 @dataclass
 class SecretPlan:
-    grants: list[tuple[User, list[EntitledSecretSpec]]] = dataclass_field(default_factory=list)
+    grants: list[tuple[User, list[tuple[EntitledSecretSpec, str | None]]]] = dataclass_field(default_factory=list)
     unreadable: list[tuple[int, EntitledSecretField]] = dataclass_field(default_factory=list)
 
 
@@ -186,12 +275,11 @@ def plan_entitled_secrets(
             if not tags_by_field.get(spec.field, set()) & user_tags:
                 continue
             try:
-                current = stored_secret(user.proxy_settings, spec)
-            except ValidationError:
+                if stored_secret(user.proxy_settings, spec) is not None:
+                    continue
+                missing.append((spec, replaceable_value(user.proxy_settings, spec)))
+            except ValidationError, UnguardableValue:
                 plan.unreadable.append((user.id, spec.field))
-                continue
-            if current is None:
-                missing.append(spec)
         if missing:
             plan.grants.append((user, missing))
     return plan
@@ -205,23 +293,41 @@ def report_unreadable(plan: SecretPlan) -> None:
         )
 
 
+async def _reload_proxy_settings(db: AsyncSession, user_ids: list[int]) -> None:
+    for start in range(0, len(user_ids), LOOKUP_CHUNK):
+        chunk = user_ids[start : start + LOOKUP_CHUNK]
+        await db.execute(select(User).where(User.id.in_(chunk)).execution_options(populate_existing=True))
+
+
 async def apply_secret_plan(
     db: AsyncSession,
     plan: SecretPlan,
     reserved: ReservedSecrets | None = None,
 ) -> list[User]:
-    holders: dict[EntitledSecretField, list[User]] = {}
-    for user, specs in plan.grants:
-        for spec in specs:
-            holders.setdefault(spec.field, []).append(user)
+    if not plan.grants:
+        return []
+    await db.flush()
 
-    for secret_field, users in holders.items():
+    holders: dict[EntitledSecretField, list[tuple[User, str | None]]] = {}
+    for user, missing in plan.grants:
+        for spec, expected in missing:
+            holders.setdefault(spec.field, []).append((user, expected))
+
+    written: set[int] = set()
+    skipped = 0
+    for secret_field, entries in holders.items():
         spec = ENTITLED_SPEC_BY_FIELD[secret_field]
-        values = await issue_unique_secrets(db, spec, len(users), reserved)
-        for user, value in zip(users, values, strict=True):
-            user.proxy_settings = write_stored_secret(user.proxy_settings, spec, value)
+        values = await issue_unique_secrets(db, spec, len(entries), reserved)
+        for (user, expected), value in zip(entries, values, strict=True):
+            if await put_entitled_secret(db, spec, user.id, expected, value):
+                written.add(user.id)
+            else:
+                skipped += 1
 
-    return [user for user, _ in plan.grants]
+    await _reload_proxy_settings(db, sorted({user.id for user, _ in plan.grants}))
+    if skipped:
+        logger.info(f"{skipped} entitled secret(s) were set by someone else meanwhile and were left as they are")
+    return [user for user, _ in plan.grants if user.id in written]
 
 
 async def grant_entitled_secrets(
@@ -247,6 +353,5 @@ async def grant_entitled_secrets(
     report_unreadable(plan)
     changed = await apply_secret_plan(db, plan, reserved)
     if changed:
-        await db.flush()
         logger.info(f"issued missing entitled secrets to {len(changed)} user(s) after an access change")
     return changed

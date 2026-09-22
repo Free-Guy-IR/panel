@@ -218,6 +218,7 @@ async def test_a_core_of_another_type_issues_nothing(engine, db, quiet_core):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["create", "modify"])
 @pytest.mark.parametrize(
     "failure",
     [
@@ -226,13 +227,37 @@ async def test_a_core_of_another_type_issues_nothing(engine, db, quiet_core):
     ],
     ids=["uniqueness-exhausted", "database-error"],
 )
-async def test_a_failed_issue_is_logged_at_error_and_fails_the_request(engine, db, quiet_core, monkeypatch, failure):
-    await _seed(db)
+async def test_a_failed_issue_runs_last_is_logged_at_error_and_fails_the_request_with_an_accurate_message(
+    engine, db, quiet_core, monkeypatch, failure, action
+):
+    from app import notification
+
+    existing = await _seed(db)
+    steps = []
 
     async def failing(*args, **kwargs):
+        steps.append("grant")
         raise failure
 
+    async def no_op():
+        return None
+
+    def record_notification(name):
+        def notify(core, admin_username):
+            steps.append(f"notification:{name}:{core.id}")
+            return no_op()
+
+        return notify
+
     monkeypatch.setattr(driver, "issue_unique_secrets", failing)
+    monkeypatch.setattr(notification, "create_core", record_notification("create"))
+    monkeypatch.setattr(notification, "modify_core", record_notification("modify"))
+    operation = _operation()
+
+    async def record_refresh(session):
+        steps.append("refresh_hosts")
+
+    operation._refresh_hosts_from_db = record_refresh
     records = []
     handler = logging.Handler(level=logging.ERROR)
     handler.emit = records.append
@@ -240,22 +265,38 @@ async def test_a_failed_issue_is_logged_at_error_and_fails_the_request(engine, d
     logger.addHandler(handler)
     try:
         with pytest.raises(HTTPException) as raised:
-            await _operation().create_core(
-                db,
-                CoreCreate(name="ovpn-2", type=CoreType.openvpn, config={"instances": [{"tag": WAITING_TAG}]}),
-                ADMIN,
-            )
+            if action == "create":
+                await operation.create_core(
+                    db,
+                    CoreCreate(name="ovpn-2", type=CoreType.openvpn, config={"instances": [{"tag": WAITING_TAG}]}),
+                    ADMIN,
+                )
+            else:
+                await operation.modify_core(
+                    db,
+                    existing.id,
+                    CoreCreate(
+                        name="ovpn",
+                        type=CoreType.openvpn,
+                        config={"instances": [{"tag": EXISTING_TAG}, {"tag": WAITING_TAG}]},
+                    ),
+                    ADMIN,
+                )
     finally:
         logger.removeHandler(handler)
 
-    saved = (await db.execute(select(CoreConfig).where(CoreConfig.name == "ovpn-2"))).scalar_one()
+    saved_name = "ovpn-2" if action == "create" else "ovpn"
+    saved = (await db.execute(select(CoreConfig).where(CoreConfig.name == saved_name))).scalar_one()
+    assert steps == [f"notification:{action}:{saved.id}", "refresh_hosts", "grant"]
     assert raised.value.status_code == 500
-    assert "Core saved" in raised.value.detail
-    assert "activation" in raised.value.detail
+    assert raised.value.detail.startswith(f"Core {saved.id} is saved and live, so do not create it again.")
+    assert "POST /api/users/bulk/openvpn_activate" in raised.value.detail
     errors = [record.getMessage() for record in records if record.levelno == logging.ERROR]
     assert len(errors) == 1
     assert f"core {saved.id} (OpenVPN)" in errors[0]
     assert "issued 0 of the 2 missing" in errors[0]
     assert "among 3 entitled user(s)" in errors[0]
+    if action == "modify":
+        assert {"tag": WAITING_TAG} in saved.config["instances"]
     stored = await _stored(engine)
     assert stored["newcomer"].openvpn.password is None
