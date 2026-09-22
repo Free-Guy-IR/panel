@@ -42,10 +42,10 @@ USERNAME = "racer"
 
 async def _purge(engine):
     async with engine.begin() as conn:
-        user_ids = select(User.id).where(User.username == USERNAME).scalar_subquery()
+        user_ids = select(User.id).where(User.username.like(f"{USERNAME}%")).scalar_subquery()
         group_ids = select(Group.id).where(Group.name.like(f"{PREFIX}%")).scalar_subquery()
         await conn.execute(delete(users_groups_association).where(users_groups_association.c.user_id.in_(user_ids)))
-        await conn.execute(delete(User.__table__).where(User.username == USERNAME))
+        await conn.execute(delete(User.__table__).where(User.username.like(f"{USERNAME}%")))
         await conn.execute(
             delete(inbounds_groups_association).where(inbounds_groups_association.c.group_id.in_(group_ids))
         )
@@ -263,6 +263,108 @@ async def test_a_missing_or_null_section_is_created_and_a_present_value_is_left_
     assert stored["vmess"]
 
 
+@pytest.mark.asyncio
+async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_session_committed(
+    sessions, synced, monkeypatch
+):
+    from app.operation import group as group_module
+    from app.operation.group import GroupOperation
+
+    user_id = await _seed(sessions)
+    committed = {}
+
+    async def both_activations(other):
+        await _operation().bulk_activate_openvpn_passwords(other, BulkUserFilter())
+        await _operation().bulk_activate_mtproto_secrets(other, BulkUserFilter())
+        user = (await other.execute(select(User).where(User.id == user_id))).scalar_one()
+        committed.update(user.proxy_settings)
+
+    _interleave(monkeypatch, entitled_module, sessions, both_activations)
+    pushed = []
+
+    async def record_push(users):
+        pushed.extend(dict(user.proxy_settings) for user in users)
+
+    monkeypatch.setattr(group_module, "sync_users", record_push)
+
+    async with sessions() as first:
+        users = list((await first.execute(select(User).where(User.id == user_id))).scalars().all())
+        await GroupOperation(operator_type=OperatorType.API)._sync_users_allocations(first, users)
+        await first.commit()
+        await group_module.sync_users(users)
+
+    stored = await _stored(sessions)
+    assert committed["openvpn"]["password"]
+    assert committed["mtproto"]["secret"]
+    assert stored["openvpn"] == committed["openvpn"]
+    assert stored["mtproto"] == committed["mtproto"]
+    assert len(pushed) == 1
+    assert pushed[0]["openvpn"] == committed["openvpn"]
+    assert pushed[0]["mtproto"] == committed["mtproto"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_value", "expected_value"),
+    [("bad value ", "bad value"), ("bad value", "bad value ")],
+    ids=["stored-has-trailing-space", "expected-has-trailing-space"],
+)
+async def test_the_old_value_guard_is_byte_exact_about_trailing_spaces(sessions, stored_value, expected_value):
+    from app.fork.proxy_secrets.entitled import EntitledSecretField, put_entitled_secret
+
+    user_id = await _seed(sessions, extra={"l2tp": {"password": stored_value}})
+    spec = entitled_module.ENTITLED_SPEC_BY_FIELD[EntitledSecretField.l2tp_password]
+
+    async with sessions() as db:
+        near_miss = await put_entitled_secret(db, spec, user_id, expected_value, "NewPassw0rd12345678")
+        await db.commit()
+    after_near_miss = await _stored(sessions)
+    async with sessions() as db:
+        exact = await put_entitled_secret(db, spec, user_id, stored_value, "NewPassw0rd12345678")
+        await db.commit()
+
+    assert near_miss is False
+    assert after_near_miss["l2tp"] == {"password": stored_value}
+    assert exact is True
+    assert (await _stored(sessions))["l2tp"] == {"password": "NewPassw0rd12345678"}
+
+
+@pytest.mark.asyncio
+async def test_a_group_change_takes_its_row_locks_in_ascending_user_id_order(sessions, monkeypatch):
+    first_id = await _seed(sessions)
+    async with sessions() as db:
+        template = await db.get(User, first_id)
+        group = (await db.execute(select(Group).where(Group.name == f"{PREFIX}vpn"))).scalar_one()
+        for index, openvpn in enumerate(["already-issued", None, None]):
+            settings = dict(template.proxy_settings)
+            settings["openvpn"] = {"password": openvpn}
+            extra = User(username=f"{USERNAME}{index}", proxy_settings=settings, admin_id=template.admin_id)
+            extra.groups = [group]
+            db.add(extra)
+        await db.commit()
+
+    original = entitled_module.put_entitled_secret
+    order = []
+
+    async def record(db, spec, user_id, expected, value):
+        order.append(user_id)
+        return await original(db, spec, user_id, expected, value)
+
+    monkeypatch.setattr(entitled_module, "put_entitled_secret", record)
+    async with sessions() as db:
+        users = list(
+            (await db.execute(select(User).where(User.username.like(f"{USERNAME}%")).order_by(User.id.desc())))
+            .scalars()
+            .all()
+        )
+        changed = await entitled_module.grant_entitled_secrets(db, users)
+        await db.commit()
+
+    assert len(order) == 7
+    assert order == sorted(order)
+    assert len(changed) == 4
+
+
 def _compiled(dialect_name, expected):
     from sqlalchemy.dialects import mysql, postgresql
 
@@ -286,7 +388,9 @@ def test_the_mysql_statement_sets_one_key_and_is_guarded():
     assert {"$.openvpn", "$.openvpn.password", "OBJECT", "NULL", "fresh", 7} <= set(params.values())
 
     guarded, guarded_params = _compiled("mysql", "old-value")
-    assert "json_unquote(json_extract(users.proxy_settings" in guarded.lower()
+    assert (
+        "cast(json_unquote(json_extract(users.proxy_settings, %s)) as binary) = cast(%s as binary)" in guarded.lower()
+    )
     assert {"STRING", "old-value"} <= set(guarded_params.values())
 
 

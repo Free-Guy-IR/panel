@@ -5,8 +5,10 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import StrEnum
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import Text, and_, case, cast, func, literal, or_, select, update
+from sqlalchemy import String, Text, and_, case, cast, func, literal, or_, select, update
+from sqlalchemy.dialects.mysql import BINARY as MySQLBinary
 from sqlalchemy.dialects.postgresql import JSON as PostgresJSON, JSONB
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
@@ -145,7 +147,10 @@ def _mysql_put(column, spec: EntitledSecretSpec, expected: str | None, value: st
     if expected is None:
         guard = func.coalesce(current_type, "NULL") == "NULL"
     else:
-        guard = and_(current_type == "STRING", func.json_unquote(current) == expected)
+        guard = and_(
+            current_type == "STRING",
+            cast(func.json_unquote(current), MySQLBinary()) == cast(literal(expected, String), MySQLBinary()),
+        )
     new_document = case(
         (func.json_type(func.json_extract(column, section_path)) == "OBJECT", func.json_set(column, key_path, value)),
         else_=func.json_set(column, section_path, func.json_object(spec.attribute, value)),
@@ -293,10 +298,16 @@ def report_unreadable(plan: SecretPlan) -> None:
         )
 
 
-async def _reload_proxy_settings(db: AsyncSession, user_ids: list[int]) -> None:
+async def _reload_proxy_settings(db: AsyncSession, users: Sequence[User]) -> None:
+    by_id = {user.id: user for user in users}
+    user_ids = sorted(by_id)
     for start in range(0, len(user_ids), LOOKUP_CHUNK):
         chunk = user_ids[start : start + LOOKUP_CHUNK]
-        await db.execute(select(User).where(User.id.in_(chunk)).execution_options(populate_existing=True))
+        rows = await db.execute(
+            select(User.id, User.proxy_settings).where(User.id.in_(chunk)).order_by(User.id).with_for_update()
+        )
+        for user_id, proxy_settings in rows.all():
+            set_committed_value(by_id[user_id], "proxy_settings", proxy_settings)
 
 
 async def apply_secret_plan(
@@ -308,23 +319,27 @@ async def apply_secret_plan(
         return []
     await db.flush()
 
-    holders: dict[EntitledSecretField, list[tuple[User, str | None]]] = {}
-    for user, missing in plan.grants:
-        for spec, expected in missing:
-            holders.setdefault(spec.field, []).append((user, expected))
+    ordered = sorted(plan.grants, key=lambda grant: grant[0].id)
+    holders: dict[EntitledSecretField, list[int]] = {}
+    for user, missing in ordered:
+        for spec, _ in missing:
+            holders.setdefault(spec.field, []).append(user.id)
+
+    issued: dict[tuple[int, EntitledSecretField], str] = {}
+    for secret_field, user_ids in holders.items():
+        values = await issue_unique_secrets(db, ENTITLED_SPEC_BY_FIELD[secret_field], len(user_ids), reserved)
+        issued.update(zip(((user_id, secret_field) for user_id in user_ids), values, strict=True))
 
     written: set[int] = set()
     skipped = 0
-    for secret_field, entries in holders.items():
-        spec = ENTITLED_SPEC_BY_FIELD[secret_field]
-        values = await issue_unique_secrets(db, spec, len(entries), reserved)
-        for (user, expected), value in zip(entries, values, strict=True):
-            if await put_entitled_secret(db, spec, user.id, expected, value):
+    for user, missing in ordered:
+        for spec, expected in missing:
+            if await put_entitled_secret(db, spec, user.id, expected, issued[(user.id, spec.field)]):
                 written.add(user.id)
             else:
                 skipped += 1
 
-    await _reload_proxy_settings(db, sorted({user.id for user, _ in plan.grants}))
+    await _reload_proxy_settings(db, [user for user, _ in plan.grants])
     if skipped:
         logger.info(f"{skipped} entitled secret(s) were set by someone else meanwhile and were left as they are")
     return [user for user, _ in plan.grants if user.id in written]
