@@ -163,7 +163,6 @@ async def test_the_health_check_passes_on_a_node_whose_usage_rpc_always_fails():
     assert await node.get_health() is Health.HEALTHY
 
 
-@pytest.mark.xfail(strict=True, reason="record_usages.get_users_stats does not report to app.fork.node_health yet")
 @pytest.mark.asyncio
 async def test_a_node_whose_usage_collection_always_fails_is_reported_instead_of_staying_connected(
     stored_node, side_effects

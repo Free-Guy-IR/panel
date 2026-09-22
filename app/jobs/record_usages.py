@@ -23,6 +23,7 @@ from app.db import GetDB
 from app.db.base import engine
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
+from app.fork.node_health import record_usage_failure, record_usage_success
 from app.node import node_manager
 from app.operation.admin_sync import enforce_admin_limits_now
 from app.utils.logger import get_logger
@@ -759,6 +760,7 @@ async def get_users_stats(node: PasarGuardNode, node_id: int | None = None):
         # Caller holds API_SEM so extra+stats can share one slot without deadlock.
         stats_response = await node.get_stats(stat_type=StatType.UsersStat, reset=True, timeout=30)
         validated_params, invalid_uids = _process_users_stats_response(stats_response)
+        record_usage_success(node_id)
 
         if invalid_uids:
             for uid in invalid_uids:
@@ -766,9 +768,11 @@ async def get_users_stats(node: PasarGuardNode, node_id: int | None = None):
 
         return validated_params
     except NodeAPIError as e:
+        record_usage_failure(node_id, e)
         logger.error("Failed to get users stats from node %s, error: %s", node_label, e.detail)
         return []
     except Exception as e:
+        record_usage_failure(node_id, e)
         logger.error("Failed to get users stats from node %s, unknown error: %s", node_label, e)
         return []
 
