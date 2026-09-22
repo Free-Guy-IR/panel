@@ -301,3 +301,29 @@ async def test_a_fresh_cohort_cancelled_before_writing_is_kept(monkeypatch: pyte
     billed, charted = await usage_snapshot(recorder_db, user_ids)
     assert billed[user_ids[0]] == charted[user_ids[0]] == 480
     assert node.reads == 2
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_cohort_cancelled_after_a_write_started_is_given_up_loudly(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, caplog
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    node = CountingNode(node_ids[0], {user_ids[0]: 260})
+    _install(monkeypatch, [node])
+    entered = asyncio.Event()
+
+    async def stalled_billing(*args, **kwargs):
+        entered.set()
+        await asyncio.sleep(5)
+
+    monkeypatch.setattr(record_usages, "apply_fenced_user_usage", stalled_billing)
+
+    tick = asyncio.ensure_future(record_usages._record_user_usages_impl())
+    await asyncio.wait_for(entered.wait(), timeout=2.0)
+    tick.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await tick
+
+    assert record_usages._retained_cohorts == []
+    assert "Gave up on 260 raw bytes" in caplog.text
+    assert "a write had already started" in caplog.text

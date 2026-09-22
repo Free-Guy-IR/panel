@@ -1369,6 +1369,7 @@ async def _record_user_usages_impl():
                     except BaseException:
                         if progress.writes_started:
                             processed.update(batch)
+                            _keep_or_abandon_retained(cohort, progress)
                         raise
                     processed.update(batch)
                     if failure is not None:
