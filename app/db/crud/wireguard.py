@@ -247,14 +247,32 @@ def _user_public_key(db_user_settings: dict | None) -> str | None:
 
 
 async def shared_wireguard_public_keys(db: AsyncSession, users: Iterable[User]) -> frozenset[str]:
-    keys = {key for user in users if (key := _user_public_key(user.proxy_settings))}
-    if not keys:
+    derived_counts: dict[str, int] = {}
+    candidates: set[str] = set()
+
+    for user in users:
+        wg = (user.proxy_settings or {}).get("wireguard") or {}
+        public_key = wg.get("public_key")
+        if public_key:
+            candidates.add(public_key)
+            continue
+        private_key = wg.get("private_key")
+        if not private_key:
+            continue
+        derived = get_wireguard_public_key(private_key)
+        derived_counts[derived] = derived_counts.get(derived, 0) + 1
+        candidates.add(derived)
+
+    if not candidates:
         return frozenset()
+
     column = User.proxy_settings["wireguard"]["public_key"].as_string()
-    rows = await db.execute(
-        select(column).where(column.in_(keys)).group_by(column).having(func.count(User.id) > 1)
+    rows = await db.execute(select(column, func.count(User.id)).where(column.in_(candidates)).group_by(column))
+    stored_counts = {row[0]: row[1] for row in rows if row[0]}
+
+    return frozenset(
+        key for key in candidates if stored_counts.get(key, 0) + derived_counts.get(key, 0) > 1
     )
-    return frozenset(row[0] for row in rows if row[0])
 
 
 def _ensure_wireguard_keys(db_user: User, shared_keys: frozenset[str] = frozenset()) -> bool:

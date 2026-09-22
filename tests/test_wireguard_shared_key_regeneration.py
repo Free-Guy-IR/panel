@@ -78,6 +78,46 @@ def test_a_user_with_no_keys_gets_a_fresh_pair():
     assert get_wireguard_public_key(wg["private_key"]) == wg["public_key"]
 
 
+def test_two_private_only_users_sharing_a_key_are_both_detected():
+    from app.db.crud.wireguard import shared_wireguard_public_keys
+
+    class _Result:
+        def __iter__(self):
+            return iter(())
+
+    class _Db:
+        async def execute(self, _stmt):
+            return _Result()
+
+    users = [_user(SHARED_PRIVATE), _user(SHARED_PRIVATE)]
+
+    import asyncio
+
+    shared = asyncio.run(shared_wireguard_public_keys(_Db(), users))
+
+    assert SHARED_PUBLIC in shared
+
+
+def test_a_lone_private_only_user_is_not_flagged():
+    from app.db.crud.wireguard import shared_wireguard_public_keys
+
+    class _Result:
+        def __iter__(self):
+            return iter(())
+
+    class _Db:
+        async def execute(self, _stmt):
+            return _Result()
+
+    private_key, public_key = generate_wireguard_keypair()
+
+    import asyncio
+
+    shared = asyncio.run(shared_wireguard_public_keys(_Db(), [_user(private_key)]))
+
+    assert public_key not in shared
+
+
 def test_the_empty_shared_set_preserves_the_old_behaviour():
     user = _user(SHARED_PRIVATE, SHARED_PUBLIC)
 

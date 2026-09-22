@@ -4,6 +4,7 @@ from sqlalchemy import delete, select
 
 from app import scheduler
 from app.db import GetDB
+from app.db.crud.general import to_utc_for_filter
 from app.db.models import NodeInboundUsage, NodeUsage
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings
@@ -42,7 +43,7 @@ async def cleanup_node_usages():
     if retention_days <= 0:
         return
 
-    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+    cutoff = to_utc_for_filter(datetime.now(UTC) - timedelta(days=retention_days))
 
     for model, description in ((NodeUsage, "node usage rows"), (NodeInboundUsage, "node inbound usage rows")):
         deleted = await _prune_in_chunks(model, cutoff)

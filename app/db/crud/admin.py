@@ -719,7 +719,6 @@ async def get_admin_usages(
     # Build truncation expression with timezone support
     trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at, start=start)
 
-    # Filter using UTC timestamps (DB stores naive UTC)
     start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
     conditions = [
