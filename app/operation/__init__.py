@@ -41,9 +41,14 @@ class OperatorType(IntEnum):
 
 class BaseOperation:
     _HTTP_HEADER_NAME_PATTERN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+    _RESERVED_RESPONSE_HEADERS: frozenset[str] = frozenset({"subscription-userinfo"})
 
     def __init__(self, operator_type: OperatorType):
         self.operator_type = operator_type
+
+    @classmethod
+    def is_reserved_response_header(cls, header_name: str) -> bool:
+        return str(header_name).strip().lower() in cls._RESERVED_RESPONSE_HEADERS
 
     @classmethod
     def sanitize_response_headers(cls, headers: dict[str, Any] | None) -> dict[str, str]:

@@ -84,9 +84,11 @@ class SystemOperation(BaseOperation):
         if system is not None:
             uplink = system.uplink
             downlink = system.downlink
+            admin_used_traffic = None
         else:
             uplink = 0
-            downlink = admin_param.used_traffic
+            downlink = 0
+            admin_used_traffic = admin_param.used_traffic if admin_param else None
 
         return SystemUsersStats(
             total_user=user_counts["total"],
@@ -98,6 +100,7 @@ class SystemOperation(BaseOperation):
             on_hold_users=user_counts[UserStatus.on_hold.value],
             incoming_bandwidth=uplink,
             outgoing_bandwidth=downlink,
+            admin_used_traffic=admin_used_traffic,
         )
 
     @staticmethod

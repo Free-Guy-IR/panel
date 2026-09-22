@@ -99,6 +99,14 @@ class Message:
     def start(stats: SystemStats):
         memory_percentage = int(stats.mem_used / stats.mem_total * 100) if stats.mem_total else 0
         disk_percentage = int(stats.disk_used / stats.disk_total * 100) if stats.disk_total else 0
+        total_data_usage = (
+            stats.admin_used_traffic
+            if stats.admin_used_traffic is not None
+            else stats.outgoing_bandwidth + stats.incoming_bandwidth
+        )
+        total_data_usage_label = (
+            "Accounted Usage (coefficient-adjusted)" if stats.admin_used_traffic is not None else "Total Data Usage"
+        )
         return f"""\
 ⚙ {b("PasarGuard Version")}: {c(stats.version)}
 
@@ -106,7 +114,7 @@ class Message:
 🎛 {b("CPU Cores")}: {c(stats.cpu_cores)}
 📈 {b("Memory")}: {c(readable_size(stats.mem_used))} / {c(readable_size(stats.mem_total))} ({c(memory_percentage)} %)
 💽 {b("Disk")}: {c(readable_size(stats.disk_used))} / {c(readable_size(stats.disk_total))} ({c(disk_percentage)} %)
-🌐 {b("Total Data Usage")}: {c(readable_size(stats.outgoing_bandwidth + stats.incoming_bandwidth))}
+🌐 {b(total_data_usage_label)}: {c(readable_size(total_data_usage))}
 
 👥 {b("Total Users")}: {c(stats.total_user)}
 🟢 {b("Online Users")}: {c(stats.online_users)}

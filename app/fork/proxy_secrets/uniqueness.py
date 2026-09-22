@@ -77,12 +77,43 @@ async def secret_holder_counts(
     return counts
 
 
+class ProxySecretUniquenessError(ValueError):
+    def __init__(self, fields) -> None:
+        self.fields = sorted(field.value for field in fields)
+        super().__init__(
+            "could not establish unique proxy secrets after "
+            f"{MAX_REGENERATION_ATTEMPTS} attempts for: {', '.join(self.fields)}"
+        )
+
+
+ReservedSecrets = dict[ProxySecretField, set[str]]
+
+
+def reserved_secret_collisions(
+    pending: dict[ProxySecretField, str],
+    reserved: ReservedSecrets | None,
+) -> set[ProxySecretField]:
+    if not reserved:
+        return set()
+    return {field for field, value in pending.items() if value in reserved.get(field, ())}
+
+
+def reserve_secret_values(proxy_settings: ProxyTable, reserved: ReservedSecrets | None, *, fields=None) -> None:
+    if reserved is None:
+        return
+    for spec in specs_for(fields):
+        value = read_secret(proxy_settings, spec)
+        if value:
+            reserved.setdefault(spec.field, set()).add(value)
+
+
 async def enforce_unique_proxy_secrets(
     db: AsyncSession,
     proxy_settings: ProxyTable,
     *,
     exclude_user_id: int | None = None,
     fields=None,
+    reserved: ReservedSecrets | None = None,
 ) -> ProxyTable:
     pending: dict[ProxySecretField, str] = {}
     for spec in specs_for(fields):
@@ -90,24 +121,33 @@ async def enforce_unique_proxy_secrets(
         if value:
             pending[spec.field] = value
 
-    for _ in range(MAX_REGENERATION_ATTEMPTS):
-        collisions = await secret_holder_counts(db, pending, exclude_user_id=exclude_user_id)
-        if not collisions:
+    for regenerations_done in range(MAX_REGENERATION_ATTEMPTS + 1):
+        stored_holders = await secret_holder_counts(db, pending, exclude_user_id=exclude_user_id)
+        batch_holders = reserved_secret_collisions(pending, reserved)
+        if not stored_holders and not batch_holders:
+            reserve_secret_values(proxy_settings, reserved, fields=fields)
             return proxy_settings
 
+        if regenerations_done == MAX_REGENERATION_ATTEMPTS:
+            break
+
         pending = {}
-        for field, holders in collisions.items():
+        for field in dict.fromkeys((*stored_holders, *batch_holders)):
             spec = SPEC_BY_FIELD[field]
-            logger.warning(
-                f"proxy secret {field.value} submitted for this user is already stored by {holders} other user(s); "
-                "replacing it with a freshly generated unique value"
-            )
+            if field in stored_holders:
+                logger.warning(
+                    f"proxy secret {field.value} submitted for this user is already stored by "
+                    f"{stored_holders[field]} other user(s); replacing it with a freshly generated unique value"
+                )
+            else:
+                logger.warning(
+                    f"proxy secret {field.value} submitted for this user was already taken by an earlier user "
+                    "in the same request; replacing it with a freshly generated unique value"
+                )
             replacement = spec.generate()
             write_secret(proxy_settings, spec, replacement)
             pending[field] = str(replacement)
 
-    logger.error(
-        "could not establish unique proxy secrets after "
-        f"{MAX_REGENERATION_ATTEMPTS} attempts for: {sorted(field.value for field in pending)}"
-    )
-    return proxy_settings
+    error = ProxySecretUniquenessError(pending)
+    logger.error(str(error))
+    raise error

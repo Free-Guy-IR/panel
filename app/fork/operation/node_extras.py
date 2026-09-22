@@ -7,6 +7,7 @@ from PasarGuardNodeBridge.common import service_pb2 as service
 from app.db import AsyncSession
 from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_nodes
 from app.db.models import Node, NodeStatus
+from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
@@ -154,13 +155,20 @@ class NodeExtraCoresMixin:
             logger.info(f"Node reports backend type(s) this panel does not manage, leaving them alone: {unknown}")
         return running
 
+    @staticmethod
+    async def _resolve_core_without_users(core_id: int):
+        from app.core.manager import core_manager
+
+        resolved = await core_manager.get_cores({core_id, 1})
+        return resolved.get(core_id) or resolved.get(1)
+
     @classmethod
     async def _reconcile_extra_cores(cls, db: AsyncSession, pg_node: PasarGuardNode, db_node: Node) -> str:
         primary_id = getattr(db_node, "core_config_id", None) or 1
         extra_ids = [core_id for core_id in cls._node_core_ids(db_node) if core_id != primary_id]
 
-        cores_by_id, users_by_core = await cls._get_core_users_map(db, set(extra_ids) | {primary_id})
-        primary_core = cores_by_id.get(primary_id)
+        cores_by_id, users_by_core = await cls._get_core_users_map(db, set(extra_ids))
+        primary_core = await cls._resolve_core_without_users(primary_id)
 
         extra_cores = [(core_id, cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in extra_ids]
 
@@ -254,6 +262,15 @@ class NodeExtraCoresMixin:
                 known_version = await _known_node_version(pg_node)
                 if _node_lacks_l2tp(known_version):
                     problems.append(f"core {core_id}: {_l2tp_unsupported_message(known_version)}")
+                    continue
+
+            singbox_offenders = singbox_index_keyed_inbounds(extra_core)
+            if singbox_offenders:
+                known_version = await _known_node_version(pg_node)
+                blocked = unsafe_singbox_node_message(f"Core {core_id}", singbox_offenders, known_version)
+                if blocked:
+                    logger.error(f'Refusing to add a sing-box core to "{db_node.name}" node: {blocked}')
+                    problems.append(f"core {core_id}: {blocked}")
                     continue
 
             try:

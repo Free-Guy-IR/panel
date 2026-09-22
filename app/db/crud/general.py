@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import String, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,81 +97,6 @@ def _build_trunc_expression(
             return func.strftime(SQLITE_FORMATS[period], column)
 
     raise ValueError(f"Unsupported dialect: {dialect}")
-
-
-def _get_next_period_boundary(dt: datetime, period: Period) -> datetime:
-    """
-    Get the next period boundary after (or at) the given datetime.
-
-    This is used to find the first COMPLETE bucket to include when start time
-    is not aligned to a period boundary.
-
-    Args:
-        dt: Datetime to find next boundary for
-        period: Period to use for boundary calculation
-
-    Returns:
-        Datetime at the next period boundary (or same if already on boundary)
-
-    Examples:
-        >>> tehran_tz = timezone(timedelta(hours=3, minutes=30))
-        >>> _get_next_period_boundary(
-        ...     datetime(2026, 5, 9, 14, 2, 37, tzinfo=tehran_tz),
-        ...     Period.hour
-        ... )
-        datetime(2026, 5, 9, 15, 0, 0, tzinfo=tehran_tz)
-
-        >>> _get_next_period_boundary(
-        ...     datetime(2026, 5, 9, 14, 0, 0, tzinfo=tehran_tz),
-        ...     Period.hour
-        ... )
-        datetime(2026, 5, 9, 14, 0, 0, tzinfo=tehran_tz)
-    """
-    if period == Period.minute:
-        # If any seconds/microseconds, round up to next minute
-        if dt.second > 0 or dt.microsecond > 0:
-            return dt.replace(second=0, microsecond=0) + timedelta(minutes=1)
-        return dt.replace(second=0, microsecond=0)
-
-    elif period == Period.hour:
-        # If any minutes/seconds/microseconds, round up to next hour
-        if dt.minute > 0 or dt.second > 0 or dt.microsecond > 0:
-            return dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        return dt.replace(minute=0, second=0, microsecond=0)
-
-    elif period == Period.day:
-        # If any hours/minutes/seconds/microseconds, round up to next day
-        if dt.hour > 0 or dt.minute > 0 or dt.second > 0 or dt.microsecond > 0:
-            return dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    elif period == Period.month:
-        # If not on first day or any time component, round up to next month
-        if dt.day > 1 or dt.hour > 0 or dt.minute > 0 or dt.second > 0 or dt.microsecond > 0:
-            # Go to first of next month
-            if dt.month == 12:
-                return datetime(dt.year + 1, 1, 1, 0, 0, 0, tzinfo=dt.tzinfo)
-            else:
-                return datetime(dt.year, dt.month + 1, 1, 0, 0, 0, tzinfo=dt.tzinfo)
-        return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    return dt
-
-
-def get_complete_period_start_for_filter(start: datetime | None, period: Period) -> datetime | None:
-    """
-    Convert start datetime to the first complete period boundary in UTC for DB filtering.
-
-    If `start` is timezone-aware, this rounds up to the next complete boundary and converts
-    it to naive UTC. If `start` is naive, it is treated as UTC and returned unchanged.
-    """
-    if start is None:
-        return None
-
-    if start.tzinfo:
-        return to_utc_for_filter(_get_next_period_boundary(start, period))
-
-    return to_utc_for_filter(start)
 
 
 def attach_timezone_to_period_start(row_dict: dict, target_tz, dialect: str | None = None) -> None:

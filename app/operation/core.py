@@ -22,7 +22,7 @@ from app.db.crud.wireguard import (
     reconcile_wireguard_subnets,
     wg_core_subnets,
 )
-from app.fork.operation.core_extras import apply_l2tp_core_config
+from app.fork.operation.core_extras import apply_l2tp_core_config, guard_singbox_user_accounting
 from app.models.admin import AdminDetails
 from app.models.core import (
     BulkCoreSelection,
@@ -101,6 +101,7 @@ class CoreOperation(BaseOperation):
             await self._validate_wireguard_subnet(db, new_core.config, exclude_core_id=None)
         apply_l2tp_core_config(new_core)
         try:
+            await guard_singbox_user_accounting(db, new_core)
             validated_core = core_manager.validate_core(
                 new_core.config,
                 new_core.exclude_inbound_tags,
@@ -144,6 +145,7 @@ class CoreOperation(BaseOperation):
             await self._validate_wireguard_subnet(db, modified_core.config, exclude_core_id=db_core.id)
         apply_l2tp_core_config(modified_core)
         try:
+            await guard_singbox_user_accounting(db, modified_core, db_core.id)
             validated_core = core_manager.validate_core(
                 modified_core.config,
                 modified_core.exclude_inbound_tags,

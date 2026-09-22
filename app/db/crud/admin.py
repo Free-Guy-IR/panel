@@ -9,7 +9,6 @@ from sqlalchemy.orm.exc import DetachedInstanceError
 from app.db.crud.general import (
     _build_trunc_expression,
     attach_timezone_to_period_start,
-    get_complete_period_start_for_filter,
     to_utc_for_filter,
 )
 from app.db.models import (
@@ -720,8 +719,8 @@ async def get_admin_usages(
     # Build truncation expression with timezone support
     trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at, start=start)
 
-    # Filter using UTC timestamps (DB stores naive UTC) from first complete bucket
-    start_utc = get_complete_period_start_for_filter(start, period)
+    # Filter using UTC timestamps (DB stores naive UTC)
+    start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
     conditions = [
         NodeUserUsage.created_at >= start_utc,

@@ -1205,7 +1205,7 @@ async def _rebuild_cores_by_id(
                 advisories=advisories,
                 drop_unsupported=drop_unsupported,
             )
-        except ReloadRequired, UnsupportedNodes:
+        except (ReloadRequired, UnsupportedNodes):
             raise
         except EnforcementError as exc:
             problems.append(f"core {core_id}: {exc.detail}")

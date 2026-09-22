@@ -28,6 +28,7 @@ class SystemUsersStats(BaseModel):
     limited_users: int
     incoming_bandwidth: int
     outgoing_bandwidth: int
+    admin_used_traffic: int | None = None
 
 
 class SystemStats(SystemResourceStats, SystemUsersStats):

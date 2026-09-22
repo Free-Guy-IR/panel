@@ -5,8 +5,7 @@ import pytest
 from aiorwlock import RWLock
 
 from app.db.models import Settings
-
-from . import GetTestDB, TestSession, client
+from tests.api import GetTestDB, TestSession, client
 
 
 # Disable caching for all tests
@@ -26,6 +25,7 @@ def mock_db_session(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.settings.GetDB", db_session)
     monkeypatch.setattr("app.subscription.client_templates.GetDB", GetTestDB)
     monkeypatch.setattr("app.subscription.sub_update_buffer.GetDB", GetTestDB)
+    monkeypatch.setattr("app.utils.jwt.GetDB", GetTestDB)
     return db_session
 
 

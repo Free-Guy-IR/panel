@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, bindparam, case, delete, func, literal_column, or_, select, update
+from sqlalchemy import and_, bindparam, case, delete, func, or_, select, update
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_expression
@@ -37,10 +37,7 @@ from app.models.stats import (
 )
 
 from .general import (
-    MYSQL_FORMATS,
-    SQLITE_FORMATS,
     _build_trunc_expression,
-    _get_next_period_boundary,
     attach_timezone_to_period_start,
     to_utc_for_filter,
 )
@@ -271,9 +268,9 @@ async def get_nodes_usage(
     Retrieves usage data for all nodes within a specified time range.
     Groups data by periods in the timezone of the start/end parameters.
 
-    Only includes COMPLETE period buckets. If start is not aligned to a period
-    boundary (e.g., 14:02:37 for hourly grouping), the partial first bucket
-    is excluded (14:00-15:00 would be excluded, 15:00-16:00 would be first bucket).
+    Every row inside [start, end) is returned exactly once, so adjacent ranges are
+    additive. A bucket at either edge may cover only the part of its period that the
+    range covers (e.g. 14:00-15:00 reported from a start of 14:02:37).
 
     Args:
         db (AsyncSession): The database session.
@@ -326,27 +323,6 @@ async def get_nodes_usage(
             .order_by(trunc_expr)
         )
 
-    # HAVING clause to exclude partial first bucket
-    # Only needed if start has timezone (which means we did timezone-aware grouping)
-    if start.tzinfo:
-        # Get the first COMPLETE bucket boundary
-        # Example: if start is 14:02:37, first_complete_bucket is 15:00:00
-        first_complete_bucket = _get_next_period_boundary(start, period)
-
-        # Convert to naive for comparison (represents wall-clock time in target timezone)
-        boundary_value = first_complete_bucket.replace(tzinfo=None)
-
-        # Add HAVING clause with appropriate comparison based on dialect
-        if dialect == "postgresql":
-            # PostgreSQL: trunc_expr returns timestamp, compare to timestamp
-            stmt = stmt.having(trunc_expr >= boundary_value)
-        elif dialect in ("mysql", "sqlite"):
-            # MySQL/SQLite: Use the alias 'period_start' in HAVING
-            # The column is already formatted as a string in the SELECT list
-            format_str = MYSQL_FORMATS[period] if dialect == "mysql" else SQLITE_FORMATS[period]
-            boundary_str = boundary_value.strftime(format_str.replace("%i", "%M"))
-            stmt = stmt.having(literal_column("period_start") >= boundary_str)
-
     result = await db.execute(stmt)
 
     stats = {}
@@ -392,26 +368,6 @@ async def get_node_stats(
         .group_by(trunc_expr)
         .order_by(trunc_expr)
     )
-
-    # HAVING clause to exclude partial first bucket
-    # Only needed if start has timezone (which means we did timezone-aware grouping)
-    if start.tzinfo:
-        # Get the first COMPLETE bucket boundary
-        first_complete_bucket = _get_next_period_boundary(start, period)
-
-        # Convert to naive for comparison (represents wall-clock time in target timezone)
-        boundary_value = first_complete_bucket.replace(tzinfo=None)
-
-        # Add HAVING clause with appropriate comparison based on dialect
-        if dialect == "postgresql":
-            # PostgreSQL: trunc_expr returns timestamp, compare to timestamp
-            stmt = stmt.having(trunc_expr >= boundary_value)
-        elif dialect in ("mysql", "sqlite"):
-            # MySQL/SQLite: trunc_expr returns string, compare to string
-            # Format the boundary value as a string in the same format
-            format_str = MYSQL_FORMATS[period] if dialect == "mysql" else SQLITE_FORMATS[period]
-            boundary_str = boundary_value.strftime(format_str.replace("%i", "%M"))  # %i -> %M for Python
-            stmt = stmt.having(literal_column("period_start") >= boundary_str)
 
     result = await db.execute(stmt)
 
@@ -617,9 +573,9 @@ async def clear_usage_data(
 ):
     filters = []
     if start:
-        filters.append(_table_model(table).created_at >= start.replace(tzinfo=UTC))
+        filters.append(_table_model(table).created_at >= to_utc_for_filter(start))
     if end:
-        filters.append(_table_model(table).created_at < end.replace(tzinfo=UTC))
+        filters.append(_table_model(table).created_at < to_utc_for_filter(end))
 
     stmt = delete(_table_model(table))
     if filters:

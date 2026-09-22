@@ -5,6 +5,7 @@ from PasarGuardNodeBridge import Health, NodeType, PasarGuardNode, create_node
 from PasarGuardNodeBridge.common.service_pb2 import User as ProtoUser
 
 from app.db.models import Node, NodeConnectionType
+from app.fork.node_push_audit import record_user_push
 from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory
 from app.node.user import core_users
 from app.utils.logger import get_logger
@@ -229,6 +230,7 @@ class NodeManager:
             node = await self.get_node(node_id)
             if node is None:
                 return None
+            record_user_push(node_id, len(users))
             await node.sync_users(users, flush_pending=flush_pending)
             return node
 

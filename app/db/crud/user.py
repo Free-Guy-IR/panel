@@ -56,7 +56,6 @@ from .general import (
     _build_trunc_expression,
     attach_timezone_to_period_start,
     build_json_proxy_settings_search_condition,
-    get_complete_period_start_for_filter,
     to_utc_for_filter,
 )
 from .group import get_groups_by_ids
@@ -568,9 +567,9 @@ def _cleanup_target_user_conditions(
         # Time-expired users: date range filters on the expiration date.
         conditions = [User.is_expired]
         if expired_after:
-            conditions.append(User.expire >= expired_after)
+            conditions.append(User.expire >= to_utc_for_filter(expired_after))
         if expired_before:
-            conditions.append(User.expire <= expired_before)
+            conditions.append(User.expire <= to_utc_for_filter(expired_before))
     else:
         # For limited / on_hold / disabled: date range filters apply to
         # last_status_change (i.e. when the user entered that status).
@@ -581,9 +580,9 @@ def _cleanup_target_user_conditions(
         }
         conditions = [User.status == status_map[target]]
         if expired_after:
-            conditions.append(User.last_status_change >= expired_after.replace(tzinfo=None))
+            conditions.append(User.last_status_change >= to_utc_for_filter(expired_after))
         if expired_before:
-            conditions.append(User.last_status_change <= expired_before.replace(tzinfo=None))
+            conditions.append(User.last_status_change <= to_utc_for_filter(expired_before))
 
     if admin_id is not None:
         conditions.append(User.admin_id == admin_id)
@@ -756,8 +755,8 @@ async def get_user_usages(
     # Build the appropriate truncation expression
     trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at, start)
 
-    # Filter using UTC timestamps (DB stores naive UTC) from first complete bucket
-    start_utc = get_complete_period_start_for_filter(start, period)
+    # Filter using UTC timestamps (DB stores naive UTC)
+    start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
     conditions = [
         NodeUserUsage.created_at >= start_utc,
@@ -1520,9 +1519,7 @@ async def get_users_subscription_agent_counts(
     from_clause, conditions = _subscription_update_from_clause(user_id=user_id, admin_id=admin_id)
 
     if start is not None:
-        start_utc = (
-            get_complete_period_start_for_filter(start, period) if period is not None else to_utc_for_filter(start)
-        )
+        start_utc = to_utc_for_filter(start)
         conditions.append(UserSubscriptionUpdate.created_at >= start_utc)
     if end is not None:
         conditions.append(UserSubscriptionUpdate.created_at < to_utc_for_filter(end))
@@ -1547,7 +1544,7 @@ async def get_users_subscription_agent_stats(
 ) -> list[dict]:
     """Retrieve subscription update counts grouped by agent and period."""
     trunc_expr = _build_trunc_expression(db, period, UserSubscriptionUpdate.created_at, start)
-    start_utc = get_complete_period_start_for_filter(start, period)
+    start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
     from_clause, conditions = _subscription_update_from_clause(user_id=user_id, admin_id=admin_id)
     conditions.extend(
@@ -1657,8 +1654,8 @@ async def get_all_users_usages(
     # Build the appropriate truncation expression
     trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at, start)
 
-    # Filter using UTC timestamps (DB stores naive UTC) from first complete bucket
-    start_utc = get_complete_period_start_for_filter(start, period)
+    # Filter using UTC timestamps (DB stores naive UTC)
+    start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
     conditions = [
         NodeUserUsage.created_at >= start_utc,
@@ -1788,7 +1785,7 @@ def _build_user_count_query_parts(
 ) -> dict:
     admins_filter = admins or None
     trunc_expr = _build_trunc_expression(db, period, NodeUserUsage.created_at, start)
-    start_utc = get_complete_period_start_for_filter(start, period)
+    start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
     conditions = [
         NodeUserUsage.created_at >= start_utc,
@@ -1880,8 +1877,14 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
 
     # Update admin traffic counters
     if old_admin and old_admin.id != admin.id:
-        old_admin.used_traffic -= db_user.used_traffic
-        admin.used_traffic += db_user.used_traffic
+        await db.execute(
+            update(Admin)
+            .where(Admin.id == old_admin.id)
+            .values(used_traffic=Admin.used_traffic - db_user.used_traffic)
+        )
+        await db.execute(
+            update(Admin).where(Admin.id == admin.id).values(used_traffic=Admin.used_traffic + db_user.used_traffic)
+        )
 
     await db.commit()
     await refresh_and_load_user(db, db_user)

@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface, ip_network
 
-from sqlalchemy import and_, delete, false, insert, select
+from sqlalchemy import and_, delete, false, func, insert, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -242,15 +242,37 @@ async def tags_from_groups(groups: Iterable) -> set[str]:
     return tags
 
 
-def _ensure_wireguard_keys(db_user: User) -> bool:
+def _user_public_key(db_user_settings: dict | None) -> str | None:
+    return ((db_user_settings or {}).get("wireguard") or {}).get("public_key")
+
+
+async def shared_wireguard_public_keys(db: AsyncSession, users: Iterable[User]) -> frozenset[str]:
+    keys = {key for user in users if (key := _user_public_key(user.proxy_settings))}
+    if not keys:
+        return frozenset()
+    column = User.proxy_settings["wireguard"]["public_key"].as_string()
+    rows = await db.execute(
+        select(column).where(column.in_(keys)).group_by(column).having(func.count(User.id) > 1)
+    )
+    return frozenset(row[0] for row in rows if row[0])
+
+
+def _ensure_wireguard_keys(db_user: User, shared_keys: frozenset[str] = frozenset()) -> bool:
     """Fill missing WG keys in proxy_settings. Returns True if the user was changed."""
     proxy_settings = dict(db_user.proxy_settings or {})
     wg = dict(proxy_settings.get("wireguard") or {})
     private_key = wg.get("private_key")
-    if private_key and wg.get("public_key"):
+    public_key = wg.get("public_key")
+    if public_key and public_key in shared_keys:
+        wg["private_key"], wg["public_key"] = generate_wireguard_keypair()
+    elif private_key and public_key:
         return False
-    if private_key:
-        wg["public_key"] = get_wireguard_public_key(private_key)
+    elif private_key:
+        derived = get_wireguard_public_key(private_key)
+        if derived in shared_keys:
+            wg["private_key"], wg["public_key"] = generate_wireguard_keypair()
+        else:
+            wg["public_key"] = derived
     else:
         wg["private_key"], wg["public_key"] = generate_wireguard_keypair()
     proxy_settings["wireguard"] = wg
@@ -434,6 +456,13 @@ async def sync_users_allocations(
                 touched_keys.add(ns.key)
     rows = await _lock_subnet_rows(db, touched_keys)
 
+    wg_bound_users = [
+        user
+        for user in users
+        if any(ns.tags & tags_by_user.get(user.id, set()) for ns in namespaces.values())
+    ]
+    shared_keys = await shared_wireguard_public_keys(db, wg_bound_users)
+
     changed: list[User] = []
     for user in users:
         tags = tags_by_user.get(user.id, set())
@@ -465,7 +494,7 @@ async def sync_users_allocations(
         if new_ips != old_ips:
             _set_user_peer_ips(user, new_ips)
             user_changed = True
-        if targets and _ensure_wireguard_keys(user):
+        if targets and _ensure_wireguard_keys(user, shared_keys):
             user_changed = True
         if user_changed:
             changed.append(user)

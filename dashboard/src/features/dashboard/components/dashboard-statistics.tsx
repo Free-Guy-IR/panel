@@ -48,8 +48,13 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
     )
   }
 
+  const adminUsedTraffic = usersData?.admin_used_traffic ?? null
+  const hasDirectionalTraffic = adminUsedTraffic === null
+
   const getTotalTrafficValue = () => {
     if (!usersData) return 0
+
+    if (adminUsedTraffic !== null) return Number(adminUsedTraffic)
 
     // For master server stats - use total traffic
     return Number(usersData.incoming_bandwidth) + Number(usersData.outgoing_bandwidth)
@@ -255,7 +260,9 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
                       <Database className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">{t('statistics.totalTraffic')}</p>
+                      <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">
+                        {hasDirectionalTraffic ? t('statistics.totalTraffic') : t('statistics.accountedUsage')}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -268,20 +275,22 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
                   </div>
 
                   {/* Incoming/Outgoing Details */}
-                  <div className="flex shrink-0 items-center gap-2 text-xs">
-                    <div className="bg-muted/50 flex items-center gap-1 rounded-md px-1.5 py-1 text-green-600 dark:text-green-400">
-                      <Download className="h-3 w-3" />
-                      <span dir="ltr" className="font-medium">
-                        {formatBytes(getIncomingBandwidth() || 0, 1)}
-                      </span>
+                  {hasDirectionalTraffic && (
+                    <div className="flex shrink-0 items-center gap-2 text-xs">
+                      <div className="bg-muted/50 flex items-center gap-1 rounded-md px-1.5 py-1 text-green-600 dark:text-green-400">
+                        <Download className="h-3 w-3" />
+                        <span dir="ltr" className="font-medium">
+                          {formatBytes(getIncomingBandwidth() || 0, 1)}
+                        </span>
+                      </div>
+                      <div className="bg-muted/50 flex items-center gap-1 rounded-md px-1.5 py-1 text-blue-600 dark:text-blue-400">
+                        <Upload className="h-3 w-3" />
+                        <span dir="ltr" className="font-medium">
+                          {formatBytes(getOutgoingBandwidth() || 0, 1)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="bg-muted/50 flex items-center gap-1 rounded-md px-1.5 py-1 text-blue-600 dark:text-blue-400">
-                      <Upload className="h-3 w-3" />
-                      <span dir="ltr" className="font-medium">
-                        {formatBytes(getOutgoingBandwidth() || 0, 1)}
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

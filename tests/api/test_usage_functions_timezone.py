@@ -300,9 +300,79 @@ class TestGetNodesUsageTimezone:
                 assert stat.period_start < end
 
     @pytest.mark.asyncio
-    async def test_hour_period_excludes_partial_first_bucket(self):
+    async def test_adjacent_unaligned_windows_are_additive(self):
         """
-        Regression test for extra first hour bucket when start is not hour-aligned.
+        DeepSeek's counterexample for item C3: [Jan 1 06:00, Jan 4 06:00) followed by
+        [Jan 4 06:00, Jan 7 06:00) must together return exactly what the single range
+        [Jan 1 06:00, Jan 7 06:00) returns, with the seam interval counted once.
+        """
+        async with TestSession() as session:
+            _admin_id, _user_id, node_id = await setup_test_data(session)
+
+            tehran_tz = timezone(timedelta(hours=3, minutes=30))
+            seam = datetime(2026, 1, 4, 6, 0, 0, tzinfo=tehran_tz)
+            window_start = datetime(2026, 1, 1, 6, 0, 0, tzinfo=tehran_tz)
+            window_end = datetime(2026, 1, 7, 6, 0, 0, tzinfo=tehran_tz)
+
+            local_timestamps = [window_start + timedelta(hours=3 * step) for step in range(48)]
+            in_range = [ts for ts in local_timestamps if window_start <= ts < window_end]
+            for idx, ts_local in enumerate(in_range):
+                session.add(
+                    NodeUsage(
+                        created_at=ts_local.astimezone(UTC),
+                        node_id=node_id,
+                        uplink=100 + idx,
+                        downlink=200 + idx,
+                    )
+                )
+            await session.commit()
+
+            async def totals(range_start, range_end):
+                result = await get_nodes_usage(
+                    session, start=range_start, end=range_end, period=Period.day, node_id=node_id
+                )
+                stats = result.stats.get(node_id, [])
+                return (
+                    sum(stat.uplink for stat in stats),
+                    sum(stat.downlink for stat in stats),
+                    {stat.period_start for stat in stats},
+                )
+
+            whole_up, whole_down, whole_buckets = await totals(window_start, window_end)
+            left_up, left_down, left_buckets = await totals(window_start, seam)
+            right_up, right_down, right_buckets = await totals(seam, window_end)
+
+            expected_uplink = sum(100 + idx for idx in range(len(in_range)))
+            expected_downlink = sum(200 + idx for idx in range(len(in_range)))
+
+            assert (whole_up, whole_down) == (expected_uplink, expected_downlink)
+            assert (left_up + right_up, left_down + right_down) == (whole_up, whole_down), (
+                "adjacent windows must sum to the combined window"
+            )
+
+            seam_bucket = datetime(2026, 1, 4, 0, 0, 0, tzinfo=tehran_tz)
+            assert seam_bucket in left_buckets
+            assert seam_bucket in right_buckets
+            assert whole_buckets == left_buckets | right_buckets
+
+            seam_tail_rows = [ts for ts in in_range if seam <= ts < datetime(2026, 1, 5, 0, 0, 0, tzinfo=tehran_tz)]
+            assert seam_tail_rows, "the counterexample needs traffic inside the seam interval"
+            seam_tail_uplink = sum(100 + in_range.index(ts) for ts in seam_tail_rows)
+            right_seam_bucket = [
+                stat
+                for stat in (
+                    await get_nodes_usage(session, start=seam, end=window_end, period=Period.day, node_id=node_id)
+                ).stats[node_id]
+                if stat.period_start == seam_bucket
+            ]
+            assert len(right_seam_bucket) == 1
+            assert right_seam_bucket[0].uplink == seam_tail_uplink
+
+    @pytest.mark.asyncio
+    async def test_hour_period_keeps_the_partial_first_bucket(self):
+        """
+        Every row inside [start, end) is returned exactly once, even when start is not
+        hour-aligned, so adjacent ranges stay additive.
         """
         async with TestSession() as session:
             _admin_id, _user_id, node_id = await setup_test_data(session)
@@ -316,6 +386,7 @@ class TestGetNodesUsageTimezone:
                 datetime(2026, 5, 9, 15, 10, 0, tzinfo=tehran_tz),
                 datetime(2026, 5, 9, 16, 10, 0, tzinfo=tehran_tz),
             ]
+            expected_uplink = sum(10000 + idx for idx in range(len(local_timestamps)))
 
             for idx, ts_local in enumerate(local_timestamps):
                 session.add(
@@ -340,9 +411,11 @@ class TestGetNodesUsageTimezone:
             period_starts = [s.period_start for s in stats]
 
             assert period_starts == [
+                datetime(2026, 5, 9, 14, 0, 0, tzinfo=tehran_tz),
                 datetime(2026, 5, 9, 15, 0, 0, tzinfo=tehran_tz),
                 datetime(2026, 5, 9, 16, 0, 0, tzinfo=tehran_tz),
             ], f"Unexpected hour buckets: {period_starts}"
+            assert sum(stat.uplink for stat in stats) == expected_uplink
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("period", [Period.hour, Period.day])
@@ -956,7 +1029,7 @@ class TestGetUserCountMetricStats:
             assert limited.stats[-1][0].count == 1
 
     @pytest.mark.asyncio
-    async def test_partial_first_bucket_is_excluded(self):
+    async def test_partial_first_bucket_is_kept(self):
         async with TestSession() as session:
             admin_id, user_id, node_id = await setup_test_data(session)
             admin_username = (await session.execute(select(Admin.username).where(Admin.id == admin_id))).scalar_one()
@@ -991,10 +1064,11 @@ class TestGetUserCountMetricStats:
 
             stats = result.stats[-1]
             assert [stat.period_start for stat in stats] == [
+                datetime(2026, 5, 9, 14, 0, 0, tzinfo=tehran_tz),
                 datetime(2026, 5, 9, 15, 0, 0, tzinfo=tehran_tz),
                 datetime(2026, 5, 9, 16, 0, 0, tzinfo=tehran_tz),
             ]
-            assert [stat.count for stat in stats] == [1, 1]
+            assert [stat.count for stat in stats] == [1, 1, 1]
 
     @pytest.mark.asyncio
     async def test_node_grouping_node_filter_and_admin_filter(self):

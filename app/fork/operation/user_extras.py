@@ -4,6 +4,7 @@ from app.db import AsyncSession
 from app.db.models import User
 from app.fork.proxy_secrets import (
     BulkRepairProxySecrets,
+    ReservedSecrets,
     duplicate_secret_values,
     enforce_unique_proxy_secrets,
     get_users_with_duplicate_secrets,
@@ -34,6 +35,7 @@ async def prepare_fork_proxy_settings(
     groups: list,
     *,
     exclude_user_id: int | None = None,
+    reserved: ReservedSecrets | None = None,
 ) -> ProxyTable:
     user_mod = _user_mod()
     prepare_openvpn = getattr(user_mod, "prepare_openvpn_password", prepare_openvpn_password)
@@ -42,7 +44,7 @@ async def prepare_fork_proxy_settings(
     proxy_settings = await prepare_openvpn(db, proxy_settings, groups)
     proxy_settings = await prepare_mtproto(db, proxy_settings, groups)
     proxy_settings = await prepare_l2tp(db, proxy_settings, groups)
-    return await enforce_unique_proxy_secrets(db, proxy_settings, exclude_user_id=exclude_user_id)
+    return await enforce_unique_proxy_secrets(db, proxy_settings, exclude_user_id=exclude_user_id, reserved=reserved)
 
 
 class UserExtrasMixin:
@@ -60,7 +62,7 @@ class UserExtrasMixin:
                     continue
                 if not l2tp_tags or not (l2tp_tags & await user_mod.tags_from_groups(user.groups)):
                     continue
-            except ValidationError, ValueError:
+            except (ValidationError, ValueError):
                 skipped.append(user.id)
                 continue
             to_update.append((user, user_mod.generate_l2tp_password()))
@@ -154,7 +156,7 @@ class UserExtrasMixin:
         for user in candidates:
             try:
                 current = ProxyTable.model_validate(user.proxy_settings)
-            except ValidationError, ValueError:
+            except (ValidationError, ValueError):
                 skipped.append(user.id)
                 continue
             if current.mtproto.secret:

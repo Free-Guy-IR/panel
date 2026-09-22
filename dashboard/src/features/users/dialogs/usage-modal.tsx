@@ -374,9 +374,16 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
   )
 
   // Prepare chart data for BarChart with node grouping
-  const processedChartData = useMemo<UsageChartDataPoint[]>(() => {
+  const {
+    processedChartData,
+    perNodeBreakdownUnavailable,
+    aggregateUsageGb,
+  } = useMemo<{ processedChartData: UsageChartDataPoint[]; perNodeBreakdownUnavailable: boolean; aggregateUsageGb: number }>(() => {
+    const empty = { processedChartData: [] as UsageChartDataPoint[], perNodeBreakdownUnavailable: false, aggregateUsageGb: 0 }
+    const points = (rows: UsageChartDataPoint[]) => ({ ...empty, processedChartData: rows })
+
     const statsPayload = data?.stats as UserUsageStatsPayload | undefined
-    if (!statsPayload) return []
+    if (!statsPayload) return empty
 
     // If all nodes selected for all-scope readers, handle like AllNodesStackedBarChart.
     if (selectedNodeId === undefined && canReadAllUserUsage) {
@@ -406,25 +413,15 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
         const aggregatedStats = statsByNode['-1']
 
         if (aggregatedStats.length > 0) {
-          const nodeCount = Math.max(nodeList.length, 1)
-          const data = aggregatedStats.map((point): UsageChartDataPoint => {
-            const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
-            // Create entry with all nodes having the same usage (aggregated)
-            const entry: UsageChartDataPoint = {
-              time: formatPeriodLabelForPeriod(point.period_start, backendPeriod, i18n.language, labelRangeHint),
-              _period_start: point.period_start,
-            }
-            nodeList.forEach(node => {
-              // Distribute usage equally among nodes
-              const nodeUsage = usageInGB / nodeCount
-              entry[node.name] = nodeUsage
-            })
-            return entry
-          })
+          const aggregatedBytes = aggregatedStats.reduce((sum, point) => sum + Number(point.total_traffic || 0), 0)
 
-          return data
+          return {
+            processedChartData: [] as UsageChartDataPoint[],
+            perNodeBreakdownUnavailable: true,
+            aggregateUsageGb: aggregatedBytes / (1024 * 1024 * 1024),
+          }
         } else {
-          return []
+          return empty
         }
       } else {
         // Handle individual node data
@@ -460,9 +457,9 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
             return entry
           })
 
-          return data
+          return points(data)
         } else {
-          return []
+          return empty
         }
       }
     } else {
@@ -488,19 +485,22 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
         if (!selectedStats) selectedStats = statsPayload[0]
         flatStats = selectedStats?.stats || []
       }
-      return flatStats.map((point): UsageChartDataPoint => {
-        const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
-        return {
-          time: formatPeriodLabelForPeriod(point.period_start, backendPeriod, i18n.language, labelRangeHint),
-          usage: usageInGB,
-          _period_start: point.period_start,
-        }
-      })
+      return points(
+        flatStats.map((point): UsageChartDataPoint => {
+          const usageInGB = point.total_traffic / (1024 * 1024 * 1024)
+          return {
+            time: formatPeriodLabelForPeriod(point.period_start, backendPeriod, i18n.language, labelRangeHint),
+            usage: usageInGB,
+            _period_start: point.period_start,
+          }
+        }),
+      )
     }
   }, [data, backendPeriod, selectedNodeId, nodeList, i18n.language, canReadAllUserUsage, labelRangeHint])
 
   // Calculate total usage during period
   const totalUsageDuringPeriod = useMemo(() => {
+    if (perNodeBreakdownUnavailable) return aggregateUsageGb
     if (!processedChartData || processedChartData.length === 0) return 0
 
     const getTotalUsage = (dataPoint: UsageChartDataPoint) => {
@@ -516,7 +516,7 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
     }
 
     return processedChartData.reduce((sum, dataPoint) => sum + getTotalUsage(dataPoint), 0)
-  }, [processedChartData, selectedNodeId, canReadAllUserUsage])
+  }, [processedChartData, selectedNodeId, canReadAllUserUsage, perNodeBreakdownUnavailable, aggregateUsageGb])
 
   // Calculate trend (simple: compare last and previous usage)
   const trend = useMemo(() => {
@@ -761,6 +761,12 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
                     </div>
                   </div>
                 </div>
+              ) : perNodeBreakdownUnavailable ? (
+                <div className="text-muted-foreground flex h-60 flex-col items-center justify-center gap-2 px-4 text-center">
+                  <PieChartIcon className="h-12 w-12 opacity-30" />
+                  <div className="text-lg font-medium">{t('statistics.perNodeBreakdownUnavailable')}</div>
+                  <div className="text-sm">{t('statistics.perNodeBreakdownUnavailableDescription')}</div>
+                </div>
               ) : processedChartData.length === 0 ? (
                 <div className="text-muted-foreground flex h-60 flex-col items-center justify-center gap-2">
                   <PieChartIcon className="h-12 w-12 opacity-30" />
@@ -905,7 +911,7 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
                 {t('usersTable.trendingDown', { defaultValue: 'Trending down by' })} {Math.abs(trend).toFixed(1)}%
               </div>
             )}
-            {processedChartData.length > 0 && (
+            {(processedChartData.length > 0 || perNodeBreakdownUnavailable) && (
               <div className="text-muted-foreground leading-none">
                 {t('statistics.usageDuringPeriod', { defaultValue: 'Usage During Period' })}:{' '}
                 <span dir="ltr" className="font-mono">

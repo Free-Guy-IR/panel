@@ -7,6 +7,7 @@ from app.fork.jobs.webhook_signing import webhook_request
 
 FORK_JOB_MODULES = (
     "cleanup_node_stats",
+    "cleanup_node_usages",
     "cleanup_node_user_usages",
     "connection_limiter",
     "content_filter_reconcile",

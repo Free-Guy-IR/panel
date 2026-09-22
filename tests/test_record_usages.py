@@ -637,23 +637,17 @@ async def test_record_user_usages_warns_when_slower_than_interval(monkeypatch: p
 
 
 @pytest.mark.asyncio
-async def test_usage_coefficient_is_cached_across_collects(monkeypatch: pytest.MonkeyPatch):
+async def test_usage_coefficient_is_refreshed_between_collects(monkeypatch: pytest.MonkeyPatch):
     node = DummyNode(1, usage_coefficient=2)
-    extra_calls = {"n": 0}
-    original_get_extra = node.get_extra
-
-    async def counting_get_extra():
-        extra_calls["n"] += 1
-        return await original_get_extra()
-
-    node.get_extra = counting_get_extra
     monkeypatch.setattr(record_usages, "get_users_stats", AsyncMock(return_value=[]))
 
     first = await record_usages._collect_node_user_usage(node, 1)
+
+    node._usage_coefficient = 2.5
     second = await record_usages._collect_node_user_usage(node, 1)
 
-    assert extra_calls["n"] == 1
-    assert first[1] == second[1] == 2.0
+    assert first[1] == 2.0
+    assert second[1] == 2.5
 
 
 class _ReplayResult:

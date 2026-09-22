@@ -2532,6 +2532,7 @@ export interface SystemStats {
   limited_users: number;
   incoming_bandwidth: number;
   outgoing_bandwidth: number;
+  admin_used_traffic?: number | null;
   version: string;
   uptime_seconds: number;
   mem_total?: number | null;
@@ -2552,6 +2553,7 @@ export interface SystemUsersStats {
   limited_users: number;
   incoming_bandwidth: number;
   outgoing_bandwidth: number;
+  admin_used_traffic?: number | null;
 }
 
 export interface Token {

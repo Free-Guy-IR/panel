@@ -128,9 +128,20 @@ def _reset_local_database() -> None:
             os.remove(leftover)
 
 
-if TEST_FROM == "local":
+_BOOTSTRAP_PID_ENV = "PASARGUARD_TEST_DB_BOOTSTRAP_PID"
+
+
+def _bootstrap_local_database_once() -> None:
+    if TEST_FROM != "local":
+        return
+    if os.environ.get(_BOOTSTRAP_PID_ENV) == str(os.getpid()):
+        return
+    os.environ[_BOOTSTRAP_PID_ENV] = str(os.getpid())
     _reset_local_database()
     run_migrations()
+
+
+_bootstrap_local_database_once()
 
 
 class GetTestDB:

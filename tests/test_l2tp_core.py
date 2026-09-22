@@ -234,5 +234,5 @@ def test_every_rejection_is_a_value_or_type_error_never_something_else():
         for value in hostile:
             try:
                 _cfg(**{key: value})
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass

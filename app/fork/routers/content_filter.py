@@ -185,7 +185,7 @@ def _reaches(assignment: ContentFilterAssignment, node: Node, tags: set[str]) ->
 def _built_rules(assignment: ContentFilterAssignment) -> list[dict]:
     try:
         return service.assignment_rules(assignment)
-    except RuleValueError, EnforcementError:
+    except (RuleValueError, EnforcementError):
         return []
 
 

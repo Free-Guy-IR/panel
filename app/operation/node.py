@@ -28,6 +28,7 @@ from app.db.crud.node import (
 )
 from app.db.crud.user import get_user_by_id, get_user_count_metric_stats
 from app.db.models import Node, NodeStatus
+from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
     _CONNECT_LOCKS,  # noqa: F401
@@ -427,6 +428,21 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             if _node_lacks_l2tp(known_version):
                 message = _l2tp_unsupported_message(known_version)
                 logger.error(f'Refusing to start an L2TP core on "{db_node.name}": {message}')
+                return {
+                    "node_id": db_node.id,
+                    "status": NodeStatus.error,
+                    "message": message,
+                    "xray_version": "",
+                    "node_version": known_version,
+                    "old_status": old_status,
+                }
+
+        singbox_offenders = singbox_index_keyed_inbounds(core)
+        if singbox_offenders:
+            known_version = await _known_node_version(pg_node)
+            message = unsafe_singbox_node_message("This node's sing-box core", singbox_offenders, known_version)
+            if message:
+                logger.error(f'Refusing to start a sing-box core on "{db_node.name}": {message}')
                 return {
                     "node_id": db_node.id,
                     "status": NodeStatus.error,

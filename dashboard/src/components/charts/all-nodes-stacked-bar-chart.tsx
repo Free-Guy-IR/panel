@@ -328,40 +328,22 @@ export function AllNodesStackedBarChart() {
     [customRange, selectedTime, showCustomRange],
   )
 
-  const { chartData, totalUsage } = useMemo(() => {
+  const { chartData, totalUsage, perNodeBreakdownUnavailable } = useMemo(() => {
     const statsKeys = Object.keys(statsByNode)
     if (statsKeys.length === 0) {
-      return { chartData: [] as NodeChartDataPoint[], totalUsage: null }
+      return { chartData: [] as NodeChartDataPoint[], totalUsage: null, perNodeBreakdownUnavailable: false }
     }
 
     const hasIndividualNodeData = statsKeys.some(key => key !== '-1')
-    const nodeCount = Math.max(nodeList.length, 1)
 
     if (!hasIndividualNodeData && Array.isArray(statsByNode['-1'])) {
       const aggregatedStats = statsByNode['-1']
-      const aggregatedChartData = aggregatedStats.map(point => {
-        const usageBytes = getTrafficBytes(point)
-        const directionalTraffic = getDirectionalTraffic(point)
-        const usagePerNodeInGb = usageBytes / nodeCount / (1024 * 1024 * 1024)
-
-        const entry: NodeChartDataPoint = {
-          time: formatPeriodLabelForPeriod(point.period_start, activePeriod, i18n.language, labelRangeHint),
-          _period_start: point.period_start,
-        }
-
-        nodeList.forEach(node => {
-          entry[node.name] = parseFloat(usagePerNodeInGb.toFixed(2))
-          entry[`_uplink_${node.name}`] = directionalTraffic.uplink / nodeCount
-          entry[`_downlink_${node.name}`] = directionalTraffic.downlink / nodeCount
-        })
-
-        return entry
-      })
-
       const totalBytes = aggregatedStats.reduce((sum, point) => sum + getTrafficBytes(point), 0)
+
       return {
-        chartData: aggregatedChartData,
+        chartData: [] as NodeChartDataPoint[],
         totalUsage: totalBytes > 0 ? String(formatBytes(totalBytes, 2)) : null,
+        perNodeBreakdownUnavailable: true,
       }
     }
 
@@ -406,6 +388,7 @@ export function AllNodesStackedBarChart() {
     return {
       chartData: chartRows,
       totalUsage: totalBytes > 0 ? String(formatBytes(totalBytes, 2)) : null,
+      perNodeBreakdownUnavailable: false,
     }
   }, [statsByNode, nodeList, activePeriod, i18n.language, labelRangeHint])
 
@@ -608,6 +591,13 @@ export function AllNodesStackedBarChart() {
             <EmptyState type="error" className="max-h-[400px] min-h-[200px]" />
           ) : nodeList.length === 0 ? (
             <EmptyState type="no-nodes" className="max-h-[400px] min-h-[200px]" />
+          ) : perNodeBreakdownUnavailable ? (
+            <EmptyState
+              type="no-data"
+              title={t('statistics.perNodeBreakdownUnavailable')}
+              description={t('statistics.perNodeBreakdownUnavailableDescription')}
+              className="max-h-[400px] min-h-[200px]"
+            />
           ) : (
             <div className="mx-auto w-full">
               {chartView === 'bar' && <DenseChartAreaHint pointCount={chartData.length} />}

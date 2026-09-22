@@ -33,7 +33,10 @@ logger = get_logger("record-usages")
 # Start with 2-4, adjust based on DB performance
 JOB_SEM = asyncio.Semaphore(3)  # Max 3 concurrent DB write operations
 API_SEM = asyncio.Semaphore(10)  # Max 10 concurrent node stats RPCs
-USAGE_COEFFICIENT_TTL_S = 60.0
+USAGE_PERSIST_COHORT_SIZE = 8
+USAGE_PERSIST_MAX_VOLATILE_S = 5.0
+USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES = 2
+USAGE_JOB_LATENESS_TOLERANCE_S = 5.0
 NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 1_000,
     "sqlite": 400,
@@ -45,6 +48,8 @@ USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT = {
 USER_ADMIN_LOOKUP_BATCH_SIZE = 1_000
 DEADLOCK_MAX_RETRIES = 5
 FENCED_USER_LOG_SAMPLE = 20
+UNKNOWN_UID_LOG_SAMPLE = 20
+UNKNOWN_UID_LOG_INTERVAL_S = 300.0
 
 
 class UserUsageContext(NamedTuple):
@@ -119,7 +124,12 @@ def _merge_usage_dicts(dicts: list[dict]) -> dict:
 # node stats calls take longer than the scheduler interval.
 _user_usage_running = False
 _node_usage_running = False
-_usage_coefficient_cache: dict[int, tuple[float, float]] = {}
+_usage_coefficient_cache: dict[int, float] = {}
+_usage_job_last_start: dict[str, float] = {}
+_unknown_uid_total_count = 0
+_unknown_uid_total_bytes = 0
+_unknown_uid_last_log_at: float | None = None
+_unknown_uid_suppressed_reports = 0
 
 
 def _chunked(items: list, size: int):
@@ -568,6 +578,19 @@ def _usage_job_hint(interval_env: str, interval: int) -> str:
 async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str) -> None:
     # No global wait_for kill: get_stats uses reset=True, so cancelling mid-run drops traffic.
     start = time.monotonic()
+    previous_start = _usage_job_last_start.get(job_name)
+    _usage_job_last_start[job_name] = start
+    if previous_start is not None and interval > 0:
+        gap = start - previous_start
+        lateness = gap - interval
+        if lateness > USAGE_JOB_LATENESS_TOLERANCE_S:
+            logger.warning(
+                "%s started %.1fs late: %.1fs since the previous run against a %ss interval",
+                job_name,
+                lateness,
+                gap,
+                interval,
+            )
     try:
         await impl()
     except asyncio.CancelledError:
@@ -584,18 +607,54 @@ async def _await_usage_job(job_name: str, impl, interval: int, interval_env: str
 
 
 async def _node_usage_coefficient(node: PasarGuardNode, node_id: int) -> float:
-    now = time.monotonic()
-    cached = _usage_coefficient_cache.get(node_id)
-    if cached is not None and cached[1] > now:
-        return cached[0]
     try:
         extra = await node.get_extra()
-        raw_coeff = extra.get("usage_coefficient", 1) if extra else 1
-        coeff = 1.0 if raw_coeff is None else float(raw_coeff)
     except Exception as exc:
-        logger.warning("Failed to get extra data for node %s: %s", node_id, exc)
-        coeff = cached[0] if cached is not None else 1.0
-    _usage_coefficient_cache[node_id] = (coeff, now + USAGE_COEFFICIENT_TTL_S)
+        last_known = _usage_coefficient_cache.get(node_id)
+        if last_known is None:
+            logger.error(
+                "No usage coefficient available for node %s (%s); billing this cycle at 1.0",
+                node_id,
+                exc,
+            )
+            return 1.0
+        logger.warning(
+            "Failed to read usage coefficient for node %s (%s); reusing last known value %s",
+            node_id,
+            exc,
+            last_known,
+        )
+        return last_known
+
+    raw_coeff = extra.get("usage_coefficient") if extra else None
+    if raw_coeff is None:
+        last_known = _usage_coefficient_cache.get(node_id)
+        if last_known is not None:
+            logger.error("Node %s reported no usage coefficient; reusing last known value %s", node_id, last_known)
+            return last_known
+        logger.error("Node %s reported no usage coefficient and none was ever seen; billing at 1.0", node_id)
+        return 1.0
+
+    try:
+        coeff = float(raw_coeff)
+    except (TypeError, ValueError):
+        last_known = _usage_coefficient_cache.get(node_id)
+        if last_known is not None:
+            logger.error(
+                "Node %s reported an unusable usage coefficient %r; reusing last known value %s",
+                node_id,
+                raw_coeff,
+                last_known,
+            )
+            return last_known
+        logger.error(
+            "Node %s reported an unusable usage coefficient %r and none was ever seen; billing at 1.0",
+            node_id,
+            raw_coeff,
+        )
+        return 1.0
+
+    _usage_coefficient_cache[node_id] = coeff
     return coeff
 
 
@@ -839,6 +898,145 @@ async def apply_fenced_user_usage(
     return await run_in_retried_transaction(_apply)
 
 
+def _report_unknown_uid_usage(
+    users_usage: list, valid_user_ids: set[int], api_params: dict | None = None
+) -> tuple[int, int]:
+    global _unknown_uid_total_count, _unknown_uid_total_bytes
+    global _unknown_uid_last_log_at, _unknown_uid_suppressed_reports
+
+    unknown_set = set()
+    unknown_bytes = 0
+    for usage in users_usage:
+        uid = int(usage["uid"])
+        if uid in valid_user_ids:
+            continue
+        unknown_set.add(uid)
+        unknown_bytes += int(usage["value"])
+
+    if not unknown_set:
+        return 0, 0
+
+    _unknown_uid_total_count += len(unknown_set)
+    _unknown_uid_total_bytes += unknown_bytes
+
+    now = time.monotonic()
+    if _unknown_uid_last_log_at is not None and now - _unknown_uid_last_log_at < UNKNOWN_UID_LOG_INTERVAL_S:
+        _unknown_uid_suppressed_reports += 1
+        return len(unknown_set), unknown_bytes
+
+    offending_nodes = sorted(
+        node_id
+        for node_id, params in (api_params or {}).items()
+        if any(int(param["uid"]) in unknown_set for param in params)
+    )
+    logger.warning(
+        "Dropped %s bytes of usage for %s distinct uid(s) with no user row on node(s) %s; "
+        "those nodes are still serving users the panel deleted. Sample: %s. "
+        "Since start: %s distinct-uid hits, %s bytes, %s suppressed report(s)",
+        unknown_bytes,
+        len(unknown_set),
+        offending_nodes[:UNKNOWN_UID_LOG_SAMPLE],
+        sorted(unknown_set)[:UNKNOWN_UID_LOG_SAMPLE],
+        _unknown_uid_total_count,
+        _unknown_uid_total_bytes,
+        _unknown_uid_suppressed_reports,
+    )
+    _unknown_uid_last_log_at = now
+    _unknown_uid_suppressed_reports = 0
+    return len(unknown_set), unknown_bytes
+
+
+async def _drain_node_collection(tasks: list, cohort_size: int, max_volatile_s: float):
+    completed_at: dict = {}
+    pending = set(tasks)
+    for task in pending:
+        task.add_done_callback(lambda finished: completed_at.setdefault(finished, time.monotonic()))
+
+    buffered: list = []
+
+    def _volatile_age() -> float:
+        now = time.monotonic()
+        return now - min(completed_at.get(task, now) for task in buffered)
+
+    while pending or buffered:
+        if pending:
+            timeout = max(0.0, max_volatile_s - _volatile_age()) if buffered else None
+            done, pending = await asyncio.wait(pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+            buffered.extend(done)
+
+        if not buffered:
+            continue
+
+        if pending and _volatile_age() < max_volatile_s and (cohort_size <= 0 or len(buffered) < cohort_size):
+            continue
+
+        yield buffered
+        buffered = []
+
+
+async def _persist_collected_usage(
+    api_params: dict,
+    usage_coefficient: dict,
+    epoch_at_poll: dict[int, int],
+) -> tuple[FencedUsageOutcome, int]:
+    users_usage = await calculate_users_usage(api_params, usage_coefficient)
+    if not users_usage:
+        logger.debug("No user usage to record")
+        return FencedUsageOutcome(0, 0, [], 0), 0
+
+    user_context = await load_user_usage_context({int(usage["uid"]) for usage in users_usage})
+    _report_unknown_uid_usage(users_usage, set(user_context), api_params)
+    if not user_context:
+        logger.warning("Skipping user usage recording; no matching users found for received stats")
+        return FencedUsageOutcome(0, 0, [], 0), 0
+
+    reset_user_ids = stale_epoch_user_ids(user_context, epoch_at_poll)
+    if reset_user_ids:
+        users_usage, api_params, dropped_bytes, dropped_users = discard_reset_users(
+            users_usage, api_params, reset_user_ids
+        )
+        if dropped_users:
+            logger.warning(
+                "Discarded %s bytes of in-flight usage for %s user(s) reset mid-collection",
+                dropped_bytes,
+                dropped_users,
+            )
+        if not users_usage:
+            logger.debug("No user usage to record after discarding reset users")
+            return FencedUsageOutcome(0, 0, [], 0), 0
+
+    valid_user_ids = set(user_context)
+    valid_users_usage = [usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0]
+
+    filtered_node_params = {}
+    if not usage_settings.disable_recording_node_usage:
+        for node_id, params in api_params.items():
+            filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
+            if filtered_params:
+                filtered_node_params[node_id] = filtered_params
+
+    if filtered_node_params:
+        await record_user_stats_batched(filtered_node_params, usage_coefficient)
+        total_records = sum(len(params) for params in filtered_node_params.values())
+        logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
+
+    outcome = FencedUsageOutcome(0, 0, [], 0)
+    if valid_users_usage:
+        valid_users_usage.sort(key=lambda item: int(item["uid"]))
+        async with JOB_SEM:
+            outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll)
+        if outcome.fenced_user_ids:
+            logger.warning(
+                "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply: %s",
+                outcome.fenced_bytes,
+                len(outcome.fenced_user_ids),
+                outcome.fenced_user_ids[:FENCED_USER_LOG_SAMPLE],
+            )
+        logger.debug(f"Updated {outcome.applied_users} users and {outcome.applied_admins} admins")
+
+    return outcome, len(filtered_node_params)
+
+
 async def _record_user_usages_impl():
     """
     Internal implementation of record_user_usages.
@@ -856,90 +1054,78 @@ async def _record_user_usages_impl():
     try:
         epoch_at_poll = await current_usage_epochs()
 
-        collected = await asyncio.gather(
-            *[_collect_node_user_usage(node, node_id) for node_id, node in nodes],
-            return_exceptions=True,
-        )
-        usage_coefficient = {}
-        api_params = {}
-        for i, result in enumerate(collected):
-            node_id = nodes[i][0]
-            if isinstance(result, Exception):
-                logger.warning("Failed to collect usage for node %s: %s", node_id, result)
-                usage_coefficient[node_id] = 1.0
-                api_params[node_id] = []
-                continue
-            _, coeff, stats = result
-            usage_coefficient[node_id] = coeff
-            api_params[node_id] = stats
+        node_by_task = {}
+        for node_id, node in nodes:
+            node_by_task[asyncio.ensure_future(_collect_node_user_usage(node, node_id))] = node_id
 
-        users_usage = await calculate_users_usage(api_params, usage_coefficient)
-        if not users_usage:
-            logger.debug("No user usage to record")
-            return
+        applied_users = 0
+        applied_admins = 0
+        recorded_nodes = 0
+        persist_failure: Exception | None = None
+        consecutive_persist_failures = 0
+        try:
+            async for batch in _drain_node_collection(
+                list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
+            ):
+                usage_coefficient = {}
+                api_params = {}
+                for task in batch:
+                    node_id = node_by_task[task]
+                    failure = asyncio.CancelledError() if task.cancelled() else task.exception()
+                    if failure is not None:
+                        logger.warning("Failed to collect usage for node %s: %s", node_id, failure)
+                        usage_coefficient[node_id] = 1.0
+                        api_params[node_id] = []
+                        continue
+                    _, coeff, stats = task.result()
+                    usage_coefficient[node_id] = coeff
+                    api_params[node_id] = stats
 
-        user_context = await load_user_usage_context({int(usage["uid"]) for usage in users_usage})
-        if not user_context:
-            logger.warning("Skipping user usage recording; no matching users found for received stats")
-            return
+                try:
+                    outcome, persisted_nodes = await _persist_collected_usage(
+                        api_params, usage_coefficient, epoch_at_poll
+                    )
+                except Exception as exc:
+                    if persist_failure is None:
+                        persist_failure = exc
+                    consecutive_persist_failures += 1
+                    logger.exception("Failed to persist usage for node(s) %s", sorted(api_params))
+                    if (
+                        _is_retriable_db_error(exc)
+                        and consecutive_persist_failures < USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES
+                    ):
+                        continue
+                    logger.error(
+                        "Stopping collection after %s consecutive persistence failure(s); "
+                        "nodes not yet polled keep their counters for the next cycle",
+                        consecutive_persist_failures,
+                    )
+                    break
+                consecutive_persist_failures = 0
+                applied_users += outcome.applied_users
+                applied_admins += outcome.applied_admins
+                recorded_nodes += persisted_nodes
+        finally:
+            leftovers = [task for task in node_by_task if not task.done()]
+            for task in leftovers:
+                task.cancel()
+            if leftovers:
+                await asyncio.gather(*leftovers, return_exceptions=True)
 
-        reset_user_ids = stale_epoch_user_ids(user_context, epoch_at_poll)
-        if reset_user_ids:
-            users_usage, api_params, dropped_bytes, dropped_users = discard_reset_users(
-                users_usage, api_params, reset_user_ids
-            )
-            if dropped_users:
-                logger.warning(
-                    "Discarded %s bytes of in-flight usage for %s user(s) reset mid-collection",
-                    dropped_bytes,
-                    dropped_users,
-                )
-            if not users_usage:
-                logger.debug("No user usage to record after discarding reset users")
-                return
-
-        valid_user_ids = set(user_context)
-        valid_users_usage = [
-            usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
-        ]
-
-        filtered_node_params = {}
-        if not usage_settings.disable_recording_node_usage:
-            for node_id, params in api_params.items():
-                filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
-                if filtered_params:
-                    filtered_node_params[node_id] = filtered_params
-
-        if filtered_node_params:
-            await record_user_stats_batched(filtered_node_params, usage_coefficient)
-            total_records = sum(len(params) for params in filtered_node_params.values())
-            logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
-
-        outcome = FencedUsageOutcome(0, 0, [], 0)
-        if valid_users_usage:
-            valid_users_usage.sort(key=lambda item: int(item["uid"]))
-            async with JOB_SEM:
-                outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll)
-            if outcome.fenced_user_ids:
-                logger.warning(
-                    "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply: %s",
-                    outcome.fenced_bytes,
-                    len(outcome.fenced_user_ids),
-                    outcome.fenced_user_ids[:FENCED_USER_LOG_SAMPLE],
-                )
-            logger.debug(f"Updated {outcome.applied_users} users and {outcome.applied_admins} admins")
-
-        if outcome.applied_admins:
+        if applied_admins:
             try:
                 await enforce_admin_limits_now(logger=logger)
             except Exception:
                 logger.exception("Failed to enforce admin limits after usage recording")
 
+        if persist_failure is not None:
+            raise persist_failure
+
         job_duration = time.time() - job_start_time
-        logger.debug(
+        logger.info(
             f"User usage recording completed in {job_duration:.2f}s: "
-            f"{outcome.applied_users} users, {outcome.applied_admins} admins, "
-            f"{len(filtered_node_params)} nodes"
+            f"{applied_users} users, {applied_admins} admins, "
+            f"{recorded_nodes} nodes"
         )
 
     except Exception:
@@ -1056,7 +1242,7 @@ async def _record_node_usages_impl():
         await after_record_node_usages(nodes, _get_time_bucket())
 
         job_duration = time.time() - job_start_time
-        logger.debug(
+        logger.info(
             f"Node usage recording completed in {job_duration:.2f}s: "
             f"{len(node_update_params)} nodes, total: {total_up + total_down} bytes"
         )

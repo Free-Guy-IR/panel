@@ -13,7 +13,7 @@ _loaded = False
 def _module_is_installed(qual: str) -> bool:
     try:
         return util.find_spec(qual) is not None
-    except ImportError, ValueError:
+    except (ImportError, ValueError):
         return False
 
 

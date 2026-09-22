@@ -59,6 +59,7 @@ from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
+from app.fork.proxy_secrets import ProxySecretUniquenessError
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
@@ -135,6 +136,7 @@ def _has_permission(admin: AdminDetails, resource: str, action: str) -> bool:
     except PermissionDenied:
         return False
 
+
 async def _resolve_users_usage_admins_filter(
     operation: BaseOperation,
     db: AsyncSession,
@@ -162,10 +164,12 @@ async def _resolve_users_usage_admins_filter(
 
     return admins_filter
 
+
 logger = get_logger("user-operation")
 
 _USER_AGENT_SPLIT_RE = re.compile(r"[;/\s\(\)]+")
 _VERSION_TOKEN_RE = re.compile(r"v?\d+(?:\.\d+)*", re.IGNORECASE)
+
 
 def _duplicate_wireguard_public_key_usernames(users: list[UserCreate]) -> tuple[str, list[str]] | None:
     owners: dict[str, list[str]] = {}
@@ -178,6 +182,7 @@ def _duplicate_wireguard_public_key_usernames(users: list[UserCreate]) -> tuple[
             return public_key, usernames
     return None
 
+
 def _resolve_enabled_user_status(user: User) -> UserStatus:
     now = dt.now(UTC)
     expire = user.expire
@@ -188,6 +193,7 @@ def _resolve_enabled_user_status(user: User) -> UserStatus:
     if user.on_hold_expire_duration is not None:
         return UserStatus.on_hold
     return UserStatus.active
+
 
 class UserOperation(UserExtrasMixin, BaseOperation):
     @staticmethod
@@ -376,6 +382,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                     next_plan=user_to_create.next_plan,
                 )
 
+        reserved_secrets: dict = {}
         for user_to_create in users_to_create:
             # peer IPs are never taken from input; the subnet pool assigns them at creation
             user_to_create.proxy_settings.wireguard.peer_ips = []
@@ -383,6 +390,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 db,
                 groups,
                 user_to_create.proxy_settings,
+                reserved_secrets=reserved_secrets,
             )
 
         duplicate_key = _duplicate_wireguard_public_key_usernames(users_to_create)
@@ -445,6 +453,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         proxy_settings: ProxyTable,
         *,
         exclude_user_id: int | None = None,
+        reserved_secrets=None,
     ) -> ProxyTable:
         try:
             proxy_settings = await prepare_wireguard_keys(
@@ -453,7 +462,15 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
             )
-            return await prepare_fork_proxy_settings(db, proxy_settings, groups, exclude_user_id=exclude_user_id)
+            return await prepare_fork_proxy_settings(
+                db,
+                proxy_settings,
+                groups,
+                exclude_user_id=exclude_user_id,
+                reserved=reserved_secrets,
+            )
+        except ProxySecretUniquenessError as exc:
+            await self.raise_error(message=str(exc), code=409, db=db)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
 

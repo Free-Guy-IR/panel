@@ -233,6 +233,9 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             if not header_name or raw_value is None:
                 continue
 
+            if cls.is_reserved_response_header(header_name):
+                continue
+
             formatted_value = cls._stringify_rule_header_value(raw_value, format_variables)
             if not formatted_value:
                 continue
@@ -255,6 +258,9 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         for raw_name, raw_value in sub_settings.response_headers.items():
             header_name = str(raw_name).strip()
             if not header_name or raw_value is None:
+                continue
+
+            if cls.is_reserved_response_header(header_name):
                 continue
 
             formatted_value = cls._stringify_rule_header_value(raw_value, format_variables)

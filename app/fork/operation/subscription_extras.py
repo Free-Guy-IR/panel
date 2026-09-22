@@ -66,7 +66,7 @@ class SubscriptionExtrasMixin:
                         parts.fragment,
                     )
                 )
-            except ValueError, UnicodeError:
+            except (ValueError, UnicodeError):
                 pass
         return quote(value, safe=":/?#[]@!$&'()*+,;=%")
 
@@ -116,7 +116,7 @@ class SubscriptionExtrasMixin:
                     data = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4)))
                     host = str(data.get("add", "")).strip()
                     port = int(str(data.get("port", "443")))
-                except ValueError, TypeError, KeyError, AttributeError:
+                except (ValueError, TypeError, KeyError, AttributeError):
                     continue
             else:
                 rest = raw[m.end() :].split("#", 1)[0].split("?", 1)[0]
@@ -133,7 +133,7 @@ class SubscriptionExtrasMixin:
                 host = host.strip()
                 try:
                     port = int(p.split("/")[0].split(",")[0])
-                except ValueError, IndexError:
+                except (ValueError, IndexError):
                     port = 443
             if not host or host in targets:
                 continue
@@ -159,7 +159,7 @@ class SubscriptionExtrasMixin:
             if udp_based:
                 return max(1, round((loop.time() - start) * 1000))
             return -1
-        except TimeoutError, OSError, ValueError:
+        except (TimeoutError, OSError, ValueError):
             return -1
         finally:
             if writer is not None:

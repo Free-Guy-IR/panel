@@ -30,6 +30,8 @@ export default function SystemStatisticsSection({ currentStats, usersStats }: Sy
       // Node stats - use bandwidth speed
       return Number(currentStats.incoming_bandwidth_speed) + Number(currentStats.outgoing_bandwidth_speed)
     } else {
+      if (usersStats?.admin_used_traffic != null) return Number(usersStats.admin_used_traffic)
+
       // Master server stats - use total traffic
       return Number(usersStats?.incoming_bandwidth) + Number(usersStats?.outgoing_bandwidth)
     }
@@ -101,6 +103,7 @@ export default function SystemStatisticsSection({ currentStats, usersStats }: Sy
   const diskPercent = Math.min(Math.max(disk.percentage, 0), 100)
   const nodeStatsMode = !!currentStats && isNodeStats(currentStats)
   const hasTrafficStats = nodeStatsMode || !!usersStats
+  const hasDirectionalTraffic = nodeStatsMode || usersStats?.admin_used_traffic == null
   const incomingSpeed = formatMbpsPair(getIncomingBandwidth() || 0)
   const outgoingSpeed = formatMbpsPair(getOutgoingBandwidth() || 0)
   const uptimeSeconds = getUptimeSeconds()
@@ -306,7 +309,9 @@ export default function SystemStatisticsSection({ currentStats, usersStats }: Sy
                           <Database className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-muted-foreground text-xs leading-tight font-medium sm:truncate sm:text-sm">{t('statistics.totalTraffic')}</p>
+                          <p className="text-muted-foreground text-xs leading-tight font-medium sm:truncate sm:text-sm">
+                            {hasDirectionalTraffic ? t('statistics.totalTraffic') : t('statistics.accountedUsage')}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -316,20 +321,22 @@ export default function SystemStatisticsSection({ currentStats, usersStats }: Sy
                         <span className="text-lg leading-tight font-bold tabular-nums sm:text-xl lg:text-2xl">{formatBytes(getTotalTrafficValue() || 0, 1)}</span>
                       </div>
 
-                      <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-xs sm:gap-2">
-                        <div className="bg-muted/50 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-green-600 dark:text-green-400">
-                          <Download className="h-3 w-3" />
-                          <span dir="ltr" className="font-semibold whitespace-nowrap">
-                            {formatBytes(getIncomingBandwidth() || 0, 1)}
-                          </span>
+                      {hasDirectionalTraffic && (
+                        <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-xs sm:gap-2">
+                          <div className="bg-muted/50 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-green-600 dark:text-green-400">
+                            <Download className="h-3 w-3" />
+                            <span dir="ltr" className="font-semibold whitespace-nowrap">
+                              {formatBytes(getIncomingBandwidth() || 0, 1)}
+                            </span>
+                          </div>
+                          <div className="bg-muted/50 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-blue-600 dark:text-blue-400">
+                            <Upload className="h-3 w-3" />
+                            <span dir="ltr" className="font-semibold whitespace-nowrap">
+                              {formatBytes(getOutgoingBandwidth() || 0, 1)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="bg-muted/50 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-blue-600 dark:text-blue-400">
-                          <Upload className="h-3 w-3" />
-                          <span dir="ltr" className="font-semibold whitespace-nowrap">
-                            {formatBytes(getOutgoingBandwidth() || 0, 1)}
-                          </span>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
