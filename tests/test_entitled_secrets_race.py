@@ -263,6 +263,46 @@ async def test_a_missing_or_null_section_is_created_and_a_present_value_is_left_
     assert stored["vmess"]
 
 
+@pytest.mark.asyncio
+async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_session_committed(
+    sessions, synced, monkeypatch
+):
+    from app.operation import group as group_module
+    from app.operation.group import GroupOperation
+
+    user_id = await _seed(sessions)
+    committed = {}
+
+    async def both_activations(other):
+        await _operation().bulk_activate_openvpn_passwords(other, BulkUserFilter())
+        await _operation().bulk_activate_mtproto_secrets(other, BulkUserFilter())
+        user = (await other.execute(select(User).where(User.id == user_id))).scalar_one()
+        committed.update(user.proxy_settings)
+
+    _interleave(monkeypatch, entitled_module, sessions, both_activations)
+    pushed = []
+
+    async def record_push(users):
+        pushed.extend(dict(user.proxy_settings) for user in users)
+
+    monkeypatch.setattr(group_module, "sync_users", record_push)
+
+    async with sessions() as first:
+        users = list((await first.execute(select(User).where(User.id == user_id))).scalars().all())
+        await GroupOperation(operator_type=OperatorType.API)._sync_users_allocations(first, users)
+        await first.commit()
+        await group_module.sync_users(users)
+
+    stored = await _stored(sessions)
+    assert committed["openvpn"]["password"]
+    assert committed["mtproto"]["secret"]
+    assert stored["openvpn"] == committed["openvpn"]
+    assert stored["mtproto"] == committed["mtproto"]
+    assert len(pushed) == 1
+    assert pushed[0]["openvpn"] == committed["openvpn"]
+    assert pushed[0]["mtproto"] == committed["mtproto"]
+
+
 def _compiled(dialect_name, expected):
     from sqlalchemy.dialects import mysql, postgresql
 

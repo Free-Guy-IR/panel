@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import Text, and_, case, cast, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import JSON as PostgresJSON, JSONB
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
@@ -293,10 +294,16 @@ def report_unreadable(plan: SecretPlan) -> None:
         )
 
 
-async def _reload_proxy_settings(db: AsyncSession, user_ids: list[int]) -> None:
+async def _reload_proxy_settings(db: AsyncSession, users: Sequence[User]) -> None:
+    by_id = {user.id: user for user in users}
+    user_ids = sorted(by_id)
     for start in range(0, len(user_ids), LOOKUP_CHUNK):
         chunk = user_ids[start : start + LOOKUP_CHUNK]
-        await db.execute(select(User).where(User.id.in_(chunk)).execution_options(populate_existing=True))
+        rows = await db.execute(
+            select(User.id, User.proxy_settings).where(User.id.in_(chunk)).order_by(User.id).with_for_update()
+        )
+        for user_id, proxy_settings in rows.all():
+            set_committed_value(by_id[user_id], "proxy_settings", proxy_settings)
 
 
 async def apply_secret_plan(
@@ -324,7 +331,7 @@ async def apply_secret_plan(
             else:
                 skipped += 1
 
-    await _reload_proxy_settings(db, sorted({user.id for user, _ in plan.grants}))
+    await _reload_proxy_settings(db, [user for user, _ in plan.grants])
     if skipped:
         logger.info(f"{skipped} entitled secret(s) were set by someone else meanwhile and were left as they are")
     return [user for user, _ in plan.grants if user.id in written]
