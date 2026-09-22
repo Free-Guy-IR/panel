@@ -40,11 +40,15 @@ async def _seed(db, node_id: int, moments: list[datetime]) -> None:
     await db.commit()
 
 
+def _as_naive_utc(moment: datetime) -> datetime:
+    return moment.astimezone(UTC).replace(tzinfo=None) if moment.tzinfo else moment
+
+
 async def _remaining(db, node_id: int) -> list[datetime]:
     rows = await db.execute(
         select(NodeUsage.created_at).where(NodeUsage.node_id == node_id).order_by(NodeUsage.created_at)
     )
-    return [r[0] for r in rows.all()]
+    return [_as_naive_utc(r[0]) for r in rows.all()]
 
 
 @pytest.mark.asyncio
