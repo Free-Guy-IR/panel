@@ -28,30 +28,26 @@ node processes.
 import asyncio
 
 from sqlalchemy import select
-from sqlalchemy.orm.attributes import flag_modified
 
 from app.db import GetDB
 from app.db.models import User
+from app.fork.proxy_secrets.backfill import fill_missing_sections
+from app.fork.proxy_secrets.entitled import ENTITLED_SPEC_BY_FIELD, EntitledSecretField
 from app.utils.system import random_password
+
+SPEC = ENTITLED_SPEC_BY_FIELD[EntitledSecretField.openvpn_password]
+CHUNK = 500
 
 
 async def main() -> None:
-    fixed = 0
     async with GetDB() as db:
-        result = await db.execute(select(User))
-        users = result.scalars().all()
-        for user in users:
-            settings = user.proxy_settings or {}
-            if "openvpn" not in settings:
-                settings = dict(settings)
-                settings["openvpn"] = {"password": random_password()}
-                user.proxy_settings = settings
-                flag_modified(user, "proxy_settings")
-                fixed += 1
-                if fixed % 300 == 0:
-                    await db.commit()
-                    print(f"committed {fixed} so far...")
-        await db.commit()
+        user_ids = (await db.execute(select(User.id).order_by(User.id))).scalars().all()
+    fixed = 0
+    for start in range(0, len(user_ids), CHUNK):
+        async with GetDB() as db:
+            fixed += await fill_missing_sections(db, SPEC, user_ids[start : start + CHUNK], random_password)
+            await db.commit()
+        print(f"committed {fixed} so far...")
     print(f"done. total users fixed: {fixed}")
 
 
