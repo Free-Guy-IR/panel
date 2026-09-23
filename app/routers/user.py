@@ -600,7 +600,7 @@ async def get_users_count_metric(
 async def get_expired_users(
     query: Annotated[ExpiredUsersQuery, Depends(get_expired_users_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "read")),
+    admin: AdminDetails = Depends(require_scope_all("users", "read")),
 ):
     """
     Get cleanup-target users in the specified scope.
@@ -611,7 +611,7 @@ async def get_expired_users(
     - For `limited` / `on_hold` / `disabled`: filters by last_status_change (when they entered that status).
     """
 
-    return await user_operator.get_expired_users(db, query=query)
+    return await user_operator.get_expired_users(db, query=query, admin=admin)
 
 
 @router.delete("s/expired", response_model=RemoveUsersResponse)
@@ -797,7 +797,7 @@ async def modify_user_with_template_by_id(
 async def bulk_modify_users_expire(
     bulk_model: BulkUser,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
     """
     Bulk expire users based on the provided criteria.
@@ -810,7 +810,7 @@ async def bulk_modify_users_expire(
     - **expire_after**: Optional UTC datetime to filter users whose expire date is on or after this date
     - **expire_before**: Optional UTC datetime to filter users whose expire date is on or before this date
     """
-    return await user_operator.bulk_modify_expire(db, bulk_model)
+    return await user_operator.bulk_modify_expire(db, bulk_model, admin)
 
 
 @router.post(
@@ -819,7 +819,7 @@ async def bulk_modify_users_expire(
 async def bulk_modify_users_datalimit(
     bulk_model: BulkUser,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
     """
     Bulk modify users' data limit based on the provided criteria.
@@ -832,7 +832,7 @@ async def bulk_modify_users_datalimit(
     - **expire_after**: Optional UTC datetime to filter users whose expire date is on or after this date
     - **expire_before**: Optional UTC datetime to filter users whose expire date is on or before this date
     """
-    return await user_operator.bulk_modify_datalimit(db, bulk_model)
+    return await user_operator.bulk_modify_datalimit(db, bulk_model, admin)
 
 
 @router.post(
@@ -841,6 +841,6 @@ async def bulk_modify_users_datalimit(
 async def bulk_modify_users_proxy_settings(
     bulk_model: BulkUsersProxy,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
-    return await user_operator.bulk_modify_proxy_settings(db, bulk_model)
+    return await user_operator.bulk_modify_proxy_settings(db, bulk_model, admin)

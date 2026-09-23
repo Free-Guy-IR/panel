@@ -37,7 +37,7 @@ from app.models.group import (
 from app.models.user import BulkOperationDryRunResponse, UserListQuery
 from app.node.sync import sync_users
 from app.operation import BaseOperation, OperatorType
-from app.operation.permissions import apply_group_access
+from app.operation.permissions import apply_group_access, get_allowed_group_ids
 from app.utils.logger import get_logger
 
 logger = get_logger("group-operation")
@@ -136,10 +136,10 @@ class GroupOperation(BaseOperation):
     async def bulk_add_groups(self, db: AsyncSession, bulk_model: BulkGroup, admin: Admin):
         await self.validate_all_groups(db, bulk_model, admin)
         if bulk_model.dry_run:
-            n = await count_bulk_group_scope(db, bulk_model)
+            n = await count_bulk_group_scope(db, bulk_model, get_allowed_group_ids(admin))
             return BulkOperationDryRunResponse(affected_users=n)
 
-        users, users_count = await add_groups_to_users(db, bulk_model)
+        users, users_count = await add_groups_to_users(db, bulk_model, get_allowed_group_ids(admin))
         await self._sync_users_allocations(db, users)
         await db.commit()
         await sync_users(users)
@@ -151,10 +151,10 @@ class GroupOperation(BaseOperation):
     async def bulk_remove_groups(self, db: AsyncSession, bulk_model: BulkGroup, admin: Admin):
         await self.validate_all_groups(db, bulk_model, admin)
         if bulk_model.dry_run:
-            n = await count_bulk_group_scope(db, bulk_model)
+            n = await count_bulk_group_scope(db, bulk_model, get_allowed_group_ids(admin))
             return BulkOperationDryRunResponse(affected_users=n)
 
-        users, users_count = await remove_groups_from_users(db, bulk_model)
+        users, users_count = await remove_groups_from_users(db, bulk_model, get_allowed_group_ids(admin))
         await self._sync_users_allocations(db, users)
         await db.commit()
         await sync_users(users)

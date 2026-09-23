@@ -562,8 +562,11 @@ async def get_expired_users(
     db: AsyncSession,
     query: ExpiredUsersQuery,
     admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ):
-    conditions = _cleanup_target_user_conditions(query.expired_after, query.expired_before, admin_id, query.target)
+    conditions = _cleanup_target_user_conditions(
+        query.expired_after, query.expired_before, admin_id, query.target, allowed_group_ids
+    )
     stmt = select(User).where(*conditions)
 
     return (await db.execute(stmt)).unique().scalars().all()
@@ -574,6 +577,7 @@ def _cleanup_target_user_conditions(
     expired_before: datetime | None = None,
     admin_id: int | None = None,
     target: Literal["expired", "limited", "on_hold", "disabled"] = "expired",
+    allowed_group_ids: list[int] | None = None,
 ):
     if target == "expired":
         # Time-expired users: date range filters on the expiration date.
@@ -598,6 +602,8 @@ def _cleanup_target_user_conditions(
 
     if admin_id is not None:
         conditions.append(User.admin_id == admin_id)
+    if allowed_group_ids is not None:
+        conditions.append(user_in_allowed_groups(User.id, allowed_group_ids))
 
     return conditions
 
@@ -611,8 +617,9 @@ async def remove_expired_users(
     dry_run: bool = False,
     *,
     on_chunk_deleted: UsersDeletedCallback | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> list[str]:
-    conditions = _cleanup_target_user_conditions(expired_after, expired_before, admin_id, target)
+    conditions = _cleanup_target_user_conditions(expired_after, expired_before, admin_id, target, allowed_group_ids)
 
     rows = (await db.execute(select(User.id, User.username).where(*conditions).order_by(User.id))).all()
     if not rows:

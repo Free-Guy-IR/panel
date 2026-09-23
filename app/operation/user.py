@@ -1313,6 +1313,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db=db,
             admin=None,  # None = all admins, not filtered by owner
             clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
 
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
@@ -1619,6 +1620,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         self,
         db: AsyncSession,
         query: ExpiredUsersQuery,
+        admin: AdminDetails | None = None,
     ) -> list[str]:
         """
         Get users who match the cleanup target within the specified date range.
@@ -1639,6 +1641,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db,
             query=query.model_copy(update={"expired_after": expired_after, "expired_before": expired_before}),
             admin_id=admin_id,
+            allowed_group_ids=None if admin is None else get_allowed_group_ids(admin),
         )
         return [row.username for row in users]
 
@@ -1672,6 +1675,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             target=query.target,
             dry_run=query.dry_run,
             on_chunk_deleted=sync_remove_users,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         if not query.dry_run:
             await self.remove_users_logger(users=username_list, by=admin.username)
@@ -1976,35 +1980,40 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         return self._build_bulk_action_response(users)
 
-    async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser):
+    async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails | None = None):
+        allowed_group_ids = None if admin is None else get_allowed_group_ids(admin)
         if bulk_model.dry_run:
-            n = await count_bulk_expire_targets(db, bulk_model)
+            n = await count_bulk_expire_targets(db, bulk_model, allowed_group_ids)
             return BulkOperationDryRunResponse(affected_users=n)
-        users, users_count = await update_users_expire(db, bulk_model)
+        users, users_count = await update_users_expire(db, bulk_model, allowed_group_ids)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
 
-    async def bulk_modify_datalimit(self, db: AsyncSession, bulk_model: BulkUser):
+    async def bulk_modify_datalimit(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails | None = None):
+        allowed_group_ids = None if admin is None else get_allowed_group_ids(admin)
         if bulk_model.dry_run:
-            n = await count_bulk_datalimit_targets(db, bulk_model)
+            n = await count_bulk_datalimit_targets(db, bulk_model, allowed_group_ids)
             return BulkOperationDryRunResponse(affected_users=n)
-        users, users_count = await update_users_datalimit(db, bulk_model)
+        users, users_count = await update_users_datalimit(db, bulk_model, allowed_group_ids)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
 
-    async def bulk_modify_proxy_settings(self, db: AsyncSession, bulk_model: BulkUsersProxy):
+    async def bulk_modify_proxy_settings(
+        self, db: AsyncSession, bulk_model: BulkUsersProxy, admin: AdminDetails | None = None
+    ):
         if bulk_model.method is None:
             await self.raise_error(message="No supported proxy settings were provided", code=400, db=db)
+        allowed_group_ids = None if admin is None else get_allowed_group_ids(admin)
         if bulk_model.dry_run:
-            n = await count_bulk_proxy_targets(db, bulk_model)
+            n = await count_bulk_proxy_targets(db, bulk_model, allowed_group_ids)
             return BulkOperationDryRunResponse(affected_users=n)
-        users, users_count = await update_users_proxy_settings(db, bulk_model)
+        users, users_count = await update_users_proxy_settings(db, bulk_model, allowed_group_ids)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):

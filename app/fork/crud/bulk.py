@@ -6,7 +6,9 @@ from app.db.models import User
 from app.models.user import BulkUserFilter
 
 
-async def get_users_for_mtproto_activation(db: AsyncSession, bulk_model: BulkUserFilter) -> list[User]:
+async def get_users_for_mtproto_activation(
+    db: AsyncSession, bulk_model: BulkUserFilter, allowed_group_ids: list[int] | None = None
+) -> list[User]:
     """Users matched by the shared bulk filter, with groups eagerly loaded.
 
     Groups are needed by app.utils.mtproto.prepare_mtproto_secret's access
@@ -19,14 +21,16 @@ async def get_users_for_mtproto_activation(db: AsyncSession, bulk_model: BulkUse
     """
     from app.db.crud.bulk import _create_final_filter
 
-    final_filter = _create_final_filter(bulk_model)
+    final_filter = _create_final_filter(bulk_model, allowed_group_ids)
     result = await db.execute(select(User).where(final_filter).options(selectinload(User.groups)))
     return list(result.scalars().all())
 
 
-async def get_users_for_l2tp_activation(db: AsyncSession, bulk_model: BulkUserFilter) -> list[User]:
+async def get_users_for_l2tp_activation(
+    db: AsyncSession, bulk_model: BulkUserFilter, allowed_group_ids: list[int] | None = None
+) -> list[User]:
     from app.db.crud.bulk import _create_final_filter
 
-    final_filter = _create_final_filter(bulk_model)
+    final_filter = _create_final_filter(bulk_model, allowed_group_ids)
     result = await db.execute(select(User).where(final_filter).options(selectinload(User.groups)))
     return list(result.scalars().all())
