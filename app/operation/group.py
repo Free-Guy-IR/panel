@@ -1,5 +1,7 @@
 import asyncio
 
+from sqlalchemy.exc import DBAPIError
+
 from app import notification
 from app.db import AsyncSession
 from app.db.crud.bulk import add_groups_to_users, count_bulk_group_scope, remove_groups_from_users
@@ -17,6 +19,7 @@ from app.db.crud.user import get_users
 from app.db.crud.wireguard import sync_users_allocations
 from app.db.models import Admin
 from app.fork.proxy_secrets.entitled import grant_entitled_secrets
+from app.fork.proxy_secrets.locks import GROUP_LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
 from app.models.group import (
     BulkGroup,
     BulkGroupsActionResponse,
@@ -57,6 +60,10 @@ class GroupOperation(BaseOperation):
             await grant_entitled_secrets(db, users)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
+        except (DBAPIError, NamedLockMissing) as exc:
+            if not is_lock_unavailable(exc):
+                raise
+            await self.raise_error(message=GROUP_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def create_group(self, db: AsyncSession, new_group: GroupCreate, admin: Admin) -> Group:
         await self.check_inbound_tags(new_group.inbound_tags)
