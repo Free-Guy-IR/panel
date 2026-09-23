@@ -51,6 +51,7 @@ USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT = {
     "sqlite": 400,
 }
 USER_ADMIN_LOOKUP_BATCH_SIZE = 1_000
+MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
 DEADLOCK_MAX_RETRIES = 5
 FENCED_USER_LOG_SAMPLE = 20
 UNKNOWN_UID_LOG_SAMPLE = 20
@@ -148,6 +149,10 @@ _usage_job_runs: set[asyncio.Task] = set()
 _stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset_issued", default=None)
 
 
+def sql_family(dialect: str) -> str:
+    return "mysql" if dialect in MYSQL_FAMILY else dialect
+
+
 def _chunked(items: list, size: int):
     for index in range(0, len(items), size):
         yield items[index : index + size]
@@ -158,7 +163,7 @@ async def get_dialect() -> str:
     if _dialect_cache:
         return _dialect_cache[0]
     async with GetDB() as db:
-        dialect = db.bind.dialect.name
+        dialect = sql_family(db.bind.dialect.name)
     _dialect_cache.append(dialect)
     return dialect
 
@@ -178,6 +183,7 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
     Returns:
         list: One SQL statement and its bound parameters.
     """
+    dialect = sql_family(dialect)
     if dialect == "postgresql":
         source = (
             func.unnest(
@@ -290,6 +296,7 @@ def build_node_usage_upsert(dialect: str, upsert_param: dict):
     Returns:
         list: One (statement, params) pair for the dialect-specific upsert.
     """
+    dialect = sql_family(dialect)
     if dialect == "postgresql":
         stmt = pg_insert(NodeUsage).values(
             node_id=bindparam("node_id"),
@@ -356,7 +363,7 @@ def _is_retriable_db_error(err) -> bool:
 
 
 async def run_in_retried_transaction(operation, max_retries: int = DEADLOCK_MAX_RETRIES):
-    dialect = await get_dialect()
+    dialect = sql_family(await get_dialect())
     connectable = engine
     if dialect == "mysql" and hasattr(engine, "execution_options"):
         # READ COMMITTED avoids gap/next-key locks that amplify MySQL deadlocks
@@ -408,7 +415,7 @@ async def safe_execute_many(statements: list[tuple], max_retries: int = DEADLOCK
         statements: List of (stmt, params) tuples; params may be None
         max_retries (int, optional): Maximum number of retry attempts
     """
-    dialect = await get_dialect()
+    dialect = sql_family(await get_dialect())
     prepared = []
     for stmt, params in statements:
         if (
@@ -504,7 +511,7 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
 async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict]) -> None:
     if not chart_rows:
         return
-    batch_size = NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT.get(dialect, len(chart_rows))
+    batch_size = NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect), len(chart_rows))
     batches = list(_chunked(chart_rows, batch_size))
     if len(batches) > 1:
         logger.debug(
@@ -914,7 +921,7 @@ async def apply_fenced_user_usage(
     chart_rows = chart_rows or []
     user_ids = sorted(delta_by_user.keys() | {int(row["uid"]) for row in chart_rows})
     dialect = await get_dialect()
-    batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(dialect) or len(user_ids) or 1
+    batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect)) or len(user_ids) or 1
     online_at = dt.now(UTC)
 
     user_stmt = (

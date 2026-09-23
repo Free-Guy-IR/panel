@@ -31,7 +31,7 @@ async def cleanup_user_subscription_accesses():
 
         dialect = db.bind.dialect.name
 
-        if dialect == "mysql":
+        if dialect in ("mysql", "mariadb"):
             total_deleted = 0
             for user_id, access_kind in groups:
                 keep_ids_result = await db.execute(
