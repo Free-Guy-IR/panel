@@ -31,7 +31,6 @@ from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     auto_delete_due,
-    is_empty_next_plan,
     reactivate_limited_users,
     refresh_next_plan_for_update,
     refresh_user_state_for_update,
@@ -1392,11 +1391,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
         User: The updated user object.
     """
     await refresh_user_state_for_update(db, db_user)
-    next_plan = await refresh_next_plan_for_update(db, db_user)
-    if next_plan is None or is_empty_next_plan(next_plan):
-        if next_plan is not None:
-            await db.delete(next_plan)
-            db_user.next_plan = None
+    if await refresh_next_plan_for_update(db, db_user) is None:
         await db.commit()
         await refresh_and_load_user(db, db_user)
         return db_user

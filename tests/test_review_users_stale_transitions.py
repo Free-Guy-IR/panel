@@ -234,12 +234,20 @@ async def test_expire_job_does_not_apply_a_next_plan_the_limit_path_already_appl
     )
 
 
-async def _seed_with_empty_next_plan(recorder_db, **values) -> int:
+async def _seed_with_unlimited_next_plan(recorder_db, *, add_remaining_traffic: bool = False, **values) -> int:
     _, user_ids, _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
     user_id = user_ids[0]
     async with recorder_db() as session:
         await session.execute(update(User).where(User.id == user_id).values(**values))
-        session.add(NextPlan(user_id=user_id, user_template_id=None, data_limit=0, expire=None))
+        session.add(
+            NextPlan(
+                user_id=user_id,
+                user_template_id=None,
+                data_limit=0,
+                expire=0,
+                add_remaining_traffic=add_remaining_traffic,
+            )
+        )
         await session.commit()
     return user_id
 
@@ -250,8 +258,8 @@ async def _next_plan_ids(recorder_db, user_id: int) -> list[int]:
 
 
 @pytest.mark.asyncio
-async def test_expire_job_treats_an_empty_next_plan_as_absent(recorder_db, review_events):
-    user_id = await _seed_with_empty_next_plan(
+async def test_expire_job_applies_a_deliberately_unlimited_next_plan(recorder_db, review_events):
+    user_id = await _seed_with_unlimited_next_plan(
         recorder_db,
         status=UserStatus.active,
         expire=datetime.now(UTC) - timedelta(minutes=5),
@@ -262,27 +270,49 @@ async def test_expire_job_treats_an_empty_next_plan_as_absent(recorder_db, revie
     await review_users.expire_users_job()
 
     row = await _row(recorder_db, user_id)
-    assert (row.status, row.data_limit) == (UserStatus.expired, 1000), (row, review_events)
-    assert row.expire is not None
-    assert review_events["next_plan"] == []
+    assert (row.status, row.data_limit, row.expire) == (UserStatus.active, 0, None), (row, review_events)
+    assert review_events["next_plan"] == [user_id]
     assert await _next_plan_ids(recorder_db, user_id) == []
 
 
 @pytest.mark.asyncio
-async def test_limit_path_treats_an_empty_next_plan_as_absent(
+async def test_limit_path_applies_a_deliberately_unlimited_next_plan(
     monkeypatch: pytest.MonkeyPatch, recorder_db, review_events
 ):
     monkeypatch.setattr(usage_limits, "GetDB", record_usages.GetDB)
-    user_id = await _seed_with_empty_next_plan(
+    user_id = await _seed_with_unlimited_next_plan(
         recorder_db, status=UserStatus.active, data_limit=1000, used_traffic=1100
     )
 
     await usage_limits.enforce_user_limits_now([user_id])
 
     row = await _row(recorder_db, user_id)
-    assert (row.status, row.data_limit, row.used_traffic) == (UserStatus.limited, 1000, 1100), (row, review_events)
-    assert review_events["next_plan"] == []
-    assert await _next_plan_ids(recorder_db, user_id) == []
+    assert (row.status, row.data_limit, row.used_traffic, row.expire) == (UserStatus.active, 0, 0, None), (
+        row,
+        review_events,
+    )
+    assert review_events["next_plan"] == [user_id]
+
+
+@pytest.mark.asyncio
+async def test_expire_job_applies_an_open_ended_next_plan_that_keeps_the_remaining_traffic(recorder_db, review_events):
+    user_id = await _seed_with_unlimited_next_plan(
+        recorder_db,
+        add_remaining_traffic=True,
+        status=UserStatus.active,
+        expire=datetime.now(UTC) - timedelta(minutes=5),
+        data_limit=1000,
+        used_traffic=400,
+    )
+
+    await review_users.expire_users_job()
+
+    row = await _row(recorder_db, user_id)
+    assert (row.status, row.data_limit, row.used_traffic, row.expire) == (UserStatus.active, 600, 0, None), (
+        row,
+        review_events,
+    )
+    assert review_events["next_plan"] == [user_id]
 
 
 @pytest.mark.asyncio

@@ -206,23 +206,25 @@ async def test_a_negative_bulk_data_limit_reports_only_the_users_it_changed(sess
     assert final == {ids["big"]: 5 * gb, ids["small"]: 3 * gb}
 
 
-async def test_an_empty_next_plan_is_dropped_instead_of_granting_an_unlimited_user(sessions):
+async def test_a_deliberately_unlimited_next_plan_is_applied(sessions):
     from app.db.crud.user import reset_user_by_next
     from app.db.models import NextPlan
 
     ids = await _seed(sessions, target={"status": UserStatus.limited, "data_limit": 10, "used_traffic": 10})
     async with sessions() as session:
-        session.add(NextPlan(user_id=ids["target"], user_template_id=None, data_limit=0, expire=None))
+        session.add(NextPlan(user_id=ids["target"], user_template_id=None, data_limit=0, expire=0))
         await session.commit()
     async with sessions() as session:
         db_user = await get_user_by_id(session, ids["target"])
         await reset_user_by_next(session, db_user)
     async with sessions() as check:
         final = (
-            await check.execute(select(User.status, User.data_limit, User.used_traffic).where(User.id == ids["target"]))
+            await check.execute(
+                select(User.status, User.data_limit, User.used_traffic, User._expire).where(User.id == ids["target"])
+            )
         ).one()
         plans = (await check.execute(select(NextPlan.id).where(NextPlan.user_id == ids["target"]))).all()
-    assert (final.status, final.data_limit, final.used_traffic) == (UserStatus.limited, 10, 10)
+    assert tuple(final) == (UserStatus.active, 0, 0, None)
     assert plans == []
 
 

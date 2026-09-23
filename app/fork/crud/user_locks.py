@@ -1,7 +1,7 @@
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import case, delete, inspect, literal, select, update
+from sqlalchemy import case, inspect, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -53,27 +53,6 @@ async def refresh_next_plan_for_update(db: AsyncSession, db_user: User) -> NextP
     )
     set_committed_value(db_user, "next_plan", plan)
     return plan
-
-
-def is_empty_next_plan(plan: NextPlan | None) -> bool:
-    return plan is not None and not plan.data_limit and not plan.expire and plan.user_template_id is None
-
-
-def has_applicable_next_plan(db_user: User) -> bool:
-    return db_user.next_plan is not None and not is_empty_next_plan(db_user.next_plan)
-
-
-async def discard_empty_next_plans(db: AsyncSession, users: Iterable[User]) -> None:
-    holders = [db_user for db_user in users if is_empty_next_plan(db_user.next_plan)]
-    if not holders:
-        return
-    await db.execute(
-        delete(NextPlan)
-        .where(NextPlan.id.in_([db_user.next_plan.id for db_user in holders]))
-        .execution_options(synchronize_session=False)
-    )
-    for db_user in holders:
-        set_committed_value(db_user, "next_plan", None)
 
 
 def _reactivated_status():

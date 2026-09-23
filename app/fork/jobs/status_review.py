@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import GetDB
 from app.db.crud.user import _review_user_select_stmt, start_users_expire
 from app.db.models import User, UserStatus
-from app.fork.crud.user_locks import has_applicable_next_plan
 
 USER_TRANSITION_BATCH_SIZE = 500
 EXPIRABLE = (User.status == UserStatus.active, User.is_expired)
@@ -44,11 +43,9 @@ async def expire_users_under_lock(user_ids: Iterable[int]) -> None:
     async with GetDB() as db:
         for batch in batches:
             users = await lock_users_matching(db, batch, EXPIRABLE)
-            await apply_status_changes(
-                db, [user for user in users if not has_applicable_next_plan(user)], UserStatus.expired
-            )
+            await apply_status_changes(db, [user for user in users if user.next_plan is None], UserStatus.expired)
             await db.commit()
-            for user_id in [user.id for user in users if has_applicable_next_plan(user)]:
+            for user_id in [user.id for user in users if user.next_plan is not None]:
                 await apply_status_changes(db, await lock_users_matching(db, [user_id], EXPIRABLE), UserStatus.expired)
                 await db.commit()
 
