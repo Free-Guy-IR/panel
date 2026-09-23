@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.user import get_existing_usernames
 from app.db.models import UserStatus
+from app.fork.operation.group_scope import user_within_allowed_groups
 from app.models.admin import AdminDetails
 from app.models.group import GroupListQuery
 from app.models.settings import ConfigFormat
@@ -650,6 +651,8 @@ async def get_user_by_sub(event: Message, db: AsyncSession, admin: AdminDetails)
 
         scope_id = get_scope_admin_id(admin, "users", "read")
         if scope_id is not None and (not user.admin or user.admin.id != scope_id):
+            return await event.reply(Texts.user_not_found)
+        if not await user_within_allowed_groups(db, db_user.id, admin):
             return await event.reply(Texts.user_not_found)
     except ValueError:
         return await event.reply(Texts.user_not_found)

@@ -56,7 +56,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/nats/router.py`
 - `app/telegram/fsm_storage.py`
 - `app/telegram/handlers/admin/bulk_actions.py`
-- `app/telegram/handlers/admin/user.py` — the subscription QR and v2ray links lookups pass `scope_action="read"` (the fork made it required, so they raised TypeError); the create and create-from-template username checks use the global `get_existing_usernames`, because usernames are unique across tenants and a read-scoped lookup called another tenant's name free and crashed for a create-only role; a create that fails at its last step answers the ValueError instead of raising it (v5.34.25)
+- `app/telegram/handlers/admin/user.py` — the subscription QR and v2ray links lookups pass `scope_action="read"` (the fork made it required, so they raised TypeError); the create and create-from-template username checks use the global `get_existing_usernames`, because usernames are unique across tenants and a read-scoped lookup called another tenant's name free and crashed for a create-only role; a create that fails at its last step answers the ValueError instead of raising it (v5.34.25); `get_user_by_sub` also answers "not found" for a user outside the caller's allowed groups (v5.34.25, a4-users-5)
 - `app/utils/crypto.py`
 - `app/utils/jwt.py`
 - `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update; since v5.34.25 (A2-r) a cohort's chart write, billing and admin update run in one retried transaction, with the fence filtering the chart rows, so a failed cohort rolls back whole and is safe to retry, and (A9) the billed user ids go to the fork's `enforce_user_limits_now`, so a user who crosses the limit is limited in the same tick

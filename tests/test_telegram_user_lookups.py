@@ -236,6 +236,41 @@ async def test_the_qr_and_links_callbacks_hide_a_user_outside_the_read_scope(db,
     assert links_event.answer.await_args.args[0] == "User not found"
 
 
+def _group_admin(allowed_group_ids: list[int]) -> AdminDetails:
+    return AdminDetails(
+        id=2,
+        username="admin2",
+        role=AdminRoleData(
+            id=3,
+            name="reseller",
+            is_owner=False,
+            permissions={"users": {"read": True}},
+            access={"allowed_group_ids": allowed_group_ids},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "admin, shown",
+    [(OWNER, True), (_group_admin([1]), True), (_group_admin([999]), False), (_group_admin([]), False)],
+    ids=["owner", "allowed group", "other group", "no group"],
+)
+async def test_a_subscription_link_opens_only_users_inside_the_admins_groups(monkeypatch, db, admin, shown):
+    db_user = await handlers.user_operations.get_validated_user_by_id(db, 10, OWNER, scope_action="read")
+    rendered = SimpleNamespace(id=10, username="taken", admin=SimpleNamespace(id=3))
+    monkeypatch.setattr(handlers.user_operations, "get_validated_sub", AsyncMock(return_value=db_user))
+    monkeypatch.setattr(handlers.user_operations, "validate_user", AsyncMock(return_value=rendered))
+    monkeypatch.setattr(handlers.user_operations, "validate_all_groups", AsyncMock(return_value=[]))
+    monkeypatch.setattr(handlers, "UserPanel", MagicMock())
+    monkeypatch.setattr(handlers.Texts, "user_details", lambda user, groups: f"details of {user.username}")
+    event = _message("https://panel.example/sub/some-token")
+
+    await handlers.get_user_by_sub(event, db, admin)
+
+    assert _replied_text(event) == ("details of taken" if shown else Texts.user_not_found)
+
+
 def test_every_user_loader_call_in_the_app_names_its_action():
     offenders = []
     for path in sorted(APP_DIR.rglob("*.py")):
