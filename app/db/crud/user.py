@@ -891,13 +891,17 @@ async def get_users_count(db: AsyncSession, status: UserStatus = None, admin_id:
 
 
 def _build_user_count_metrics_query(
-    statuses: list[UserStatus], online_since: datetime, admin_id: int | None = None
+    statuses: list[UserStatus],
+    online_since: datetime,
+    admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> Select:
     """Build one index-aware query for dashboard user counts."""
+    visible = [] if allowed_group_ids is None else [user_in_allowed_groups(User.id, allowed_group_ids)]
     if admin_id is not None:
         status_columns = [
             select(func.count(User.id))
-            .where(User.admin_id == admin_id, User.status == status)
+            .where(User.admin_id == admin_id, User.status == status, *visible)
             .scalar_subquery()
             .label(status.value)
             for status in statuses
@@ -908,6 +912,7 @@ def _build_user_count_metrics_query(
                 User.admin_id == admin_id,
                 User.online_at.isnot(None),
                 User.online_at >= online_since,
+                *visible,
             )
             .scalar_subquery()
             .label("online")
@@ -918,7 +923,10 @@ def _build_user_count_metrics_query(
     online_column = func.count(case((and_(User.online_at.isnot(None), User.online_at >= online_since), User.id))).label(
         "online"
     )
-    return select(*status_columns, online_column)
+    stmt = select(*status_columns, online_column)
+    if visible:
+        stmt = stmt.select_from(User).where(*visible)
+    return stmt
 
 
 async def get_users_count_metrics(
@@ -926,13 +934,14 @@ async def get_users_count_metrics(
     statuses: list[UserStatus],
     online_window: timedelta,
     admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> tuple[dict[str, int], int]:
     """Return per-status, total, and recent-online user counts in one SELECT.
 
     The ``total`` value includes only the requested statuses. Pass every
     ``UserStatus`` value when a complete user count is required.
     """
-    stmt = _build_user_count_metrics_query(statuses, datetime.now(UTC) - online_window, admin_id)
+    stmt = _build_user_count_metrics_query(statuses, datetime.now(UTC) - online_window, admin_id, allowed_group_ids)
     row = (await db.execute(stmt)).one()
 
     status_counts = {status.value: int(getattr(row, status.value) or 0) for status in statuses}
