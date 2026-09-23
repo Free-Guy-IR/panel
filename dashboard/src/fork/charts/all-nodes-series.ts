@@ -80,33 +80,42 @@ export const relabelDeletedNodesRow = (row: AllNodesChartRow, label: string): Al
   return relabelled
 }
 
-export const buildAllNodesSeries = (statsByNode: Record<string, AllNodesUsageStat[]>, nodeList: Pick<NodeSimple, 'id' | 'name'>[], labelFor: (periodStart: string) => string): AllNodesSeries => {
-  const statsKeys = Object.keys(statsByNode)
+export type AllNodesDrawnSeries = {
+  key: string
+  stats: AllNodesUsageStat[]
+}
+
+export const buildUsageSeries = (
+  sourceStats: Record<string, AllNodesUsageStat[]>,
+  series: AllNodesDrawnSeries[],
+  labelFor: (periodStart: string) => string,
+  deletedStats: AllNodesUsageStat[] = [],
+): AllNodesSeries => {
+  const statsKeys = Object.keys(sourceStats)
   if (statsKeys.length === 0) {
     return { rows: [], seriesKeys: [], totalBytes: 0, perNodeBreakdownUnavailable: false, pieSlices: [] }
   }
 
   const hasIndividualNodeData = statsKeys.some(key => key !== AGGREGATE_STATS_KEY)
 
-  if (!hasIndividualNodeData && Array.isArray(statsByNode[AGGREGATE_STATS_KEY])) {
-    const aggregatedStats = statsByNode[AGGREGATE_STATS_KEY]
+  if (!hasIndividualNodeData && Array.isArray(sourceStats[AGGREGATE_STATS_KEY])) {
+    const aggregatedStats = sourceStats[AGGREGATE_STATS_KEY]
     const totalBytes = aggregatedStats.reduce((sum, point) => sum + getTrafficBytes(point), 0)
 
     return { rows: [], seriesKeys: [], totalBytes, perNodeBreakdownUnavailable: true, pieSlices: [] }
   }
 
-  const drawnSeries = nodeList.map(node => ({ key: node.name, stats: statsByNode[String(node.id)] ?? [] }))
-  const deletedStats = statsByNode[DELETED_NODES_STATS_KEY] ?? []
+  const drawnSeries = [...series]
   if (deletedStats.reduce((sum, point) => sum + getTrafficBytes(point), 0) > 0) {
     drawnSeries.push({ key: DELETED_NODES_KEY, stats: deletedStats })
   }
 
   const allPeriods = new Set<string>()
-  Object.values(statsByNode).forEach(statsArray => {
-    statsArray.forEach(stat => allPeriods.add(stat.period_start))
+  drawnSeries.forEach(({ stats }) => {
+    stats.forEach(stat => allPeriods.add(stat.period_start))
   })
 
-  const bytesByKey = new Map(drawnSeries.map(series => [series.key, 0]))
+  const bytesByKey = new Map(drawnSeries.map(item => [item.key, 0]))
   const sortedPeriods = Array.from(allPeriods).sort()
   const rows = sortedPeriods.map(periodStart => {
     const row: AllNodesChartRow = {
@@ -141,8 +150,8 @@ export const buildAllNodesSeries = (statsByNode: Record<string, AllNodesUsageSta
     percentage: totalBytes > 0 ? (bytes * 100) / totalBytes : 0,
   })
   const liveSlices = drawnSeries
-    .filter(series => series.key !== DELETED_NODES_KEY)
-    .map(series => toSlice(series.key, bytesByKey.get(series.key) ?? 0))
+    .filter(item => item.key !== DELETED_NODES_KEY)
+    .map(item => toSlice(item.key, bytesByKey.get(item.key) ?? 0))
     .filter(slice => slice.bytes > 0)
     .sort((a, b) => b.bytes - a.bytes)
   const deletedBytes = bytesByKey.get(DELETED_NODES_KEY) ?? 0
@@ -150,9 +159,17 @@ export const buildAllNodesSeries = (statsByNode: Record<string, AllNodesUsageSta
 
   return {
     rows,
-    seriesKeys: drawnSeries.map(series => series.key),
+    seriesKeys: drawnSeries.map(item => item.key),
     totalBytes,
     perNodeBreakdownUnavailable: false,
     pieSlices,
   }
 }
+
+export const buildAllNodesSeries = (statsByNode: Record<string, AllNodesUsageStat[]>, nodeList: Pick<NodeSimple, 'id' | 'name'>[], labelFor: (periodStart: string) => string): AllNodesSeries =>
+  buildUsageSeries(
+    statsByNode,
+    nodeList.map(node => ({ key: node.name, stats: statsByNode[String(node.id)] ?? [] })),
+    labelFor,
+    statsByNode[DELETED_NODES_STATS_KEY] ?? [],
+  )
