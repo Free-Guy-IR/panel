@@ -85,7 +85,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - `test_a_fresh_cohort_whose_write_started_is_given_up` (:256) becomes `test_a_fresh_cohort_whose_write_failed_is_retained`.
   - Both assert retention and exactly-once billing on the next tick. Keep `:200`, `:231` and `:274` unchanged.
   - Expected to fail before T010.
-- [ ] T007 [P] [US1] P3: create `tests/test_reset_admin_usage_relative.py`.
+- [X] T007 [P] [US1] P3: create `tests/test_reset_admin_usage_relative.py`.
   - Session A loads an admin with `used_traffic=1000`.
   - Session B runs `update(Admin).values(used_traffic=Admin.used_traffic + 300)` and commits.
   - Session A calls `reset_admin_usage(db, admin)`. Then `admins.used_traffic == 300` and the new `AdminUsageLogs.used_traffic_at_reset == 1000`.
@@ -125,7 +125,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Adjust `tests/test_recorder_chart_fence.py` only where it asserts the removed withdrawal internals. Its end-state assertions (the chart never shows fenced bytes) must stay and pass.
 
   Proof: T005 and T006, plus the whole recorder suite: `tests/test_record_usages*.py`, `tests/test_recorder_*.py` and `tests/test_usage_coeff_freshness.py`.
-- [ ] T011 [US1] P3: in `app/db/crud/admin.py` `reset_admin_usage` (:663-693):
+- [X] T011 [US1] P3: in `app/db/crud/admin.py` `reset_admin_usage` (:663-693):
   - Keep `logged = db_admin.used_traffic` and the `AdminUsageLogs(used_traffic_at_reset=logged)` insert.
   - Replace `db_admin.used_traffic = 0` with `await db.execute(update(Admin).where(Admin.id == db_admin.id).values(used_traffic=Admin.used_traffic - logged))`.
   - Keep the status change and the refreshes. The existing docstring stays; add no new one.
@@ -254,14 +254,14 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 **Goal**: A3. Owner: P3.
 
-- [ ] T031 [P] [US3] P3: create `tests/test_node_update_in_place.py`.
+- [X] T031 [P] [US3] P3: create `tests/test_node_update_in_place.py`.
   - Setup: monkeypatch `app.node.create_node` to return fake bridges that record constructions and `stop()` calls. Each fake has a `name` attribute and an async `get_extra()` that returns its dict.
   - Also monkeypatch `ensure_bridge_memory`/`get_bridge_memory` to no-ops.
   - Call `NodeManager().update_node(node)`, then call it again with only `name` and `usage_coefficient` changed. Expect: one construction, zero `stop()` calls, the same object returned, and that object carrying the new `name` and `get_extra()["usage_coefficient"]`.
   - Changing `address` gives two constructions and one `stop()` on the old bridge.
   - Unchanged fields: the same object, no construction.
   - Expected to fail before T032, because a second construction and a stop happen.
-- [ ] T032 [US3] P3: in `app/node/__init__.py` `update_node` (:92-99), when the signature is equal, update `existing.name` and `(await existing.get_extra())["usage_coefficient"]` in place and return `existing`. Proof: T031, plus `tests/api/test_node.py` and `tests/test_node_*.py`.
+- [X] T032 [US3] P3: in `app/node/__init__.py` `update_node` (:92-99), when the signature is equal, update `existing.name` and `(await existing.get_extra())["usage_coefficient"]` in place and return `existing`. Proof: T031, plus `tests/api/test_node.py` and `tests/test_node_*.py`.
 
 ---
 
@@ -330,13 +330,13 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 **Goal**: pinning tests for G5 and B1 (P3). The D4 pin is in T033.
 
-- [ ] T039 [P] [US6] P3: create `tests/api/test_traffic_log_purge_http.py` with the `client` from `tests/api` and the existing auth helpers in `tests/api/helpers.py`.
+- [X] T039 [P] [US6] P3: create `tests/api/test_traffic_log_purge_http.py` with the `client` from `tests/api` and the existing auth helpers in `tests/api/helpers.py`.
   - Seed `TrafficLogRecord` rows, both old and recent.
   - The owner calls `POST /api/traffic-log/purge` with `{"older_than_hours": 1}`: the response is 200, `removed` equals the number of old rows, and the recent rows remain.
   - A body-less call removes every row.
   - A non-owner admin with `nodes` permission gets 403, and no row is removed.
   - Fail-first: run it against a scratch copy of `app/fork/routers/traffic_log.py` where `purge_before` is replaced by a no-op, which is never committed. It must fail on `removed`.
-- [ ] T040 [P] [US6] P3: create `tests/test_set_owner_relative_update.py`.
+- [X] T040 [P] [US6] P3: create `tests/test_set_owner_relative_update.py`.
   - Session A loads user U (`used_traffic=500`) owned by admin X (`used_traffic=2000`), plus admin Y.
   - Session B adds 300 to X through a relative update and commits.
   - A runs the `set_owner` operation that moves U to Y and commits. Then X is 1800 and Y is its old value + 500.
