@@ -231,7 +231,7 @@ async def drain_pending_resyncs(*, min_age_seconds: float = DRAIN_MIN_AGE_SECOND
                 f"could not finish the pending WireGuard allocation and entitled secrets of users {user_ids[:20]} "
                 f"left by an earlier group change; the next run retries: {describe_failure(exc)}"
             )
-            return drained
+            continue
         drained += len(user_ids)
 
 

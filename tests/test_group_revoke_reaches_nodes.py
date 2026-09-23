@@ -235,3 +235,47 @@ async def test_a_group_change_that_finishes_leaves_no_marker(sessions, monkeypat
         await operation.bulk_set_groups_disabled(db, BulkGroupSelection(ids={seed.group_id}), OWNER, is_disabled=True)
 
     assert await _markers(sessions) == []
+
+
+@pytest.mark.asyncio
+async def test_a_marker_chunk_that_keeps_failing_does_not_hold_back_the_ones_after_it(sessions, monkeypatch):
+    from app.fork.proxy_secrets import group_repair, resync_markers
+
+    seed = await _seed(sessions)
+    async with sessions() as db:
+        admin_id = await db.scalar(select(User.admin_id).where(User.id == seed.user_id))
+        later = User(username=f"{PREFIX}later", proxy_settings=ProxyTable().dict(), admin_id=admin_id)
+        db.add(later)
+        await db.flush()
+        later_id = later.id
+        await resync_markers.mark_users(db, [seed.user_id, later_id])
+        await db.commit()
+
+    finished = []
+
+    async def finish(user_ids, markers=None):
+        if seed.user_id in user_ids:
+            raise ValueError("WireGuard subnet 10.80.0.0/24 has no free addresses")
+        finished.extend(user_ids)
+        async with sessions() as db:
+            await resync_markers.clear_markers(db, markers)
+            await db.commit()
+
+    class _TestGetDB:
+        def __init__(self):
+            self.db = sessions()
+
+        async def __aenter__(self):
+            return self.db
+
+        async def __aexit__(self, *exc):
+            await self.db.close()
+
+    monkeypatch.setattr(group_repair, "GetDB", _TestGetDB)
+    monkeypatch.setattr(group_repair, "DRAIN_CHUNK", 1)
+    monkeypatch.setattr(group_repair, "finish_in_background", finish)
+
+    assert await group_repair.drain_pending_resyncs(min_age_seconds=0) == 1
+
+    assert finished == [later_id]
+    assert [user_id for user_id, _ in await _markers(sessions)] == [seed.user_id]
