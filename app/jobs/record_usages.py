@@ -23,6 +23,18 @@ from app.db import GetDB
 from app.db.base import engine
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
+from app.fork.jobs.stat_batches import (
+    StaleStatBatches,
+    StatBatch,
+    as_ack_only,
+    batch_from_response,
+    held,
+    load_acks,
+    remember_epoch,
+    request_keywords,
+    settle_batches,
+    supports_two_phase,
+)
 from app.fork.jobs.usage_limits import enforce_user_limits_now
 from app.fork.node_health import record_usage_failure, record_usage_success
 from app.node import node_manager
@@ -76,6 +88,7 @@ class UsageCohort(NamedTuple):
     usage_coefficient: dict
     epoch_at_poll: dict[int, int]
     attempts: int = 0
+    stat_batches: dict[int, StatBatch] | None = None
 
 
 class NodeUsageBacklog(NamedTuple):
@@ -153,10 +166,43 @@ _retained_cohorts: list[UsageCohort] = []
 _retained_node_usage: list[NodeUsageBacklog] = []
 _usage_job_runs: set[asyncio.Task] = set()
 _stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset_issued", default=None)
+_stat_batch_context: ContextVar[tuple[dict[int, StatBatch], dict[int, StatBatch]] | None] = ContextVar(
+    "usage_stat_batches", default=None
+)
 
 
 def sql_family(dialect: str) -> str:
     return "mysql" if dialect in MYSQL_FAMILY else dialect
+
+
+def _two_phase_keywords(node, node_id: int | None) -> dict:
+    context = _stat_batch_context.get()
+    if context is None or node_id is None or not supports_two_phase(node):
+        return {}
+    return request_keywords(context[0].get(node_id))
+
+
+def _remember_batch(node_id: int | None, stat_type: int, response) -> None:
+    context = _stat_batch_context.get()
+    if context is None or node_id is None:
+        return
+    batch = batch_from_response(response)
+    if batch is None:
+        return
+    remember_epoch(node_id, stat_type, batch)
+    context[1][node_id] = batch
+
+
+async def _load_stat_acks(stat_type: int, nodes) -> dict[int, StatBatch]:
+    capable = [node_id for node_id, node in nodes if supports_two_phase(node)]
+    if not capable:
+        return {}
+    try:
+        async with GetDB() as db:
+            return await load_acks(db, stat_type, capable)
+    except Exception:
+        logger.exception("Could not read the last billed stats batches; asking the nodes without acknowledgements")
+        return {}
 
 
 def _chunked(items: list, size: int):
@@ -779,8 +825,11 @@ async def get_users_stats(node: PasarGuardNode, node_id: int | None = None):
         if reset_issued is not None and node_id is not None:
             reset_issued.add(node_id)
         # Caller holds API_SEM so extra+stats can share one slot without deadlock.
-        stats_response = await node.get_stats(stat_type=StatType.UsersStat, reset=True, timeout=30)
+        stats_response = await node.get_stats(
+            stat_type=StatType.UsersStat, reset=True, timeout=30, **_two_phase_keywords(node, node_id)
+        )
         validated_params, invalid_uids = _process_users_stats_response(stats_response)
+        _remember_batch(node_id, StatType.UsersStat, stats_response)
         record_usage_success(node_id)
 
         if invalid_uids:
@@ -812,8 +861,12 @@ async def get_outbounds_stats(node: PasarGuardNode, node_id: int | None = None):
     node_label = node_id if node_id is not None else getattr(node, "node_id", "unknown")
     try:
         # Caller holds API_SEM so node RPCs stay bounded.
-        stats_response = await node.get_stats(stat_type=StatType.Outbounds, reset=True, timeout=10)
-        return _process_outbounds_stats_response(stats_response)
+        stats_response = await node.get_stats(
+            stat_type=StatType.Outbounds, reset=True, timeout=10, **_two_phase_keywords(node, node_id)
+        )
+        params = _process_outbounds_stats_response(stats_response)
+        _remember_batch(node_id, StatType.Outbounds, stats_response)
+        return params
     except NodeAPIError as e:
         logger.error("Failed to get outbounds stats from node %s, error: %s", node_label, e.detail)
         return []
@@ -935,6 +988,7 @@ async def apply_fenced_user_usage(
     user_context: dict[int, UserUsageContext],
     epoch_at_poll: dict[int, int],
     chart_rows: list[dict] | None = None,
+    stat_batches: dict[int, StatBatch] | None = None,
 ) -> FencedUsageOutcome:
     delta_by_user = {int(item["uid"]): int(item["value"]) for item in users_usage}
     chart_rows = chart_rows or []
@@ -957,6 +1011,7 @@ async def apply_fenced_user_usage(
     )
 
     async def _apply(conn) -> FencedUsageOutcome:
+        await settle_batches(conn, StatType.UsersStat, stat_batches)
         committed_epochs: dict[int, int] = {}
         committed_admins: dict[int, int | None] = {}
         for id_batch in _chunked(user_ids, batch_size):
@@ -1090,20 +1145,51 @@ async def _drain_node_collection(tasks: list, cohort_size: int, max_volatile_s: 
         buffered = []
 
 
+async def _acknowledge_only(epoch_at_poll: dict[int, int], stat_batches: dict[int, StatBatch]) -> None:
+    if not held(stat_batches):
+        return
+    async with JOB_SEM:
+        await apply_fenced_user_usage([], {}, epoch_at_poll, [], stat_batches)
+
+
 async def _persist_collected_usage(
     api_params: dict,
     usage_coefficient: dict,
     epoch_at_poll: dict[int, int],
+    stat_batches: dict[int, StatBatch] | None = None,
+) -> tuple[FencedUsageOutcome, int]:
+    stat_batches = held(stat_batches)
+    while True:
+        try:
+            return await _persist_collected_usage_once(api_params, usage_coefficient, epoch_at_poll, stat_batches)
+        except StaleStatBatches as stale:
+            logger.warning(
+                "Node(s) %s sent stats batches that were already billed; acknowledging them without billing again",
+                sorted(stale.node_ids),
+            )
+            api_params = {
+                node_id: ([] if node_id in stale.node_ids else params) for node_id, params in api_params.items()
+            }
+            stat_batches = as_ack_only(stat_batches, stale.node_ids)
+
+
+async def _persist_collected_usage_once(
+    api_params: dict,
+    usage_coefficient: dict,
+    epoch_at_poll: dict[int, int],
+    stat_batches: dict[int, StatBatch],
 ) -> tuple[FencedUsageOutcome, int]:
     users_usage = await calculate_users_usage(api_params, usage_coefficient)
     if not users_usage:
         logger.debug("No user usage to record")
+        await _acknowledge_only(epoch_at_poll, stat_batches)
         return FencedUsageOutcome(0, 0, [], 0), 0
 
     user_context = await load_user_usage_context({int(usage["uid"]) for usage in users_usage})
     _report_unknown_uid_usage(users_usage, set(user_context), api_params)
     if not user_context:
         logger.warning("Skipping user usage recording; no matching users found for received stats")
+        await _acknowledge_only(epoch_at_poll, stat_batches)
         return FencedUsageOutcome(0, 0, [], 0), 0
 
     reset_user_ids = stale_epoch_user_ids(user_context, epoch_at_poll)
@@ -1119,6 +1205,7 @@ async def _persist_collected_usage(
             )
         if not users_usage:
             logger.debug("No user usage to record after discarding reset users")
+            await _acknowledge_only(epoch_at_poll, stat_batches)
             return FencedUsageOutcome(0, 0, [], 0), 0
 
     valid_user_ids = set(user_context)
@@ -1139,7 +1226,9 @@ async def _persist_collected_usage(
     if valid_users_usage or chart_rows:
         valid_users_usage.sort(key=lambda item: int(item["uid"]))
         async with JOB_SEM:
-            outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll, chart_rows)
+            outcome = await apply_fenced_user_usage(
+                valid_users_usage, user_context, epoch_at_poll, chart_rows, stat_batches
+            )
         if outcome.fenced_user_ids:
             logger.warning(
                 "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply and kept them out of the chart: %s",
@@ -1151,13 +1240,18 @@ async def _persist_collected_usage(
             f"Recorded {len(chart_rows)} node user usage records across {len(filtered_node_params)} nodes; "
             f"updated {outcome.applied_users} users and {outcome.applied_admins} admins"
         )
+    else:
+        await _acknowledge_only(epoch_at_poll, stat_batches)
 
     return outcome, len(filtered_node_params)
 
 
-def _cohort_from_tasks(tasks, node_by_task: dict, epoch_at_poll: dict[int, int]) -> UsageCohort:
+def _cohort_from_tasks(
+    tasks, node_by_task: dict, epoch_at_poll: dict[int, int], seen_batches: dict[int, StatBatch] | None = None
+) -> UsageCohort:
     usage_coefficient = {}
     api_params = {}
+    stat_batches = {}
     for task in tasks:
         node_id = node_by_task[task]
         failure = asyncio.CancelledError() if task.cancelled() else task.exception()
@@ -1169,19 +1263,34 @@ def _cohort_from_tasks(tasks, node_by_task: dict, epoch_at_poll: dict[int, int])
         _, coeff, stats = task.result()
         usage_coefficient[node_id] = coeff
         api_params[node_id] = stats
-    return UsageCohort(api_params, usage_coefficient, epoch_at_poll)
+        batch = (seen_batches or {}).get(node_id)
+        if batch is not None:
+            stat_batches[node_id] = batch
+    return UsageCohort(api_params, usage_coefficient, epoch_at_poll, stat_batches=stat_batches)
+
+
+def _legacy_params(cohort: UsageCohort) -> dict:
+    two_phase = set(cohort.stat_batches or {})
+    return {node_id: params for node_id, params in cohort.api_params.items() if params and node_id not in two_phase}
 
 
 def _raw_bytes(api_params: dict) -> int:
     return sum(int(param["value"]) for params in api_params.values() for param in params)
 
 
-def _retain_finished_collections(tasks, node_by_task: dict, epoch_at_poll: dict[int, int]) -> None:
+def _retain_finished_collections(
+    tasks, node_by_task: dict, epoch_at_poll: dict[int, int], seen_batches: dict[int, StatBatch] | None = None
+) -> None:
     finished = [task for task in tasks if task.done() and not task.cancelled() and task.exception() is None]
     if not finished:
         return
-    cohort = _cohort_from_tasks(finished, node_by_task, epoch_at_poll)
-    read_params = {node_id: params for node_id, params in cohort.api_params.items() if params}
+    cohort = _cohort_from_tasks(finished, node_by_task, epoch_at_poll, seen_batches)
+    held_by_nodes = sorted(
+        node_id for node_id, params in cohort.api_params.items() if params and node_id in (cohort.stat_batches or {})
+    )
+    if held_by_nodes:
+        logger.warning("Node(s) %s keep the usage they sent until it is billed on a later cycle", held_by_nodes)
+    read_params = _legacy_params(cohort)
     if not read_params:
         return
     _retained_cohorts.append(
@@ -1199,7 +1308,11 @@ def _retain_finished_collections(tasks, node_by_task: dict, epoch_at_poll: dict[
 
 
 async def _settle_collection(
-    node_by_task: dict, reset_issued: set[int], processed: set, epoch_at_poll: dict[int, int]
+    node_by_task: dict,
+    reset_issued: set[int],
+    processed: set,
+    epoch_at_poll: dict[int, int],
+    seen_batches: dict[int, StatBatch] | None = None,
 ) -> None:
     for task, node_id in node_by_task.items():
         if not task.done() and node_id not in reset_issued:
@@ -1210,7 +1323,7 @@ async def _settle_collection(
             await asyncio.wait(unfinished)
     finally:
         _retain_finished_collections(
-            [task for task in node_by_task if task not in processed], node_by_task, epoch_at_poll
+            [task for task in node_by_task if task not in processed], node_by_task, epoch_at_poll, seen_batches
         )
 
 
@@ -1219,12 +1332,13 @@ def _write_may_have_committed(failure: BaseException | None) -> bool:
 
 
 def _keep_or_abandon_retained(cohort: UsageCohort, failure: BaseException | None) -> None:
-    read_params = {node_id: params for node_id, params in cohort.api_params.items() if params}
+    read_params = _legacy_params(cohort)
     if not read_params:
         return
     cohort = cohort._replace(
         api_params=read_params,
         usage_coefficient={node_id: cohort.usage_coefficient.get(node_id, 1.0) for node_id in read_params},
+        stat_batches=None,
     )
     attempts = cohort.attempts + 1
     commit_in_doubt = _write_may_have_committed(failure)
@@ -1280,7 +1394,7 @@ async def _flush_retained_cohorts() -> None:
         nonlocal applied_admins
         try:
             outcome, _ = await _persist_collected_usage(
-                cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll
+                cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, cohort.stat_batches
             )
         except Exception as exc:
             logger.exception("Failed to persist kept usage for node(s) %s", sorted(cohort.api_params))
@@ -1326,7 +1440,7 @@ async def _record_user_usages_impl():
             nonlocal applied_users, applied_admins, recorded_nodes, persist_failure, consecutive_persist_failures
             try:
                 outcome, persisted_nodes = await _persist_collected_usage(
-                    cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll
+                    cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, cohort.stat_batches
                 )
             except Exception as exc:
                 if persist_failure is None:
@@ -1356,12 +1470,16 @@ async def _record_user_usages_impl():
 
         if await _persist_retained_cohorts(persist) and nodes:
             reset_issued: set[int] = set()
+            seen_batches: dict[int, StatBatch] = {}
+            acks = await _load_stat_acks(StatType.UsersStat, nodes)
             token = _stats_reset_issued.set(reset_issued)
+            batch_token = _stat_batch_context.set((acks, seen_batches))
             try:
                 node_by_task = {
                     asyncio.ensure_future(_collect_node_user_usage(node, node_id)): node_id for node_id, node in nodes
                 }
             finally:
+                _stat_batch_context.reset(batch_token)
                 _stats_reset_issued.reset(token)
 
             processed: set = set()
@@ -1369,7 +1487,7 @@ async def _record_user_usages_impl():
                 async for batch in _drain_node_collection(
                     list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
                 ):
-                    cohort = _cohort_from_tasks(batch, node_by_task, epoch_at_poll)
+                    cohort = _cohort_from_tasks(batch, node_by_task, epoch_at_poll, seen_batches)
                     failure = await persist(cohort)
                     processed.update(batch)
                     if failure is not None:
@@ -1377,7 +1495,7 @@ async def _record_user_usages_impl():
                     if must_stop(failure):
                         break
             finally:
-                await _settle_collection(node_by_task, reset_issued, processed, epoch_at_poll)
+                await _settle_collection(node_by_task, reset_issued, processed, epoch_at_poll, seen_batches)
 
         await _enforce_user_limits_after_billing(billed_user_ids, "usage recording")
 
@@ -1445,9 +1563,11 @@ def _node_usage_bytes(totals: dict[int, tuple[int, int]]) -> int:
     return sum(up + down for up, down in totals.values())
 
 
-async def write_node_usage(node_totals: dict[int, tuple[int, int]], created_at: dt) -> None:
+async def write_node_usage(
+    node_totals: dict[int, tuple[int, int]], created_at: dt, stat_batches: dict[int, StatBatch] | None = None
+) -> None:
     ordered = [(node_id, up, down) for node_id, (up, down) in sorted(node_totals.items()) if up or down]
-    if not ordered:
+    if not ordered and not held(stat_batches):
         return
     dialect = await get_dialect()
     node_update_stmt = (
@@ -1462,7 +1582,12 @@ async def write_node_usage(node_totals: dict[int, tuple[int, int]], created_at: 
     )
 
     async def _apply(conn) -> None:
-        await conn.execute(node_update_stmt, [{"node_id": node_id, "up": up, "down": down} for node_id, up, down in ordered])
+        await settle_batches(conn, StatType.Outbounds, stat_batches)
+        if not ordered:
+            return
+        await conn.execute(
+            node_update_stmt, [{"node_id": node_id, "up": up, "down": down} for node_id, up, down in ordered]
+        )
         await conn.execute(system_update_stmt)
         if usage_settings.disable_recording_node_usage:
             return
@@ -1532,10 +1657,16 @@ async def _record_node_usages_impl():
     logger.debug(f"Starting node usage recording for {len(nodes)} nodes")
 
     try:
-        stats_results = await asyncio.gather(
-            *[_bounded_node_rpc(get_outbounds_stats(node, node_id)) for node_id, node in nodes],
-            return_exceptions=True,
-        )
+        seen_batches: dict[int, StatBatch] = {}
+        acks = await _load_stat_acks(StatType.Outbounds, nodes)
+        batch_token = _stat_batch_context.set((acks, seen_batches))
+        try:
+            stats_results = await asyncio.gather(
+                *[_bounded_node_rpc(get_outbounds_stats(node, node_id)) for node_id, node in nodes],
+                return_exceptions=True,
+            )
+        finally:
+            _stat_batch_context.reset(batch_token)
         api_params = {}
         for i, result in enumerate(stats_results):
             node_id = nodes[i][0]
@@ -1553,21 +1684,36 @@ async def _record_node_usages_impl():
                 }
             ]
         )
+        stat_batches = held(seen_batches)
+        legacy_fresh = {node_id: totals for node_id, totals in fresh.items() if node_id not in seen_batches}
+        held_fresh = {node_id: totals for node_id, totals in fresh.items() if node_id in stat_batches}
         backlog = list(_retained_node_usage)
         _retained_node_usage.clear()
-        node_totals = _sum_node_totals([*(entry.totals for entry in backlog), fresh])
+        created_at = _get_time_bucket()
+        while True:
+            node_totals = _sum_node_totals([*(entry.totals for entry in backlog), legacy_fresh, held_fresh])
+            if not node_totals and not stat_batches:
+                logger.debug("No node usage to record")
+                return
+            try:
+                await write_node_usage(node_totals, created_at, stat_batches)
+                break
+            except StaleStatBatches as stale:
+                logger.warning(
+                    "Node(s) %s sent outbound stats batches that were already recorded; acknowledging them only",
+                    sorted(stale.node_ids),
+                )
+                held_fresh = {
+                    node_id: totals for node_id, totals in held_fresh.items() if node_id not in stale.node_ids
+                }
+                stat_batches = as_ack_only(stat_batches, stale.node_ids)
+            except BaseException as exc:
+                _keep_or_abandon_node_usage(backlog, legacy_fresh, exc if isinstance(exc, Exception) else None)
+                raise
+        logger.debug(f"Updated {len(node_totals)} nodes")
 
         if not node_totals:
-            logger.debug("No node usage to record")
             return
-
-        created_at = _get_time_bucket()
-        try:
-            await write_node_usage(node_totals, created_at)
-        except BaseException as exc:
-            _keep_or_abandon_node_usage(backlog, fresh, exc if isinstance(exc, Exception) else None)
-            raise
-        logger.debug(f"Updated {len(node_totals)} nodes")
 
         if usage_settings.disable_recording_node_usage:
             return
