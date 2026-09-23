@@ -165,7 +165,7 @@ async def remove_user_awaited(user: UserNotificationResponse) -> None:
     dispatch so callers can be sure the node update completed (or raised)
     before committing the corresponding database deletion.
     """
-    proto_user = _serialize_user_for_node(user.id, user.proxy_settings.dict())
+    proto_user = _serialize_user_for_node(user.id, user.proxy_settings.dict(), hwid_limit=user.hwid_limit)
     await _dispatch_user_update(proto_user)
 
 
