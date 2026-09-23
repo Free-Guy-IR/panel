@@ -644,10 +644,11 @@ async def reconcile_wireguard_subnets(db: AsyncSession) -> list[int]:
         for i in range(0, len(changed_ids), RECONCILE_USER_CHUNK):
             chunk = changed_ids[i : i + RECONCILE_USER_CHUNK]
             users = (await db.execute(select(User).where(User.id.in_(chunk)))).scalars().all()
+            shared = await shared_wireguard_public_keys(db, users)
             for user in users:
                 _set_user_peer_ips(user, desired[user.id])
                 if desired[user.id]:
-                    _ensure_wireguard_keys(user)
+                    _ensure_wireguard_keys(user, shared)
 
     # rebuild pool rows from the used sets; drop rows for dead namespaces
     if used:

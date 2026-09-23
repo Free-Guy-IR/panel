@@ -7,7 +7,7 @@ from datetime import UTC, datetime, datetime as dt, timedelta as td
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app import notification
 from app.db import AsyncSession
@@ -60,6 +60,7 @@ from app.db.models import User, UserStatus, UserTemplate
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
 from app.fork.proxy_secrets import ProxySecretUniquenessError
+from app.fork.proxy_secrets.locks import LOCK_WAIT_TIMEOUT_DETAIL, is_lock_wait_timeout
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
@@ -473,6 +474,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self.raise_error(message=str(exc), code=409, db=db)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
+        except DBAPIError as exc:
+            if not is_lock_wait_timeout(exc):
+                raise
+            await self.raise_error(message=LOCK_WAIT_TIMEOUT_DETAIL, code=503, db=db)
 
     async def _prepare_revoked_proxy_settings(self, db: AsyncSession, db_user: User) -> ProxyTable:
         groups = db_user.__dict__.get("groups")

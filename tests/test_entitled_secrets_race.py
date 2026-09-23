@@ -138,15 +138,14 @@ def _interleave(monkeypatch, module, sessions, second):
     original = module.issue_unique_secrets
     state = {"ran": False}
 
-    async def issue_then_let_the_other_session_commit(db, spec, count, reserved=None):
-        values = await original(db, spec, count, reserved)
+    async def let_the_other_session_commit_then_issue(db, spec, count, reserved=None):
         if not state["ran"]:
             state["ran"] = True
             async with sessions() as other:
                 await second(other)
-        return values
+        return await original(db, spec, count, reserved)
 
-    monkeypatch.setattr(module, "issue_unique_secrets", issue_then_let_the_other_session_commit)
+    monkeypatch.setattr(module, "issue_unique_secrets", let_the_other_session_commit_then_issue)
     return state
 
 

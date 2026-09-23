@@ -1,5 +1,9 @@
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.db.models import Admin, Base, CoreConfig, Group, ProxyInbound, User
+from app.models.core import CoreType
 from app.models.protocol import ProxyProtocol
 from app.models.proxy import ProxyTable, ProxyTableInput
 from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
@@ -98,19 +102,31 @@ def test_admin_input_is_still_rejected_even_though_storage_is_tolerant(password)
         UserCreate(username="legacy", group_ids=[1], data_limit=0, proxy_settings={"l2tp": {"password": password}})
 
 
-class _FakeUser:
-    def __init__(self, user_id, proxy_settings, groups):
-        self.id = user_id
-        self.proxy_settings = proxy_settings
-        self.groups = groups
-
-
-class _FakeDB:
-    def __init__(self):
-        self.commits = 0
-
-    async def commit(self):
-        self.commits += 1
+async def _seed_legacy_rows(db):
+    admin = Admin(username="owner", hashed_password="x", role_id=1)
+    db.add(admin)
+    inbound = ProxyInbound(tag="l2tp-de")
+    db.add(inbound)
+    await db.flush()
+    db.add(
+        CoreConfig(
+            name="L2TP",
+            type=CoreType.l2tp,
+            config={"inbound_tag": "l2tp-de", "server_addr": "vpn.example.com", "psk": "correct-horse"},
+        )
+    )
+    group = Group(name="l2tp", inbounds=[inbound])
+    db.add(group)
+    await db.flush()
+    for username in ("poisoned", "healthy"):
+        user = User(username=username, proxy_settings=_stored(HEALTHY), admin_id=admin.id)
+        user.groups = [group]
+        db.add(user)
+    await db.commit()
+    await db.execute(
+        update(User).where(User.username == "poisoned").values(proxy_settings=_stored('x\nattacker l2tp-de "pw" *'))
+    )
+    await db.commit()
 
 
 @pytest.mark.asyncio
@@ -119,38 +135,31 @@ async def test_bulk_activation_repairs_a_legacy_row_and_leaves_healthy_ones_alon
 
     synced = {}
 
-    async def fake_candidates(db, bulk_model):
-        return state
-
-    async def fake_cores(db):
-        return ["core"]
-
-    async def fake_tags_from_groups(groups):
-        return set(groups)
-
     async def fake_sync(users):
-        synced["users"] = users
+        synced["usernames"] = [user.username for user in users]
 
-    monkeypatch.setattr(user_module, "get_users_for_l2tp_activation", fake_candidates)
-    monkeypatch.setattr(user_module, "get_l2tp_cores", fake_cores)
-    monkeypatch.setattr(user_module, "l2tp_core_tags", lambda cores: {"l2tp-de"})
-    monkeypatch.setattr(user_module, "tags_from_groups", fake_tags_from_groups)
     monkeypatch.setattr(user_module, "sync_users", fake_sync)
 
-    poisoned = _FakeUser(1, _stored('x\nattacker l2tp-de "pw" *'), ["l2tp-de"])
-    healthy = _FakeUser(2, _stored(HEALTHY), ["l2tp-de"])
-    state = [poisoned, healthy]
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)() as db:
+            await _seed_legacy_rows(db)
+            operation = UserOperation.__new__(UserOperation)
+            operation.operator_type = OperatorType.API
 
-    operation = UserOperation.__new__(UserOperation)
-    operation.operator_type = OperatorType.API
-    db = _FakeDB()
+            result = await operation.bulk_activate_l2tp_passwords(db, BulkUserFilter())
 
-    result = await operation.bulk_activate_l2tp_passwords(db, BulkUserFilter())
+            rows = (await db.execute(select(User).execution_options(populate_existing=True))).scalars().all()
+            stored = {user.username: user.proxy_settings for user in rows}
+    finally:
+        await engine.dispose()
 
     assert result == {"detail": "operation has been successfuly done on 1 users"}
-    repaired = poisoned.proxy_settings["l2tp"]["password"]
+    repaired = stored["poisoned"]["l2tp"]["password"]
     assert repaired != 'x\nattacker l2tp-de "pw" *'
     assert len(repaired) == 20 and repaired.isalnum()
-    assert poisoned.proxy_settings["vmess"]["id"] == "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"
-    assert healthy.proxy_settings["l2tp"]["password"] == HEALTHY
-    assert synced["users"] == [poisoned]
+    assert stored["poisoned"]["vmess"]["id"] == "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"
+    assert stored["healthy"]["l2tp"]["password"] == HEALTHY
+    assert synced["usernames"] == ["poisoned"]

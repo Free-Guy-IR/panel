@@ -1,8 +1,11 @@
+from app.fork.models.named_lock import NamedLock
+
 __all__ = [
     "ConnectionRestriction",
     "ContentFilterAssignment",
     "ContentFilterProfile",
     "ContentFilterSniffingOverride",
+    "NamedLock",
     "NodeInboundUsage",
     "TrafficLogIdentity",
     "TrafficLogRecord",
