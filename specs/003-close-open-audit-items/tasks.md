@@ -130,7 +130,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Replace `db_admin.used_traffic = 0` with `await db.execute(update(Admin).where(Admin.id == db_admin.id).values(used_traffic=Admin.used_traffic - logged))`.
   - Keep the status change and the refreshes. The existing docstring stays; add no new one.
   - Proof: T007.
-- [ ] T012 [US1] P1: run `tests/test_record_usages*.py`, `tests/test_recorder_*.py`, `tests/test_usage_*.py` and `tests/test_scheduler_misfire_grace.py` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p1`).
+- [X] T012 [US1] P1: run `tests/test_record_usages*.py`, `tests/test_recorder_*.py`, `tests/test_usage_*.py` and `tests/test_scheduler_misfire_grace.py` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p1`).
   - Commit with the fork identity.
   - Hand to P3 one OVERRIDES.md line each for `app/jobs/record_usages.py` and `app/scheduler.py`, if the ledger does not already list them.
 - [ ] T013 [US1] MAIN (test server, after T049): watch the usage job for one hour. The G3 duration lines are at INFO. The item passes only if:
