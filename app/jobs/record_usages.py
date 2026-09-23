@@ -952,12 +952,17 @@ async def apply_fenced_user_usage(
 
     async def _apply(conn) -> FencedUsageOutcome:
         committed_epochs: dict[int, int] = {}
+        committed_admins: dict[int, int | None] = {}
         for id_batch in _chunked(user_ids, batch_size):
             locked = await conn.execute(
-                select(User.id, User.usage_epoch).where(User.id.in_(id_batch)).order_by(User.id).with_for_update()
+                select(User.id, User.usage_epoch, User.admin_id)
+                .where(User.id.in_(id_batch))
+                .order_by(User.id)
+                .with_for_update()
             )
-            for user_id, usage_epoch in locked.fetchall():
+            for user_id, usage_epoch, admin_id in locked.fetchall():
                 committed_epochs[int(user_id)] = int(usage_epoch or 0)
+                committed_admins[int(user_id)] = admin_id
 
         fenced = {
             user_id
@@ -976,9 +981,9 @@ async def apply_fenced_user_usage(
 
         admin_totals = defaultdict(int)
         for item in billable:
-            entry = user_context.get(item["uid"])
-            if entry is not None and entry.admin_id:
-                admin_totals[entry.admin_id] += item["value"]
+            admin_id = committed_admins.get(item["uid"])
+            if admin_id:
+                admin_totals[admin_id] += item["value"]
         admin_data = [{"admin_id": admin_id, "value": value} for admin_id, value in sorted(admin_totals.items())]
 
         for update_batch in _chunked(billable, batch_size):
