@@ -20,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app import notification, scheduler
 from app.db import GetDB
 from app.db.crud.settings import get_settings
-from app.db.models import User, UserConnectionState
+from app.db.models import User, UserConnectionState, UserStatus
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import ConnectionLimit
 from app.operation import OperatorType
@@ -87,15 +87,15 @@ async def _release_due(db, settings) -> None:
     if not pairs:
         return
 
-    for restriction, user in pairs:
-        release(restriction, user)
+    restored = [user for restriction, user in pairs if release(restriction, user)]
     await db.commit()
 
-    await _push_to_nodes([user for _, user in pairs])
+    await _push_to_nodes(restored)
     logger.info(
-        "released %d user(s)%s",
+        "released %d user(s)%s, %d of them back to their earlier status",
         len(pairs),
         " because enforcement is off" if everyone else "",
+        len(restored),
     )
 
 
@@ -242,11 +242,29 @@ async def _enforce(db, observations, settings) -> None:
     if not over:
         return
 
+    still_active = (
+        (
+            await db.execute(
+                select(User.id)
+                .where(User.id.in_(sorted(o.user_id for o in over)), User.status == UserStatus.active)
+                .order_by(User.id)
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
     users = {
         user.id: user
         for user in (
-            await db.execute(select(User).options(*USER_LOAD_OPTIONS).where(User.id.in_([o.user_id for o in over])))
+            await db.execute(
+                select(User)
+                .options(*USER_LOAD_OPTIONS)
+                .where(User.id.in_(still_active))
+                .execution_options(populate_existing=True)
+            )
         )
+        .unique()
         .scalars()
         .all()
     }
