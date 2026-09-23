@@ -39,6 +39,7 @@ SUBNET = "10.77.0.0/24"
 OWNER = SimpleNamespace(username=f"{PREFIX}owner", is_owner=True)
 BALLAST_ROWS = 10
 DEADLOCK_SETUP_SECONDS = 0.3
+REPAIR_HOLD_SECONDS = 1.0
 
 
 class _DriverError(Exception):
@@ -219,21 +220,85 @@ def _group_change(seed, path):
     )
 
 
+@pytest_asyncio.fixture
+async def repair(monkeypatch, sessions):
+    from app.fork.proxy_secrets import group_repair
+
+    state = SimpleNamespace(scheduled=[], tasks=[], synced=[])
+    monkeypatch.setattr(group_repair, "_pending_repairs", {})
+    monkeypatch.setattr(group_repair, "_queued_user_ids", set())
+
+    class _TestGetDB:
+        def __init__(self):
+            self.db = sessions()
+
+        async def __aenter__(self):
+            return self.db
+
+        async def __aexit__(self, exc_type, exc_value, traceback):
+            if exc_type is not None:
+                await self.db.rollback()
+            await self.db.close()
+
+    async def record_sync(users):
+        state.synced.append(sorted(user.id for user in users))
+
+    real_schedule = group_repair.schedule_allocation_repair
+
+    def schedule(user_ids):
+        state.scheduled.append(sorted(user_ids))
+        task = real_schedule(user_ids)
+        if task is not None:
+            state.tasks.append(task)
+        return task
+
+    monkeypatch.setattr(group_repair, "GetDB", _TestGetDB)
+    monkeypatch.setattr(group_repair, "sync_users", record_sync)
+    monkeypatch.setattr(group_repair, "IN_REQUEST_RETRY_PAUSE_SECONDS", 0.05)
+    monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (0.05, 0.05, 0.05))
+    monkeypatch.setattr(group_repair, "schedule_allocation_repair", schedule)
+    yield state
+    await group_repair.cancel_pending_repairs()
+
+
+def _failing_lock(monkeypatch, failure, *, failures_before_success):
+    from app.fork.proxy_secrets import entitled as entitled_module
+
+    real_acquire = entitled_module.acquire_proxy_secrets_lock
+    calls = SimpleNamespace(count=0)
+
+    async def acquire(db):
+        calls.count += 1
+        if failures_before_success is None or calls.count <= failures_before_success:
+            raise failure
+        return await real_acquire(db)
+
+    monkeypatch.setattr(entitled_module, "acquire_proxy_secrets_lock", acquire)
+    return calls
+
+
+def _in_request_attempts(sessions, failure):
+    from app.fork.proxy_secrets.locks import MYSQL_FAMILY, is_deadlock
+
+    return 1 if sessions.kw["bind"].dialect.name in MYSQL_FAMILY and is_deadlock(failure) else 2
+
+
+def _errors(caplog):
+    return [record.getMessage() for record in caplog.records if record.levelname == "ERROR"]
+
+
+def _warnings(caplog):
+    return [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
+
+
 @pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
 @pytest.mark.parametrize("failure", list(FAILURES), ids=list(FAILURES))
 @pytest.mark.asyncio
-async def test_a_group_change_that_cannot_take_the_secret_lock_answers_503_and_keeps_nothing_of_the_grant_step(
-    sessions, monkeypatch, path, failure
+async def test_a_group_change_that_cannot_take_the_secret_lock_twice_answers_503_and_keeps_nothing_of_the_grant_step(
+    sessions, monkeypatch, repair, path, failure
 ):
-    from app.operation import group as group_module
-
     seed = await _seed(sessions)
-
-    async def refused_after_writing(db, users, **kwargs):
-        await db.flush()
-        raise FAILURES[failure]
-
-    monkeypatch.setattr(group_module, "grant_entitled_secrets", refused_after_writing)
+    calls = _failing_lock(monkeypatch, FAILURES[failure], failures_before_success=None)
     _, member, change = _group_change(seed, path)
 
     async with sessions() as db:
@@ -242,10 +307,181 @@ async def test_a_group_change_that_cannot_take_the_secret_lock_answers_503_and_k
         await db.commit()
 
     assert raised.value.status_code == 503
+    assert "saved" in raised.value.detail
+    assert calls.count == _in_request_attempts(sessions, FAILURES[failure])
+    assert repair.scheduled == [[seed.users[member]]]
     state = await _phase_two_state(sessions, seed.users[member])
     assert state.peer_ips == []
     assert state.openvpn is None
     assert state.pool_rows == 0
+
+
+@pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
+@pytest.mark.asyncio
+async def test_a_lock_that_clears_before_the_retry_completes_the_group_change_in_the_request(
+    sessions, monkeypatch, repair, path
+):
+    seed = await _seed(sessions)
+    calls = _failing_lock(monkeypatch, FAILURES["mysql-lock-wait-timeout"], failures_before_success=1)
+    _, member, change = _group_change(seed, path)
+
+    async with sessions() as db:
+        await change(db)
+
+    assert calls.count == 2
+    assert repair.scheduled == []
+    state = await _phase_two_state(sessions, seed.users[member])
+    assert state.peer_ips
+    assert state.openvpn
+    assert state.pool_rows == 1
+
+
+@pytest.mark.asyncio
+async def test_a_group_change_that_still_fails_is_finished_by_the_background_repair(
+    sessions, monkeypatch, repair, caplog
+):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    calls = _failing_lock(monkeypatch, FAILURES["lock-row-missing"], failures_before_success=3)
+    _, _, change = _group_change(seed, "bulk_set_groups_disabled")
+
+    async with sessions() as db:
+        with pytest.raises(HTTPException) as raised:
+            await change(db)
+
+    assert raised.value.status_code == 503
+    assert repair.scheduled == [[member]]
+    healed = await repair.tasks[0]
+
+    assert healed is True
+    assert calls.count == 4
+    assert repair.synced == [[member]]
+    state = await _phase_two_state(sessions, member)
+    assert state.peer_ips
+    assert state.openvpn
+    assert state.pool_rows == 1
+    assert len([message for message in _warnings(caplog) if "attempt 1/3" in message]) == 1
+    assert _errors(caplog) == []
+
+
+@pytest.mark.asyncio
+async def test_a_background_repair_that_never_gets_the_lock_gives_up_with_an_error_and_writes_nothing(
+    sessions, monkeypatch, repair, caplog
+):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    calls = _failing_lock(monkeypatch, FAILURES["deadlock"], failures_before_success=None)
+    _, _, change = _group_change(seed, "bulk_set_groups_disabled")
+
+    async with sessions() as db:
+        with pytest.raises(HTTPException):
+            await change(db)
+    healed = await repair.tasks[0]
+
+    assert healed is False
+    assert calls.count == _in_request_attempts(sessions, FAILURES["deadlock"]) + 3
+    assert repair.synced == []
+    state = await _phase_two_state(sessions, member)
+    assert state.peer_ips == []
+    assert state.openvpn is None
+    assert state.pool_rows == 0
+    attempt_warnings = [message for message in _warnings(caplog) if "attempt" in message and "/3" in message]
+    assert len(attempt_warnings) == 3
+    errors = _errors(caplog)
+    assert len(errors) == 1
+    assert "gave up" in errors[0] and str(member) in errors[0]
+
+
+async def _fail_the_enable_then_run(sessions, monkeypatch, seed, second_change):
+    from app.fork.proxy_secrets import group_repair
+
+    monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (REPAIR_HOLD_SECONDS, 0.05, 0.05))
+    _failing_lock(monkeypatch, FAILURES["lock-row-missing"], failures_before_success=2)
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    async with sessions() as db:
+        with pytest.raises(HTTPException):
+            await enable(db)
+    async with sessions() as db:
+        await second_change(db)
+
+
+@pytest.mark.asyncio
+async def test_a_member_removed_before_the_repair_runs_ends_with_nothing(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    operation = _groups()
+
+    await _fail_the_enable_then_run(
+        sessions,
+        monkeypatch,
+        seed,
+        lambda db: operation.bulk_remove_groups(
+            db, BulkGroup(group_ids={seed.groups["paused"]}, users={member}), OWNER
+        ),
+    )
+    assert await repair.tasks[0] is True
+
+    state = await _phase_two_state(sessions, member)
+    assert state.peer_ips == []
+    assert state.openvpn is None
+
+
+@pytest.mark.asyncio
+async def test_a_member_healed_by_a_later_change_is_not_given_a_second_address_or_secret(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    operation = _groups()
+
+    await _fail_the_enable_then_run(
+        sessions,
+        monkeypatch,
+        seed,
+        lambda db: operation.modify_group(
+            db, seed.groups["paused"], GroupModify(name=f"{PREFIX}paused", inbound_tags=[WG_TAG, OVPN]), OWNER
+        ),
+    )
+    healed_by_the_change = await _phase_two_state(sessions, member)
+    assert await repair.tasks[0] is True
+
+    after_the_repair = await _phase_two_state(sessions, member)
+    assert len(healed_by_the_change.peer_ips) == 1
+    assert healed_by_the_change.openvpn
+    assert after_the_repair.peer_ips == healed_by_the_change.peer_ips
+    assert after_the_repair.openvpn == healed_by_the_change.openvpn
+    assert after_the_repair.pool_rows == 1
+
+
+@pytest.mark.asyncio
+async def test_repairs_for_the_same_users_are_not_multiplied(repair, monkeypatch):
+    from app.fork.proxy_secrets import group_repair
+
+    monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (60.0,))
+    first = group_repair.schedule_allocation_repair([7, 8])
+    second = group_repair.schedule_allocation_repair([8, 7])
+    third = group_repair.schedule_allocation_repair([8, 9])
+
+    assert repair.scheduled == [[7, 8], [7, 8], [8, 9]]
+    assert first is not None
+    assert second is None
+    assert third is not None
+    assert group_repair.pending_repair_user_ids() == {7, 8, 9}
+    assert group_repair._pending_repairs[third] == [9]
+
+
+@pytest.mark.asyncio
+async def test_a_repair_still_pending_at_shutdown_is_cancelled_with_a_warning(repair, monkeypatch, caplog):
+    from app.fork.proxy_secrets import group_repair
+    from app.lifecycle import shutdown_functions
+
+    monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (60.0,))
+    task = group_repair.schedule_allocation_repair([41])
+
+    await group_repair.cancel_pending_repairs()
+
+    assert task.cancelled()
+    assert group_repair.pending_repair_user_ids() == set()
+    assert any("shutting down before" in message and "41" in message for message in _warnings(caplog))
+    assert group_repair.cancel_pending_repairs in shutdown_functions
 
 
 @pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
@@ -264,26 +500,21 @@ async def test_without_a_lock_problem_the_grant_step_writes_what_the_failure_cas
 
 
 @pytest.mark.asyncio
-async def test_an_unrelated_database_error_in_a_group_change_is_not_turned_into_503(sessions, monkeypatch):
-    from app.operation import group as group_module
-
+async def test_an_unrelated_database_error_in_a_group_change_is_not_turned_into_503(sessions, monkeypatch, repair):
     seed = await _seed(sessions)
     unrelated = OperationalError("SELECT 1", {}, _DriverError(1146, "Table does not exist"))
-
-    async def broken(db, users, **kwargs):
-        raise unrelated
-
-    monkeypatch.setattr(group_module, "grant_entitled_secrets", broken)
+    _failing_lock(monkeypatch, unrelated, failures_before_success=None)
     _, _, change = _group_change(seed, "bulk_add_groups")
 
     async with sessions() as db:
         with pytest.raises(OperationalError):
             await change(db)
+    assert repair.scheduled == []
 
 
 @pytest.mark.asyncio
-async def test_a_group_change_chosen_as_deadlock_victim_answers_503_and_keeps_nothing_of_the_grant_step(
-    engine, sessions, monkeypatch
+async def test_a_group_change_chosen_as_deadlock_victim_ends_with_its_step_done_exactly_once(
+    engine, sessions, monkeypatch, repair
 ):
     from app.fork.proxy_secrets import entitled as entitled_module
     from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, acquire_named_lock
@@ -318,13 +549,21 @@ async def test_a_group_change_chosen_as_deadlock_victim_answers_503_and_keeps_no
         await holder.execute(update(User).where(User.id == member).values(note="holder"))
         await holder.commit()
 
-    with pytest.raises(HTTPException) as raised:
-        await waiting
+    outcome = (await asyncio.gather(waiting, return_exceptions=True))[0]
+    if engine.dialect.name in ("mysql", "mariadb"):
+        assert isinstance(outcome, HTTPException) and outcome.status_code == 503
+        assert repair.scheduled == [[member]]
+        interim = await _phase_two_state(sessions, member)
+        assert interim.peer_ips == []
+        assert interim.openvpn is None
+        assert await repair.tasks[0] is True
+    else:
+        assert not isinstance(outcome, BaseException)
+        assert repair.scheduled == []
 
-    assert raised.value.status_code == 503
     state = await _phase_two_state(sessions, member)
-    assert state.peer_ips == []
-    assert state.openvpn is None
-    assert state.pool_rows == 0
+    assert len(state.peer_ips) == 1
+    assert state.openvpn
+    assert state.pool_rows == 1
     async with sessions() as db:
         assert await db.scalar(select(User.note).where(User.id == member)) == "holder"

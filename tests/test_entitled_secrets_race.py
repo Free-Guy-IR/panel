@@ -278,7 +278,9 @@ async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_
         user = (await other.execute(select(User).where(User.id == user_id))).scalar_one()
         committed.update(user.proxy_settings)
 
-    _interleave(monkeypatch, entitled_module, sessions, both_activations)
+    phase_two_takes_the_lock_first = sessions.kw["bind"].dialect.name == "sqlite"
+    if not phase_two_takes_the_lock_first:
+        _interleave(monkeypatch, entitled_module, sessions, both_activations)
     pushed = []
 
     async def record_push(users):
@@ -288,6 +290,9 @@ async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_
 
     async with sessions() as first:
         users = list((await first.execute(select(User).where(User.id == user_id))).scalars().all())
+        if phase_two_takes_the_lock_first:
+            async with sessions() as other:
+                await both_activations(other)
         await GroupOperation(operator_type=OperatorType.API)._sync_users_allocations(first, users)
         await first.commit()
         await group_module.sync_users(users)

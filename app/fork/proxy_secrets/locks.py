@@ -29,8 +29,8 @@ LOCK_UNAVAILABLE_DETAIL = (
 )
 GROUP_LOCK_UNAVAILABLE_DETAIL = (
     "the group change was saved, but giving its users their WireGuard addresses and entitled secrets could not "
-    "take the proxy secrets lock in time; none of that step was stored, repeat the request or run the "
-    "protocol activation"
+    "take the proxy secrets lock in time; that step was not stored and is being completed automatically in the "
+    "background"
 )
 
 

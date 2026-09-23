@@ -16,9 +16,8 @@ from app.db.crud.group import (
     remove_groups,
 )
 from app.db.crud.user import get_users
-from app.db.crud.wireguard import sync_users_allocations
 from app.db.models import Admin
-from app.fork.proxy_secrets.entitled import grant_entitled_secrets
+from app.fork.proxy_secrets import group_repair
 from app.fork.proxy_secrets.locks import GROUP_LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
 from app.models.group import (
     BulkGroup,
@@ -55,14 +54,16 @@ class GroupOperation(BaseOperation):
         return db_group
 
     async def _sync_users_allocations(self, db: AsyncSession, users) -> None:
+        user_ids = [user.id for user in users]
         try:
-            await sync_users_allocations(db, users)
-            await grant_entitled_secrets(db, users)
+            await group_repair.allocate_and_grant_with_one_retry(db, users, user_ids)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
         except (DBAPIError, NamedLockMissing) as exc:
             if not is_lock_unavailable(exc):
                 raise
+            await db.rollback()
+            group_repair.schedule_allocation_repair(user_ids)
             await self.raise_error(message=GROUP_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def create_group(self, db: AsyncSession, new_group: GroupCreate, admin: Admin) -> Group:
