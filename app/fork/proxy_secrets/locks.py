@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from weakref import WeakKeyDictionary
 
-from sqlalchemy import insert, update
+from sqlalchemy import Engine, insert, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.db import AsyncSession
 from app.fork.models.named_lock import NamedLock
+from config import database_settings
 
 PROXY_SECRETS_LOCK = "proxy_secrets"
 MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
@@ -16,6 +19,8 @@ HELD_LOCKS_KEY = "fork_named_locks"
 MYSQL_LOCK_WAIT_TIMEOUT = 1205
 POSTGRES_LOCK_NOT_AVAILABLE = "55P03"
 SQLITE_LOCKED = "database is locked"
+COMMITTED_READER_POOL_SIZE = 1
+COMMITTED_READER_MAX_OVERFLOW = 1
 LOCK_WAIT_TIMEOUT_DETAIL = (
     "another request is writing proxy secrets and this one timed out waiting for it; retry shortly"
 )
@@ -25,7 +30,10 @@ class NamedLockMissing(RuntimeError):
     pass
 
 
-def _seed_statement(dialect_name: str, name: str):
+_committed_readers: WeakKeyDictionary[Engine, AsyncEngine] = WeakKeyDictionary()
+
+
+def named_lock_seed_statement(dialect_name: str, name: str):
     table = NamedLock.__table__
     values = {"name": name, "acquired_at": None}
     if dialect_name == "postgresql":
@@ -46,7 +54,7 @@ async def acquire_named_lock(db: AsyncSession, name: str) -> None:
     with db.no_autoflush:
         result = await db.execute(take)
         if result.rowcount == 0:
-            await db.execute(_seed_statement(db.get_bind().dialect.name, name))
+            await db.execute(named_lock_seed_statement(db.get_bind().dialect.name, name))
             result = await db.execute(take)
     if result.rowcount != 1:
         raise NamedLockMissing(f"the {name!r} named lock row could not be taken")
@@ -57,12 +65,28 @@ async def acquire_proxy_secrets_lock(db: AsyncSession) -> None:
     await acquire_named_lock(db, PROXY_SECRETS_LOCK)
 
 
+def committed_reader(engine: Engine) -> AsyncEngine:
+    reader = _committed_readers.get(engine)
+    if reader is None:
+        reader = create_async_engine(
+            engine.url,
+            isolation_level="READ COMMITTED",
+            pool_size=COMMITTED_READER_POOL_SIZE,
+            max_overflow=COMMITTED_READER_MAX_OVERFLOW,
+            pool_timeout=database_settings.pool_timeout,
+            pool_recycle=database_settings.pool_recycle,
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": database_settings.connect_timeout},
+        )
+        _committed_readers[engine] = reader
+    return reader
+
+
 async def read_committed_rows(db: AsyncSession, statement) -> list:
-    if db.get_bind().dialect.name not in MYSQL_FAMILY:
+    bind = db.get_bind()
+    if bind.dialect.name not in MYSQL_FAMILY:
         return list((await db.execute(statement)).all())
-    connection = await db.connection()
-    async with connection.engine.connect() as fresh:
-        await fresh.execution_options(isolation_level="READ COMMITTED")
+    async with committed_reader(bind.engine).connect() as fresh:
         return list((await fresh.execute(statement)).all())
 
 

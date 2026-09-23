@@ -8,12 +8,13 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import String, Text, and_, case, cast, func, literal, or_, select, update
 from sqlalchemy.dialects.mysql import BINARY as MySQLBinary
 from sqlalchemy.dialects.postgresql import JSON as PostgresJSON, JSONB
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
 from app.db.models import CoreConfig, CoreType, User
-from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock, read_committed_rows
+from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock, is_lock_wait_timeout, read_committed_rows
 from app.fork.proxy_secrets.uniqueness import (
     MAX_REGENERATION_ATTEMPTS,
     ProxySecretUniquenessError,
@@ -376,11 +377,24 @@ async def grant_entitled_secrets(
 
 async def grant_entitled_secrets_after_plan_change(db: AsyncSession, db_user: User) -> list[User]:
     await db.flush()
+    savepoint = await db.begin_nested()
     try:
-        return await grant_entitled_secrets(db, [db_user])
+        granted = await grant_entitled_secrets(db, [db_user])
     except ProxySecretUniquenessError as exc:
+        await savepoint.rollback()
         logger.error(
             f"next plan applied to user {db_user.id}, but granting {', '.join(exc.fields)} failed and nothing was "
             f"written; the protocol stays refused until an operator runs its activation: {exc}"
         )
         return []
+    except DBAPIError as exc:
+        if not is_lock_wait_timeout(exc):
+            raise
+        await savepoint.rollback()
+        logger.error(
+            f"next plan applied to user {db_user.id}, but granting its entitled secrets timed out waiting for the "
+            f"proxy secrets lock and nothing was written; run the activation for the protocol: {exc}"
+        )
+        return []
+    await savepoint.commit()
+    return granted

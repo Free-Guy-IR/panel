@@ -1,9 +1,11 @@
 import logging
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
@@ -147,3 +149,52 @@ async def test_a_failed_grant_still_applies_the_plan_and_logs_the_user_and_field
     assert stored.secrets == (None, None, None)
     messages = [record.getMessage() for record in errors_seen]
     assert any(str(seed.user_id) in message and "openvpn.password" in message for message in messages), messages
+
+
+def _lock_wait_timeout():
+    return OperationalError("UPDATE named_locks", {}, sqlite3.OperationalError("database is locked"))
+
+
+@pytest.mark.asyncio
+async def test_a_grant_that_times_out_on_the_lock_still_applies_the_plan(engine, db, monkeypatch, errors_seen):
+    seed = await _seed(db)
+
+    async def timed_out(session):
+        raise _lock_wait_timeout()
+
+    monkeypatch.setattr(entitled_module, "acquire_proxy_secrets_lock", timed_out)
+    db_user = await get_user_by_id(db, seed.user_id)
+
+    await reset_user_by_next(db, db_user)
+
+    stored = await _stored(engine, seed.user_id)
+    assert stored.groups == ["vpn"]
+    assert stored.data_limit == 5 * GIGABYTE
+    assert stored.used_traffic == 0
+    assert stored.secrets == (None, None, None)
+    messages = [record.getMessage() for record in errors_seen]
+    assert any(str(seed.user_id) in message and "timed out" in message for message in messages), messages
+
+
+@pytest.mark.asyncio
+async def test_a_grant_whose_transaction_is_already_gone_fails_the_plan_instead_of_half_applying_it(
+    engine, db, monkeypatch
+):
+    seed = await _seed(db)
+
+    async def transaction_rolled_back_under_it(session):
+        await session.execute(text("ROLLBACK"))
+        raise _lock_wait_timeout()
+
+    monkeypatch.setattr(entitled_module, "acquire_proxy_secrets_lock", transaction_rolled_back_under_it)
+    db_user = await get_user_by_id(db, seed.user_id)
+
+    with pytest.raises(OperationalError):
+        await reset_user_by_next(db, db_user)
+    await db.rollback()
+
+    stored = await _stored(engine, seed.user_id)
+    assert stored.groups == ["plain"]
+    assert stored.data_limit == GIGABYTE
+    assert stored.used_traffic == GIGABYTE
+    assert stored.secrets == (None, None, None)

@@ -9,8 +9,23 @@ from sqlalchemy import delete, event, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.db.models import Admin, AdminRole, Base, User
+from app.db.crud.user import get_user_by_id, reset_user_by_next
+from app.db.models import (
+    Admin,
+    AdminRole,
+    Base,
+    CoreConfig,
+    Group,
+    NextPlan,
+    ProxyInbound,
+    User,
+    UserTemplate,
+    inbounds_groups_association,
+    template_group_association,
+    users_groups_association,
+)
 from app.fork.proxy_secrets import SPEC_BY_FIELD, ProxySecretField, enforce_unique_proxy_secrets, secret_column
+from app.models.core import CoreType
 from app.models.proxy import ProxyTable
 from app.models.user import UserCreate
 from app.operation import OperatorType
@@ -35,9 +50,30 @@ def _foreign_keys_on(dbapi_connection, _record):
 
 async def _purge(engine):
     async with engine.begin() as conn:
+        user_ids = select(User.id).where(User.username.like(f"{USERNAME}%")).scalar_subquery()
+        group_ids = select(Group.id).where(Group.name.like(f"{PREFIX}%")).scalar_subquery()
+        template_ids = select(UserTemplate.id).where(UserTemplate.name.like(f"{PREFIX}%")).scalar_subquery()
+        await conn.execute(delete(users_groups_association).where(users_groups_association.c.user_id.in_(user_ids)))
         await conn.execute(delete(User.__table__).where(User.username.like(f"{USERNAME}%")))
+        await conn.execute(
+            delete(template_group_association).where(template_group_association.c.user_template_id.in_(template_ids))
+        )
+        await conn.execute(delete(UserTemplate.__table__).where(UserTemplate.name.like(f"{PREFIX}%")))
+        await conn.execute(
+            delete(inbounds_groups_association).where(inbounds_groups_association.c.group_id.in_(group_ids))
+        )
+        await conn.execute(delete(Group.__table__).where(Group.name.like(f"{PREFIX}%")))
+        await conn.execute(delete(ProxyInbound.__table__).where(ProxyInbound.tag.like(f"{PREFIX}%")))
+        await conn.execute(delete(CoreConfig.__table__).where(CoreConfig.name.like(f"{PREFIX}%")))
         await conn.execute(delete(Admin.__table__).where(Admin.username.like(f"{PREFIX}%")))
         await conn.execute(delete(AdminRole.__table__).where(AdminRole.name.like(f"{PREFIX}%")))
+
+
+async def _seed_lock_row(engine):
+    from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, named_lock_seed_statement
+
+    async with engine.begin() as conn:
+        await conn.execute(named_lock_seed_statement(engine.dialect.name, PROXY_SECRETS_LOCK))
 
 
 @pytest_asyncio.fixture
@@ -45,6 +81,7 @@ async def engine(tmp_path):
     if GITHUB_MODE:
         engine = create_async_engine(database_settings.url, poolclass=NullPool)
         await _purge(engine)
+        await _seed_lock_row(engine)
         yield engine
         await _purge(engine)
         await engine.dispose()
@@ -196,6 +233,30 @@ async def test_a_missing_lock_row_is_seeded_on_first_use(engine, sessions):
     assert taken_again == taken
 
 
+@pytest.mark.asyncio
+async def test_the_lock_holder_never_needs_a_second_slot_from_a_full_pool(engine, sessions, admin_id):
+    writers = 3
+    bounded = create_async_engine(engine.url, pool_size=writers, max_overflow=0, pool_timeout=1)
+    bounded_sessions = async_sessionmaker(bounded, class_=AsyncSession, autoflush=False, expire_on_commit=False)
+    everyone_connected = asyncio.Barrier(writers)
+
+    async def create(index):
+        async with bounded_sessions() as db:
+            await db.execute(select(1))
+            await everyone_connected.wait()
+            prepared = await enforce_unique_proxy_secrets(db, _trojan(TROJAN))
+            await _add_user(db, admin_id, f"{USERNAME}-pool{index}", prepared)
+            await db.commit()
+
+    try:
+        outcomes = await asyncio.gather(*(create(index) for index in range(writers)), return_exceptions=True)
+    finally:
+        await bounded.dispose()
+
+    assert [f"{type(outcome).__name__}: {outcome}" for outcome in outcomes if outcome is not None] == []
+    assert (await _holders(sessions, ProxySecretField.trojan_password))[TROJAN] == 1
+
+
 async def _short_lock_timeout(db):
     dialect = db.get_bind().dialect.name
     if dialect == "sqlite":
@@ -232,3 +293,65 @@ async def test_a_create_that_cannot_take_the_lock_in_time_answers_503_and_stores
     async with sessions() as db:
         stored = (await db.execute(select(User.id).where(User.username == f"{USERNAME}-late"))).all()
     assert stored == []
+
+
+async def _seed_next_plan(sessions, admin_id):
+    async with sessions() as db:
+        inbound = ProxyInbound(tag=f"{PREFIX}ovpn")
+        db.add(inbound)
+        await db.flush()
+        db.add(
+            CoreConfig(name=f"{PREFIX}ovpn", type=CoreType.openvpn, config={"instances": [{"tag": f"{PREFIX}ovpn"}]})
+        )
+        plain = Group(name=f"{PREFIX}plain", inbounds=[])
+        vpn = Group(name=f"{PREFIX}vpn", inbounds=[inbound])
+        db.add_all([plain, vpn])
+        await db.flush()
+        template = UserTemplate(
+            name=f"{PREFIX}plan",
+            username_prefix=None,
+            username_suffix=None,
+            extra_settings=None,
+            groups=[vpn],
+            data_limit=5 * 1024**3,
+            expire_duration=0,
+        )
+        db.add(template)
+        await db.flush()
+        user = User(username=f"{USERNAME}-renewing", proxy_settings=ProxyTable().dict(), admin_id=admin_id)
+        user.groups = [plain]
+        user.data_limit = 1024**3
+        user.used_traffic = 1024**3
+        db.add(user)
+        await db.flush()
+        db.add(NextPlan(user_id=user.id, user_template_id=template.id))
+        await db.commit()
+        return user.id
+
+
+@pytest.mark.asyncio
+async def test_a_next_plan_whose_grant_times_out_on_the_lock_is_still_applied(engine, sessions, admin_id):
+    from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, acquire_named_lock
+
+    if engine.dialect.name == "sqlite":
+        pytest.skip(reason="sqlite locks the whole database, so the plan itself would wait for the holder")
+    user_id = await _seed_next_plan(sessions, admin_id)
+
+    async with sessions() as holder:
+        await acquire_named_lock(holder, PROXY_SECRETS_LOCK)
+        async with sessions() as reviewer:
+            await _short_lock_timeout(reviewer)
+            db_user = await get_user_by_id(reviewer, user_id)
+            await reset_user_by_next(reviewer, db_user)
+        await holder.rollback()
+
+    async with sessions() as db:
+        stored = await get_user_by_id(db, user_id)
+        groups = sorted(group.name for group in stored.groups)
+        openvpn_password = ProxyTable.model_validate(stored.proxy_settings).openvpn.password
+        data_limit, used_traffic = stored.data_limit, stored.used_traffic
+
+    assert groups == [f"{PREFIX}vpn"]
+    assert data_limit == 5 * 1024**3
+    assert used_traffic == 0
+    assert openvpn_password is None
