@@ -581,8 +581,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
         return node
 
+    @staticmethod
+    def _start_settings(db_node: Node) -> tuple:
+        return db_node.core_config_id, tuple(db_node.additional_core_config_ids or ()), db_node.keep_alive
+
     async def modify_node(self, db: AsyncSession, node_id: int, modified_node: NodeModify, admin: AdminDetails) -> Node:
         db_node = await self.get_validated_node(db=db, node_id=node_id)
+        stored_start_settings = self._start_settings(db_node)
         if modified_node.core_config_id is not None:
             await self.get_validated_core_config(db, modified_node.core_config_id)
         if modified_node.additional_core_config_ids is not None:
@@ -602,11 +607,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         else:
             try:
                 await self._update_node_impl(db_node)
-                force_start = (
-                    modified_node.core_config_id is not None
-                    or modified_node.additional_core_config_ids is not None
-                    or modified_node.keep_alive is not None
-                )
+                force_start = self._start_settings(db_node) != stored_start_settings
                 asyncio.create_task(self._connect_single_node_background(db_node.id, force_start=force_start))
             except NodeAPIError as e:
                 await self._update_single_node_status(db, db_node.id, NodeStatus.error, message=e.detail)
