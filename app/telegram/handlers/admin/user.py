@@ -15,6 +15,7 @@ from aiogram.types import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.crud.user import get_existing_usernames
 from app.db.models import UserStatus
 from app.models.admin import AdminDetails
 from app.models.group import GroupListQuery
@@ -85,16 +86,13 @@ async def process_username(event: Message | CallbackQuery, state: FSMContext, db
         await add_to_messages_to_delete(state, event.message)
         username = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=5))
 
-    try:
-        await user_operations.get_validated_user(db, username, admin)
+    if await get_existing_usernames(db, [username]):
         if isinstance(event, Message):
             msg = await event.reply(Texts.username_already_exist, reply_markup=RandomUsername().as_markup())
             await add_to_messages_to_delete(state, msg)
         else:
             await event.answer(Texts.username_already_exist)
         return
-    except ValueError:
-        pass
 
     await delete_messages(event, state)
     await state.update_data(username=username)
@@ -258,7 +256,10 @@ async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
     del data["duration"]
 
     new_user = UserCreate(**data)
-    user = await user_operations.create_user(db, new_user, admin)
+    try:
+        user = await user_operations.create_user(db, new_user, admin)
+    except ValueError as exc:
+        return await event.answer(f"❌ {exc}"[:MAX_CALLBACK_ALERT_LENGTH], show_alert=True)
     groups = await user_operations.validate_all_groups(db, user)
     await event.answer(Texts.user_created)
     return await event.message.edit_text(
@@ -598,14 +599,8 @@ async def create_user_from_template_choose(
     template_id = await state.get_value("template_id")
     template = await user_templates.get_validated_user_template(db, template_id)
 
-    try:
-        actual_username = username
-        if template.username_prefix:
-            actual_username = template.username_prefix + username
-        if template.username_suffix:
-            actual_username = username + template.username_suffix
-
-        await user_operations.get_validated_user(db, actual_username, admin)
+    actual_username = user_operations._apply_template_username_affixes(username, template)
+    if await get_existing_usernames(db, [actual_username]):
         if isinstance(event, Message):
             msg = await event.reply(
                 Texts.username_already_exist, reply_markup=RandomUsername(with_template=True).as_markup()
@@ -614,15 +609,22 @@ async def create_user_from_template_choose(
         else:
             await event.answer(Texts.username_already_exist)
         return
-    except ValueError:
-        pass
+
+    try:
+        user = await user_operations.create_user_from_template(
+            db, CreateUserFromTemplate(username=username, user_template_id=template_id), admin
+        )
+    except ValueError as exc:
+        if isinstance(event, Message):
+            msg = await event.reply(f"❌ {exc}", reply_markup=RandomUsername(with_template=True).as_markup())
+            await add_to_messages_to_delete(state, msg)
+        else:
+            await event.answer(f"❌ {exc}"[:MAX_CALLBACK_ALERT_LENGTH])
+        return
 
     await state.clear()
     await delete_messages(event, state)
 
-    user = await user_operations.create_user_from_template(
-        db, CreateUserFromTemplate(username=username, user_template_id=template_id), admin
-    )
     groups = await user_operations.validate_all_groups(db, user)
     if isinstance(event, Message):
         return await event.answer(
@@ -663,7 +665,7 @@ async def get_subscription_qr(
     event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: UserPanel.Callback
 ):
     try:
-        db_user = await user_operations.get_validated_user_by_id(db, callback_data.user_id, admin)
+        db_user = await user_operations.get_validated_user_by_id(db, callback_data.user_id, admin, scope_action="read")
         user = await user_operations.validate_user(db_user)
     except ValueError:
         return await event.answer(Texts.user_not_found, show_alert=True)
@@ -679,7 +681,7 @@ async def get_v2ray_links(
     event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: UserPanel.Callback
 ):
     try:
-        db_user = await user_operations.get_validated_user_by_id(db, callback_data.user_id, admin)
+        db_user = await user_operations.get_validated_user_by_id(db, callback_data.user_id, admin, scope_action="read")
         user = await user_operations.validate_user(db_user)
         user_with_inbounds = await subscription_operations.validated_user(db_user)
         links, _ = await subscription_operations.fetch_config(user_with_inbounds, ConfigFormat.links)
