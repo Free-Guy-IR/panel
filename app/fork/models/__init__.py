@@ -1,4 +1,5 @@
 from app.fork.models.named_lock import NamedLock
+from app.fork.models.pending_user_resync import PendingUserResync
 
 __all__ = [
     "ConnectionRestriction",
@@ -7,6 +8,7 @@ __all__ = [
     "ContentFilterSniffingOverride",
     "NamedLock",
     "NodeInboundUsage",
+    "PendingUserResync",
     "TrafficLogIdentity",
     "TrafficLogRecord",
     "TrafficLogState",

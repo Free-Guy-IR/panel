@@ -589,7 +589,7 @@ async def test_users_that_keep_changing_stop_the_repair_at_the_pass_bound_with_a
 async def test_a_group_request_waits_at_most_twice_the_bounded_lock_wait_and_restores_the_connection(
     engine, monkeypatch, repair
 ):
-    from app.fork.proxy_secrets import entitled as entitled_module, group_repair
+    from app.fork.proxy_secrets import group_repair
     from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, acquire_named_lock
 
     if engine.dialect.name not in ("mysql", "mariadb"):
@@ -600,13 +600,13 @@ async def test_a_group_request_waits_at_most_twice_the_bounded_lock_wait_and_res
     monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (600.0,))
     seed = await _seed(holder_sessions)
     connection_ids = []
-    real_acquire = entitled_module.acquire_proxy_secrets_lock
+    real_acquire = group_repair.acquire_proxy_secrets_lock
 
     async def remember_the_connection(db):
         connection_ids.append(await db.scalar(text("SELECT CONNECTION_ID()")))
         await real_acquire(db)
 
-    monkeypatch.setattr(entitled_module, "acquire_proxy_secrets_lock", remember_the_connection)
+    monkeypatch.setattr(group_repair, "acquire_proxy_secrets_lock", remember_the_connection)
     _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
 
     try:
@@ -663,10 +663,10 @@ async def test_an_unrelated_database_error_in_a_group_change_is_not_turned_into_
 
 
 @pytest.mark.asyncio
-async def test_a_group_change_chosen_as_deadlock_victim_ends_with_its_step_done_exactly_once(
+async def test_a_group_change_waiting_for_the_lock_holds_no_row_its_holder_needs_and_does_its_step_once(
     engine, sessions, monkeypatch, repair
 ):
-    from app.fork.proxy_secrets import entitled as entitled_module
+    from app.fork.proxy_secrets import group_repair
     from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, acquire_named_lock
 
     if engine.dialect.name == "sqlite":
@@ -674,13 +674,13 @@ async def test_a_group_change_chosen_as_deadlock_victim_ends_with_its_step_done_
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
     victim_waits_for_the_lock = asyncio.Event()
-    real_acquire = entitled_module.acquire_proxy_secrets_lock
+    real_acquire = group_repair.acquire_proxy_secrets_lock
 
     async def announce_then_acquire(db):
         victim_waits_for_the_lock.set()
         await real_acquire(db)
 
-    monkeypatch.setattr(entitled_module, "acquire_proxy_secrets_lock", announce_then_acquire)
+    monkeypatch.setattr(group_repair, "acquire_proxy_secrets_lock", announce_then_acquire)
     _, _, change = _group_change(seed, "bulk_set_groups_disabled")
 
     async def victim():
@@ -700,16 +700,8 @@ async def test_a_group_change_chosen_as_deadlock_victim_ends_with_its_step_done_
         await holder.commit()
 
     outcome = (await asyncio.gather(waiting, return_exceptions=True))[0]
-    if engine.dialect.name in ("mysql", "mariadb"):
-        assert isinstance(outcome, HTTPException) and outcome.status_code == 503
-        assert repair.scheduled == [[member]]
-        interim = await _phase_two_state(sessions, member)
-        assert interim.peer_ips == []
-        assert interim.openvpn is None
-        assert await repair.tasks[0] is True
-    else:
-        assert not isinstance(outcome, BaseException)
-        assert repair.scheduled == []
+    assert not isinstance(outcome, BaseException)
+    assert repair.scheduled == []
 
     state = await _phase_two_state(sessions, member)
     assert len(state.peer_ips) == 1

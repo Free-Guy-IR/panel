@@ -840,6 +840,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self._get_validated_template_with_access(db, modified_user.next_plan.user_template_id, admin)
 
         effective_groups = validated_groups if validated_groups is not None else db_user.groups
+        await self._lock_user_proxy_settings(db, db_user)
         current_proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
         current_proxy_settings_data = current_proxy_settings.dict()
         proxy_settings_to_prepare = (

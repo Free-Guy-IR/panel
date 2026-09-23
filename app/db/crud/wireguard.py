@@ -5,10 +5,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface, ip_network
 
-from sqlalchemy import and_, delete, false, func, insert, select
+from sqlalchemy import and_, delete, false, insert, select, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db.models import (
     CoreConfig,
@@ -246,33 +247,35 @@ def _user_public_key(db_user_settings: dict | None) -> str | None:
     return ((db_user_settings or {}).get("wireguard") or {}).get("public_key")
 
 
+async def _committed_rows(db: AsyncSession, statement) -> list:
+    from app.fork.proxy_secrets.locks import read_committed_rows
+
+    return await read_committed_rows(db, statement)
+
+
 async def shared_wireguard_public_keys(db: AsyncSession, users: Iterable[User]) -> frozenset[str]:
-    derived_counts: dict[str, int] = {}
-    candidates: set[str] = set()
+    own_counts: dict[str, int] = {}
+    own_ids: set[int] = set()
 
     for user in users:
+        own_ids.add(user.id)
         wg = (user.proxy_settings or {}).get("wireguard") or {}
         public_key = wg.get("public_key")
+        if not public_key and wg.get("private_key"):
+            public_key = get_wireguard_public_key(wg["private_key"])
         if public_key:
-            candidates.add(public_key)
-            continue
-        private_key = wg.get("private_key")
-        if not private_key:
-            continue
-        derived = get_wireguard_public_key(private_key)
-        derived_counts[derived] = derived_counts.get(derived, 0) + 1
-        candidates.add(derived)
+            own_counts[public_key] = own_counts.get(public_key, 0) + 1
 
-    if not candidates:
+    if not own_counts:
         return frozenset()
 
     column = User.proxy_settings["wireguard"]["public_key"].as_string()
-    rows = await db.execute(select(column, func.count(User.id)).where(column.in_(candidates)).group_by(column))
-    stored_counts = {row[0]: row[1] for row in rows if row[0]}
+    other_counts: dict[str, int] = {}
+    for user_id, public_key in await _committed_rows(db, select(User.id, column).where(column.in_(own_counts))):
+        if public_key and user_id not in own_ids:
+            other_counts[public_key] = other_counts.get(public_key, 0) + 1
 
-    return frozenset(
-        key for key in candidates if stored_counts.get(key, 0) + derived_counts.get(key, 0) > 1
-    )
+    return frozenset(key for key, count in own_counts.items() if count + other_counts.get(key, 0) > 1)
 
 
 def _ensure_wireguard_keys(db_user: User, shared_keys: frozenset[str] = frozenset()) -> bool:
@@ -300,6 +303,13 @@ def _ensure_wireguard_keys(db_user: User, shared_keys: frozenset[str] = frozense
 
 def _user_peer_ips(db_user_settings: dict | None) -> list[str]:
     return list(((db_user_settings or {}).get("wireguard") or {}).get("peer_ips") or [])
+
+
+def with_stored_peer_ips(proxy_settings: dict, stored_settings: dict | None) -> dict:
+    wireguard = proxy_settings.get("wireguard")
+    wireguard = dict(wireguard) if isinstance(wireguard, dict) else {}
+    wireguard["peer_ips"] = _user_peer_ips(stored_settings)
+    return {**proxy_settings, "wireguard": wireguard}
 
 
 def _set_user_peer_ips(db_user: User, peer_ips: list[str]) -> None:
@@ -393,7 +403,9 @@ async def _load_user_proxy_settings(db: AsyncSession, user_ids: list[int]) -> li
     for i in range(0, len(user_ids), RECONCILE_USER_CHUNK):
         chunk = user_ids[i : i + RECONCILE_USER_CHUNK]
         for user_id, proxy_settings in (
-            await db.execute(select(User.id, User.proxy_settings).where(User.id.in_(chunk)))
+            await db.execute(
+                select(User.id, User.proxy_settings).where(User.id.in_(chunk)).order_by(User.id).with_for_update()
+            )
         ).all():
             by_id[user_id] = proxy_settings
     for user_id in user_ids:
@@ -442,6 +454,38 @@ async def _lock_subnet_rows(db: AsyncSession, keys: Iterable[str]) -> dict[str, 
     return {row.network: row for row in rows}
 
 
+def _touched_subnet_keys(
+    namespaces: dict[str, WgNamespace], users: Iterable[User], tags_by_user: dict[int, set[str]]
+) -> set[str]:
+    touched: set[str] = set()
+    for user in users:
+        tags = tags_by_user.get(user.id, set())
+        touched.update(ns.key for ns in namespaces.values() if ns.tags & tags)
+        for entry in _user_peer_ips(user.proxy_settings):
+            host = peer_host(entry)
+            if host is not None and (ns := match_namespace(namespaces, *host)):
+                touched.add(ns.key)
+    return touched
+
+
+async def lock_users_proxy_settings(db: AsyncSession, users: Iterable[User]) -> list[User]:
+    by_id = {user.id: user for user in users}
+    user_ids = sorted(by_id)
+    present: set[int] = set()
+    serializes_writers = db.get_bind().dialect.name == "sqlite"
+    for start in range(0, len(user_ids), RECONCILE_USER_CHUNK):
+        chunk = user_ids[start : start + RECONCILE_USER_CHUNK]
+        if serializes_writers:
+            await db.execute(update(User.__table__).where(User.__table__.c.id.in_(chunk)).values(id=User.__table__.c.id))
+        rows = await db.execute(
+            select(User.id, User.proxy_settings).where(User.id.in_(chunk)).order_by(User.id).with_for_update()
+        )
+        for user_id, proxy_settings in rows.all():
+            set_committed_value(by_id[user_id], "proxy_settings", proxy_settings)
+            present.add(user_id)
+    return [user for user in by_id.values() if user.id in present]
+
+
 # --- sync (the single trigger) ----------------------------------------------
 
 
@@ -460,19 +504,18 @@ async def sync_users_allocations(
     """
     if not users:
         return []
+    fresh_tags = tags_by_user is None
     namespaces = wg_namespaces(await get_wg_cores(db))
     if tags_by_user is None:
         tags_by_user = await get_users_accessible_tags(db, [user.id for user in users])
-
-    touched_keys: set[str] = set()
-    for user in users:
-        tags = tags_by_user.get(user.id, set())
-        touched_keys.update(ns.key for ns in namespaces.values() if ns.tags & tags)
-        for entry in _user_peer_ips(user.proxy_settings):
-            host = peer_host(entry)
-            if host is not None and (ns := match_namespace(namespaces, *host)):
-                touched_keys.add(ns.key)
-    rows = await _lock_subnet_rows(db, touched_keys)
+    rows = await _lock_subnet_rows(db, _touched_subnet_keys(namespaces, users, tags_by_user))
+    await db.flush()
+    users = await lock_users_proxy_settings(db, users)
+    if fresh_tags:
+        tags_by_user = await get_users_accessible_tags(db, [user.id for user in users])
+    missing_keys = _touched_subnet_keys(namespaces, users, tags_by_user) - set(rows)
+    if missing_keys:
+        rows.update(await _lock_subnet_rows(db, missing_keys))
 
     wg_bound_users = [
         user
@@ -588,8 +631,12 @@ async def reconcile_wireguard_subnets(db: AsyncSession) -> list[int]:
     all_tags = {tag for ns in namespaces.values() for tag in ns.tags}
     eligible_tags = await get_users_accessible_tags_by_inbound_tags(db, all_tags) if all_tags else {}
 
-    peer_ip_ids = await _user_ids_with_peer_ips(db)
-    relevant_ids = sorted(set(eligible_tags) | set(peer_ip_ids))
+    peer_ip_ids = set(await _user_ids_with_peer_ips(db))
+    peer_ip_ids.update(
+        row[0]
+        for row in await _committed_rows(db, select(User.id).where(_peer_ips_present_clause()))
+    )
+    relevant_ids = sorted(set(eligible_tags) | peer_ip_ids)
     user_rows = await _load_user_proxy_settings(db, relevant_ids)
 
     used: dict[str, set[int]] = {key: set() for key in namespaces}
@@ -644,6 +691,8 @@ async def reconcile_wireguard_subnets(db: AsyncSession) -> list[int]:
         for i in range(0, len(changed_ids), RECONCILE_USER_CHUNK):
             chunk = changed_ids[i : i + RECONCILE_USER_CHUNK]
             users = (await db.execute(select(User).where(User.id.in_(chunk)))).scalars().all()
+            for user in users:
+                set_committed_value(user, "proxy_settings", settings_by_id[user.id])
             shared = await shared_wireguard_public_keys(db, users)
             for user in users:
                 _set_user_peer_ips(user, desired[user.id])

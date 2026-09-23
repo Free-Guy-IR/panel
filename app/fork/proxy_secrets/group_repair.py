@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 
+import anyio
+from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.db import AsyncSession, GetDB
 from app.db.crud.user import get_users_by_ids
 from app.db.crud.wireguard import sync_users_allocations
-from app.db.models import User
+from app.db.models import Admin, Group, User
+from app.fork.proxy_secrets import resync_markers
 from app.fork.proxy_secrets.entitled import grant_entitled_secrets
+from app.fork.proxy_secrets.errors import describe_failure
 from app.fork.proxy_secrets.locks import (
     MYSQL_FAMILY,
     NamedLockMissing,
@@ -28,6 +34,9 @@ IN_REQUEST_RETRY_PAUSE_SECONDS = 1.0
 IN_REQUEST_LOCK_WAIT_SECONDS = 10
 REPAIR_DELAYS_SECONDS: tuple[float, ...] = (5.0, 30.0, 120.0)
 REPAIR_MAX_PASSES = 5
+PUSH_LOAD_CHUNK = 1000
+DRAIN_MIN_AGE_SECONDS = 600.0
+DRAIN_CHUNK = 200
 LOCK_FAILURES = (DBAPIError, NamedLockMissing)
 LOCK_WAIT_VARIABLE = "innodb_lock_wait_timeout"
 
@@ -36,9 +45,37 @@ _repair_owners: dict[int, asyncio.Task] = {}
 _dirty_user_ids: set[int] = set()
 
 
+PushUsers = Callable[[list[User]], Awaitable[None]]
+
+
 async def allocate_and_grant(db: AsyncSession, users: Sequence[User]) -> None:
+    await acquire_proxy_secrets_lock(db)
     await sync_users_allocations(db, list(users))
     await grant_entitled_secrets(db, list(users))
+
+
+def _committed_users_statement(user_ids: Sequence[int]):
+    return (
+        select(User)
+        .where(User.id.in_(user_ids))
+        .order_by(User.id)
+        .options(
+            joinedload(User.admin).selectinload(Admin.role),
+            selectinload(User.groups).selectinload(Group.inbounds),
+        )
+    )
+
+
+async def push_committed_users(db: AsyncSession, user_ids: Iterable[int], push: PushUsers) -> None:
+    ordered = sorted(set(user_ids))
+    if not ordered:
+        return
+    async with AsyncSession(db.bind, autoflush=False, expire_on_commit=False) as fresh:
+        users: list[User] = []
+        for start in range(0, len(ordered), PUSH_LOAD_CHUNK):
+            chunk = ordered[start : start + PUSH_LOAD_CHUNK]
+            users.extend((await fresh.execute(_committed_users_statement(chunk))).unique().scalars().all())
+        await push(users)
 
 
 def _whole_transaction_is_gone(db: AsyncSession, exc: BaseException) -> bool:
@@ -75,6 +112,19 @@ async def _driver_scalar(driver_connection, sql: str, args=None):
     return row[0] if row else None
 
 
+async def _restore_lock_wait(connection, driver_connection, previous) -> None:
+    with anyio.CancelScope(shield=True):
+        try:
+            await _driver_scalar(driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (previous,))
+        except BaseException as exc:
+            logger.warning(
+                f"could not restore {LOCK_WAIT_VARIABLE} on a pooled connection, discarding it: "
+                f"{describe_failure(exc)}"
+            )
+            await connection.invalidate()
+            raise
+
+
 @asynccontextmanager
 async def _bounded_lock_wait(db: AsyncSession) -> AsyncIterator[None]:
     if db.get_bind().dialect.name not in MYSQL_FAMILY:
@@ -83,15 +133,13 @@ async def _bounded_lock_wait(db: AsyncSession) -> AsyncIterator[None]:
     connection = await db.connection()
     driver_connection = (await connection.get_raw_connection()).driver_connection
     previous = await _driver_scalar(driver_connection, f"SELECT @@SESSION.{LOCK_WAIT_VARIABLE}")
-    await _driver_scalar(driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (IN_REQUEST_LOCK_WAIT_SECONDS,))
     try:
+        await _driver_scalar(
+            driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (IN_REQUEST_LOCK_WAIT_SECONDS,)
+        )
         yield
     finally:
-        try:
-            await _driver_scalar(driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (previous,))
-        except Exception as exc:
-            logger.warning(f"could not restore {LOCK_WAIT_VARIABLE} on a pooled connection, discarding it: {exc}")
-            await connection.invalidate()
+        await _restore_lock_wait(connection, driver_connection, previous)
 
 
 async def _attempt_twice(db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]) -> None:
@@ -102,9 +150,10 @@ async def _attempt_twice(db: AsyncSession, users: Sequence[User], user_ids: Sequ
         raise failure
     logger.warning(
         f"WireGuard allocation and entitled secrets for users {list(user_ids)[:20]} could not take the proxy "
-        f"secrets lock ({failure}); retrying once in {IN_REQUEST_RETRY_PAUSE_SECONDS:g}s"
+        f"secrets lock ({describe_failure(failure)}); retrying once in {IN_REQUEST_RETRY_PAUSE_SECONDS:g}s"
     )
     await asyncio.sleep(IN_REQUEST_RETRY_PAUSE_SECONDS)
+    await acquire_proxy_secrets_lock(db)
     await get_users_by_ids(db, list(user_ids), load_admin_role=True)
     failure, _ = await _attempt(db, users)
     if failure is not None:
@@ -112,8 +161,30 @@ async def _attempt_twice(db: AsyncSession, users: Sequence[User], user_ids: Sequ
 
 
 async def allocate_and_grant_with_one_retry(db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]) -> None:
+    await db.commit()
     async with _bounded_lock_wait(db):
         await _attempt_twice(db, users, user_ids)
+
+
+async def pending_resync_markers(db: AsyncSession, user_ids: Iterable[int]) -> list[resync_markers.Marker]:
+    return await resync_markers.markers_for(db, user_ids)
+
+
+async def clear_resync_markers(db: AsyncSession, markers: Iterable[resync_markers.Marker]) -> None:
+    await resync_markers.clear_markers(db, markers)
+    await db.commit()
+
+
+async def finish_in_background(user_ids: list[int], markers: Iterable[resync_markers.Marker] | None = None) -> None:
+    async with GetDB() as db:
+        users = await get_users_by_ids(db, user_ids, load_admin_role=True)
+        if markers is None:
+            markers = await resync_markers.markers_for(db, user_ids)
+        await db.commit()
+        await allocate_and_grant(db, users)
+        await db.commit()
+        await push_committed_users(db, user_ids, sync_users)
+        await clear_resync_markers(db, markers)
 
 
 async def _repair_pass(user_ids: list[int], pass_number: int) -> bool:
@@ -121,15 +192,11 @@ async def _repair_pass(user_ids: list[int], pass_number: int) -> bool:
     for attempt, delay in enumerate(REPAIR_DELAYS_SECONDS, start=1):
         await asyncio.sleep(delay)
         try:
-            async with GetDB() as db:
-                users = await get_users_by_ids(db, user_ids, load_admin_role=True)
-                await allocate_and_grant(db, users)
-                await db.commit()
-                await sync_users(users)
+            await finish_in_background(user_ids)
         except Exception as exc:
             logger.warning(
                 f"pass {pass_number}, attempt {attempt}/{attempts} to finish WireGuard allocation and entitled "
-                f"secrets for users {user_ids[:20]} after a group change failed: {exc}"
+                f"secrets for users {user_ids[:20]} after a group change failed: {describe_failure(exc)}"
             )
             continue
         logger.info(
@@ -142,6 +209,30 @@ async def _repair_pass(user_ids: list[int], pass_number: int) -> bool:
         "attempts; nothing of that step was stored, run the protocol activation or repeat the group change"
     )
     return False
+
+
+async def drain_pending_resyncs(*, min_age_seconds: float = DRAIN_MIN_AGE_SECONDS) -> int:
+    requested_before = datetime.now(UTC) - timedelta(seconds=min_age_seconds)
+    drained = 0
+    after_user_id = 0
+    while True:
+        async with GetDB() as db:
+            markers = await resync_markers.due_markers(
+                db, requested_before, DRAIN_CHUNK, after_user_id=after_user_id
+            )
+        if not markers:
+            return drained
+        user_ids = sorted({user_id for user_id, _ in markers})
+        after_user_id = user_ids[-1]
+        try:
+            await finish_in_background(user_ids, markers)
+        except Exception as exc:
+            logger.warning(
+                f"could not finish the pending WireGuard allocation and entitled secrets of users {user_ids[:20]} "
+                f"left by an earlier group change; the next run retries: {describe_failure(exc)}"
+            )
+            return drained
+        drained += len(user_ids)
 
 
 async def repair_allocations(user_ids: Sequence[int]) -> bool:

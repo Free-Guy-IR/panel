@@ -14,6 +14,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
 from app.db.models import CoreConfig, CoreType, User
+from app.fork.proxy_secrets.errors import describe_failure
 from app.fork.proxy_secrets.locks import (
     NamedLockMissing,
     acquire_proxy_secrets_lock,
@@ -405,7 +406,8 @@ async def grant_entitled_secrets_after_plan_change(db: AsyncSession, db_user: Us
         await savepoint.rollback()
         logger.error(
             f"next plan applied to user {db_user.id}, but granting its entitled secrets timed out waiting for the "
-            f"proxy secrets lock and nothing was written; run the activation for the protocol: {exc}"
+            f"proxy secrets lock and nothing was written; run the activation for the protocol: "
+            f"{describe_failure(exc)}"
         )
         return []
     await savepoint.commit()
