@@ -76,7 +76,10 @@ async def test_deleting_one_node_mid_tick_does_not_void_the_cohorts_billing(fk_e
     try:
         await record_usages.apply_fenced_user_usage(
             [{"uid": alice_id, "value": 700}, {"uid": bob_id, "value": 300}],
-            {alice_id: record_usages.UserUsageContext(admin_id, 0), bob_id: record_usages.UserUsageContext(admin_id, 0)},
+            {
+                alice_id: record_usages.UserUsageContext(admin_id, 0),
+                bob_id: record_usages.UserUsageContext(admin_id, 0),
+            },
             {alice_id: 0, bob_id: 0},
             [
                 {"uid": alice_id, "node_id": kept_id, "created_at": BUCKET, "value": 700},
