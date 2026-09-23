@@ -675,9 +675,10 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> Admin:
         await db.commit()
         return db_admin
 
-    usage_log = AdminUsageLogs(admin_id=db_admin.id, used_traffic_at_reset=db_admin.used_traffic)
+    logged = db_admin.used_traffic
+    usage_log = AdminUsageLogs(admin_id=db_admin.id, used_traffic_at_reset=logged)
     db.add(usage_log)
-    db_admin.used_traffic = 0
+    await db.execute(update(Admin).where(Admin.id == db_admin.id).values(used_traffic=Admin.used_traffic - logged))
 
     # After reset, used_traffic = 0 so the admin is no longer limited
     if db_admin.status == AdminStatus.limited:
