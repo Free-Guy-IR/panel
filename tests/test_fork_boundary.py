@@ -18,7 +18,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_LOCALE_RELATIVE_DIR = "dashboard/public/statics/locales"
 FORK_LOCALE_DIR = REPO_ROOT / "dashboard" / "src" / "fork" / "locales"
 LOCALE_CODES = ("en", "fa", "ru", "zh")
-UPSTREAM_REF = "v5.4.1"
+UPSTREAM_SYNC_POINT_FILE = REPO_ROOT / ".upstream-sync-point"
+UPSTREAM_REF = (
+    UPSTREAM_SYNC_POINT_FILE.read_text(encoding="utf-8").strip() if UPSTREAM_SYNC_POINT_FILE.is_file() else "v5.4.1"
+)
 
 FORK_MODULE_PREFIX = "app.fork."
 FORK_ROUTER_MODULE_PREFIX = "app.fork.routers."
