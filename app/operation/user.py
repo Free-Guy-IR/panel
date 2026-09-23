@@ -117,6 +117,7 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
+from app.utils.connection_enforcement import close_active_restriction, close_active_restrictions
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
@@ -166,6 +167,7 @@ async def _resolve_users_usage_admins_filter(
     return admins_filter
 
 
+ADMIN_STATUS_DECISION = "an admin set the user's status"
 logger = get_logger("user-operation")
 
 _USER_AGENT_SPLIT_RE = re.compile(r"[;/\s\(\)]+")
@@ -903,9 +905,13 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         old_status = db_user.status
         new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
+        closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
         if db_user.status != new_status:
             db_user.status = new_status
             db_user.last_status_change = dt.now(UTC)
+            await db.commit()
+            await load_user_attrs(db_user, load_admin_role=True)
+        elif closed:
             await db.commit()
             await load_user_attrs(db_user, load_admin_role=True)
 
@@ -1201,6 +1207,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 if db_user.id is not None:
                     modified_user_ids.append(db_user.id)
 
+            await close_active_restrictions(db, modified_user_ids, ADMIN_STATUS_DECISION)
             await db.commit()
         except Exception:
             await db.rollback()
@@ -1276,9 +1283,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="update"
         )
+        closed = await close_active_restrictions(db, [db_user.id for db_user in db_users], ADMIN_STATUS_DECISION)
         users_to_disable = [db_user for db_user in db_users if db_user.status != UserStatus.disabled]
 
         users = await self._bulk_set_users_disabled(db, users_to_disable, True, admin)
+        if closed and not users_to_disable:
+            await db.commit()
 
         return self._build_bulk_action_response(users)
 
@@ -1288,9 +1298,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="update"
         )
+        closed = await close_active_restrictions(db, [db_user.id for db_user in db_users], ADMIN_STATUS_DECISION)
         users_to_enable = [db_user for db_user in db_users if db_user.status == UserStatus.disabled]
 
         users = await self._bulk_set_users_disabled(db, users_to_enable, False, admin)
+        if closed and not users_to_enable:
+            await db.commit()
 
         return self._build_bulk_action_response(users)
 
@@ -1783,6 +1796,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 emit_status_change_notification=not suppress_reset_status_change,
             )
 
+        await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
         return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
 
     async def modify_user_with_template(
@@ -1929,6 +1943,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 if db_user.id is not None:
                     modified_user_ids.append(db_user.id)
 
+            await close_active_restrictions(db, modified_user_ids, ADMIN_STATUS_DECISION)
             await db.commit()
         except Exception:
             await db.rollback()

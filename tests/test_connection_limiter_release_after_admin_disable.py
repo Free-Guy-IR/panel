@@ -2,8 +2,6 @@ from datetime import UTC, datetime as dt, timedelta as td
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
-
 from app import notification
 from app.db.crud.user import get_user_by_id
 from app.db.models import User, UserStatus
@@ -20,10 +18,6 @@ from tests.api.helpers import unique_name
 ADMIN = SimpleNamespace(username="owner", is_owner=True, role=None)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="needs close_active_restriction called from UserOperation._set_user_disabled (routed to P6/P8)",
-)
 async def test_limiter_release_re_enables_a_user_the_admin_disabled_meanwhile(monkeypatch):
     tag = unique_name("a1_tag")
     group_id = await seed_group(tag)
