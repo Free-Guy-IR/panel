@@ -640,7 +640,7 @@ def test_bulk_delete_user_templates_removes_group_links_and_next_plan_refs(acces
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["count"] == 1
         assert get_template_group_link_count(template["id"]) == 0
-        assert get_next_plan_state(user["id"]) == {"exists": True, "user_template_id": None}
+        assert get_next_plan_state(user["id"]) is None
     finally:
         delete_user(access_token, user["username"])
         delete_group_if_present(access_token, group["id"])

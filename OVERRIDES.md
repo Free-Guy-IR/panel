@@ -127,6 +127,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/db/crud/settings.py` — 1 line; `get_settings` is annotated `Settings | None`, which is what `scalar_one_or_none` has always returned. The upstream annotation promised a row that may not exist and every caller believed it
 - `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`
 - `app/jobs/review_users.py` — limit_users_job hands its candidate ids to the fork's row-locked limit_users_under_lock, so the usage tick and the review job never apply a transition twice
+- `app/db/crud/user_template.py` — `remove_user_templates` (the bulk delete) locks the templates and deletes the next plans that point to them, as the single delete's ORM cascade already does, instead of nulling `user_template_id` and leaving an empty next plan that activates as unlimited data with no expiry (v5.34.25, a4-users-8)
 - `app/operation/admin_sync.py` — `limit_exceeded_admins` limits each candidate through the fork's `limit_admin_if_over_quota` (row lock with the over-quota predicate plus a conditional UPDATE) under the shared `admin_transition_lock`, instead of writing `status=limited` onto an ORM object loaded before the loop, so a quota raised or reset mid-loop is never overwritten and the review job and the recorder never flip the same admin twice (v5.34.25, a2-usage-3)
 - `app/operation/admin.py` — modify and reset (single and bulk) take `admin_transition_lock`, lock the admin row, and decide the old user-sync state from the locked status, so a job limit that lands between the read and the write cannot leave a raised or reset admin limited with its users cut; the password is hashed before the row lock (v5.34.25, a2-usage-3)
 
@@ -135,6 +136,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `tests/api/__init__.py` — test app import cleanup
 - `tests/api/test_usage_functions_timezone.py` — admins parameter updates
 - `tests/api/test_user.py` — crud import updates and flow assertion
+- `tests/api/test_bulk_delete_entities.py` — `test_bulk_delete_user_templates_removes_group_links_and_next_plan_refs` asserted the upstream behaviour of keeping the next plan with a null template, which is the a4-users-8 defect; it now asserts the next plan is deleted (v5.34.25)
 - `tests/api/test_host.py` — settings assertion update
 - `tests/api/test_node.py` — serialize lambda signature update
 - `tests/test_review_users_unit.py` — import block re-sorted for the fork's combine-as-imports ruff config
