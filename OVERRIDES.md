@@ -51,7 +51,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/core/manager.py`
 - `app/core/xray.py`
 - `app/db/crud/admin.py` — except-fix; plus `reset_admin_usage` subtracts the logged value with a relative SQL update (`used_traffic = used_traffic - logged`) instead of assigning 0, so bytes a usage tick bills between the admin's read and the reset commit stay on the counter while the usage log still records the pre-reset value (v5.34.25)
-- `app/db/crud/general.py`
+- `app/db/crud/general.py` — except-fix; plus upstream's complete-period-bucket helpers `_get_next_period_boundary` and `get_complete_period_start_for_filter` (upstream a04bf498c, 56cb06e62) are removed on purpose by fork 1519b6bbb: usage ranges are additive half-open [start, end) windows, so a query no longer drops its partial first bucket
 - `app/lifecycle.py`
 - `app/nats/router.py`
 - `app/telegram/fsm_storage.py`
@@ -66,7 +66,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 ## connect_node multicore generalization (upstream PR candidate)
 
 - `app/operation/node.py` — connect_node generalized across cores with bounded concurrency; the local log-stream getter also returns the fork's fork_log_stream seam so the traffic-log collector stays the only reader of the node's shared log channel; attaching to an already-running core now re-pushes the user list, because without it a core that came up without users rejects every client forever; `modify_node` forces a Start only when the stored `core_config_id`, additional cores or `keep_alive` actually changed, where upstream forced one on every edit and the fork previously forced one whenever the fields were merely present in the body, which the dashboard sends on every save, so renaming a node or changing its coefficient stopped and restarted its core (v5.34.25, A3)
-- `app/db/crud/node.py` — core_config_id-aware node filtering, and the per-node resource-history query compares its HAVING clause against the `period_start` alias the way the usage query already did; re-emitting the truncation expression made MySQL reject the whole statement with `Unknown column 'node_stats.created_at' in 'having clause'`, which is why that endpoint answered 503 on every node
+- `app/db/crud/node.py` — core_config_id-aware node filtering including additional cores; the complete-bucket HAVING clauses of the node usage and resource-history queries are removed with general.py's helpers (1519b6bbb), which also ends the MySQL `Unknown column 'node_stats.created_at' in 'having clause'` error that made the resource-history endpoint answer 503; removing a node keeps its usage rows with `node_id` set to NULL instead of deleting them (see the app/db/models.py entry); `clear_usage_data` compares timezone-aware bounds
 - `app/node/manager_sync.py` — call-site update for new connect_node signature
 - `app/node/sync.py` — _serialize_user_for_node signature update
 - `app/node/user.py` — node user serialization carries vless id
@@ -173,7 +173,7 @@ The ledger gate was already failing on these 27 files before the boundary work s
 they carry 201 override lines between them. They are listed here so the gate reflects the
 real boundary, and each one still needs its own justification or a revert.
 
-- `dashboard/src/features/nodes/components/cores/logs.tsx` — 121 upstream lines removed, the largest inherited override; the upstream WebSocket log viewer was replaced wholesale and the reason is not recorded
+- `dashboard/src/features/nodes/components/cores/logs.tsx` — the file is deleted (123 upstream lines). It is dead code upstream too: nothing imports it at v5.4.1, and the live log viewer is pages/_dashboard.nodes.logs.tsx, which the fork leaves unchanged
 - `dashboard/src/features/admins/components/admins-table.tsx` — 14 lines; upstream's `dangerouslySetInnerHTML` confirm prompts were replaced with escaped rendering
 - `app/db/models.py` — 14 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size, and those `node_id` foreign keys became nullable `ondelete="SET NULL"` so deleting a node no longer walks its usage rows. The file now also ends with `_register_fork_model_tables`, which imports the fork model modules so their tables join the shared declarative metadata, and `fk_id_column` forwards a `name` keyword through to `ForeignKey` so a fork table can pin a constraint name short enough for PostgreSQL's 63-character identifier limit
 - `app/operation/permissions.py` — 4 lines, reason not recorded
