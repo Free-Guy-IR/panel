@@ -14,6 +14,7 @@ logger = get_logger("nats-router")
 
 RESUBSCRIBE_BACKOFF_MIN_S = 0.5
 RESUBSCRIBE_BACKOFF_MAX_S = 10.0
+PERIODIC_RESYNC_S = 300.0
 
 
 def _router_enabled() -> bool:
@@ -39,6 +40,7 @@ class NatsMessageRouter:
         self._handlers: dict[MessageTopic, Callable[[dict], Awaitable[None]]] = {}
         self._resync_handlers: list[Callable[[], Awaitable[None]]] = []
         self._resync_task: asyncio.Task | None = None
+        self._periodic_resync_task: asyncio.Task | None = None
         self._resync_pending = False
         self._running = False
 
@@ -88,6 +90,11 @@ class NatsMessageRouter:
                     logger.exception("NATS resync handler failed")
             if not self._resync_pending:
                 return
+
+    async def _resync_periodically(self) -> None:
+        while True:
+            await asyncio.sleep(PERIODIC_RESYNC_S)
+            self._schedule_resync()
 
     async def _on_reconnected(self, client: nats.NATS) -> None:
         if client is self._nc:
@@ -166,16 +173,18 @@ class NatsMessageRouter:
         add_reconnect_listener(self._on_reconnected)
         self._running = True
         self._listener_task = asyncio.create_task(self._listen())
+        self._periodic_resync_task = asyncio.create_task(self._resync_periodically())
 
     async def stop(self):
         """Stop the router listener."""
         remove_reconnect_listener(self._on_reconnected)
-        for task in (self._listener_task, self._resync_task):
+        for task in (self._listener_task, self._periodic_resync_task, self._resync_task):
             if task and not task.done():
                 task.cancel()
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(task, timeout=2.0)
         self._resync_task = None
+        self._periodic_resync_task = None
 
         if self._nc:
             await self._nc.close()

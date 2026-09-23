@@ -169,6 +169,38 @@ async def test_the_router_resyncs_after_subscribing_and_after_its_own_client_rec
 
 
 @pytest.mark.asyncio
+async def test_the_router_also_resyncs_periodically_so_a_single_lost_publish_cannot_last_forever(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    live = _LiveClient()
+
+    async def create_client():
+        return live
+
+    monkeypatch.setattr(router_module, "_router_enabled", lambda: True)
+    monkeypatch.setattr(router_module, "create_nats_client", create_client)
+    assert 0 < router_module.PERIODIC_RESYNC_S <= 600
+    monkeypatch.setattr(router_module, "PERIODIC_RESYNC_S", 0.05)
+    router = router_module.NatsMessageRouter()
+    resyncs = []
+
+    async def resync():
+        resyncs.append(True)
+
+    router.register_resync_handler(resync)
+    await router.start()
+    try:
+        for _ in range(100):
+            if len(resyncs) >= 3:
+                break
+            await asyncio.sleep(0.02)
+    finally:
+        await router.stop()
+
+    assert len(resyncs) >= 3
+
+
+@pytest.mark.asyncio
 async def test_settings_edited_by_another_worker_are_seen_once_the_cache_entry_expires(
     monkeypatch: pytest.MonkeyPatch,
 ):
