@@ -15,7 +15,7 @@ from sqlalchemy import BigInteger, DateTime, bindparam, func, select, union_all,
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.exc import DatabaseError, DBAPIError, OperationalError
+from sqlalchemy.exc import DatabaseError, DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.sql.expression import Insert
 
 from app import on_shutdown, scheduler
@@ -200,11 +200,11 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
             select(
                 source.c.created_at,
                 source.c.uid,
-                source.c.node_id,
+                Node.id.label("node_id"),
                 func.sum(source.c.value).label("used_traffic"),
             )
-            .select_from(source.join(User, User.id == source.c.uid))
-            .group_by(source.c.created_at, source.c.uid, source.c.node_id)
+            .select_from(source.join(User, User.id == source.c.uid).outerjoin(Node, Node.id == source.c.node_id))
+            .group_by(source.c.created_at, source.c.uid, Node.id)
         )
 
         stmt = pg_insert(NodeUserUsage).from_select(
@@ -252,11 +252,11 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
         select(
             source.c.created_at,
             source.c.uid,
-            source.c.node_id,
+            Node.id.label("node_id"),
             func.sum(source.c.value).label("used_traffic"),
         )
-        .select_from(source.join(User, User.id == source.c.uid))
-        .group_by(source.c.created_at, source.c.uid, source.c.node_id)
+        .select_from(source.join(User, User.id == source.c.uid).outerjoin(Node, Node.id == source.c.node_id))
+        .group_by(source.c.created_at, source.c.uid, Node.id)
     )
 
     if dialect == "mysql":
@@ -349,6 +349,19 @@ def _mysql_errno(err) -> int | None:
     if args and isinstance(args[0], int):
         return args[0]
     return None
+
+
+def is_missing_parent_error(err) -> bool:
+    if _mysql_errno(err) == 1452:
+        return True
+    orig = getattr(err, "orig", err)
+    if getattr(orig, "sqlstate", None) == "23503" or getattr(orig, "pgcode", None) == "23503":
+        return True
+    message = str(err).lower()
+    return any(
+        fragment in message
+        for fragment in ("foreign key constraint fails", "foreign key constraint failed", "violates foreign key")
+    )
 
 
 def _is_retriable_db_error(err) -> bool:
@@ -981,7 +994,13 @@ async def apply_fenced_user_usage(
             tuple(item["uid"] for item in billable),
         )
 
-    return await run_in_retried_transaction(_apply)
+    try:
+        return await run_in_retried_transaction(_apply)
+    except IntegrityError as err:
+        if not is_missing_parent_error(err):
+            raise
+        logger.warning("A node was deleted while its usage was being written; writing the cohort again without it")
+        return await run_in_retried_transaction(_apply)
 
 
 def _report_unknown_uid_usage(
