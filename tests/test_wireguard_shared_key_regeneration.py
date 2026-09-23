@@ -18,7 +18,7 @@ def _user(private_key=None, public_key=None):
 def test_a_shared_public_key_is_replaced_by_a_fresh_pair():
     user = _user(SHARED_PRIVATE, SHARED_PUBLIC)
 
-    assert _ensure_wireguard_keys(user, frozenset({SHARED_PUBLIC})) is True
+    assert _ensure_wireguard_keys(user, shared_keys=frozenset({SHARED_PUBLIC})) is True
 
     wg = user.proxy_settings["wireguard"]
     assert wg["public_key"] != SHARED_PUBLIC
@@ -31,8 +31,8 @@ def test_two_users_on_one_shared_key_end_up_with_different_keys():
     second = _user(SHARED_PRIVATE, SHARED_PUBLIC)
     shared = frozenset({SHARED_PUBLIC})
 
-    _ensure_wireguard_keys(first, shared)
-    _ensure_wireguard_keys(second, shared)
+    _ensure_wireguard_keys(first, shared_keys=shared)
+    _ensure_wireguard_keys(second, shared_keys=shared)
 
     assert _user_public_key(first.proxy_settings) != _user_public_key(second.proxy_settings)
     assert _user_public_key(first.proxy_settings) != SHARED_PUBLIC
@@ -43,7 +43,7 @@ def test_an_unshared_complete_keypair_is_left_alone():
     private_key, public_key = generate_wireguard_keypair()
     user = _user(private_key, public_key)
 
-    assert _ensure_wireguard_keys(user, frozenset({SHARED_PUBLIC})) is False
+    assert _ensure_wireguard_keys(user, shared_keys=frozenset({SHARED_PUBLIC})) is False
     assert user.proxy_settings["wireguard"]["private_key"] == private_key
     assert user.proxy_settings["wireguard"]["public_key"] == public_key
 
@@ -60,7 +60,7 @@ def test_a_missing_public_key_is_derived_not_regenerated():
 def test_a_shared_private_key_cannot_sneak_its_public_key_back_in_by_derivation():
     user = _user(SHARED_PRIVATE)
 
-    assert _ensure_wireguard_keys(user, frozenset({SHARED_PUBLIC})) is True
+    assert _ensure_wireguard_keys(user, shared_keys=frozenset({SHARED_PUBLIC})) is True
 
     wg = user.proxy_settings["wireguard"]
     assert wg["public_key"] != SHARED_PUBLIC
@@ -121,5 +121,5 @@ def test_a_lone_private_only_user_is_not_flagged():
 def test_the_empty_shared_set_preserves_the_old_behaviour():
     user = _user(SHARED_PRIVATE, SHARED_PUBLIC)
 
-    assert _ensure_wireguard_keys(user, frozenset()) is False
+    assert _ensure_wireguard_keys(user, shared_keys=frozenset()) is False
     assert user.proxy_settings["wireguard"]["public_key"] == SHARED_PUBLIC
