@@ -244,3 +244,28 @@ async def test_a_cancelled_group_request_leaves_its_pooled_connection_restored_o
     assert server.value == 50 or server.invalidated, (
         f"connection returned to the pool with innodb_lock_wait_timeout={server.value} and not invalidated"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_request_task_cancelled_inside_the_bounded_wait_leaves_its_connection_restored_or_discarded():
+    from app.fork.proxy_secrets.group_repair import _bounded_lock_wait
+
+    server = _Server()
+    entered = asyncio.Event()
+
+    async def request():
+        async with _bounded_lock_wait(_Session(server)):
+            entered.set()
+            await asyncio.sleep(1)
+
+    task = asyncio.create_task(request())
+    await entered.wait()
+    task.cancel()
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert server.value == 50 or server.invalidated, (
+        f"connection returned to the pool with innodb_lock_wait_timeout={server.value} and not invalidated"
+    )

@@ -5,7 +5,7 @@ import pytest_asyncio
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.crud.user import get_user_by_id
+from app.db.crud.user import get_user_by_id, modify_user as crud_modify_user
 from app.db.crud.wireguard import get_subnet_usage
 from app.db.models import Admin, AdminRole, Base, CoreConfig, Group, ProxyInbound, User
 from app.models.core import CoreType
@@ -168,3 +168,24 @@ async def test_a_user_edit_that_overlaps_a_group_change_keeps_what_the_group_cha
     assert after.openvpn == granted.openvpn, "the OpenVPN password the group change issued was replaced"
     assert after.public_key == granted.public_key, "the WireGuard key the group change issued was replaced"
     assert await _pool_used(sessions) == len(held), f"pool marks {await _pool_used(sessions)} used, users hold {held}"
+
+
+@pytest.mark.asyncio
+async def test_an_edit_that_sends_its_own_peer_ips_keeps_the_pool_allocation(sessions):
+    seed = await _seed(sessions, ["member"])
+    member = seed.users["member"]
+    async with sessions() as group_db:
+        await _groups().modify_group(
+            group_db, seed.groups["bare"], GroupModify(name=f"{PREFIX}bare", inbound_tags=[WG_TAG, OVPN]), OWNER
+        )
+    granted = await _wireguard_of(sessions, member)
+
+    async with sessions() as db:
+        db_user = await get_user_by_id(db, member, load_admin_role=True)
+        sent = ProxyTable.model_validate(db_user.proxy_settings).dict()
+        sent["wireguard"]["peer_ips"] = ["10.78.0.200/32"]
+        await crud_modify_user(db, db_user, UserModify(proxy_settings=sent))
+
+    after = await _wireguard_of(sessions, member)
+    assert after.peer_ips == granted.peer_ips
+    assert await _held_ips(sessions) == {granted.peer_ips[0]: [member]}

@@ -206,7 +206,7 @@ async def _repair_pass(user_ids: list[int], pass_number: int) -> bool:
         return True
     logger.error(
         f"gave up finishing WireGuard allocation and entitled secrets for users {user_ids[:20]} after {attempts} "
-        "attempts; nothing of that step was stored, run the protocol activation or repeat the group change"
+        "attempts; nothing of that step was stored, and the pending-resync job retries it from the durable marker"
     )
     return False
 
@@ -249,7 +249,7 @@ async def repair_allocations(user_ids: Sequence[int]) -> bool:
         logger.error(
             f"users {pending[:20]} kept changing while their background WireGuard allocation and entitled secrets "
             f"repair ran; stopped after {REPAIR_MAX_PASSES} passes, so their latest group change may still lack its "
-            "addresses or secrets; run the protocol activation or repeat the group change"
+            "addresses or secrets until the pending-resync job finishes them from the durable marker"
         )
         return False
     finally:
@@ -294,7 +294,7 @@ async def cancel_pending_repairs() -> None:
     for task in tasks:
         logger.warning(
             f"shutting down before the background WireGuard allocation and entitled secrets for users "
-            f"{_pending_repairs.get(task, [])[:20]} finished; run the protocol activation or repeat the group change"
+            f"{_pending_repairs.get(task, [])[:20]} finished; the pending-resync job finishes them after the restart"
         )
         task.cancel()
     if tasks:
