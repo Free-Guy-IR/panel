@@ -27,6 +27,7 @@ from app.db.models import (
     users_groups_association,
 )
 from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.proxy import ProxyTable
 from app.models.stats import (
     Period,
@@ -1657,6 +1658,7 @@ async def get_all_users_usages(
     period: Period = Period.hour,
     node_id: int | None = None,
     group_by_node: bool = False,
+    allowed_group_ids: list[int] | None = None,
 ) -> UserUsageStatsList:
     """
     Retrieves aggregated usage data for all users of an admin within a specified time range,
@@ -1687,6 +1689,8 @@ async def get_all_users_usages(
     ]
     if admins_filter:
         conditions.append(Admin.username.in_(admins_filter))
+    if allowed_group_ids is not None:
+        conditions.append(user_in_allowed_groups(NodeUserUsage.user_id, allowed_group_ids))
 
     if node_id is not None:
         conditions.append(NodeUserUsage.node_id == node_id)
@@ -1719,7 +1723,7 @@ async def get_all_users_usages(
             .order_by(trunc_expr)
         )
 
-    result = await db.execute(stmt)
+    result = await execute_with_statement_timeout(db, stmt)
 
     stats = {}
     for row in result.mappings():
@@ -1745,11 +1749,14 @@ async def get_user_count_metric_stats(
     metric: UserCountMetric = UserCountMetric.online,
     node_id: int | None = None,
     group_by_node: bool = False,
+    allowed_group_ids: list[int] | None = None,
 ) -> UserCountMetricStatsList:
     """Retrieves one distinct user count metric from node_user_usages."""
     validate_user_count_metric_scope(metric, node_id=node_id, group_by_node=group_by_node)
 
     query_parts = _build_user_count_query_parts(db, admins, start, end, period, node_id)
+    if allowed_group_ids is not None:
+        query_parts["conditions"].append(user_in_allowed_groups(NodeUserUsage.user_id, allowed_group_ids))
     count_expr = _build_user_count_metric_expression(metric).label("count")
     total_stmt = select(count_expr).select_from(query_parts["from_clause"]).where(and_(*query_parts["conditions"]))
 
@@ -1774,8 +1781,8 @@ async def get_user_count_metric_stats(
             .order_by(query_parts["trunc_expr"])
         )
 
-    total_result = await db.execute(total_stmt)
-    result = await db.execute(stmt)
+    total_result = await execute_with_statement_timeout(db, total_stmt)
+    result = await execute_with_statement_timeout(db, stmt)
     count_during_period = total_result.scalar_one() or 0
 
     stats = {}

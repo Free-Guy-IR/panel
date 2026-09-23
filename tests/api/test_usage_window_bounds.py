@@ -38,3 +38,21 @@ def test_subscription_token_cannot_request_a_26_year_hourly_aggregation(access_t
         )
     finally:
         delete_user(access_token, user["username"])
+
+
+ALL_TIME_BY_DAY = {"start": "2000-01-01T00:00:00+00:00", "end": "2026-09-24T00:00:00+00:00", "period": "day"}
+
+
+@pytest.mark.parametrize("path", ["/api/users/usage", "/api/users/counts/online"])
+def test_the_dashboards_all_time_chart_by_day_still_works(operator_token, path):
+    response = client.get(path, params=ALL_TIME_BY_DAY, headers=auth_headers(operator_token))
+    assert response.status_code == 200, response.text
+
+
+def test_the_subscription_all_time_chart_by_day_still_works(access_token):
+    user = create_user(access_token, payload={"username": unique_name("usage_all_time")})
+    try:
+        response = client.get(f"{user['subscription_url']}/usage", params=ALL_TIME_BY_DAY)
+        assert response.status_code == 200, response.text
+    finally:
+        delete_user(access_token, user["username"])

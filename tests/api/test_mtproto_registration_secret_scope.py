@@ -4,7 +4,16 @@ from sqlalchemy import update
 
 from app.db.models import User
 from tests.api import TestSession, app, client
-from tests.api.helpers import auth_headers, create_user, delete_user, unique_name
+from tests.api.helpers import (
+    auth_headers,
+    create_core,
+    create_group,
+    create_user,
+    delete_core,
+    delete_group,
+    delete_user,
+    unique_name,
+)
 
 OTHER_SECRET = "ab" * 16
 
@@ -150,3 +159,64 @@ async def test_a_non_ascii_fake_tls_domain_is_a_client_error(access_token):
     finally:
         delete_user(access_token, holder["username"])
         client.delete(f"/api/core/{core['id']}", headers=auth_headers(access_token))
+
+
+@pytest.mark.asyncio
+async def test_group_restricted_admin_never_gets_a_hidden_users_secret(access_token):
+    xray_core = create_core(access_token, name=unique_name("mt_groups_core"))
+    allowed = create_group(access_token, name=unique_name("mt_allowed"))
+    forbidden = create_group(access_token, name=unique_name("mt_forbidden"))
+    tag = unique_name("plain")
+    core = _mtproto_core(access_token, {"tag": tag, "port": 8452, "mode": "plain"})
+    role = client.post(
+        "/api/admin-role",
+        headers=auth_headers(access_token),
+        json={
+            "name": unique_name("mt_group_role"),
+            "permissions": {"cores": {"read": True}, "users": {"read": True}},
+            "access": {"require_template": False, "allowed_template_ids": None, "allowed_group_ids": [allowed["id"]]},
+        },
+    )
+    assert role.status_code == 201, role.text
+    username = unique_name("grouped")
+    password = "Grouped#12abCD"
+    created = client.post(
+        "/api/admin",
+        headers=auth_headers(access_token),
+        json={"username": username, "password": password, "role_id": role.json()["id"]},
+    )
+    assert created.status_code == 201, created.text
+    token = client.post(
+        "/api/admin/token", data={"username": username, "password": password, "grant_type": "password"}
+    ).json()["access_token"]
+    hidden = create_user(access_token, group_ids=[forbidden["id"]], payload={"username": unique_name("mt_hidden")})
+    async with TestSession() as db:
+        await db.execute(
+            update(User).where(User.id == hidden["id"]).values(proxy_settings={"mtproto": {"secret": OTHER_SECRET}})
+        )
+        await db.commit()
+    visible = None
+    url = f"/api/core/{core['id']}/mtproto/{tag}/registration-secret"
+    try:
+        nothing_visible = client.get(url, headers=auth_headers(token))
+        assert nothing_visible.status_code == 409, nothing_visible.text
+
+        visible = create_user(access_token, group_ids=[allowed["id"]], payload={"username": unique_name("mt_visible")})
+        async with TestSession() as db:
+            await db.execute(
+                update(User).where(User.id == visible["id"]).values(proxy_settings={"mtproto": {"secret": OWN_SECRET}})
+            )
+            await db.commit()
+        response = client.get(url, headers=auth_headers(token))
+        assert response.status_code == 200, response.text
+        assert response.json()["secret"] == "dd" + OWN_SECRET
+    finally:
+        for user in (hidden, visible):
+            if user is not None:
+                delete_user(access_token, user["username"])
+        client.delete(f"/api/admin/{username}", headers=auth_headers(access_token))
+        client.delete(f"/api/admin-role/{role.json()['id']}", headers=auth_headers(access_token))
+        client.delete(f"/api/core/{core['id']}", headers=auth_headers(access_token))
+        delete_group(access_token, allowed["id"])
+        delete_group(access_token, forbidden["id"])
+        delete_core(access_token, xray_core["id"])

@@ -4,12 +4,13 @@ from sqlalchemy import select
 from app.db import AsyncSession, get_db
 from app.db.models import User as DBUser
 from app.fork.cores.openvpn import generate_openvpn_pki
+from app.fork.crud.group_scope import user_in_allowed_groups
 from app.models.admin import AdminDetails
 from app.models.core import MTProtoRegistrationSecret, OpenVPNPKIResponse
 from app.models.user import UserStatus
 from app.operation import OperatorType
 from app.operation.core import CoreOperation
-from app.operation.permissions import get_scope_admin_id
+from app.operation.permissions import get_allowed_group_ids, get_scope_admin_id
 from app.routers.authentication import require_permission
 from app.utils import responses
 
@@ -69,6 +70,9 @@ async def get_mtproto_registration_secret(
     scope_admin_id = get_scope_admin_id(admin, "users", "read")
     if scope_admin_id is not None:
         stmt = stmt.where(DBUser.admin_id == scope_admin_id)
+    allowed_group_ids = get_allowed_group_ids(admin)
+    if allowed_group_ids is not None:
+        stmt = stmt.where(user_in_allowed_groups(DBUser.id, allowed_group_ids))
     row = (await db.execute(stmt)).scalar_one_or_none()
     raw_secret = (row or {}).get("mtproto", {}).get("secret") if row else None
     if not raw_secret:
