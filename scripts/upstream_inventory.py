@@ -54,9 +54,20 @@ SYMBOL_RULES = [
 
 CATEGORY_ORDER = ["fork-only", "pure-addition", "override", "mechanical"]
 
+SYNC_POINT_FILE = ".upstream-sync-point"
+STATUS_NAMES = {"A": "added", "M": "modified", "D": "deleted"}
 
-def git(*args):
-    result = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+
+def git(*args, stdin=None):
+    result = subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        input=stdin,
+        check=False,
+    )
     if result.returncode != 0:
         sys.stderr.write(f"error: git {' '.join(args)}\n{result.stderr.strip()}\n")
         raise SystemExit(2)
@@ -78,7 +89,14 @@ def is_mechanical_path(path):
 
 
 def head_blob(ref, path):
-    result = subprocess.run(["git", "show", f"{ref}:{path}"], capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["git", "show", f"{ref}:{path}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     return result.stdout if result.returncode == 0 else None
 
 
@@ -129,8 +147,12 @@ def scan_symbol(path, base_lines, lineno):
     return None
 
 
-def parse_file_diffs(base, head):
-    out = git("diff", "--no-color", "--no-ext-diff", "-U3", base, head)
+def tree_paths(ref):
+    return {p for p in git("ls-tree", "-r", "-z", "--name-only", ref).split("\0") if p}
+
+
+def parse_file_diffs(base, head, *extra):
+    out = git("diff", "--no-color", "--no-ext-diff", *extra, "-U3", base, head)
     files = {}
     current = None
     old_path = None
@@ -198,12 +220,18 @@ def attach_ranges_and_symbols(path, base, parsed):
     return [{"start": s, "end": e, "symbol": scan_symbol(path, base_lines, s)} for s, e in ranges]
 
 
-def classify(base, head):
+def empty_diff():
+    return {"added": [], "removed": []}
+
+
+def classify(base, head, upstream=None):
+    if upstream is not None:
+        return classify_dual(base, head, upstream)
     statuses = parse_name_status(base, head)
     parsed = parse_file_diffs(base, head)
     records = []
     for path, status in sorted(statuses.items()):
-        diff = parsed.get(path, {"added": [], "removed": []})
+        diff = parsed.get(path, empty_diff())
         if is_mechanical_path(path):
             category = "mechanical"
         elif status == "A":
@@ -216,7 +244,7 @@ def classify(base, head):
             category = "pure-addition"
         record = {
             "path": path,
-            "status": {"A": "added", "M": "modified", "D": "deleted"}[status],
+            "status": STATUS_NAMES[status],
             "category": category,
             "added_lines": 0,
             "removed_lines": len(diff["removed"]),
@@ -230,7 +258,83 @@ def classify(base, head):
     return records
 
 
-def build_report(base, head, records):
+def load_upstream_view(base, head, upstream):
+    return {
+        "ref": upstream,
+        "paths": tree_paths(upstream),
+        "statuses": parse_name_status(upstream, head),
+        "diffs": parse_file_diffs(upstream, head),
+        "changes": parse_file_diffs(base, upstream, "--no-renames"),
+    }
+
+
+def dual_category(path, status, diff, head, view):
+    if is_mechanical_path(path):
+        return "mechanical"
+    if status == "A" and path not in view["paths"]:
+        return "fork-only"
+    if looks_generated(head, path):
+        return "mechanical"
+    if path not in view["statuses"]:
+        return None
+    removed_vs_upstream = view["diffs"].get(path, empty_diff())["removed"]
+    if status == "A":
+        return "override" if removed_vs_upstream else "pure-addition"
+    if diff["removed"] and removed_vs_upstream:
+        return "override"
+    if diff["added"]:
+        return "pure-addition"
+    return None
+
+
+def dual_override_positions(path, status, diff, base, view):
+    upstream_removed = view["diffs"].get(path, empty_diff())["removed"]
+    if status == "A":
+        return upstream_removed, view["ref"]
+    ported = set(view["changes"].get(path, empty_diff())["removed"])
+    own = [n for n in diff["removed"] if n not in ported]
+    if own:
+        return own, base
+    return upstream_removed, view["ref"]
+
+
+def dual_added(status, diff, path, view):
+    upstream_added = view["diffs"].get(path, empty_diff())["added"]
+    if status == "A":
+        return upstream_added
+    return list((Counter(diff["added"]) & Counter(upstream_added)).elements())
+
+
+def classify_dual(base, head, upstream):
+    statuses = parse_name_status(base, head)
+    parsed = parse_file_diffs(base, head)
+    view = load_upstream_view(base, head, upstream)
+    records = []
+    for path, status in sorted(statuses.items()):
+        diff = parsed.get(path, empty_diff())
+        category = dual_category(path, status, diff, head, view)
+        if category is None:
+            continue
+        record = {
+            "path": path,
+            "status": STATUS_NAMES[status],
+            "category": category,
+            "added_lines": 0,
+            "removed_lines": len(diff["removed"]),
+        }
+        if category in ("pure-addition", "override"):
+            added = dual_added(status, diff, path, view)
+            record["added_lines"] = len(added)
+            record["added_hashes"] = sorted(set(added))
+        if category == "override":
+            positions, blob_ref = dual_override_positions(path, status, diff, base, view)
+            record["removed_lines"] = len(positions)
+            record["override_ranges"] = attach_ranges_and_symbols(path, blob_ref, {"removed": positions})
+        records.append(record)
+    return records
+
+
+def build_report(base, head, records, upstream=None):
     summary = {c: 0 for c in CATEGORY_ORDER}
     override_lines = 0
     added_tracked = 0
@@ -240,7 +344,7 @@ def build_report(base, head, records):
             override_lines += r["removed_lines"]
         if r["category"] in ("pure-addition", "override"):
             added_tracked += r["added_lines"]
-    return {
+    report = {
         "version": 1,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "base": {"ref": base, "sha": resolve_ref(base)},
@@ -254,6 +358,9 @@ def build_report(base, head, records):
         "files": [{k: v for k, v in r.items() if k != "added_hashes"} for r in records],
         "files_with_hashes": records,
     }
+    if upstream is not None:
+        report["upstream_head"] = {"ref": upstream, "sha": resolve_ref(upstream)}
+    return report
 
 
 def print_summary(report, top):
@@ -261,6 +368,9 @@ def print_summary(report, top):
     print("Upstream Inventory")
     print(f"  base: {report['base']['ref']} ({report['base']['sha'][:12]})")
     print(f"  head: {report['head']['ref']} ({report['head']['sha'][:12]})")
+    if "upstream_head" in report:
+        upstream = report["upstream_head"]
+        print(f"  upstream head: {upstream['ref']} ({upstream['sha'][:12]})")
     print()
     print(f"Files diverged: {s['total_files']}")
     for c in CATEGORY_ORDER:
@@ -354,12 +464,40 @@ def baseline_check(report, baseline_path):
     return violations
 
 
+def repo_root():
+    return Path(git("rev-parse", "--show-toplevel").strip())
+
+
+def sync_point_from_file():
+    path = repo_root() / SYNC_POINT_FILE
+    if not path.is_file():
+        return None
+    value = next((line.strip() for line in path.read_text().splitlines() if line.strip()), "")
+    if not value:
+        sys.stderr.write(f"error: {path} is empty; write the upstream sha the fork is synced to\n")
+        raise SystemExit(2)
+    return value
+
+
+def resolve_upstream_head(option):
+    value = sync_point_from_file() if option is None else option
+    if value is None or value.lower() == "none":
+        return None
+    resolve_ref(f"{value}^{{commit}}")
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Inventory fork divergence from upstream and guard the override boundary."
     )
     parser.add_argument("--base", default="upstream/main", help="upstream ref (default: upstream/main)")
     parser.add_argument("--head", default="HEAD", help="fork ref (default: HEAD)")
+    parser.add_argument(
+        "--upstream-head",
+        metavar="REF",
+        help=f"upstream commit the fork is synced to (default: the sha in {SYNC_POINT_FILE}; 'none' disables)",
+    )
     parser.add_argument("--json", action="store_true", help="print full JSON report to stdout")
     parser.add_argument("--json-file", metavar="PATH", help="write full JSON report to PATH")
     parser.add_argument(
@@ -377,8 +515,9 @@ def main():
 
     resolve_ref(args.base)
     resolve_ref(args.head)
-    records = classify(args.base, args.head)
-    report = build_report(args.base, args.head, records)
+    upstream = resolve_upstream_head(args.upstream_head)
+    records = classify(args.base, args.head, upstream)
+    report = build_report(args.base, args.head, records, upstream)
 
     if args.json:
         json.dump(report, sys.stdout, indent=2)
