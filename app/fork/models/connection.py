@@ -51,7 +51,7 @@ class UserConnectionState(Base, IdMixin):
     node_count: Mapped[int] = mapped_column(default=0)
     app_count: Mapped[int] = mapped_column(default=0)
     verdict: Mapped[str] = mapped_column(String(16), default="within_limit")
-    limit_applied: Mapped[int] = mapped_column(default=0)
+    limit_applied: Mapped[int] = mapped_column(default=0, server_default="0")
     streak: Mapped[int] = mapped_column(default=0)
     node_streak: Mapped[int] = mapped_column(default=0, server_default="0")
     at_once_streak: Mapped[int] = mapped_column(default=0, server_default="0")
