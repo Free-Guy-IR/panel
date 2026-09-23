@@ -12,7 +12,6 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
-    LargeBinary,
     String,
     Table,
     Text,
@@ -36,8 +35,8 @@ from app.db.compiles_types import (
     EnumArray,
     SqliteCompatibleBigInteger,
     StringArray,
-    WebAuthnChallenge,
     WebAuthnBinary,
+    WebAuthnChallenge,
     WebAuthnCredentialId,
 )
 
@@ -99,7 +98,7 @@ class Admin(Base, CreatedAtUTCMixin):
     api_keys: Mapped[list[APIKey]] = relationship(
         back_populates="admin", init=False, default_factory=list, cascade="all, delete-orphan"
     )
-    passkeys: Mapped[list["AdminPasskey"]] = relationship(
+    passkeys: Mapped[list[AdminPasskey]] = relationship(
         back_populates="admin", init=False, default_factory=list, cascade="all, delete-orphan"
     )
 

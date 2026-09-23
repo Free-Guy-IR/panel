@@ -3,7 +3,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from webauthn import (
@@ -23,8 +23,8 @@ from webauthn.helpers.structs import (
 from app.db import AsyncSession, get_db
 from app.db.models import Admin, AdminPasskey, AdminStatus, PasskeyChallenge
 from app.models.admin import AdminDetails, Token
-from app.utils.jwt import create_admin_token
 from app.operation.permissions import PermissionDenied, enforce_permission
+from app.utils.jwt import create_admin_token
 
 from .authentication import get_current
 
