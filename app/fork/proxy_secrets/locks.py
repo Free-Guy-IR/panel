@@ -17,6 +17,7 @@ from config import database_settings
 PROXY_SECRETS_LOCK = "proxy_secrets"
 MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
 HELD_LOCKS_KEY = "fork_named_locks"
+SEEN_LOCK_ROWS_KEY = "fork_named_lock_rows_seen"
 MYSQL_LOCK_WAIT_TIMEOUT = 1205
 MYSQL_DEADLOCK = 1213
 POSTGRES_LOCK_NOT_AVAILABLE = "55P03"
@@ -81,25 +82,54 @@ async def _seed_named_lock(db: AsyncSession, name: str) -> None:
     await seed_named_lock_outside(side, dialect_name, name)
 
 
+async def _seed_before_blocking(db: AsyncSession, name: str) -> None:
+    seen = db.info.setdefault(SEEN_LOCK_ROWS_KEY, set())
+    if name in seen:
+        return
+    await _seed_named_lock(db, name)
+    seen.add(name)
+
+
+def _innermost_transaction(db: AsyncSession):
+    session = db.sync_session
+    return session.get_nested_transaction() or session.get_transaction()
+
+
 async def acquire_named_lock(db: AsyncSession, name: str) -> None:
     held = db.info.setdefault(HELD_LOCKS_KEY, {})
-    transaction = db.sync_session.get_transaction()
+    transaction = _innermost_transaction(db)
     if transaction is not None and held.get(name) is transaction:
         return
 
     table = NamedLock.__table__
     take = update(table).where(table.c.name == name).values(acquired_at=datetime.now(UTC))
+    gap_locking = db.get_bind().dialect.name in MYSQL_FAMILY
     with db.no_autoflush:
-        if await db.scalar(select(table.c.name).where(table.c.name == name)) is None:
-            await _seed_named_lock(db, name)
+        if gap_locking:
+            await _seed_before_blocking(db, name)
         result = await db.execute(take)
+        if result.rowcount == 0 and not gap_locking:
+            await _seed_named_lock(db, name)
+            result = await db.execute(take)
     if result.rowcount != 1:
+        db.info.get(SEEN_LOCK_ROWS_KEY, set()).discard(name)
         raise NamedLockMissing(f"the {name!r} named lock row could not be taken")
-    held[name] = db.sync_session.get_transaction()
+    held[name] = _innermost_transaction(db)
 
 
 async def acquire_proxy_secrets_lock(db: AsyncSession) -> None:
     await acquire_named_lock(db, PROXY_SECRETS_LOCK)
+
+
+def side_connect_args(url) -> dict:
+    backend = url.get_backend_name()
+    if backend in MYSQL_FAMILY:
+        return {"connect_timeout": database_settings.connect_timeout}
+    if backend == "postgresql":
+        if url.get_driver_name() == "asyncpg":
+            return {"timeout": database_settings.connect_timeout}
+        return {"connect_timeout": database_settings.connect_timeout}
+    return {}
 
 
 def side_engine(engine: Engine) -> AsyncEngine:
@@ -109,7 +139,8 @@ def side_engine(engine: Engine) -> AsyncEngine:
             engine.url,
             isolation_level="READ COMMITTED",
             poolclass=NullPool,
-            connect_args={"connect_timeout": database_settings.connect_timeout},
+            hide_parameters=True,
+            connect_args=side_connect_args(engine.url),
         )
         _side_engines[engine] = side
     return side
@@ -123,7 +154,7 @@ async def read_committed_rows(db: AsyncSession, statement) -> list:
         return list((await fresh.execute(statement)).all())
 
 
-def _driver_code(exc: DBAPIError):
+def driver_code(exc: DBAPIError):
     arguments = getattr(exc.orig, "args", ()) or ()
     return arguments[0] if arguments else None
 
@@ -135,7 +166,7 @@ def _driver_sqlstate(exc: DBAPIError) -> set:
 def is_deadlock(exc: BaseException) -> bool:
     if not isinstance(exc, DBAPIError):
         return False
-    return _driver_code(exc) == MYSQL_DEADLOCK or POSTGRES_DEADLOCK in _driver_sqlstate(exc)
+    return driver_code(exc) == MYSQL_DEADLOCK or POSTGRES_DEADLOCK in _driver_sqlstate(exc)
 
 
 def is_lock_unavailable(exc: BaseException) -> bool:
@@ -145,6 +176,6 @@ def is_lock_unavailable(exc: BaseException) -> bool:
 def is_lock_wait_timeout(exc: BaseException) -> bool:
     if not isinstance(exc, DBAPIError):
         return False
-    if _driver_code(exc) == MYSQL_LOCK_WAIT_TIMEOUT or POSTGRES_LOCK_NOT_AVAILABLE in _driver_sqlstate(exc):
+    if driver_code(exc) == MYSQL_LOCK_WAIT_TIMEOUT or POSTGRES_LOCK_NOT_AVAILABLE in _driver_sqlstate(exc):
         return True
     return SQLITE_LOCKED in str(exc.orig)
