@@ -58,8 +58,8 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/telegram/handlers/admin/bulk_actions.py`
 - `app/utils/crypto.py`
 - `app/utils/jwt.py`
-- `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update
-- `app/scheduler.py` — job_defaults max_instances 30 -> 1 with coalesce, so a job that does not set it cannot overlap itself
+- `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update; since v5.34.25 (A2-r) a cohort's chart write, billing and admin update run in one retried transaction, with the fence filtering the chart rows, so a failed cohort rolls back whole and is safe to retry, and (A9) the billed user ids go to the fork's `enforce_user_limits_now`, so a user who crosses the limit is limited in the same tick
+- `app/scheduler.py` — job_defaults max_instances 30 -> 1 with coalesce, so a job that does not set it cannot overlap itself; since v5.34.25 (A6) also misfire_grace_time 30, so a job that starts up to 30 s late still runs instead of being skipped
 - `app/subscription/share.py` — except-fixes plus WireGuardConfiguration union update
 - `app/operation/subscription.py` — except-fixes, announce payload formatting, plus subscription access-log recording on every config-revealing path
 
@@ -125,7 +125,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/db/compiles_types.py` — registers the MySQL compilation of `CaseSensitiveString`, `DaysDiff` and `DateDiff` for the `mariadb` dialect name as well. SQLAlchemy gives a `mariadb://` URL its own dialect name, which upstream's `mysql`-only hooks never match, so on MariaDB the collation was dropped silently and the two date helpers raised `UnsupportedCompilationError` in the `days_left` expression and the usage-reset queries. `config.py` accepts those URLs, so this is a supported configuration the fork has to make work
 - `app/db/crud/settings.py` — 1 line; `get_settings` is annotated `Settings | None`, which is what `scalar_one_or_none` has always returned. The upstream annotation promised a row that may not exist and every caller believed it
 - `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`
-- `app/jobs/review_users.py` — limit_users_job hands its candidate ids to the fork's row-locked limit_users_under_lock, so the usage tick and the review job never apply the limited transition twice
+- `app/jobs/review_users.py` — limit_users_job hands its candidate ids to the fork's row-locked limit_users_under_lock, so the usage tick and the review job never apply a transition twice
 
 ## Tests
 
@@ -204,4 +204,4 @@ real boundary, and each one still needs its own justification or a revert.
 - `dashboard/src/pages/_dashboard.nodes.cores._index.tsx` — 2 lines, reason not recorded
 - `tests/api/test_bulk_entity_actions.py` — 1 line, reason not recorded
 - `tests/api/test_core.py` — 1 line, reason not recorded
-- `tests/test_record_usages.py` — 2 lines, reason not recorded
+- `tests/test_record_usages.py` — the session fixture also patches GetDB in app/fork/jobs/usage_limits.py so the same-tick limit reads the test database, the two chart-writer tests are rewritten for the single-transaction cohort write, and the scheduler-defaults pin also asserts misfire_grace_time 30 (v5.34.25)
