@@ -104,7 +104,7 @@ from app.models.user import (
     UsersUsageQuery,
     UserUsageQuery,
 )
-from app.node.sync import remove_user as sync_remove_user, sync_user, sync_users
+from app.node.sync import remove_users as sync_remove_users, sync_user, sync_users
 from app.operation import BaseOperation, OperatorType
 from app.operation.permissions import (
     PermissionDenied,
@@ -976,7 +976,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     async def _remove_user(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> dict:
         user = await self.validate_user(db_user, include_subscription_url=False)
         await remove_user(db, db_user)
-        await sync_remove_user(user)
+        await sync_remove_users([db_user])
 
         asyncio.create_task(notification.remove_user(user, admin))
         logger.info(f'User "{db_user.username}" with id "{db_user.id}" deleted by admin "{admin.username}"')
@@ -1046,16 +1046,23 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         self, db: AsyncSession, bulk_users: BulkUsersSelection, admin: AdminDetails
     ) -> RemoveUsersResponse:
         db_users = await self._get_validated_users_by_ids(db, bulk_users.ids, admin, scope_action="delete")
-        users = [await self.validate_user(db_user, include_subscription_url=False) for db_user in db_users]
+        users_by_id = {
+            db_user.id: await self.validate_user(db_user, include_subscription_url=False) for db_user in db_users
+        }
+        deleted: list[UserNotificationResponse] = []
 
-        await remove_users(db, db_users)
+        async def push_removed(chunk: list[User]) -> None:
+            await sync_remove_users(chunk)
+            deleted.extend(users_by_id[db_user.id] for db_user in chunk)
 
-        for user in users:
-            await sync_remove_user(user)
-            asyncio.create_task(notification.remove_user(user, admin))
-            logger.info(f'User "{user.username}" with id "{user.id}" deleted by admin "{admin.username}"')
+        try:
+            await remove_users(db, db_users, on_chunk_deleted=push_removed)
+        finally:
+            for user in deleted:
+                asyncio.create_task(notification.remove_user(user, admin))
+                logger.info(f'User "{user.username}" with id "{user.id}" deleted by admin "{admin.username}"')
 
-        return RemoveUsersResponse(users=[user.username for user in users], count=len(users))
+        return RemoveUsersResponse(users=[user.username for user in deleted], count=len(deleted))
 
     async def _reset_user_data_usage(
         self,
@@ -1651,6 +1658,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             admin_id,
             target=query.target,
             dry_run=query.dry_run,
+            on_chunk_deleted=sync_remove_users,
         )
         if not query.dry_run:
             await self.remove_users_logger(users=username_list, by=admin.username)

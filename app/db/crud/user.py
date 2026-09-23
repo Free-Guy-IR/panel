@@ -1,10 +1,11 @@
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from sqlalchemy import and_, bindparam, case, delete, desc, func, literal, not_, or_, select, update
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload, with_expression
 from sqlalchemy.orm.attributes import set_committed_value
@@ -25,6 +26,14 @@ from app.db.models import (
     UserSubscriptionUpdate,
     UserUsageResetLogs,
     users_groups_association,
+)
+from app.fork.crud.user_locks import (
+    MODIFY_STATUS_KEYS,
+    auto_delete_due,
+    is_empty_next_plan,
+    reactivate_limited_users,
+    refresh_next_plan_for_update,
+    refresh_user_state_for_update,
 )
 from app.models.proxy import ProxyTable
 from app.models.stats import (
@@ -60,7 +69,8 @@ from .general import (
 )
 from .group import get_groups_by_ids
 from .wireguard import (
-    release_allocations_by_user_ids,
+    lock_wireguard_pools,
+    release_locked_allocations,
     release_users_allocations,
     sync_user_allocations,
     sync_users_allocations,
@@ -120,6 +130,7 @@ def _resolve_enabled_user_status(user: User) -> UserStatus:
 
 
 DELETE_CHUNK_SIZE = 100
+UsersDeletedCallback = Callable[[Sequence], Awaitable[None]]
 
 
 def _build_user_select_stmt(
@@ -597,6 +608,8 @@ async def remove_expired_users(
     admin_id: int | None = None,
     target: Literal["expired", "limited", "on_hold", "disabled"] = "expired",
     dry_run: bool = False,
+    *,
+    on_chunk_deleted: UsersDeletedCallback | None = None,
 ) -> list[str]:
     conditions = _cleanup_target_user_conditions(expired_after, expired_before, admin_id, target)
 
@@ -607,21 +620,20 @@ async def remove_expired_users(
     if dry_run:
         return [username for _, username in rows]
 
-    username_by_id = dict(rows)
     user_ids = [user_id for user_id, _ in rows]
     deleted: list[str] = []
 
     for start in range(0, len(user_ids), DELETE_CHUNK_SIZE):
         chunk = user_ids[start : start + DELETE_CHUNK_SIZE]
         try:
-            await release_allocations_by_user_ids(db, chunk)
-            await _delete_user_dependencies(db, chunk)
-            await db.execute(delete(User).where(User.id.in_(chunk)))
+            removed = await _delete_locked_users(db, chunk, *conditions)
             await db.commit()
         except Exception:
             await db.rollback()
             raise
-        deleted.extend(username_by_id[user_id] for user_id in chunk)
+        if removed and on_chunk_deleted is not None:
+            await on_chunk_deleted(removed)
+        deleted.extend(row.username for row in removed)
 
     return deleted
 
@@ -1031,6 +1043,33 @@ async def _delete_user_dependencies(db: AsyncSession, user_ids: list[int]):
     await db.execute(users_groups_association.delete().where(users_groups_association.c.user_id.in_(user_ids)))
 
 
+async def _delete_locked_users(
+    db: AsyncSession,
+    user_ids: list[int],
+    *predicates,
+    extra_columns: Sequence = (),
+    keep: Callable[[Row], bool] | None = None,
+) -> list[Row]:
+    pools = await lock_wireguard_pools(db)
+    rows = (
+        await db.execute(
+            select(User.id, User.username, User.proxy_settings, User.hwid_limit, *extra_columns)
+            .where(User.id.in_(user_ids), *predicates)
+            .order_by(User.id)
+            .with_for_update()
+        )
+    ).all()
+    if keep is not None:
+        rows = [row for row in rows if keep(row)]
+    if not rows:
+        return []
+    await release_locked_allocations(db, pools, [row.proxy_settings for row in rows])
+    locked_ids = [row.id for row in rows]
+    await _delete_user_dependencies(db, locked_ids)
+    await db.execute(delete(User).where(User.id.in_(locked_ids)))
+    return rows
+
+
 async def remove_user(db: AsyncSession, db_user: User) -> User:
     """
     Removes a user from the database.
@@ -1049,7 +1088,7 @@ async def remove_user(db: AsyncSession, db_user: User) -> User:
     return db_user
 
 
-async def remove_users(db: AsyncSession, db_users: list[User]):
+async def remove_users(db: AsyncSession, db_users: list[User], *, on_chunk_deleted: UsersDeletedCallback | None = None):
     """
     Removes multiple users from the database.
 
@@ -1078,6 +1117,8 @@ async def remove_users(db: AsyncSession, db_users: list[User]):
         except Exception:
             await db.rollback()
             raise
+        if on_chunk_deleted is not None:
+            await on_chunk_deleted(chunk)
 
 
 async def modify_user(
@@ -1107,6 +1148,8 @@ async def modify_user(
     if modify.group_ids is not None:
         db_user.groups = groups or await get_groups_by_ids(db, modify.group_ids, load_users=False, load_inbounds=True)
         await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(db_user.groups))
+
+    await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
 
     if modify.status is not None:
         if modify.status == UserStatus.active and db_user.status == UserStatus.disabled:
@@ -1275,8 +1318,7 @@ async def reset_user_data_usage(
     if clean_chart_data:
         await clear_user_node_usages(db, db_user.id)
 
-    if db_user.status == UserStatus.limited:
-        db_user.status = UserStatus.active
+    await reactivate_limited_users(db, [db_user])
 
     if commit:
         await db.commit()
@@ -1311,8 +1353,7 @@ async def bulk_reset_user_data_usage(
         await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
         if clean_chart_data:
             await clear_user_node_usages(db, db_user.id)
-        if db_user.status == UserStatus.limited:
-            db_user.status = UserStatus.active
+    await reactivate_limited_users(db, users)
     if commit:
         await db.commit()
 
@@ -1342,6 +1383,16 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
     Returns:
         User: The updated user object.
     """
+    await refresh_user_state_for_update(db, db_user)
+    next_plan = await refresh_next_plan_for_update(db, db_user)
+    if next_plan is None or is_empty_next_plan(next_plan):
+        if next_plan is not None:
+            await db.delete(next_plan)
+            db_user.next_plan = None
+        await db.commit()
+        await refresh_and_load_user(db, db_user)
+        return db_user
+
     remaining_traffic = (db_user.data_limit or 0) - db_user.used_traffic
     if db_user.next_plan.user_template_id is None:
         db_user.data_limit = db_user.next_plan.data_limit + (
@@ -1580,7 +1631,10 @@ async def get_users_subscription_agent_stats(
 
 
 async def autodelete_expired_users(
-    db: AsyncSession, include_limited_users: bool = False
+    db: AsyncSession,
+    include_limited_users: bool = False,
+    *,
+    on_chunk_deleted: UsersDeletedCallback | None = None,
 ) -> list[UserNotificationResponse]:
     """
     Deletes expired (optionally also limited) users whose auto-delete time has passed.
@@ -1595,33 +1649,48 @@ async def autodelete_expired_users(
     """
     target_status = [UserStatus.expired] if not include_limited_users else [UserStatus.expired, UserStatus.limited]
 
-    auto_delete = func.coalesce(User.auto_delete_in_days, literal(user_cleanup_settings.autodelete_days))
-
-    query = (
-        select(
-            User,
-            auto_delete,  # Use global auto-delete days as fallback
-        )
-        .where(
-            auto_delete >= 0,  # Negative values prevent auto-deletion
-            User.status.in_(target_status),
-        )
-        .options(joinedload(User.admin))
+    auto_delete = func.coalesce(User.auto_delete_in_days, literal(user_cleanup_settings.autodelete_days)).label(
+        "auto_delete"
     )
+    predicates = (auto_delete >= 0, User.status.in_(target_status))
 
-    expired_users = [
-        user
-        for (user, auto_delete) in (await db.execute(query)).unique()
-        if user.last_status_change.replace(tzinfo=UTC) + timedelta(days=auto_delete) <= datetime.now(UTC)
-    ]
+    def is_due(row: Row) -> bool:
+        return auto_delete_due(row.last_status_change, row.auto_delete, datetime.now(UTC))
+
+    candidates = (
+        await db.execute(select(User.id, User.last_status_change, auto_delete).where(*predicates).order_by(User.id))
+    ).all()
+    due_ids = [row.id for row in candidates if is_due(row)]
 
     result: list[UserNotificationResponse] = []
-    if expired_users:
-        for user in expired_users:
+    for start in range(0, len(due_ids), DELETE_CHUNK_SIZE):
+        chunk = due_ids[start : start + DELETE_CHUNK_SIZE]
+        users = (
+            (await db.execute(select(User).options(joinedload(User.admin)).where(User.id.in_(chunk)).order_by(User.id)))
+            .unique()
+            .scalars()
+            .all()
+        )
+        responses: dict[int, UserNotificationResponse] = {}
+        for user in users:
             await load_user_attrs(user)
-            result.append(UserNotificationResponse.model_validate(user))
+            responses[user.id] = UserNotificationResponse.model_validate(user)
 
-        await remove_users(db, expired_users)
+        try:
+            removed = await _delete_locked_users(
+                db,
+                chunk,
+                *predicates,
+                extra_columns=(User.last_status_change, auto_delete),
+                keep=is_due,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        if removed and on_chunk_deleted is not None:
+            await on_chunk_deleted(removed)
+        result.extend(responses[row.id] for row in removed if row.id in responses)
 
     return result
 

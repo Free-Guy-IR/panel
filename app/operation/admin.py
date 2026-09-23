@@ -21,7 +21,7 @@ from app.db.crud.admin import (
 )
 from app.db.crud.bulk import activate_all_disabled_users, disable_all_active_users
 from app.db.crud.user import get_users, remove_users
-from app.db.models import Admin, AdminStatus
+from app.db.models import Admin, AdminStatus, User
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -38,7 +38,7 @@ from app.models.admin import (
 )
 from app.models.stats import Period, UserUsageStatsList
 from app.models.user import UserListQuery
-from app.node.sync import remove_user as sync_remove_user, sync_users
+from app.node.sync import remove_users as sync_remove_users, sync_users
 from app.operation import BaseOperation
 from app.operation.admin_sync import admin_users_sync_blocked, sync_admin_users_for_block_transition
 from app.operation.permissions import PermissionDenied, enforce_permission
@@ -266,18 +266,21 @@ class AdminOperation(BaseOperation):
             return 0
 
         user_operation = UserOperation(self.operator_type)
-        serialized_users = [await user_operation.validate_user(user) for user in users]
+        serialized_by_id = {user.id: await user_operation.validate_user(user) for user in users}
+        deleted = []
 
-        await remove_users(db, users)
-        for user in serialized_users:
-            await sync_remove_user(user)
-        for user in serialized_users:
-            asyncio.create_task(notification.remove_user(user, admin))
+        async def push_removed(chunk: list[User]) -> None:
+            await sync_remove_users(chunk)
+            deleted.extend(serialized_by_id[user.id] for user in chunk)
 
-        logger.info(
-            f'Admin "{admin.username}" deleted {len(serialized_users)} users belonging to admin "{db_admin.username}"'
-        )
-        return len(serialized_users)
+        try:
+            await remove_users(db, users, on_chunk_deleted=push_removed)
+        finally:
+            for user in deleted:
+                asyncio.create_task(notification.remove_user(user, admin))
+
+        logger.info(f'Admin "{admin.username}" deleted {len(deleted)} users belonging to admin "{db_admin.username}"')
+        return len(deleted)
 
     async def remove_all_users_by_id(self, db: AsyncSession, admin_id: int, admin: AdminDetails) -> int:
         db_admin = await self.get_validated_admin_by_id(db, admin_id)

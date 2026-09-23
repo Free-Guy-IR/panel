@@ -316,81 +316,72 @@ def _create_final_filter(bulk_model: BulkUserFilter):
     return and_(*conditions)
 
 
+BULK_STATUS_CHUNK_SIZE = 5000
+
+
+def _id_chunks(user_ids: list[int]) -> list[list[int]]:
+    return [user_ids[i : i + BULK_STATUS_CHUNK_SIZE] for i in range(0, len(user_ids), BULK_STATUS_CHUNK_SIZE)]
+
+
+async def _lock_bulk_targets(db: AsyncSession, condition) -> dict[int, UserStatus]:
+    rows = await db.execute(select(User.id, User.status).where(condition).order_by(User.id).with_for_update())
+    return {user_id: status for user_id, status in rows.all()}
+
+
+async def _apply_to_locked_targets(
+    db: AsyncSession, locked: dict[int, UserStatus], conditions: tuple, **values
+) -> list[User]:
+    changed_ids: list[int] = []
+    for chunk in _id_chunks(sorted(locked)):
+        await db.execute(update(User).where(User.id.in_(chunk), *conditions).values(**values))
+        rows = await db.execute(select(User.id, User.status).where(User.id.in_(chunk)).with_for_update())
+        changed_ids.extend(user_id for user_id, status in rows.all() if status != locked[user_id])
+    await db.commit()
+
+    users: list[User] = []
+    for chunk in _id_chunks(changed_ids):
+        users.extend((await db.execute(_bulk_user_reload_stmt().where(User.id.in_(chunk)))).scalars().all())
+    return users
+
+
 async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> tuple[list[User], int] | tuple[list, int]:
     """
     Bulk update user expiration dates and return list of User objects where status changed.
     """
-    final_filter = _create_final_filter(bulk_model)
+    target_conditions = (User.expire.isnot(None),)
+    locked = await _lock_bulk_targets(db, and_(_create_final_filter(bulk_model), *target_conditions))
+    if not locked:
+        await db.commit()
+        return [], 0
 
-    count_effctive_users = (
-        await db.execute(select(func.count(User.id)).where(and_(final_filter, User.expire.isnot(None))))
-    ).scalar_one_or_none() or 0
-    # Get database-specific datetime addition expression
     new_expire = get_datetime_add_expression(db, User.expire, bulk_model.amount)
     current_time = dt.now(UTC)
-
-    # First, get the users that will have status changes BEFORE updating
-    status_change_conditions = or_(
-        and_(new_expire <= current_time, User.status == UserStatus.active),
-        and_(new_expire > current_time, User.status == UserStatus.expired),
-    )
-
-    # Get IDs of users whose status will change
-    result = await db.execute(
-        select(User.id).where(and_(final_filter, User.expire.isnot(None), status_change_conditions))
-    )
-    status_changed_user_ids = [row[0] for row in result.fetchall()]
-
-    # Perform the update
     status_cases = [
         (and_(new_expire <= current_time, User.status == UserStatus.active), UserStatus.expired),
         (and_(new_expire > current_time, User.status == UserStatus.expired), UserStatus.active),
     ]
-
-    await db.execute(
-        update(User)
-        .where(and_(final_filter, User.expire.isnot(None)))
-        .values(expire=new_expire, status=case(*status_cases, else_=User.status))
+    users = await _apply_to_locked_targets(
+        db,
+        locked,
+        target_conditions,
+        expire=new_expire,
+        status=case(*status_cases, else_=User.status),
     )
-    await db.commit()
-
-    # Return the users whose status changed
-    if status_changed_user_ids:
-        result = await db.execute(_bulk_user_reload_stmt().where(User.id.in_(status_changed_user_ids)))
-        users = result.scalars().all()
-        return users, count_effctive_users
-    return [], count_effctive_users
+    return users, len(locked)
 
 
 async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> tuple[list[User], int] | tuple[list, int]:
     """
     Bulk update user data limits and return list of User objects where status changed.
     """
-    final_filter = _create_final_filter(bulk_model)
-
-    extra_condition = [User.data_limit.isnot(None), User.data_limit != 0]
+    target_conditions = [User.data_limit.isnot(None), User.data_limit != 0]
     if bulk_model.amount < 0:
-        extra_condition.append(User.data_limit > bulk_model.amount * -1)
+        target_conditions.append(User.data_limit > bulk_model.amount * -1)
+    locked = await _lock_bulk_targets(db, and_(_create_final_filter(bulk_model), *target_conditions))
+    if not locked:
+        await db.commit()
+        return [], 0
 
-    count_effctive_users = (
-        await db.execute(select(func.count(User.id)).where(and_(final_filter, *extra_condition)))
-    ).scalar_one_or_none() or 0
-
-    # First, get the users that will have status changes BEFORE updating
-    status_change_conditions = or_(
-        and_(User.data_limit + bulk_model.amount <= User.used_traffic, User.status == UserStatus.active),
-        and_(User.data_limit + bulk_model.amount > User.used_traffic, User.status == UserStatus.limited),
-    )
-
-    # Get IDs of users whose status will change
-    result = await db.execute(
-        select(User.id).where(
-            and_(final_filter, User.data_limit.isnot(None), User.data_limit != 0, status_change_conditions)
-        )
-    )
-    status_changed_user_ids = [row[0] for row in result.fetchall()]
-
-    # Perform the update
     status_cases = [
         (
             and_(User.data_limit + bulk_model.amount <= User.used_traffic, User.status == UserStatus.active),
@@ -401,21 +392,14 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> tupl
             UserStatus.active,
         ),
     ]
-
-    await db.execute(
-        update(User)
-        .where(and_(final_filter, *extra_condition))
-        .values(data_limit=User.data_limit + bulk_model.amount, status=case(*status_cases, else_=User.status))
+    users = await _apply_to_locked_targets(
+        db,
+        locked,
+        tuple(target_conditions),
+        data_limit=User.data_limit + bulk_model.amount,
+        status=case(*status_cases, else_=User.status),
     )
-
-    await db.commit()
-
-    # Return the users whose status changed
-    if status_changed_user_ids:
-        result = await db.execute(_bulk_user_reload_stmt().where(User.id.in_(status_changed_user_ids)))
-        users = result.scalars().all()
-        return users, count_effctive_users
-    return [], count_effctive_users
+    return users, len(locked)
 
 
 async def update_users_proxy_settings(

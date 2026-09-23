@@ -13,10 +13,11 @@ from app.db.crud.user import (
     get_on_hold_to_active_users,
     get_usage_percentage_reached_users,
     reset_user_by_next,
-    start_users_expire,
     update_users_status,
 )
 from app.db.models import ReminderType, User, UserStatus
+from app.fork.crud.user_locks import discard_empty_next_plans, has_applicable_next_plan
+from app.fork.jobs.status_review import expire_users_under_lock, start_on_hold_users_under_lock
 from app.fork.jobs.usage_limits import limit_users_under_lock
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import Webhook
@@ -52,13 +53,14 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
     next_plan_users: list[User] = []
     plain_users: list[User] = []
     for user in users:
-        if user.next_plan is not None and status != UserStatus.active:
+        if status != UserStatus.active and has_applicable_next_plan(user):
             next_plan_users.append(user)
         else:
             plain_users.append(user)
 
     if plain_users:
         if status in (UserStatus.expired, UserStatus.limited):
+            await discard_empty_next_plans(db, plain_users)
             await update_users_status(db, plain_users, status)
         await sync_users(plain_users)
         for db_user in plain_users:
@@ -83,8 +85,9 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
 
 async def expire_users_job():
     async with GetDB() as db:
-        if expired_users := await get_active_to_expire_users(db):
-            await apply_status_changes(db, expired_users, UserStatus.expired)
+        expired_users = await get_active_to_expire_users(db)
+    if expired_users:
+        await expire_users_under_lock([user.id for user in expired_users])
 
 
 async def limit_users_job():
@@ -96,9 +99,9 @@ async def limit_users_job():
 
 async def on_hold_to_active_users_job():
     async with GetDB() as db:
-        if on_hold_users := await get_on_hold_to_active_users(db):
-            updated_users = await start_users_expire(db, on_hold_users)
-            await apply_status_changes(db, updated_users, UserStatus.active)
+        on_hold_users = await get_on_hold_to_active_users(db)
+    if on_hold_users:
+        await start_on_hold_users_under_lock([user.id for user in on_hold_users])
 
 
 async def usage_percent_notification_job():

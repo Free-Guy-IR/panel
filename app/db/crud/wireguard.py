@@ -5,10 +5,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface, ip_network
 
-from sqlalchemy import and_, delete, false, func, insert, select
+from sqlalchemy import and_, delete, false, func, insert, inspect, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db.models import (
     CoreConfig,
@@ -532,35 +533,57 @@ async def sync_user_allocations(
     return bool(await sync_users_allocations(db, [db_user], tags_by_user=tags_by_user))
 
 
-async def _release_proxy_settings(db: AsyncSession, settings_list: Iterable[dict | None]) -> None:
+@dataclass(frozen=True)
+class LockedWireGuardPools:
+    namespaces: dict[str, WgNamespace]
+    rows: dict[str, WireGuardSubnet]
+
+
+async def lock_wireguard_pools(db: AsyncSession) -> LockedWireGuardPools:
     namespaces = wg_namespaces(await get_wg_cores(db))
-    releases: dict[str, list[int]] = {}
+    return LockedWireGuardPools(namespaces=namespaces, rows=await _lock_subnet_rows(db, namespaces))
+
+
+async def release_locked_allocations(
+    db: AsyncSession, pools: LockedWireGuardPools, settings_list: Iterable[dict | None]
+) -> None:
+    released = False
     for proxy_settings in settings_list:
         for entry in _user_peer_ips(proxy_settings):
             host = peer_host(entry)
-            if host is not None and (ns := match_namespace(namespaces, *host)):
-                releases.setdefault(ns.key, []).append(host[1] - int(ns.subnet.network_address))
-    if not releases:
-        return
-    rows = await _lock_subnet_rows(db, releases)
-    for key, offsets in releases.items():
-        _give_back(rows[key], offsets)
-    await db.flush()
+            if host is None or (ns := match_namespace(pools.namespaces, *host)) is None or ns.key not in pools.rows:
+                continue
+            _give_back(pools.rows[ns.key], [host[1] - int(ns.subnet.network_address)])
+            released = True
+    if released:
+        await db.flush()
+
+
+async def release_allocations_by_user_ids(db: AsyncSession, user_ids: list[int]) -> dict[int, dict | None]:
+    if not user_ids:
+        return {}
+    pools = await lock_wireguard_pools(db)
+    committed = dict(
+        (
+            await db.execute(
+                select(User.id, User.proxy_settings)
+                .where(User.id.in_(user_ids))
+                .order_by(User.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    await release_locked_allocations(db, pools, committed.values())
+    return committed
 
 
 async def release_users_allocations(db: AsyncSession, users: list[User]) -> None:
-    """Give the users' peer IPs back to the pool (called right before user deletion)."""
     if not users:
         return
-    await _release_proxy_settings(db, [user.proxy_settings for user in users])
-
-
-async def release_allocations_by_user_ids(db: AsyncSession, user_ids: list[int]) -> None:
-    """Same as release_users_allocations for delete paths that only hold user ids."""
-    if not user_ids:
-        return
-    settings_list = (await db.execute(select(User.proxy_settings).where(User.id.in_(user_ids)))).scalars().all()
-    await _release_proxy_settings(db, settings_list)
+    committed = await release_allocations_by_user_ids(db, [user.id for user in users])
+    for user in users:
+        if user.id in committed and not inspect(user).attrs.proxy_settings.history.has_changes():
+            set_committed_value(user, "proxy_settings", committed[user.id])
 
 
 # --- full rebuild (core lifecycle & repair) ---------------------------------
