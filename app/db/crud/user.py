@@ -26,6 +26,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
+from app.fork.crud.group_scope import user_in_allowed_groups
 from app.models.proxy import ProxyTable
 from app.models.stats import (
     Period,
@@ -1497,6 +1498,7 @@ async def get_users_sub_update_list(
 def _subscription_update_from_clause(
     user_id: int | None = None,
     admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ):
     conditions = []
     if user_id is not None:
@@ -1506,6 +1508,8 @@ def _subscription_update_from_clause(
         from_clause = UserSubscriptionUpdate.__table__.join(User, UserSubscriptionUpdate.user_id == User.id)
         if admin_id:
             conditions.append(User.admin_id == admin_id)
+        if allowed_group_ids is not None:
+            conditions.append(user_in_allowed_groups(UserSubscriptionUpdate.user_id, allowed_group_ids))
     return from_clause, conditions
 
 
@@ -1516,9 +1520,12 @@ async def get_users_subscription_agent_counts(
     start: datetime | None = None,
     end: datetime | None = None,
     period: Period | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> list[tuple[str, int]]:
     stmt = select(UserSubscriptionUpdate.user_agent, func.count().label("count"))
-    from_clause, conditions = _subscription_update_from_clause(user_id=user_id, admin_id=admin_id)
+    from_clause, conditions = _subscription_update_from_clause(
+        user_id=user_id, admin_id=admin_id, allowed_group_ids=allowed_group_ids
+    )
 
     if start is not None:
         start_utc = to_utc_for_filter(start)
@@ -1543,12 +1550,15 @@ async def get_users_subscription_agent_stats(
     period: Period = Period.hour,
     user_id: int | None = None,
     admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> list[dict]:
     """Retrieve subscription update counts grouped by agent and period."""
     trunc_expr = _build_trunc_expression(db, period, UserSubscriptionUpdate.created_at, start)
     start_utc = to_utc_for_filter(start)
     end_utc = to_utc_for_filter(end)
-    from_clause, conditions = _subscription_update_from_clause(user_id=user_id, admin_id=admin_id)
+    from_clause, conditions = _subscription_update_from_clause(
+        user_id=user_id, admin_id=admin_id, allowed_group_ids=allowed_group_ids
+    )
     conditions.extend(
         [
             UserSubscriptionUpdate.created_at >= start_utc,
