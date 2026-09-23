@@ -1582,7 +1582,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         admins_filter = await _resolve_users_usage_admins_filter(self, db, admin, query.owner)
 
-        async with usage_aggregation_guard(("users_usage", admin.id)):
+        async with usage_aggregation_guard(("users_count_metric", admin.id)):
             return await get_user_count_metric_stats(
                 db=db,
                 admins=admins_filter,

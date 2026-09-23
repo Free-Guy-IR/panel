@@ -112,3 +112,27 @@ async def test_other_database_errors_are_not_disguised():
     with pytest.raises(OperationalError):
         await usage_guard.execute_with_statement_timeout(db, select(USAGE.c.used_traffic))
     assert not db.rolled_back
+
+
+@pytest.mark.asyncio
+async def test_the_usage_chart_and_the_count_chart_of_one_admin_load_side_by_side(monkeypatch):
+    started = asyncio.Event()
+    released = asyncio.Event()
+
+    async def slow_usage(**_kwargs):
+        started.set()
+        await released.wait()
+        return "usage"
+
+    async def quick_count(**_kwargs):
+        return "count"
+
+    monkeypatch.setattr(user_operation, "get_all_users_usages", slow_usage)
+    monkeypatch.setattr(user_operation, "get_user_count_metric_stats", quick_count)
+    operation = UserOperation(OperatorType.API)
+
+    usage = asyncio.create_task(operation.get_users_usage(None, _owner(1), _query()))
+    await started.wait()
+    assert await operation.get_users_count_metric(None, _owner(1), "online", _query()) == "count"
+    released.set()
+    assert await usage == "usage"
