@@ -402,7 +402,7 @@ async def clear_usage_data(
     table: UsageTable,
     query: Annotated[NodeClearUsageQuery, Depends(get_node_clear_usage_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("nodes", "delete")),
+    _: AdminDetails = Depends(require_owner),
 ):
     """
     Deletes **all rows** from the selected usage data table. Use with caution.

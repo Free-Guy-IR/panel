@@ -23,6 +23,7 @@ from app.db.crud.bulk import activate_all_disabled_users, disable_all_active_use
 from app.db.crud.user import get_users, remove_users
 from app.db.models import Admin, AdminStatus
 from app.fork.crud.admin_limits import lock_admin_row, lock_admin_status
+from app.fork.operation.admin_scope import admin_details_for, close_visible_restrictions, visible_users_query
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
 from app.models.admin import (
     AdminCreate,
@@ -40,13 +41,11 @@ from app.models.admin import (
     hash_password,
 )
 from app.models.stats import Period, UserUsageStatsList
-from app.models.user import UserListQuery
 from app.node.sync import remove_user as sync_remove_user, sync_users
 from app.operation import BaseOperation
 from app.operation.admin_sync import admin_users_sync_blocked, sync_admin_users_for_block_transition
-from app.operation.permissions import PermissionDenied, enforce_permission
+from app.operation.permissions import PermissionDenied, enforce_permission, get_allowed_group_ids
 from app.operation.user import UserOperation
-from app.utils.connection_enforcement import close_active_restrictions_for_admin
 from app.utils.logger import get_logger
 
 logger = get_logger("admin-operation")
@@ -150,7 +149,7 @@ class AdminOperation(BaseOperation):
 
         logger.info(f'Admin "{db_admin.username}" with id "{db_admin.id}" modified by admin "{current_admin.username}"')
 
-        modified_admin_details = build_admin_details(db_admin, include_loaded_metrics=True)
+        modified_admin_details = await admin_details_for(db, db_admin, current_admin)
         asyncio.create_task(notification.modify_admin(modified_admin_details, current_admin.username))
         return modified_admin_details
 
@@ -198,6 +197,7 @@ class AdminOperation(BaseOperation):
             return_with_count=True,
             compact=True,
             include_owner=admin.is_owner,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         return AdminsResponse(admins=admins, total=total, active=active, disabled=disabled, limited=limited)
 
@@ -222,12 +222,18 @@ class AdminOperation(BaseOperation):
         await self._ensure_owner_target_access(db_admin, admin)
         await self._disable_all_active_users_for_admin(db, db_admin, admin)
 
+    @staticmethod
+    async def _visible_users_of(db: AsyncSession, db_admin: Admin, caller: AdminDetails) -> list:
+        query = visible_users_query(caller)
+        if query is None:
+            return []
+        return await get_users(db, query=query, admin=db_admin, load_admin_role=True)
+
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Disable all active users under a specific admin."""
-        await close_active_restrictions_for_admin(db, db_admin.id, "an admin changed all users' status")
-        await disable_all_active_users(db=db, admin=db_admin)
-        users = await get_users(db, query=UserListQuery(), admin=db_admin, load_admin_role=True)
-        await sync_users(users)
+        await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
+        await disable_all_active_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+        await sync_users(await self._visible_users_of(db, db_admin, admin))
         logger.info(f'Admin "{db_admin.username}" users has been disabled by admin "{admin.username}"')
 
     async def disable_all_active_users_by_id(self, db: AsyncSession, admin_id: int, admin: AdminDetails):
@@ -247,10 +253,9 @@ class AdminOperation(BaseOperation):
 
     async def _activate_all_disabled_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Activate all disabled users under a specific admin."""
-        await close_active_restrictions_for_admin(db, db_admin.id, "an admin changed all users' status")
-        await activate_all_disabled_users(db=db, admin=db_admin)
-        users = await get_users(db, query=UserListQuery(), admin=db_admin, load_admin_role=True)
-        await sync_users(users)
+        await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
+        await activate_all_disabled_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+        await sync_users(await self._visible_users_of(db, db_admin, admin))
         logger.info(f'Admin "{db_admin.username}" users has been activated by admin "{admin.username}"')
 
     async def activate_all_disabled_users_by_id(self, db: AsyncSession, admin_id: int, admin: AdminDetails):
@@ -270,7 +275,7 @@ class AdminOperation(BaseOperation):
 
     async def _remove_all_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails) -> int:
         """Delete all users that belong to the specified admin."""
-        users = await get_users(db, query=UserListQuery(), admin=db_admin, load_admin_role=True)
+        users = await self._visible_users_of(db, db_admin, admin)
         if not users:
             return 0
 
@@ -319,7 +324,7 @@ class AdminOperation(BaseOperation):
         db_admin = await self._reset_admin_usage_and_sync(db, db_admin)
 
         logger.info(f'Admin "{db_admin.username}" usage has been reset by admin "{admin.username}"')
-        reseted_admin_details = build_admin_details(db_admin, include_loaded_metrics=True)
+        reseted_admin_details = await admin_details_for(db, db_admin, admin)
         asyncio.create_task(notification.admin_usage_reset(reseted_admin_details, admin.username))
         return reseted_admin_details
 
@@ -383,6 +388,7 @@ class AdminOperation(BaseOperation):
             period=period,
             node_id=node_id,
             group_by_node=group_by_node,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
 
     async def get_admin_usage_by_id(
@@ -464,7 +470,7 @@ class AdminOperation(BaseOperation):
 
         for db_admin in admins_to_update:
             await sync_admin_users_for_block_transition(db, db_admin, old_sync_blocked[db_admin.id])
-            modified_admin = build_admin_details(db_admin, include_loaded_metrics=True)
+            modified_admin = await admin_details_for(db, db_admin, current_admin)
             asyncio.create_task(notification.modify_admin(modified_admin, current_admin.username))
             logger.info(
                 f'Admin "{db_admin.username}" bulk {"disabled" if is_disabled else "enabled"} by admin "{current_admin.username}"'
@@ -479,7 +485,7 @@ class AdminOperation(BaseOperation):
         db_admins = await self._get_validated_bulk_admins(db, bulk_admins.ids, admin)
         for db_admin in db_admins:
             db_admin = await self._reset_admin_usage_and_sync(db, db_admin)
-            reseted_admin = build_admin_details(db_admin, include_loaded_metrics=True)
+            reseted_admin = await admin_details_for(db, db_admin, admin)
             asyncio.create_task(notification.admin_usage_reset(reseted_admin, admin.username))
             logger.info(f'Admin "{db_admin.username}" usage has been reset by admin "{admin.username}"')
         return self._build_bulk_action_response(db_admins)

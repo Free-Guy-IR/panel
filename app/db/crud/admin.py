@@ -21,6 +21,7 @@ from app.db.models import (
     ReminderType,
     User,
 )
+from app.fork.crud.group_scope import user_in_allowed_groups
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -311,6 +312,7 @@ async def get_admins(
     compact: bool = False,
     include_owner: bool = True,
     load_role: bool = True,
+    allowed_group_ids: list[int] | None = None,
 ) -> list[Admin] | tuple[list[Admin], int, int, int, int]:
     """
     Retrieves a list of admins with optional filters and pagination.
@@ -353,11 +355,10 @@ async def get_admins(
         limited = row.limited or 0
 
     if compact:
-        users_count_subq = (
-            select(User.admin_id.label("admin_id"), func.count(User.id).label("total_users"))
-            .group_by(User.admin_id)
-            .subquery()
-        )
+        users_count_stmt = select(User.admin_id.label("admin_id"), func.count(User.id).label("total_users"))
+        if allowed_group_ids is not None:
+            users_count_stmt = users_count_stmt.where(user_in_allowed_groups(User.id, allowed_group_ids))
+        users_count_subq = users_count_stmt.group_by(User.admin_id).subquery()
         reset_usage_subq = (
             select(
                 AdminUsageLogs.admin_id.label("admin_id"),
@@ -713,6 +714,7 @@ async def get_admin_usages(
     period: Period,
     node_id: int | None = None,
     group_by_node: bool = False,
+    allowed_group_ids: list[int] | None = None,
 ) -> UserUsageStatsList:
     """
     Retrieves aggregated usage data for an admin's users within a specified time range,
@@ -742,6 +744,8 @@ async def get_admin_usages(
 
     if admin_id is not None:
         conditions.append(User.admin_id == admin_id)
+    if allowed_group_ids is not None:
+        conditions.append(user_in_allowed_groups(NodeUserUsage.user_id, allowed_group_ids))
 
     if node_id is not None:
         conditions.append(NodeUserUsage.node_id == node_id)
