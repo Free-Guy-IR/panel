@@ -2078,6 +2078,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             start=start,
             end=end,
             period=period,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         agent_stats = await get_users_subscription_agent_stats(
             db,
@@ -2086,6 +2087,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             period=period,
             user_id=resolved_user_id,
             admin_id=resolved_admin_id,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         return self._build_user_agent_chart(
             agent_counts,
