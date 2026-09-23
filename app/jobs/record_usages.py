@@ -78,6 +78,11 @@ class UsageCohort(NamedTuple):
     attempts: int = 0
 
 
+class NodeUsageBacklog(NamedTuple):
+    totals: dict[int, tuple[int, int]]
+    attempts: int = 0
+
+
 # Thread pool executor for I/O-bound node API calls
 # Distributes workload across threads/cores for data collection
 _thread_pool = None
@@ -145,6 +150,7 @@ _unknown_uid_total_bytes = 0
 _unknown_uid_last_log_at: float | None = None
 _unknown_uid_suppressed_reports = 0
 _retained_cohorts: list[UsageCohort] = []
+_retained_node_usage: list[NodeUsageBacklog] = []
 _usage_job_runs: set[asyncio.Task] = set()
 _stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset_issued", default=None)
 
@@ -1425,6 +1431,92 @@ async def record_user_usages():
         _user_usage_running = False
 
 
+def _sum_node_totals(parts) -> dict[int, tuple[int, int]]:
+    merged: dict[int, list[int]] = {}
+    for totals in parts:
+        for node_id, (up, down) in totals.items():
+            entry = merged.setdefault(node_id, [0, 0])
+            entry[0] += up
+            entry[1] += down
+    return {node_id: (up, down) for node_id, (up, down) in sorted(merged.items()) if up or down}
+
+
+def _node_usage_bytes(totals: dict[int, tuple[int, int]]) -> int:
+    return sum(up + down for up, down in totals.values())
+
+
+async def write_node_usage(node_totals: dict[int, tuple[int, int]], created_at: dt) -> None:
+    ordered = [(node_id, up, down) for node_id, (up, down) in sorted(node_totals.items()) if up or down]
+    if not ordered:
+        return
+    dialect = await get_dialect()
+    node_update_stmt = (
+        update(Node)
+        .where(Node.id == bindparam("node_id"))
+        .values(uplink=Node.uplink + bindparam("up"), downlink=Node.downlink + bindparam("down"))
+        .execution_options(synchronize_session=False)
+    )
+    system_update_stmt = update(System).values(
+        uplink=System.uplink + sum(up for _, up, _ in ordered),
+        downlink=System.downlink + sum(down for _, _, down in ordered),
+    )
+
+    async def _apply(conn) -> None:
+        await conn.execute(node_update_stmt, [{"node_id": node_id, "up": up, "down": down} for node_id, up, down in ordered])
+        await conn.execute(system_update_stmt)
+        if usage_settings.disable_recording_node_usage:
+            return
+        existing = set(
+            (await conn.execute(select(Node.id).where(Node.id.in_([node_id for node_id, _, _ in ordered])))).scalars()
+        )
+        for node_id, up, down in ordered:
+            upsert_param = {
+                "node_id": node_id if node_id in existing else None,
+                "created_at": created_at,
+                "up": up,
+                "down": down,
+            }
+            for stmt, stmt_params in build_node_usage_upsert(dialect, upsert_param):
+                await conn.execute(stmt, stmt_params)
+
+    async with JOB_SEM:
+        try:
+            await run_in_retried_transaction(_apply)
+        except IntegrityError as err:
+            if not is_missing_parent_error(err):
+                raise
+            logger.warning("A node was deleted while its usage was being written; writing node usage again without it")
+            await run_in_retried_transaction(_apply)
+
+
+def _keep_or_abandon_node_usage(
+    backlog: list[NodeUsageBacklog], fresh: dict[int, tuple[int, int]], failure: BaseException | None
+) -> None:
+    commit_in_doubt = _write_may_have_committed(failure)
+    entries = [*backlog, NodeUsageBacklog(fresh)] if fresh else list(backlog)
+    for entry in entries:
+        attempts = entry.attempts + 1
+        if not commit_in_doubt and attempts < USAGE_RETAINED_MAX_ATTEMPTS:
+            _retained_node_usage.append(entry._replace(attempts=attempts))
+            logger.warning(
+                "Still holding %s node usage bytes from node(s) %s after %s failed attempt(s); nothing was written",
+                _node_usage_bytes(entry.totals),
+                sorted(entry.totals),
+                attempts,
+            )
+            continue
+        logger.error(
+            "Gave up on %s node usage bytes read from node(s) %s after %s attempt(s); %s",
+            _node_usage_bytes(entry.totals),
+            sorted(entry.totals),
+            attempts,
+            "the connection dropped while the write was in flight, so it may have committed and a retry could count "
+            "them twice"
+            if commit_in_doubt
+            else "the retry limit was reached",
+        )
+
+
 async def _record_node_usages_impl():
     """
     Internal implementation of record_node_usages.
@@ -1433,14 +1525,13 @@ async def _record_node_usages_impl():
     job_start_time = time.time()
     nodes = await node_manager.get_healthy_nodes()
 
-    if not nodes:
+    if not nodes and not _retained_node_usage:
         logger.debug("No healthy nodes found, skipping node usage recording")
         return
 
     logger.debug(f"Starting node usage recording for {len(nodes)} nodes")
 
     try:
-        # Get healthy nodes and gather stats directly
         stats_results = await asyncio.gather(
             *[_bounded_node_rpc(get_outbounds_stats(node, node_id)) for node_id, node in nodes],
             return_exceptions=True,
@@ -1454,60 +1545,39 @@ async def _record_node_usages_impl():
             else:
                 api_params[node_id] = result
 
-        # Calculate per-node totals
-        node_totals = {
-            node_id: {
-                "up": sum(param["up"] for param in params),
-                "down": sum(param["down"] for param in params),
-            }
-            for node_id, params in api_params.items()
-        }
+        fresh = _sum_node_totals(
+            [
+                {
+                    node_id: (sum(param["up"] for param in params), sum(param["down"] for param in params))
+                    for node_id, params in api_params.items()
+                }
+            ]
+        )
+        backlog = list(_retained_node_usage)
+        _retained_node_usage.clear()
+        node_totals = _sum_node_totals([*(entry.totals for entry in backlog), fresh])
 
-        # Calculate system totals from node totals
-        total_up = sum(node_data["up"] for node_data in node_totals.values())
-        total_down = sum(node_data["down"] for node_data in node_totals.values())
-
-        if not (total_up or total_down):
+        if not node_totals:
             logger.debug("No node usage to record")
             return
 
-        # Update each node's uplink/downlink with concurrency control
-        node_update_params = [
-            {"node_id": node_id, "up": node_data["up"], "down": node_data["down"]}
-            for node_id, node_data in sorted(node_totals.items())
-            if node_data["up"] or node_data["down"]
-        ]
-
-        if node_update_params:
-            node_update_stmt = (
-                update(Node)
-                .where(Node.id == bindparam("node_id"))
-                .values(uplink=Node.uplink + bindparam("up"), downlink=Node.downlink + bindparam("down"))
-                .execution_options(synchronize_session=False)
-            )
-            async with JOB_SEM:
-                await safe_execute(node_update_stmt, node_update_params)
-            logger.debug(f"Updated {len(node_update_params)} nodes")
-
-        # Update system totals with concurrency control
-        system_update_stmt = update(System).values(
-            uplink=System.uplink + total_up, downlink=System.downlink + total_down
-        )
-        async with JOB_SEM:
-            await safe_execute(system_update_stmt)
+        created_at = _get_time_bucket()
+        try:
+            await write_node_usage(node_totals, created_at)
+        except BaseException as exc:
+            _keep_or_abandon_node_usage(backlog, fresh, exc if isinstance(exc, Exception) else None)
+            raise
+        logger.debug(f"Updated {len(node_totals)} nodes")
 
         if usage_settings.disable_recording_node_usage:
             return
 
-        # Batch all node usage writes
-        await record_node_stats_batched(api_params)
-
-        await after_record_node_usages(nodes, _get_time_bucket())
+        await after_record_node_usages(nodes, created_at)
 
         job_duration = time.time() - job_start_time
         logger.info(
             f"Node usage recording completed in {job_duration:.2f}s: "
-            f"{len(node_update_params)} nodes, total: {total_up + total_down} bytes"
+            f"{len(node_totals)} nodes, total: {_node_usage_bytes(node_totals)} bytes"
         )
 
     except Exception:
