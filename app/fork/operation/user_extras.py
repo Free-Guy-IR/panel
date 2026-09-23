@@ -15,7 +15,12 @@ from app.fork.proxy_secrets import (
     write_stored_secret,
 )
 from app.fork.proxy_secrets.entitled import EntitledSecretField
-from app.fork.proxy_secrets.locks import LOCK_WAIT_TIMEOUT_DETAIL, acquire_proxy_secrets_lock, is_lock_wait_timeout
+from app.fork.proxy_secrets.locks import (
+    LOCK_UNAVAILABLE_DETAIL,
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_unavailable,
+)
 from app.fork.proxy_secrets.wireguard_scope import drop_unentitled_wireguard_keys
 from app.models.proxy import ProxyTable
 from app.models.user import BulkOperationDryRunResponse, BulkUserFilter
@@ -54,10 +59,10 @@ async def prepare_fork_proxy_settings(
 
 
 class UserExtrasMixin:
-    async def _raise_if_lock_wait_timeout(self, db: AsyncSession, exc: DBAPIError) -> None:
-        if not is_lock_wait_timeout(exc):
+    async def _raise_if_lock_unavailable(self, db: AsyncSession, exc: Exception) -> None:
+        if not is_lock_unavailable(exc):
             raise exc
-        await self.raise_error(message=LOCK_WAIT_TIMEOUT_DETAIL, code=503, db=db)
+        await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
         return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)
@@ -68,8 +73,8 @@ class UserExtrasMixin:
         if not bulk_model.dry_run:
             try:
                 await acquire_proxy_secrets_lock(db)
-            except DBAPIError as exc:
-                await self._raise_if_lock_wait_timeout(db, exc)
+            except (DBAPIError, NamedLockMissing) as exc:
+                await self._raise_if_lock_unavailable(db, exc)
 
         shared = {}
         for spec in specs:
@@ -137,8 +142,8 @@ class UserExtrasMixin:
                 candidate_ids=candidate_ids,
                 dry_run=bulk_model.dry_run,
             )
-        except DBAPIError as exc:
-            await self._raise_if_lock_wait_timeout(db, exc)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
         if bulk_model.dry_run:
             return BulkOperationDryRunResponse(affected_users=run.missing)

@@ -14,7 +14,12 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
 from app.db.models import CoreConfig, CoreType, User
-from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock, is_lock_wait_timeout, read_committed_rows
+from app.fork.proxy_secrets.locks import (
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_wait_timeout,
+    read_committed_rows,
+)
 from app.fork.proxy_secrets.uniqueness import (
     MAX_REGENERATION_ATTEMPTS,
     ProxySecretUniquenessError,
@@ -385,6 +390,13 @@ async def grant_entitled_secrets_after_plan_change(db: AsyncSession, db_user: Us
         logger.error(
             f"next plan applied to user {db_user.id}, but granting {', '.join(exc.fields)} failed and nothing was "
             f"written; the protocol stays refused until an operator runs its activation: {exc}"
+        )
+        return []
+    except NamedLockMissing as exc:
+        await savepoint.rollback()
+        logger.error(
+            f"next plan applied to user {db_user.id}, but its entitled secrets were not granted because the proxy "
+            f"secrets lock row vanished; nothing was written, run the activation for the protocol: {exc}"
         )
         return []
     except DBAPIError as exc:
