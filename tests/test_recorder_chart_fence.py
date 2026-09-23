@@ -12,8 +12,10 @@ from app.db.models import NodeUserUsage, User
 from app.jobs import record_usages
 from tests.test_recorder_harness import (  # noqa: F401
     CountingNode,
+    is_billing_write,
     recorder_db_fixture,
     seed_users_and_nodes,
+    statement_faults_fixture,
     usage_snapshot,
 )
 
@@ -113,30 +115,20 @@ class _Deadlock(Exception):
 
 
 @pytest.mark.asyncio
-async def test_a_retried_billing_transaction_withdraws_fenced_chart_bytes_exactly_once(
-    monkeypatch: pytest.MonkeyPatch, recorder_db
+async def test_a_retried_cohort_transaction_writes_the_chart_exactly_once(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, statement_faults
 ):
     _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=2, node_count=1)
     reset_user_id, kept_user_id = user_ids
     node = CountingNode(node_ids[0], {reset_user_id: 600, kept_user_id: 45})
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=[(node.node_id, node)]))
     _reset_during(monkeypatch, recorder_db, "after_chart_write", reset_user_id, clean_chart_data=False)
-    real_withdraw = record_usages._withdraw_fenced_chart_rows
-    attempts = {"n": 0}
-
-    async def withdraw_then_deadlock(*args, **kwargs):
-        attempts["n"] += 1
-        withdrawn = await real_withdraw(*args, **kwargs)
-        if attempts["n"] == 1:
-            raise OperationalError("stmt", {}, _Deadlock())
-        return withdrawn
-
-    monkeypatch.setattr(record_usages, "_withdraw_fenced_chart_rows", withdraw_then_deadlock)
+    faults = statement_faults(is_billing_write, OperationalError("stmt", {}, _Deadlock()), {1})
     billed_before, charted_before = await usage_snapshot(recorder_db, user_ids)
 
     await record_usages._record_user_usages_impl()
 
-    assert attempts["n"] == 2
+    assert faults.log == ["chart", "billing", "failed", "chart", "billing"]
     billed_after, charted_after = await usage_snapshot(recorder_db, user_ids)
     assert _delta(charted_after, charted_before) == {reset_user_id: 0, kept_user_id: 45}
     assert _delta(billed_after, billed_before)[kept_user_id] == 45

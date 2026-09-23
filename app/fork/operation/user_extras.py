@@ -1,5 +1,5 @@
-from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 
 from app.db import AsyncSession
 from app.db.models import User
@@ -15,6 +15,13 @@ from app.fork.proxy_secrets import (
     write_stored_secret,
 )
 from app.fork.proxy_secrets.entitled import EntitledSecretField
+from app.fork.proxy_secrets.locks import (
+    LOCK_UNAVAILABLE_DETAIL,
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_unavailable,
+)
+from app.fork.proxy_secrets.wireguard_scope import drop_unentitled_wireguard_keys
 from app.models.proxy import ProxyTable
 from app.models.user import BulkOperationDryRunResponse, BulkUserFilter
 from app.operation import OperatorType
@@ -44,6 +51,7 @@ async def prepare_fork_proxy_settings(
     prepare_openvpn = getattr(user_mod, "prepare_openvpn_password", prepare_openvpn_password)
     prepare_mtproto = getattr(user_mod, "prepare_mtproto_secret", prepare_mtproto_secret)
     prepare_l2tp = getattr(user_mod, "prepare_l2tp_password", prepare_l2tp_password)
+    proxy_settings = await drop_unentitled_wireguard_keys(db, proxy_settings, groups, exclude_user_id=exclude_user_id)
     proxy_settings = await prepare_openvpn(db, proxy_settings, groups)
     proxy_settings = await prepare_mtproto(db, proxy_settings, groups)
     proxy_settings = await prepare_l2tp(db, proxy_settings, groups)
@@ -51,54 +59,22 @@ async def prepare_fork_proxy_settings(
 
 
 class UserExtrasMixin:
+    async def _raise_if_lock_unavailable(self, db: AsyncSession, exc: Exception) -> None:
+        if not is_lock_unavailable(exc):
+            raise exc
+        await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+
     async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
-        user_mod = _user_mod()
-        candidates = await user_mod.get_users_for_l2tp_activation(db, bulk_model)
-        l2tp_tags = user_mod.l2tp_core_tags(await user_mod.get_l2tp_cores(db))
-
-        to_update: list[tuple[User, str]] = []
-        skipped: list[int] = []
-        for user in candidates:
-            try:
-                current = ProxyTable.model_validate(user.proxy_settings)
-                if current.l2tp.password:
-                    continue
-                if not l2tp_tags or not (l2tp_tags & await user_mod.tags_from_groups(user.groups)):
-                    continue
-            except (ValidationError, ValueError):
-                skipped.append(user.id)
-                continue
-            to_update.append((user, user_mod.generate_l2tp_password()))
-
-        if skipped:
-            logger.warning(
-                f"L2TP activation skipped {len(skipped)} users with unreadable proxy settings: {skipped[:20]}"
-            )
-
-        if bulk_model.dry_run:
-            return BulkOperationDryRunResponse(affected_users=len(to_update))
-
-        if not to_update:
-            if self.operator_type in (OperatorType.API, OperatorType.WEB):
-                return {"detail": "operation has been successfuly done on 0 users"}
-            return 0
-
-        for user, password in to_update:
-            settings = dict(user.proxy_settings or {})
-            settings["l2tp"] = {"password": password}
-            user.proxy_settings = settings
-        await db.commit()
-
-        updated_users = [user for user, _ in to_update]
-        await user_mod.sync_users(updated_users)
-
-        if self.operator_type in (OperatorType.API, OperatorType.WEB):
-            return {"detail": f"operation has been successfuly done on {len(to_update)} users"}
-        return len(to_update)
+        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)
 
     async def bulk_repair_duplicate_proxy_secrets(self, db: AsyncSession, bulk_model: BulkRepairProxySecrets):
         user_mod = _user_mod()
         specs = specs_for(bulk_model.secret_fields)
+        if not bulk_model.dry_run:
+            try:
+                await acquire_proxy_secrets_lock(db)
+            except (DBAPIError, NamedLockMissing) as exc:
+                await self._raise_if_lock_unavailable(db, exc)
 
         shared = {}
         for spec in specs:
@@ -157,14 +133,17 @@ class UserExtrasMixin:
 
         user_mod = _user_mod()
         candidate_ids = (await db.execute(select(User.id).where(_create_final_filter(bulk_model)))).scalars().all()
-        run = await issue_missing_entitled_secrets(
-            db,
-            secret_field,
-            load_users=load_users_for_sync,
-            sync_users=user_mod.sync_users,
-            candidate_ids=candidate_ids,
-            dry_run=bulk_model.dry_run,
-        )
+        try:
+            run = await issue_missing_entitled_secrets(
+                db,
+                secret_field,
+                load_users=load_users_for_sync,
+                sync_users=user_mod.sync_users,
+                candidate_ids=candidate_ids,
+                dry_run=bulk_model.dry_run,
+            )
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
         if bulk_model.dry_run:
             return BulkOperationDryRunResponse(affected_users=run.missing)

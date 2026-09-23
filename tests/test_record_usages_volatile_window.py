@@ -39,7 +39,8 @@ class _FrozenClock:
 
 
 @pytest.fixture(autouse=True)
-def _reset_module_state():
+def _reset_module_state(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(record_usages, "_retained_cohorts", [])
     record_usages._usage_coefficient_cache.clear()
     record_usages._user_usage_running = False
     record_usages._node_usage_running = False
@@ -181,6 +182,7 @@ def test_scheduler_never_runs_a_job_concurrently_with_itself():
 
     assert defaults["coalesce"] is True
     assert defaults["max_instances"] == 1
+    assert defaults["misfire_grace_time"] == 30
 
 
 @pytest.mark.asyncio

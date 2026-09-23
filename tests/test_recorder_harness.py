@@ -7,13 +7,14 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import event, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
 
 from app.db import base
 from app.db.models import Admin, AdminRole, Node, NodeUserUsage, User
+from app.fork.jobs import usage_limits
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.operation import admin_sync
@@ -80,6 +81,7 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(record_usages, "engine", engine)
     monkeypatch.setattr(record_usages, "GetDB", RecorderGetDB)
     monkeypatch.setattr(admin_sync, "GetDB", RecorderGetDB)
+    monkeypatch.setattr(usage_limits, "GetDB", RecorderGetDB)
     monkeypatch.setattr(record_usages, "_retained_cohorts", [], raising=False)
     monkeypatch.setattr(record_usages, "_usage_job_runs", set(), raising=False)
     monkeypatch.setattr(record_usages, "_user_usage_running", False)
@@ -183,3 +185,53 @@ async def usage_snapshot(session_factory, user_ids: list[int]) -> tuple[dict[int
     for user_id, total in chart_rows:
         charted[int(user_id)] = int(total or 0)
     return billed, {user_id: charted[user_id] for user_id in user_ids}
+
+
+def _normalized_sql(statement: str) -> str:
+    return " ".join(statement.upper().split())
+
+
+def is_chart_write(statement: str) -> bool:
+    return _normalized_sql(statement).startswith("INSERT INTO NODE_USER_USAGES")
+
+
+def is_billing_write(statement: str) -> bool:
+    return _normalized_sql(statement).startswith("UPDATE USERS SET USED_TRAFFIC=(USERS.USED_TRAFFIC +")
+
+
+class StatementFaults:
+    def __init__(self, matches, error: Exception, occurrences):
+        self.matches = matches
+        self.error = error
+        self.occurrences = occurrences
+        self.matched = 0
+        self.log: list[str] = []
+
+    def before_cursor_execute(self, conn, cursor, statement, parameters, context, executemany):
+        if is_chart_write(statement):
+            self.log.append("chart")
+        elif is_billing_write(statement):
+            self.log.append("billing")
+        if not self.matches(statement):
+            return
+        self.matched += 1
+        if self.occurrences is None or self.matched in self.occurrences:
+            self.log.append("failed")
+            raise self.error
+
+
+@pytest.fixture(name="statement_faults")
+def statement_faults_fixture(recorder_db):
+    engine = record_usages.engine.sync_engine
+    installed: list[StatementFaults] = []
+
+    def install(matches, error: Exception, occurrences=None) -> StatementFaults:
+        faults = StatementFaults(matches, error, occurrences)
+        event.listen(engine, "before_cursor_execute", faults.before_cursor_execute)
+        installed.append(faults)
+        return faults
+
+    yield install
+
+    for faults in installed:
+        event.remove(engine, "before_cursor_execute", faults.before_cursor_execute)

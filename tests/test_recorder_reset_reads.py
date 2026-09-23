@@ -20,7 +20,7 @@ class _ConnectionGone(Exception):
 
 
 def _fail_first_persist(
-    monkeypatch: pytest.MonkeyPatch, delay: float = 0.0, after_partial_write: bool = False
+    monkeypatch: pytest.MonkeyPatch, delay: float = 0.0, commit_in_doubt: bool = False
 ) -> dict[str, int]:
     real_persist = record_usages._persist_collected_usage
     calls = {"n": 0}
@@ -29,9 +29,7 @@ def _fail_first_persist(
         calls["n"] += 1
         if calls["n"] == 1:
             await asyncio.sleep(delay)
-            if after_partial_write and kwargs.get("progress") is not None:
-                kwargs["progress"].writes_started = True
-            raise OperationalError("stmt", {}, _ConnectionGone())
+            raise OperationalError("stmt", {}, _ConnectionGone(), connection_invalidated=commit_in_doubt)
         return await real_persist(*args, **kwargs)
 
     monkeypatch.setattr(record_usages, "_persist_collected_usage", flaky_persist)
@@ -134,7 +132,7 @@ async def _leave_one_node_retained(monkeypatch: pytest.MonkeyPatch, recorder_db,
     slower = CountingNode(node_ids[1], {user_ids[1]: raw_bytes}, latency=0.1)
     _install(monkeypatch, [fast, slower])
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.02)
-    _fail_first_persist(monkeypatch, delay=0.3, after_partial_write=True)
+    _fail_first_persist(monkeypatch, delay=0.3, commit_in_doubt=True)
     with pytest.raises(OperationalError):
         await record_usages._record_user_usages_impl()
     assert len(record_usages._retained_cohorts) == 1
@@ -168,29 +166,36 @@ async def test_kept_bytes_outlive_a_failed_retry_that_wrote_nothing(monkeypatch:
     assert record_usages._retained_cohorts == []
 
 
-@pytest.mark.asyncio
-async def test_kept_bytes_are_not_retried_once_a_write_started(monkeypatch: pytest.MonkeyPatch, recorder_db, caplog):
-    user_ids, _, _ = await _leave_one_node_retained(monkeypatch, recorder_db, 330)
+def _billing_down_once(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
     real_apply = record_usages.apply_fenced_user_usage
-    apply_calls = {"n": 0}
+    calls = {"n": 0}
 
     async def billing_down_once(*args, **kwargs):
-        apply_calls["n"] += 1
-        if apply_calls["n"] == 1:
+        calls["n"] += 1
+        if calls["n"] == 1:
             raise OperationalError("stmt", {}, _ConnectionGone())
         return await real_apply(*args, **kwargs)
 
     monkeypatch.setattr(record_usages, "apply_fenced_user_usage", billing_down_once)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_kept_bytes_are_retried_after_a_failed_write(monkeypatch: pytest.MonkeyPatch, recorder_db, caplog):
+    user_ids, _, _ = await _leave_one_node_retained(monkeypatch, recorder_db, 330)
+    _billing_down_once(monkeypatch)
 
     with pytest.raises(OperationalError):
         await record_usages._record_user_usages_impl()
-    assert record_usages._retained_cohorts == []
-    assert "Gave up on 330 raw bytes" in caplog.text
+    assert [cohort.attempts for cohort in record_usages._retained_cohorts] == [1]
+    assert "Gave up on 330 raw bytes" not in caplog.text
 
     await record_usages._record_user_usages_impl()
 
-    _, charted = await usage_snapshot(recorder_db, user_ids)
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed[user_ids[1]] == 330
     assert charted[user_ids[1]] == 330
+    assert record_usages._retained_cohorts == []
 
 
 @pytest.mark.asyncio
@@ -253,22 +258,23 @@ async def test_a_fresh_cohort_that_failed_before_writing_is_recovered_exactly_on
 
 
 @pytest.mark.asyncio
-async def test_a_fresh_cohort_whose_write_started_is_given_up(monkeypatch: pytest.MonkeyPatch, recorder_db, caplog):
+async def test_a_fresh_cohort_whose_write_failed_is_retained(monkeypatch: pytest.MonkeyPatch, recorder_db, caplog):
     _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
     node = CountingNode(node_ids[0], {user_ids[0]: 210})
     _install(monkeypatch, [node])
-    monkeypatch.setattr(
-        record_usages,
-        "apply_fenced_user_usage",
-        AsyncMock(side_effect=OperationalError("stmt", {}, _ConnectionGone())),
-    )
+    _billing_down_once(monkeypatch)
 
     with pytest.raises(OperationalError):
         await record_usages._record_user_usages_impl()
 
+    assert [cohort.attempts for cohort in record_usages._retained_cohorts] == [1]
+    assert "Gave up on 210 raw bytes" not in caplog.text
+
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed[user_ids[0]] == charted[user_ids[0]] == 210
     assert record_usages._retained_cohorts == []
-    assert "Gave up on 210 raw bytes" in caplog.text
-    assert "a write had already started" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -304,17 +310,20 @@ async def test_a_fresh_cohort_cancelled_before_writing_is_kept(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_a_fresh_cohort_cancelled_after_a_write_started_is_given_up_loudly(
-    monkeypatch: pytest.MonkeyPatch, recorder_db, caplog
-):
+async def test_a_fresh_cohort_cancelled_during_its_write_is_kept(monkeypatch: pytest.MonkeyPatch, recorder_db, caplog):
     _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
     node = CountingNode(node_ids[0], {user_ids[0]: 260})
     _install(monkeypatch, [node])
+    real_apply = record_usages.apply_fenced_user_usage
     entered = asyncio.Event()
+    calls = {"n": 0}
 
     async def stalled_billing(*args, **kwargs):
-        entered.set()
-        await asyncio.sleep(5)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            entered.set()
+            await asyncio.sleep(5)
+        return await real_apply(*args, **kwargs)
 
     monkeypatch.setattr(record_usages, "apply_fenced_user_usage", stalled_billing)
 
@@ -324,6 +333,11 @@ async def test_a_fresh_cohort_cancelled_after_a_write_started_is_given_up_loudly
     with pytest.raises(asyncio.CancelledError):
         await tick
 
+    assert len(record_usages._retained_cohorts) == 1
+    assert "Gave up on 260 raw bytes" not in caplog.text
+
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed[user_ids[0]] == charted[user_ids[0]] == 260
     assert record_usages._retained_cohorts == []
-    assert "Gave up on 260 raw bytes" in caplog.text
-    assert "a write had already started" in caplog.text

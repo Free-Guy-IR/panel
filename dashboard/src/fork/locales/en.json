@@ -228,6 +228,7 @@
   "statistics.inboundDataHint": "Inbound history builds up from the moment it is enabled.",
   "statistics.perNodeBreakdownUnavailable": "Per-node breakdown unavailable",
   "statistics.perNodeBreakdownUnavailableDescription": "The usage API returned only a combined total for this range, so this traffic cannot be attributed to individual nodes. The combined total is measured.",
+  "statistics.deletedNodes": "Deleted nodes",
   "statistics.accountedUsage": "Accounted usage (coefficient-adjusted)",
   "settings.connectionLimit.title": "Connection limit",
   "settings.connectionLimit.loadError": "Failed to load connection limit settings",

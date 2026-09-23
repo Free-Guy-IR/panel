@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from app.db import AsyncSession
 from app.db.models import User
 from app.fork.proxy_secrets.fields import SPEC_BY_FIELD, ProxySecretField, SecretFieldSpec, specs_for
+from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock, read_committed_rows
 from app.models.proxy import ProxyTable
 from app.utils.logger import get_logger
 
@@ -70,7 +71,7 @@ async def secret_holder_counts(
         stmt = stmt.where(User.id != exclude_user_id)
 
     counts: dict[ProxySecretField, int] = {}
-    for row in (await db.execute(stmt)).all():
+    for row in await read_committed_rows(db, stmt):
         for offset, spec in enumerate(specs, start=1):
             if row[offset] is not None and row[offset] == wanted[spec.field]:
                 counts[spec.field] = counts.get(spec.field, 0) + 1
@@ -115,6 +116,7 @@ async def enforce_unique_proxy_secrets(
     fields=None,
     reserved: ReservedSecrets | None = None,
 ) -> ProxyTable:
+    await acquire_proxy_secrets_lock(db)
     pending: dict[ProxySecretField, str] = {}
     for spec in specs_for(fields):
         value = read_secret(proxy_settings, spec)

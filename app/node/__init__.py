@@ -38,7 +38,7 @@ class NodeManager:
             node.api_key,
             node.default_timeout,
             node.internal_timeout,
-            node.proxy_url,
+            node.proxy_url or None,
         )
 
     def _create_node_kwargs(self, node: Node) -> dict:
@@ -94,9 +94,9 @@ class NodeManager:
             # that used to defeat the attach-if-already-running logic below and turned
             # transient health-check false negatives into a permanent restart loop.
             if existing is not None and self._node_signatures.get(node.id) == signature:
-                existing_extra = await existing.get_extra()
-                if existing.name == node.name and existing_extra.get("usage_coefficient") == node.usage_coefficient:
-                    return existing
+                existing.name = node.name
+                (await existing.get_extra())["usage_coefficient"] = node.usage_coefficient
+                return existing
 
             async with self._lock.writer_lock:
                 old_node: PasarGuardNode | None = self._nodes.pop(node.id, None)

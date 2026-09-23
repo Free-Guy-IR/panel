@@ -8,11 +8,18 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import String, Text, and_, case, cast, func, literal, or_, select, update
 from sqlalchemy.dialects.mysql import BINARY as MySQLBinary
 from sqlalchemy.dialects.postgresql import JSON as PostgresJSON, JSONB
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
 from app.db.models import CoreConfig, CoreType, User
+from app.fork.proxy_secrets.locks import (
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_wait_timeout,
+    read_committed_rows,
+)
 from app.fork.proxy_secrets.uniqueness import (
     MAX_REGENERATION_ATTEMPTS,
     ProxySecretUniquenessError,
@@ -223,7 +230,7 @@ async def secret_values_in_use(db: AsyncSession, spec: EntitledSecretSpec, value
     found: set[str] = set()
     for start in range(0, len(ordered), LOOKUP_CHUNK):
         chunk = ordered[start : start + LOOKUP_CHUNK]
-        rows = await db.execute(select(column).where(column.in_(chunk)))
+        rows = await read_committed_rows(db, select(column).where(column.in_(chunk)))
         found.update(row[0] for row in rows if row[0])
     return found
 
@@ -234,6 +241,7 @@ async def issue_unique_secrets(
     count: int,
     reserved: ReservedSecrets | None = None,
 ) -> list[str]:
+    await acquire_proxy_secrets_lock(db)
     taken = reserved.setdefault(spec.field, set()) if reserved is not None else set()
     issued = [""] * count
     pending = list(range(count))
@@ -370,3 +378,35 @@ async def grant_entitled_secrets(
     if changed:
         logger.info(f"issued missing entitled secrets to {len(changed)} user(s) after an access change")
     return changed
+
+
+async def grant_entitled_secrets_after_plan_change(db: AsyncSession, db_user: User) -> list[User]:
+    await db.flush()
+    savepoint = await db.begin_nested()
+    try:
+        granted = await grant_entitled_secrets(db, [db_user])
+    except ProxySecretUniquenessError as exc:
+        await savepoint.rollback()
+        logger.error(
+            f"next plan applied to user {db_user.id}, but granting {', '.join(exc.fields)} failed and nothing was "
+            f"written; the protocol stays refused until an operator runs its activation: {exc}"
+        )
+        return []
+    except NamedLockMissing as exc:
+        await savepoint.rollback()
+        logger.error(
+            f"next plan applied to user {db_user.id}, but its entitled secrets were not granted because the proxy "
+            f"secrets lock row vanished; nothing was written, run the activation for the protocol: {exc}"
+        )
+        return []
+    except DBAPIError as exc:
+        if not is_lock_wait_timeout(exc):
+            raise
+        await savepoint.rollback()
+        logger.error(
+            f"next plan applied to user {db_user.id}, but granting its entitled secrets timed out waiting for the "
+            f"proxy secrets lock and nothing was written; run the activation for the protocol: {exc}"
+        )
+        return []
+    await savepoint.commit()
+    return granted

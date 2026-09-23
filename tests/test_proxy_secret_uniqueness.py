@@ -29,6 +29,7 @@ SHARED = {
     ProxySecretField.shadowsocks_password: "shared-shadowsocks-password-value",
     ProxySecretField.vless_id: "22222222-2222-4222-8222-222222222222",
     ProxySecretField.vmess_id: "33333333-3333-4333-8333-333333333333",
+    ProxySecretField.mtproto_secret: "0123456789abcdef0123456789abcdef",
 }
 
 HY2 = ProxySecretField.hysteria2_password

@@ -39,7 +39,7 @@
   - Start one local PostgreSQL container and create the databases `testdb_p1` … `testdb_p4`.
   - Start one local MySQL container and create `testdb_p2_mysql`.
   - Each owner runs `make run-migration` against its database and records the baseline `TEST_FROM=local uv run pytest tests -q` summary line in its hand-off.
-- [ ] T002 [P] P4: in `/Users/mohammadahadpor/Projects/pasarguard/work/panel-v53425-p4/dashboard`, run:
+- [X] T002 [P] P4: in `/Users/mohammadahadpor/Projects/pasarguard/work/panel-v53425-p4/dashboard`, run:
   - `bun install --frozen-lockfile`.
   - `bun node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json | grep -c "error TS"`, and record the count. The expected baseline is 578.
   - `bun test src/features/subscriptions/components/subscription-settings-schema.test.ts`, which must pass.
@@ -62,30 +62,30 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Tests for User Story 1 (write first, must fail before the fix)
 
-- [ ] T003 [P] [US1] P1: create `tests/test_scheduler_misfire_grace.py`.
+- [X] T003 [P] [US1] P1: create `tests/test_scheduler_misfire_grace.py`.
   - Assert `app.scheduler.scheduler._job_defaults["misfire_grace_time"] == 30`, `["max_instances"] == 1` and `["coalesce"] is True`.
   - Behavioural check: build an `AsyncIOScheduler` with `job_defaults` copied from `app.scheduler.scheduler._job_defaults`. Add a `date` job whose run time is 10 s in the past, start the scheduler, and assert that the job ran. Under APScheduler's default grace of 1 s it is skipped with "was missed by".
-  - Expected to fail before T008: the defaults assertion fails with a KeyError, and the behavioural job never runs.
-- [ ] T004 [P] [US1] P1: create `tests/test_usage_same_tick_limit.py` on the recorder harness (`recorder_db` from `tests/test_recorder_harness.py`, plus `seed_users_and_nodes` and `CountingNode`). Monkeypatch `app.jobs.review_users.sync_users` and the notification entry point so pushes and notifications are recorded. Cases:
+  - Expected to fail before T008: the defaults assertion fails with `assert 1 == 30`, because APScheduler 3.11.3 always fills `misfire_grace_time` with its default of 1 (not a KeyError). The behavioural job never runs.
+- [X] T004 [P] [US1] P1: create `tests/test_usage_same_tick_limit.py` on the recorder harness (`recorder_db` from `tests/test_recorder_harness.py`, plus `seed_users_and_nodes` and `CountingNode`). Monkeypatch `app.jobs.review_users.sync_users` and the notification entry point so pushes and notifications are recorded. Cases:
   - (a) An active user with `data_limit=1000` and `used_traffic=900` is billed 200 in one `record_user_usages()` call. When the call returns, the status is `limited`, the user was pushed once and one status-change notification was scheduled.
   - (b) An `on_hold` user crossing the limit is limited in the same way.
   - (c) A user with a `next_plan` crossing the limit gets the next plan applied: `used_traffic` is reset, the status is not `limited`, and the next-plan notification was scheduled.
   - (d) A user below the limit and a user with `data_limit` 0 or NULL are untouched.
   - (e) `enforce_user_limits_now` monkeypatched to raise: the billing is still committed, the exception is logged, and the tick returns normally.
   - Cases (a), (b) and (c) are expected to fail before T009, because the status stays active.
-- [ ] T005 [P] [US1] P1: create `tests/test_recorder_atomic_cohort.py` on the recorder harness. Cases:
+- [X] T005 [P] [US1] P1: create `tests/test_recorder_atomic_cohort.py` on the recorder harness. Cases:
   - (a) Inject an `OperationalError` into the billing `update(User)` step after the chart upsert statements of the same cohort have executed. After the tick, the cohort's `node_user_usages` rows do not exist, `users.used_traffic` is unchanged, and `_retained_cohorts` holds the cohort with `attempts == 1`. After the next tick, the chart and `used_traffic` each hold the bytes exactly once.
   - (b) Force a chart chunk size of 1 and make the second chunk raise. The result is the same as (a).
   - (c) Fenced user (epoch changed between poll and write): no `node_user_usages` row is ever written for that user, and other users in the cohort are billed.
   - (d) Every attempt fails: after `USAGE_RETAINED_MAX_ATTEMPTS` ticks the cohort is abandoned with an ERROR containing "Gave up".
   - (e) A `DBAPIError` with `connection_invalidated=True` raised from the unit is abandoned at once with an ERROR, and is not retained.
   - (a) and (b) are expected to fail before T010: the chart keeps the bytes, and the log shows "a write had already started".
-- [ ] T006 [US1] P1: rewrite the two tests in `tests/test_recorder_reset_reads.py` that pin the old give-up.
+- [X] T006 [US1] P1: rewrite the two tests in `tests/test_recorder_reset_reads.py` that pin the old give-up.
   - `test_kept_bytes_are_not_retried_once_a_write_started` (:172) becomes `test_kept_bytes_are_retried_after_a_failed_write`.
   - `test_a_fresh_cohort_whose_write_started_is_given_up` (:256) becomes `test_a_fresh_cohort_whose_write_failed_is_retained`.
   - Both assert retention and exactly-once billing on the next tick. Keep `:200`, `:231` and `:274` unchanged.
   - Expected to fail before T010.
-- [ ] T007 [P] [US1] P3: create `tests/test_reset_admin_usage_relative.py`.
+- [X] T007 [P] [US1] P3: create `tests/test_reset_admin_usage_relative.py`.
   - Session A loads an admin with `used_traffic=1000`.
   - Session B runs `update(Admin).values(used_traffic=Admin.used_traffic + 300)` and commits.
   - Session A calls `reset_admin_usage(db, admin)`. Then `admins.used_traffic == 300` and the new `AdminUsageLogs.used_traffic_at_reset == 1000`.
@@ -95,10 +95,10 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] P1: in `app/scheduler.py`, set `job_defaults={"max_instances": 1, "coalesce": True, "misfire_grace_time": 30}`.
+- [X] T008 [US1] P1: in `app/scheduler.py`, set `job_defaults={"max_instances": 1, "coalesce": True, "misfire_grace_time": 30}`.
   - Extend the existing pins `tests/test_record_usages.py:1307` (`test_scheduler_defaults_serialize_unflagged_jobs`) and `tests/test_record_usages_volatile_window.py:177` to also assert 30.
   - Proof: T003.
-- [ ] T009 [US1] P1: create `app/fork/jobs/usage_limits.py` with `async def enforce_user_limits_now(user_ids: Iterable[int]) -> None`. It:
+- [X] T009 [US1] P1: create `app/fork/jobs/usage_limits.py` with `async def enforce_user_limits_now(user_ids: Iterable[int]) -> None`. It:
   - opens `GetDB()`;
   - for each chunk of 500 ids, selects `_review_user_select_stmt()` (imported from `app.db.crud.user`, not edited) with `User.id.in_(chunk)`, `User.status.in_([UserStatus.active, UserStatus.on_hold])` and `User.is_limited`;
   - calls `apply_status_changes(db, users, UserStatus.limited)` (imported from `app.jobs.review_users`, not edited).
@@ -109,7 +109,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Each call is wrapped in `try/except Exception: logger.exception(...)`.
 
   Proof: T004.
-- [ ] T010 [US1] P1: make the cohort write atomic in `app/jobs/record_usages.py`, per plan D-A2r. Inside the single `run_in_retried_transaction` of `apply_fenced_user_usage`, the order is:
+- [X] T010 [US1] P1: make the cohort write atomic in `app/jobs/record_usages.py`, per plan D-A2r. Inside the single `run_in_retried_transaction` of `apply_fenced_user_usage`, the order is:
   1. `SELECT … FOR UPDATE` of the users, ordered by id.
   2. The fence decision.
   3. Filter out chart params of fenced users.
@@ -125,12 +125,12 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Adjust `tests/test_recorder_chart_fence.py` only where it asserts the removed withdrawal internals. Its end-state assertions (the chart never shows fenced bytes) must stay and pass.
 
   Proof: T005 and T006, plus the whole recorder suite: `tests/test_record_usages*.py`, `tests/test_recorder_*.py` and `tests/test_usage_coeff_freshness.py`.
-- [ ] T011 [US1] P3: in `app/db/crud/admin.py` `reset_admin_usage` (:663-693):
+- [X] T011 [US1] P3: in `app/db/crud/admin.py` `reset_admin_usage` (:663-693):
   - Keep `logged = db_admin.used_traffic` and the `AdminUsageLogs(used_traffic_at_reset=logged)` insert.
   - Replace `db_admin.used_traffic = 0` with `await db.execute(update(Admin).where(Admin.id == db_admin.id).values(used_traffic=Admin.used_traffic - logged))`.
   - Keep the status change and the refreshes. The existing docstring stays; add no new one.
   - Proof: T007.
-- [ ] T012 [US1] P1: run `tests/test_record_usages*.py`, `tests/test_recorder_*.py`, `tests/test_usage_*.py` and `tests/test_scheduler_misfire_grace.py` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p1`).
+- [X] T012 [US1] P1: run `tests/test_record_usages*.py`, `tests/test_recorder_*.py`, `tests/test_usage_*.py` and `tests/test_scheduler_misfire_grace.py` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p1`).
   - Commit with the fork identity.
   - Hand to P3 one OVERRIDES.md line each for `app/jobs/record_usages.py` and `app/scheduler.py`, if the ledger does not already list them.
 - [ ] T013 [US1] MAIN (test server, after T049): watch the usage job for one hour. The G3 duration lines are at INFO. The item passes only if:
@@ -151,23 +151,23 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Tests for User Story 2 (write first, must fail before the fix)
 
-- [ ] T014 [P] [US2] P2: create `tests/test_wireguard_reconcile_shared_keys.py`. Use an in-memory database fixture in the style of `tests/test_entitled_secrets_activation.py`, with FK pragma on, plus a WireGuard core and a subnet pool.
+- [X] T014 [P] [US2] P2: create `tests/test_wireguard_reconcile_shared_keys.py`. Use an in-memory database fixture in the style of `tests/test_entitled_secrets_activation.py`, with FK pragma on, plus a WireGuard core and a subnet pool.
   - Two WireGuard-bound users store the same public key, and a reconcile changes their peer IPs.
   - After `reconcile_wireguard_subnets(db)`, each holds a distinct key and neither holds the old shared key.
   - A third WireGuard-bound user with a unique complete keypair keeps it unchanged.
   - Expected to fail before T024, because the shared key is kept.
-- [ ] T015 [P] [US2] P2: create `tests/test_wireguard_client_keys_scope.py`. Use `UserOperation` built as in `tests/test_entitled_secrets_group_paths.py`, with `sync_users` monkeypatched.
+- [X] T015 [P] [US2] P2: create `tests/test_wireguard_client_keys_scope.py`. Use `UserOperation` built as in `tests/test_entitled_secrets_group_paths.py`, with `sync_users` monkeypatched.
   - (a) Create a user without WireGuard access with a client keypair. The stored `proxy_settings.wireguard` has no keys.
   - (b) Modify an existing user without WireGuard access, sending a different keypair. The stored keypair is unchanged.
   - (c) A WireGuard-entitled user with a unique keypair is stored as sent.
   - (d) Revoking a user without WireGuard access keeps its stored keys.
   - (a) and (b) are expected to fail before T025.
-- [ ] T016 [P] [US2] P2: create `tests/test_named_lock_migration.py`.
+- [X] T016 [P] [US2] P2: create `tests/test_named_lock_migration.py`.
   - In `TEST_FROM=github`, after `make run-migration`, the table `named_locks` exists with the row `name='proxy_secrets'`.
   - In both modes, `Base.metadata` contains `named_locks` with `name VARCHAR(64) primary key` and `acquired_at` nullable.
   - Load the new migration module by path. Run its `upgrade()` and then `downgrade()` inside `alembic.runtime.migration.MigrationContext.configure(conn)` plus `alembic.operations.Operations`, on a fresh SQLite file. After upgrade, the table exists with the seed row; after downgrade, it is gone. Do not replay the whole chain.
   - Expected to fail before T022.
-- [ ] T017 [P] [US2] P2: create `tests/test_proxy_secret_lock.py`. Use a file SQLite database in `tmp_path` for local mode, or `SQLALCHEMY_DATABASE_URL` with NullPool in github mode, following `tests/test_entitled_secrets_race.py`. Cases:
+- [X] T017 [P] [US2] P2: create `tests/test_proxy_secret_lock.py`. Use a file SQLite database in `tmp_path` for local mode, or `SQLALCHEMY_DATABASE_URL` with NullPool in github mode, following `tests/test_entitled_secrets_race.py`. Cases:
   - (a) **Snapshot case.** Session A reads `users`, which opens its snapshot. Session B stores `trojan.password = X` for another user and commits. A then calls `enforce_unique_proxy_secrets` with `X` supplied. X is regenerated in A's `ProxyTable`, so no duplicate is written after A commits.
   - (b) **Interleave case.** A takes the lock and checks X free. B, in a task, blocks on the lock until A commits, then sees X and regenerates.
   - (c) **Concurrency.** N concurrent creates with the same supplied `vless.id` (N=10 on SQLite, 50 on server databases) store it for at most one user: `SELECT COUNT(*) … GROUP BY` shows no value held twice.
@@ -176,12 +176,12 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Fail-first, before T023:
     - (a) must fail on MySQL (`testdb_p2_mysql`). It is `skipif` on other dialects, with the reason carried in the test id; no comment.
     - (b) and (c) must fail on PostgreSQL and on SQLite.
-- [ ] T018 [P] [US2] P2: create `tests/test_mtproto_secret_uniqueness.py`.
+- [X] T018 [P] [US2] P2: create `tests/test_mtproto_secret_uniqueness.py`.
   - Creating a user with MTProto access and a supplied `mtproto.secret` held by another user stores a different 32-hex secret and logs a WARNING.
   - Modify behaves the same.
   - With the generator monkeypatched to always return the held value, the create answers 409.
   - Expected to fail before T026, because the duplicate is stored.
-- [ ] T019 [US2] P2: rewrite `tests/test_bulk_l2tp_activation.py` as database-backed tests in the style of `tests/test_entitled_secrets_activation.py`. Cases:
+- [X] T019 [US2] P2: rewrite `tests/test_bulk_l2tp_activation.py` as database-backed tests in the style of `tests/test_entitled_secrets_activation.py`. Cases:
   - `dry_run` returns the count of missing users.
   - Activation grants passwords that are unique and pass `_valid_l2tp_password`.
   - Users without L2TP access are skipped.
@@ -189,11 +189,11 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - A concurrent edit of another proxy field of the same user, committed between the candidate query and the put, is preserved.
   - The route requires `users:update`.
   - The preserved-edit and uniqueness cases are expected to fail before T027.
-- [ ] T020 [P] [US2] P2: create `tests/test_next_plan_entitled_grant.py`.
+- [X] T020 [P] [US2] P2: create `tests/test_next_plan_entitled_grant.py`.
   - A user whose next-plan template groups entitle OpenVPN, L2TP and MTProto gets the missing secrets from `reset_user_by_next(db, user)`.
   - With `issue_unique_secrets` monkeypatched to raise `ProxySecretUniquenessError`, the plan is still applied (groups and limits changed), no secret is written, and an ERROR names the user id and field.
   - Expected to fail before T028.
-- [ ] T021 [P] [US2] P2: create `tests/test_mtproto_links_409.py`.
+- [X] T021 [P] [US2] P2: create `tests/test_mtproto_links_409.py`.
   - (a) An MTProto-only user without a secret: the `links` subscription through `SubscriptionOperation` raises `HTTPException` 409 with the MTProto "has not been activated" message.
   - (b) A user with vless and MTProto but no MTProto secret gets 200 with the vless link.
   - (c) A user with a secret gets the MTProto link.
@@ -201,12 +201,12 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] P2: create the lock table.
+- [X] T022 [US2] P2: create the lock table.
   - Model: `app/fork/models/named_lock.py`, `NamedLock` with `__tablename__ = "named_locks"`, `name: VARCHAR(64) primary key`, `acquired_at: DateTime nullable`. Export it from `app/fork/models/__init__.py`.
   - Migration: `app/db/migrations/versions/<new_rev>_named_locks.py` with `down_revision = "d8b2c4f60a17"`. Upgrade creates the table and inserts `('proxy_secrets', NULL)`; downgrade drops the table.
   - `make check-migrations` must be clean.
   - Proof: T016.
-- [ ] T023 [US2] P2: create `app/fork/proxy_secrets/locks.py` with `async def acquire_named_lock(db, name)`. It:
+- [X] T023 [US2] P2: create `app/fork/proxy_secrets/locks.py` with `async def acquire_named_lock(db, name)`. It:
   - runs inside `db.no_autoflush`;
   - executes the `UPDATE named_locks SET acquired_at=:now WHERE name=:name` fast path;
   - if `rowcount == 0`, runs the dialect insert-ignore (the pattern at `app/db/crud/wireguard.py:423-440`) and then the UPDATE again;
@@ -223,28 +223,28 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
     Map them in `UserOperation._prepare_user_proxy_settings` (`app/operation/user.py:449-475`, next to the existing 409) and in the bulk activation methods of `app/fork/operation/user_extras.py`.
 
   Proof: T017, plus the existing `tests/test_proxy_secret_*.py` and `tests/test_entitled_secrets_*.py`.
-- [ ] T024 [US2] P2: in `app/db/crud/wireguard.py` `reconcile_wireguard_subnets` (:644-650), compute `shared = await shared_wireguard_public_keys(db, users)` for each loaded chunk and call `_ensure_wireguard_keys(user, shared)`. Proof: T014, plus `tests/test_wireguard_shared_key_regeneration.py`.
-- [ ] T025 [US2] P2: create `app/fork/proxy_secrets/wireguard_scope.py` with `async def drop_unentitled_wireguard_keys(db, proxy_settings, groups, *, exclude_user_id=None) -> ProxyTable`.
+- [X] T024 [US2] P2: in `app/db/crud/wireguard.py` `reconcile_wireguard_subnets` (:644-650), compute `shared = await shared_wireguard_public_keys(db, users)` for each loaded chunk and call `_ensure_wireguard_keys(user, shared)`. Proof: T014, plus `tests/test_wireguard_shared_key_regeneration.py`.
+- [X] T025 [US2] P2: create `app/fork/proxy_secrets/wireguard_scope.py` with `async def drop_unentitled_wireguard_keys(db, proxy_settings, groups, *, exclude_user_id=None) -> ProxyTable`.
   - When `user_has_wireguard_access(db, groups)` is false, it sets `proxy_settings.wireguard` to the stored value of `exclude_user_id`, or to the empty default on create.
   - Call it first in `prepare_fork_proxy_settings` (`app/fork/operation/user_extras.py:35-50`).
   - Proof: T015.
-- [ ] T026 [US2] P2: add `ProxySecretField.mtproto_secret = "mtproto.secret"` and its `SecretFieldSpec("mtproto", "secret", <token_hex(16) generator>)` in `app/fork/proxy_secrets/fields.py`.
+- [X] T026 [US2] P2: add `ProxySecretField.mtproto_secret = "mtproto.secret"` and its `SecretFieldSpec("mtproto", "secret", <token_hex(16) generator>)` in `app/fork/proxy_secrets/fields.py`.
   - Check that `app/fork/proxy_secrets/repair.py` and the `BulkRepairProxySecrets` schema accept the new field.
   - Keep format validation in `app/utils/mtproto.py`.
   - Proof: T018.
-- [ ] T027 [US2] P2: replace the body of the L2TP bulk activation in `app/fork/operation/user_extras.py:54-97` with `return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)`.
+- [X] T027 [US2] P2: replace the body of the L2TP bulk activation in `app/fork/operation/user_extras.py:54-97` with `return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)`.
   - Delete `get_users_for_l2tp_activation` from `app/fork/crud/bulk.py` if nothing else references it.
   - Keep the response model unchanged.
   - Proof: T019.
-- [ ] T028 [US2] P2: add `async def grant_entitled_secrets_after_plan_change(db, db_user)` to `app/fork/proxy_secrets/entitled.py`.
+- [X] T028 [US2] P2: add `async def grant_entitled_secrets_after_plan_change(db, db_user)` to `app/fork/proxy_secrets/entitled.py`.
   - It calls `grant_entitled_secrets(db, [db_user])`, catches `ProxySecretUniquenessError` and logs ERROR with the user id and fields.
   - Call it with a local import in `app/db/crud/user.py` `reset_user_by_next`, immediately after `sync_user_allocations` (:1357). That is the only edit to this file.
   - Proof: T020.
-- [ ] T029 [US2] P2: record per render whether an MTProto link was skipped for a missing secret. Use `_note_unissued_secret` in `app/fork/subscription/helpers.py`.
+- [X] T029 [US2] P2: record per render whether an MTProto link was skipped for a missing secret. Use `_note_unissued_secret` in `app/fork/subscription/helpers.py`.
   - In the fork links path (`app/fork/subscription/links.py`), raise `UnissuedSecretError` for MTProto when the final links output is empty and that flag is set.
   - If `StandardLinks.render` has no seam, add one minimal call in `app/subscription/links.py` and send its OVERRIDES.md line to P3.
   - Proof: T021, plus `tests/test_entitled_secrets_subscription.py` and `tests/test_subscription_*.py`.
-- [ ] T030 [US2] P2: run all of `tests/` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p2`), and fix any regression in P2 files. Then commit. Hand P3 the OVERRIDES.md lines for every upstream file P2 changed: `app/db/crud/wireguard.py`, `app/db/crud/user.py`, `app/operation/user.py`, and `app/subscription/links.py` if touched.
+- [X] T030 [US2] P2: run all of `tests/` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p2`), and fix any regression in P2 files. Then commit. Hand P3 the OVERRIDES.md lines for every upstream file P2 changed: `app/db/crud/wireguard.py`, `app/db/crud/user.py`, `app/operation/user.py`, and `app/subscription/links.py` if touched.
 
 **Checkpoint**: US2 is independently shippable once the migration is in.
 
@@ -254,14 +254,14 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 **Goal**: A3. Owner: P3.
 
-- [ ] T031 [P] [US3] P3: create `tests/test_node_update_in_place.py`.
+- [X] T031 [P] [US3] P3: create `tests/test_node_update_in_place.py`.
   - Setup: monkeypatch `app.node.create_node` to return fake bridges that record constructions and `stop()` calls. Each fake has a `name` attribute and an async `get_extra()` that returns its dict.
   - Also monkeypatch `ensure_bridge_memory`/`get_bridge_memory` to no-ops.
   - Call `NodeManager().update_node(node)`, then call it again with only `name` and `usage_coefficient` changed. Expect: one construction, zero `stop()` calls, the same object returned, and that object carrying the new `name` and `get_extra()["usage_coefficient"]`.
   - Changing `address` gives two constructions and one `stop()` on the old bridge.
   - Unchanged fields: the same object, no construction.
   - Expected to fail before T032, because a second construction and a stop happen.
-- [ ] T032 [US3] P3: in `app/node/__init__.py` `update_node` (:92-99), when the signature is equal, update `existing.name` and `(await existing.get_extra())["usage_coefficient"]` in place and return `existing`. Proof: T031, plus `tests/api/test_node.py` and `tests/test_node_*.py`.
+- [X] T032 [US3] P3: in `app/node/__init__.py` `update_node` (:92-99), when the signature is equal, update `existing.name` and `(await existing.get_extra())["usage_coefficient"]` in place and return `existing`. Proof: T031, plus `tests/api/test_node.py` and `tests/test_node_*.py`.
 
 ---
 
@@ -269,7 +269,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 **Goal**: D5 and the D4 pin. Owner: P4.
 
-- [ ] T033 [P] [US4] P4: create `dashboard/src/fork/charts/all-nodes-series.test.ts` (`bun:test`).
+- [X] T033 [P] [US4] P4: create `dashboard/src/fork/charts/all-nodes-series.test.ts` (`bun:test`).
   - **D5**:
     - `statsByNode` holds nodes 1 and 2 plus key `'0'`, 5 GB. The result has series `[node1, node2, __deleted_nodes__]`, where `__deleted_nodes__` is last.
     - Every row carries the `'0'` value.
@@ -282,20 +282,20 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
     - D5 fails against a helper that copies the current inline logic (T034 step 1).
     - The locale case fails before T035.
     - D4 is proven against a scratch revert to the upstream even split, which is not committed.
-- [ ] T034 [US4] P4:
+- [X] T034 [US4] P4:
   1. Move the current inline memo of `dashboard/src/components/charts/all-nodes-stacked-bar-chart.tsx` (:331-393, and the pie at :414-438) unchanged into `dashboard/src/fork/charts/all-nodes-series.ts` as `buildAllNodesSeries(statsByNode, nodeList, labelFor)`. Confirm the D5 cases of T033 fail.
   2. Implement the deleted-nodes series per plan D-D5: stacked last, colour `hsl(var(--muted-foreground))`, label `t('statistics.deletedNodes')`, and totals taken from drawn series only.
   3. Make the component render the extra series in the area and bar views, the legend, the tooltip and the pie, through the helper's `seriesKeys` and `pieSlices`.
   
   Proof: T033.
-- [ ] T035 [P] [US4] P4: add `"statistics.deletedNodes"` to every shipped locale overlay:
+- [X] T035 [P] [US4] P4: add `"statistics.deletedNodes"` to every shipped locale overlay:
   - en "Deleted nodes" in `dashboard/src/fork/locales/en.json`
   - fa "نودهای حذف‌شده" in `dashboard/src/fork/locales/fa.json`
   - ru "Удалённые узлы" in `dashboard/src/fork/locales/ru.json`
   - zh "已删除的节点" in `dashboard/src/fork/locales/zh.json`
   
   `dashboard/public/statics/locales/*.json` stay byte-identical to upstream. Proof: a `bun:test` case in T033 loads all four overlays and asserts the key is non-empty in each.
-- [ ] T036 [US4] P4: finish the dashboard wiring.
+- [X] T036 [US4] P4: finish the dashboard wiring.
   - Add `"test": "bun test src"` to `dashboard/package.json` scripts.
   - Add a step `bun run test` after `bun install --frozen-lockfile` in `.github/workflows/dashboard-smoke.yml`.
   - Checks:
@@ -330,13 +330,13 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 **Goal**: pinning tests for G5 and B1 (P3). The D4 pin is in T033.
 
-- [ ] T039 [P] [US6] P3: create `tests/api/test_traffic_log_purge_http.py` with the `client` from `tests/api` and the existing auth helpers in `tests/api/helpers.py`.
+- [X] T039 [P] [US6] P3: create `tests/api/test_traffic_log_purge_http.py` with the `client` from `tests/api` and the existing auth helpers in `tests/api/helpers.py`.
   - Seed `TrafficLogRecord` rows, both old and recent.
   - The owner calls `POST /api/traffic-log/purge` with `{"older_than_hours": 1}`: the response is 200, `removed` equals the number of old rows, and the recent rows remain.
   - A body-less call removes every row.
   - A non-owner admin with `nodes` permission gets 403, and no row is removed.
   - Fail-first: run it against a scratch copy of `app/fork/routers/traffic_log.py` where `purge_before` is replaced by a no-op, which is never committed. It must fail on `removed`.
-- [ ] T040 [P] [US6] P3: create `tests/test_set_owner_relative_update.py`.
+- [X] T040 [P] [US6] P3: create `tests/test_set_owner_relative_update.py`.
   - Session A loads user U (`used_traffic=500`) owned by admin X (`used_traffic=2000`), plus admin Y.
   - Session B adds 300 to X through a relative update and commits.
   - A runs the `set_owner` operation that moves U to Y and commits. Then X is 1800 and Y is its old value + 500.

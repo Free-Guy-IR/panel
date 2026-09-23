@@ -124,9 +124,7 @@ async def test_node_manager_bulk_user_sync_falls_back_when_chunked_is_not_suppor
 
 
 @pytest.mark.asyncio
-async def test_update_node_replaces_on_name_or_coefficient_change(monkeypatch: pytest.MonkeyPatch):
-    """Test that if the node name or usage_coefficient changes, the node is replaced,
-    since we cannot refresh metadata through the bridge API."""
+async def test_update_node_keeps_the_bridge_on_name_or_coefficient_change(monkeypatch: pytest.MonkeyPatch):
     manager = NodeManager()
 
     monkeypatch.setattr("app.node.ensure_bridge_memory", lambda: _AwaitableNone())
@@ -136,17 +134,23 @@ async def test_update_node_replaces_on_name_or_coefficient_change(monkeypatch: p
 
     node1 = _make_node(1, name="old-name", usage_coefficient=1.0)
     first = await manager.update_node(node1)
-    
-    # Unchanged
+
     same = await manager.update_node(_make_node(1, name="old-name", usage_coefficient=1.0))
     assert same is first
-    
-    # Name change
+
     node2 = _make_node(1, name="new-name", usage_coefficient=1.0)
     second = await manager.update_node(node2)
-    assert second is not first
-    
-    # Coefficient change
+    assert second is first
+    assert first.name == "new-name"
+
     node3 = _make_node(1, name="new-name", usage_coefficient=2.0)
     third = await manager.update_node(node3)
-    assert third is not second
+    assert third is first
+    assert (await first.get_extra())["usage_coefficient"] == 2.0
+    assert first.stop_calls == 0
+    assert first.set_health_calls == 0
+
+    node4 = _make_node(1, name="new-name", usage_coefficient=2.0, address="node-b.example")
+    fourth = await manager.update_node(node4)
+    assert fourth is not first
+    assert first.stop_calls == 1

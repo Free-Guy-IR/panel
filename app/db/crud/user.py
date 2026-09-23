@@ -1355,6 +1355,9 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
         await db_user.next_plan.user_template.awaitable_attrs.groups
         db_user.groups = db_user.next_plan.user_template.groups
         await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(db_user.groups))
+        from app.fork.proxy_secrets.entitled import grant_entitled_secrets_after_plan_change
+
+        await grant_entitled_secrets_after_plan_change(db, db_user)
         db_user.data_limit = db_user.next_plan.user_template.data_limit + (
             0 if not db_user.next_plan.add_remaining_traffic else remaining_traffic
         )

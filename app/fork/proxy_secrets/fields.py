@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID, uuid4
 
+from app.utils.mtproto import generate_mtproto_secret
 from app.utils.system import random_password
 
 
@@ -17,6 +18,7 @@ class ProxySecretField(StrEnum):
     shadowsocks_password = "shadowsocks.password"
     vless_id = "vless.id"
     vmess_id = "vmess.id"
+    mtproto_secret = "mtproto.secret"
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,7 @@ SECRET_FIELD_SPECS: tuple[SecretFieldSpec, ...] = (
     SecretFieldSpec(ProxySecretField.shadowsocks_password, "shadowsocks", "password", random_password),
     SecretFieldSpec(ProxySecretField.vless_id, "vless", "id", uuid4),
     SecretFieldSpec(ProxySecretField.vmess_id, "vmess", "id", uuid4),
+    SecretFieldSpec(ProxySecretField.mtproto_secret, "mtproto", "secret", generate_mtproto_secret),
 )
 
 SPEC_BY_FIELD: dict[ProxySecretField, SecretFieldSpec] = {spec.field: spec for spec in SECRET_FIELD_SPECS}

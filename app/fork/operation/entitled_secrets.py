@@ -23,6 +23,7 @@ from app.fork.proxy_secrets.entitled import (
     spec_for_core_type,
     stored_secret,
 )
+from app.fork.proxy_secrets.locks import NamedLockMissing
 from app.node.sync import sync_users
 from app.utils.logger import get_logger
 
@@ -145,7 +146,7 @@ async def grant_entitled_secrets_for_core(operation, db: AsyncSession, core) -> 
             scan_tags=spec.core_tags([core]),
             run=run,
         )
-    except (ProxySecretUniquenessError, SQLAlchemyError) as exc:
+    except (ProxySecretUniquenessError, NamedLockMissing, SQLAlchemyError) as exc:
         core_id = core.id
         logger.error(
             f"core {core_id} ({spec.label}): issued {run.granted} of the {run.missing} missing {spec.field.value} "
