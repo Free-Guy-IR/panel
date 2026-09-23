@@ -111,9 +111,9 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 
 ## Backend operations & CRUD
 
-- `app/db/crud/user.py` — chunked bulk user queries and owner operations
+- `app/db/crud/user.py` — chunked bulk user queries and owner operations; plus one local-import call in `reset_user_by_next` to `grant_entitled_secrets_after_plan_change`, right after `sync_user_allocations`, so a next plan grants the secrets its groups entitle (v5.34.25, E6a)
 - `app/db/crud/bulk.py` — bulk target filter refactor (_create_final_filter)
-- `app/operation/user.py` — wireguard key preparation and validated-user flow
+- `app/operation/user.py` — wireguard key preparation and validated-user flow; plus a `DBAPIError` branch in `_prepare_user_proxy_settings` that maps a proxy-secrets lock-wait timeout to HTTP 503 via `is_lock_wait_timeout` (v5.34.25, E3)
 - `app/operation/__init__.py` — scope_action parameter plumbing
 - `app/operation/hwid.py` — get_validated_user_by_id flow
 - `app/middlewares/__init__.py` — settings import update
@@ -143,7 +143,7 @@ These eight files already failed the ledger gate at `72ad0e4a5`; each carried a 
 without an entry here.
 
 - `app/app_factory.py` — 1 upstream line; the shutdown hook awaits `drain_usage_jobs` before `stop_job_leader`, so a usage tick that has already reset the node counters finishes billing them instead of being dropped mid-write on a redeploy
-- `app/db/crud/wireguard.py` — `shared_wireguard_public_keys` finds public keys, stored or derived from a stored private key, that more than one user holds, and `_ensure_wireguard_keys` regenerates such a shared keypair for WireGuard-bound users in `sync_users_allocations` instead of keeping it; the node fails a whole batch sync on a duplicate key, and 3,051 users held 3 template keypairs
+- `app/db/crud/wireguard.py` — subnet reconcile passes `shared_wireguard_public_keys()` for each loaded chunk into `_ensure_wireguard_keys()`, so WireGuard-bound users that share a key get a fresh unique pair (v5.34.25, E1); the fork's pool-backed allocation and reconcile also live in this upstream file
 - `app/operation/system.py` — 1 upstream line; for a non-owner admin the users-stats response carries that admin's coefficient-adjusted usage as `admin_used_traffic` and leaves `outgoing_bandwidth` at 0, instead of passing accounted usage off as raw downlink bandwidth
 - `app/telegram/utils/texts.py` — 1 upstream line; the bot's start message shows `admin_used_traffic`, when present, as "Accounted Usage (coefficient-adjusted)" instead of summing it into "Total Data Usage" as if it were raw bandwidth
 - `dashboard/src/components/charts/all-nodes-stacked-bar-chart.tsx` — D4: when the backend returns only the aggregate series (key `'-1'`), the chart shows a "per-node breakdown unavailable" state with the measured total instead of dividing the aggregate evenly across the nodes, which drew per-node numbers nobody measured. D5 (v5.34.25): the series building moved to `buildAllNodesSeries` in the fork module dashboard/src/fork/charts/all-nodes-series.ts, and usage of deleted nodes (key `'0'`) is drawn as a "Deleted nodes" series stacked last and as the last pie slice, so the header total equals the sum of what is drawn
