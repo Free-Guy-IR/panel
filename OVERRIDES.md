@@ -34,7 +34,7 @@ stays visible.
 
 ## Branding & fork infrastructure (not upstreamable)
 
-- `app/db/migrations/env.py` — imports `app/db/models.py` so the fork model modules register their tables on the shared declarative metadata before autogenerate reads it, and adds `MIGRATION_OWNED_TABLES` with an `_include_name` hook handed to both of alembic's context.configure calls; a table that a hand-written migration owns and deliberately has no ORM model for (`content_filter_sniffing_repairs`) is therefore skipped by autogenerate instead of being emitted as a drop. Because the hook sits on the offline and the online path alike, it changes autogenerate behaviour for the whole fork, not just for that one table
+- `app/db/migrations/env.py` — imports `app/db/models.py` so the fork model modules register their tables on the shared declarative metadata before autogenerate reads it, and adds `MIGRATION_OWNED_TABLES` with an `_include_name` hook handed to both of alembic's context.configure calls; a table that a hand-written migration owns and deliberately has no ORM model for (`content_filter_sniffing_repairs`) is therefore skipped by autogenerate instead of being emitted as a drop. Because the hook sits on the offline and the online path alike, it changes autogenerate behaviour for the whole fork, not just for that one table. `_compare_type` also resolves a `with_variant` type to its PostgreSQL implementation before the plain-JSON shortcut, so a column the model declares as jsonb but the database holds as json is reported again instead of hidden (v5.34.25, a6-db-6)
 - `README.md` — fork branding: logo, badges, links point to Free-Guy-IR
 - `README-fa.md` — fork branding, Persian edition
 - `README-ru.md` — fork branding, Russian edition
@@ -69,15 +69,18 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/db/crud/node.py` — core_config_id-aware node filtering, and the per-node resource-history query compares its HAVING clause against the `period_start` alias the way the usage query already did; re-emitting the truncation expression made MySQL reject the whole statement with `Unknown column 'node_stats.created_at' in 'having clause'`, which is why that endpoint answered 503 on every node
 - `app/node/manager_sync.py` — call-site update for new connect_node signature
 - `app/node/sync.py` — _serialize_user_for_node signature update
-- `app/node/user.py` — node user serialization carries vless id
+- `app/node/user.py` — node user serialization carries vless id; the pushed VLESS flow is only `''` or `xtls-rprx-vision` (udp443 maps to vision, as upstream d54fcdfac did), the OpenVPN connection cap is clamped to the uint32 field, and a user that still cannot be serialized is revoked on the nodes instead of failing the batch or the core Start (v5.34.25, a4-users-1/2)
 - `tests/test_connect_concurrency.py` — test updated to new connect_node signature
 - `tests/test_node_start_timeout.py` — the attach path now refreshes the user list, so the doubles carry sync_users and an id
 
 ## New proxy cores: openvpn / l2tp / mtproto / singbox
 
 - `app/core/hosts.py` — openvpn/l2tp subscription inbound data plus except-fixes
-- `app/models/host.py` — host override models reshuffled for new cores
-- `app/models/user.py` — proxy_settings import and field update
+- `app/models/host.py` — host override models reshuffled for new cores; `CreateHost` validates addresses (letters, digits and `.-_:[]*{}`), the OpenVPN and WireGuard DNS overrides and WireGuard `reserved`, so a newline cannot inject directives into a downloaded .ovpn or .conf (v5.34.25, a5-surface-3)
+- `app/models/user.py` — proxy_settings import and field update; `UserWithValidator` bounds `hwid_limit` to 0..2^31-1 and `auto_delete_in_days` to at most 36500 on input only, so stored legacy rows still read (v5.34.25, a4-users-2/10)
+- `app/models/user_template.py` — pure addition: `UserTemplateWithValidator` bounds `hwid_limit` to 0..2^31-1 (v5.34.25, a4-users-2)
+- `app/models/proxy.py` — pure addition: upstream's `XTLSFlows` allowed values come back with a lenient stored read, and `ProxyTableInput` refuses an unknown VLESS flow or an OpenVPN password that could break the .ovpn (v5.34.25, a4-users-1, u2-1)
+- `app/subscription/wireguard.py` — pure addition: a config whose values carry a control character, `<`, `>` or `"` is skipped with a warning instead of being rendered into the .conf, where a newline could add a PostUp hook (v5.34.25, a5-surface-3)
 - `app/db/crud/core.py` — CoreConfig/Node import update
 - `dashboard/src/features/hosts/dialogs/host-modal.tsx` — host mode resolution for new protocols
 - `dashboard/src/features/nodes/dialogs/core-config-modal.tsx` — config modal beyond xray/wg
