@@ -125,6 +125,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/db/compiles_types.py` — registers the MySQL compilation of `CaseSensitiveString`, `DaysDiff` and `DateDiff` for the `mariadb` dialect name as well. SQLAlchemy gives a `mariadb://` URL its own dialect name, which upstream's `mysql`-only hooks never match, so on MariaDB the collation was dropped silently and the two date helpers raised `UnsupportedCompilationError` in the `days_left` expression and the usage-reset queries. `config.py` accepts those URLs, so this is a supported configuration the fork has to make work
 - `app/db/crud/settings.py` — 1 line; `get_settings` is annotated `Settings | None`, which is what `scalar_one_or_none` has always returned. The upstream annotation promised a row that may not exist and every caller believed it
 - `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`
+- `app/jobs/review_users.py` — limit_users_job hands its candidate ids to the fork's row-locked limit_users_under_lock, so the usage tick and the review job never apply the limited transition twice
 
 ## Tests
 
