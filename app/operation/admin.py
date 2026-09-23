@@ -46,6 +46,7 @@ from app.operation import BaseOperation
 from app.operation.admin_sync import admin_users_sync_blocked, sync_admin_users_for_block_transition
 from app.operation.permissions import PermissionDenied, enforce_permission
 from app.operation.user import UserOperation
+from app.utils.connection_enforcement import close_active_restrictions_for_admin
 from app.utils.logger import get_logger
 
 logger = get_logger("admin-operation")
@@ -223,6 +224,7 @@ class AdminOperation(BaseOperation):
 
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Disable all active users under a specific admin."""
+        await close_active_restrictions_for_admin(db, db_admin.id, "an admin changed all users' status")
         await disable_all_active_users(db=db, admin=db_admin)
         users = await get_users(db, query=UserListQuery(), admin=db_admin, load_admin_role=True)
         await sync_users(users)
@@ -245,6 +247,7 @@ class AdminOperation(BaseOperation):
 
     async def _activate_all_disabled_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Activate all disabled users under a specific admin."""
+        await close_active_restrictions_for_admin(db, db_admin.id, "an admin changed all users' status")
         await activate_all_disabled_users(db=db, admin=db_admin)
         users = await get_users(db, query=UserListQuery(), admin=db_admin, load_admin_role=True)
         await sync_users(users)
