@@ -174,7 +174,9 @@ async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
     return db_admin
 
 
-async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminModify) -> Admin:
+async def update_admin(
+    db: AsyncSession, db_admin: Admin, modified_admin: AdminModify, *, hashed_password: str | None = None
+) -> Admin:
     """
     Updates an admin's details.
 
@@ -203,7 +205,7 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
                 db_admin.status = new_status
                 db_admin.last_status_change = datetime.now(UTC)
     if modified_admin.password is not None:
-        db_admin.hashed_password = await hash_password(modified_admin.password)
+        db_admin.hashed_password = hashed_password or await hash_password(modified_admin.password)
         db_admin.password_reset_at = datetime.now(UTC)
     if modified_admin.role_id is not None:
         db_admin.role_id = modified_admin.role_id
@@ -671,19 +673,30 @@ async def reset_admin_usage(db: AsyncSession, db_admin: Admin) -> Admin:
     """
     await delete_admin_notification_reminders(db, db_admin.id, ReminderType.data_usage)
 
-    if db_admin.used_traffic == 0:
+    locked = (
+        await db.execute(
+            select(Admin.used_traffic, Admin.status, Admin.data_limit).where(Admin.id == db_admin.id).with_for_update()
+        )
+    ).one_or_none()
+    if locked is None:
         await db.commit()
         return db_admin
 
-    logged = db_admin.used_traffic
-    usage_log = AdminUsageLogs(admin_id=db_admin.id, used_traffic_at_reset=logged)
-    db.add(usage_log)
-    await db.execute(update(Admin).where(Admin.id == db_admin.id).values(used_traffic=Admin.used_traffic - logged))
+    locked_used_traffic = int(locked.used_traffic or 0)
+    logged = max(0, min(int(db_admin.used_traffic or 0), locked_used_traffic))
+    values = {}
+    if logged:
+        db.add(AdminUsageLogs(admin_id=db_admin.id, used_traffic_at_reset=logged))
+        values["used_traffic"] = Admin.used_traffic - logged
 
     # After reset, used_traffic = 0 so the admin is no longer limited
-    if db_admin.status == AdminStatus.limited:
-        db_admin.status = AdminStatus.active
-        db_admin.last_status_change = datetime.now(UTC)
+    still_over_quota = (locked.data_limit or 0) > 0 and locked_used_traffic - logged >= locked.data_limit
+    if locked.status == AdminStatus.limited and not still_over_quota:
+        values["status"] = AdminStatus.active
+        values["last_status_change"] = datetime.now(UTC)
+
+    if values:
+        await db.execute(update(Admin).where(Admin.id == db_admin.id).values(**values))
 
     await db.commit()
     await db.refresh(db_admin)

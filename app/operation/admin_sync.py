@@ -1,7 +1,8 @@
 from app.db import AsyncSession, GetDB
-from app.db.crud.admin import get_active_to_limited_admins, update_admin_status
 from app.db.crud.user import get_users
 from app.db.models import Admin, AdminStatus, UserStatus
+from app.fork.crud.admin_limits import get_active_to_limited_admin_ids, limit_admin_if_over_quota
+from app.fork.operation.admin_transition import admin_transition_lock
 from app.models.user import UserListQuery
 from app.node.sync import remove_users as sync_remove_users, sync_users
 
@@ -45,20 +46,21 @@ async def sync_admin_users_for_block_transition(
 
 
 async def limit_exceeded_admins(db: AsyncSession, logger=None) -> int:
-    admins = await get_active_to_limited_admins(db)
-    if not admins:
-        return 0
+    limited = 0
+    async with admin_transition_lock():
+        for admin_id in await get_active_to_limited_admin_ids(db):
+            admin = await limit_admin_if_over_quota(db, admin_id)
+            if admin is None:
+                continue
+            limited += 1
+            if logger:
+                logger.info(f'Admin "{admin.username}" status changed to limited')
 
-    for admin in admins:
-        await update_admin_status(db, admin, AdminStatus.limited)
-        if logger:
-            logger.info(f'Admin "{admin.username}" status changed to limited')
+            synced_count = await sync_admin_users_for_block_transition(db, admin, was_blocked=False)
+            if synced_count and logger:
+                logger.info(f'Admin "{admin.username}" removed {synced_count} users from nodes')
 
-        synced_count = await sync_admin_users_for_block_transition(db, admin, was_blocked=False)
-        if synced_count and logger:
-            logger.info(f'Admin "{admin.username}" removed {synced_count} users from nodes')
-
-    return len(admins)
+    return limited
 
 
 async def enforce_admin_limits_now(logger=None):

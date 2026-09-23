@@ -50,7 +50,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `main.py`
 - `app/core/manager.py`
 - `app/core/xray.py`
-- `app/db/crud/admin.py` — except-fix; plus `reset_admin_usage` subtracts the logged value with a relative SQL update (`used_traffic = used_traffic - logged`) instead of assigning 0, so bytes a usage tick bills between the admin's read and the reset commit stay on the counter while the usage log still records the pre-reset value (v5.34.25)
+- `app/db/crud/admin.py` — except-fix; plus `reset_admin_usage` subtracts the logged value with a relative SQL update (`used_traffic = used_traffic - logged`) instead of assigning 0, so bytes a usage tick bills between the admin's read and the reset commit stay on the counter while the usage log still records the pre-reset value (v5.34.25); `reset_admin_usage` also locks the admin row, logs `min(read, locked)` and reactivates from the locked status, and `update_admin` accepts a pre-computed `hashed_password` so the caller can hash outside the row lock (v5.34.25, a2-usage-3)
 - `app/db/crud/general.py`
 - `app/lifecycle.py`
 - `app/nats/router.py`
@@ -127,6 +127,8 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/db/crud/settings.py` — 1 line; `get_settings` is annotated `Settings | None`, which is what `scalar_one_or_none` has always returned. The upstream annotation promised a row that may not exist and every caller believed it
 - `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`
 - `app/jobs/review_users.py` — limit_users_job hands its candidate ids to the fork's row-locked limit_users_under_lock, so the usage tick and the review job never apply a transition twice
+- `app/operation/admin_sync.py` — `limit_exceeded_admins` limits each candidate through the fork's `limit_admin_if_over_quota` (row lock with the over-quota predicate plus a conditional UPDATE) under the shared `admin_transition_lock`, instead of writing `status=limited` onto an ORM object loaded before the loop, so a quota raised or reset mid-loop is never overwritten and the review job and the recorder never flip the same admin twice (v5.34.25, a2-usage-3)
+- `app/operation/admin.py` — modify and reset (single and bulk) take `admin_transition_lock`, lock the admin row, and decide the old user-sync state from the locked status, so a job limit that lands between the read and the write cannot leave a raised or reset admin limited with its users cut; the password is hashed before the row lock (v5.34.25, a2-usage-3)
 
 ## Tests
 
