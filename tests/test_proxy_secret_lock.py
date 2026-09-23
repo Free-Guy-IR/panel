@@ -257,6 +257,27 @@ async def test_the_lock_holder_never_needs_a_second_slot_from_a_full_pool(engine
     assert (await _holders(sessions, ProxySecretField.trojan_password))[TROJAN] == 1
 
 
+@pytest.mark.skipif(
+    not database_settings.url.startswith(MYSQL_FAMILY), reason="the separate committed reader exists only on MySQL"
+)
+def test_the_committed_reader_is_not_tied_to_one_event_loop():
+    from app.fork.proxy_secrets.locks import read_committed_rows
+
+    engine = create_async_engine(database_settings.url, poolclass=NullPool)
+
+    async def read():
+        async with AsyncSession(engine) as db:
+            return await read_committed_rows(db, select(1))
+
+    try:
+        first = asyncio.run(read())
+        second = asyncio.run(read())
+    finally:
+        asyncio.run(engine.dispose())
+
+    assert [tuple(row) for row in first] == [tuple(row) for row in second] == [(1,)]
+
+
 async def _short_lock_timeout(db):
     dialect = db.get_bind().dialect.name
     if dialect == "sqlite":

@@ -151,23 +151,23 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Tests for User Story 2 (write first, must fail before the fix)
 
-- [ ] T014 [P] [US2] P2: create `tests/test_wireguard_reconcile_shared_keys.py`. Use an in-memory database fixture in the style of `tests/test_entitled_secrets_activation.py`, with FK pragma on, plus a WireGuard core and a subnet pool.
+- [X] T014 [P] [US2] P2: create `tests/test_wireguard_reconcile_shared_keys.py`. Use an in-memory database fixture in the style of `tests/test_entitled_secrets_activation.py`, with FK pragma on, plus a WireGuard core and a subnet pool.
   - Two WireGuard-bound users store the same public key, and a reconcile changes their peer IPs.
   - After `reconcile_wireguard_subnets(db)`, each holds a distinct key and neither holds the old shared key.
   - A third WireGuard-bound user with a unique complete keypair keeps it unchanged.
   - Expected to fail before T024, because the shared key is kept.
-- [ ] T015 [P] [US2] P2: create `tests/test_wireguard_client_keys_scope.py`. Use `UserOperation` built as in `tests/test_entitled_secrets_group_paths.py`, with `sync_users` monkeypatched.
+- [X] T015 [P] [US2] P2: create `tests/test_wireguard_client_keys_scope.py`. Use `UserOperation` built as in `tests/test_entitled_secrets_group_paths.py`, with `sync_users` monkeypatched.
   - (a) Create a user without WireGuard access with a client keypair. The stored `proxy_settings.wireguard` has no keys.
   - (b) Modify an existing user without WireGuard access, sending a different keypair. The stored keypair is unchanged.
   - (c) A WireGuard-entitled user with a unique keypair is stored as sent.
   - (d) Revoking a user without WireGuard access keeps its stored keys.
   - (a) and (b) are expected to fail before T025.
-- [ ] T016 [P] [US2] P2: create `tests/test_named_lock_migration.py`.
+- [X] T016 [P] [US2] P2: create `tests/test_named_lock_migration.py`.
   - In `TEST_FROM=github`, after `make run-migration`, the table `named_locks` exists with the row `name='proxy_secrets'`.
   - In both modes, `Base.metadata` contains `named_locks` with `name VARCHAR(64) primary key` and `acquired_at` nullable.
   - Load the new migration module by path. Run its `upgrade()` and then `downgrade()` inside `alembic.runtime.migration.MigrationContext.configure(conn)` plus `alembic.operations.Operations`, on a fresh SQLite file. After upgrade, the table exists with the seed row; after downgrade, it is gone. Do not replay the whole chain.
   - Expected to fail before T022.
-- [ ] T017 [P] [US2] P2: create `tests/test_proxy_secret_lock.py`. Use a file SQLite database in `tmp_path` for local mode, or `SQLALCHEMY_DATABASE_URL` with NullPool in github mode, following `tests/test_entitled_secrets_race.py`. Cases:
+- [X] T017 [P] [US2] P2: create `tests/test_proxy_secret_lock.py`. Use a file SQLite database in `tmp_path` for local mode, or `SQLALCHEMY_DATABASE_URL` with NullPool in github mode, following `tests/test_entitled_secrets_race.py`. Cases:
   - (a) **Snapshot case.** Session A reads `users`, which opens its snapshot. Session B stores `trojan.password = X` for another user and commits. A then calls `enforce_unique_proxy_secrets` with `X` supplied. X is regenerated in A's `ProxyTable`, so no duplicate is written after A commits.
   - (b) **Interleave case.** A takes the lock and checks X free. B, in a task, blocks on the lock until A commits, then sees X and regenerates.
   - (c) **Concurrency.** N concurrent creates with the same supplied `vless.id` (N=10 on SQLite, 50 on server databases) store it for at most one user: `SELECT COUNT(*) … GROUP BY` shows no value held twice.
@@ -176,12 +176,12 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Fail-first, before T023:
     - (a) must fail on MySQL (`testdb_p2_mysql`). It is `skipif` on other dialects, with the reason carried in the test id; no comment.
     - (b) and (c) must fail on PostgreSQL and on SQLite.
-- [ ] T018 [P] [US2] P2: create `tests/test_mtproto_secret_uniqueness.py`.
+- [X] T018 [P] [US2] P2: create `tests/test_mtproto_secret_uniqueness.py`.
   - Creating a user with MTProto access and a supplied `mtproto.secret` held by another user stores a different 32-hex secret and logs a WARNING.
   - Modify behaves the same.
   - With the generator monkeypatched to always return the held value, the create answers 409.
   - Expected to fail before T026, because the duplicate is stored.
-- [ ] T019 [US2] P2: rewrite `tests/test_bulk_l2tp_activation.py` as database-backed tests in the style of `tests/test_entitled_secrets_activation.py`. Cases:
+- [X] T019 [US2] P2: rewrite `tests/test_bulk_l2tp_activation.py` as database-backed tests in the style of `tests/test_entitled_secrets_activation.py`. Cases:
   - `dry_run` returns the count of missing users.
   - Activation grants passwords that are unique and pass `_valid_l2tp_password`.
   - Users without L2TP access are skipped.
@@ -189,11 +189,11 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - A concurrent edit of another proxy field of the same user, committed between the candidate query and the put, is preserved.
   - The route requires `users:update`.
   - The preserved-edit and uniqueness cases are expected to fail before T027.
-- [ ] T020 [P] [US2] P2: create `tests/test_next_plan_entitled_grant.py`.
+- [X] T020 [P] [US2] P2: create `tests/test_next_plan_entitled_grant.py`.
   - A user whose next-plan template groups entitle OpenVPN, L2TP and MTProto gets the missing secrets from `reset_user_by_next(db, user)`.
   - With `issue_unique_secrets` monkeypatched to raise `ProxySecretUniquenessError`, the plan is still applied (groups and limits changed), no secret is written, and an ERROR names the user id and field.
   - Expected to fail before T028.
-- [ ] T021 [P] [US2] P2: create `tests/test_mtproto_links_409.py`.
+- [X] T021 [P] [US2] P2: create `tests/test_mtproto_links_409.py`.
   - (a) An MTProto-only user without a secret: the `links` subscription through `SubscriptionOperation` raises `HTTPException` 409 with the MTProto "has not been activated" message.
   - (b) A user with vless and MTProto but no MTProto secret gets 200 with the vless link.
   - (c) A user with a secret gets the MTProto link.
@@ -201,12 +201,12 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] P2: create the lock table.
+- [X] T022 [US2] P2: create the lock table.
   - Model: `app/fork/models/named_lock.py`, `NamedLock` with `__tablename__ = "named_locks"`, `name: VARCHAR(64) primary key`, `acquired_at: DateTime nullable`. Export it from `app/fork/models/__init__.py`.
   - Migration: `app/db/migrations/versions/<new_rev>_named_locks.py` with `down_revision = "d8b2c4f60a17"`. Upgrade creates the table and inserts `('proxy_secrets', NULL)`; downgrade drops the table.
   - `make check-migrations` must be clean.
   - Proof: T016.
-- [ ] T023 [US2] P2: create `app/fork/proxy_secrets/locks.py` with `async def acquire_named_lock(db, name)`. It:
+- [X] T023 [US2] P2: create `app/fork/proxy_secrets/locks.py` with `async def acquire_named_lock(db, name)`. It:
   - runs inside `db.no_autoflush`;
   - executes the `UPDATE named_locks SET acquired_at=:now WHERE name=:name` fast path;
   - if `rowcount == 0`, runs the dialect insert-ignore (the pattern at `app/db/crud/wireguard.py:423-440`) and then the UPDATE again;
@@ -223,28 +223,28 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
     Map them in `UserOperation._prepare_user_proxy_settings` (`app/operation/user.py:449-475`, next to the existing 409) and in the bulk activation methods of `app/fork/operation/user_extras.py`.
 
   Proof: T017, plus the existing `tests/test_proxy_secret_*.py` and `tests/test_entitled_secrets_*.py`.
-- [ ] T024 [US2] P2: in `app/db/crud/wireguard.py` `reconcile_wireguard_subnets` (:644-650), compute `shared = await shared_wireguard_public_keys(db, users)` for each loaded chunk and call `_ensure_wireguard_keys(user, shared)`. Proof: T014, plus `tests/test_wireguard_shared_key_regeneration.py`.
-- [ ] T025 [US2] P2: create `app/fork/proxy_secrets/wireguard_scope.py` with `async def drop_unentitled_wireguard_keys(db, proxy_settings, groups, *, exclude_user_id=None) -> ProxyTable`.
+- [X] T024 [US2] P2: in `app/db/crud/wireguard.py` `reconcile_wireguard_subnets` (:644-650), compute `shared = await shared_wireguard_public_keys(db, users)` for each loaded chunk and call `_ensure_wireguard_keys(user, shared)`. Proof: T014, plus `tests/test_wireguard_shared_key_regeneration.py`.
+- [X] T025 [US2] P2: create `app/fork/proxy_secrets/wireguard_scope.py` with `async def drop_unentitled_wireguard_keys(db, proxy_settings, groups, *, exclude_user_id=None) -> ProxyTable`.
   - When `user_has_wireguard_access(db, groups)` is false, it sets `proxy_settings.wireguard` to the stored value of `exclude_user_id`, or to the empty default on create.
   - Call it first in `prepare_fork_proxy_settings` (`app/fork/operation/user_extras.py:35-50`).
   - Proof: T015.
-- [ ] T026 [US2] P2: add `ProxySecretField.mtproto_secret = "mtproto.secret"` and its `SecretFieldSpec("mtproto", "secret", <token_hex(16) generator>)` in `app/fork/proxy_secrets/fields.py`.
+- [X] T026 [US2] P2: add `ProxySecretField.mtproto_secret = "mtproto.secret"` and its `SecretFieldSpec("mtproto", "secret", <token_hex(16) generator>)` in `app/fork/proxy_secrets/fields.py`.
   - Check that `app/fork/proxy_secrets/repair.py` and the `BulkRepairProxySecrets` schema accept the new field.
   - Keep format validation in `app/utils/mtproto.py`.
   - Proof: T018.
-- [ ] T027 [US2] P2: replace the body of the L2TP bulk activation in `app/fork/operation/user_extras.py:54-97` with `return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)`.
+- [X] T027 [US2] P2: replace the body of the L2TP bulk activation in `app/fork/operation/user_extras.py:54-97` with `return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)`.
   - Delete `get_users_for_l2tp_activation` from `app/fork/crud/bulk.py` if nothing else references it.
   - Keep the response model unchanged.
   - Proof: T019.
-- [ ] T028 [US2] P2: add `async def grant_entitled_secrets_after_plan_change(db, db_user)` to `app/fork/proxy_secrets/entitled.py`.
+- [X] T028 [US2] P2: add `async def grant_entitled_secrets_after_plan_change(db, db_user)` to `app/fork/proxy_secrets/entitled.py`.
   - It calls `grant_entitled_secrets(db, [db_user])`, catches `ProxySecretUniquenessError` and logs ERROR with the user id and fields.
   - Call it with a local import in `app/db/crud/user.py` `reset_user_by_next`, immediately after `sync_user_allocations` (:1357). That is the only edit to this file.
   - Proof: T020.
-- [ ] T029 [US2] P2: record per render whether an MTProto link was skipped for a missing secret. Use `_note_unissued_secret` in `app/fork/subscription/helpers.py`.
+- [X] T029 [US2] P2: record per render whether an MTProto link was skipped for a missing secret. Use `_note_unissued_secret` in `app/fork/subscription/helpers.py`.
   - In the fork links path (`app/fork/subscription/links.py`), raise `UnissuedSecretError` for MTProto when the final links output is empty and that flag is set.
   - If `StandardLinks.render` has no seam, add one minimal call in `app/subscription/links.py` and send its OVERRIDES.md line to P3.
   - Proof: T021, plus `tests/test_entitled_secrets_subscription.py` and `tests/test_subscription_*.py`.
-- [ ] T030 [US2] P2: run all of `tests/` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p2`), and fix any regression in P2 files. Then commit. Hand P3 the OVERRIDES.md lines for every upstream file P2 changed: `app/db/crud/wireguard.py`, `app/db/crud/user.py`, `app/operation/user.py`, and `app/subscription/links.py` if touched.
+- [X] T030 [US2] P2: run all of `tests/` in `TEST_FROM=local` and `TEST_FROM=github` (on `testdb_p2`), and fix any regression in P2 files. Then commit. Hand P3 the OVERRIDES.md lines for every upstream file P2 changed: `app/db/crud/wireguard.py`, `app/db/crud/user.py`, `app/operation/user.py`, and `app/subscription/links.py` if touched.
 
 **Checkpoint**: US2 is independently shippable once the migration is in.
 

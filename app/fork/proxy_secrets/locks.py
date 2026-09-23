@@ -8,6 +8,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.db import AsyncSession
 from app.fork.models.named_lock import NamedLock
@@ -19,8 +20,6 @@ HELD_LOCKS_KEY = "fork_named_locks"
 MYSQL_LOCK_WAIT_TIMEOUT = 1205
 POSTGRES_LOCK_NOT_AVAILABLE = "55P03"
 SQLITE_LOCKED = "database is locked"
-COMMITTED_READER_POOL_SIZE = 1
-COMMITTED_READER_MAX_OVERFLOW = 1
 LOCK_WAIT_TIMEOUT_DETAIL = (
     "another request is writing proxy secrets and this one timed out waiting for it; retry shortly"
 )
@@ -71,11 +70,7 @@ def committed_reader(engine: Engine) -> AsyncEngine:
         reader = create_async_engine(
             engine.url,
             isolation_level="READ COMMITTED",
-            pool_size=COMMITTED_READER_POOL_SIZE,
-            max_overflow=COMMITTED_READER_MAX_OVERFLOW,
-            pool_timeout=database_settings.pool_timeout,
-            pool_recycle=database_settings.pool_recycle,
-            pool_pre_ping=True,
+            poolclass=NullPool,
             connect_args={"connect_timeout": database_settings.connect_timeout},
         )
         _committed_readers[engine] = reader
