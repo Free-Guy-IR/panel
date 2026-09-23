@@ -39,7 +39,7 @@
   - Start one local PostgreSQL container and create the databases `testdb_p1` … `testdb_p4`.
   - Start one local MySQL container and create `testdb_p2_mysql`.
   - Each owner runs `make run-migration` against its database and records the baseline `TEST_FROM=local uv run pytest tests -q` summary line in its hand-off.
-- [ ] T002 [P] P4: in `/Users/mohammadahadpor/Projects/pasarguard/work/panel-v53425-p4/dashboard`, run:
+- [X] T002 [P] P4: in `/Users/mohammadahadpor/Projects/pasarguard/work/panel-v53425-p4/dashboard`, run:
   - `bun install --frozen-lockfile`.
   - `bun node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json | grep -c "error TS"`, and record the count. The expected baseline is 578.
   - `bun test src/features/subscriptions/components/subscription-settings-schema.test.ts`, which must pass.
@@ -269,7 +269,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 **Goal**: D5 and the D4 pin. Owner: P4.
 
-- [ ] T033 [P] [US4] P4: create `dashboard/src/fork/charts/all-nodes-series.test.ts` (`bun:test`).
+- [X] T033 [P] [US4] P4: create `dashboard/src/fork/charts/all-nodes-series.test.ts` (`bun:test`).
   - **D5**:
     - `statsByNode` holds nodes 1 and 2 plus key `'0'`, 5 GB. The result has series `[node1, node2, __deleted_nodes__]`, where `__deleted_nodes__` is last.
     - Every row carries the `'0'` value.
@@ -282,20 +282,20 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
     - D5 fails against a helper that copies the current inline logic (T034 step 1).
     - The locale case fails before T035.
     - D4 is proven against a scratch revert to the upstream even split, which is not committed.
-- [ ] T034 [US4] P4:
+- [X] T034 [US4] P4:
   1. Move the current inline memo of `dashboard/src/components/charts/all-nodes-stacked-bar-chart.tsx` (:331-393, and the pie at :414-438) unchanged into `dashboard/src/fork/charts/all-nodes-series.ts` as `buildAllNodesSeries(statsByNode, nodeList, labelFor)`. Confirm the D5 cases of T033 fail.
   2. Implement the deleted-nodes series per plan D-D5: stacked last, colour `hsl(var(--muted-foreground))`, label `t('statistics.deletedNodes')`, and totals taken from drawn series only.
   3. Make the component render the extra series in the area and bar views, the legend, the tooltip and the pie, through the helper's `seriesKeys` and `pieSlices`.
   
   Proof: T033.
-- [ ] T035 [P] [US4] P4: add `"statistics.deletedNodes"` to every shipped locale overlay:
+- [X] T035 [P] [US4] P4: add `"statistics.deletedNodes"` to every shipped locale overlay:
   - en "Deleted nodes" in `dashboard/src/fork/locales/en.json`
   - fa "نودهای حذف‌شده" in `dashboard/src/fork/locales/fa.json`
   - ru "Удалённые узлы" in `dashboard/src/fork/locales/ru.json`
   - zh "已删除的节点" in `dashboard/src/fork/locales/zh.json`
   
   `dashboard/public/statics/locales/*.json` stay byte-identical to upstream. Proof: a `bun:test` case in T033 loads all four overlays and asserts the key is non-empty in each.
-- [ ] T036 [US4] P4: finish the dashboard wiring.
+- [X] T036 [US4] P4: finish the dashboard wiring.
   - Add `"test": "bun test src"` to `dashboard/package.json` scripts.
   - Add a step `bun run test` after `bun install --frozen-lockfile` in `.github/workflows/dashboard-smoke.yml`.
   - Checks:
