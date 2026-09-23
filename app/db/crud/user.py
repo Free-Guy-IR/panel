@@ -26,6 +26,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
+from app.fork.crud.owner_traffic import lock_owner_rows, shift_admin_traffic
 from app.models.proxy import ProxyTable
 from app.models.stats import (
     Period,
@@ -1873,19 +1874,13 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     Returns:
         User: The updated user object.
     """
-    old_admin = db_user.admin
+    locked = await lock_owner_rows(db, [db_user])
+    old_admin_id, used_traffic = locked.get(db_user.id, (db_user.admin_id, int(db_user.used_traffic or 0)))
     db_user.admin = admin
 
     # Update admin traffic counters
-    if old_admin and old_admin.id != admin.id:
-        await db.execute(
-            update(Admin)
-            .where(Admin.id == old_admin.id)
-            .values(used_traffic=Admin.used_traffic - db_user.used_traffic)
-        )
-        await db.execute(
-            update(Admin).where(Admin.id == admin.id).values(used_traffic=Admin.used_traffic + db_user.used_traffic)
-        )
+    if old_admin_id is not None and old_admin_id != admin.id:
+        await shift_admin_traffic(db, {old_admin_id: -used_traffic, admin.id: used_traffic})
 
     await db.commit()
     await refresh_and_load_user(db, db_user)
@@ -1905,31 +1900,21 @@ async def bulk_set_owner(db: AsyncSession, users: list[User], admin: Admin) -> l
         list[User]: The refreshed users.
     """
     # Group users by old admin to update traffic counters
-    admin_traffic_changes = {}
-    total_traffic_to_add = 0
+    locked = await lock_owner_rows(db, users)
+    admin_traffic_changes: dict[int, int] = {}
 
     for user in users:
-        old_admin = user.admin
-        if old_admin is not None and old_admin.id == admin.id:
+        old_admin_id, used_traffic = locked.get(user.id, (user.admin_id, int(user.used_traffic or 0)))
+        if old_admin_id is not None and old_admin_id == admin.id:
             continue
-        if old_admin is not None:
-            if old_admin.id not in admin_traffic_changes:
-                admin_traffic_changes[old_admin.id] = 0
-            admin_traffic_changes[old_admin.id] -= user.used_traffic
-        total_traffic_to_add += user.used_traffic
+        if old_admin_id is not None:
+            admin_traffic_changes[old_admin_id] = admin_traffic_changes.get(old_admin_id, 0) - used_traffic
+        admin_traffic_changes[admin.id] = admin_traffic_changes.get(admin.id, 0) + used_traffic
         user.admin = admin
 
     # Update old admins' traffic
-    for admin_id, traffic_change in admin_traffic_changes.items():
-        await db.execute(
-            update(Admin).where(Admin.id == admin_id).values(used_traffic=Admin.used_traffic + traffic_change)
-        )
-
     # Update new admin's traffic
-    if total_traffic_to_add > 0:
-        await db.execute(
-            update(Admin).where(Admin.id == admin.id).values(used_traffic=Admin.used_traffic + total_traffic_to_add)
-        )
+    await shift_admin_traffic(db, admin_traffic_changes)
 
     await db.commit()
     for user in users:
