@@ -17,6 +17,7 @@ from app.db.crud.user import (
     update_users_status,
 )
 from app.db.models import ReminderType, User, UserStatus
+from app.fork.jobs.usage_limits import limit_users_under_lock
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import Webhook
 from app.models.user import UserNotificationResponse
@@ -88,8 +89,9 @@ async def expire_users_job():
 
 async def limit_users_job():
     async with GetDB() as db:
-        if limited_users := await get_active_to_limited_users(db):
-            await apply_status_changes(db, limited_users, UserStatus.limited)
+        limited_users = await get_active_to_limited_users(db)
+    if limited_users:
+        await limit_users_under_lock([user.id for user in limited_users], (UserStatus.active,))
 
 
 async def on_hold_to_active_users_job():
