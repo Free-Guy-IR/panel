@@ -41,6 +41,10 @@ jobs:
         working-directory: ./dashboard
         run: bun install --frozen-lockfile
 
+      - name: Dashboard unit tests
+        working-directory: ./dashboard
+        run: bun run test
+
       - name: Build dashboard
         working-directory: ./dashboard
         run: VITE_BASE_API=/ bun run build --outDir build --assetsDir statics
