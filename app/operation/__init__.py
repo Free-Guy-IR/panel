@@ -21,6 +21,7 @@ from app.db.crud.group import get_groups_by_ids
 from app.db.crud.user import get_user_by_id
 from app.db.models import Admin as DBAdmin, ClientTemplate, CoreConfig, Group, Node, ProxyHost, User, UserTemplate
 from app.fork.operation.base_extras import reject_disallowed_assigned_groups
+from app.fork.operation.group_scope import user_within_allowed_groups
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
 from app.models.user import UserCreate, UserModify
@@ -208,7 +209,7 @@ class BaseOperation:
             load_lifetime_used_traffic=load_lifetime_used_traffic,
             admin_id=get_scope_admin_id(admin, scope_resource, scope_action),
         )
-        if not db_user:
+        if not db_user or not await user_within_allowed_groups(db, db_user.id, admin):
             await self.raise_error(message="User not found", code=404)
         return db_user
 
@@ -238,7 +239,7 @@ class BaseOperation:
             load_lifetime_used_traffic=load_lifetime_used_traffic,
             admin_id=get_scope_admin_id(admin, scope_resource, scope_action),
         )
-        if not db_user:
+        if not db_user or not await user_within_allowed_groups(db, db_user.id, admin):
             await self.raise_error(message="User not found", code=404)
         return db_user
 

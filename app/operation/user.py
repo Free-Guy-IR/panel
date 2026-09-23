@@ -520,6 +520,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         require_finite_hwid_limit: bool = True,
     ) -> None:
         """Enforce role-level limits and feature flags. No-op for owner."""
+        if next_plan is not None:
+            await self._reject_negative_next_plan(db, next_plan)
         if admin.is_owner:
             return
 
@@ -654,6 +656,64 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                     await self.raise_error(message="Reset strategy is not allowed for your role", code=403, db=db)
             if next_plan is not None and not features.can_use_next_plan:
                 await self.raise_error(message="Next plan is not allowed for your role", code=403, db=db)
+
+        if next_plan is not None and next_plan.user_template_id is None:
+            await self._enforce_next_plan_limits(db, limits, next_plan)
+
+    async def _reject_negative_next_plan(self, db: AsyncSession, next_plan) -> None:
+        if next_plan.data_limit is not None and next_plan.data_limit < 0:
+            await self.raise_error(message="Next plan data limit cannot be negative", code=400, db=db)
+        if next_plan.expire is not None and next_plan.expire < 0:
+            await self.raise_error(message="Next plan expire cannot be negative", code=400, db=db)
+
+    async def _enforce_next_plan_limits(self, db: AsyncSession, limits, next_plan) -> None:
+        data_limit = next_plan.data_limit or 0
+        if limits.data_limit_max is not None and data_limit <= 0:
+            await self.raise_error(
+                message=f"Next plan data limit cannot be unlimited; maximum is {readable_size(limits.data_limit_max)}",
+                code=400,
+                db=db,
+            )
+        if data_limit > 0:
+            if limits.data_limit_min is not None and data_limit < limits.data_limit_min:
+                await self.raise_error(
+                    message=f"Next plan data limit must be at least {readable_size(limits.data_limit_min)}",
+                    code=400,
+                    db=db,
+                )
+            if limits.data_limit_max is not None and data_limit > limits.data_limit_max:
+                await self.raise_error(
+                    message=f"Next plan data limit cannot exceed {readable_size(limits.data_limit_max)}",
+                    code=400,
+                    db=db,
+                )
+        if limits.data_limit_max is not None and next_plan.add_remaining_traffic:
+            await self.raise_error(
+                message="Next plan cannot add the remaining traffic while your role caps the data limit",
+                code=400,
+                db=db,
+            )
+
+        expire = next_plan.expire or 0
+        if limits.expire_max is not None and expire <= 0:
+            await self.raise_error(
+                message=f"Next plan expire cannot be unlimited; maximum is {readable_duration(limits.expire_max)}",
+                code=400,
+                db=db,
+            )
+        if expire > 0:
+            if limits.expire_min is not None and expire < limits.expire_min:
+                await self.raise_error(
+                    message=f"Next plan expire must be at least {readable_duration(limits.expire_min)}",
+                    code=400,
+                    db=db,
+                )
+            if limits.expire_max is not None and expire > limits.expire_max:
+                await self.raise_error(
+                    message=f"Next plan expire cannot exceed {readable_duration(limits.expire_max)}",
+                    code=400,
+                    db=db,
+                )
 
     async def _enforce_manual_user_write_access(self, admin: AdminDetails, db: AsyncSession) -> None:
         if admin.is_owner or admin.role is None:
@@ -1021,6 +1081,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             admin_ids=[scope_admin_id] if scope_admin_id is not None else None,
             limit=len(ids_list),
         )
+        query, no_allowed_groups = restrict_users_query_by_groups(admin, query)
+        if no_allowed_groups:
+            await self.raise_error(message="User not found", code=404)
         users = await get_users(db, query=query, load_admin_role=load_admin_role)
 
         # Verify every requested ID was found (mirrors the 404 in get_validated_user_by_id)
@@ -1329,6 +1392,18 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="activate_next_plan")
         return await self._active_next_plan(db, db_user, admin)
 
+    async def _ensure_owner_target_allowed(self, new_admin, admin: AdminDetails) -> None:
+        if admin.is_owner:
+            return
+        if new_admin.role_id == 1 or (new_admin.role is not None and new_admin.role.is_owner):
+            await self.raise_error(message="Owner account is not accessible.", code=403)
+        if (
+            get_scope_admin_id(admin, "users", "set_owner") is not None
+            and new_admin.id != admin.id
+            and not _has_permission(admin, "admins", "update")
+        ):
+            await self.raise_error(message="You're not allowed to move users to another admin", code=403)
+
     async def _set_owner(self, db: AsyncSession, db_user: User, new_admin, admin: AdminDetails) -> UserResponse:
         db_user = await set_owner(db, db_user, new_admin)
         user = await self.validate_user(db_user)
@@ -1347,6 +1422,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             stacklevel=2,
         )
         new_admin = await self.get_validated_admin(db, username=admin_username)
+        await self._ensure_owner_target_allowed(new_admin, admin)
         db_user = await self.get_validated_user(db, username, admin, scope_action="set_owner")
         return await self._set_owner(db, db_user, new_admin, admin)
 
@@ -1354,6 +1430,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         self, db: AsyncSession, user_id: int, admin_username: str, admin: AdminDetails
     ) -> UserResponse:
         new_admin = await self.get_validated_admin(db, username=admin_username)
+        await self._ensure_owner_target_allowed(new_admin, admin)
         db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="set_owner")
         return await self._set_owner(db, db_user, new_admin, admin)
 
@@ -1361,6 +1438,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         self, db: AsyncSession, bulk_users: BulkUsersSetOwner, admin: AdminDetails
     ) -> BulkUsersActionResponse:
         new_admin = await self.get_validated_admin(db, username=bulk_users.admin_username)
+        await self._ensure_owner_target_allowed(new_admin, admin)
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="set_owner"
         )
