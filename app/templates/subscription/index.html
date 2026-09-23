@@ -1,3 +1,16 @@
+{%- macro http_url(value) -%}
+{%- set url = (value or '') | string | trim -%}
+{%- if url[:8].lower() == 'https://' or url[:7].lower() == 'http://' -%}{{ url }}{%- endif -%}
+{%- endmacro -%}
+{%- macro app_url(value) -%}
+{%- set url = (value or '') | string | trim -%}
+{%- set scheme = url.split(':', 1)[0] -%}
+{%- if ':' in url and scheme[:1].isalpha() and not scheme.strip('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-') and scheme.lower() not in ('javascript', 'data', 'vbscript', 'file', 'blob', 'about') -%}{{ url }}{%- endif -%}
+{%- endmacro -%}
+{%- macro image_url(value) -%}
+{%- set url = (value or '') | string | trim -%}
+{%- if http_url(url) or url[:11].lower() == 'data:image/' -%}{{ url }}{%- endif -%}
+{%- endmacro -%}
 <!DOCTYPE html>
 <html>
     <head>
@@ -577,8 +590,9 @@
             {% if announce %}
             <div class="announcement">
                 <span>{{ announce | e | replace('\n', '<br>' | safe) }}</span>
-                {% if announce_url %}
-                <a href="{{ announce_url }}" target="_blank">More info</a>
+                {% set safe_announce_url = http_url(announce_url) %}
+                {% if safe_announce_url %}
+                <a href="{{ safe_announce_url }}" target="_blank" rel="noopener noreferrer">More info</a>
                 {% endif %}
             </div>
             {% endif %}
@@ -650,7 +664,8 @@
                     <input type="text" class="link-input" value="{{ link }}" readonly />
                     <button
                         class="copy-button"
-                        onclick="copyLink('{{ link }}', this)"
+                        data-link="{{ link }}"
+                        onclick="copyLink(this.dataset.link, this)"
                     >
                         Copy
                     </button>
@@ -674,8 +689,9 @@
                 {% for app in apps %}
                 <div class="application-card">
                     <div class="app-header">
-                        {% if app.icon_url %}
-                        <img src="{{ app.icon_url }}" alt="{{ app.name }}" class="app-icon" />
+                        {% set safe_icon_url = image_url(app.icon_url) %}
+                        {% if safe_icon_url %}
+                        <img src="{{ safe_icon_url }}" alt="{{ app.name }}" class="app-icon" />
                         {% endif %}
                         <div style="flex: 1;">
                             <h3>{{ app.name }} {% if app.recommended %}(Recommended){% endif %}</h3>
@@ -691,14 +707,16 @@
                     <h4>Download Links:</h4>
                     <ul>
                         {% for link in app.download_links %}
-                        {% if link.language.value == 'en' %}
-                        <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
+                        {% set safe_download_url = http_url(link.url) %}
+                        {% if link.language.value == 'en' and safe_download_url %}
+                        <li><a href="{{ safe_download_url }}" target="_blank" rel="noopener noreferrer">{{ link.name }}</a></li>
                         {% endif %}
                         {% endfor %}
                     </ul>
                     {% endif %}
-                    {% if app.import_url %}
-                    <button onclick="importConfig('{{ app.import_url }}')">Import Config</button>
+                    {% set safe_import_url = app_url(app.import_url) %}
+                    {% if safe_import_url %}
+                    <button data-url="{{ safe_import_url }}" onclick="importConfig(this.dataset.url)">Import Config</button>
                     {% endif %}
                 </div>
                 {% endfor %}

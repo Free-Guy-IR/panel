@@ -9,6 +9,7 @@ from app.models.core import MTProtoRegistrationSecret, OpenVPNPKIResponse
 from app.models.user import UserStatus
 from app.operation import OperatorType
 from app.operation.core import CoreOperation
+from app.operation.permissions import get_scope_admin_id
 from app.routers.authentication import require_permission
 from app.utils import responses
 
@@ -37,7 +38,7 @@ since the CA and tls-crypt key both change."""
 async def get_mtproto_registration_secret(
     core_id: int,
     tag: str,
-    _: AdminDetails = Depends(require_permission("cores", "read")),
+    admin: AdminDetails = Depends(require_permission("cores", "read")),
     db: AsyncSession = Depends(get_db),
 ) -> MTProtoRegistrationSecret:
     core = await core_operator.get_validated_core_config(db, core_id)
@@ -52,13 +53,22 @@ async def get_mtproto_registration_secret(
     )
     if mode == "faketls" and not domains:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"{tag} has no fake-tls domain")
+    if mode == "faketls" and not domains[0].isascii():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{tag} fake-tls domain must be ASCII; write an internationalised domain in punycode",
+        )
 
     stmt = (
         select(DBUser.proxy_settings)
         .where(DBUser.status == UserStatus.active)
         .where(DBUser.proxy_settings["mtproto"]["secret"].isnot(None))
+        .order_by(DBUser.id)
         .limit(1)
     )
+    scope_admin_id = get_scope_admin_id(admin, "users", "read")
+    if scope_admin_id is not None:
+        stmt = stmt.where(DBUser.admin_id == scope_admin_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     raw_secret = (row or {}).get("mtproto", {}).get("secret") if row else None
     if not raw_secret:

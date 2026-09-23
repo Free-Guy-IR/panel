@@ -232,7 +232,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             if user.admin and user.admin.sub_domain
             else (settings.url_prefix).replace("*", salt)
         )
-        token = await create_subscription_token(user.id)
+        token = await create_subscription_token(user.id, user.sub_revoked_at)
         return f"{url_prefix}/{subscription_env_settings.path}/{token}"
 
     async def _generate_usernames(

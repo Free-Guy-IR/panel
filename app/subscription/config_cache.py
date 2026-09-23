@@ -7,6 +7,7 @@ Uvicorn worker has its own cache (same model as the sub-update buffer).
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections import OrderedDict
 from typing import Any
@@ -15,6 +16,18 @@ SUB_CONFIG_CACHE_TTL_S = 15
 SUB_CONFIG_CACHE_MAX = 4096
 
 _cache: OrderedDict[tuple, tuple[float, str | bytes]] = OrderedDict()
+_generation = 0
+
+
+def _proxy_settings_digest(user: Any) -> str:
+    proxy_settings = getattr(user, "proxy_settings", None)
+    if proxy_settings is None:
+        return ""
+    if hasattr(proxy_settings, "model_dump_json"):
+        serialized = proxy_settings.model_dump_json()
+    else:
+        serialized = repr(proxy_settings)
+    return hashlib.sha256(serialized.encode()).hexdigest()
 
 
 def make_sub_config_key(
@@ -28,8 +41,14 @@ def make_sub_config_key(
     status = getattr(user, "status", None)
     status_key = status.value if hasattr(status, "value") else status
     inbounds = getattr(user, "inbounds", None) or ()
+    created_at = getattr(user, "created_at", None)
+    created_at_key = created_at.timestamp() if hasattr(created_at, "timestamp") else created_at
     return (
+        _generation,
         getattr(user, "id", None),
+        getattr(user, "username", None),
+        created_at_key,
+        _proxy_settings_digest(user),
         config_format,
         bool(as_base64),
         bool(randomize_order),
@@ -53,6 +72,8 @@ def get_sub_config(key: tuple) -> str | bytes | None:
 
 
 def put_sub_config(key: tuple, value: str | bytes) -> None:
+    if key[0] != _generation:
+        return
     _cache[key] = (time.monotonic() + SUB_CONFIG_CACHE_TTL_S, value)
     _cache.move_to_end(key)
     while len(_cache) > SUB_CONFIG_CACHE_MAX:
@@ -60,4 +81,6 @@ def put_sub_config(key: tuple, value: str | bytes) -> None:
 
 
 def clear_sub_config_cache() -> None:
+    global _generation
+    _generation += 1
     _cache.clear()

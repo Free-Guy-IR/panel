@@ -50,6 +50,7 @@ from app.models.user import (
 )
 from app.models.validators import MAX_ON_HOLD_EXPIRE_DURATION_SECONDS
 from app.subscription.sub_update_buffer import flush_user_sub_updates, queue_user_sub_update
+from app.utils.jwt import next_revocation_instant
 from config import user_cleanup_settings
 
 from .general import (
@@ -1407,7 +1408,10 @@ async def revoke_user_sub(db: AsyncSession, db_user: User, *, proxy_settings: di
     Returns:
         User: The updated user object.
     """
-    db_user.sub_revoked_at = datetime.now(UTC)
+    previous_revoked_at = (
+        await db.execute(select(User.sub_revoked_at).where(User.id == db_user.id).with_for_update())
+    ).scalar_one_or_none()
+    db_user.sub_revoked_at = next_revocation_instant(previous_revoked_at)
     db_user.proxy_settings = proxy_settings if proxy_settings is not None else build_revoked_proxy_settings(db_user)
     await db.commit()
     await refresh_and_load_user(db, db_user)
@@ -1427,9 +1431,18 @@ async def bulk_revoke_user_sub(
     Returns:
         list[User]: The refreshed users.
     """
-    revoked_at = datetime.now(UTC)
+    previous_revoked_at = dict(
+        (
+            await db.execute(
+                select(User.id, User.sub_revoked_at)
+                .where(User.id.in_([user.id for user in users]))
+                .order_by(User.id)
+                .with_for_update()
+            )
+        ).all()
+    )
     for user in users:
-        user.sub_revoked_at = revoked_at
+        user.sub_revoked_at = next_revocation_instant(previous_revoked_at.get(user.id))
         user.proxy_settings = (
             proxy_settings_by_user_id.get(user.id)
             if proxy_settings_by_user_id is not None and user.id in proxy_settings_by_user_id

@@ -677,10 +677,17 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         format_variables: dict,
         headers: dict[str, str],
         is_hwid_enabled: bool,
+        configs_hidden_by_hwid: bool = False,
     ) -> dict[str, Any]:
         return {
             "body": self._build_subscription_body_payload(
-                user, links, formatted_announce, sub_settings, format_variables, is_hwid_enabled
+                user,
+                links,
+                formatted_announce,
+                sub_settings,
+                format_variables,
+                is_hwid_enabled,
+                configs_hidden_by_hwid=configs_hidden_by_hwid,
             ),
             "headers": headers,
         }
@@ -697,9 +704,10 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         db_user = await self.get_validated_sub(db, token, load_admin_role=True, **self._SUB_CONFIG_LOAD)
         user = await self.validated_user(db_user)
         is_hwid_enabled = await self.is_user_hwid_enabled(db_user, db=db)
+        configs_hidden_by_hwid = is_hwid_enabled and (await hwid_settings()).require_hwid_for_manual_sub
 
         links = []
-        if sub_settings.allow_browser_config:
+        if sub_settings.allow_browser_config and not configs_hidden_by_hwid:
             conf, _ = await self.fetch_config(user, ConfigFormat.links)
             links = conf.splitlines()
         format_variables = await self.get_format_variables(user)
@@ -730,6 +738,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             format_variables,
             response_headers,
             is_hwid_enabled,
+            configs_hidden_by_hwid=configs_hidden_by_hwid,
         )
 
     async def user_subscription_by_user(

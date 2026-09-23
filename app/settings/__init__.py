@@ -4,6 +4,7 @@ from app.db import GetDB
 from app.db.crud.settings import get_settings
 from app.db.models import Settings
 from app.models import settings
+from app.subscription.config_cache import clear_sub_config_cache
 
 
 class SettingsRowMissing(RuntimeError):
@@ -67,6 +68,7 @@ async def refresh_caches() -> None:
     await subscription_settings.cache.clear()
     await hwid_settings.cache.clear()
     await general_settings.cache.clear()
+    clear_sub_config_cache()
 
 
 async def handle_settings_message(_: dict):
