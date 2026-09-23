@@ -57,11 +57,11 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/telegram/fsm_storage.py`
 - `app/telegram/handlers/admin/bulk_actions.py`
 - `app/utils/crypto.py`
-- `app/utils/jwt.py`
+- `app/utils/jwt.py` — except-fix; plus new subscription tokens are `v4,<id>,<ts>,<revocation epoch>` and `get_subscription_payload` returns that epoch, `revocation_epoch` / `next_revocation_instant` derive and advance it, and the legacy signature is compared as bytes so a non-ASCII token is refused instead of raising (v5.34.25, a5-surface-4, a5-surface-9)
 - `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update; since v5.34.25 (A2-r) a cohort's chart write, billing and admin update run in one retried transaction, with the fence filtering the chart rows, so a failed cohort rolls back whole and is safe to retry, and (A9) the billed user ids go to the fork's `enforce_user_limits_now`, so a user who crosses the limit is limited in the same tick
 - `app/scheduler.py` — job_defaults max_instances 30 -> 1 with coalesce, so a job that does not set it cannot overlap itself; since v5.34.25 (A6) also misfire_grace_time 30, so a job that starts up to 30 s late still runs instead of being skipped
 - `app/subscription/share.py` — except-fixes plus WireGuardConfiguration union update
-- `app/operation/subscription.py` — except-fixes, announce payload formatting, plus subscription access-log recording on every config-revealing path
+- `app/operation/subscription.py` — except-fixes, announce payload formatting, plus subscription access-log recording on every config-revealing path; plus `user_subscription_raw` hides links behind the HWID lock exactly as the page does, and `get_user_usage` passes the period to `validate_dates` and runs under the fork's `usage_aggregation_guard` (v5.34.25, a5-surface-7, a5-surface-8)
 
 ## connect_node multicore generalization (upstream PR candidate)
 
@@ -75,9 +75,9 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 
 ## New proxy cores: openvpn / l2tp / mtproto / singbox
 
-- `app/core/hosts.py` — openvpn/l2tp subscription inbound data plus except-fixes
+- `app/core/hosts.py` — openvpn/l2tp subscription inbound data plus except-fixes; plus `_reset_cache` clears the subscription config cache, the same line upstream dev b606dbc26 adds (v5.34.25, a5-surface-1)
 - `app/models/host.py` — host override models reshuffled for new cores
-- `app/models/user.py` — proxy_settings import and field update
+- `app/models/user.py` — proxy_settings import and field update; plus `UserNotificationResponse.sub_revoked_at` (excluded from output) so the token mint knows the revocation epoch without a query, and `SubscriptionUserResponse` excludes `proxy_settings`, so /sub/{token}/info and /raw carry no proxy secret (v5.34.25, a5-surface-8, a5-surface-9)
 - `app/db/crud/core.py` — CoreConfig/Node import update
 - `dashboard/src/features/hosts/dialogs/host-modal.tsx` — host mode resolution for new protocols
 - `dashboard/src/features/nodes/dialogs/core-config-modal.tsx` — config modal beyond xray/wg
@@ -111,11 +111,11 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 
 ## Backend operations & CRUD
 
-- `app/db/crud/user.py` — chunked bulk user queries and owner operations; plus one local-import call in `reset_user_by_next` to `grant_entitled_secrets_after_plan_change`, right after `sync_user_allocations`, so a next plan grants the secrets its groups entitle (v5.34.25, E6a)
+- `app/db/crud/user.py` — chunked bulk user queries and owner operations; plus one local-import call in `reset_user_by_next` to `grant_entitled_secrets_after_plan_change`, right after `sync_user_allocations`, so a next plan grants the secrets its groups entitle (v5.34.25, E6a); `_subscription_update_from_clause` and the two subscription-agent chart queries take `allowed_group_ids` and filter through the fork's `user_in_allowed_groups` (v5.34.25, a4-users-5); `revoke_user_sub` and `bulk_revoke_user_sub` lock the rows and write `sub_revoked_at` as a whole second strictly after the previous revocation, so every revoke moves the token epoch (v5.34.25, a5-surface-9); `get_all_users_usages` and `get_user_count_metric_stats` take `allowed_group_ids` and execute through the fork's `execute_with_statement_timeout` (v5.34.25, a5-surface-7)
 - `app/db/crud/bulk.py` — bulk target filter refactor (_create_final_filter)
-- `app/operation/user.py` — wireguard key preparation and validated-user flow; plus a `DBAPIError` branch in `_prepare_user_proxy_settings` that maps a proxy-secrets lock-wait timeout to HTTP 503 via `is_lock_wait_timeout` (v5.34.25, E3)
+- `app/operation/user.py` — wireguard key preparation and validated-user flow; plus a `DBAPIError` branch in `_prepare_user_proxy_settings` that maps a proxy-secrets lock-wait timeout to HTTP 503 via `is_lock_wait_timeout` (v5.34.25, E3); `get_users_sub_update_chart` passes the caller's `allowed_group_ids` to the chart queries (v5.34.25, a4-users-5); `generate_subscription_url` passes `sub_revoked_at` to the token mint (v5.34.25, a5-surface-9); `get_users_usage` and `get_users_count_metric` pass the period to `validate_dates`, run under the fork's `usage_aggregation_guard` and pass `allowed_group_ids` (v5.34.25, a5-surface-7)
 - `app/operation/group.py` — `_sync_users_allocations` (the second step of every group path: WireGuard allocation plus the entitled-secret grant) runs through the fork module app/fork/proxy_secrets/group_repair.py. It runs in a savepoint and is retried once after a short pause when the proxy secrets lock is unavailable (deleted `named_locks` row, deadlock, lock-wait timeout). If it still fails, the request rolls back and answers 503 (the upstream crud has already saved the group change), and a background repair re-runs the step for exactly those user ids at 5 s, 30 s and 2 min (v5.34.25, E3)
-- `app/operation/__init__.py` — scope_action parameter plumbing
+- `app/operation/__init__.py` — scope_action parameter plumbing; plus `validate_dates` takes an optional period and refuses a window of more than 50,000 buckets, and `get_validated_sub` refuses a v4 token whose revocation epoch is stale and compares naive database times as UTC (v5.34.25, a5-surface-7, a5-surface-9)
 - `app/operation/hwid.py` — get_validated_user_by_id flow
 - `app/middlewares/__init__.py` — settings import update
 - `app/routers/core.py` — fastapi import update
@@ -125,7 +125,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/subscription/xray.py` — finalmask stream settings emission
 - `app/db/compiles_types.py` — registers the MySQL compilation of `CaseSensitiveString`, `DaysDiff` and `DateDiff` for the `mariadb` dialect name as well. SQLAlchemy gives a `mariadb://` URL its own dialect name, which upstream's `mysql`-only hooks never match, so on MariaDB the collation was dropped silently and the two date helpers raised `UnsupportedCompilationError` in the `days_left` expression and the usage-reset queries. `config.py` accepts those URLs, so this is a supported configuration the fork has to make work
 - `app/db/crud/settings.py` — 1 line; `get_settings` is annotated `Settings | None`, which is what `scalar_one_or_none` has always returned. The upstream annotation promised a row that may not exist and every caller believed it
-- `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`
+- `app/settings/__init__.py` — the seven settings accessors read their section through one `stored_settings` helper that raises `SettingsRowMissing` naming migration `9af04c077ede`, instead of each dereferencing a possibly-absent row and dying at startup with a bare `AttributeError` on `NoneType`; plus `refresh_caches` clears the subscription config cache, the same line upstream dev b606dbc26 adds (v5.34.25, a5-surface-1)
 - `app/jobs/review_users.py` — limit_users_job hands its candidate ids to the fork's row-locked limit_users_under_lock, so the usage tick and the review job never apply a transition twice
 
 ## Tests
@@ -190,11 +190,11 @@ real boundary, and each one still needs its own justification or a revert.
 - `dashboard/src/components/layout/sidebar.tsx` — 1 line, fork main-nav items are taken from the owner-aware accessor so owner-only entries are never rendered for other admins
 - `dashboard/src/components/layout/tabbed-route-suspense-fallback.tsx` — the settings loading skeleton drops fork tabs the current admin may not open
 - `dashboard/src/pages/_dashboard.settings.tsx` — the settings tab list drops fork tabs the current admin may not open
-- `app/routers/system.py` — 1 line, reason not recorded
+- `app/routers/system.py` — the Telegram webhook secret is compared with `hmac.compare_digest` on bytes instead of `!=`, so a non-ASCII header is a 403 instead of a 500 (v5.34.25, a5-surface-4)
 - `app/subscription/clash.py` — 2 lines, reason not recorded
 - `app/subscription/links.py` — 1 line, reason not recorded
 - `app/subscription/singbox.py` — 2 lines, reason not recorded
-- `app/templates/subscription/index.html` — 1 line, reason not recorded
+- `app/templates/subscription/index.html` — the announce text is escaped before line breaks are inserted; the copy and import handlers read `data-*` attributes instead of interpolating values into JavaScript strings, and announce, download, icon and import URLs pass a scheme allow-list (v5.34.25, a5-surface-2)
 - `dashboard/src/features/admin-roles/components/admin-role-actions-menu.tsx` — 2 lines, reason not recorded
 - `dashboard/src/features/groups/components/group-actions-menu.tsx` — 2 lines, reason not recorded
 - `dashboard/src/features/groups/components/group.tsx` — 2 lines, reason not recorded
