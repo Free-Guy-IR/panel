@@ -26,6 +26,7 @@ from app.db.models import (
     User,
     UserUsageResetLogs,
 )
+from app.fork.jobs import usage_limits
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.operation import admin_sync
@@ -105,6 +106,8 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(record_usages, "engine", engine)
     monkeypatch.setattr(record_usages, "GetDB", TestGetDB)
     monkeypatch.setattr(admin_sync, "GetDB", TestGetDB)
+    monkeypatch.setattr(usage_limits, "GetDB", TestGetDB)
+    monkeypatch.setattr(record_usages, "_retained_cohorts", [])
 
     yield session_factory
 
@@ -297,7 +300,7 @@ async def test_calculate_users_usage_rounds_instead_of_truncating():
 
 
 @pytest.mark.asyncio
-async def test_record_user_stats_batched_skips_missing_users(session_factory):
+async def test_cohort_chart_write_skips_missing_users(session_factory):
     async with session_factory() as session:
         admin = Admin(username="admin", hashed_password="secret", role_id=3)
         session.add(admin)
@@ -319,7 +322,7 @@ async def test_record_user_stats_batched_skips_missing_users(session_factory):
         missing_user_id = user_id + 10_000
         await session.commit()
 
-    await record_usages.record_user_stats_batched(
+    chart_rows = await record_usages.record_user_stats_batched(
         {
             node_id: [
                 {"uid": str(user_id), "value": 100},
@@ -328,31 +331,37 @@ async def test_record_user_stats_batched_skips_missing_users(session_factory):
         },
         {node_id: 1},
     )
+    user_context = await record_usages.load_user_usage_context({user_id, missing_user_id})
+    outcome = await record_usages.apply_fenced_user_usage(
+        [{"uid": user_id, "value": 100}, {"uid": missing_user_id, "value": 200}],
+        user_context,
+        {user_id: 0, missing_user_id: 0},
+        chart_rows,
+    )
 
     async with session_factory() as session:
         rows = await session.execute(select(NodeUserUsage.user_id, NodeUserUsage.used_traffic))
         records = rows.all()
 
     assert records == [(user_id, 100)]
+    assert outcome.fenced_user_ids == [missing_user_id]
+    assert outcome.billed_user_ids == (user_id,)
 
 
 @pytest.mark.asyncio
-async def test_record_user_stats_batched_chunks_mysql_batches(monkeypatch: pytest.MonkeyPatch):
+async def test_chart_rows_are_written_in_mysql_sized_batches(monkeypatch: pytest.MonkeyPatch):
     executed_param_sizes = []
 
-    async def fake_get_dialect():
-        return "mysql"
+    class RecordingConnection:
+        async def execute(self, stmt, params=None):
+            executed_param_sizes.append(len(params))
 
-    async def fake_safe_execute(stmt, params=None, max_retries=5):
-        executed_param_sizes.append(len(params))
-
-    monkeypatch.setattr(record_usages, "get_dialect", fake_get_dialect)
-    monkeypatch.setattr(record_usages, "safe_execute", fake_safe_execute)
     monkeypatch.setattr(record_usages, "_get_time_bucket", lambda: None)
 
     params = [{"uid": str(index + 1), "value": 1} for index in range(2_501)]
 
-    await record_usages.record_user_stats_batched({1: params}, {1: 1})
+    chart_rows = await record_usages.record_user_stats_batched({1: params}, {1: 1})
+    await record_usages.write_node_user_usage_rows(RecordingConnection(), "mysql", chart_rows)
 
     assert executed_param_sizes == [4_000, 4_000, 2_004]
 
@@ -1308,3 +1317,4 @@ def test_scheduler_defaults_serialize_unflagged_jobs():
     defaults = record_usages.scheduler._job_defaults
     assert defaults["max_instances"] == 1
     assert defaults["coalesce"] is True
+    assert defaults["misfire_grace_time"] == 30

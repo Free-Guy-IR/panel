@@ -11,11 +11,11 @@ from typing import NamedTuple
 
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
-from sqlalchemy import BigInteger, DateTime, bindparam, delete, func, select, union_all, update
+from sqlalchemy import BigInteger, DateTime, bindparam, func, select, union_all, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.exc import DatabaseError, OperationalError
+from sqlalchemy.exc import DatabaseError, DBAPIError, OperationalError
 from sqlalchemy.sql.expression import Insert
 
 from app import on_shutdown, scheduler
@@ -23,6 +23,7 @@ from app.db import GetDB
 from app.db.base import engine
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
+from app.fork.jobs.usage_limits import enforce_user_limits_now
 from app.fork.node_health import record_usage_failure, record_usage_success
 from app.node import node_manager
 from app.operation.admin_sync import enforce_admin_limits_now
@@ -66,7 +67,7 @@ class FencedUsageOutcome(NamedTuple):
     applied_admins: int
     fenced_user_ids: list[int]
     fenced_bytes: int
-    withdrawn_chart_bytes: int = 0
+    billed_user_ids: tuple[int, ...] = ()
 
 
 class UsageCohort(NamedTuple):
@@ -74,11 +75,6 @@ class UsageCohort(NamedTuple):
     usage_coefficient: dict
     epoch_at_poll: dict[int, int]
     attempts: int = 0
-
-
-class PersistProgress:
-    def __init__(self) -> None:
-        self.writes_started = False
 
 
 # Thread pool executor for I/O-bound node API calls
@@ -480,7 +476,6 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
 
     # Aggregate all params across all nodes into single list
     created_at = _get_time_bucket()
-    dialect = await get_dialect()
 
     # Prepare parameters for all nodes in one batch
     upsert_params = []
@@ -503,24 +498,24 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
 
     # Consistent lock order reduces InnoDB deadlocks across overlapping writers
     upsert_params.sort(key=lambda item: (item["uid"], item["node_id"]))
+    return upsert_params
 
-    batch_size = NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT.get(dialect, len(upsert_params))
-    batches = list(_chunked(upsert_params, batch_size))
+
+async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict]) -> None:
+    if not chart_rows:
+        return
+    batch_size = NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT.get(dialect, len(chart_rows))
+    batches = list(_chunked(chart_rows, batch_size))
     if len(batches) > 1:
         logger.debug(
             "Splitting %s node user usage rows into %s %s batches",
-            len(upsert_params),
+            len(chart_rows),
             len(batches),
             dialect,
         )
-
-    # Execute batched UPSERTs with concurrency control
-    async with JOB_SEM:
-        for batch in batches:
-            queries = build_node_user_usage_upsert(dialect, batch)
-            for stmt, stmt_params in queries:
-                await safe_execute(stmt, stmt_params)
-    return upsert_params
+    for batch in batches:
+        for stmt, stmt_params in build_node_user_usage_upsert(dialect, batch):
+            await conn.execute(stmt, stmt_params)
 
 
 async def record_node_stats_batched(all_node_params: dict):
@@ -909,55 +904,6 @@ def discard_reset_users(users_usage: list, api_params: dict, reset_user_ids) -> 
     return kept, kept_params, dropped_bytes, dropped_users
 
 
-def _as_naive_utc(moment: dt) -> dt:
-    return moment.astimezone(UTC).replace(tzinfo=None) if moment.tzinfo else moment
-
-
-async def _withdraw_fenced_chart_rows(conn, chart_rows: list[dict], fenced_user_ids: list[int]) -> int:
-    fenced = set(fenced_user_ids)
-    owed: dict[tuple[int, int, dt], int] = defaultdict(int)
-    for row in chart_rows:
-        uid = int(row["uid"])
-        if uid in fenced and row["value"]:
-            owed[(uid, row["node_id"], _as_naive_utc(row["created_at"]))] += int(row["value"])
-    if not owed:
-        return 0
-
-    oldest_bucket = min(row["created_at"] for row in chart_rows if int(row["uid"]) in fenced)
-    candidates = await conn.execute(
-        select(NodeUserUsage.id, NodeUserUsage.user_id, NodeUserUsage.node_id, NodeUserUsage.created_at)
-        .where(
-            NodeUserUsage.user_id.in_(sorted({uid for uid, _, _ in owed})),
-            NodeUserUsage.created_at >= oldest_bucket - td(minutes=10),
-        )
-        .order_by(NodeUserUsage.id)
-    )
-    withdrawals = []
-    for row_id, user_id, node_id, created_at in candidates.fetchall():
-        value = owed.get((int(user_id), node_id, _as_naive_utc(created_at)))
-        if value:
-            withdrawals.append({"row_id": row_id, "withdrawn": value})
-    if not withdrawals:
-        return 0
-
-    await conn.execute(
-        update(NodeUserUsage)
-        .where(NodeUserUsage.id == bindparam("row_id"))
-        .values(used_traffic=NodeUserUsage.used_traffic - bindparam("withdrawn"))
-        .execution_options(synchronize_session=False),
-        withdrawals,
-    )
-    await conn.execute(
-        delete(NodeUserUsage)
-        .where(
-            NodeUserUsage.id.in_([item["row_id"] for item in withdrawals]),
-            NodeUserUsage.used_traffic <= 0,
-        )
-        .execution_options(synchronize_session=False)
-    )
-    return sum(item["withdrawn"] for item in withdrawals)
-
-
 async def apply_fenced_user_usage(
     users_usage: list,
     user_context: dict[int, UserUsageContext],
@@ -965,7 +911,8 @@ async def apply_fenced_user_usage(
     chart_rows: list[dict] | None = None,
 ) -> FencedUsageOutcome:
     delta_by_user = {int(item["uid"]): int(item["value"]) for item in users_usage}
-    user_ids = sorted(delta_by_user)
+    chart_rows = chart_rows or []
+    user_ids = sorted(delta_by_user.keys() | {int(row["uid"]) for row in chart_rows})
     dialect = await get_dialect()
     batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(dialect) or len(user_ids) or 1
     online_at = dt.now(UTC)
@@ -992,20 +939,20 @@ async def apply_fenced_user_usage(
             for user_id, usage_epoch in locked.fetchall():
                 committed_epochs[int(user_id)] = int(usage_epoch or 0)
 
-        billable = []
-        fenced_user_ids = []
-        fenced_bytes = 0
-        for user_id in user_ids:
-            usage_epoch = committed_epochs.get(user_id)
-            if usage_epoch is None or usage_epoch != epoch_at_poll.get(user_id, 0):
-                fenced_user_ids.append(user_id)
-                fenced_bytes += delta_by_user[user_id]
-                continue
-            billable.append({"uid": user_id, "epoch": usage_epoch, "value": delta_by_user[user_id]})
+        fenced = {
+            user_id
+            for user_id in user_ids
+            if committed_epochs.get(user_id) is None or committed_epochs[user_id] != epoch_at_poll.get(user_id, 0)
+        }
+        fenced_user_ids = [user_id for user_id in sorted(delta_by_user) if user_id in fenced]
+        fenced_bytes = sum(delta_by_user[user_id] for user_id in fenced_user_ids)
+        billable = [
+            {"uid": user_id, "epoch": committed_epochs[user_id], "value": delta_by_user[user_id]}
+            for user_id in sorted(delta_by_user)
+            if user_id not in fenced
+        ]
 
-        withdrawn_chart_bytes = 0
-        if fenced_user_ids and chart_rows:
-            withdrawn_chart_bytes = await _withdraw_fenced_chart_rows(conn, chart_rows, fenced_user_ids)
+        await write_node_user_usage_rows(conn, dialect, [row for row in chart_rows if int(row["uid"]) not in fenced])
 
         admin_totals = defaultdict(int)
         for item in billable:
@@ -1019,7 +966,13 @@ async def apply_fenced_user_usage(
         if admin_data:
             await conn.execute(admin_stmt, admin_data)
 
-        return FencedUsageOutcome(len(billable), len(admin_data), fenced_user_ids, fenced_bytes, withdrawn_chart_bytes)
+        return FencedUsageOutcome(
+            len(billable),
+            len(admin_data),
+            fenced_user_ids,
+            fenced_bytes,
+            tuple(item["uid"] for item in billable),
+        )
 
     return await run_in_retried_transaction(_apply)
 
@@ -1104,7 +1057,6 @@ async def _persist_collected_usage(
     api_params: dict,
     usage_coefficient: dict,
     epoch_at_poll: dict[int, int],
-    progress: PersistProgress | None = None,
 ) -> tuple[FencedUsageOutcome, int]:
     users_usage = await calculate_users_usage(api_params, usage_coefficient)
     if not users_usage:
@@ -1144,29 +1096,24 @@ async def _persist_collected_usage(
 
     chart_rows: list[dict] = []
     if filtered_node_params:
-        if progress is not None:
-            progress.writes_started = True
         chart_rows = await record_user_stats_batched(filtered_node_params, usage_coefficient) or []
-        total_records = sum(len(params) for params in filtered_node_params.values())
-        logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
 
     outcome = FencedUsageOutcome(0, 0, [], 0)
-    if valid_users_usage:
+    if valid_users_usage or chart_rows:
         valid_users_usage.sort(key=lambda item: int(item["uid"]))
-        if progress is not None:
-            progress.writes_started = True
         async with JOB_SEM:
             outcome = await apply_fenced_user_usage(valid_users_usage, user_context, epoch_at_poll, chart_rows)
         if outcome.fenced_user_ids:
             logger.warning(
-                "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply and withdrew %s of them "
-                "from the chart: %s",
+                "Usage epoch fence rejected %s bytes for %s user(s) reset mid-apply and kept them out of the chart: %s",
                 outcome.fenced_bytes,
                 len(outcome.fenced_user_ids),
-                outcome.withdrawn_chart_bytes,
                 outcome.fenced_user_ids[:FENCED_USER_LOG_SAMPLE],
             )
-        logger.debug(f"Updated {outcome.applied_users} users and {outcome.applied_admins} admins")
+        logger.debug(
+            f"Recorded {len(chart_rows)} node user usage records across {len(filtered_node_params)} nodes; "
+            f"updated {outcome.applied_users} users and {outcome.applied_admins} admins"
+        )
 
     return outcome, len(filtered_node_params)
 
@@ -1230,7 +1177,11 @@ async def _settle_collection(
         )
 
 
-def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) -> None:
+def _write_may_have_committed(failure: BaseException | None) -> bool:
+    return isinstance(failure, DBAPIError) and failure.connection_invalidated
+
+
+def _keep_or_abandon_retained(cohort: UsageCohort, failure: BaseException | None) -> None:
     read_params = {node_id: params for node_id, params in cohort.api_params.items() if params}
     if not read_params:
         return
@@ -1239,7 +1190,8 @@ def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) ->
         usage_coefficient={node_id: cohort.usage_coefficient.get(node_id, 1.0) for node_id in read_params},
     )
     attempts = cohort.attempts + 1
-    if not progress.writes_started and attempts < USAGE_RETAINED_MAX_ATTEMPTS:
+    commit_in_doubt = _write_may_have_committed(failure)
+    if not commit_in_doubt and attempts < USAGE_RETAINED_MAX_ATTEMPTS:
         _retained_cohorts.insert(0, cohort._replace(attempts=attempts))
         logger.warning(
             "Still holding %s raw bytes from node(s) %s after %s failed attempt(s); nothing was written",
@@ -1253,8 +1205,9 @@ def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) ->
         _raw_bytes(cohort.api_params),
         sorted(cohort.api_params),
         attempts,
-        "a write had already started, so a retry could count them twice"
-        if progress.writes_started
+        "the connection dropped while the write was in flight, so it may have committed and a retry could count "
+        "them twice"
+        if commit_in_doubt
         else "the retry limit was reached",
     )
 
@@ -1262,34 +1215,45 @@ def _keep_or_abandon_retained(cohort: UsageCohort, progress: PersistProgress) ->
 async def _persist_retained_cohorts(persist) -> bool:
     while _retained_cohorts:
         cohort = _retained_cohorts.pop(0)
-        progress = PersistProgress()
         try:
-            failure = await persist(cohort, progress)
+            failure = await persist(cohort)
         except BaseException:
-            _keep_or_abandon_retained(cohort, progress)
+            _keep_or_abandon_retained(cohort, None)
             raise
         if failure is not None:
-            _keep_or_abandon_retained(cohort, progress)
+            _keep_or_abandon_retained(cohort, failure)
             return False
     return True
 
 
+async def _enforce_user_limits_after_billing(billed_user_ids: set[int], context: str) -> None:
+    if not billed_user_ids:
+        return
+    try:
+        await enforce_user_limits_now(billed_user_ids)
+    except Exception:
+        logger.exception("Failed to enforce user limits after %s", context)
+
+
 async def _flush_retained_cohorts() -> None:
     applied_admins = 0
+    billed_user_ids: set[int] = set()
 
-    async def persist(cohort: UsageCohort, progress: PersistProgress | None = None) -> Exception | None:
+    async def persist(cohort: UsageCohort) -> Exception | None:
         nonlocal applied_admins
         try:
             outcome, _ = await _persist_collected_usage(
-                cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, progress=progress
+                cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll
             )
         except Exception as exc:
             logger.exception("Failed to persist kept usage for node(s) %s", sorted(cohort.api_params))
             return exc
         applied_admins += outcome.applied_admins
+        billed_user_ids.update(outcome.billed_user_ids)
         return None
 
     await _persist_retained_cohorts(persist)
+    await _enforce_user_limits_after_billing(billed_user_ids, "persisting kept usage")
     if applied_admins:
         try:
             await enforce_admin_limits_now(logger=logger)
@@ -1317,14 +1281,15 @@ async def _record_user_usages_impl():
         applied_users = 0
         applied_admins = 0
         recorded_nodes = 0
+        billed_user_ids: set[int] = set()
         persist_failure: Exception | None = None
         consecutive_persist_failures = 0
 
-        async def persist(cohort: UsageCohort, progress: PersistProgress | None = None) -> Exception | None:
+        async def persist(cohort: UsageCohort) -> Exception | None:
             nonlocal applied_users, applied_admins, recorded_nodes, persist_failure, consecutive_persist_failures
             try:
                 outcome, persisted_nodes = await _persist_collected_usage(
-                    cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll, progress=progress
+                    cohort.api_params, cohort.usage_coefficient, cohort.epoch_at_poll
                 )
             except Exception as exc:
                 if persist_failure is None:
@@ -1336,6 +1301,7 @@ async def _record_user_usages_impl():
             applied_users += outcome.applied_users
             applied_admins += outcome.applied_admins
             recorded_nodes += persisted_nodes
+            billed_user_ids.update(outcome.billed_user_ids)
             return None
 
         def must_stop(failure: Exception | None) -> bool:
@@ -1367,21 +1333,16 @@ async def _record_user_usages_impl():
                     list(node_by_task), USAGE_PERSIST_COHORT_SIZE, USAGE_PERSIST_MAX_VOLATILE_S
                 ):
                     cohort = _cohort_from_tasks(batch, node_by_task, epoch_at_poll)
-                    progress = PersistProgress()
-                    try:
-                        failure = await persist(cohort, progress)
-                    except BaseException:
-                        if progress.writes_started:
-                            processed.update(batch)
-                            _keep_or_abandon_retained(cohort, progress)
-                        raise
+                    failure = await persist(cohort)
                     processed.update(batch)
                     if failure is not None:
-                        _keep_or_abandon_retained(cohort, progress)
+                        _keep_or_abandon_retained(cohort, failure)
                     if must_stop(failure):
                         break
             finally:
                 await _settle_collection(node_by_task, reset_issued, processed, epoch_at_poll)
+
+        await _enforce_user_limits_after_billing(billed_user_ids, "usage recording")
 
         if applied_admins:
             try:

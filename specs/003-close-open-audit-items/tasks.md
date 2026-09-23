@@ -62,25 +62,25 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Tests for User Story 1 (write first, must fail before the fix)
 
-- [ ] T003 [P] [US1] P1: create `tests/test_scheduler_misfire_grace.py`.
+- [X] T003 [P] [US1] P1: create `tests/test_scheduler_misfire_grace.py`.
   - Assert `app.scheduler.scheduler._job_defaults["misfire_grace_time"] == 30`, `["max_instances"] == 1` and `["coalesce"] is True`.
   - Behavioural check: build an `AsyncIOScheduler` with `job_defaults` copied from `app.scheduler.scheduler._job_defaults`. Add a `date` job whose run time is 10 s in the past, start the scheduler, and assert that the job ran. Under APScheduler's default grace of 1 s it is skipped with "was missed by".
-  - Expected to fail before T008: the defaults assertion fails with a KeyError, and the behavioural job never runs.
-- [ ] T004 [P] [US1] P1: create `tests/test_usage_same_tick_limit.py` on the recorder harness (`recorder_db` from `tests/test_recorder_harness.py`, plus `seed_users_and_nodes` and `CountingNode`). Monkeypatch `app.jobs.review_users.sync_users` and the notification entry point so pushes and notifications are recorded. Cases:
+  - Expected to fail before T008: the defaults assertion fails with `assert 1 == 30`, because APScheduler 3.11.3 always fills `misfire_grace_time` with its default of 1 (not a KeyError). The behavioural job never runs.
+- [X] T004 [P] [US1] P1: create `tests/test_usage_same_tick_limit.py` on the recorder harness (`recorder_db` from `tests/test_recorder_harness.py`, plus `seed_users_and_nodes` and `CountingNode`). Monkeypatch `app.jobs.review_users.sync_users` and the notification entry point so pushes and notifications are recorded. Cases:
   - (a) An active user with `data_limit=1000` and `used_traffic=900` is billed 200 in one `record_user_usages()` call. When the call returns, the status is `limited`, the user was pushed once and one status-change notification was scheduled.
   - (b) An `on_hold` user crossing the limit is limited in the same way.
   - (c) A user with a `next_plan` crossing the limit gets the next plan applied: `used_traffic` is reset, the status is not `limited`, and the next-plan notification was scheduled.
   - (d) A user below the limit and a user with `data_limit` 0 or NULL are untouched.
   - (e) `enforce_user_limits_now` monkeypatched to raise: the billing is still committed, the exception is logged, and the tick returns normally.
   - Cases (a), (b) and (c) are expected to fail before T009, because the status stays active.
-- [ ] T005 [P] [US1] P1: create `tests/test_recorder_atomic_cohort.py` on the recorder harness. Cases:
+- [X] T005 [P] [US1] P1: create `tests/test_recorder_atomic_cohort.py` on the recorder harness. Cases:
   - (a) Inject an `OperationalError` into the billing `update(User)` step after the chart upsert statements of the same cohort have executed. After the tick, the cohort's `node_user_usages` rows do not exist, `users.used_traffic` is unchanged, and `_retained_cohorts` holds the cohort with `attempts == 1`. After the next tick, the chart and `used_traffic` each hold the bytes exactly once.
   - (b) Force a chart chunk size of 1 and make the second chunk raise. The result is the same as (a).
   - (c) Fenced user (epoch changed between poll and write): no `node_user_usages` row is ever written for that user, and other users in the cohort are billed.
   - (d) Every attempt fails: after `USAGE_RETAINED_MAX_ATTEMPTS` ticks the cohort is abandoned with an ERROR containing "Gave up".
   - (e) A `DBAPIError` with `connection_invalidated=True` raised from the unit is abandoned at once with an ERROR, and is not retained.
   - (a) and (b) are expected to fail before T010: the chart keeps the bytes, and the log shows "a write had already started".
-- [ ] T006 [US1] P1: rewrite the two tests in `tests/test_recorder_reset_reads.py` that pin the old give-up.
+- [X] T006 [US1] P1: rewrite the two tests in `tests/test_recorder_reset_reads.py` that pin the old give-up.
   - `test_kept_bytes_are_not_retried_once_a_write_started` (:172) becomes `test_kept_bytes_are_retried_after_a_failed_write`.
   - `test_a_fresh_cohort_whose_write_started_is_given_up` (:256) becomes `test_a_fresh_cohort_whose_write_failed_is_retained`.
   - Both assert retention and exactly-once billing on the next tick. Keep `:200`, `:231` and `:274` unchanged.
@@ -95,10 +95,10 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] P1: in `app/scheduler.py`, set `job_defaults={"max_instances": 1, "coalesce": True, "misfire_grace_time": 30}`.
+- [X] T008 [US1] P1: in `app/scheduler.py`, set `job_defaults={"max_instances": 1, "coalesce": True, "misfire_grace_time": 30}`.
   - Extend the existing pins `tests/test_record_usages.py:1307` (`test_scheduler_defaults_serialize_unflagged_jobs`) and `tests/test_record_usages_volatile_window.py:177` to also assert 30.
   - Proof: T003.
-- [ ] T009 [US1] P1: create `app/fork/jobs/usage_limits.py` with `async def enforce_user_limits_now(user_ids: Iterable[int]) -> None`. It:
+- [X] T009 [US1] P1: create `app/fork/jobs/usage_limits.py` with `async def enforce_user_limits_now(user_ids: Iterable[int]) -> None`. It:
   - opens `GetDB()`;
   - for each chunk of 500 ids, selects `_review_user_select_stmt()` (imported from `app.db.crud.user`, not edited) with `User.id.in_(chunk)`, `User.status.in_([UserStatus.active, UserStatus.on_hold])` and `User.is_limited`;
   - calls `apply_status_changes(db, users, UserStatus.limited)` (imported from `app.jobs.review_users`, not edited).
@@ -109,7 +109,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Each call is wrapped in `try/except Exception: logger.exception(...)`.
 
   Proof: T004.
-- [ ] T010 [US1] P1: make the cohort write atomic in `app/jobs/record_usages.py`, per plan D-A2r. Inside the single `run_in_retried_transaction` of `apply_fenced_user_usage`, the order is:
+- [X] T010 [US1] P1: make the cohort write atomic in `app/jobs/record_usages.py`, per plan D-A2r. Inside the single `run_in_retried_transaction` of `apply_fenced_user_usage`, the order is:
   1. `SELECT … FOR UPDATE` of the users, ordered by id.
   2. The fence decision.
   3. Filter out chart params of fenced users.
