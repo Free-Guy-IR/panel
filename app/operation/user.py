@@ -117,6 +117,7 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
+from app.utils.connection_enforcement import close_active_restriction
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
@@ -875,6 +876,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         old_status = db_user.status
 
         self._apply_explicit_null_hwid_limit(db_user, modified_user)
+        if modified_user.status is not None:
+            await close_active_restriction(db, db_user.id, "an admin set the user's status")
         try:
             db_user = await crud_modify_user(db, db_user, modified_user, groups=validated_groups)
         except ValueError as exc:  # WireGuard subnet exhausted
