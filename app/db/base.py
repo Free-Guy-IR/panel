@@ -18,6 +18,7 @@ def build_engine_options(settings: DatabaseSettings) -> dict[str, Any]:
     options: dict[str, Any] = {
         "connect_args": connect_args,
         "echo": settings.echo_queries,
+        "hide_parameters": True,
     }
     if not settings.is_sqlite:
         options.update(
@@ -47,16 +48,20 @@ def database_pool_summary(settings: DatabaseSettings, process_count: int = 1) ->
 
 engine = create_async_engine(database_settings.url, **build_engine_options(database_settings))
 
+
+# WAL mode lets readers proceed concurrently with the single writer, preventing
+# "database is locked" errors under async workloads. busy_timeout makes SQLite
+# retry for up to 5 s on a locked write instead of failing immediately.
+def _set_sqlite_pragmas(dbapi_conn, _connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 if database_settings.is_sqlite:
-    # WAL mode lets readers proceed concurrently with the single writer, preventing
-    # "database is locked" errors under async workloads. busy_timeout makes SQLite
-    # retry for up to 5 s on a locked write instead of failing immediately.
-    @event.listens_for(engine.sync_engine, "connect")
-    def _set_sqlite_pragmas(dbapi_conn, _connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA busy_timeout=5000")
-        cursor.close()
+    event.listen(engine.sync_engine, "connect", _set_sqlite_pragmas)
 
 
 SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
