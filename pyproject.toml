@@ -82,6 +82,7 @@ extend-immutable-calls = [
     "SIM115",
     "UP031",
 ]
+"app/routers/passkey.py" = ["F401", "I001"]
 "tests/test_cleanup_window_timezone.py" = ["DTZ001"]
 "tests/test_clear_usage_data_window.py" = ["DTZ001"]
 
