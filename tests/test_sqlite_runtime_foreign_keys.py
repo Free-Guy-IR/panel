@@ -26,18 +26,13 @@ from app.utils.connection_enforcement import active_restriction, due_to_restore,
 
 
 def _runtime_pragmas(dbapi_conn, record):
-    listener = getattr(base, "_set_sqlite_pragmas", None)
-    if listener is not None:
-        listener(dbapi_conn, record)
-        return
-    cursor = dbapi_conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA busy_timeout=5000")
-    cursor.close()
+    base._set_sqlite_pragmas(dbapi_conn, record)
 
 
 @pytest.fixture
 async def runtime_db(tmp_path):
+    if not hasattr(base, "_set_sqlite_pragmas"):
+        pytest.skip(reason="the runtime engine is not SQLite, so the SQLite connect listener is not installed")
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'runtime.sqlite3'}", connect_args={"check_same_thread": False}
     )
