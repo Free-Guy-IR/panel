@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.db.models import DataLimitResetStrategy, UserStatusCreate
 from app.models.proxy import ShadowsocksMethods
 
+from .user import MAX_HWID_LIMIT
 from .validators import MAX_ON_HOLD_EXPIRE_DURATION_SECONDS, ListValidator, UserValidator
 
 
@@ -40,6 +41,8 @@ class UserTemplate(BaseModel):
 
 
 class UserTemplateWithValidator(UserTemplate):
+    hwid_limit: int | None = Field(default=None, ge=0, le=MAX_HWID_LIMIT)
+
     @field_validator("status", mode="before", check_fields=False)
     def validate_status(cls, status, values):
         return UserValidator.validate_status(status, {UserStatusCreate.active, UserStatusCreate.on_hold}, values)

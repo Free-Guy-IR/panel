@@ -53,7 +53,14 @@ class User(BaseModel):
     next_plan: NextPlanModel | None = Field(default=None)
 
 
+MAX_HWID_LIMIT = 2**31 - 1
+MAX_AUTO_DELETE_IN_DAYS = 36500
+
+
 class UserWithValidator(User):
+    auto_delete_in_days: int | None = Field(default=None, le=MAX_AUTO_DELETE_IN_DAYS)
+    hwid_limit: int | None = Field(default=None, ge=0, le=MAX_HWID_LIMIT)
+
     @field_validator("on_hold_expire_duration")
     @classmethod
     def validate_timeout(cls, v):

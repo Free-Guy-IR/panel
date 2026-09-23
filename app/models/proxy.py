@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.fork.config_text import is_safe_config_value
 from app.utils.crypto import get_wireguard_public_key, validate_wireguard_key
 from app.utils.logger import get_logger
 from app.utils.system import random_password
@@ -16,9 +17,43 @@ class VMessSettings(BaseModel):
     id: UUID = Field(default_factory=uuid4)
 
 
+class XTLSFlows(StrEnum):
+    NONE = ""
+    VISION = "xtls-rprx-vision"
+    VISION_UDP443 = "xtls-rprx-vision-udp443"
+
+
+VLESS_USER_FLOWS = frozenset(flow.value for flow in XTLSFlows)
+VLESS_NODE_FLOWS = frozenset({XTLSFlows.NONE.value, XTLSFlows.VISION.value})
+
+
+def check_vless_flow(value) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in VLESS_USER_FLOWS:
+        raise ValueError(f"vless flow must be one of {sorted(VLESS_USER_FLOWS)} or null")
+    return value
+
+
 class VlessSettings(BaseModel):
     id: UUID = Field(default_factory=uuid4)
-    flow: str | None = None
+    flow: str | None = Field(default=None, exclude_if=lambda flow: flow is None)
+
+    @field_validator("flow", mode="before")
+    @classmethod
+    def validate_flow(cls, value):
+        try:
+            return check_vless_flow(value)
+        except ValueError:
+            logger.warning("Discarding an unusable stored VLESS flow")
+            return None
+
+
+class StrictVlessSettings(VlessSettings):
+    @field_validator("flow", mode="before")
+    @classmethod
+    def validate_flow(cls, value):
+        return check_vless_flow(value)
 
 
 class TrojanSettings(BaseModel):
@@ -58,6 +93,23 @@ class OpenVPNSettings(BaseModel):
     # app.utils.openvpn.prepare_openvpn_password, called at the same point
     # prepare_wireguard_keys/prepare_mtproto_secret are.
     password: str | None = None
+
+
+def check_openvpn_password(value) -> str | None:
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise ValueError("openvpn password must be a string")  # noqa: TRY004
+    if not is_safe_config_value(value):
+        raise ValueError("openvpn password must not contain control characters, <, > or \"")
+    return value
+
+
+class StrictOpenVPNSettings(OpenVPNSettings):
+    @field_validator("password", mode="before")
+    @classmethod
+    def validate_password(cls, value):
+        return check_openvpn_password(value)
 
 
 class MTProtoSettings(BaseModel):
@@ -198,4 +250,6 @@ class ProxyTable(BaseModel):
 
 
 class ProxyTableInput(ProxyTable):
+    vless: StrictVlessSettings = Field(default_factory=StrictVlessSettings)
+    openvpn: StrictOpenVPNSettings = Field(default_factory=StrictOpenVPNSettings)
     l2tp: StrictL2TPSettings = Field(default_factory=StrictL2TPSettings)

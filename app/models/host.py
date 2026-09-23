@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity, UserStatus
+from app.fork.config_text import check_dns_servers, check_host_addresses, check_single_line
 
 from .validators import ListValidator, StringArrayValidator
 
@@ -755,7 +756,22 @@ class CreateHost(BaseHost):
 
     @field_validator("address", mode="after")
     def validate_address(cls, v):
-        return StringArrayValidator.len_check(v, 256)
+        return check_host_addresses(StringArrayValidator.len_check(v, 256))
+
+    @field_validator("wireguard_overrides", mode="after")
+    @classmethod
+    def validate_wireguard_overrides(cls, value: WireGuardHostOverrides | None):
+        if value is not None:
+            value.dns = check_dns_servers(value.dns, allow_names=True)
+            check_single_line(value.reserved, "reserved")
+        return value
+
+    @field_validator("openvpn_overrides", mode="after")
+    @classmethod
+    def validate_openvpn_overrides(cls, value: OpenVPNHostOverrides | None):
+        if value is not None:
+            value.dns_servers = check_dns_servers(value.dns_servers, allow_names=False)
+        return value
 
     @field_validator("sni", "host", mode="after")
     def validate_sets(cls, v: set):
