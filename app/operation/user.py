@@ -1360,26 +1360,26 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             stacklevel=2,
         )
         new_admin = await self.get_validated_admin(db, username=admin_username)
-        await ensure_owner_target_allowed(self, new_admin, admin)
         db_user = await self.get_validated_user(db, username, admin, scope_action="set_owner")
+        await ensure_owner_target_allowed(self, new_admin, admin)
         return await self._set_owner(db, db_user, new_admin, admin)
 
     async def set_owner_by_id(
         self, db: AsyncSession, user_id: int, admin_username: str, admin: AdminDetails
     ) -> UserResponse:
         new_admin = await self.get_validated_admin(db, username=admin_username)
-        await ensure_owner_target_allowed(self, new_admin, admin)
         db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="set_owner")
+        await ensure_owner_target_allowed(self, new_admin, admin)
         return await self._set_owner(db, db_user, new_admin, admin)
 
     async def bulk_set_owner(
         self, db: AsyncSession, bulk_users: BulkUsersSetOwner, admin: AdminDetails
     ) -> BulkUsersActionResponse:
         new_admin = await self.get_validated_admin(db, username=bulk_users.admin_username)
-        await ensure_owner_target_allowed(self, new_admin, admin)
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="set_owner"
         )
+        await ensure_owner_target_allowed(self, new_admin, admin)
 
         db_users = await bulk_set_owner(db, db_users, new_admin)
         users = [await self.validate_user(db_user) for db_user in db_users]
