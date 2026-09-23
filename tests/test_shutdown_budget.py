@@ -39,6 +39,11 @@ async def test_the_usage_drain_is_given_only_what_is_left_of_the_budget(monkeypa
     assert 2.0 < app_factory._usage_drain_timeout() <= 3.0 - app_factory.USAGE_DRAIN_TAIL_S
     monkeypatch.setattr(lifecycle, "_shutdown_deadline", loop.time() + 60.0)
     assert app_factory._usage_drain_timeout() == record_usages.USAGE_SHUTDOWN_GRACE_S
+    main_phase = lifecycle.SHUTDOWN_BUDGET_S - lifecycle.SHUTDOWN_FINAL_RESERVE_S
+    monkeypatch.setattr(lifecycle, "_shutdown_deadline", loop.time() + main_phase)
+    assert app_factory._usage_drain_timeout() == pytest.approx(
+        min(record_usages.USAGE_SHUTDOWN_GRACE_S, lifecycle.SHUTDOWN_BUDGET_S - 1.0), abs=0.01
+    )
 
 
 @pytest.mark.asyncio
@@ -95,8 +100,44 @@ async def test_a_slow_notification_flush_cannot_push_shutdown_past_the_budget_an
     order = [name for name, _ in events]
 
     assert order[:2] == ["usage tick persisted", "flush started"]
-    assert "later teardown" not in order
+    assert all(stamp <= shutdown_started + lifecycle.SHUTDOWN_BUDGET_S for _, stamp in events)
     assert total <= lifecycle.SHUTDOWN_BUDGET_S + 0.25
     assert total < DOCKER_STOP_TIMEOUT_S
     saved = json.loads((tmp_path / "notification_spool.json").read_text())["notifications"]
     assert [entry["item"]["message"] for entry in saved] == ["unsent"]
+
+
+@pytest.mark.asyncio
+async def test_a_callback_that_swallows_its_cancellation_still_cannot_hold_shutdown_past_the_budget(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    loop = asyncio.get_running_loop()
+    ran: list[str] = []
+    released = asyncio.Event()
+    monkeypatch.setattr(lifecycle, "SHUTDOWN_BUDGET_S", 0.6)
+    monkeypatch.setattr(lifecycle, "SHUTDOWN_FINAL_RESERVE_S", 0.2)
+
+    async def stubborn():
+        while not released.is_set():
+            try:
+                await released.wait()
+            except asyncio.CancelledError:
+                continue
+
+    async def final_step():
+        ran.append("final")
+
+    monkeypatch.setattr(lifecycle, "startup_functions", [])
+    monkeypatch.setattr(lifecycle, "shutdown_functions", [stubborn])
+    monkeypatch.setattr(lifecycle, "final_shutdown_functions", [final_step])
+
+    try:
+        async with lifecycle.lifespan(None):
+            started = loop.time()
+        elapsed = loop.time() - started
+    finally:
+        released.set()
+        await asyncio.sleep(0)
+
+    assert elapsed <= 0.6 + 0.1
+    assert ran == ["final"]

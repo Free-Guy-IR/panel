@@ -22,7 +22,7 @@ from config import database_settings, runtime_settings, server_settings, subscri
 
 logger = get_logger("app-factory")
 
-USAGE_DRAIN_TAIL_S = 0.5
+USAGE_DRAIN_TAIL_S = 0.25
 
 # Swagger UI ships no dark theme; hand-tune one instead of the harsher filter-invert hack
 # (and instead of swagger-ui-dist's built-in `html.dark-mode` theme, which reads too dark).

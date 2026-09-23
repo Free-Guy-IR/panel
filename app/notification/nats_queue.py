@@ -16,6 +16,7 @@ logger = get_logger("Notification")
 PUBLISH_TIMEOUT_MAX_ATTEMPTS = 3
 PUBLISH_TIMEOUT_BASE_DELAY = 0.1
 IN_PROGRESS_INTERVAL_S = 10.0
+IN_PROGRESS_MAX_S = 600.0
 
 
 class NotificationQueue:
@@ -49,7 +50,7 @@ class NatsNotificationQueue(NotificationQueue):
         self._nc: nats.NATS | None = None
         self._js: JetStreamContext | None = None
         self._consumer: JetStreamContext.PullSubscription | None = None
-        self._unacked: dict[int, tuple] = {}
+        self._unacked: dict[int, tuple[dict, object, asyncio.Task]] = {}
 
     async def initialize(self, create_consumer: bool = True):
         """Initialize NATS connection, JetStream stream, and optionally pull consumer.
@@ -125,7 +126,7 @@ class NatsNotificationQueue(NotificationQueue):
                     logger.error(f"Dropping an unreadable notification from {self.SUBJECT}: {exc}")
                     await msg.term()
                     return None
-                self._unacked[id(data)] = (msg, asyncio.create_task(self._keep_in_progress(msg)))
+                self._unacked[id(data)] = (data, msg, asyncio.create_task(self._keep_in_progress(msg)))
                 return data
         except TimeoutError:
             return None
@@ -138,16 +139,17 @@ class NatsNotificationQueue(NotificationQueue):
 
     @staticmethod
     async def _keep_in_progress(msg) -> None:
-        while True:
+        for _ in range(int(IN_PROGRESS_MAX_S // IN_PROGRESS_INTERVAL_S)):
             await asyncio.sleep(IN_PROGRESS_INTERVAL_S)
             with contextlib.suppress(Exception):
                 await msg.in_progress()
 
     def _claim(self, item: dict):
-        entry = self._unacked.pop(id(item), None)
-        if entry is None:
+        entry = self._unacked.get(id(item))
+        if entry is None or entry[0] is not item:
             return None
-        msg, keeper = entry
+        del self._unacked[id(item)]
+        _, msg, keeper = entry
         keeper.cancel()
         return msg
 

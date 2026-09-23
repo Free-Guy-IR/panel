@@ -46,3 +46,34 @@ async def test_a_flush_cancelled_mid_write_keeps_every_row_for_the_final_flush(
     assert await sub_update_buffer.flush_user_sub_updates() == 3
     stored = (await session.execute(select(func.count()).select_from(UserSubscriptionUpdate))).scalar()
     assert stored == 3
+
+
+@pytest.mark.asyncio
+async def test_a_size_triggered_flush_is_held_until_it_finishes_and_its_failure_is_consumed(
+    buffer_db,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _session, user_id = buffer_db
+    release = asyncio.Event()
+
+    class SlowFailingGetDB:
+        async def __aenter__(self):
+            await release.wait()
+            raise RuntimeError("database gone")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(sub_update_buffer, "GetDB", SlowFailingGetDB)
+    for index in range(sub_update_buffer.FLUSH_BATCH_SIZE):
+        await sub_update_buffer.queue_user_sub_update(user_id, f"client/{index}")
+    await asyncio.sleep(0)
+
+    running = set(sub_update_buffer._background_flushes)
+    assert len(running) == 1, "the size-triggered flush task is not referenced and can be garbage-collected mid-write"
+
+    release.set()
+    await asyncio.wait(running, timeout=2.0)
+
+    assert sub_update_buffer._background_flushes == set()
+    assert sub_update_buffer.pending_count() == sub_update_buffer.FLUSH_BATCH_SIZE

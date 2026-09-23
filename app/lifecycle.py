@@ -7,7 +7,8 @@ from app.utils.logger import get_logger
 logger = get_logger("lifecycle")
 
 SHUTDOWN_BUDGET_S = 9.0
-SHUTDOWN_FINAL_RESERVE_S = 0.75
+SHUTDOWN_FINAL_RESERVE_S = 0.5
+SHUTDOWN_CUT_SETTLE_S = 0.2
 
 startup_functions = []
 shutdown_functions = []
@@ -88,14 +89,21 @@ async def _run_shutdown_callbacks(functions, app, deadline: float) -> None:
                     ", ".join(_callback_name(skipped) for skipped in functions[index:]),
                 )
                 return
-            try:
-                await asyncio.wait_for(_invoke(func, app), timeout=remaining)
-            except TimeoutError:
+            task = asyncio.ensure_future(_invoke(func, app))
+            done, _ = await asyncio.wait({task}, timeout=max(remaining - SHUTDOWN_CUT_SETTLE_S, remaining / 2))
+            if not done:
+                task.cancel()
+                await asyncio.wait({task}, timeout=max(deadline - loop.time(), 0.0))
                 logger.error(
                     "Shutdown callback %s was cut at the %ss shutdown budget", _callback_name(func), SHUTDOWN_BUDGET_S
                 )
-            except Exception:
-                logger.exception("Shutdown callback %s failed; running the remaining callbacks", _callback_name(func))
+                continue
+            if not task.cancelled() and task.exception() is not None:
+                logger.error(
+                    "Shutdown callback %s failed; running the remaining callbacks",
+                    _callback_name(func),
+                    exc_info=task.exception(),
+                )
     finally:
         _shutdown_deadline = None
 

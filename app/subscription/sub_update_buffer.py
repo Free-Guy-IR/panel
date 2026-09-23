@@ -32,6 +32,7 @@ _pending: list[dict[str, Any]] = []
 _lock = asyncio.Lock()
 _drain_lock = asyncio.Lock()
 _flush_task: asyncio.Task | None = None
+_background_flushes: set[asyncio.Task] = set()
 
 
 def _sanitize_record(user_id: int, user_agent: str, ip: str | None, hwid: str | None) -> dict[str, Any]:
@@ -72,7 +73,15 @@ async def queue_user_sub_update(user_id: int, user_agent: str, ip: str | None = 
     if dropped:
         logger.warning("Dropped %s buffered subscription updates; buffer full", dropped)
     if should_flush:
-        asyncio.create_task(flush_user_sub_updates(), name="sub_update_flush")
+        task = asyncio.create_task(flush_user_sub_updates(), name="sub_update_flush")
+        _background_flushes.add(task)
+        task.add_done_callback(_forget_background_flush)
+
+
+def _forget_background_flush(task: asyncio.Task) -> None:
+    _background_flushes.discard(task)
+    if not task.cancelled():
+        task.exception()
 
 
 async def flush_user_sub_updates() -> int:
