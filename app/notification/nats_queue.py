@@ -1,5 +1,7 @@
 import asyncio
+import contextlib
 import json
+from collections import deque
 
 import nats
 from nats import errors as nats_errors
@@ -13,6 +15,7 @@ logger = get_logger("Notification")
 
 PUBLISH_TIMEOUT_MAX_ATTEMPTS = 3
 PUBLISH_TIMEOUT_BASE_DELAY = 0.1
+IN_PROGRESS_INTERVAL_S = 10.0
 
 
 class NotificationQueue:
@@ -21,6 +24,15 @@ class NotificationQueue:
 
     async def dequeue(self, timeout: int | None = None):
         raise NotImplementedError
+
+    async def ack(self, item: dict) -> None:
+        return None
+
+    async def release(self, *items: dict) -> None:
+        raise NotImplementedError
+
+    def drain_nowait(self) -> list[dict]:
+        return []
 
 
 class NatsNotificationQueue(NotificationQueue):
@@ -37,6 +49,7 @@ class NatsNotificationQueue(NotificationQueue):
         self._nc: nats.NATS | None = None
         self._js: JetStreamContext | None = None
         self._consumer: JetStreamContext.PullSubscription | None = None
+        self._unacked: dict[int, tuple] = {}
 
     async def initialize(self, create_consumer: bool = True):
         """Initialize NATS connection, JetStream stream, and optionally pull consumer.
@@ -108,30 +121,78 @@ class NatsNotificationQueue(NotificationQueue):
                 msg = msgs[0]
                 try:
                     data = json.loads(msg.data.decode())
-                    await msg.ack()
-                    return data
-                except Exception:
-                    await msg.nak()  # Negative ack on parse error
+                except Exception as exc:
+                    logger.error(f"Dropping an unreadable notification from {self.SUBJECT}: {exc}")
+                    await msg.term()
                     return None
+                self._unacked[id(data)] = (msg, asyncio.create_task(self._keep_in_progress(msg)))
+                return data
         except TimeoutError:
             return None
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"Fetching from {self.SUBJECT} failed: {exc}")
+            await asyncio.sleep(timeout_seconds)
             return None
 
         return None
+
+    @staticmethod
+    async def _keep_in_progress(msg) -> None:
+        while True:
+            await asyncio.sleep(IN_PROGRESS_INTERVAL_S)
+            with contextlib.suppress(Exception):
+                await msg.in_progress()
+
+    def _claim(self, item: dict):
+        entry = self._unacked.pop(id(item), None)
+        if entry is None:
+            return None
+        msg, keeper = entry
+        keeper.cancel()
+        return msg
+
+    async def ack(self, item: dict) -> None:
+        msg = self._claim(item)
+        if msg is not None:
+            await msg.ack()
+
+    async def release(self, *items: dict) -> None:
+        for item in items:
+            msg = self._claim(item)
+            if msg is None:
+                continue
+            try:
+                await msg.nak()
+            except Exception as exc:
+                logger.warning(f"Could not hand a notification back to {self.SUBJECT}; it is redelivered later: {exc}")
 
 
 class InMemoryNotificationQueue(NotificationQueue):
     def __init__(self):
         self.q: asyncio.Queue[dict] = asyncio.Queue()
+        self._returned: deque[dict] = deque()
 
     async def enqueue(self, item: dict):
         await self.q.put(item)
 
     async def dequeue(self, timeout: int | None = None):
+        if self._returned:
+            return self._returned.popleft()
         if timeout:
             try:
                 return await asyncio.wait_for(self.q.get(), timeout=timeout)
             except TimeoutError:
                 return None
         return await self.q.get()
+
+    async def release(self, *items: dict) -> None:
+        self._returned.extendleft(reversed(items))
+
+    def drain_nowait(self) -> list[dict]:
+        items = list(self._returned)
+        self._returned.clear()
+        while True:
+            try:
+                items.append(self.q.get_nowait())
+            except asyncio.QueueEmpty:
+                return items

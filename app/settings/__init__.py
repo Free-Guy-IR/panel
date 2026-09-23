@@ -5,6 +5,8 @@ from app.db.crud.settings import get_settings
 from app.db.models import Settings
 from app.models import settings
 
+SETTINGS_CACHE_TTL_S = 60
+
 
 class SettingsRowMissing(RuntimeError):
     pass
@@ -24,37 +26,37 @@ async def stored_settings() -> Settings:
     return db_settings
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def telegram_settings() -> settings.Telegram:
     return settings.Telegram.model_validate((await stored_settings()).telegram)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def webhook_settings() -> settings.Webhook:
     return settings.Webhook.model_validate((await stored_settings()).webhook)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def notification_settings() -> settings.NotificationSettings:
     return settings.NotificationSettings.model_validate((await stored_settings()).notification_settings)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def notification_enable() -> settings.NotificationEnable:
     return settings.NotificationEnable.model_validate((await stored_settings()).notification_enable)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def subscription_settings() -> settings.Subscription:
     return settings.Subscription.model_validate((await stored_settings()).subscription)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def hwid_settings() -> settings.HWIDSettings:
     return settings.HWIDSettings.model_validate((await stored_settings()).hwid)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def general_settings() -> settings.General:
     return settings.General.model_validate((await stored_settings()).general)
 

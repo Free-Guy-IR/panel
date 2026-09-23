@@ -104,7 +104,7 @@ async def flush_user_sub_updates() -> int:
                         await db.execute(insert(UserSubscriptionUpdate.__table__), live_records)
                     await db.commit()
                 written += len(live_records)
-            except Exception:
+            except BaseException:
                 async with _lock:
                     _pending[0:0] = batch
                     overflow = len(_pending) - _MAX_BUFFER

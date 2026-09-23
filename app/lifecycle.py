@@ -6,8 +6,14 @@ from app.utils.logger import get_logger
 
 logger = get_logger("lifecycle")
 
+SHUTDOWN_BUDGET_S = 9.0
+SHUTDOWN_FINAL_RESERVE_S = 0.75
+
 startup_functions = []
 shutdown_functions = []
+final_shutdown_functions = []
+
+_shutdown_deadline: float | None = None
 
 
 def on_startup(func):
@@ -20,6 +26,25 @@ def on_shutdown(func):
     if func not in shutdown_functions:
         shutdown_functions.append(func)
     return func
+
+
+def on_shutdown_first(func):
+    if func in shutdown_functions:
+        shutdown_functions.remove(func)
+    shutdown_functions.insert(0, func)
+    return func
+
+
+def on_shutdown_final(func):
+    if func not in final_shutdown_functions:
+        final_shutdown_functions.append(func)
+    return func
+
+
+def shutdown_time_left() -> float | None:
+    if _shutdown_deadline is None:
+        return None
+    return max(_shutdown_deadline - asyncio.get_running_loop().time(), 0.0)
 
 
 def _accepts_app(func) -> bool:
@@ -49,14 +74,39 @@ def _callback_name(func) -> str:
     return getattr(func, "__qualname__", None) or repr(func)
 
 
+async def _run_shutdown_callbacks(functions, app, deadline: float) -> None:
+    global _shutdown_deadline
+    loop = asyncio.get_running_loop()
+    _shutdown_deadline = deadline
+    try:
+        for index, func in enumerate(functions):
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                logger.error(
+                    "Shutdown budget of %ss is spent; skipped %s",
+                    SHUTDOWN_BUDGET_S,
+                    ", ".join(_callback_name(skipped) for skipped in functions[index:]),
+                )
+                return
+            try:
+                await asyncio.wait_for(_invoke(func, app), timeout=remaining)
+            except TimeoutError:
+                logger.error(
+                    "Shutdown callback %s was cut at the %ss shutdown budget", _callback_name(func), SHUTDOWN_BUDGET_S
+                )
+            except Exception:
+                logger.exception("Shutdown callback %s failed; running the remaining callbacks", _callback_name(func))
+    finally:
+        _shutdown_deadline = None
+
+
 @asynccontextmanager
 async def lifespan(app):
     for func in startup_functions:
         await _invoke(func, app)
     yield
 
-    for func in shutdown_functions:
-        try:
-            await _invoke(func, app)
-        except Exception:
-            logger.exception("Shutdown callback %s failed; running the remaining callbacks", _callback_name(func))
+    loop = asyncio.get_running_loop()
+    final_deadline = loop.time() + SHUTDOWN_BUDGET_S
+    await _run_shutdown_callbacks(list(shutdown_functions), app, final_deadline - SHUTDOWN_FINAL_RESERVE_S)
+    await _run_shutdown_callbacks(list(final_shutdown_functions), app, final_deadline)

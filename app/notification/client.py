@@ -6,6 +6,7 @@ import aiohttp
 
 from app import on_startup
 from app.models.settings import NotificationSettings
+from app.notification.nats_queue import NotificationQueue
 from app.notification.queue_manager import (
     DiscordNotification,
     TelegramNotification,
@@ -195,13 +196,22 @@ async def process_notification(item: dict | None):
         logger.error(f"Failed to process notification: {err}")
 
 
+async def process_queued_notification(queue: NotificationQueue, item: dict) -> None:
+    try:
+        await process_notification(item)
+    except asyncio.CancelledError:
+        await queue.release(item)
+        raise
+    await queue.ack(item)
+
+
 async def run_notification_dispatcher():
     queue = get_queue()
     while True:
         try:
             item: dict[str, Any] | None = await queue.dequeue(timeout=1)
             if item:
-                await process_notification(item)
+                await process_queued_notification(queue, item)
         except asyncio.CancelledError:
             break
         except Exception as err:
