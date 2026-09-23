@@ -11,6 +11,7 @@ from . import (
     host,
     hwid,
     node,
+    passkey,
     settings,
     setup,
     subscription,
@@ -36,6 +37,7 @@ routers = [
     subscription.router,
     user_template.router,
     hwid.router,
+    passkey.router,
 ]
 
 _api_router = None
