@@ -27,6 +27,10 @@ export type ProtocolHostPayload = {
   vless_route?: unknown
   ech_config_list?: unknown
   ech_query_strategy?: unknown
+  mihomo_ech_config?: unknown
+  mihomo_ech_query_server_name?: unknown
+  sing_box_ech_config?: unknown
+  sing_box_ech_query_server_name?: unknown
   pinned_peer_cert_sha256?: unknown
   verify_peer_cert_by_name?: unknown
   fragment_settings?: unknown
@@ -62,7 +66,7 @@ export function normalizeOpenvpnOverrides(ov?: OpenVPNOverridePayload): OpenVPNO
 }
 
 export function cleanWireguardPayload(payload: ProtocolHostPayload): void {
-  stripXrayHostFields(payload)
+  stripXrayHostFields(payload, { keepCamouflage: true })
   if (payload.wireguard_overrides) {
     payload.wireguard_overrides = normalizeWireguardOverrides(payload.wireguard_overrides)
   }
