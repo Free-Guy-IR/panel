@@ -135,7 +135,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 
 - `tests/api/__init__.py` — test app import cleanup
 - `tests/api/test_usage_functions_timezone.py` — admins parameter updates
-- `tests/api/test_user.py` — crud import updates and flow assertion
+- `tests/api/test_user.py` — crud import updates; the udp443 subscription test carries upstream's `"flow" not in` assertion again (v5.34.25, u2-1)
 - `tests/api/test_host.py` — settings assertion update
 - `tests/api/test_node.py` — serialize lambda signature update
 - `tests/test_review_users_unit.py` — import block re-sorted for the fork's combine-as-imports ruff config
