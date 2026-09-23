@@ -4,7 +4,7 @@ import en from '../locales/en.json'
 import fa from '../locales/fa.json'
 import ru from '../locales/ru.json'
 import zh from '../locales/zh.json'
-import { type AllNodesSeries, type AllNodesUsageStat, DELETED_NODES_KEY, buildAllNodesSeries, buildUsageSeries, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from './all-nodes-series'
+import { type AllNodesSeries, type AllNodesUsageStat, DELETED_NODES_KEY, buildAllNodesSeries, buildUsageSeries, getTrafficBytes, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from './all-nodes-series'
 
 const GIB = 1024 * 1024 * 1024
 const P1 = '2026-09-20T00:00:00Z'
@@ -155,7 +155,7 @@ describe('deleted-nodes presentation helpers', () => {
 })
 
 describe('buildUsageSeries for the core and admin breakdowns', () => {
-  const total = (stats: AllNodesUsageStat[]) => stats.reduce((sum, point) => sum + Number(point.uplink || 0) + Number(point.downlink || 0), 0)
+  const total = (stats: AllNodesUsageStat[]) => stats.reduce((sum, point) => sum + getTrafficBytes(point), 0)
 
   it('stacks deleted-node usage after the cores so the core total matches the node total', () => {
     const coreSeries = [
