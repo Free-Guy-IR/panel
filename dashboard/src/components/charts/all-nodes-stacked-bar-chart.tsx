@@ -33,6 +33,7 @@ import {
   TrafficShortcutKey,
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
+import { DELETED_NODES_COLOR, DELETED_NODES_KEY, buildAllNodesSeries, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from '@/fork/charts/all-nodes-series'
 
 type NodeChartDataPoint = {
   time: string
@@ -41,34 +42,12 @@ type NodeChartDataPoint = {
 }
 
 type NodePieChartDataPoint = {
+  key: string
   name: string
   usage: number
   bytes: number
   percentage: number
   fill: string
-}
-
-const isNodeUsageStat = (point: NodeUsageStat | UserUsageStat): point is NodeUsageStat => 'uplink' in point && 'downlink' in point
-
-const getTrafficBytes = (point: NodeUsageStat | UserUsageStat) => {
-  if ('total_traffic' in point) {
-    return Number(point.total_traffic || 0)
-  }
-  return Number(point.uplink || 0) + Number(point.downlink || 0)
-}
-
-const getDirectionalTraffic = (point: NodeUsageStat | UserUsageStat) => {
-  if (isNodeUsageStat(point) && !('total_traffic' in point)) {
-    return {
-      uplink: Number(point.uplink || 0),
-      downlink: Number(point.downlink || 0),
-    }
-  }
-
-  return {
-    uplink: 0,
-    downlink: 0,
-  }
 }
 
 const STACKED_BAR_RADIUS = 4
@@ -78,15 +57,15 @@ const SQUARE_STACK_RADIUS: StackBarRadius = [0, 0, 0, 0]
 
 const getCellRadiusProps = (radius: StackBarRadius) => ({ radius }) as unknown as CellRadiusProps
 
-const getStackedNodeRadius = (row: NodeChartDataPoint, nodeName: string, nodeList: NodeSimple[]): StackBarRadius => {
-  const visibleNodes = nodeList.filter(node => Number(row[node.name] || 0) > 0)
-  const visibleIndex = visibleNodes.findIndex(node => node.name === nodeName)
+const getStackedNodeRadius = (row: NodeChartDataPoint, seriesKey: string, seriesKeys: string[]): StackBarRadius => {
+  const visibleKeys = seriesKeys.filter(key => Number(row[key] || 0) > 0)
+  const visibleIndex = visibleKeys.indexOf(seriesKey)
 
   if (visibleIndex < 0) return SQUARE_STACK_RADIUS
-  if (visibleNodes.length === 1) return [STACKED_BAR_RADIUS, STACKED_BAR_RADIUS, STACKED_BAR_RADIUS, STACKED_BAR_RADIUS]
+  if (visibleKeys.length === 1) return [STACKED_BAR_RADIUS, STACKED_BAR_RADIUS, STACKED_BAR_RADIUS, STACKED_BAR_RADIUS]
 
   const isBottomSegment = visibleIndex === 0
-  const isTopSegment = visibleIndex === visibleNodes.length - 1
+  const isTopSegment = visibleIndex === visibleKeys.length - 1
 
   return [isTopSegment ? STACKED_BAR_RADIUS : 0, isTopSegment ? STACKED_BAR_RADIUS : 0, isBottomSegment ? STACKED_BAR_RADIUS : 0, isBottomSegment ? STACKED_BAR_RADIUS : 0]
 }
@@ -113,9 +92,10 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
   const isRTL = dir === 'rtl'
 
   const activeNodes = Object.keys(data)
-    .filter(key => !key.startsWith('_') && key !== 'time' && key !== '_period_start' && Number(data[key] || 0) > 0)
+    .filter(key => isSeriesKey(key) && Number(data[key] || 0) > 0)
     .map(nodeName => ({
       name: nodeName,
+      label: String(chartConfig?.[nodeName]?.label ?? nodeName),
       usage: Number(data[nodeName] || 0),
       uplink: Number(data[`_uplink_${nodeName}`] || 0),
       downlink: Number(data[`_downlink_${nodeName}`] || 0),
@@ -148,8 +128,8 @@ function CustomTooltip({ active, payload, chartConfig, dir, period }: TooltipPro
           <div key={node.name} className={`flex flex-col gap-0.5 ${isRTL ? 'items-end' : 'items-start'}`}>
             <span className={`flex items-center gap-0.5 text-[10px] font-semibold sm:text-xs ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className="h-1.5 w-1.5 flex-shrink-0 rounded-full sm:h-2 sm:w-2" style={{ backgroundColor: getNodeColor(node.name) }} />
-              <span className="max-w-[60px] truncate overflow-hidden text-ellipsis sm:max-w-[80px]" title={node.name}>
-                {node.name}
+              <span className="max-w-[60px] truncate overflow-hidden text-ellipsis sm:max-w-[80px]" title={node.label}>
+                {node.label}
               </span>
             </span>
             <span dir="ltr" className="text-muted-foreground font-mono text-[9px] sm:text-[10px]">
@@ -230,6 +210,14 @@ export function AllNodesStackedBarChart() {
   const shouldUseNodeUsage = selectedAdmin === 'all'
 
   const nodeList: NodeSimple[] = useMemo(() => nodesResponse?.nodes || [], [nodesResponse])
+  const deletedNodesLabel = useMemo(
+    () =>
+      resolveDeletedNodesLabel(
+        t('statistics.deletedNodes'),
+        nodeList.map(node => node.name),
+      ),
+    [t, nodeList],
+  )
 
   const generateDistinctColor = useCallback((index: number, isDark: boolean): string => {
     const distinctHues = [0, 30, 60, 120, 180, 210, 240, 270, 300, 330, 15, 45, 75, 150, 200, 225, 255, 285, 315, 345]
@@ -257,8 +245,11 @@ export function AllNodesStackedBarChart() {
 
       config[node.name] = { label: node.name, color: generateDistinctColor(index, isDark) }
     })
+    config[DELETED_NODES_KEY] = { label: deletedNodesLabel, color: DELETED_NODES_COLOR }
     return config
-  }, [generateDistinctColor, nodeList, resolvedTheme])
+  }, [generateDistinctColor, nodeList, resolvedTheme, deletedNodesLabel])
+
+  const modalChartConfig = useMemo<ChartConfig>(() => ({ ...chartConfig, [deletedNodesLabel]: { label: deletedNodesLabel, color: DELETED_NODES_COLOR } }), [chartConfig, deletedNodesLabel])
 
   const activeQueryRange = useMemo(() => {
     const periodOptions = { minuteForOneHour: true, periodOverride: resolvePeriodOverride(periodOverride) }
@@ -328,69 +319,17 @@ export function AllNodesStackedBarChart() {
     [customRange, selectedTime, showCustomRange],
   )
 
-  const { chartData, totalUsage, perNodeBreakdownUnavailable } = useMemo(() => {
-    const statsKeys = Object.keys(statsByNode)
-    if (statsKeys.length === 0) {
-      return { chartData: [] as NodeChartDataPoint[], totalUsage: null, perNodeBreakdownUnavailable: false }
-    }
-
-    const hasIndividualNodeData = statsKeys.some(key => key !== '-1')
-
-    if (!hasIndividualNodeData && Array.isArray(statsByNode['-1'])) {
-      const aggregatedStats = statsByNode['-1']
-      const totalBytes = aggregatedStats.reduce((sum, point) => sum + getTrafficBytes(point), 0)
-
-      return {
-        chartData: [] as NodeChartDataPoint[],
-        totalUsage: totalBytes > 0 ? String(formatBytes(totalBytes, 2)) : null,
-        perNodeBreakdownUnavailable: true,
-      }
-    }
-
-    const allPeriods = new Set<string>()
-    Object.values(statsByNode).forEach(statsArray => {
-      statsArray.forEach(stat => allPeriods.add(stat.period_start))
-    })
-
-    const sortedPeriods = Array.from(allPeriods).sort()
-    const chartRows = sortedPeriods.map(periodStart => {
-      const row: NodeChartDataPoint = {
-        time: formatPeriodLabelForPeriod(periodStart, activePeriod, i18n.language, labelRangeHint),
-        _period_start: periodStart,
-      }
-
-      nodeList.forEach(node => {
-        const nodeStats = statsByNode[String(node.id)]?.find(stat => stat.period_start === periodStart)
-        if (!nodeStats) {
-          row[node.name] = 0
-          row[`_uplink_${node.name}`] = 0
-          row[`_downlink_${node.name}`] = 0
-          return
-        }
-
-        const usageBytes = getTrafficBytes(nodeStats)
-        const directionalTraffic = getDirectionalTraffic(nodeStats)
-        row[node.name] = usageBytes / (1024 * 1024 * 1024)
-        row[`_uplink_${node.name}`] = directionalTraffic.uplink
-        row[`_downlink_${node.name}`] = directionalTraffic.downlink
-      })
-
-      return row
-    })
-
-    let totalBytes = 0
-    Object.values(statsByNode).forEach(statsArray => {
-      statsArray.forEach(stat => {
-        totalBytes += getTrafficBytes(stat)
-      })
-    })
-
-    return {
-      chartData: chartRows,
-      totalUsage: totalBytes > 0 ? String(formatBytes(totalBytes, 2)) : null,
-      perNodeBreakdownUnavailable: false,
-    }
-  }, [statsByNode, nodeList, activePeriod, i18n.language, labelRangeHint])
+  const {
+    rows: chartData,
+    seriesKeys,
+    totalBytes,
+    perNodeBreakdownUnavailable,
+    pieSlices,
+  } = useMemo(
+    () => buildAllNodesSeries(statsByNode, nodeList, periodStart => formatPeriodLabelForPeriod(periodStart, activePeriod, i18n.language, labelRangeHint)),
+    [statsByNode, nodeList, activePeriod, i18n.language, labelRangeHint],
+  )
+  const totalUsage = totalBytes > 0 ? String(formatBytes(totalBytes, 2)) : null
 
   const xAxisInterval = useMemo(
     () =>
@@ -406,45 +345,44 @@ export function AllNodesStackedBarChart() {
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(
-    () => getChartRenderFlags(chartData.length, nodeList.length),
-    [chartData.length, nodeList.length],
+    () => getChartRenderFlags(chartData.length, seriesKeys.length),
+    [chartData.length, seriesKeys.length],
   )
-  const brushWindow = useMemo(() => getChartBrushWindow(chartData.length, nodeList.length), [chartData.length, nodeList.length])
+  const brushWindow = useMemo(() => getChartBrushWindow(chartData.length, seriesKeys.length), [chartData.length, seriesKeys.length])
 
-  const pieData = useMemo<NodePieChartDataPoint[]>(() => {
-    if (chartData.length === 0 || nodeList.length === 0) return []
+  const pieData = useMemo<NodePieChartDataPoint[]>(
+    () =>
+      pieSlices.map((slice, index) => ({
+        key: slice.key,
+        name: String(chartConfig[slice.key]?.label ?? slice.key),
+        usage: slice.bytes / (1024 * 1024 * 1024),
+        bytes: slice.bytes,
+        percentage: slice.percentage,
+        fill: chartConfig[slice.key]?.color || `hsl(var(--chart-${(index % 5) + 1}))`,
+      })),
+    [pieSlices, chartConfig],
+  )
 
-    const nodesWithUsage = nodeList
-      .map((node, index) => {
-        const usageInGb = chartData.reduce((sum, row) => sum + Number(row[node.name] || 0), 0)
-        const bytes = usageInGb * 1024 * 1024 * 1024
-        return {
-          name: node.name,
-          usage: usageInGb,
-          bytes,
-          fill: chartConfig[node.name]?.color || `hsl(var(--chart-${(index % 5) + 1}))`,
-        }
-      })
-      .filter(node => node.bytes > 0)
-
-    const totalBytes = nodesWithUsage.reduce((sum, node) => sum + node.bytes, 0)
-
-    return nodesWithUsage
-      .map(node => ({
-        ...node,
-        percentage: totalBytes > 0 ? (node.bytes * 100) / totalBytes : 0,
-      }))
-      .sort((a, b) => b.bytes - a.bytes)
-  }, [chartData, nodeList, chartConfig])
+  const legendSeries = useMemo(
+    () =>
+      seriesKeys.map((key, index) => ({
+        key,
+        name: String(chartConfig[key]?.label ?? key),
+        fill: chartConfig[key]?.color || `hsl(var(--chart-${(index % 5) + 1}))`,
+      })),
+    [seriesKeys, chartConfig],
+  )
 
   const pieChartConfig = useMemo<ChartConfig>(
     () =>
       pieData.reduce<ChartConfig>((config, point) => {
-        config[point.name] = { label: point.name, color: point.fill }
+        config[point.key] = { label: point.name, color: point.fill }
         return config
       }, {}),
     [pieData],
   )
+
+  const modalData = useMemo(() => selectedData && relabelDeletedNodesRow(selectedData, deletedNodesLabel), [selectedData, deletedNodesLabel])
 
   const piePaddingAngle = pieData.length > 1 ? 1 : 0
 
@@ -488,7 +426,7 @@ export function AllNodesStackedBarChart() {
       if (!clickedData) return
 
       const activeNodesCount = Object.keys(clickedData).filter(key => {
-        if (key.startsWith('_') || key === 'time' || key === '_period_start') return false
+        if (!isSeriesKey(key)) return false
         const usageValue = Number(clickedData[key] || 0)
         const uplinkValue = Number(clickedData[`_uplink_${key}`] || 0)
         const downlinkValue = Number(clickedData[`_downlink_${key}`] || 0)
@@ -589,7 +527,7 @@ export function AllNodesStackedBarChart() {
             </div>
           ) : error ? (
             <EmptyState type="error" className="max-h-[400px] min-h-[200px]" />
-          ) : nodeList.length === 0 ? (
+          ) : nodeList.length === 0 && seriesKeys.length === 0 ? (
             <EmptyState type="no-nodes" className="max-h-[400px] min-h-[200px]" />
           ) : perNodeBreakdownUnavailable ? (
             <EmptyState
@@ -606,10 +544,10 @@ export function AllNodesStackedBarChart() {
                   chartViewType === 'area' ? (
                     <AreaChart {...(useAccessibilityLayer ? { accessibilityLayer: true } : {})} data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }} onClick={handleChartPointClick}>
                       <defs>
-                        {nodeList.map((node, index) => {
-                          const color = chartConfig[node.name]?.color || `hsl(var(--chart-${(index % 5) + 1}))`
+                        {seriesKeys.map((seriesKey, index) => {
+                          const color = chartConfig[seriesKey]?.color || `hsl(var(--chart-${(index % 5) + 1}))`
                           return (
-                            <linearGradient key={node.id} id={`node-area-gradient-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <linearGradient key={seriesKey} id={`all-nodes-area-gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor={color} stopOpacity={0.45} />
                               <stop offset="100%" stopColor={color} stopOpacity={0.05} />
                             </linearGradient>
@@ -633,14 +571,14 @@ export function AllNodesStackedBarChart() {
                         tickMargin={2}
                       />
                       <ChartTooltip cursor={false} content={props => <CustomTooltip {...(props as TooltipProps<number, string>)} chartConfig={chartConfig} dir={dir} period={activePeriod} />} />
-                      {nodeList.map((node, index) => (
+                      {seriesKeys.map((seriesKey, index) => (
                         <Area
-                          key={node.id}
+                          key={seriesKey}
                           type={areaCurveType}
-                          dataKey={node.name}
+                          dataKey={seriesKey}
                           stackId="a"
-                          fill={`url(#node-area-gradient-${node.id})`}
-                          stroke={chartConfig[node.name]?.color || `hsl(var(--chart-${(index % 5) + 1}))`}
+                          fill={`url(#all-nodes-area-gradient-${index})`}
+                          stroke={chartConfig[seriesKey]?.color || `hsl(var(--chart-${(index % 5) + 1}))`}
                           strokeWidth={1.5}
                           dot={false}
                           activeDot={false}
@@ -670,19 +608,19 @@ export function AllNodesStackedBarChart() {
                         tickMargin={2}
                       />
                       <ChartTooltip cursor={false} content={props => <CustomTooltip {...(props as TooltipProps<number, string>)} chartConfig={chartConfig} dir={dir} period={activePeriod} />} />
-                      {nodeList.map((node, index) => (
+                      {seriesKeys.map((seriesKey, index) => (
                         <Bar
-                          key={node.id}
-                          dataKey={node.name}
+                          key={seriesKey}
+                          dataKey={seriesKey}
                           stackId="a"
-                          fill={chartConfig[node.name]?.color || `hsl(var(--chart-${(index % 5) + 1}))`}
+                          fill={chartConfig[seriesKey]?.color || `hsl(var(--chart-${(index % 5) + 1}))`}
                           radius={SQUARE_STACK_RADIUS}
                           cursor="pointer"
                           isAnimationActive={isAnimationActive}
                         >
                           {usePerBarRadius &&
                             chartData.map(row => (
-                              <Cell key={`${node.id}-${row._period_start}`} {...getCellRadiusProps(getStackedNodeRadius(row, node.name, nodeList))} />
+                              <Cell key={`${seriesKey}-${row._period_start}`} {...getCellRadiusProps(getStackedNodeRadius(row, seriesKey, seriesKeys))} />
                             ))}
                         </Bar>
                       ))}
@@ -697,7 +635,7 @@ export function AllNodesStackedBarChart() {
                       <ChartTooltip cursor={false} content={props => <NodePieTooltip {...(props as TooltipProps<number, string>)} />} />
                       <Pie data={pieData} dataKey="bytes" nameKey="name" innerRadius="45%" outerRadius="88%" paddingAngle={piePaddingAngle} strokeWidth={1.5}>
                         {pieData.map(point => (
-                          <Cell key={point.name} fill={point.fill} />
+                          <Cell key={point.key} fill={point.fill} />
                         ))}
                       </Pie>
                     </PieChart>
@@ -711,20 +649,19 @@ export function AllNodesStackedBarChart() {
               {chartData.length > 0 && (
                 <div className="overflow-x-auto pt-3">
                   <div className="flex min-w-max items-center justify-center gap-4">
-                    {(chartView === 'pie' ? pieData : nodeList).map(item => {
-                      const nodeName = typeof item === 'object' && 'name' in item ? item.name : ''
-                      const itemConfig = chartConfig[nodeName]
-                      const percentage = typeof item === 'object' && 'percentage' in item ? item.percentage : undefined
+                    {(chartView === 'pie' ? pieData : legendSeries).map(item => {
+                      const itemConfig = chartConfig[item.key]
+                      const percentage = 'percentage' in item ? item.percentage : undefined
                       return (
-                        <div dir="ltr" key={nodeName} className="[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3">
+                        <div dir="ltr" key={item.key} className="[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3">
                           <div
                             className="h-2 w-2 shrink-0 rounded-[2px]"
                             style={{
-                              backgroundColor: itemConfig?.color || (typeof item === 'object' && 'fill' in item ? item.fill : 'hsl(var(--chart-1))'),
+                              backgroundColor: itemConfig?.color || item.fill,
                             }}
                           />
                           <span className="text-xs whitespace-nowrap">
-                            {nodeName}
+                            {item.name}
                             {typeof percentage === 'number' ? ` (${percentage.toFixed(1)}%)` : ''}
                           </span>
                         </div>
@@ -741,8 +678,8 @@ export function AllNodesStackedBarChart() {
       <NodeStatsModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        data={selectedData}
-        chartConfig={chartConfig}
+        data={modalData}
+        chartConfig={modalChartConfig}
         period={activePeriod}
         allChartData={chartData}
         currentIndex={currentDataIndex}

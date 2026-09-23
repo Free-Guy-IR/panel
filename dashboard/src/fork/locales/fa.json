@@ -301,6 +301,7 @@
   "statistics.inboundDataHint": "تاریخچه اینباندها از لحظه فعال شدن شروع به جمع شدن می‌کند.",
   "statistics.perNodeBreakdownUnavailable": "تفکیک بر اساس نود در دسترس نیست",
   "statistics.perNodeBreakdownUnavailableDescription": "API مصرف برای این بازه فقط یک مجموع ترکیبی برگرداند، بنابراین این ترافیک قابل انتساب به نودهای جداگانه نیست. مجموع ترکیبی اندازه‌گیری‌شده است.",
+  "statistics.deletedNodes": "نودهای حذف‌شده",
   "statistics.accountedUsage": "مصرف محاسبه‌شده (با ضریب اعمال‌شده)",
   "settings.connectionLimit.title": "محدودیت اتصال",
   "settings.connectionLimit.loadError": "بارگذاری تنظیمات محدودیت اتصال ناموفق بود",
