@@ -13,10 +13,10 @@ from app.db.models import Node, NodeInboundUsage
 from app.fork.jobs.stat_batches import (
     StaleStatBatches,
     StatBatch,
+    acks_for_request,
     as_ack_only,
     batch_from_response,
     held,
-    load_acks,
     remember_epoch,
     request_keywords,
     settle_batches,
@@ -104,12 +104,8 @@ async def _load_inbound_acks(nodes) -> dict[int, StatBatch]:
     capable = [node_id for node_id, node in nodes if supports_two_phase(node)]
     if not capable:
         return {}
-    try:
-        async with GetDB() as db:
-            return await load_acks(db, StatType.Inbounds, capable)
-    except Exception:
-        logger.exception("Could not read the last recorded inbound stats batches; asking without acknowledgements")
-        return {}
+    async with GetDB() as db:
+        return await acks_for_request(db, StatType.Inbounds, capable)
 
 
 async def _write_inbound_rows(rows: list[dict], created_at, stat_batches: dict[int, StatBatch]) -> None:

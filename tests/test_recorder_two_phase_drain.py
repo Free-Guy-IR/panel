@@ -38,6 +38,8 @@ class TwoPhaseNode:
         self.speaks_two_phase = speaks_two_phase
         self.seq = 0
         self.pending: dict = {}
+        self.late: dict = {}
+        self.orphaned: list[tuple] = []
         self.requests: list[tuple] = []
         self.lose_next_response = False
         self.lose_next_request = False
@@ -51,12 +53,19 @@ class TwoPhaseNode:
     def restart(self, keep_held: bool = False) -> None:
         self.epoch = uuid4().hex
         self.seq = 0
+        self.late = {}
         if not keep_held:
             self.pending = {}
 
-    def _drain(self) -> dict:
+    def answer_late(self, stat_type, key, value: int) -> None:
+        carried = self.late.setdefault(stat_type, {})
+        carried[key] = carried.get(key, 0) + value
+
+    def _drain(self, stat_type=None) -> dict:
         drained = {key: value for key, value in self.counters.items() if value}
         self.counters = {key: 0 for key in self.counters}
+        for key, value in self.late.pop(stat_type, {}).items():
+            drained[key] = drained.get(key, 0) + value
         return drained
 
     def _stats(self, stat_type, values: dict) -> list:
@@ -77,19 +86,25 @@ class TwoPhaseNode:
         self.requests.append((StatType.Name(stat_type), hold, ack_epoch, ack_batch_id))
         if self.speaks_two_phase and hold and reset and not name:
             held = self.pending.get(stat_type)
+            if held is not None and ack_epoch == "":
+                self.orphaned.append((held, self.late.pop(stat_type, {})))
+                self.pending.pop(stat_type)
+                held = None
             if held is not None and ack_epoch == held[0] and ack_batch_id >= held[1]:
                 held = None
                 self.pending.pop(stat_type)
             if held is None:
-                drained = self._drain()
+                drained = self._drain(stat_type)
                 if drained:
                     self.seq += 1
                     held = (self.epoch, self.seq, drained)
                     self.pending[stat_type] = held
             epoch, batch_id, values = held or (self.epoch, 0, {})
             response = SimpleNamespace(stats=self._stats(stat_type, values), batch_epoch=epoch, batch_id=batch_id)
+        elif reset and not name:
+            response = SimpleNamespace(stats=self._stats(stat_type, self._drain(stat_type)))
         else:
-            response = SimpleNamespace(stats=self._stats(stat_type, self._drain() if reset else dict(self.counters)))
+            response = SimpleNamespace(stats=self._stats(stat_type, dict(self.counters)))
         if self.delay:
             await asyncio.sleep(self.delay)
         if self.lose_next_response:
@@ -160,7 +175,8 @@ async def test_an_old_node_that_loses_a_drained_response_behaves_exactly_as_befo
     billed, charted = await usage_snapshot(recorder_db, user_ids)
     assert billed == {uid: 700}
     assert charted == billed
-    assert await _acks(recorder_db) == []
+    assert await _acks(recorder_db) == [(node_id, StatType.UsersStat, stat_batches.claim_epoch(node_id), 0)]
+    assert [request[2] for request in node.requests] == ["", stat_batches.claim_epoch(node_id)]
     assert all(request[1] for request in node.requests)
 
 
@@ -497,3 +513,211 @@ async def test_a_restored_batch_that_was_already_billed_before_the_restart_is_no
     assert billed == {uid: 3_344}
     assert charted == billed
     assert first_epoch not in {row[2] for row in await _acks(recorder_db)}
+
+
+class OldBridgeView:
+    def __init__(self, node: TwoPhaseNode):
+        self.node = node
+
+    async def get_extra(self) -> dict:
+        return await self.node.get_extra()
+
+    async def get_stats(self, stat_type, reset=True, name="", timeout=None):
+        return await self.node.get_stats(stat_type, reset=reset, name=name, timeout=timeout)
+
+
+def _empty_ack_requests(node: TwoPhaseNode) -> list[int]:
+    return [index for index, request in enumerate(node.requests) if request[1] and request[2] == ""]
+
+
+@pytest.mark.asyncio
+async def test_a_first_batch_whose_billing_failed_is_billed_later_and_never_orphaned(
+    monkeypatch, recorder_db, statement_faults
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid = user_ids[0]
+    node = TwoPhaseNode({uid: 1_500})
+    _install(monkeypatch, [(node_ids[0], node)])
+    statement_faults(is_billing_write, OperationalError("UPDATE users", {}, _ConnectionGone()), {1})
+
+    with pytest.raises(OperationalError):
+        await record_usages._record_user_usages_impl()
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert node.orphaned == []
+    assert _empty_ack_requests(node) == [0]
+    assert billed == {uid: 1_500}
+    assert charted == billed
+
+
+@pytest.mark.asyncio
+async def test_a_panel_restarted_before_its_first_billed_batch_still_acknowledges_the_seen_epoch(
+    monkeypatch, recorder_db
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid = user_ids[0]
+    node = TwoPhaseNode({uid: 0})
+    _install(monkeypatch, [(node_ids[0], node)])
+
+    await record_usages._record_user_usages_impl()
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+    node.add(uid, 2_600)
+    node.lose_next_response = True
+    await record_usages._record_user_usages_impl()
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert node.orphaned == []
+    assert _empty_ack_requests(node) == [0]
+    assert billed == {uid: 2_600}
+    assert charted == billed
+
+
+@pytest.mark.asyncio
+async def test_after_a_panel_restart_or_a_same_id_re_add_the_ack_comes_from_the_database(monkeypatch, recorder_db):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid, node_id = user_ids[0], node_ids[0]
+    node = TwoPhaseNode({uid: 700})
+    _install(monkeypatch, [(node_id, node)])
+    await record_usages._record_user_usages_impl()
+
+    node.add(uid, 30)
+    node.lose_next_response = True
+    await record_usages._record_user_usages_impl()
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+    monkeypatch.setattr(stat_batches, "_two_phase_by_class", {})
+    _install(monkeypatch, [(node_id, node)])
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert node.orphaned == []
+    assert _empty_ack_requests(node) == [0]
+    assert [request[2:] for request in node.requests[1:]] == [(node.epoch, 1), (node.epoch, 1)]
+    assert billed == {uid: 730}
+    assert charted == billed
+
+
+@pytest.mark.asyncio
+async def test_no_node_is_read_while_the_acknowledgements_cannot_be_loaded(monkeypatch, recorder_db):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid = user_ids[0]
+    node = TwoPhaseNode({uid: 500})
+    _install(monkeypatch, [(node_ids[0], node)])
+    await record_usages._record_user_usages_impl()
+    node.add(uid, 60)
+    node.lose_next_response = True
+    await record_usages._record_user_usages_impl()
+    requests_before = len(node.requests)
+    real_load = stat_batches.load_acks
+
+    async def unreadable(*args, **kwargs):
+        raise OperationalError("SELECT node_stat_acks", {}, _ConnectionGone())
+
+    monkeypatch.setattr(stat_batches, "load_acks", unreadable)
+    with pytest.raises(OperationalError):
+        await record_usages._record_user_usages_impl()
+    assert len(node.requests) == requests_before
+
+    monkeypatch.setattr(stat_batches, "load_acks", real_load)
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert node.orphaned == []
+    assert billed == {uid: 560}
+    assert charted == billed
+
+
+@pytest.mark.asyncio
+async def test_a_late_answer_carried_into_a_later_batch_is_billed_exactly_once(monkeypatch, recorder_db):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid = user_ids[0]
+    node = TwoPhaseNode({uid: 1_000})
+    _install(monkeypatch, [(node_ids[0], node)])
+
+    await record_usages._record_user_usages_impl()
+    node.answer_late(StatType.UsersStat, uid, 77)
+    await record_usages._record_user_usages_impl()
+    node.add(uid, 3)
+    await record_usages._record_user_usages_impl()
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {uid: 1_080}
+    assert charted == billed
+    assert node.orphaned == []
+
+
+@pytest.mark.asyncio
+async def test_a_legacy_read_leaves_a_held_batch_for_the_next_two_phase_read(monkeypatch, recorder_db):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid, node_id = user_ids[0], node_ids[0]
+    node = TwoPhaseNode({uid: 100})
+    _install(monkeypatch, [(node_id, node)])
+    await record_usages._record_user_usages_impl()
+
+    node.add(uid, 20)
+    node.lose_next_response = True
+    await record_usages._record_user_usages_impl()
+    held_before = dict(node.pending)
+
+    node.add(uid, 5)
+    _install(monkeypatch, [(node_id, OldBridgeView(node))])
+    await record_usages._record_user_usages_impl()
+    assert node.pending == held_before
+
+    _install(monkeypatch, [(node_id, node)])
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert node.orphaned == []
+    assert billed == {uid: 125}
+    assert charted == billed
+
+
+@pytest.mark.asyncio
+async def test_an_empty_ack_epoch_is_sent_once_per_node_and_type_whatever_happens_afterwards(
+    monkeypatch, recorder_db, statement_faults
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid, node_id = user_ids[0], node_ids[0]
+    async with recorder_db() as session:
+        session.add(System(uplink=0, downlink=0))
+        await session.commit()
+    node = TwoPhaseNode({uid: 100})
+    _install(monkeypatch, [(node_id, node)])
+    monkeypatch.setattr(record_usages, "after_record_node_usages", AsyncMock())
+    monkeypatch.setattr(inbound_usage, "GetDB", record_usages.GetDB)
+    total = 100
+
+    node.lose_next_response = True
+    await record_usages._record_user_usages_impl()
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+    node.restart(keep_held=True)
+    await record_usages._record_user_usages_impl()
+    node.add(uid, 10)
+    total += 10
+    faults = statement_faults(is_billing_write, OperationalError("UPDATE users", {}, _ConnectionGone()), {1})
+    with pytest.raises(OperationalError):
+        await record_usages._record_user_usages_impl()
+    assert faults.matched == 1
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+    monkeypatch.setattr(stat_batches, "_two_phase_by_class", {})
+    _install(monkeypatch, [(node_id, node)])
+    await record_usages._record_user_usages_impl()
+    node.restart()
+    node.add(uid, 1)
+    total += 1
+    for _ in range(2):
+        await record_usages._record_user_usages_impl()
+    await record_usages._record_node_usages_impl()
+    await inbound_usage.record_inbound_usages([(node_id, node)], record_usages._get_time_bucket())
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {uid: total}
+    assert charted == billed
+    assert node.orphaned == []
+    empty = [node.requests[index][0] for index in _empty_ack_requests(node)]
+    assert sorted(empty) == ["Inbounds", "Outbounds", "UsersStat"]
