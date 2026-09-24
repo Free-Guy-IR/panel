@@ -1,5 +1,5 @@
 import pytest
-from PasarGuardNodeBridge import controller as bridge_controller, storage as bridge_storage
+from PasarGuardNodeBridge import controller as bridge_controller, grpclib as bridge_grpclib, storage as bridge_storage
 
 from app.fork import node_bridge_guard
 
@@ -19,6 +19,10 @@ def test_the_installed_bridge_carries_the_reliable_user_sync():
         (bridge_storage.InMemoryUserSyncStore, "retire_captured"),
         (bridge_storage.InMemoryUserSyncStore, "fence_state"),
         (bridge_storage.InMemoryUserSyncStore, "has_pending"),
+        (bridge_controller.Controller, "_deliver_isolating_rejects"),
+        (bridge_controller.Controller, "quarantined_users"),
+        (bridge_grpclib.Node, "_probe_capabilities"),
+        (bridge_grpclib, "RetirableChannel"),
     ],
 )
 def test_a_bridge_without_the_reliable_user_sync_refuses_to_start(monkeypatch, owner, name):
