@@ -1732,11 +1732,14 @@ async def get_user_count_metric_stats(
     metric: UserCountMetric = UserCountMetric.online,
     node_id: int | None = None,
     group_by_node: bool = False,
+    allowed_group_ids: list[int] | None = None,
 ) -> UserCountMetricStatsList:
     """Retrieves one distinct user count metric from node_user_usages."""
     validate_user_count_metric_scope(metric, node_id=node_id, group_by_node=group_by_node)
 
     query_parts = _build_user_count_query_parts(db, admins, start, end, period, node_id)
+    if allowed_group_ids is not None:
+        query_parts["conditions"].append(user_in_allowed_groups(NodeUserUsage.user_id, allowed_group_ids))
     count_expr = _build_user_count_metric_expression(metric).label("count")
     total_stmt = select(count_expr).select_from(query_parts["from_clause"]).where(and_(*query_parts["conditions"]))
 

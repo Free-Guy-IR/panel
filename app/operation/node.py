@@ -880,6 +880,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         db: AsyncSession,
         metric: UserCountMetric,
         query: NodeUsageQuery,
+        admin: AdminDetails | None = None,
     ) -> UserCountMetricStatsList:
         start, end = await self.validate_dates(query.start, query.end, True)
         try:
@@ -887,9 +888,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
 
+        admins, allowed_group_ids = self._user_count_scope(admin) if admin is not None else (None, None)
         return await get_user_count_metric_stats(
             db,
-            admins=None,
+            admins=admins,
+            allowed_group_ids=allowed_group_ids,
             start=start,
             end=end,
             period=query.period,

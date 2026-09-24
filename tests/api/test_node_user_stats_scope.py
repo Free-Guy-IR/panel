@@ -52,8 +52,7 @@ class _NodeWithOnlineUser:
         return SimpleNamespace(ips={"203.0.113.9": 1})
 
 
-@pytest.fixture
-def world(access_token, monkeypatch):
+def build_world(access_token, monkeypatch):
     node = _NodeWithOnlineUser()
     monkeypatch.setattr(node_operation.node_manager, "get_node", AsyncMock(return_value=node))
     monkeypatch.setattr(node_operation.node_manager, "get_healthy_nodes", AsyncMock(return_value=[(77, node)]))
@@ -81,6 +80,11 @@ def world(access_token, monkeypatch):
     delete_group(access_token, allowed["id"])
     delete_group(access_token, forbidden["id"])
     delete_core(access_token, core["id"])
+
+
+@pytest.fixture
+def world(access_token, monkeypatch):
+    yield from build_world(access_token, monkeypatch)
 
 
 def _online_routes(user_id: int) -> list[str]:

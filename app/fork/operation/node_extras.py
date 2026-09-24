@@ -16,7 +16,7 @@ from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
 from app.models.stats import InboundUsageStatsList
 from app.node import node_manager
-from app.operation.permissions import get_allowed_group_ids
+from app.operation.permissions import PermissionScope, _get_resource_action, _resolve_scope, get_allowed_group_ids
 from app.utils.logger import get_logger
 
 logger = get_logger("node-operation")
@@ -339,6 +339,13 @@ class NodeExtraCoresMixin:
         )
         if visible.first() is None:
             await self.raise_error(message="User not found", code=404)
+
+    @staticmethod
+    def _user_count_scope(admin: AdminDetails) -> tuple[list[str] | None, list[int] | None]:
+        if admin.is_owner:
+            return None, None
+        own = _resolve_scope(_get_resource_action(admin, "users", "read")) is PermissionScope.OWN
+        return ([admin.username] if own else None), get_allowed_group_ids(admin)
 
     async def restart_nodes_by_ids(self, db: AsyncSession, node_ids: list[int], admin: AdminDetails) -> None:
         if not node_ids:
