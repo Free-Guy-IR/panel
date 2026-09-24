@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import ClassVar
 
 from fastapi import HTTPException
@@ -9,6 +9,7 @@ from PasarGuardNodeBridge.storage import LifecycleStatus
 from sqlalchemy.exc import IntegrityError
 
 from app import notification
+from app.core.manager import core_manager
 from app.db import AsyncSession, GetDB
 from app.db.crud.node import (
     bulk_reset_node_usage,
@@ -39,6 +40,17 @@ from app.fork.operation.node_extras import (
     _known_node_version,
     _l2tp_unsupported_message,
     _node_lacks_l2tp,
+)
+from app.fork.operation.node_snapshots import (
+    NO_ATTACH_PUSH,
+    OWN_FENCE,
+    CoreUsersSnapshots,
+    check_fence,
+    clear_local_user_queue,
+    drain_node_usage,
+    full_sync_fence,
+    node_users_loader,
+    resolve_users,
 )
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
@@ -88,6 +100,8 @@ MAX_MESSAGE_LENGTH = 128
 CONNECT_CONCURRENCY = 10
 ATTACH_SYNC_ATTEMPTS = 3
 ATTACH_SYNC_BACKOFF = 1.0
+FENCE_WAIT_SECONDS = 60.0
+type CoreUsers = list | Callable[[], Awaitable[list]]
 
 logger = get_logger("node-operation")
 
@@ -234,18 +248,33 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             asyncio.create_task(notification.error_node(node_notif))
 
     @staticmethod
+    async def _register_if_wanted(db_node: Node) -> bool:
+        async with _connect_lock(db_node.id):
+            async with GetDB() as fresh:
+                current = await get_node_by_id(fresh, db_node.id, load_usage_logs=False)
+            if current is None or current.status in (NodeStatus.disabled, NodeStatus.limited):
+                logger.info(f'Not connecting "{db_node.name}" node: it was disabled, limited or removed meanwhile')
+                return False
+            await node_manager.update_node(current)
+            return True
+
+    @staticmethod
     async def _get_core_users_map(
-        db: AsyncSession, core_ids: set[int]
-    ) -> tuple[dict[int, object | None], dict[int, list]]:
+        db: AsyncSession, core_ids: set[int], *, lazy: bool = False
+    ) -> tuple[dict[int, object | None], dict[int, CoreUsers]]:
         if not core_ids:
             return {}, {}
-
-        from app.core.manager import core_manager
 
         resolved_cores = await core_manager.get_cores(core_ids | {1})
         default_core = resolved_cores.get(1)
         cores_by_id: dict[int, object | None] = {}
-        users_by_core: dict[int, list] = {}
+        users_by_core: dict[int, CoreUsers] = {}
+
+        async def read_in_fresh_session(inbound_tags, allowed_protocols):
+            async with AsyncSession(bind=db.bind, expire_on_commit=False) as session:
+                return await core_users(db=session, inbound_tags=inbound_tags, allowed_protocols=allowed_protocols)
+
+        snapshots = CoreUsersSnapshots(read_in_fresh_session)
 
         for core_id in core_ids:
             core = resolved_cores.get(core_id) or default_core
@@ -254,13 +283,20 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 users_by_core[core_id] = []
                 continue
 
-            users_by_core[core_id] = await core_users(
-                db=db,
-                inbound_tags=core.inbounds,
-                allowed_protocols=core.protocols,
-            )
+            if lazy:
+                users_by_core[core_id] = snapshots.loader((core_id,), [core])
+            else:
+                users_by_core[core_id] = await core_users(
+                    db=db, inbound_tags=core.inbounds, allowed_protocols=core.protocols
+                )
 
         return cores_by_id, users_by_core
+
+    @staticmethod
+    async def _resume_shared_sync(pg_node: PasarGuardNode):
+        if needs_shared_bridge_memory():
+            pg_node._work_available.set()
+            await pg_node._ensure_sync_worker_running()
 
     @staticmethod
     async def _attach_if_running(pg_node: PasarGuardNode, node_name: str):
@@ -279,6 +315,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 return None
 
             await pg_node.connect(info.node_version, info.core_version)
+            # Shared pending work survives a panel restart. Attaching must
+            # wake the lazy bridge worker even without a fresh user update.
+            await NodeOperation._resume_shared_sync(pg_node)
             if state is not None:
                 await pg_node.update_observed_lifecycle(LifecycleStatus.HEALTHY, expected_epoch=state.epoch)
             logger.debug(
@@ -290,10 +329,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             return None
 
     @staticmethod
-    async def _push_users_after_attach(pg_node: PasarGuardNode, db_node: Node, users: list) -> bool:
+    async def _push_users_after_attach(pg_node: PasarGuardNode, db_node: Node, users: CoreUsers, held=None) -> bool:
         delay = ATTACH_SYNC_BACKOFF
         for attempt in range(ATTACH_SYNC_ATTEMPTS):
             try:
+                users = await resolve_users(users)
+                check_fence(held)
                 await pg_node.sync_users(users, flush_pending=False)
                 NodeOperation._pending_user_sync.discard(db_node.id)
                 return True
@@ -314,7 +355,35 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
     @staticmethod
     async def _start_or_attach_node(
-        pg_node: PasarGuardNode, db_node: Node, core, users: list, backend_type, *, force_start: bool = False
+        pg_node: PasarGuardNode,
+        db_node: Node,
+        core,
+        users: CoreUsers,
+        backend_type,
+        *,
+        force_start: bool = False,
+        attach_users: CoreUsers | None = None,
+        held=OWN_FENCE,
+    ):
+        if held is not OWN_FENCE:
+            return await NodeOperation._start_or_attach_fenced(
+                pg_node, db_node, core, users, backend_type, force_start, attach_users, held
+            )
+        async with full_sync_fence(pg_node) as own:
+            return await NodeOperation._start_or_attach_fenced(
+                pg_node, db_node, core, users, backend_type, force_start, attach_users, own
+            )
+
+    @staticmethod
+    async def _start_or_attach_fenced(
+        pg_node: PasarGuardNode,
+        db_node: Node,
+        core,
+        users: CoreUsers,
+        backend_type,
+        force_start: bool,
+        attach_users: CoreUsers | None,
+        held,
     ):
         stop_first = force_start
         if not force_start:
@@ -324,7 +393,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 or state.desired is LifecycleStatus.HEALTHY
             ):
                 attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
-                if attached is not None and await NodeOperation._push_users_after_attach(pg_node, db_node, users):
+                if attached is not None and (
+                    attach_users is NO_ATTACH_PUSH
+                    or await NodeOperation._push_users_after_attach(
+                        pg_node, db_node, users if attach_users is None else attach_users, held
+                    )
+                ):
                     return attached
                 if state.observed is LifecycleStatus.STARTING:
                     # Another worker is already starting this node right now - don't race
@@ -335,14 +409,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     stop_first = True
                     logger.warning(f'Restarting "{db_node.name}" because its user list could not be refreshed')
 
-        start_kwargs = {
-            "config": core.to_str(),
-            "backend_type": backend_type,
-            "users": users,
-            "keep_alive": db_node.keep_alive,
-        }
-        if core.type == CoreType.xray:
-            start_kwargs["exclude_inbounds"] = core.exclude_inbound_tags
+        users = await resolve_users(users)
+        check_fence(held)
+        await drain_node_usage(pg_node, db_node.id)
 
         if stop_first:
             try:
@@ -356,13 +425,29 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     raise
                 logger.debug(f'Stop before force start of "{db_node.name}" skipped: {exc}')
 
+        check_fence(held)
+        start_kwargs = {
+            "config": core.to_str(),
+            "backend_type": backend_type,
+            "users": users,
+            "keep_alive": db_node.keep_alive,
+        }
+        if core.type == CoreType.xray:
+            start_kwargs["exclude_inbounds"] = core.exclude_inbound_tags
+
         log = logger.info if force_start else logger.debug
         log(f'Starting "{db_node.name}" node')
         return await pg_node.start(**start_kwargs)
 
     @staticmethod
     async def connect_node(
-        db_node: Node, core, users: list, extra_cores: list[tuple] | None = None, *, force_start: bool = False
+        db_node: Node,
+        core,
+        users: CoreUsers,
+        extra_cores: list[tuple] | None = None,
+        *,
+        force_start: bool = False,
+        push_on_attach: bool = True,
     ) -> dict | None:
         """
         Connect to a node and return status result (does NOT update database).
@@ -370,7 +455,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         Args:
             db_node (Node): Node object from database.
             core: Pre-fetched core config for this node.
-            users (list): Pre-fetched core users list.
+            users: Core users or a deferred snapshot loader, used only for Start.
             extra_cores: Additional cores to run alongside the primary one.
             force_start: Push a new Start RPC (and re-add running extra backends) even when
                 the node looks healthy, so a changed config actually reaches the daemon.
@@ -380,11 +465,18 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             None: if connection should be skipped
         """
         async with _connect_lock(db_node.id):
-            return await NodeOperation._connect_node_inner(db_node, core, users, extra_cores, force_start)
+            return await NodeOperation._connect_node_inner(
+                db_node, core, users, extra_cores, force_start, push_on_attach
+            )
 
     @staticmethod
     async def _connect_node_inner(
-        db_node: Node, core, users: list, extra_cores: list[tuple] | None, force_start: bool
+        db_node: Node,
+        core,
+        users: CoreUsers,
+        extra_cores: list[tuple] | None,
+        force_start: bool,
+        push_on_attach: bool = True,
     ) -> dict | None:
         pg_node: PasarGuardNode | None = await node_manager.get_node(db_node.id)
         if pg_node is None:
@@ -455,8 +547,42 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         NodeOperation._in_flight_connects.add(db_node.id)
 
         try:
+            async with full_sync_fence(pg_node, wait=FENCE_WAIT_SECONDS) as held:
+                return await NodeOperation._connect_fenced(
+                    pg_node, db_node, core, users, extra_cores, type, force_start, old_status, held, push_on_attach
+                )
+        except NodeAPIError as e:
+            if e.code != 409:
+                raise
+            logger.error(f'Could not connect "{db_node.name}" node: {e.detail}')
+            return {
+                "node_id": db_node.id,
+                "status": NodeStatus.error,
+                "message": f"Not started: {e.detail}"[:1024],
+                "xray_version": "",
+                "node_version": "",
+                "old_status": old_status,
+            }
+        finally:
+            NodeOperation._in_flight_connects.discard(db_node.id)
+
+    @staticmethod
+    async def _connect_fenced(
+        pg_node: PasarGuardNode,
+        db_node: Node,
+        core,
+        users: CoreUsers,
+        extra_cores: list[tuple] | None,
+        type,
+        force_start: bool,
+        old_status: NodeStatus,
+        held,
+        push_on_attach: bool = True,
+    ) -> dict | None:
+        attach_users = node_users_loader(users, extra_cores) if push_on_attach else NO_ATTACH_PUSH
+        try:
             info = await NodeOperation._start_or_attach_node(
-                pg_node, db_node, core, users, type, force_start=force_start
+                pg_node, db_node, core, users, type, force_start=force_start, attach_users=attach_users, held=held
             )
             if info is None:
                 return None
@@ -469,7 +595,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 for p in (
                     await NodeOperation._remove_surplus_backends(pg_node, db_node, extra_cores, core.type),
                     await NodeOperation._add_extra_cores(
-                        pg_node, db_node, extra_cores, restart_running=force_start
+                        pg_node, db_node, extra_cores, restart_running=force_start, held=held
                     ),
                 )
                 if p
@@ -500,7 +626,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                                     pg_node, db_node, extra_cores, core.type
                                 ),
                                 await NodeOperation._add_extra_cores(
-                                    pg_node, db_node, extra_cores, restart_running=force_start
+                                    pg_node, db_node, extra_cores, restart_running=force_start, held=held
                                 ),
                             )
                             if p
@@ -526,12 +652,28 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 # it before reporting an error so a late success is attached instead of
                 # being torn down by the next health-check reconnect.
                 attached = await NodeOperation._attach_if_running(pg_node, db_node.name)
-                if attached is not None:
-                    logger.debug(f'Attached to "{db_node.name}" after its Start request timed out')
+                if attached is not None and (
+                    attach_users is NO_ATTACH_PUSH
+                    or await NodeOperation._push_users_after_attach(pg_node, db_node, attach_users, held)
+                ):
+                    logger.warning(
+                        f'Attached to "{db_node.name}" after its Start request timed out and pushed the current '
+                        "user list to the running core"
+                    )
+                    problems = [
+                        await NodeOperation._remove_surplus_backends(pg_node, db_node, extra_cores, core.type),
+                        await NodeOperation._add_extra_cores(pg_node, db_node, extra_cores, held=held),
+                    ]
+                    if force_start:
+                        problems.insert(
+                            0,
+                            "the restart timed out and the panel attached to the core that was already running, "
+                            "so its configuration may predate this restart",
+                        )
                     return {
                         "node_id": db_node.id,
                         "status": NodeStatus.connected,
-                        "message": "",
+                        "message": "; ".join(p for p in problems if p)[:1024],
                         "xray_version": attached.core_version,
                         "node_version": attached.node_version,
                         "old_status": old_status,
@@ -551,8 +693,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 "node_version": "",
                 "old_status": old_status,
             }
-        finally:
-            NodeOperation._in_flight_connects.discard(db_node.id)
 
     async def _connect_single_node_background(self, node_id: int, *, force_start: bool = False) -> None:
         try:
@@ -751,10 +891,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
 
+        admins, allowed_group_ids = self._user_count_scope(admin) if admin is not None else (None, None)
         async with usage_aggregation_guard(("nodes_user_count", admin.id if admin else None)):
             return await get_user_count_metric_stats(
                 db,
-                admins=None,
+                admins=admins,
+                allowed_group_ids=allowed_group_ids,
                 start=start,
                 end=end,
                 period=query.period,
@@ -792,13 +934,20 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             logger.error(f"Error getting system stats for node {node_id}: {e}")
             return None
 
-    async def get_user_online_stats_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> dict[int, int]:
+    async def get_user_online_stats_by_node(
+        self, db: AsyncSession, node_id: int, user_id: int, admin: AdminDetails
+    ) -> dict[int, int]:
+        await self._validate_stats_user(db, user_id, admin)
         return await self._get_user_online_stats_impl(db, node_id, user_id)
 
-    async def get_user_ip_list_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
+    async def get_user_ip_list_by_node(
+        self, db: AsyncSession, node_id: int, user_id: int, admin: AdminDetails
+    ) -> UserIPList:
+        await self._validate_stats_user(db, user_id, admin)
         return await self._get_user_ip_list_impl(db, node_id, user_id)
 
-    async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int) -> UserIPListAll:
+    async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserIPListAll:
+        await self._validate_stats_user(db, user_id, admin)
         return await self._get_user_ip_list_all_impl(db, user_id)
 
     async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> dict[str, int] | None:
@@ -856,6 +1005,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     async def _remove_node_local(self, node_id: int) -> None:
         await node_manager.remove_node(node_id)
         await clear_bridge_memory_for_node(node_id)
+        await clear_local_user_queue(node_id)
 
     async def _remove_node_sync(self, node_id: int) -> None:
         await self._remove_node_local(node_id)
@@ -864,12 +1014,14 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     async def _remove_node_remote(self, node_id: int) -> None:
         await node_nats_client.publish("remove_node", {"node_id": node_id})
 
-    async def _connect_nodes_bulk_local(self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False) -> None:
+    async def _connect_nodes_bulk_local(
+        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False
+    ) -> None:
         if not nodes:
             return
 
         core_ids = {core_id for node in nodes for core_id in self._node_core_ids(node)}
-        cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids)
+        cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids, lazy=True)
         sem = asyncio.Semaphore(CONNECT_CONCURRENCY)
 
         async def connect_single(node: Node) -> dict | None:
@@ -878,7 +1030,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
             async with sem:
                 try:
-                    await node_manager.update_node(node)
+                    if not await NodeOperation._register_if_wanted(node):
+                        return
                 except NodeAPIError as e:
                     return {
                         "node_id": node.id,
@@ -946,20 +1099,22 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             if node is not None and node.status not in (NodeStatus.disabled, NodeStatus.limited):
                 await publish_node_sync("connect", node.id)
 
-    async def _connect_nodes_bulk_remote(self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False) -> None:
+    async def _connect_nodes_bulk_remote(
+        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False
+    ) -> None:
         if not nodes:
             return
         await node_nats_client.publish(
             "connect_nodes_bulk", {"node_ids": [node.id for node in nodes], "force_start": force_start}
         )
 
-    async def _connect_single_node_local(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
+    async def _connect_single_node_local(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> bool:
         db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
         if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
-            return
+            return False
 
         core_id = db_node.core_config_id or 1
-        cores_by_id, users_by_core = await self._get_core_users_map(db, set(self._node_core_ids(db_node)))
+        cores_by_id, users_by_core = await self._get_core_users_map(db, set(self._node_core_ids(db_node)), lazy=True)
         core = cores_by_id.get(core_id)
         users = users_by_core.get(core_id, [])
         extra_cores = self._extra_cores_for(db_node, cores_by_id, users_by_core)
@@ -967,7 +1122,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         # Update node manager
         old_status = db_node.status
         try:
-            await node_manager.update_node(db_node)
+            if not await NodeOperation._register_if_wanted(db_node):
+                return False
         except NodeAPIError as e:
             # Update status to error using simple CRUD
             await update_node_status(
@@ -984,13 +1140,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     message=e.detail,
                 )
                 asyncio.create_task(notification.error_node(node_notif))
-            return
+            return False
 
         # Connect the node
         result = await NodeOperation.connect_node(db_node, core, users, extra_cores, force_start=force_start)
 
         if not result:
-            return
+            return False
 
         # Update status using simple CRUD (NOT bulk!)
         await update_node_status(
@@ -1026,15 +1182,18 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             )
             asyncio.create_task(notification.error_node(node_notif))
 
+        return True
+
     async def _connect_single_node_sync(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
-        await self._connect_single_node_local(db, node_id, force_start=force_start)
-        await publish_node_sync("connect", node_id)
+        if await self._connect_single_node_local(db, node_id, force_start=force_start):
+            await publish_node_sync("connect", node_id)
 
     async def _connect_single_node_remote(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> None:
         await node_nats_client.publish("connect_node", {"node_id": node_id, "force_start": force_start})
 
     async def _disconnect_single_node_local(self, node_id: int) -> None:
-        await node_manager.remove_node(node_id)
+        async with _connect_lock(node_id):
+            await node_manager.remove_node(node_id)
 
     async def _disconnect_single_node_sync(self, node_id: int) -> None:
         await self._disconnect_single_node_local(node_id)
@@ -1253,11 +1412,18 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             await self.raise_error(message="Node is not connected", code=409)
 
         try:
-            users = await self._node_union_users(db, db_node)
+            cores_by_id, users_by_core = await self._get_core_users_map(
+                db, set(self._node_core_ids(db_node)), lazy=True
+            )
+            users = node_users_loader(
+                users_by_core.get(db_node.core_config_id or 1, []),
+                self._extra_cores_for(db_node, cores_by_id, users_by_core),
+            )
             if await node_manager.sync_full(node_id, users, flush_pending=flush_users) is None:
                 await self.raise_error(message="Node is not connected", code=409)
         except NodeAPIError as e:
-            await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
+            if e.code != 409:
+                await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
             await self.raise_error(message=e.detail, code=e.code)
 
         return NodeResponse.model_validate(db_node)

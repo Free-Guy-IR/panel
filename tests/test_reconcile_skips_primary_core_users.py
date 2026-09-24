@@ -3,20 +3,25 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.fork.operation import node_extras as node_extras_module
 from app.fork.operation.node_extras import NodeExtraCoresMixin
+from app.models.core import CoreType
 
 
 class _Reconciler(NodeExtraCoresMixin):
     pass
 
 
+REGISTERED = SimpleNamespace()
+
+
 @pytest.fixture
 def requested_core_ids(monkeypatch):
     seen: list[set[int]] = []
 
-    async def _map(db, core_ids):
+    async def _map(db, core_ids, lazy=False):
         seen.append(set(core_ids))
-        return {core_id: SimpleNamespace(type="xray") for core_id in core_ids}, {
+        return {core_id: SimpleNamespace(type=CoreType.mtproto) for core_id in core_ids}, {
             core_id: [f"user-of-{core_id}"] for core_id in core_ids
         }
 
@@ -26,6 +31,8 @@ def requested_core_ids(monkeypatch):
         "_resolve_core_without_users",
         AsyncMock(return_value=SimpleNamespace(type="xray")),
     )
+    monkeypatch.setattr(node_extras_module, "node_manager", SimpleNamespace(get_node=AsyncMock(return_value=REGISTERED)))
+    monkeypatch.setattr(_Reconciler, "_running_backend_types", AsyncMock(return_value=set()))
     monkeypatch.setattr(_Reconciler, "_remove_surplus_backends", AsyncMock(return_value=""))
     monkeypatch.setattr(_Reconciler, "_add_extra_cores", AsyncMock(return_value=""))
     return seen
@@ -39,16 +46,16 @@ def _node(primary: int, core_ids: list[int]):
 async def test_a_single_core_node_fetches_no_user_lists_at_all(requested_core_ids, monkeypatch):
     monkeypatch.setattr(_Reconciler, "_node_core_ids", staticmethod(lambda db_node: [9]))
 
-    await _Reconciler._reconcile_extra_cores(AsyncMock(), AsyncMock(), _node(9, [9]))
+    await _Reconciler._reconcile_extra_cores(AsyncMock(), REGISTERED, _node(9, [9]))
 
-    assert requested_core_ids == [set()]
+    assert requested_core_ids == []
 
 
 @pytest.mark.asyncio
 async def test_the_primary_core_is_never_in_the_user_fetch(requested_core_ids, monkeypatch):
     monkeypatch.setattr(_Reconciler, "_node_core_ids", staticmethod(lambda db_node: [9, 3]))
 
-    await _Reconciler._reconcile_extra_cores(AsyncMock(), AsyncMock(), _node(9, [9, 3]))
+    await _Reconciler._reconcile_extra_cores(AsyncMock(), REGISTERED, _node(9, [9, 3]))
 
     assert requested_core_ids == [{3}]
     assert 9 not in requested_core_ids[0]
@@ -58,7 +65,7 @@ async def test_the_primary_core_is_never_in_the_user_fetch(requested_core_ids, m
 async def test_the_primary_core_type_still_reaches_the_surplus_check(requested_core_ids, monkeypatch):
     monkeypatch.setattr(_Reconciler, "_node_core_ids", staticmethod(lambda db_node: [9, 3]))
 
-    await _Reconciler._reconcile_extra_cores(AsyncMock(), AsyncMock(), _node(9, [9, 3]))
+    await _Reconciler._reconcile_extra_cores(AsyncMock(), REGISTERED, _node(9, [9, 3]))
 
     _Reconciler._resolve_core_without_users.assert_awaited_once_with(9)
     assert _Reconciler._remove_surplus_backends.await_args.args[-1] == "xray"
@@ -68,7 +75,7 @@ async def test_the_primary_core_type_still_reaches_the_surplus_check(requested_c
 async def test_extra_cores_still_receive_their_own_user_lists(requested_core_ids, monkeypatch):
     monkeypatch.setattr(_Reconciler, "_node_core_ids", staticmethod(lambda db_node: [9, 3, 6]))
 
-    await _Reconciler._reconcile_extra_cores(AsyncMock(), AsyncMock(), _node(9, [9, 3, 6]))
+    await _Reconciler._reconcile_extra_cores(AsyncMock(), REGISTERED, _node(9, [9, 3, 6]))
 
     passed = _Reconciler._add_extra_cores.await_args.args[-1]
     assert {core_id for core_id, _, _ in passed} == {3, 6}

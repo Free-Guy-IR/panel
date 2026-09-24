@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.storage import LifecycleStatus
@@ -9,8 +10,9 @@ from app.db.crud.node import get_limited_nodes, get_nodes
 from app.db.models import Node, NodeStatus
 from app.fork.jobs import after_healthy_node_check
 from app.fork.node_health import hold_for_usage_collection
+from app.fork.operation.node_snapshots import drain_node_usage, flush_drained_usage
 from app.models.node import NodeListQuery, NodeNotification
-from app.nats import is_multi_worker
+from app.nats import is_multi_worker, needs_shared_bridge_memory
 from app.node import node_manager
 from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory, shutdown_bridge_memory
 from app.operation import OperatorType
@@ -25,7 +27,34 @@ logger = get_logger("node-checker")
 # Limits concurrent node health check operations
 NODE_CHECK_SEM = asyncio.Semaphore(5)  # Max 5 concurrent node health checks
 NODE_CHECK_TIMEOUT = 60
+HEALTH_PROBE_TIMEOUT = 10
 ACTIVE_NODE_STATUSES = [NodeStatus.connected, NodeStatus.connecting, NodeStatus.error]
+_SYNC_RECOVERY_INTERVAL = 60.0
+_sync_recovery_deadlines: dict[int, float] = {}
+_checks_in_flight: dict[int, asyncio.Task] = {}
+
+
+def _forget_check(node_id: int, task: asyncio.Task) -> None:
+    if _checks_in_flight.get(node_id) is task:
+        _checks_in_flight.pop(node_id, None)
+
+
+async def _resync_users(db_node: Node) -> bool:
+    try:
+        async with GetDB() as db:
+            return await NodeOperation._resync_node_users(db, db_node)
+    except Exception as exc:
+        logger.error(f"[{db_node.name}] Could not push the current user list after attaching: {exc}")
+        return False
+
+
+async def _mark_abandoned_check(db_node: Node, node: PasarGuardNode, message: str) -> None:
+    try:
+        await node.set_health(Health.BROKEN)
+        async with GetDB() as db:
+            await NodeOperation._update_single_node_status(db, db_node.id, NodeStatus.error, message=message)
+    except Exception as exc:
+        logger.error(f"[{db_node.name}] Could not record the abandoned health check: {exc}")
 
 
 # pg-node returns these while the HTTP API is up. They are not interchangeable:
@@ -87,7 +116,7 @@ async def verify_node_backend_health(node: PasarGuardNode, node_name: str) -> tu
         return current_health, None, None
 
     try:
-        await node.get_backend_stats()
+        await node.get_backend_stats(timeout=HEALTH_PROBE_TIMEOUT)
         if current_health != Health.HEALTHY:
             await node.set_health(Health.HEALTHY)
             logger.debug(f"[{node_name}] Node health is HEALTHY")
@@ -119,8 +148,8 @@ async def verify_node_backend_health(node: PasarGuardNode, node_name: str) -> tu
 async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     """
     Process health check for a single node:
-    1. Check if node requires hard reset
-    2. Verify backend health
+    1. Verify backend health
+    2. Recover shared user sync when healthy
     3. Compare with database status
     4. Update status if needed
 
@@ -130,12 +159,6 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     - For NOT_CONNECTED/INVALID: Reconnect immediately
     """
     if node is None:
-        return
-
-    # Handle hard reset requirement
-    if node.requires_hard_reset():
-        async with GetDB() as db:
-            await node_operator.connect_single_node(db, db_node.id)
         return
 
     try:
@@ -166,6 +189,21 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
         return
 
     if health == Health.HEALTHY and db_node.status == NodeStatus.connected:
+        requires_recovery = node.requires_hard_reset()
+        if requires_recovery or needs_shared_bridge_memory():
+            # A slow user-sync RPC does not mean the backend is dead. Repair
+            # this worker's attachment without restarting the core, clearing
+            # queued work, or broadcasting reconnects to sibling workers.
+            now = time.monotonic()
+            if now >= _sync_recovery_deadlines.get(db_node.id, 0):
+                _sync_recovery_deadlines[db_node.id] = now + _SYNC_RECOVERY_INTERVAL
+                if requires_recovery:
+                    await NodeOperation._attach_if_running(node, db_node.name)
+                else:
+                    # An orphaned claim can expire after the first startup
+                    # poll. Retry discovery even without a fresh update;
+                    # the live KV index makes empty polls request-free.
+                    await NodeOperation._resume_shared_sync(node)
         await after_healthy_node_check(node, db_node)
         return
 
@@ -184,6 +222,7 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
     ):
         attached = await NodeOperation._attach_if_running(node, db_node.name)
         if attached is not None:
+            await _resync_users(db_node)
             await after_healthy_node_check(node, db_node)
             return
 
@@ -234,6 +273,8 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
 
     # Update status for recovering nodes
     if db_node.status in (NodeStatus.connecting, NodeStatus.error) and health == Health.HEALTHY:
+        if db_node.id in NodeOperation._pending_user_sync and not await _resync_users(db_node):
+            return
         async with GetDB() as db:
             logger.info(f"Node '{db_node.name}' have been recovered")
             node_version, core_version = await node.get_versions()
@@ -270,13 +311,10 @@ async def check_node_limits():
         limited_nodes = await get_limited_nodes(db)
 
         for db_node in limited_nodes:
-            # Disconnect the node first (stop it from running)
-            await node_operator.disconnect_single_node(db_node.id)
-
-            # Update status to limited
             await NodeOperation._update_single_node_status(
                 db, db_node.id, NodeStatus.limited, message="Data limit exceeded", send_notification=False
             )
+            await node_operator.disconnect_single_node(db_node.id)
 
             # Send notification
             node_notif = NodeNotification(
@@ -294,10 +332,12 @@ async def _bounded_health_check(db_node: Node, node: PasarGuardNode | None):
         try:
             await asyncio.wait_for(process_node_health_check(db_node, node), timeout=NODE_CHECK_TIMEOUT)
         except TimeoutError:
+            message = f"Health check did not finish within {NODE_CHECK_TIMEOUT}s"
             logger.error(
                 f"[{db_node.name}] health check did not finish within {NODE_CHECK_TIMEOUT}s and was abandoned; "
-                "the next round will try again instead of the whole job staying stuck"
+                "the node is marked broken and the next round will try again"
             )
+            await _mark_abandoned_check(db_node, node, message)
 
 
 async def node_health_check():
@@ -310,8 +350,15 @@ async def node_health_check():
         db_nodes, _ = await get_nodes(db=db, query=NodeListQuery(status=ACTIVE_NODE_STATUSES), load_usage_logs=False)
 
     dict_nodes = await node_manager.get_nodes()
-    check_tasks = [_bounded_health_check(db_node, dict_nodes.get(db_node.id)) for db_node in db_nodes]
-    await asyncio.gather(*check_tasks, return_exceptions=True)
+    for node_id in _sync_recovery_deadlines.keys() - dict_nodes.keys():
+        _sync_recovery_deadlines.pop(node_id, None)
+    for db_node in db_nodes:
+        node = dict_nodes.get(db_node.id)
+        if node is None or db_node.id in _checks_in_flight:
+            continue
+        task = asyncio.create_task(_bounded_health_check(db_node, node), name=f"node_health_check_{db_node.id}")
+        _checks_in_flight[db_node.id] = task
+        task.add_done_callback(lambda done, node_id=db_node.id: _forget_check(node_id, done))
 
 
 _node_loop_tasks: list[asyncio.Task] = []
@@ -387,11 +434,13 @@ async def initialize_nodes():
 
 
 async def _stop_node_loops():
-    for task in _node_loop_tasks:
+    running = [*_node_loop_tasks, *_checks_in_flight.values()]
+    for task in running:
         task.cancel()
-    if _node_loop_tasks:
-        await asyncio.gather(*_node_loop_tasks, return_exceptions=True)
+    if running:
+        await asyncio.gather(*running, return_exceptions=True)
     _node_loop_tasks.clear()
+    _checks_in_flight.clear()
 
 
 async def shutdown_nodes():
@@ -404,6 +453,9 @@ async def shutdown_nodes():
     logger.info("Stopping nodes' cores...")
 
     nodes: dict[int, PasarGuardNode] = await node_manager.get_nodes()
+
+    await asyncio.gather(*(drain_node_usage(node, node_id) for node_id, node in nodes.items()), return_exceptions=True)
+    await flush_drained_usage()
 
     stop_tasks = [node.stop() for node in nodes.values()]
 

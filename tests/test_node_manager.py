@@ -124,6 +124,40 @@ async def test_node_manager_bulk_user_sync_falls_back_when_chunked_is_not_suppor
 
 
 @pytest.mark.asyncio
+async def test_full_sync_does_not_use_incomplete_bridge_fence():
+    manager = NodeManager()
+
+    class FakeNode:
+        def __init__(self):
+            self.sync_calls = []
+            self.fence_calls = 0
+
+        def full_sync_fence(self):
+            self.fence_calls += 1
+            raise AssertionError("local sync must not enter the shared fence")
+
+        async def sync_users(self, users, flush_pending=False):
+            self.sync_calls.append((users, flush_pending))
+
+    fake_node = FakeNode()
+    manager._nodes[1] = fake_node
+
+    loaded = object()
+    result = await manager.sync_full(1, lambda: _resolved(loaded), flush_pending=True)
+
+    assert result is fake_node
+    assert fake_node.fence_calls == 0
+    assert fake_node.sync_calls == [([loaded], True)]
+
+
+def _resolved(value):
+    async def load():
+        return [value]
+
+    return load()
+
+
+@pytest.mark.asyncio
 async def test_update_node_keeps_the_bridge_on_name_or_coefficient_change(monkeypatch: pytest.MonkeyPatch):
     manager = NodeManager()
 
@@ -154,3 +188,12 @@ async def test_update_node_keeps_the_bridge_on_name_or_coefficient_change(monkey
     fourth = await manager.update_node(node4)
     assert fourth is not first
     assert first.stop_calls == 1
+
+
+def test_queued_deliveries_keep_the_configured_bulk_batch_size(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("app.node.get_bridge_memory", lambda: (None, None, None))
+    monkeypatch.setattr("app.node.nats_settings.node_update_users_batch_size", 750)
+
+    kwargs = NodeManager()._create_node_kwargs(_make_node(3))
+
+    assert kwargs["sync_batch_size"] == 750

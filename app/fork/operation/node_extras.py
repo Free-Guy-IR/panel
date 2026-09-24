@@ -3,17 +3,21 @@ import asyncio
 from packaging.version import InvalidVersion, Version
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
+from sqlalchemy import select
 
 from app.db import AsyncSession
 from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_nodes
-from app.db.models import Node, NodeStatus
+from app.db.models import Node, NodeStatus, User
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
+from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.operation.node_snapshots import check_fence, full_sync_fence, node_users_loader, resolve_users
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
 from app.models.stats import InboundUsageStatsList
-from app.node.user import core_users
+from app.node import node_manager
+from app.operation.permissions import PermissionScope, _get_resource_action, _resolve_scope, get_allowed_group_ids
 from app.utils.logger import get_logger
 
 logger = get_logger("node-operation")
@@ -110,22 +114,19 @@ class NodeExtraCoresMixin:
             taken_types[db_core.type] = db_core.name
 
     @classmethod
-    async def _node_union_users(cls, db: AsyncSession, db_node: Node) -> list:
-        core_ids = cls._node_core_ids(db_node)
-        from app.core.manager import core_manager
-
-        resolved_cores = await core_manager.get_cores(set(core_ids) | {1})
-        default_core = resolved_cores.get(1)
-
-        inbound_tags, protocols = [], set()
-        for core_id in core_ids:
-            core = resolved_cores.get(core_id) or default_core
-            if core is None:
-                continue
-            inbound_tags.extend(core.inbounds)
-            protocols.update(core.protocols)
-
-        return await core_users(db=db, inbound_tags=inbound_tags, allowed_protocols=frozenset(protocols))
+    async def _resync_node_users(cls, db: AsyncSession, db_node: Node) -> bool:
+        if _connect_lock(db_node.id).locked():
+            return False
+        async with _connect_lock(db_node.id):
+            cores_by_id, users_by_core = await cls._get_core_users_map(db, set(cls._node_core_ids(db_node)), lazy=True)
+            users = node_users_loader(
+                users_by_core.get(getattr(db_node, "core_config_id", None) or 1, []),
+                cls._extra_cores_for(db_node, cores_by_id, users_by_core),
+            )
+            if await node_manager.sync_full(db_node.id, users, flush_pending=True) is None:
+                return False
+            cls._pending_user_sync.discard(db_node.id)
+            return True
 
     @classmethod
     def _extra_cores_for(cls, db_node: Node, cores_by_id: dict, users_by_core: dict) -> list[tuple]:
@@ -165,21 +166,37 @@ class NodeExtraCoresMixin:
 
     @classmethod
     async def _reconcile_extra_cores(cls, db: AsyncSession, pg_node: PasarGuardNode, db_node: Node) -> str:
-        primary_id = getattr(db_node, "core_config_id", None) or 1
-        extra_ids = [core_id for core_id in cls._node_core_ids(db_node) if core_id != primary_id]
+        if _connect_lock(db_node.id).locked():
+            return ""
+        async with _connect_lock(db_node.id):
+            if await node_manager.get_node(db_node.id) is not pg_node:
+                return ""
+            primary_id = getattr(db_node, "core_config_id", None) or 1
+            extra_ids = [core_id for core_id in cls._node_core_ids(db_node) if core_id != primary_id]
+            cores_by_id, users_by_core = (
+                await cls._get_core_users_map(db, set(extra_ids), lazy=True) if extra_ids else ({}, {})
+            )
+            primary_core = await cls._resolve_core_without_users(primary_id)
 
-        cores_by_id, users_by_core = await cls._get_core_users_map(db, set(extra_ids))
-        primary_core = await cls._resolve_core_without_users(primary_id)
-
-        extra_cores = [(core_id, cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in extra_ids]
-
-        problems = [
-            await cls._remove_surplus_backends(
-                pg_node, db_node, extra_cores, primary_core.type if primary_core is not None else None
-            ),
-            await cls._add_extra_cores(pg_node, db_node, extra_cores),
-        ]
-        return "; ".join(p for p in problems if p)[:1024]
+            extra_cores = [
+                (core_id, cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in extra_ids
+            ]
+            running = await cls._running_backend_types(pg_node)
+            problems = [
+                await cls._remove_surplus_backends(
+                    pg_node,
+                    db_node,
+                    extra_cores,
+                    primary_core.type if primary_core is not None else None,
+                    running=running,
+                )
+            ]
+            if set(cls._desired_extra_backends(extra_cores)) - running:
+                async with full_sync_fence(pg_node) as held:
+                    problems.append(
+                        await cls._add_extra_cores(pg_node, db_node, extra_cores, held=held, running=running)
+                    )
+            return "; ".join(p for p in problems if p)[:1024]
 
     @staticmethod
     def _desired_extra_backends(extra_cores: list[tuple] | None) -> dict:
@@ -194,7 +211,13 @@ class NodeExtraCoresMixin:
 
     @classmethod
     async def _remove_surplus_backends(
-        cls, pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None, primary_core_type
+        cls,
+        pg_node: PasarGuardNode,
+        db_node: Node,
+        extra_cores: list[tuple] | None,
+        primary_core_type,
+        *,
+        running: set | None = None,
     ) -> str:
         primary_type = _BACKEND_TYPE_BY_CORE.get(primary_core_type)
         if primary_type is None:
@@ -204,7 +227,8 @@ class NodeExtraCoresMixin:
             )
             return ""
 
-        running = await cls._running_backend_types(pg_node)
+        if running is None:
+            running = await cls._running_backend_types(pg_node)
         if not running:
             return ""
 
@@ -226,13 +250,20 @@ class NodeExtraCoresMixin:
 
     @classmethod
     async def _add_extra_cores(
-        cls, pg_node: PasarGuardNode, db_node: Node, extra_cores: list[tuple] | None, *, restart_running: bool = False
+        cls,
+        pg_node: PasarGuardNode,
+        db_node: Node,
+        extra_cores: list[tuple] | None,
+        *,
+        restart_running: bool = False,
+        held=None,
+        running: set | None = None,
     ) -> str:
         if not extra_cores:
             return ""
 
         problems = []
-        already_running = await cls._running_backend_types(pg_node)
+        already_running = set(running) if running is not None else await cls._running_backend_types(pg_node)
 
         for core_id, extra_core, extra_users in extra_cores or []:
             if extra_core is None:
@@ -275,10 +306,12 @@ class NodeExtraCoresMixin:
                     continue
 
             try:
+                users = await resolve_users(extra_users)
+                check_fence(held)
                 await pg_node.add_backend(
                     config=extra_core.to_str(),
                     backend_type=backend_type,
-                    users=extra_users,
+                    users=users,
                 )
                 already_running.add(backend_type)
                 logger.info(f'Added {extra_core.type.value} core "{core_id}" to "{db_node.name}" node')
@@ -290,6 +323,33 @@ class NodeExtraCoresMixin:
                 problems.append(f"core {core_id}: {e}")
 
         return "; ".join(problems)[:1024]
+
+    async def _validate_stats_user(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> None:
+        await self.get_validated_user_by_id(
+            db,
+            user_id,
+            admin,
+            load_admin=False,
+            load_next_plan=False,
+            load_usage_logs=False,
+            load_groups=False,
+            scope_action="read",
+        )
+        allowed_group_ids = get_allowed_group_ids(admin)
+        if allowed_group_ids is None:
+            return
+        visible = await db.execute(
+            select(User.id).where(User.id == user_id, user_in_allowed_groups(User.id, allowed_group_ids))
+        )
+        if visible.first() is None:
+            await self.raise_error(message="User not found", code=404)
+
+    @staticmethod
+    def _user_count_scope(admin: AdminDetails) -> tuple[list[str] | None, list[int] | None]:
+        if admin.is_owner:
+            return None, None
+        own = _resolve_scope(_get_resource_action(admin, "users", "read")) is PermissionScope.OWN
+        return ([admin.username] if own else None), get_allowed_group_ids(admin)
 
     async def restart_nodes_by_ids(self, db: AsyncSession, node_ids: list[int], admin: AdminDetails) -> None:
         if not node_ids:

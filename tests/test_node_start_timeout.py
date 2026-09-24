@@ -96,7 +96,7 @@ async def test_force_start_skips_attach_and_starts_core(monkeypatch: pytest.Monk
     )
     attach = AsyncMock(return_value=object())
     monkeypatch.setattr(NodeOperation, "_attach_if_running", attach)
-    db_node = SimpleNamespace(name="england", keep_alive=60)
+    db_node = SimpleNamespace(id=12, name="england", keep_alive=60)
     core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
 
     result = await NodeOperation._start_or_attach_node(
@@ -116,7 +116,7 @@ async def test_force_start_skips_attach_and_starts_core(monkeypatch: pytest.Monk
 
 @pytest.mark.asyncio
 async def test_connect_node_attaches_when_remote_start_finishes_after_timeout(monkeypatch: pytest.MonkeyPatch):
-    pg_node = object()
+    pg_node = SimpleNamespace(sync_users=AsyncMock())
     db_node = SimpleNamespace(id=19, name="slow-node", status=NodeStatus.connecting)
     core = SimpleNamespace(type=object())
     attached = SimpleNamespace(node_version="0.5.4", core_version="1.0.20260223")
@@ -130,8 +130,10 @@ async def test_connect_node_attaches_when_remote_start_finishes_after_timeout(mo
     attach = AsyncMock(return_value=attached)
     monkeypatch.setattr(NodeOperation, "_attach_if_running", attach)
 
-    result = await NodeOperation.connect_node(db_node, core, [])
+    users = [object()]
+    result = await NodeOperation.connect_node(db_node, core, users)
 
+    pg_node.sync_users.assert_awaited_once_with(users, flush_pending=False)
     assert result == {
         "node_id": 19,
         "status": NodeStatus.connected,
@@ -160,10 +162,14 @@ async def test_health_check_attaches_ambiguous_timed_out_start_before_reconnect(
     monkeypatch.setattr(NodeOperation, "_attach_if_running", attach)
     reconnect = AsyncMock()
     monkeypatch.setattr(node_checker.node_operator, "connect_single_node", reconnect)
+    resync = AsyncMock()
+    monkeypatch.setattr(node_checker, "_resync_users", resync)
+    monkeypatch.setattr(node_checker, "after_healthy_node_check", AsyncMock())
 
     await node_checker.process_node_health_check(db_node, node)
 
     attach.assert_awaited_once_with(node, "slow-node")
+    resync.assert_awaited_once_with(db_node)
     reconnect.assert_not_awaited()
 
 
