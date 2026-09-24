@@ -827,3 +827,29 @@ async def test_a_node_disabled_right_after_it_was_registered_is_not_started(monk
         assert await eventually(lambda: not h.remote(db_node).running), (
             "a node disabled during its reconnect was left running"
         )
+
+
+@pytest.mark.parametrize("order", ["newer_first", "older_first", "concurrent"])
+async def test_node_worker_commands_for_one_user_end_at_the_database_state(monkeypatch, order):
+    from app.nats.proto_utils import serialize_proto_message, serialize_proto_messages
+    from app.node import worker as node_worker
+
+    async with Harness(monkeypatch) as h:
+        db_node = h.node(1)
+        await h.boot(db_node)
+        service = node_worker.NodeWorkerService.__new__(node_worker.NodeWorkerService)
+        service._command_semaphore = asyncio.Semaphore(10)
+        service._command_handlers = {"update_users": service._update_users, "update_user": service._update_user}
+        await h.disable(dispatch=False)
+        newer = {"action": "update_users", "payload": {"users": serialize_proto_messages([h.user(None)])}}
+        older = {"action": "update_user", "payload": {"user": serialize_proto_message(h.user([h.tag_a, h.tag_b]))}}
+        commands = [newer, older] if order == "newer_first" else [older, newer]
+
+        if order == "concurrent":
+            await asyncio.gather(*(service._run_command(c["action"], c["payload"]) for c in commands))
+        else:
+            for command in commands:
+                await service._handle_command(SimpleNamespace(data=json.dumps(command).encode()))
+        await asyncio.sleep(1.5)
+
+        assert not h.remote(db_node).carries(h.email), f"{order}: a stale command payload won on the node"
