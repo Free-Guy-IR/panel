@@ -643,7 +643,10 @@ class LockedWireGuardPools:
     rows: dict[str, WireGuardSubnet]
 
 
-async def lock_wireguard_pools(db: AsyncSession) -> LockedWireGuardPools:
+async def lock_for_allocation_release(db: AsyncSession) -> LockedWireGuardPools:
+    from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock
+
+    await acquire_proxy_secrets_lock(db)
     namespaces = wg_namespaces(await get_wg_cores(db))
     return LockedWireGuardPools(namespaces=namespaces, rows=await _lock_subnet_rows(db, namespaces))
 
@@ -666,7 +669,7 @@ async def release_locked_allocations(
 async def release_allocations_by_user_ids(db: AsyncSession, user_ids: list[int]) -> dict[int, dict | None]:
     if not user_ids:
         return {}
-    pools = await lock_wireguard_pools(db)
+    pools = await lock_for_allocation_release(db)
     committed = dict(
         (
             await db.execute(

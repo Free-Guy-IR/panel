@@ -75,7 +75,7 @@ from .general import (
 )
 from .group import get_groups_by_ids
 from .wireguard import (
-    lock_wireguard_pools,
+    lock_for_allocation_release,
     release_locked_allocations,
     release_users_allocations,
     sync_user_allocations,
@@ -1109,7 +1109,7 @@ async def _delete_locked_users(
     extra_columns: Sequence = (),
     keep: Callable[[Row], bool] | None = None,
 ) -> list[Row]:
-    pools = await lock_wireguard_pools(db)
+    pools = await lock_for_allocation_release(db)
     rows = (
         await db.execute(
             select(User.id, User.username, User.proxy_settings, User.hwid_limit, *extra_columns)

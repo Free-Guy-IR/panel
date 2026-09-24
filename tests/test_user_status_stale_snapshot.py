@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -311,3 +312,97 @@ async def test_cleanup_does_not_delete_a_user_renewed_after_it_was_listed(sessio
     assert remaining == {ids["renewed"]}, (deleted, remaining)
     assert deleted == ["stale"]
     assert pushed == [ids["stale"]]
+
+
+async def test_activating_a_next_plan_the_review_job_already_applied_is_a_404_and_not_a_second_reset(
+    sessions, monkeypatch
+):
+    from fastapi import HTTPException
+    from sqlalchemy import func
+
+    from app import notification
+    from app.db.models import NextPlan, UserUsageResetLogs
+    from app.fork.jobs import usage_limits
+    from app.jobs import review_users
+    from app.operation import OperatorType, user as user_module
+    from app.operation.user import UserOperation
+
+    ids = await _seed(sessions, target={"status": UserStatus.active, "data_limit": 1000, "used_traffic": 1100})
+    async with sessions() as session:
+        session.add(NextPlan(user_id=ids["target"], user_template_id=None, data_limit=5000, expire=86400))
+        await session.commit()
+
+    class SessionsGetDB:
+        def __init__(self):
+            self.db = sessions()
+
+        async def __aenter__(self):
+            return self.db
+
+        async def __aexit__(self, *exc):
+            await self.db.close()
+
+    events: dict[str, list] = {"pushed": [], "reset_by_next": [], "status_change": []}
+
+    async def record_push(db_user):
+        events["pushed"].append(db_user.id)
+
+    async def record_reset(user, admin):
+        events["reset_by_next"].append(user.id)
+
+    async def record_status(user, admin):
+        events["status_change"].append(user.id)
+
+    async def job_push(users):
+        return None
+
+    async def job_notify(*args, **kwargs):
+        return None
+
+    async def no_url(*args, **kwargs):
+        return ""
+
+    monkeypatch.setattr(usage_limits, "GetDB", SessionsGetDB)
+    monkeypatch.setattr(review_users, "sync_users", job_push)
+    monkeypatch.setattr(review_users, "_notify_next_plan", job_notify)
+    monkeypatch.setattr(review_users, "_notify_status_change", job_notify)
+    monkeypatch.setattr(user_module, "sync_user", record_push)
+    monkeypatch.setattr(notification, "user_data_reset_by_next", record_reset)
+    monkeypatch.setattr(notification, "user_status_change", record_status)
+    monkeypatch.setattr(UserOperation, "generate_subscription_url", staticmethod(no_url))
+
+    admin = type("Admin", (), {"username": "owner", "is_owner": True, "role": None, "id": None})()
+    async with sessions() as request_session:
+        db_user = await get_user_by_id(request_session, ids["target"], load_admin_role=True)
+        assert db_user.next_plan is not None
+
+        await usage_limits.enforce_user_limits_now([ids["target"]])
+        async with sessions() as check:
+            after_job = (
+                await check.execute(
+                    select(User.status, User.data_limit, User._expire, User.used_traffic).where(
+                        User.id == ids["target"]
+                    )
+                )
+            ).one()
+
+        with pytest.raises(HTTPException) as raised:
+            await UserOperation(operator_type=OperatorType.API)._active_next_plan(request_session, db_user, admin)
+
+    async with sessions() as check:
+        final = (
+            await check.execute(
+                select(User.status, User.data_limit, User._expire, User.used_traffic).where(User.id == ids["target"])
+            )
+        ).one()
+        resets = (
+            await check.execute(
+                select(func.count()).select_from(UserUsageResetLogs).where(UserUsageResetLogs.user_id == ids["target"])
+            )
+        ).scalar_one()
+    await asyncio.sleep(0)
+    assert raised.value.status_code == 404
+    assert after_job.data_limit == 5000 and after_job.status == UserStatus.active
+    assert tuple(final) == tuple(after_job)
+    assert resets == 1
+    assert events == {"pushed": [], "reset_by_next": [], "status_change": []}, events
