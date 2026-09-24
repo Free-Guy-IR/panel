@@ -61,6 +61,7 @@ class NodeManager:
             # A delivery claim must outlive the slowest single RPC so an expired
             # claim always means its send is no longer in flight.
             "sync_lease_seconds": max(30.0, 2.0 * float(node.internal_timeout or 15) + 5.0),
+            "sync_batch_size": max(1, nats_settings.node_update_users_batch_size),
         }
         store, coordinator, worker_id = get_bridge_memory()
         if store is not None and coordinator is not None:

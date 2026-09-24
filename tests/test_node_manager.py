@@ -188,3 +188,12 @@ async def test_update_node_keeps_the_bridge_on_name_or_coefficient_change(monkey
     fourth = await manager.update_node(node4)
     assert fourth is not first
     assert first.stop_calls == 1
+
+
+def test_queued_deliveries_keep_the_configured_bulk_batch_size(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("app.node.get_bridge_memory", lambda: (None, None, None))
+    monkeypatch.setattr("app.node.nats_settings.node_update_users_batch_size", 750)
+
+    kwargs = NodeManager()._create_node_kwargs(_make_node(3))
+
+    assert kwargs["sync_batch_size"] == 750
