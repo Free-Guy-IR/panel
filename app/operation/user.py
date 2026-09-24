@@ -57,6 +57,7 @@ from app.db.crud.user import (
 )
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
+from app.fork.crud.user_locks import refresh_next_plan_for_update, refresh_user_state_for_update
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
 from app.fork.proxy_secrets import ProxySecretUniquenessError
@@ -1319,6 +1320,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
             await self.raise_error(message="User doesn't have next plan", code=404)
+        await refresh_user_state_for_update(db, db_user)
+        if await refresh_next_plan_for_update(db, db_user) is None:
+            await self.raise_error(message="User doesn't have next plan", code=404, db=db)
 
         old_status = db_user.status
         db_user = await reset_user_by_next(
