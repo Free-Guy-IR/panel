@@ -111,6 +111,11 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
     mirror = fetch_mirror(workdir, name, fork_url, upstream_url)
     fetch_snapshot_heads(mirror, snapshot, upstream_url)
     base = f"refs/remotes/fork/{entry['ported_ref']}"
+    patterns = [
+        pattern
+        for pattern in ("refs/remotes/upstream/*", "refs/upstream-tags/*")
+        if run_git(mirror, "for-each-ref", "--count=1", pattern.removesuffix("*")).stdout.strip()
+    ]
     previous = Path.cwd()
     os.chdir(mirror)
     try:
@@ -119,7 +124,7 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
         return upstream_inventory.parity_gate(
             base,
             base,
-            ["refs/remotes/upstream/*", "refs/upstream-tags/*"],
+            patterns,
             ledger,
             snapshot,
             write_snapshot,

@@ -95,6 +95,24 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+      - name: Fork tracker coverage
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          python scripts/upstream_forks.py --config upstream-forks/forks.toml --owner Free-Guy-IR \
+            > fork-trackers.txt 2>&1 || status=$?
+          cat fork-trackers.txt
+          {
+            echo "## Fork tracker coverage"
+            echo
+            echo '```'
+            cat fork-trackers.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
       - name: Bridge version gate
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: |
