@@ -42,4 +42,3 @@ async def drop_unentitled_wireguard_keys(
         return proxy_settings
     proxy_settings.wireguard = await stored_wireguard_settings(db, exclude_user_id)
     return proxy_settings
-
