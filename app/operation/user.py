@@ -58,7 +58,7 @@ from app.db.crud.user import (
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.operation.base_extras import restrict_users_query_by_groups
-from app.fork.operation.user_extras import UserExtrasMixin, keep_stored_entitled_secrets, prepare_fork_proxy_settings
+from app.fork.operation.user_extras import UserExtrasMixin, keep_stored_secrets, prepare_fork_proxy_settings
 from app.fork.proxy_secrets import ProxySecretUniquenessError
 from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
 from app.models.admin import AdminDetails
@@ -844,8 +844,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         current_proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
         current_proxy_settings_data = current_proxy_settings.dict()
         proxy_settings_to_prepare = (
-            keep_stored_entitled_secrets(
-                ProxyTable.model_validate(modified_user.proxy_settings.dict()), current_proxy_settings
+            await keep_stored_secrets(
+                db,
+                ProxyTable.model_validate(modified_user.proxy_settings.dict()),
+                current_proxy_settings,
+                effective_groups,
+                db_user.id,
             )
             if modified_user.proxy_settings is not None
             else ProxyTable.model_validate(current_proxy_settings_data)
