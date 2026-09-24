@@ -83,6 +83,7 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(admin_sync, "GetDB", RecorderGetDB)
     monkeypatch.setattr(usage_limits, "GetDB", RecorderGetDB)
     monkeypatch.setattr(record_usages, "_retained_cohorts", [], raising=False)
+    monkeypatch.setattr(record_usages, "_retained_node_usage", [], raising=False)
     monkeypatch.setattr(record_usages, "_usage_job_runs", set(), raising=False)
     monkeypatch.setattr(record_usages, "_user_usage_running", False)
     monkeypatch.setattr(record_usages, "_node_usage_running", False)

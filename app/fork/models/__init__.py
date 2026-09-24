@@ -1,4 +1,5 @@
 from app.fork.models.named_lock import NamedLock
+from app.fork.models.node_stat_ack import NodeStatAck
 
 __all__ = [
     "ConnectionRestriction",
@@ -7,6 +8,7 @@ __all__ = [
     "ContentFilterSniffingOverride",
     "NamedLock",
     "NodeInboundUsage",
+    "NodeStatAck",
     "TrafficLogIdentity",
     "TrafficLogRecord",
     "TrafficLogState",

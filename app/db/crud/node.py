@@ -735,6 +735,44 @@ async def get_nodes_to_reset_usage(db: AsyncSession) -> list[Node]:
     return filtered_nodes
 
 
+async def _reset_locked_node_usage(db: AsyncSession, node_ids: list[int]) -> None:
+    ids = sorted({node_id for node_id in node_ids if node_id is not None})
+    if not ids:
+        return
+    locked = (
+        await db.execute(
+            select(Node.id, Node.uplink, Node.downlink).where(Node.id.in_(ids)).order_by(Node.id).with_for_update()
+        )
+    ).all()
+    if not locked:
+        return
+    db.add_all(
+        [
+            NodeUsageResetLogs(node_id=node_id, uplink=uplink or 0, downlink=downlink or 0)
+            for node_id, uplink, downlink in locked
+        ]
+    )
+    nodes_table = Node.__table__
+    await db.execute(
+        update(nodes_table)
+        .where(nodes_table.c.id == bindparam("reset_node_id"))
+        .values(
+            uplink=nodes_table.c.uplink - bindparam("reset_uplink"),
+            downlink=nodes_table.c.downlink - bindparam("reset_downlink"),
+        ),
+        [
+            {"reset_node_id": node_id, "reset_uplink": uplink or 0, "reset_downlink": downlink or 0}
+            for node_id, uplink, downlink in locked
+        ],
+    )
+    await db.execute(
+        update(Node)
+        .where(Node.id.in_([node_id for node_id, _, _ in locked]), Node.status == NodeStatus.limited)
+        .values(status=NodeStatus.connecting)
+        .execution_options(synchronize_session=False)
+    )
+
+
 async def reset_node_usage(db: AsyncSession, db_node: Node) -> Node:
     """
     Resets the usage data for a node and logs the reset.
@@ -746,21 +784,7 @@ async def reset_node_usage(db: AsyncSession, db_node: Node) -> Node:
     Returns:
         Node: The updated node object.
     """
-    # Create usage log entry with current uplink and downlink
-    usage_log = NodeUsageResetLogs(
-        node_id=db_node.id,
-        uplink=db_node.uplink,
-        downlink=db_node.downlink,
-    )
-    db.add(usage_log)
-
-    # Reset node usage to zero
-    db_node.uplink = 0
-    db_node.downlink = 0
-
-    if db_node.status == NodeStatus.limited:
-        db_node.status = NodeStatus.connecting
-
+    await _reset_locked_node_usage(db, [db_node.id])
     await db.commit()
     await db.refresh(db_node)
     await load_node_attrs(db_node)
@@ -778,23 +802,7 @@ async def bulk_reset_node_usage(db: AsyncSession, nodes: list[Node]) -> list[Nod
     Returns:
         list[Node]: The updated list of node objects.
     """
-    for db_node in nodes:
-        # Create usage log entry
-        usage_log = NodeUsageResetLogs(
-            node_id=db_node.id,
-            uplink=db_node.uplink,
-            downlink=db_node.downlink,
-        )
-        db.add(usage_log)
-
-        # Reset usage to zero
-        db_node.uplink = 0
-        db_node.downlink = 0
-
-        # Update status if was limited
-        if db_node.status == NodeStatus.limited:
-            db_node.status = NodeStatus.connecting
-
+    await _reset_locked_node_usage(db, [node.id for node in nodes])
     await db.commit()
 
     # Refresh both existing history and new log timestamps from the database so

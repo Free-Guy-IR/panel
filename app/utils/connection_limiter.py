@@ -826,6 +826,7 @@ async def run_assessment(db: AsyncSession, settings: ConnectionLimit) -> list[Ob
         return []
 
     by_node = await nodes_per_user(db, settings, user_ids)
+    await db.commit()
     live, live_nodes = await collect_live_ips(users, by_node)
     infra = infrastructure_addresses(live, settings)
     pools = carrier_pools(live, settings)

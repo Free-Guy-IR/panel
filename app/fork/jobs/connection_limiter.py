@@ -115,11 +115,14 @@ def _is_retriable_db_error(err) -> bool:
 
 
 async def _write_states(db, observations) -> None:
+    observations = sorted(observations, key=lambda o: o.user_id)
     existing = {
         state.user_id: state
         for state in (
             await db.execute(
-                select(UserConnectionState).where(UserConnectionState.user_id.in_([o.user_id for o in observations]))
+                select(UserConnectionState)
+                .where(UserConnectionState.user_id.in_([o.user_id for o in observations]))
+                .order_by(UserConnectionState.user_id)
             )
         )
         .scalars()
@@ -201,8 +204,8 @@ async def record_connection_states():
         # Before anything else, so that narrowing the scope takes effect even
         # on a cycle that later runs out of time.
         forgotten = await prune_out_of_scope(db, settings)
+        await db.commit()
         if forgotten:
-            await db.commit()
             logger.info("forgot %d user(s) the settings no longer cover", forgotten)
 
         try:
