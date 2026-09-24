@@ -210,6 +210,7 @@ async def test_a_connected_node_with_failed_extras_still_raises_an_error_notific
         }
 
     monkeypatch.setattr(node_op_module, "node_manager", MagicMock(update_node=AsyncMock()))
+    monkeypatch.setattr(NodeOperation, "_register_if_wanted", AsyncMock(return_value=True))
     monkeypatch.setattr(NodeOperation, "_get_core_users_map", AsyncMock(return_value=({1: object()}, {1: []})))
     monkeypatch.setattr(NodeOperation, "connect_node", staticmethod(_connect_node))
     monkeypatch.setattr(node_op_module, "bulk_update_node_status", AsyncMock())
@@ -249,6 +250,7 @@ async def test_a_cleanly_connected_node_raises_no_error_notification(monkeypatch
         }
 
     monkeypatch.setattr(node_op_module, "node_manager", MagicMock(update_node=AsyncMock()))
+    monkeypatch.setattr(NodeOperation, "_register_if_wanted", AsyncMock(return_value=True))
     monkeypatch.setattr(NodeOperation, "_get_core_users_map", AsyncMock(return_value=({1: object()}, {1: []})))
     monkeypatch.setattr(NodeOperation, "connect_node", staticmethod(_connect_node))
     monkeypatch.setattr(node_op_module, "bulk_update_node_status", AsyncMock())
