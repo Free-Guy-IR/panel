@@ -28,14 +28,9 @@ jobs:
           bun-version: 1.3.14
 
       - name: Fetch sibling config kits
-        run: |
-            KITS="core-kit openvpn-config-kit mtproto-config-kit l2tp-config-kit singbox-config-kit wireguard-config-kit"
-            for kit in $KITS; do
-                git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$GITHUB_WORKSPACE/../$kit"
-            done
-            for kit in $KITS; do
-                (cd "$GITHUB_WORKSPACE/../$kit" && bun install)
-            done
+        env:
+            KITS_OWNER: ${{ github.repository_owner }}
+        run: scripts/fetch_config_kits.sh
 
       - name: Install dashboard dependencies
         working-directory: ./dashboard

@@ -101,6 +101,8 @@ jobs:
                   bun-version: 1.3.14
 
             - name: Fetch sibling config kits
+              env:
+                  KITS_OWNER: ${{ github.repository_owner }}
               run: |
                   # dashboard/package.json refers to these through file:../../<kit>, i.e.
                   # next to the panel checkout. Clone them there so bun resolves them the
@@ -108,31 +110,9 @@ jobs:
                   # compiled dist/ resolves imports from inside the kit, so it never reaches
                   # the dashboard's node_modules. Each kit ships its built dist/, so no
                   # TypeScript build is needed here.
-                  KITS="core-kit@8d14f8fa5a62f422b47cbff46bd626e2a96d66b7 openvpn-config-kit@15ec50c87fd6a3d48cf7d1dc57b3eb0cddc9fab4 mtproto-config-kit@8eb84713f38e192c168b2d1cebb306fabe843795 l2tp-config-kit@fce077c58e97ae566f20aefdbbcec13a8ff869eb singbox-config-kit@9e2126dc7d146d7717016ac81833f61ac7680bb0 wireguard-config-kit@e55aff7f46ad71e5ebc697d324f5fa0dce074dd3"
-                  for entry in $KITS; do
-                      kit="${entry%%@*}"
-                      ref="${entry#*@}"
-                      dir="$GITHUB_WORKSPACE/../$kit"
-                      if [ "$ref" = "$entry" ]; then
-                          git clone --depth 1 "https://github.com/${{ github.repository_owner }}/$kit.git" "$dir"
-                      else
-                          git clone --filter=blob:none --no-checkout "https://github.com/${{ github.repository_owner }}/$kit.git" "$dir"
-                          git -C "$dir" checkout --detach "$ref"
-                          got="$(git -C "$dir" rev-parse HEAD)"
-                          if [ "$got" != "$ref" ]; then
-                              echo "::error::$kit resolved to $got, expected $ref"
-                              exit 1
-                          fi
-                          echo "$kit pinned at $got"
-                      fi
-                  done
-                  echo "KITS_PINNED=$KITS" >> "$GITHUB_ENV"
-                  KITS="$(echo "$KITS" | tr " " "\n" | sed "s/@.*//" | tr "\n" " ")"
                   # Install only after every kit exists: core-kit resolves its
                   # siblings through file:../<kit>, so they must already be on disk.
-                  for kit in $KITS; do
-                      (cd "$GITHUB_WORKSPACE/../$kit" && bun install)
-                  done
+                  scripts/fetch_config_kits.sh
 
             - name: Install dependencies
               working-directory: ./dashboard
