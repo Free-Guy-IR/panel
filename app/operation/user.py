@@ -64,7 +64,7 @@ from app.fork.crud.user_locks import (
 )
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.usage_guard import usage_aggregation_guard
-from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
+from app.fork.operation.user_extras import UserExtrasMixin, keep_stored_entitled_secrets, prepare_fork_proxy_settings
 from app.fork.operation.user_guards import (
     enforce_next_plan_limits,
     ensure_owner_target_allowed,
@@ -858,12 +858,13 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         if modified_user.next_plan is not None and modified_user.next_plan.user_template_id is not None:
             await self._get_validated_template_with_access(db, modified_user.next_plan.user_template_id, admin)
 
-        effective_groups = validated_groups if validated_groups is not None else db_user.groups
-        await self._lock_user_proxy_settings(db, db_user)
+        effective_groups = await self._lock_user_proxy_settings(db, db_user, validated_groups)
         current_proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
         current_proxy_settings_data = current_proxy_settings.dict()
         proxy_settings_to_prepare = (
-            ProxyTable.model_validate(modified_user.proxy_settings.dict())
+            keep_stored_entitled_secrets(
+                ProxyTable.model_validate(modified_user.proxy_settings.dict()), current_proxy_settings
+            )
             if modified_user.proxy_settings is not None
             else ProxyTable.model_validate(current_proxy_settings_data)
         )
