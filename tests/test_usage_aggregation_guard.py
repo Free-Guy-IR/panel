@@ -12,7 +12,7 @@ import app.operation.user as user_operation
 from app.fork.operation import usage_guard
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.stats import Period
-from app.models.user import UsersUsageQuery
+from app.models.user import UsersUsageBreakdownQuery
 from app.operation import OperatorType
 from app.operation.user import UserOperation
 
@@ -23,9 +23,9 @@ def _owner(admin_id: int) -> AdminDetails:
     return AdminDetails(id=admin_id, username=f"owner{admin_id}", role=AdminRoleData(is_owner=True))
 
 
-def _query() -> UsersUsageQuery:
+def _query() -> UsersUsageBreakdownQuery:
     now = datetime.now(UTC)
-    return UsersUsageQuery(start=now - timedelta(days=1), end=now, period=Period.hour)
+    return UsersUsageBreakdownQuery(start=now - timedelta(days=1), end=now, period=Period.hour)
 
 
 @pytest.mark.asyncio
@@ -48,9 +48,9 @@ async def test_a_second_aggregation_for_the_same_admin_is_refused_while_the_firs
         return await operation.get_users_count_metric(None, admin, "online", _query())
 
     first = asyncio.create_task(run(_owner(1)))
-    await started.wait()
+    await asyncio.wait_for(started.wait(), timeout=5)
     with pytest.raises(HTTPException) as refused:
-        await run(_owner(1))
+        await asyncio.wait_for(run(_owner(1)), timeout=5)
     assert refused.value.status_code == 429
 
     other_admin = asyncio.create_task(run(_owner(2)))
@@ -132,7 +132,7 @@ async def test_the_usage_chart_and_the_count_chart_of_one_admin_load_side_by_sid
     operation = UserOperation(OperatorType.API)
 
     usage = asyncio.create_task(operation.get_users_usage(None, _owner(1), _query()))
-    await started.wait()
+    await asyncio.wait_for(started.wait(), timeout=5)
     assert await operation.get_users_count_metric(None, _owner(1), "online", _query()) == "count"
     released.set()
     assert await usage == "usage"

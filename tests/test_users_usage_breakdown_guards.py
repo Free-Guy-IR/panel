@@ -38,7 +38,7 @@ async def test_breakdown_parameters_cannot_skip_the_date_window_validation(extra
     ):
         await operator.get_users_usage(AsyncMock(), SimpleNamespace(), query)
 
-    validate.assert_awaited_once_with(START, END, True)
+    validate.assert_awaited_once_with(START, END, True, period=Period.hour)
     aggregate.assert_not_called()
 
 
@@ -69,7 +69,7 @@ async def test_core_filter_is_dropped_without_the_node_stats_permission():
         patch("app.operation.user._resolve_users_usage_admins_filter", AsyncMock(return_value=["self"])),
         patch("app.operation.user.get_all_users_usages", new_callable=AsyncMock) as aggregate,
     ):
-        await operator.get_users_usage(AsyncMock(), SimpleNamespace(), query)
+        await operator.get_users_usage(AsyncMock(), SimpleNamespace(id=1, is_owner=True, role=None), query)
 
     kwargs = aggregate.await_args.kwargs
     assert kwargs["core_id"] is None
