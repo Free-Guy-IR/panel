@@ -10,7 +10,7 @@ from app.db.crud.user import get_users_count_metrics
 from app.db.models import UserStatus
 from app.models.admin import AdminDetails
 from app.models.system import InboundSummary, SystemResourceStats, SystemStats, SystemUsersStats
-from app.operation.permissions import PermissionDenied, enforce_permission, is_scope_all
+from app.operation.permissions import PermissionDenied, enforce_permission, get_allowed_group_ids, is_scope_all
 from app.utils.system import cpu_usage, disk_usage, get_uptime, memory_usage
 
 from . import BaseOperation
@@ -79,9 +79,12 @@ class SystemOperation(BaseOperation):
         else:
             system = None
 
-        user_counts, online_users = await get_users_count_metrics(db, statuses, timedelta(minutes=2), admin_id)
+        allowed_group_ids = get_allowed_group_ids(admin)
+        user_counts, online_users = await get_users_count_metrics(
+            db, statuses, timedelta(minutes=2), admin_id, allowed_group_ids
+        )
 
-        if system is not None:
+        if system is not None and allowed_group_ids is None:
             uplink = system.uplink
             downlink = system.downlink
             admin_used_traffic = None
@@ -89,6 +92,8 @@ class SystemOperation(BaseOperation):
             uplink = 0
             downlink = 0
             admin_used_traffic = admin_param.used_traffic if admin_param else None
+            if allowed_group_ids is not None and admin_param is not None and admin_param.id != admin.id:
+                admin_used_traffic = None
 
         return SystemUsersStats(
             total_user=user_counts["total"],

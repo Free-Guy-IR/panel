@@ -1,4 +1,4 @@
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import NextPlan, UserTemplate, template_group_association
@@ -231,9 +231,10 @@ async def remove_user_templates(db: AsyncSession, template_ids: list[int]) -> No
     if not template_ids:
         return
 
+    await db.execute(select(UserTemplate.id).where(UserTemplate.id.in_(template_ids)).with_for_update())
     await db.execute(
         delete(template_group_association).where(template_group_association.c.user_template_id.in_(template_ids))
     )
-    await db.execute(update(NextPlan).where(NextPlan.user_template_id.in_(template_ids)).values(user_template_id=None))
+    await db.execute(delete(NextPlan).where(NextPlan.user_template_id.in_(template_ids)))
     await db.execute(delete(UserTemplate).where(UserTemplate.id.in_(template_ids)))
     await db.commit()

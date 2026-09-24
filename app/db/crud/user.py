@@ -31,6 +31,7 @@ from app.db.models import (
     users_groups_association,
 )
 from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.crud.owner_traffic import lock_owner_rows, shift_admin_traffic
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     auto_delete_due,
@@ -947,13 +948,17 @@ async def get_users_count(db: AsyncSession, status: UserStatus = None, admin_id:
 
 
 def _build_user_count_metrics_query(
-    statuses: list[UserStatus], online_since: datetime, admin_id: int | None = None
+    statuses: list[UserStatus],
+    online_since: datetime,
+    admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> Select:
     """Build one index-aware query for dashboard user counts."""
+    visible = [] if allowed_group_ids is None else [user_in_allowed_groups(User.id, allowed_group_ids)]
     if admin_id is not None:
         status_columns = [
             select(func.count(User.id))
-            .where(User.admin_id == admin_id, User.status == status)
+            .where(User.admin_id == admin_id, User.status == status, *visible)
             .scalar_subquery()
             .label(status.value)
             for status in statuses
@@ -964,6 +969,7 @@ def _build_user_count_metrics_query(
                 User.admin_id == admin_id,
                 User.online_at.isnot(None),
                 User.online_at >= online_since,
+                *visible,
             )
             .scalar_subquery()
             .label("online")
@@ -974,7 +980,10 @@ def _build_user_count_metrics_query(
     online_column = func.count(case((and_(User.online_at.isnot(None), User.online_at >= online_since), User.id))).label(
         "online"
     )
-    return select(*status_columns, online_column)
+    stmt = select(*status_columns, online_column)
+    if visible:
+        stmt = stmt.select_from(User).where(*visible)
+    return stmt
 
 
 async def get_users_count_metrics(
@@ -982,13 +991,14 @@ async def get_users_count_metrics(
     statuses: list[UserStatus],
     online_window: timedelta,
     admin_id: int | None = None,
+    allowed_group_ids: list[int] | None = None,
 ) -> tuple[dict[str, int], int]:
     """Return per-status, total, and recent-online user counts in one SELECT.
 
     The ``total`` value includes only the requested statuses. Pass every
     ``UserStatus`` value when a complete user count is required.
     """
-    stmt = _build_user_count_metrics_query(statuses, datetime.now(UTC) - online_window, admin_id)
+    stmt = _build_user_count_metrics_query(statuses, datetime.now(UTC) - online_window, admin_id, allowed_group_ids)
     row = (await db.execute(stmt)).one()
 
     status_counts = {status.value: int(getattr(row, status.value) or 0) for status in statuses}
@@ -2015,19 +2025,13 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
     Returns:
         User: The updated user object.
     """
-    old_admin = db_user.admin
+    locked = await lock_owner_rows(db, [db_user])
+    old_admin_id, used_traffic = locked.get(db_user.id, (db_user.admin_id, int(db_user.used_traffic or 0)))
     db_user.admin = admin
 
     # Update admin traffic counters
-    if old_admin and old_admin.id != admin.id:
-        await db.execute(
-            update(Admin)
-            .where(Admin.id == old_admin.id)
-            .values(used_traffic=Admin.used_traffic - db_user.used_traffic)
-        )
-        await db.execute(
-            update(Admin).where(Admin.id == admin.id).values(used_traffic=Admin.used_traffic + db_user.used_traffic)
-        )
+    if old_admin_id is not None and old_admin_id != admin.id:
+        await shift_admin_traffic(db, {old_admin_id: -used_traffic, admin.id: used_traffic})
 
     await db.commit()
     await refresh_and_load_user(db, db_user)
@@ -2047,31 +2051,21 @@ async def bulk_set_owner(db: AsyncSession, users: list[User], admin: Admin) -> l
         list[User]: The refreshed users.
     """
     # Group users by old admin to update traffic counters
-    admin_traffic_changes = {}
-    total_traffic_to_add = 0
+    locked = await lock_owner_rows(db, users)
+    admin_traffic_changes: dict[int, int] = {}
 
     for user in users:
-        old_admin = user.admin
-        if old_admin is not None and old_admin.id == admin.id:
+        old_admin_id, used_traffic = locked.get(user.id, (user.admin_id, int(user.used_traffic or 0)))
+        if old_admin_id is not None and old_admin_id == admin.id:
             continue
-        if old_admin is not None:
-            if old_admin.id not in admin_traffic_changes:
-                admin_traffic_changes[old_admin.id] = 0
-            admin_traffic_changes[old_admin.id] -= user.used_traffic
-        total_traffic_to_add += user.used_traffic
+        if old_admin_id is not None:
+            admin_traffic_changes[old_admin_id] = admin_traffic_changes.get(old_admin_id, 0) - used_traffic
+        admin_traffic_changes[admin.id] = admin_traffic_changes.get(admin.id, 0) + used_traffic
         user.admin = admin
 
     # Update old admins' traffic
-    for admin_id, traffic_change in admin_traffic_changes.items():
-        await db.execute(
-            update(Admin).where(Admin.id == admin_id).values(used_traffic=Admin.used_traffic + traffic_change)
-        )
-
     # Update new admin's traffic
-    if total_traffic_to_add > 0:
-        await db.execute(
-            update(Admin).where(Admin.id == admin.id).values(used_traffic=Admin.used_traffic + total_traffic_to_add)
-        )
+    await shift_admin_traffic(db, admin_traffic_changes)
 
     await db.commit()
     for user in users:

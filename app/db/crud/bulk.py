@@ -86,7 +86,9 @@ async def reset_all_users_data_usage(
     await db.commit()
 
 
-async def disable_all_active_users(db: AsyncSession, admin: Admin | None = None):
+async def disable_all_active_users(
+    db: AsyncSession, admin: Admin | None = None, *, allowed_group_ids: list[int] | None = None
+):
     """
     Disable all active users or users under a specific admin.
 
@@ -97,6 +99,8 @@ async def disable_all_active_users(db: AsyncSession, admin: Admin | None = None)
     query = update(User).where(User.status.in_((UserStatus.active, UserStatus.on_hold)))
     if admin:
         query = query.filter(User.admin_id == admin.id)
+    if allowed_group_ids is not None:
+        query = query.filter(user_in_allowed_groups(User.id, allowed_group_ids))
 
     await db.execute(
         query.values(
@@ -108,7 +112,9 @@ async def disable_all_active_users(db: AsyncSession, admin: Admin | None = None)
     await db.refresh(admin)
 
 
-async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = None):
+async def activate_all_disabled_users(
+    db: AsyncSession, admin: Admin | None = None, *, allowed_group_ids: list[int] | None = None
+):
     """
     Activate all disabled users or users under a specific admin.
 
@@ -122,6 +128,8 @@ async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = No
     filters = [User.status == UserStatus.disabled]
     if admin:
         filters.append(User.admin_id == admin.id)
+    if allowed_group_ids is not None:
+        filters.append(user_in_allowed_groups(User.id, allowed_group_ids))
 
     status_type = User.__table__.c.status.type
     status_case = case(

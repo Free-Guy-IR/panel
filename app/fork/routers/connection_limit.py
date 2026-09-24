@@ -9,6 +9,7 @@ from app import notification
 from app.db import get_db
 from app.db.crud.settings import get_settings
 from app.db.models import ConnectionRestriction, User, UserConnectionLimit, UserConnectionState
+from app.fork.crud.group_scope import user_in_allowed_groups
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.admin import AdminDetails
 from app.models.connection_limit import (
@@ -24,7 +25,7 @@ from app.models.connection_limit import (
 )
 from app.models.settings import ConnectionLimit
 from app.operation import OperatorType
-from app.operation.permissions import get_scope_admin_id
+from app.operation.permissions import get_allowed_group_ids, get_scope_admin_id
 from app.operation.user import UserOperation
 from app.routers.authentication import require_permission
 from app.utils.connection_enforcement import active_restriction, release
@@ -34,6 +35,16 @@ from app.utils.logger import get_logger
 router = APIRouter(tags=["Connection Limit"], prefix="/api/connection-limit")
 logger = get_logger("connection-limit-api")
 user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
+
+
+def _visible_users(stmt, admin: AdminDetails, action: str):
+    scope_admin_id = get_scope_admin_id(admin, "users", action)
+    if scope_admin_id is not None:
+        stmt = stmt.where(User.admin_id == scope_admin_id)
+    allowed_group_ids = get_allowed_group_ids(admin)
+    if allowed_group_ids is not None:
+        stmt = stmt.where(user_in_allowed_groups(User.id, allowed_group_ids))
+    return stmt
 
 
 async def _settings(db: AsyncSession) -> ConnectionLimit:
@@ -59,11 +70,10 @@ async def list_connection_states(
 ):
     """Users ordered by how many devices were last seen on them."""
     settings = await _settings(db)
-    scope_admin_id = get_scope_admin_id(admin, "users", "read")
 
-    stmt = select(UserConnectionState, User.username).join(User, User.id == UserConnectionState.user_id)
-    if scope_admin_id is not None:
-        stmt = stmt.where(User.admin_id == scope_admin_id)
+    stmt = _visible_users(
+        select(UserConnectionState, User.username).join(User, User.id == UserConnectionState.user_id), admin, "read"
+    )
     if verdict:
         stmt = stmt.where(UserConnectionState.verdict == verdict)
     if min_devices is not None:
@@ -115,14 +125,13 @@ async def connection_states_for_users(
             monitor_only=settings.monitor_only,
         )
 
-    scope_admin_id = get_scope_admin_id(admin, "users", "read")
-    stmt = (
+    stmt = _visible_users(
         select(UserConnectionState, User.username)
         .join(User, User.id == UserConnectionState.user_id)
-        .where(UserConnectionState.user_id.in_(user_ids[:500]))
+        .where(UserConnectionState.user_id.in_(user_ids[:500])),
+        admin,
+        "read",
     )
-    if scope_admin_id is not None:
-        stmt = stmt.where(User.admin_id == scope_admin_id)
 
     rows = (await db.execute(stmt)).all()
 
@@ -156,11 +165,10 @@ async def list_overrides(
 ):
     """Users given their own allowance, or exempted from checking."""
     settings = await _settings(db)
-    scope_admin_id = get_scope_admin_id(admin, "users", "read")
 
-    stmt = select(UserConnectionLimit, User.username).join(User, User.id == UserConnectionLimit.user_id)
-    if scope_admin_id is not None:
-        stmt = stmt.where(User.admin_id == scope_admin_id)
+    stmt = _visible_users(
+        select(UserConnectionLimit, User.username).join(User, User.id == UserConnectionLimit.user_id), admin, "read"
+    )
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = (await db.execute(stmt.order_by(User.username).limit(limit).offset(offset))).all()
 
@@ -183,11 +191,7 @@ async def set_override(
     admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
     """Give one user their own allowance, or exempt them."""
-    scope_admin_id = get_scope_admin_id(admin, "users", "update")
-    user_stmt = select(User).where(User.id == user_id)
-    if scope_admin_id is not None:
-        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
-    user = (await db.execute(user_stmt)).scalar()
+    user = (await db.execute(_visible_users(select(User).where(User.id == user_id), admin, "update"))).scalar()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -214,10 +218,7 @@ async def clear_override(
     admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
     """Put a user back on the default allowance."""
-    scope_admin_id = get_scope_admin_id(admin, "users", "update")
-    user_stmt = select(User.id).where(User.id == user_id)
-    if scope_admin_id is not None:
-        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
+    user_stmt = _visible_users(select(User.id).where(User.id == user_id), admin, "update")
     if (await db.execute(user_stmt)).scalar() is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -241,10 +242,7 @@ async def resolve_user_addresses(
     """
     settings = await _settings(db)
 
-    scope_admin_id = get_scope_admin_id(admin, "users", "read")
-    user_stmt = select(User.id).where(User.id == user_id)
-    if scope_admin_id is not None:
-        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
+    user_stmt = _visible_users(select(User.id).where(User.id == user_id), admin, "read")
     if (await db.execute(user_stmt)).scalar() is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -286,11 +284,12 @@ async def list_violations(
 ):
     """Every time the limiter acted on someone, most recent first."""
     settings = await _settings(db)
-    scope_admin_id = get_scope_admin_id(admin, "users", "read")
 
-    stmt = select(ConnectionRestriction, User.username).join(User, User.id == ConnectionRestriction.user_id)
-    if scope_admin_id is not None:
-        stmt = stmt.where(User.admin_id == scope_admin_id)
+    stmt = _visible_users(
+        select(ConnectionRestriction, User.username).join(User, User.id == ConnectionRestriction.user_id),
+        admin,
+        "read",
+    )
     if user_id is not None:
         stmt = stmt.where(ConnectionRestriction.user_id == user_id)
     if active_only:
@@ -339,11 +338,7 @@ async def release_user(
     The one that matters for the last step, which has no time on it and would
     otherwise stay until someone did this.
     """
-    scope_admin_id = get_scope_admin_id(admin, "users", "update")
-    user_stmt = select(User).where(User.id == user_id)
-    if scope_admin_id is not None:
-        user_stmt = user_stmt.where(User.admin_id == scope_admin_id)
-    user = (await db.execute(user_stmt)).scalar()
+    user = (await db.execute(_visible_users(select(User).where(User.id == user_id), admin, "update"))).scalar()
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
 

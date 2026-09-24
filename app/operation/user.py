@@ -59,6 +59,11 @@ from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
+from app.fork.operation.user_guards import (
+    enforce_next_plan_limits,
+    ensure_owner_target_allowed,
+    reject_negative_next_plan,
+)
 from app.fork.proxy_secrets import ProxySecretUniquenessError
 from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
 from app.models.admin import AdminDetails
@@ -523,6 +528,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         require_finite_hwid_limit: bool = True,
     ) -> None:
         """Enforce role-level limits and feature flags. No-op for owner."""
+        if next_plan is not None:
+            await reject_negative_next_plan(self, db, next_plan)
         if admin.is_owner:
             return
 
@@ -657,6 +664,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                     await self.raise_error(message="Reset strategy is not allowed for your role", code=403, db=db)
             if next_plan is not None and not features.can_use_next_plan:
                 await self.raise_error(message="Next plan is not allowed for your role", code=403, db=db)
+
+        if next_plan is not None and next_plan.user_template_id is None:
+            await enforce_next_plan_limits(self, db, limits, next_plan)
 
     async def _enforce_manual_user_write_access(self, admin: AdminDetails, db: AsyncSession) -> None:
         if admin.is_owner or admin.role is None:
@@ -1028,6 +1038,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             admin_ids=[scope_admin_id] if scope_admin_id is not None else None,
             limit=len(ids_list),
         )
+        query, no_allowed_groups = restrict_users_query_by_groups(admin, query)
+        if no_allowed_groups:
+            await self.raise_error(message="User not found", code=404)
         users = await get_users(db, query=query, load_admin_role=load_admin_role)
 
         # Verify every requested ID was found (mirrors the 404 in get_validated_user_by_id)
@@ -1370,6 +1383,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         )
         new_admin = await self.get_validated_admin(db, username=admin_username)
         db_user = await self.get_validated_user(db, username, admin, scope_action="set_owner")
+        await ensure_owner_target_allowed(self, new_admin, admin)
         return await self._set_owner(db, db_user, new_admin, admin)
 
     async def set_owner_by_id(
@@ -1377,6 +1391,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     ) -> UserResponse:
         new_admin = await self.get_validated_admin(db, username=admin_username)
         db_user = await self.get_validated_user_by_id(db, user_id, admin, scope_action="set_owner")
+        await ensure_owner_target_allowed(self, new_admin, admin)
         return await self._set_owner(db, db_user, new_admin, admin)
 
     async def bulk_set_owner(
@@ -1386,6 +1401,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="set_owner"
         )
+        await ensure_owner_target_allowed(self, new_admin, admin)
 
         db_users = await bulk_set_owner(db, db_users, new_admin)
         users = [await self.validate_user(db_user) for db_user in db_users]

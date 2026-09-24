@@ -2,8 +2,6 @@ from datetime import UTC, datetime as dt, timedelta as td
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
-
 from app import notification
 from app.db.crud.user import get_user_by_id
 from app.db.models import Admin, User, UserStatus
@@ -71,10 +69,6 @@ async def test_limiter_release_re_enables_a_user_the_admin_disabled_meanwhile(mo
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the admin-wide call site in AdminOperation._disable_all_active_users_for_admin is wired by P8 (f9af373de)",
-)
 async def test_limiter_release_re_enables_a_user_whose_admin_disabled_every_user_meanwhile(monkeypatch):
     from app.db.crud.admin import get_admin_by_id
     from app.operation.admin import AdminOperation
