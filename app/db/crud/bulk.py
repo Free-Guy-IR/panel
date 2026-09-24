@@ -15,6 +15,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
+from app.fork.crud.group_scope import user_in_allowed_groups
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
 
@@ -37,6 +38,7 @@ async def reset_all_users_data_usage(
     admin: Admin | None = None,
     *,
     clean_chart_data: bool = False,
+    allowed_group_ids: list[int] | None = None,
 ):
     """
     Efficiently resets data usage for all users, or users under a specific admin if provided.
@@ -61,6 +63,8 @@ async def reset_all_users_data_usage(
         - The function commits changes at the end of the operation.
     """
     user_ids_query = select(User.id).where(User.admin_id == admin.id) if admin else select(User.id)
+    if allowed_group_ids is not None:
+        user_ids_query = user_ids_query.where(user_in_allowed_groups(User.id, allowed_group_ids))
     user_ids = (await db.execute(user_ids_query)).scalars().all()
 
     if not user_ids:
@@ -142,7 +146,7 @@ async def activate_all_disabled_users(db: AsyncSession, admin: Admin | None = No
     await db.refresh(admin)
 
 
-def _create_group_filter(bulk_model: BulkGroup):
+def _create_group_filter(bulk_model: BulkGroup, allowed_group_ids: list[int] | None = None):
     """Create a comprehensive SQLAlchemy filter condition from a BulkGroup model."""
     other_conditions = []
     if bulk_model.admins:
@@ -161,18 +165,23 @@ def _create_group_filter(bulk_model: BulkGroup):
         filter_conditions.append(and_(*other_conditions))
 
     if len(filter_conditions) > 1:
-        return or_(*filter_conditions)
+        target = or_(*filter_conditions)
     elif filter_conditions:
-        return filter_conditions[0]
+        target = filter_conditions[0]
     else:
-        return True
+        target = True
+    if allowed_group_ids is None:
+        return target
+    return and_(target, user_in_allowed_groups(User.id, allowed_group_ids))
 
 
-async def add_groups_to_users(db: AsyncSession, bulk_model: BulkGroup) -> tuple[list, int] | tuple[list[User], int]:
+async def add_groups_to_users(
+    db: AsyncSession, bulk_model: BulkGroup, allowed_group_ids: list[int] | None = None
+) -> tuple[list, int] | tuple[list[User], int]:
     """
     Bulk add groups to users and return list of affected User objects.
     """
-    final_filter = _create_group_filter(bulk_model)
+    final_filter = _create_group_filter(bulk_model, allowed_group_ids)
 
     # Get target user IDs
     result = await db.execute(select(User.id).where(final_filter))
@@ -214,12 +223,12 @@ async def add_groups_to_users(db: AsyncSession, bulk_model: BulkGroup) -> tuple[
 
 
 async def remove_groups_from_users(
-    db: AsyncSession, bulk_model: BulkGroup
+    db: AsyncSession, bulk_model: BulkGroup, allowed_group_ids: list[int] | None = None
 ) -> tuple[list, int] | tuple[list[User], int]:
     """
     Bulk remove groups from users and return list of affected User objects.
     """
-    final_filter = _create_group_filter(bulk_model)
+    final_filter = _create_group_filter(bulk_model, allowed_group_ids)
 
     # Get target user IDs
     result = await db.execute(select(User.id).where(final_filter))
@@ -259,15 +268,19 @@ async def remove_groups_from_users(
     return users, count_effctive_users
 
 
-async def count_bulk_expire_targets(db: AsyncSession, bulk_model: BulkUser) -> int:
-    final_filter = _create_final_filter(bulk_model)
+async def count_bulk_expire_targets(
+    db: AsyncSession, bulk_model: BulkUser, allowed_group_ids: list[int] | None = None
+) -> int:
+    final_filter = _create_final_filter(bulk_model, allowed_group_ids)
     return (
         await db.execute(select(func.count(User.id)).where(and_(final_filter, User.expire.isnot(None))))
     ).scalar_one_or_none() or 0
 
 
-async def count_bulk_datalimit_targets(db: AsyncSession, bulk_model: BulkUser) -> int:
-    final_filter = _create_final_filter(bulk_model)
+async def count_bulk_datalimit_targets(
+    db: AsyncSession, bulk_model: BulkUser, allowed_group_ids: list[int] | None = None
+) -> int:
+    final_filter = _create_final_filter(bulk_model, allowed_group_ids)
     return (
         await db.execute(
             select(func.count(User.id)).where(and_(final_filter, User.data_limit.isnot(None), User.data_limit != 0))
@@ -275,17 +288,21 @@ async def count_bulk_datalimit_targets(db: AsyncSession, bulk_model: BulkUser) -
     ).scalar_one_or_none() or 0
 
 
-async def count_bulk_proxy_targets(db: AsyncSession, bulk_model: BulkUsersProxy) -> int:
-    final_filter = _create_final_filter(bulk_model)
+async def count_bulk_proxy_targets(
+    db: AsyncSession, bulk_model: BulkUsersProxy, allowed_group_ids: list[int] | None = None
+) -> int:
+    final_filter = _create_final_filter(bulk_model, allowed_group_ids)
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
 
-async def count_bulk_group_scope(db: AsyncSession, bulk_model: BulkGroup) -> int:
-    final_filter = _create_group_filter(bulk_model)
+async def count_bulk_group_scope(
+    db: AsyncSession, bulk_model: BulkGroup, allowed_group_ids: list[int] | None = None
+) -> int:
+    final_filter = _create_group_filter(bulk_model, allowed_group_ids)
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
 
-def _create_final_filter(bulk_model: BulkUserFilter):
+def _create_final_filter(bulk_model: BulkUserFilter, allowed_group_ids: list[int] | None = None):
     """Create a comprehensive SQLAlchemy filter condition from a bulk model."""
     restrictions = []
     if bulk_model.status:
@@ -310,87 +327,84 @@ def _create_final_filter(bulk_model: BulkUserFilter):
     conditions = list(restrictions)
     if targets:
         conditions.append(or_(*targets))
+    if allowed_group_ids is not None:
+        conditions.append(user_in_allowed_groups(User.id, allowed_group_ids))
 
     if not conditions:
         return True
     return and_(*conditions)
 
 
-async def update_users_expire(db: AsyncSession, bulk_model: BulkUser) -> tuple[list[User], int] | tuple[list, int]:
+BULK_STATUS_CHUNK_SIZE = 5000
+
+
+def _id_chunks(user_ids: list[int]) -> list[list[int]]:
+    return [user_ids[i : i + BULK_STATUS_CHUNK_SIZE] for i in range(0, len(user_ids), BULK_STATUS_CHUNK_SIZE)]
+
+
+async def _lock_bulk_targets(db: AsyncSession, condition) -> dict[int, UserStatus]:
+    rows = await db.execute(select(User.id, User.status).where(condition).order_by(User.id).with_for_update())
+    return {user_id: status for user_id, status in rows.all()}
+
+
+async def _apply_to_locked_targets(
+    db: AsyncSession, locked: dict[int, UserStatus], conditions: tuple, **values
+) -> list[User]:
+    changed_ids: list[int] = []
+    for chunk in _id_chunks(sorted(locked)):
+        await db.execute(update(User).where(User.id.in_(chunk), *conditions).values(**values))
+        rows = await db.execute(select(User.id, User.status).where(User.id.in_(chunk)).with_for_update())
+        changed_ids.extend(user_id for user_id, status in rows.all() if status != locked[user_id])
+    await db.commit()
+
+    users: list[User] = []
+    for chunk in _id_chunks(changed_ids):
+        users.extend((await db.execute(_bulk_user_reload_stmt().where(User.id.in_(chunk)))).scalars().all())
+    return users
+
+
+async def update_users_expire(
+    db: AsyncSession, bulk_model: BulkUser, allowed_group_ids: list[int] | None = None
+) -> tuple[list[User], int] | tuple[list, int]:
     """
     Bulk update user expiration dates and return list of User objects where status changed.
     """
-    final_filter = _create_final_filter(bulk_model)
+    target_conditions = (User.expire.isnot(None),)
+    locked = await _lock_bulk_targets(db, and_(_create_final_filter(bulk_model, allowed_group_ids), *target_conditions))
+    if not locked:
+        await db.commit()
+        return [], 0
 
-    count_effctive_users = (
-        await db.execute(select(func.count(User.id)).where(and_(final_filter, User.expire.isnot(None))))
-    ).scalar_one_or_none() or 0
-    # Get database-specific datetime addition expression
     new_expire = get_datetime_add_expression(db, User.expire, bulk_model.amount)
     current_time = dt.now(UTC)
-
-    # First, get the users that will have status changes BEFORE updating
-    status_change_conditions = or_(
-        and_(new_expire <= current_time, User.status == UserStatus.active),
-        and_(new_expire > current_time, User.status == UserStatus.expired),
-    )
-
-    # Get IDs of users whose status will change
-    result = await db.execute(
-        select(User.id).where(and_(final_filter, User.expire.isnot(None), status_change_conditions))
-    )
-    status_changed_user_ids = [row[0] for row in result.fetchall()]
-
-    # Perform the update
     status_cases = [
         (and_(new_expire <= current_time, User.status == UserStatus.active), UserStatus.expired),
         (and_(new_expire > current_time, User.status == UserStatus.expired), UserStatus.active),
     ]
-
-    await db.execute(
-        update(User)
-        .where(and_(final_filter, User.expire.isnot(None)))
-        .values(expire=new_expire, status=case(*status_cases, else_=User.status))
+    users = await _apply_to_locked_targets(
+        db,
+        locked,
+        target_conditions,
+        expire=new_expire,
+        status=case(*status_cases, else_=User.status),
     )
-    await db.commit()
-
-    # Return the users whose status changed
-    if status_changed_user_ids:
-        result = await db.execute(_bulk_user_reload_stmt().where(User.id.in_(status_changed_user_ids)))
-        users = result.scalars().all()
-        return users, count_effctive_users
-    return [], count_effctive_users
+    return users, len(locked)
 
 
-async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> tuple[list[User], int] | tuple[list, int]:
+async def update_users_datalimit(
+    db: AsyncSession, bulk_model: BulkUser, allowed_group_ids: list[int] | None = None
+) -> tuple[list[User], int] | tuple[list, int]:
     """
     Bulk update user data limits and return list of User objects where status changed.
     """
-    final_filter = _create_final_filter(bulk_model)
-
-    extra_condition = [User.data_limit.isnot(None), User.data_limit != 0]
+    target_conditions = [User.data_limit.isnot(None), User.data_limit != 0]
     if bulk_model.amount < 0:
-        extra_condition.append(User.data_limit > bulk_model.amount * -1)
+        target_conditions.append(User.data_limit > bulk_model.amount * -1)
+    locked = await _lock_bulk_targets(db, and_(_create_final_filter(bulk_model, allowed_group_ids), *target_conditions))
+    if not locked:
+        await db.commit()
+        return [], 0
 
-    count_effctive_users = (
-        await db.execute(select(func.count(User.id)).where(and_(final_filter, *extra_condition)))
-    ).scalar_one_or_none() or 0
-
-    # First, get the users that will have status changes BEFORE updating
-    status_change_conditions = or_(
-        and_(User.data_limit + bulk_model.amount <= User.used_traffic, User.status == UserStatus.active),
-        and_(User.data_limit + bulk_model.amount > User.used_traffic, User.status == UserStatus.limited),
-    )
-
-    # Get IDs of users whose status will change
-    result = await db.execute(
-        select(User.id).where(
-            and_(final_filter, User.data_limit.isnot(None), User.data_limit != 0, status_change_conditions)
-        )
-    )
-    status_changed_user_ids = [row[0] for row in result.fetchall()]
-
-    # Perform the update
     status_cases = [
         (
             and_(User.data_limit + bulk_model.amount <= User.used_traffic, User.status == UserStatus.active),
@@ -401,30 +415,23 @@ async def update_users_datalimit(db: AsyncSession, bulk_model: BulkUser) -> tupl
             UserStatus.active,
         ),
     ]
-
-    await db.execute(
-        update(User)
-        .where(and_(final_filter, *extra_condition))
-        .values(data_limit=User.data_limit + bulk_model.amount, status=case(*status_cases, else_=User.status))
+    users = await _apply_to_locked_targets(
+        db,
+        locked,
+        tuple(target_conditions),
+        data_limit=User.data_limit + bulk_model.amount,
+        status=case(*status_cases, else_=User.status),
     )
-
-    await db.commit()
-
-    # Return the users whose status changed
-    if status_changed_user_ids:
-        result = await db.execute(_bulk_user_reload_stmt().where(User.id.in_(status_changed_user_ids)))
-        users = result.scalars().all()
-        return users, count_effctive_users
-    return [], count_effctive_users
+    return users, len(locked)
 
 
 async def update_users_proxy_settings(
-    db: AsyncSession, bulk_model: BulkUsersProxy
+    db: AsyncSession, bulk_model: BulkUsersProxy, allowed_group_ids: list[int] | None = None
 ) -> tuple[list, int] | tuple[list[User], int]:
     """
     Bulk update the `proxy_settings` JSON field for users and return updated rows.
     """
-    final_filter = _create_final_filter(bulk_model)
+    final_filter = _create_final_filter(bulk_model, allowed_group_ids)
 
     # Capture target IDs without materializing users before the update.
     select_stmt = select(User.id).where(final_filter)

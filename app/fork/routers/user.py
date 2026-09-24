@@ -89,9 +89,9 @@ already unique are never touched."""
 async def bulk_activate_mtproto_secrets(
     bulk_model: BulkUserFilter,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
-    return await user_operator.bulk_activate_mtproto_secrets(db, bulk_model)
+    return await user_operator.bulk_activate_mtproto_secrets(db, bulk_model, admin)
 
 
 @router.post(
@@ -103,9 +103,9 @@ async def bulk_activate_mtproto_secrets(
 async def bulk_activate_l2tp_passwords(
     bulk_model: BulkUserFilter,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
-    return await user_operator.bulk_activate_l2tp_passwords(db, bulk_model)
+    return await user_operator.bulk_activate_l2tp_passwords(db, bulk_model, admin)
 
 
 @router.post(
@@ -117,9 +117,9 @@ async def bulk_activate_l2tp_passwords(
 async def bulk_repair_duplicate_proxy_secrets(
     bulk_model: BulkRepairProxySecrets,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
-    return await user_operator.bulk_repair_duplicate_proxy_secrets(db, bulk_model)
+    return await user_operator.bulk_repair_duplicate_proxy_secrets(db, bulk_model, admin)
 
 
 @router.post(
@@ -131,6 +131,6 @@ async def bulk_repair_duplicate_proxy_secrets(
 async def bulk_activate_openvpn_passwords(
     bulk_model: BulkUserFilter,
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_scope_all("users", "update")),
+    admin: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
-    return await user_operator.bulk_activate_openvpn_passwords(db, bulk_model)
+    return await user_operator.bulk_activate_openvpn_passwords(db, bulk_model, admin)

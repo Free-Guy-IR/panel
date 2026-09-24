@@ -25,6 +25,7 @@ from app.fork.proxy_secrets.wireguard_scope import drop_unentitled_wireguard_key
 from app.models.proxy import ProxyTable
 from app.models.user import BulkOperationDryRunResponse, BulkUserFilter
 from app.operation import OperatorType
+from app.operation.permissions import get_allowed_group_ids
 from app.utils.l2tp import prepare_l2tp_password
 from app.utils.logger import get_logger
 from app.utils.mtproto import prepare_mtproto_secret
@@ -37,6 +38,10 @@ def _user_mod():
     from app.operation import user as user_mod
 
     return user_mod
+
+
+def _allowed_group_ids(admin) -> list[int] | None:
+    return None if admin is None else get_allowed_group_ids(admin)
 
 
 async def prepare_fork_proxy_settings(
@@ -64,10 +69,12 @@ class UserExtrasMixin:
             raise exc
         await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
-    async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
-        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)
+    async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
+        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password, admin)
 
-    async def bulk_repair_duplicate_proxy_secrets(self, db: AsyncSession, bulk_model: BulkRepairProxySecrets):
+    async def bulk_repair_duplicate_proxy_secrets(
+        self, db: AsyncSession, bulk_model: BulkRepairProxySecrets, admin=None
+    ):
         user_mod = _user_mod()
         specs = specs_for(bulk_model.secret_fields)
         if not bulk_model.dry_run:
@@ -82,7 +89,7 @@ class UserExtrasMixin:
             if values:
                 shared[spec.field] = (spec, values)
 
-        candidates = await get_users_with_duplicate_secrets(db, shared, bulk_model)
+        candidates = await get_users_with_duplicate_secrets(db, shared, bulk_model, _allowed_group_ids(admin))
 
         taken = {field: set(values) for field, (_, values) in shared.items()}
         to_update: list[tuple[User, dict]] = []
@@ -127,12 +134,16 @@ class UserExtrasMixin:
         return len(updated_users)
 
     async def _bulk_activate_entitled_secret(
-        self, db: AsyncSession, bulk_model: BulkUserFilter, secret_field: EntitledSecretField
+        self, db: AsyncSession, bulk_model: BulkUserFilter, secret_field: EntitledSecretField, admin=None
     ):
         from app.db.crud.bulk import _create_final_filter
 
         user_mod = _user_mod()
-        candidate_ids = (await db.execute(select(User.id).where(_create_final_filter(bulk_model)))).scalars().all()
+        candidate_ids = (
+            (await db.execute(select(User.id).where(_create_final_filter(bulk_model, _allowed_group_ids(admin)))))
+            .scalars()
+            .all()
+        )
         try:
             run = await issue_missing_entitled_secrets(
                 db,
@@ -156,8 +167,8 @@ class UserExtrasMixin:
             return {"detail": f"operation has been successfuly done on {run.granted} users"}
         return run.granted
 
-    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter):
-        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.mtproto_secret)
+    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
+        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.mtproto_secret, admin)
 
-    async def bulk_activate_openvpn_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
-        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.openvpn_password)
+    async def bulk_activate_openvpn_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
+        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.openvpn_password, admin)

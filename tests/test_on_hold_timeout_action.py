@@ -29,18 +29,8 @@ async def _validate(db_user, include_subscription_url=True):
     return SimpleNamespace(id=db_user.id, username=db_user.username)
 
 
-async def _run_job(action: OnHoldTimeoutAction, users, *, remove_side_effect=None):
+async def _run_job(action: OnHoldTimeoutAction, users):
     session = AsyncMock()
-    calls: list[str] = []
-
-    async def _remove_awaited(user):
-        calls.append(f"node:{user.id}")
-        if remove_side_effect is not None:
-            raise remove_side_effect
-
-    async def _remove_users(_db, db_users):
-        calls.append("db:" + ",".join(str(u.id) for u in db_users))
-
     patches = {
         "GetDB": patch("app.jobs.review_users.GetDB", _get_db(session)),
         "get_users": patch(
@@ -51,17 +41,9 @@ async def _run_job(action: OnHoldTimeoutAction, users, *, remove_side_effect=Non
             new_callable=AsyncMock,
             return_value=General(on_hold_timeout_action=action),
         ),
-        "update_status": patch(
-            "app.jobs.review_users.update_users_status", new_callable=AsyncMock, side_effect=lambda _db, u, _s: u
-        ),
-        "start_expire": patch(
-            "app.jobs.review_users.start_users_expire", new_callable=AsyncMock, side_effect=lambda _db, u: u
-        ),
-        "apply": patch("app.jobs.review_users.apply_status_changes", new_callable=AsyncMock),
-        "remove_awaited": patch("app.jobs.review_users.sync_remove_user_awaited", side_effect=_remove_awaited),
-        "remove_users": patch("app.jobs.review_users.remove_users", side_effect=_remove_users),
-        "notify": patch("app.jobs.review_users.notification.remove_user", new_callable=AsyncMock),
-        "validate": patch.object(review_users.user_operator, "validate_user", side_effect=_validate),
+        "activate": patch("app.jobs.review_users.start_on_hold_users_under_lock", new_callable=AsyncMock),
+        "disable": patch("app.jobs.review_users.disable_on_hold_users_under_lock", new_callable=AsyncMock),
+        "delete": patch("app.jobs.review_users.remove_on_hold_users_under_lock", new_callable=AsyncMock),
     }
     mocks = {name: p.start() for name, p in patches.items()}
     try:
@@ -69,41 +51,56 @@ async def _run_job(action: OnHoldTimeoutAction, users, *, remove_side_effect=Non
     finally:
         for p in patches.values():
             p.stop()
-    return mocks, calls
+    return mocks
+
+
+@pytest.mark.parametrize(
+    ("action", "chosen"),
+    [
+        (OnHoldTimeoutAction.activate, "activate"),
+        (OnHoldTimeoutAction.disable, "disable"),
+        (OnHoldTimeoutAction.delete, "delete"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_each_action_hands_the_candidate_ids_to_its_locked_path(action, chosen):
+    users = [_db_user(2), _db_user(1)]
+    mocks = await _run_job(action, users)
+
+    mocks[chosen].assert_awaited_once_with([2, 1])
+    for other in {"activate", "disable", "delete"} - {chosen}:
+        mocks[other].assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_default_action_activates_on_hold_users():
-    users = [_db_user(1), _db_user(2)]
-    mocks, calls = await _run_job(OnHoldTimeoutAction.activate, users)
+async def test_no_candidates_reads_no_settings_and_takes_no_path():
+    mocks = await _run_job(OnHoldTimeoutAction.delete, [])
 
-    mocks["start_expire"].assert_awaited_once()
-    mocks["apply"].assert_awaited_once()
-    assert mocks["apply"].await_args.args[1:] == (users, UserStatus.active)
-    mocks["update_status"].assert_not_called()
-    assert calls == []
-
-
-@pytest.mark.asyncio
-async def test_disable_action_disables_on_hold_users():
-    users = [_db_user(1)]
-    mocks, calls = await _run_job(OnHoldTimeoutAction.disable, users)
-
-    mocks["update_status"].assert_awaited_once()
-    assert mocks["update_status"].await_args.args[1:] == (users, UserStatus.disabled)
-    assert mocks["apply"].await_args.args[1:] == (users, UserStatus.disabled)
-    mocks["start_expire"].assert_not_called()
-    assert calls == []
+    mocks["settings"].assert_not_called()
+    for name in ("activate", "disable", "delete"):
+        mocks[name].assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_delete_action_removes_from_nodes_before_database():
     users = [_db_user(1), _db_user(2)]
-    mocks, calls = await _run_job(OnHoldTimeoutAction.delete, users)
+    calls: list[str] = []
+
+    async def _remove_awaited(user):
+        calls.append(f"node:{user.id}")
+
+    async def _remove_users(_db, db_users):
+        calls.append("db:" + ",".join(str(u.id) for u in db_users))
+
+    with (
+        patch("app.jobs.review_users.sync_remove_user_awaited", side_effect=_remove_awaited),
+        patch("app.jobs.review_users.remove_users", side_effect=_remove_users),
+        patch("app.jobs.review_users.notification.remove_user", new_callable=AsyncMock),
+        patch.object(review_users.user_operator, "validate_user", side_effect=_validate),
+    ):
+        await review_users.remove_on_hold_users(AsyncMock(), users)
 
     assert calls == ["node:1", "node:2", "db:1,2"]
-    mocks["start_expire"].assert_not_called()
-    mocks["apply"].assert_not_called()
 
 
 @pytest.mark.asyncio

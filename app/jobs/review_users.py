@@ -14,10 +14,15 @@ from app.db.crud.user import (
     get_usage_percentage_reached_users,
     remove_users,
     reset_user_by_next,
-    start_users_expire,
     update_users_status,
 )
 from app.db.models import ReminderType, User, UserStatus
+from app.fork.jobs.status_review import (
+    disable_on_hold_users_under_lock,
+    expire_users_under_lock,
+    remove_on_hold_users_under_lock,
+    start_on_hold_users_under_lock,
+)
 from app.fork.jobs.usage_limits import limit_users_under_lock
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import OnHoldTimeoutAction, Webhook
@@ -84,8 +89,9 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
 
 async def expire_users_job():
     async with GetDB() as db:
-        if expired_users := await get_active_to_expire_users(db):
-            await apply_status_changes(db, expired_users, UserStatus.expired)
+        expired_users = await get_active_to_expire_users(db)
+    if expired_users:
+        await expire_users_under_lock([user.id for user in expired_users])
 
 
 async def limit_users_job():
@@ -116,18 +122,20 @@ async def remove_on_hold_users(db: AsyncSession, db_users: list[User]):
 
 async def on_hold_to_active_users_job():
     async with GetDB() as db:
-        if on_hold_users := await get_on_hold_to_active_users(db):
-            settings = await general_settings()
+        on_hold_users = await get_on_hold_to_active_users(db)
+    if not on_hold_users:
+        return
 
-            match settings.on_hold_timeout_action:
-                case OnHoldTimeoutAction.disable:
-                    updated_users = await update_users_status(db, on_hold_users, UserStatus.disabled)
-                    await apply_status_changes(db, updated_users, UserStatus.disabled)
-                case OnHoldTimeoutAction.delete:
-                    await remove_on_hold_users(db, on_hold_users)
-                case _:
-                    updated_users = await start_users_expire(db, on_hold_users)
-                    await apply_status_changes(db, updated_users, UserStatus.active)
+    user_ids = [user.id for user in on_hold_users]
+    settings = await general_settings()
+
+    match settings.on_hold_timeout_action:
+        case OnHoldTimeoutAction.disable:
+            await disable_on_hold_users_under_lock(user_ids)
+        case OnHoldTimeoutAction.delete:
+            await remove_on_hold_users_under_lock(user_ids)
+        case _:
+            await start_on_hold_users_under_lock(user_ids)
 
 
 async def usage_percent_notification_job():

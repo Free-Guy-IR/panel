@@ -41,3 +41,53 @@ def test_only_users_selected_produces_a_plain_id_filter():
     sql = _sql(BulkUserFilter(users=[9]))
     assert "users.id IN (9)" in sql
     assert " OR " not in sql
+
+
+def _group_sql(bulk_model, allowed_group_ids):
+    from app.db.crud.bulk import _create_group_filter
+
+    return str(
+        select(User.id)
+        .where(_create_group_filter(bulk_model, allowed_group_ids))
+        .compile(compile_kwargs={"literal_binds": True})
+    )
+
+
+def test_allowed_groups_are_a_top_level_and_around_explicitly_listed_users():
+    sql = str(
+        select(User.id)
+        .where(_create_final_filter(BulkUserFilter(users=[1], group_ids=[7]), [3]))
+        .compile(compile_kwargs={"literal_binds": True})
+    )
+    where = sql.split("WHERE", 1)[1]
+    assert where.strip().startswith("(")
+    assert ") AND users.id IN (SELECT users_groups_association.user_id" in where
+    assert "users_groups_association.groups_id IN (3)" in where
+
+
+def test_an_empty_allowed_group_list_reaches_nobody():
+    sql = str(
+        select(User.id)
+        .where(_create_final_filter(BulkUserFilter(users=[1]), []))
+        .compile(compile_kwargs={"literal_binds": True})
+    )
+    assert "false" in sql.lower() or "0 = 1" in sql
+
+
+def test_unrestricted_callers_keep_the_plain_filter():
+    assert _create_final_filter(BulkUserFilter(), None) is True
+    assert _sql(BulkUserFilter(users=[1])) == str(
+        select(User.id)
+        .where(_create_final_filter(BulkUserFilter(users=[1]), None))
+        .compile(compile_kwargs={"literal_binds": True})
+    )
+
+
+def test_group_bulk_targets_are_restricted_with_a_top_level_and():
+    from app.models.group import BulkGroup
+
+    sql = _group_sql(BulkGroup(group_ids={1}, users={5}, admins={2}), [3])
+    where = sql.split("WHERE", 1)[1]
+    assert " OR " in where
+    assert ") AND users.id IN (SELECT users_groups_association.user_id" in where
+    assert _group_sql(BulkGroup(group_ids={1}, users={5}), None).count("users_groups_association") == 0

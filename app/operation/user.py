@@ -105,7 +105,7 @@ from app.models.user import (
     UsersUsageQuery,
     UserUsageQuery,
 )
-from app.node.sync import remove_user as sync_remove_user, sync_user, sync_users
+from app.node.sync import remove_users as sync_remove_users, sync_user, sync_users
 from app.operation import BaseOperation, OperatorType
 from app.operation.permissions import (
     PermissionDenied,
@@ -118,6 +118,7 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
+from app.utils.connection_enforcement import close_active_restriction, close_active_restrictions
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
@@ -167,6 +168,7 @@ async def _resolve_users_usage_admins_filter(
     return admins_filter
 
 
+ADMIN_STATUS_DECISION = "an admin set the user's status"
 logger = get_logger("user-operation")
 
 _USER_AGENT_SPLIT_RE = re.compile(r"[;/\s\(\)]+")
@@ -904,9 +906,13 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         old_status = db_user.status
         new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
+        closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
         if db_user.status != new_status:
             db_user.status = new_status
             db_user.last_status_change = dt.now(UTC)
+            await db.commit()
+            await load_user_attrs(db_user, load_admin_role=True)
+        elif closed:
             await db.commit()
             await load_user_attrs(db_user, load_admin_role=True)
 
@@ -977,7 +983,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     async def _remove_user(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> dict:
         user = await self.validate_user(db_user, include_subscription_url=False)
         await remove_user(db, db_user)
-        await sync_remove_user(user)
+        await sync_remove_users([db_user])
 
         asyncio.create_task(notification.remove_user(user, admin))
         logger.info(f'User "{db_user.username}" with id "{db_user.id}" deleted by admin "{admin.username}"')
@@ -1047,16 +1053,23 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         self, db: AsyncSession, bulk_users: BulkUsersSelection, admin: AdminDetails
     ) -> RemoveUsersResponse:
         db_users = await self._get_validated_users_by_ids(db, bulk_users.ids, admin, scope_action="delete")
-        users = [await self.validate_user(db_user, include_subscription_url=False) for db_user in db_users]
+        users_by_id = {
+            db_user.id: await self.validate_user(db_user, include_subscription_url=False) for db_user in db_users
+        }
+        deleted: list[UserNotificationResponse] = []
 
-        await remove_users(db, db_users)
+        async def push_removed(chunk: list[User]) -> None:
+            await sync_remove_users(chunk)
+            deleted.extend(users_by_id[db_user.id] for db_user in chunk)
 
-        for user in users:
-            await sync_remove_user(user)
-            asyncio.create_task(notification.remove_user(user, admin))
-            logger.info(f'User "{user.username}" with id "{user.id}" deleted by admin "{admin.username}"')
+        try:
+            await remove_users(db, db_users, on_chunk_deleted=push_removed)
+        finally:
+            for user in deleted:
+                asyncio.create_task(notification.remove_user(user, admin))
+                logger.info(f'User "{user.username}" with id "{user.id}" deleted by admin "{admin.username}"')
 
-        return RemoveUsersResponse(users=[user.username for user in users], count=len(users))
+        return RemoveUsersResponse(users=[user.username for user in deleted], count=len(deleted))
 
     async def _reset_user_data_usage(
         self,
@@ -1195,6 +1208,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 if db_user.id is not None:
                     modified_user_ids.append(db_user.id)
 
+            await close_active_restrictions(db, modified_user_ids, ADMIN_STATUS_DECISION)
             await db.commit()
         except Exception:
             await db.rollback()
@@ -1270,9 +1284,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="update"
         )
+        closed = await close_active_restrictions(db, [db_user.id for db_user in db_users], ADMIN_STATUS_DECISION)
         users_to_disable = [db_user for db_user in db_users if db_user.status != UserStatus.disabled]
 
         users = await self._bulk_set_users_disabled(db, users_to_disable, True, admin)
+        if closed and not users_to_disable:
+            await db.commit()
 
         return self._build_bulk_action_response(users)
 
@@ -1282,9 +1299,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="update"
         )
+        closed = await close_active_restrictions(db, [db_user.id for db_user in db_users], ADMIN_STATUS_DECISION)
         users_to_enable = [db_user for db_user in db_users if db_user.status == UserStatus.disabled]
 
         users = await self._bulk_set_users_disabled(db, users_to_enable, False, admin)
+        if closed and not users_to_enable:
+            await db.commit()
 
         return self._build_bulk_action_response(users)
 
@@ -1294,6 +1314,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db=db,
             admin=None,  # None = all admins, not filtered by owner
             clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
 
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
@@ -1607,6 +1628,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         self,
         db: AsyncSession,
         query: ExpiredUsersQuery,
+        admin: AdminDetails | None = None,
     ) -> list[str]:
         """
         Get users who match the cleanup target within the specified date range.
@@ -1627,6 +1649,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db,
             query=query.model_copy(update={"expired_after": expired_after, "expired_before": expired_before}),
             admin_id=admin_id,
+            allowed_group_ids=None if admin is None else get_allowed_group_ids(admin),
         )
         return [row.username for row in users]
 
@@ -1659,6 +1682,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             admin_id,
             target=query.target,
             dry_run=query.dry_run,
+            on_chunk_deleted=sync_remove_users,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         if not query.dry_run:
             await self.remove_users_logger(users=username_list, by=admin.username)
@@ -1783,6 +1808,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 emit_status_change_notification=not suppress_reset_status_change,
             )
 
+        await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
         return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
 
     async def modify_user_with_template(
@@ -1929,6 +1955,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 if db_user.id is not None:
                     modified_user_ids.append(db_user.id)
 
+            await close_active_restrictions(db, modified_user_ids, ADMIN_STATUS_DECISION)
             await db.commit()
         except Exception:
             await db.rollback()
@@ -1961,35 +1988,40 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         return self._build_bulk_action_response(users)
 
-    async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser):
+    async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails | None = None):
+        allowed_group_ids = None if admin is None else get_allowed_group_ids(admin)
         if bulk_model.dry_run:
-            n = await count_bulk_expire_targets(db, bulk_model)
+            n = await count_bulk_expire_targets(db, bulk_model, allowed_group_ids)
             return BulkOperationDryRunResponse(affected_users=n)
-        users, users_count = await update_users_expire(db, bulk_model)
+        users, users_count = await update_users_expire(db, bulk_model, allowed_group_ids)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
 
-    async def bulk_modify_datalimit(self, db: AsyncSession, bulk_model: BulkUser):
+    async def bulk_modify_datalimit(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails | None = None):
+        allowed_group_ids = None if admin is None else get_allowed_group_ids(admin)
         if bulk_model.dry_run:
-            n = await count_bulk_datalimit_targets(db, bulk_model)
+            n = await count_bulk_datalimit_targets(db, bulk_model, allowed_group_ids)
             return BulkOperationDryRunResponse(affected_users=n)
-        users, users_count = await update_users_datalimit(db, bulk_model)
+        users, users_count = await update_users_datalimit(db, bulk_model, allowed_group_ids)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
         return users_count
 
-    async def bulk_modify_proxy_settings(self, db: AsyncSession, bulk_model: BulkUsersProxy):
+    async def bulk_modify_proxy_settings(
+        self, db: AsyncSession, bulk_model: BulkUsersProxy, admin: AdminDetails | None = None
+    ):
         if bulk_model.method is None:
             await self.raise_error(message="No supported proxy settings were provided", code=400, db=db)
+        allowed_group_ids = None if admin is None else get_allowed_group_ids(admin)
         if bulk_model.dry_run:
-            n = await count_bulk_proxy_targets(db, bulk_model)
+            n = await count_bulk_proxy_targets(db, bulk_model, allowed_group_ids)
             return BulkOperationDryRunResponse(affected_users=n)
-        users, users_count = await update_users_proxy_settings(db, bulk_model)
+        users, users_count = await update_users_proxy_settings(db, bulk_model, allowed_group_ids)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
@@ -2070,6 +2102,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             start=start,
             end=end,
             period=period,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         agent_stats = await get_users_subscription_agent_stats(
             db,
@@ -2078,6 +2111,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             period=period,
             user_id=resolved_user_id,
             admin_id=resolved_admin_id,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
         return self._build_user_agent_chart(
             agent_counts,

@@ -24,6 +24,7 @@ async def get_users_with_duplicate_secrets(
     db: AsyncSession,
     shared: dict[ProxySecretField, tuple[SecretFieldSpec, set[str]]],
     bulk_model,
+    allowed_group_ids: list[int] | None = None,
 ) -> list[User]:
     if not shared:
         return []
@@ -35,6 +36,8 @@ async def get_users_with_duplicate_secrets(
         return []
 
     stmt = (
-        select(User).where(and_(_create_final_filter(bulk_model), or_(*candidates))).options(selectinload(User.groups))
+        select(User)
+        .where(and_(_create_final_filter(bulk_model, allowed_group_ids), or_(*candidates)))
+        .options(selectinload(User.groups))
     )
     return list((await db.execute(stmt)).scalars().all())

@@ -15,9 +15,10 @@ on the restriction at the moment it is applied, because reconstructing them
 afterwards is guesswork once the user has been moved.
 """
 
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -133,32 +134,96 @@ async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tu
     Turning enforcement off has to let people go. Leaving them disabled by a
     feature that is no longer running is the one outcome nobody would expect.
     """
+    due = [ConnectionRestriction.active.is_(True)]
+    if not everyone:
+        due += [
+            ConnectionRestriction.restore_at.is_not(None),
+            ConnectionRestriction.restore_at <= datetime.now(UTC),
+        ]
+    locked = (
+        await db.execute(
+            select(ConnectionRestriction.id)
+            .join(User, User.id == ConnectionRestriction.user_id)
+            .where(*due)
+            .order_by(User.id, ConnectionRestriction.id)
+            .with_for_update()
+        )
+    ).scalars().all()
+    if not locked:
+        return []
     stmt = (
         select(ConnectionRestriction, User)
         .join(User, User.id == ConnectionRestriction.user_id)
         .options(*USER_LOAD_OPTIONS)
-        .where(ConnectionRestriction.active.is_(True))
+        .where(ConnectionRestriction.id.in_(locked), *due)
+        .order_by(User.id, ConnectionRestriction.id)
+        .execution_options(populate_existing=True)
     )
-    if not everyone:
-        stmt = stmt.where(
-            ConnectionRestriction.restore_at.is_not(None),
-            ConnectionRestriction.restore_at <= datetime.now(UTC),
-        )
-    return list((await db.execute(stmt)).all())
+    return list((await db.execute(stmt)).unique().all())
 
 
-def release(restriction: ConnectionRestriction, user: User) -> None:
+def _as_utc(moment: datetime | None) -> datetime | None:
+    if moment is None:
+        return None
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+
+def limiter_still_owns_status(restriction: ConnectionRestriction, user: User) -> bool:
+    if user.status != UserStatus.disabled:
+        return False
+    changed_at = _as_utc(user.last_status_change)
+    imposed_at = _as_utc(restriction.created_at)
+    return changed_at is None or imposed_at is None or changed_at <= imposed_at
+
+
+def release(restriction: ConnectionRestriction, user: User) -> bool:
     """Put back what was there before, and close the restriction."""
-    if restriction.previous_status:
+    restored = limiter_still_owns_status(restriction, user)
+    if restored:
         try:
-            user.status = UserStatus(restriction.previous_status)
+            user.status = UserStatus(restriction.previous_status or UserStatus.active.value)
         except ValueError:
             user.status = UserStatus.active
-    else:
-        user.status = UserStatus.active
 
     restriction.active = False
     restriction.restored_at = datetime.now(UTC)
+    return restored
+
+
+async def close_active_restrictions(db: AsyncSession, user_ids: Iterable[int], reason: str) -> int:
+    ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
+    if not ids:
+        return 0
+    result = await db.execute(
+        update(ConnectionRestriction)
+        .where(ConnectionRestriction.user_id.in_(ids), ConnectionRestriction.active.is_(True))
+        .values(active=False, restored_at=datetime.now(UTC))
+        .execution_options(synchronize_session=False)
+    )
+    closed = result.rowcount or 0
+    if closed:
+        logger.info("closed %d device-limit restriction(s): %s", closed, reason)
+    return closed
+
+
+async def close_active_restriction(db: AsyncSession, user_id: int, reason: str) -> bool:
+    return await close_active_restrictions(db, [user_id], reason) > 0
+
+
+async def close_active_restrictions_for_admin(db: AsyncSession, admin_id: int | None, reason: str) -> int:
+    owned = select(User.id)
+    if admin_id is not None:
+        owned = owned.where(User.admin_id == admin_id)
+    result = await db.execute(
+        update(ConnectionRestriction)
+        .where(ConnectionRestriction.user_id.in_(owned), ConnectionRestriction.active.is_(True))
+        .values(active=False, restored_at=datetime.now(UTC))
+        .execution_options(synchronize_session=False)
+    )
+    closed = result.rowcount or 0
+    if closed:
+        logger.info("closed %d device-limit restriction(s): %s", closed, reason)
+    return closed
 
 
 async def forget_old(db: AsyncSession, retention_days: int) -> int:
