@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.models import host as host_models
 from app.models.settings import Application
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperation
@@ -41,7 +42,8 @@ def _decoded_handlers(page: str) -> list[str]:
 
 
 @pytest.fixture
-def poisoned_host_user(access_token):
+def poisoned_host_user(access_token, monkeypatch):
+    monkeypatch.setattr(host_models, "check_host_addresses", lambda addresses: addresses)
     core = create_core(access_token, name=unique_name("xss_core"))
     hosts = create_hosts_for_inbounds(access_token, address=[PAYLOAD])
     group = create_group(access_token, name=unique_name("xss_group"))

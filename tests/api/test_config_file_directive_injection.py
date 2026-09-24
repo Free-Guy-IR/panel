@@ -183,7 +183,7 @@ def test_a_safe_wireguard_config_still_renders():
     lines = rendered.splitlines()
     assert "Endpoint = wg.example.com:51820" in lines
     assert "DNS = 1.1.1.1, search.lan" in lines
-    assert "Reserved = 1,2,3" in lines
+    assert not [line for line in lines if line.startswith("Reserved")]
 
 
 def test_wireguard_dns_and_reserved_cannot_add_an_interface_hook():
