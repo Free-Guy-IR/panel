@@ -57,7 +57,11 @@ from app.db.crud.user import (
 )
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
-from app.fork.crud.user_locks import refresh_next_plan_for_update, refresh_user_state_for_update
+from app.fork.crud.user_locks import (
+    MODIFY_STATUS_KEYS,
+    refresh_next_plan_for_update,
+    refresh_user_state_for_update,
+)
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
 from app.fork.proxy_secrets import ProxySecretUniquenessError
@@ -903,10 +907,11 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         toggle: UserStatusToggle,
         admin: AdminDetails,
     ) -> UserResponse:
+        closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
+        await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
         old_status = db_user.status
         new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
-        closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
         if db_user.status != new_status:
             db_user.status = new_status
             db_user.last_status_change = dt.now(UTC)
