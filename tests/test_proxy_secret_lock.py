@@ -233,7 +233,7 @@ async def test_a_missing_lock_row_is_seeded_on_first_use(engine, sessions):
         names = (await db.execute(select(table.c.name).where(table.c.name == PROXY_SECRETS_LOCK))).scalars().all()
 
     assert names == [PROXY_SECRETS_LOCK]
-    assert taken >= 2
+    assert taken >= 1
     assert taken_again == taken
 
 

@@ -854,6 +854,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self._get_validated_template_with_access(db, modified_user.next_plan.user_template_id, admin)
 
         effective_groups = validated_groups if validated_groups is not None else db_user.groups
+        await self._lock_user_proxy_settings(db, db_user)
         current_proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
         current_proxy_settings_data = current_proxy_settings.dict()
         proxy_settings_to_prepare = (
@@ -888,6 +889,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         old_status = db_user.status
 
         self._apply_explicit_null_hwid_limit(db_user, modified_user)
+        if modified_user.status is not None:
+            await close_active_restriction(db, db_user.id, "an admin set the user's status")
         try:
             db_user = await crud_modify_user(db, db_user, modified_user, groups=validated_groups)
         except ValueError as exc:  # WireGuard subnet exhausted

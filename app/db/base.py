@@ -18,6 +18,7 @@ def build_engine_options(settings: DatabaseSettings) -> dict[str, Any]:
     options: dict[str, Any] = {
         "connect_args": connect_args,
         "echo": settings.echo_queries,
+        "hide_parameters": True,
     }
     if not settings.is_sqlite:
         options.update(
@@ -56,6 +57,7 @@ if database_settings.is_sqlite:
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 

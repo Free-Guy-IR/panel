@@ -23,6 +23,7 @@ from app.fork.proxy_secrets.entitled import (
     spec_for_core_type,
     stored_secret,
 )
+from app.fork.proxy_secrets.errors import describe_failure
 from app.fork.proxy_secrets.locks import NamedLockMissing
 from app.node.sync import sync_users
 from app.utils.logger import get_logger
@@ -148,14 +149,15 @@ async def grant_entitled_secrets_for_core(operation, db: AsyncSession, core) -> 
         )
     except (ProxySecretUniquenessError, NamedLockMissing, SQLAlchemyError) as exc:
         core_id = core.id
+        failure = describe_failure(exc)
         logger.error(
             f"core {core_id} ({spec.label}): issued {run.granted} of the {run.missing} missing {spec.field.value} "
-            f"value(s) found so far among {run.entitled} entitled user(s), then failed: {exc}"
+            f"value(s) found so far among {run.entitled} entitled user(s), then failed: {failure}"
         )
         await operation.raise_error(
             message=(
                 f"Core {core_id} is saved and live, so do not create it again. {spec.label} credentials were issued "
-                f"to {run.granted} entitled user(s) before issuing failed ({exc}); run "
+                f"to {run.granted} entitled user(s) before issuing failed ({failure}); run "
                 f"POST /api/users/bulk/{spec.protocol}_activate to finish."
             ),
             code=500,

@@ -81,6 +81,7 @@ from .wireguard import (
     sync_user_allocations,
     sync_users_allocations,
     tags_from_groups,
+    with_stored_peer_ips,
 )
 
 _ONLINE_USERS_WINDOW = timedelta(minutes=2)
@@ -1202,7 +1203,7 @@ async def modify_user(
     remove_expiration_reminder = False
 
     if modify.proxy_settings is not None:
-        db_user.proxy_settings = modify.proxy_settings.dict()
+        db_user.proxy_settings = with_stored_peer_ips(modify.proxy_settings.dict(), db_user.proxy_settings)
     if modify.group_ids is not None:
         db_user.groups = groups or await get_groups_by_ids(db, modify.group_ids, load_users=False, load_inbounds=True)
         await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(db_user.groups))

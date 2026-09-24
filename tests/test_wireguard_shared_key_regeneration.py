@@ -85,11 +85,19 @@ def test_two_private_only_users_sharing_a_key_are_both_detected():
         def __iter__(self):
             return iter(())
 
+        def all(self):
+            return []
+
     class _Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
         async def execute(self, _stmt):
             return _Result()
 
     users = [_user(SHARED_PRIVATE), _user(SHARED_PRIVATE)]
+    for user_id, user in enumerate(users, start=1):
+        user.id = user_id
 
     import asyncio
 
@@ -105,7 +113,13 @@ def test_a_lone_private_only_user_is_not_flagged():
         def __iter__(self):
             return iter(())
 
+        def all(self):
+            return []
+
     class _Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
         async def execute(self, _stmt):
             return _Result()
 
@@ -113,7 +127,9 @@ def test_a_lone_private_only_user_is_not_flagged():
 
     import asyncio
 
-    shared = asyncio.run(shared_wireguard_public_keys(_Db(), [_user(private_key)]))
+    lone = _user(private_key)
+    lone.id = 1
+    shared = asyncio.run(shared_wireguard_public_keys(_Db(), [lone]))
 
     assert public_key not in shared
 

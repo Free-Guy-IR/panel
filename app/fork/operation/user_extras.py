@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 
 from app.db import AsyncSession
+from app.db.crud.wireguard import lock_users_proxy_settings
 from app.db.models import User
 from app.fork.operation.entitled_secrets import issue_missing_entitled_secrets, load_users_for_sync
 from app.fork.proxy_secrets import (
@@ -68,6 +69,13 @@ class UserExtrasMixin:
         if not is_lock_unavailable(exc):
             raise exc
         await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+
+    async def _lock_user_proxy_settings(self, db: AsyncSession, db_user: User) -> None:
+        try:
+            await acquire_proxy_secrets_lock(db)
+            await lock_users_proxy_settings(db, [db_user])
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
     async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
         return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password, admin)
