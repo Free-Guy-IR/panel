@@ -6,7 +6,7 @@ upstream-inventory.yml fails the PR if an override appears in a file not listed 
 
 Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
 baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`) and the
-upstream head is the commit pinned in the .upstream-sync-point file (upstream/dev @ `ec74c933`).
+upstream head is the commit pinned in the .upstream-sync-point file (upstream/dev @ `61150ba4`).
 Measurement on 2026-09-24, after the port of upstream dev: 585 diverged files — 404 fork-only,
 34 pure-addition, 127 override, 20 mechanical — 1770 override lines, and 5474 fork lines still
 living inside upstream-tracked files.
