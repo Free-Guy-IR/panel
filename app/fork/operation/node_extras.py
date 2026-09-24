@@ -8,6 +8,7 @@ from app.db import AsyncSession
 from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_nodes
 from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
+from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
@@ -308,13 +309,15 @@ class NodeExtraCoresMixin:
         self,
         db: AsyncSession,
         query: InboundUsageQuery,
+        admin: AdminDetails | None = None,
     ) -> InboundUsageStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True)
-        return await fetch_inbounds_usage(
-            db,
-            start,
-            end,
-            period=query.period,
-            inbound_tag=query.inbound_tag,
-            node_id=query.node_id,
-        )
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        async with usage_aggregation_guard(("inbounds_usage", admin.id if admin else None)):
+            return await fetch_inbounds_usage(
+                db,
+                start,
+                end,
+                period=query.period,
+                inbound_tag=query.inbound_tag,
+                node_id=query.node_id,
+            )

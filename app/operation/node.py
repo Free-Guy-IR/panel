@@ -40,6 +40,7 @@ from app.fork.operation.node_extras import (
     _l2tp_unsupported_message,
     _node_lacks_l2tp,
 )
+from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import (
@@ -724,39 +725,43 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         self,
         db: AsyncSession,
         query: NodeUsageQuery,
+        admin: AdminDetails | None = None,
     ) -> NodeUsageStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True)
-        return await get_nodes_usage(
-            db,
-            start,
-            end,
-            period=query.period,
-            node_id=query.node_id,
-            group_by_node=query.group_by_node,
-        )
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        async with usage_aggregation_guard(("nodes_usage", admin.id if admin else None)):
+            return await get_nodes_usage(
+                db,
+                start,
+                end,
+                period=query.period,
+                node_id=query.node_id,
+                group_by_node=query.group_by_node,
+            )
 
     async def get_user_count_metric(
         self,
         db: AsyncSession,
         metric: UserCountMetric,
         query: NodeUsageQuery,
+        admin: AdminDetails | None = None,
     ) -> UserCountMetricStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True)
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
         try:
             validate_user_count_metric_scope(metric, node_id=query.node_id, group_by_node=query.group_by_node)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
 
-        return await get_user_count_metric_stats(
-            db,
-            admins=None,
-            start=start,
-            end=end,
-            period=query.period,
-            metric=metric,
-            node_id=query.node_id,
-            group_by_node=query.group_by_node,
-        )
+        async with usage_aggregation_guard(("nodes_user_count", admin.id if admin else None)):
+            return await get_user_count_metric_stats(
+                db,
+                admins=None,
+                start=start,
+                end=end,
+                period=query.period,
+                metric=metric,
+                node_id=query.node_id,
+                group_by_node=query.group_by_node,
+            )
 
     async def get_logs(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
         return await self._get_logs_impl(node_id)
@@ -764,7 +769,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     async def get_node_stats_periodic(
         self, db: AsyncSession, node_id: int, query: NodeStatsPeriodQuery
     ) -> NodeStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True)
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
 
         return await get_node_stats(db, node_id, start, end, period=query.period)
 

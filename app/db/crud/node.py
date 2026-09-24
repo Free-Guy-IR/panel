@@ -19,6 +19,7 @@ from app.db.models import (
     node_additional_cores_association,
 )
 from app.fork.crud.node import get_inbounds_usage, resolve_additional_cores  # noqa: F401
+from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.node import (
     NodeCreate,
     NodeListQuery,
@@ -323,7 +324,7 @@ async def get_nodes_usage(
             .order_by(trunc_expr)
         )
 
-    result = await db.execute(stmt)
+    result = await execute_with_statement_timeout(db, stmt)
 
     stats = {}
     for row in result.mappings():

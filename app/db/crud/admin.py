@@ -22,6 +22,7 @@ from app.db.models import (
     User,
 )
 from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -780,7 +781,7 @@ async def get_admin_usages(
             .order_by(trunc_expr)
         )
 
-    result = await db.execute(stmt)
+    result = await execute_with_statement_timeout(db, stmt)
     stats = {}
     for row in result.mappings():
         row_dict = dict(row)

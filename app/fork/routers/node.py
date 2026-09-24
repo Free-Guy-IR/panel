@@ -53,6 +53,6 @@ get_inbound_usage_query = make_query_dependency(
 async def get_inbounds_usage_stats(
     query: Annotated[InboundUsageQuery, Depends(get_inbound_usage_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(OWNER_STATS),
+    admin: AdminDetails = Depends(OWNER_STATS),
 ):
-    return await node_operator.get_inbounds_usage(db=db, query=query)
+    return await node_operator.get_inbounds_usage(db=db, query=query, admin=admin)

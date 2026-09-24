@@ -147,10 +147,10 @@ async def get_node_settings(_: AdminDetails = Depends(require_permission("nodes"
 async def get_usage(
     query: Annotated[NodeUsageQuery, Depends(get_node_usage_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("nodes", "stats")),
+    admin: AdminDetails = Depends(require_permission("nodes", "stats")),
 ):
     """Retrieve usage statistics for nodes within a specified date range."""
-    return await node_operator.get_usage(db=db, query=query)
+    return await node_operator.get_usage(db=db, query=query, admin=admin)
 
 
 @router.get("/user_counts/{metric}", response_model=UserCountMetricStatsList)
@@ -158,7 +158,7 @@ async def get_user_count_metric(
     metric: UserCountMetric,
     query: Annotated[NodeUsageQuery, Depends(get_node_usage_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("nodes", "stats")),
+    admin: AdminDetails = Depends(require_permission("nodes", "stats")),
 ):
     """Retrieve one user activity/status count metric from node user usage rows."""
     try:
@@ -166,7 +166,7 @@ async def get_user_count_metric(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return await node_operator.get_user_count_metric(db=db, metric=metric, query=query)
+    return await node_operator.get_user_count_metric(db=db, metric=metric, query=query, admin=admin)
 
 
 @router.get("s", response_model=NodesResponse)

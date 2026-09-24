@@ -851,7 +851,7 @@ async def get_user_usages(
             .order_by(trunc_expr)
         )
 
-    result = await db.execute(stmt)
+    result = await execute_with_statement_timeout(db, stmt)
 
     stats = {}
     for row in result.mappings():
@@ -1656,7 +1656,7 @@ async def get_users_subscription_agent_counts(
     stmt = stmt.group_by(UserSubscriptionUpdate.user_agent)
 
     async with _subscription_update_read_session(db) as read_db:
-        result = await read_db.execute(stmt)
+        result = await execute_with_statement_timeout(read_db, stmt)
     return [(agent, count) for agent, count in result.all()]
 
 
@@ -1696,7 +1696,7 @@ async def get_users_subscription_agent_stats(
     )
 
     async with _subscription_update_read_session(db) as read_db:
-        result = await read_db.execute(stmt)
+        result = await execute_with_statement_timeout(read_db, stmt)
     dialect = db.bind.dialect.name
     rows = []
     for row in result.mappings():

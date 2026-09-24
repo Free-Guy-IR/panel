@@ -25,6 +25,7 @@ from app.db.models import Admin, AdminStatus, User
 from app.fork.crud.admin_limits import lock_admin_row, lock_admin_status
 from app.fork.operation.admin_scope import admin_details_for, close_visible_restrictions, visible_users_query
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
+from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -369,7 +370,7 @@ class AdminOperation(BaseOperation):
         group_by_node: bool = False,
     ) -> UserUsageStatsList:
         """Get aggregated usage for an admin's users."""
-        start, end = await self.validate_dates(start, end, True)
+        start, end = await self.validate_dates(start, end, True, period=period)
 
         is_self = db_admin.username == admin.username
         if not is_self:
@@ -383,16 +384,17 @@ class AdminOperation(BaseOperation):
             node_id = None
             group_by_node = False
 
-        return await get_admin_usages(
-            db=db,
-            admin_id=db_admin.id,
-            start=start,
-            end=end,
-            period=period,
-            node_id=node_id,
-            group_by_node=group_by_node,
-            allowed_group_ids=get_allowed_group_ids(admin),
-        )
+        async with usage_aggregation_guard(("admin_usage", admin.id)):
+            return await get_admin_usages(
+                db=db,
+                admin_id=db_admin.id,
+                start=start,
+                end=end,
+                period=period,
+                node_id=node_id,
+                group_by_node=group_by_node,
+                allowed_group_ids=get_allowed_group_ids(admin),
+            )
 
     async def get_admin_usage_by_id(
         self, db: AsyncSession, admin_id: int, admin: AdminDetails, query: AdminUsageQuery

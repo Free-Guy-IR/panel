@@ -1434,7 +1434,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         node_id: int | None = None,
         group_by_node: bool = False,
     ) -> UserUsageStatsList:
-        start, end = await self.validate_dates(start, end, True)
+        start, end = await self.validate_dates(start, end, True, period=period)
 
         if not _has_permission(admin, "nodes", "stats"):
             node_id = None
@@ -2094,7 +2094,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         start: dt | None = None,
         end: dt | None = None,
     ) -> UserSubscriptionUpdateChart:
-        start, end = await self.validate_dates(start, end, True)
+        start, end = await self.validate_dates(start, end, True, period=period)
         resolved_user_id: int | None = None
         resolved_admin_id: int | None = None
 
@@ -2126,24 +2126,25 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             else:
                 resolved_admin_id = get_scope_admin_id(admin, "users", "read")
 
-        agent_counts = await get_users_subscription_agent_counts(
-            db,
-            user_id=resolved_user_id,
-            admin_id=resolved_admin_id,
-            start=start,
-            end=end,
-            period=period,
-            allowed_group_ids=get_allowed_group_ids(admin),
-        )
-        agent_stats = await get_users_subscription_agent_stats(
-            db,
-            start=start,
-            end=end,
-            period=period,
-            user_id=resolved_user_id,
-            admin_id=resolved_admin_id,
-            allowed_group_ids=get_allowed_group_ids(admin),
-        )
+        async with usage_aggregation_guard(("users_sub_update_chart", admin.id)):
+            agent_counts = await get_users_subscription_agent_counts(
+                db,
+                user_id=resolved_user_id,
+                admin_id=resolved_admin_id,
+                start=start,
+                end=end,
+                period=period,
+                allowed_group_ids=get_allowed_group_ids(admin),
+            )
+            agent_stats = await get_users_subscription_agent_stats(
+                db,
+                start=start,
+                end=end,
+                period=period,
+                user_id=resolved_user_id,
+                admin_id=resolved_admin_id,
+                allowed_group_ids=get_allowed_group_ids(admin),
+            )
         return self._build_user_agent_chart(
             agent_counts,
             start=start,

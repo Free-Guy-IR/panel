@@ -9,6 +9,7 @@ from app.db.crud.general import (
     to_utc_for_filter,
 )
 from app.db.models import CoreConfig, NodeInboundUsage
+from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.stats import InboundUsageStat, InboundUsageStatsList, Period
 
 
@@ -60,7 +61,7 @@ async def get_inbounds_usage(
         .order_by(trunc_expr, NodeInboundUsage.inbound_tag)
     )
 
-    result = await db.execute(stmt)
+    result = await execute_with_statement_timeout(db, stmt)
 
     stats: dict[str, list[InboundUsageStat]] = {}
     for row in result.mappings():
