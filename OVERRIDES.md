@@ -47,7 +47,7 @@ stays visible.
 Upstream uses the Python-2-style `except A, B:` which is a SyntaxError on Python 3;
 the fork parenthesizes every occurrence. Each file below is that fix unless noted.
 
-- `main.py`
+- `main.py` — except-fix, plus `timeout_graceful_shutdown=HTTP_DRAIN_TIMEOUT_S` (1.5 s) on the uvicorn run call. Without it, uvicorn waits for every in-flight request before lifespan shutdown starts, so one slow request could use up Docker's 10 s stop window and the usage drain would never run (v5.34.25, P12)
 - `app/core/manager.py`
 - `app/core/xray.py`
 - `app/db/crud/admin.py` — except-fix; plus `reset_admin_usage` subtracts the logged value with a relative SQL update (`used_traffic = used_traffic - logged`) instead of assigning 0, so bytes a usage tick bills between the admin's read and the reset commit stay on the counter while the usage log still records the pre-reset value (v5.34.25)
@@ -154,7 +154,7 @@ without an entry here.
 
 ## Runtime resilience: NATS, boot, shutdown and notifications (v5.34.25, P12)
 
-Every file below changed for the A7 runtime findings. Most matter only with NATS_ENABLED=1. With NATS off (production), the single-process path stays the same except for three things: the settings TTL, the shutdown order and budget, and the notification spool.
+Every file below changed for the A7 runtime findings. Most matter only with NATS_ENABLED=1. With NATS off (production), the single-process path stays the same except for three things: the settings TTL, the shutdown order and stop-window budget, and the notification spool.
 
 - `app/nats/client.py` — clients connect with `max_reconnect_attempts=-1`, so a NATS outage longer than 2 minutes no longer closes every client for good. Rate-limited error, disconnect, reconnect and close logs replace the default traceback every 2 s, and a reconnect-listener registry lets the router resync after a reconnect
 - `app/nats/router.py` — `_listen` is a supervisor. It subscribes again with backoff when the subscription ends and replaces a closed client. After every subscribe and every reconnect of its own client it runs the registered resync handlers, because core NATS drops the messages sent while a worker was deaf. A resync also runs every 5 minutes, so a single lost publish cannot leave a sibling stale forever
@@ -165,7 +165,7 @@ Every file below changed for the A7 runtime findings. Most matter only with NATS
 - `app/settings/__init__.py` — the seven settings caches expire after 60 s, so a missed SETTING invalidation cannot last forever
 - `app/scheduler.py` — `cancel_running_jobs`. When a worker loses the leader lease, its running jobs are cancelled instead of continuing next to the new leader's; usage ticks stay shielded and finish what they already read
 - `app/app_factory.py` — `_stop_scheduler_and_leader` is the first shutdown step, so the scheduler stops and the usage drain runs before the network flushes, within what is left of the shutdown budget. Leadership loss cancels the running jobs. Settings and client-template caches are resynced after a router reconnect. The notification spool is registered to restore at startup and to persist at the end of shutdown
-- `app/lifecycle.py` — shutdown runs inside a 9 s budget (Docker sends SIGKILL at 10 s), with a 0.5 s final slice reserved for `on_shutdown_final` callbacks. Each callback runs as a task. One that overruns is cancelled and left behind, even if it swallows the cancellation, and callbacks skipped once the budget is spent are logged by name. `on_shutdown_first` and `shutdown_time_left` support the ordering
+- `app/lifecycle.py` — Docker's 10 s stop window is split into a 1.5 s uvicorn HTTP drain (`HTTP_DRAIN_TIMEOUT_S`) followed by a 7.25 s lifespan shutdown budget, which gives about 9.2 s end to end. The last 0.5 s of that budget is reserved for `on_shutdown_final` callbacks. Each callback runs as a task. One that overruns is cancelled and left behind, even if it swallows the cancellation, and callbacks skipped once the budget is spent are logged by name. `on_shutdown_first` and `shutdown_time_left` support the ordering
 - `app/notification/nats_queue.py` — NATS: an item is acked only after it is processed, a cancelled one is nak'd for redelivery, a poison message is terminated with an error log, and `in_progress` keeps a long send from being redelivered. In-memory: `release` puts items back at the front, and `drain_nowait` hands the shutdown spool the whole backlog in order
 - `app/notification/client.py` — `process_queued_notification` acks after processing and releases the item when it is cancelled, so the dispatcher never drops an in-flight notification
 - `app/jobs/process_notification_queues.py` — 1 line; the flush and the periodic job go through `process_queued_notification`

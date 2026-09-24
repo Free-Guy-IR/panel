@@ -6,7 +6,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger("lifecycle")
 
-SHUTDOWN_BUDGET_S = 9.0
+HTTP_DRAIN_TIMEOUT_S = 1.5
+SHUTDOWN_BUDGET_S = 7.25
 SHUTDOWN_FINAL_RESERVE_S = 0.5
 SHUTDOWN_CUT_SETTLE_S = 0.2
 

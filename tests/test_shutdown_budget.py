@@ -17,7 +17,7 @@ DOCKER_STOP_TIMEOUT_S = 10.0
 
 
 def test_the_budget_leaves_margin_under_the_docker_stop_timeout():
-    assert lifecycle.SHUTDOWN_BUDGET_S + 0.5 <= DOCKER_STOP_TIMEOUT_S
+    assert lifecycle.HTTP_DRAIN_TIMEOUT_S + lifecycle.SHUTDOWN_BUDGET_S + 0.5 <= DOCKER_STOP_TIMEOUT_S
     assert 0 < lifecycle.SHUTDOWN_FINAL_RESERVE_S < lifecycle.SHUTDOWN_BUDGET_S
 
 
@@ -41,9 +41,9 @@ async def test_the_usage_drain_is_given_only_what_is_left_of_the_budget(monkeypa
     assert app_factory._usage_drain_timeout() == record_usages.USAGE_SHUTDOWN_GRACE_S
     main_phase = lifecycle.SHUTDOWN_BUDGET_S - lifecycle.SHUTDOWN_FINAL_RESERVE_S
     monkeypatch.setattr(lifecycle, "_shutdown_deadline", loop.time() + main_phase)
-    assert app_factory._usage_drain_timeout() == pytest.approx(
-        min(record_usages.USAGE_SHUTDOWN_GRACE_S, lifecycle.SHUTDOWN_BUDGET_S - 1.0), abs=0.01
-    )
+    drain_at_start = app_factory._usage_drain_timeout()
+    assert drain_at_start == pytest.approx(main_phase - app_factory.USAGE_DRAIN_TAIL_S, abs=0.01)
+    assert drain_at_start >= record_usages.USAGE_PERSIST_MAX_VOLATILE_S + 1.0
 
 
 @pytest.mark.asyncio
