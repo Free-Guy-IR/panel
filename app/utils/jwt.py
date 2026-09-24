@@ -7,10 +7,15 @@ from math import ceil
 
 import jwt
 from aiocache import cached
+from sqlalchemy import select
 
 from app.db import GetDB
 from app.db.crud.general import get_jwt_secret_key
+from app.db.models import User
 from config import jwt_settings
+
+_UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+_READ_FROM_DATABASE = object()
 
 
 @cached(ttl=60)
@@ -58,8 +63,33 @@ async def get_admin_payload(token: str) -> dict | None:
         return
 
 
-async def create_subscription_token(user_id: int) -> str:
-    data = "v3," + str(user_id) + "," + str(ceil(time.time()))
+def revocation_epoch(sub_revoked_at: datetime | None) -> int:
+    if sub_revoked_at is None:
+        return 0
+    if sub_revoked_at.tzinfo is None:
+        sub_revoked_at = sub_revoked_at.replace(tzinfo=UTC)
+    microseconds = (sub_revoked_at - _UNIX_EPOCH) // timedelta(microseconds=1)
+    return (microseconds + 500_000) // 1_000_000
+
+
+def next_revocation_instant(previous: datetime | None) -> datetime:
+    now = datetime.now(UTC).replace(microsecond=0)
+    if previous is None:
+        return now
+    after_previous = datetime.fromtimestamp(revocation_epoch(previous) + 1, tz=UTC)
+    return max(now, after_previous)
+
+
+async def _stored_sub_revoked_at(user_id: int) -> datetime | None:
+    async with GetDB() as db:
+        result = await db.execute(select(User.sub_revoked_at).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+
+async def create_subscription_token(user_id: int, sub_revoked_at: object = _READ_FROM_DATABASE) -> str:
+    if sub_revoked_at is _READ_FROM_DATABASE:
+        sub_revoked_at = await _stored_sub_revoked_at(user_id)
+    data = f"v4,{user_id},{ceil(time.time())},{revocation_epoch(sub_revoked_at)}"
     data_b64_str = b64encode(data.encode("utf-8"), altchars=b"-_").decode("utf-8").rstrip("=")
     secret = await get_secret_key()
     # HMAC-SHA256 over the payload, url-safe base64, no truncation.
@@ -79,6 +109,20 @@ async def create_subscription_token(user_id: int) -> str:
 def _parse_subscription_data(data_str: str) -> dict | None:
     """Parse the decoded subscription payload string into a result dict."""
     parts = data_str.split(",")
+    if len(parts) == 4 and parts[0] == "v4":
+        _, u_user_id_str, u_created_at_str, u_epoch_str = parts
+        try:
+            u_user_id = int(u_user_id_str)
+            u_created_at = int(u_created_at_str)
+            u_epoch = int(u_epoch_str)
+        except ValueError:
+            return
+        return {
+            "user_id": u_user_id,
+            "created_at": datetime.fromtimestamp(u_created_at, tz=UTC),
+            "revocation_epoch": u_epoch,
+        }
+
     if len(parts) == 3 and parts[0] in ("v2", "v3"):
         _, u_user_id_str, u_created_at_str = parts
         try:
@@ -164,7 +208,8 @@ async def get_subscription_payload(token: str) -> dict | None:
         b64_resign = b64encode(digest, altchars=b"-_").decode("utf-8")[:10]
         hex_resign = digest.hex()[:10]
         if not (
-            hmac.compare_digest(u_signature, b64_resign) or hmac.compare_digest(u_signature, hex_resign)
+            hmac.compare_digest(u_signature.encode("utf-8"), b64_resign.encode("utf-8"))
+            or hmac.compare_digest(u_signature.encode("utf-8"), hex_resign.encode("utf-8"))
         ):
             return
         return _parse_subscription_data(u_token_dec_str)

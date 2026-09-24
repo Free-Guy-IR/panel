@@ -132,6 +132,7 @@ class UserNotificationResponse(User):
     created_at: AwareDatetime
     edit_at: OptionalAwareDatetime = Field(default=None)
     online_at: OptionalAwareDatetime = Field(default=None)
+    sub_revoked_at: OptionalAwareDatetime = Field(default=None, exclude=True)
     subscription_url: str = Field(default="")
     admin: AdminContactInfo | None = Field(default=None)
     group_names: list[str] | None = Field(default_factory=list)
@@ -149,6 +150,7 @@ class UserResponse(UserNotificationResponse):
 
 
 class SubscriptionUserResponse(UserResponse):
+    proxy_settings: ProxyTable = Field(default_factory=ProxyTable, exclude=True)
     admin: AdminContactInfo | None = Field(default=None, exclude=True)
     note: str | None = Field(None, exclude=True)
     auto_delete_in_days: int | None = Field(None, exclude=True)

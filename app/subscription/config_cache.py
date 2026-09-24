@@ -34,13 +34,17 @@ def make_sub_config_key(
     status_key = status.value if hasattr(status, "value") else status
     inbounds = getattr(user, "inbounds", None) or ()
     proxy_settings = getattr(user, "proxy_settings", None)
-    if config_format == "wireguard" and proxy_settings is not None and hasattr(proxy_settings, "model_dump_json"):
+    if proxy_settings is not None and hasattr(proxy_settings, "model_dump_json"):
         proxy_key = proxy_settings.model_dump_json()
     else:
         proxy_key = ""
+    created_at = getattr(user, "created_at", None)
+    created_at_key = created_at.timestamp() if hasattr(created_at, "timestamp") else created_at
     return (
-        _generation if config_format == "wireguard" else 0,
+        _generation,
         getattr(user, "id", None),
+        getattr(user, "username", None),
+        created_at_key,
         config_format,
         bool(as_base64),
         bool(randomize_order),

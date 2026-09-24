@@ -58,6 +58,7 @@ from app.db.crud.user import (
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.operation.base_extras import restrict_users_query_by_groups
+from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.fork.operation.user_extras import UserExtrasMixin, prepare_fork_proxy_settings
 from app.fork.operation.user_guards import (
     enforce_next_plan_limits,
@@ -240,7 +241,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             if user.admin and user.admin.sub_domain
             else (settings.url_prefix).replace("*", salt)
         )
-        token = await create_subscription_token(user.id)
+        token = await create_subscription_token(user.id, user.sub_revoked_at)
         return f"{url_prefix}/{subscription_env_settings.path}/{token}"
 
     async def _generate_usernames(
@@ -1572,7 +1573,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         query: UsersUsageBreakdownQuery,
     ) -> UserUsageStatsList:
         """Get all users usage"""
-        start, end = await self.validate_dates(query.start, query.end, True)
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
         node_id = query.node_id
         core_id = query.core_id
         group_by_node = query.group_by_node
@@ -1588,18 +1589,19 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         admins_filter = await _resolve_users_usage_admins_filter(self, db, admin, query.owner)
 
-        return await get_all_users_usages(
-            db=db,
-            start=start,
-            end=end,
-            period=query.period,
-            node_id=node_id,
-            core_id=core_id,
-            admins=admins_filter,
-            group_by_node=group_by_node,
-            group_by_admin=query.group_by_admin,
-            allowed_group_ids=get_allowed_group_ids(admin),
-        )
+        async with usage_aggregation_guard(("users_usage", admin.id)):
+            return await get_all_users_usages(
+                db=db,
+                start=start,
+                end=end,
+                period=query.period,
+                node_id=node_id,
+                core_id=core_id,
+                admins=admins_filter,
+                group_by_node=group_by_node,
+                group_by_admin=query.group_by_admin,
+                allowed_group_ids=get_allowed_group_ids(admin),
+            )
 
     async def get_users_count_metric(
         self,
@@ -1609,7 +1611,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         query: UsersUsageQuery,
     ) -> UserCountMetricStatsList:
         """Get one users activity/status count metric from usage rows."""
-        start, end = await self.validate_dates(query.start, query.end, True)
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
         node_id = query.node_id
         group_by_node = query.group_by_node
 
@@ -1625,17 +1627,18 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         admins_filter = await _resolve_users_usage_admins_filter(self, db, admin, query.owner)
 
-        return await get_user_count_metric_stats(
-            db=db,
-            admins=admins_filter,
-            start=start,
-            end=end,
-            period=query.period,
-            metric=metric,
-            node_id=node_id,
-            group_by_node=group_by_node,
-            allowed_group_ids=get_allowed_group_ids(admin),
-        )
+        async with usage_aggregation_guard(("users_count_metric", admin.id)):
+            return await get_user_count_metric_stats(
+                db=db,
+                admins=admins_filter,
+                start=start,
+                end=end,
+                period=query.period,
+                metric=metric,
+                node_id=node_id,
+                group_by_node=group_by_node,
+                allowed_group_ids=get_allowed_group_ids(admin),
+            )
 
     @staticmethod
     async def remove_users_logger(users: list[str], by: str):

@@ -125,7 +125,9 @@ async def webhook_handler(request: Request, X_Telegram_Bot_Api_Secret_Token: str
         raise HTTPException(status_code=404, detail="not found")
 
     webhook_secret = settings.webhook_secret or ""
-    if not webhook_secret or not hmac.compare_digest(X_Telegram_Bot_Api_Secret_Token, webhook_secret):
+    if not webhook_secret or not hmac.compare_digest(
+        X_Telegram_Bot_Api_Secret_Token.encode("utf-8"), webhook_secret.encode("utf-8")
+    ):
         raise HTTPException(status_code=403, detail="Forbidden: Invalid secret key")
 
     bot = get_bot()

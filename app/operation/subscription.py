@@ -15,6 +15,7 @@ from app.db.crud.hwid import (
 from app.db.crud.user import get_user_usages, user_sub_update
 from app.db.models import SubscriptionAccessKind, User
 from app.fork.operation.subscription_extras import EXTRA_CLIENT_CONFIG, SubscriptionExtrasMixin
+from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
 from app.models.stats import UserUsageStatsList
@@ -697,10 +698,17 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         format_variables: dict,
         headers: dict[str, str],
         is_hwid_enabled: bool,
+        configs_hidden_by_hwid: bool = False,
     ) -> dict[str, Any]:
         return {
             "body": self._build_subscription_body_payload(
-                user, links, formatted_announce, sub_settings, format_variables, is_hwid_enabled
+                user,
+                links,
+                formatted_announce,
+                sub_settings,
+                format_variables,
+                is_hwid_enabled,
+                configs_hidden_by_hwid=configs_hidden_by_hwid,
             ),
             "headers": headers,
         }
@@ -717,9 +725,10 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         db_user = await self.get_validated_sub(db, token, load_admin_role=True, **self._SUB_CONFIG_LOAD)
         user = await self.validated_user(db_user)
         is_hwid_enabled = await self.is_user_hwid_enabled(db_user, db=db)
+        configs_hidden_by_hwid = is_hwid_enabled and (await hwid_settings()).require_hwid_for_manual_sub
 
         links = []
-        if sub_settings.allow_browser_config:
+        if sub_settings.allow_browser_config and not configs_hidden_by_hwid:
             conf, _ = await self.fetch_config(user, ConfigFormat.links)
             links = conf.splitlines()
         format_variables = await self.get_format_variables(user)
@@ -750,6 +759,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             format_variables,
             response_headers,
             is_hwid_enabled,
+            configs_hidden_by_hwid=configs_hidden_by_hwid,
         )
 
     async def user_subscription_by_user(
@@ -933,7 +943,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         ip: str | None = None,
     ) -> UserUsageStatsList:
         """Fetches the usage statistics for the user within a specified date range."""
-        start, end = await self.validate_dates(query.start, query.end, True)
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
 
         db_user = await self.get_validated_sub(
             db,
@@ -951,4 +961,5 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             ip=ip,
         )
 
-        return await get_user_usages(db, db_user.id, start, end, query.period)
+        async with usage_aggregation_guard(("subscription_usage", db_user.id)):
+            return await get_user_usages(db, db_user.id, start, end, query.period)

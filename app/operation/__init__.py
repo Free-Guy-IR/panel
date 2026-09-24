@@ -24,11 +24,20 @@ from app.fork.operation.base_extras import reject_disallowed_assigned_groups
 from app.fork.operation.group_scope import user_within_allowed_groups
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
+from app.models.stats import Period
 from app.models.user import UserCreate, UserModify
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
 from app.operation.permissions import apply_group_access, get_scope_admin_id
 from app.utils.helpers import ensure_datetime_timezone
-from app.utils.jwt import get_subscription_payload
+from app.utils.jwt import get_subscription_payload, revocation_epoch
+
+USAGE_MAX_BUCKETS = 50_000
+PERIOD_LENGTHS = {
+    Period.minute: td(minutes=1),
+    Period.hour: td(hours=1),
+    Period.day: td(days=1),
+    Period.month: td(days=28),
+}
 
 
 class OperatorType(IntEnum):
@@ -105,7 +114,9 @@ class BaseOperation:
         code = getattr(exc, "code", 500)
         await self.raise_error(message=str(exc), code=code)
 
-    async def validate_dates(self, start: dt | None, end: dt | None, set_default_values: bool) -> tuple[dt, dt]:
+    async def validate_dates(
+        self, start: dt | None, end: dt | None, set_default_values: bool, period: Period | None = None
+    ) -> tuple[dt, dt]:
         """
         Validate if start and end dates are correct and if end is after start.
         Preserves timezone information instead of converting to UTC.
@@ -134,6 +145,13 @@ class BaseOperation:
                 # Compare dates (SQLAlchemy handles timezone conversion)
                 if end_date < start_date:
                     await self.raise_error(message="Start date must be before end date", code=400)
+
+                if period is not None and (end_date - start_date) / PERIOD_LENGTHS[Period(period)] > USAGE_MAX_BUCKETS:
+                    await self.raise_error(
+                        message=f"Date range too long for {Period(period).value} buckets; "
+                        f"use a coarser period or a shorter range (at most {USAGE_MAX_BUCKETS} buckets)",
+                        code=400,
+                    )
 
             return start_date, end_date
         except ValueError as e:
@@ -188,8 +206,13 @@ class BaseOperation:
 
         if (
             not db_user
-            or db_user.created_at.astimezone(UTC) > sub["created_at"]
-            or (db_user.sub_revoked_at and db_user.sub_revoked_at.astimezone(UTC) > sub["created_at"])
+            or ensure_datetime_timezone(db_user.created_at) > sub["created_at"]
+            or ("revocation_epoch" in sub and sub["revocation_epoch"] != revocation_epoch(db_user.sub_revoked_at))
+            or (
+                "revocation_epoch" not in sub
+                and db_user.sub_revoked_at
+                and ensure_datetime_timezone(db_user.sub_revoked_at) > sub["created_at"]
+            )
         ):
             await self.raise_error(message="Not Found", code=404)
 
