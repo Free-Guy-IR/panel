@@ -342,3 +342,29 @@ def test_checks_compose_to_the_worst_exit_code(repo, tmp_path):
     worst = parity(repo, empty, *broken_bridge)
     assert worst.returncode == 2
     assert "Upstream parity gate FAILED" in worst.stdout
+
+
+def test_an_old_tag_whose_commits_are_already_in_the_base_is_covered(tmp_path):
+    path = tmp_path / "old-tag"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    root = commit(path, "root", {"r.py": lines("r")})
+    git(path, "checkout", "-q", "-b", "old", root)
+    old_fix = commit(path, "old release fix", {"o.py": lines("o", 3)})
+    git(path, "tag", "v0.9")
+    git(path, "checkout", "-q", "up")
+    commit(path, "upstream work", {"u.py": lines("u", 2)})
+    git(path, "cherry-pick", old_fix)
+    commit(path, "upstream base", {"r.py": lines("r", overrides={1: "R1"})})
+    git(path, "tag", "v1.0")
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    (path / "UPSTREAM_SYNC.md").write_text("## Ported by design\n\n## Waived\n")
+
+    result = run(path, "--base", "v1.0", "--head", "main", "--track", "v0.9", "--fail-on-unported", "UPSTREAM_SYNC.md")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "patch-id equivalent already in the base") == 1
+    assert tally(result.stdout, "unported") == 0

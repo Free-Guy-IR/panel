@@ -78,6 +78,7 @@ COVERAGE_LABELS = {
     "ported-by-design": "ported by design (ledger)",
     "waived": "waived (ledger)",
     "patch-id": "patch-id equivalent of a covered commit",
+    "in-base": "patch-id equivalent already in the base",
 }
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
@@ -688,6 +689,16 @@ def resolve_sync_entries(entries, in_range):
     return resolved, errors, stale, duplicates
 
 
+def base_equivalents(base, tips):
+    equivalent = set()
+    for tip in tips:
+        for line in git("cherry", base, tip).splitlines():
+            marker, _, sha = line.partition(" ")
+            if marker == "-":
+                equivalent.add(sha.strip())
+    return equivalent
+
+
 def parity_gate(base, head, patterns, ledger_path):
     tracked = expand_tracked(patterns)
     containing, active, skipped = upstream_commits(base, tracked)
@@ -706,6 +717,8 @@ def parity_gate(base, head, patterns, ledger_path):
     for sha in in_range - set(coverage):
         if ids.get(sha) in covered_ids:
             coverage[sha] = "patch-id"
+    for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
+        coverage[sha] = "in-base"
 
     rows = commit_metadata(base, [tip for _, tip, _ in active])
     uncovered = [row for row in rows if row["sha"] not in coverage]
