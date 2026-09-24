@@ -26,10 +26,10 @@ from app.fork.jobs import after_record_node_usages, apply_usage_value
 from app.fork.jobs.stat_batches import (
     StaleStatBatches,
     StatBatch,
+    acks_for_request,
     as_ack_only,
     batch_from_response,
     held,
-    load_acks,
     remember_epoch,
     request_keywords,
     settle_batches,
@@ -197,12 +197,8 @@ async def _load_stat_acks(stat_type: int, nodes) -> dict[int, StatBatch]:
     capable = [node_id for node_id, node in nodes if supports_two_phase(node)]
     if not capable:
         return {}
-    try:
-        async with GetDB() as db:
-            return await load_acks(db, stat_type, capable)
-    except Exception:
-        logger.exception("Could not read the last billed stats batches; asking the nodes without acknowledgements")
-        return {}
+    async with GetDB() as db:
+        return await acks_for_request(db, stat_type, capable)
 
 
 def _chunked(items: list, size: int):

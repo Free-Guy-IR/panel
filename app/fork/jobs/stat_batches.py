@@ -8,6 +8,7 @@ from sqlalchemy import delete, insert, select, update
 from app.fork.models.node_stat_ack import NodeStatAck
 
 TWO_PHASE_KEYWORDS = ("hold", "ack_epoch", "ack_batch_id")
+CLAIM_EPOCH_PREFIX = "claim:"
 
 
 class StatBatch(NamedTuple):
@@ -98,8 +99,28 @@ async def load_acks(db, stat_type: int, node_ids: Iterable[int]) -> dict[int, St
             latest[node_id] = (epoch, int(batch_id), updated_at)
     acks = {node_id: StatBatch(epoch, batch_id) for node_id, (epoch, batch_id, _) in latest.items()}
     for node_id, epoch in known.items():
-        if epoch in by_epoch:
-            acks[node_id] = StatBatch(epoch, by_epoch[epoch])
+        acks[node_id] = StatBatch(epoch, by_epoch.get(epoch, 0))
+    return acks
+
+
+def claim_epoch(node_id: int) -> str:
+    return f"{CLAIM_EPOCH_PREFIX}{int(node_id)}"
+
+
+async def acks_for_request(db, stat_type: int, node_ids: Iterable[int]) -> dict[int, StatBatch]:
+    stat_type = int(stat_type)
+    acks = await load_acks(db, stat_type, node_ids)
+    first_contact = sorted({int(node_id) for node_id in node_ids} - set(acks))
+    if not first_contact:
+        return acks
+    now = dt.now(UTC)
+    for node_id in first_contact:
+        await db.execute(
+            insert(NodeStatAck).values(
+                batch_epoch=claim_epoch(node_id), stat_type=stat_type, node_id=node_id, batch_id=0, updated_at=now
+            )
+        )
+    await db.commit()
     return acks
 
 
