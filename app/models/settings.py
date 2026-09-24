@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from enum import Enum, StrEnum
 from typing import Any
 
@@ -246,6 +247,50 @@ class DownloadLink(BaseModel):
     language: Language
 
 
+IMPORT_URL_SCHEMES = frozenset(
+    {
+        "https",
+        "http",
+        "happ",
+        "v2rayng",
+        "v2box",
+        "v2raytun",
+        "streisand",
+        "sing-box",
+        "hiddify",
+        "karing",
+        "clash",
+        "clashmeta",
+        "flclash",
+        "koala-clash",
+        "stash",
+        "foxray",
+        "shadowrocket",
+        "sub",
+        "sn",
+        "husi",
+        "incy",
+        "loon",
+        "surge",
+        "quantumult-x",
+        "npvtsub",
+    }
+)
+_IMPORT_URL_SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.\-]*):")
+_INVISIBLE_OR_SPACE_CATEGORIES = frozenset({"Cc", "Cf", "Zs", "Zl", "Zp"})
+
+
+def check_import_url(value: str) -> str:
+    if not value:
+        return value
+    if any(unicodedata.category(char) in _INVISIBLE_OR_SPACE_CATEGORIES for char in value):
+        raise ValueError("import_url must not contain spaces or control characters")
+    scheme = _IMPORT_URL_SCHEME.match(value)
+    if scheme is None or scheme.group(1).lower() not in IMPORT_URL_SCHEMES:
+        raise ValueError(f"import_url must start with one of these schemes: {', '.join(sorted(IMPORT_URL_SCHEMES))}")
+    return value
+
+
 class Application(BaseModel):
     name: str = Field(max_length=32)
     icon_url: str = Field(default="", max_length=512)
@@ -262,7 +307,7 @@ class Application(BaseModel):
         """Validate import_url contains {url} if not empty."""
         if v and "{url}" not in v:
             raise ValueError("import_url must contain {url} placeholder for URL replacement")
-        return v
+        return check_import_url(v)
 
 
 class CustomVariable(BaseModel):
