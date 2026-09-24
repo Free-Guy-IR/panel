@@ -1,7 +1,9 @@
+import logging
+
 import pytest
 from pydantic import ValidationError
 
-from app.models.settings import IMPORT_URL_SCHEMES, Application
+from app.models.settings import IMPORT_URL_SCHEMES, Application, ApplicationInput
 
 SUB_PAGE_APP_SCHEMES = {
     "https",
@@ -71,8 +73,12 @@ REJECTED = [
 ]
 
 
-def _app(import_url: str) -> Application:
-    return Application(name="client", platform="android", download_links=[], import_url=import_url)
+def _app(import_url: str) -> ApplicationInput:
+    return ApplicationInput(name="client", platform="android", download_links=[], import_url=import_url)
+
+
+def _stored(import_url: str) -> Application:
+    return Application(name="legacy-client", platform="android", download_links=[], import_url=import_url)
 
 
 def test_the_allowed_schemes_are_exactly_the_sub_pages_list():
@@ -88,3 +94,20 @@ def test_real_client_import_links_are_accepted(import_url):
 def test_hostile_or_malformed_import_links_are_refused(import_url):
     with pytest.raises(ValidationError):
         _app(import_url)
+
+
+@pytest.mark.parametrize("import_url", REJECTED, ids=[repr(value)[:40] for value in REJECTED])
+def test_a_stored_invalid_import_url_loads_as_empty_and_names_only_the_application(import_url, caplog):
+    with caplog.at_level(logging.WARNING):
+        assert _stored(import_url).import_url == ""
+    messages = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(messages) == 1
+    assert "legacy-client" in messages[0]
+    assert import_url not in messages[0]
+
+
+@pytest.mark.parametrize("import_url", ACCEPTED)
+def test_a_stored_valid_import_url_loads_unchanged_without_a_warning(import_url, caplog):
+    with caplog.at_level(logging.WARNING):
+        assert _stored(import_url).import_url == import_url
+    assert not [record for record in caplog.records if record.levelno == logging.WARNING]

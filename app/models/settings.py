@@ -3,9 +3,18 @@ import unicodedata
 from enum import Enum, StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
 
 from app.models.proxy import ShadowsocksMethods
+from app.utils.logger import get_logger
 
 from .notification_enable import NotificationEnable
 from .validators import DiscordValidator, ProxyValidator, URLValidator
@@ -247,6 +256,8 @@ class DownloadLink(BaseModel):
     language: Language
 
 
+logger = get_logger("settings")
+
 IMPORT_URL_SCHEMES = frozenset(
     {
         "https",
@@ -283,6 +294,8 @@ _INVISIBLE_OR_SPACE_CATEGORIES = frozenset({"Cc", "Cf", "Zs", "Zl", "Zp"})
 def check_import_url(value: str) -> str:
     if not value:
         return value
+    if "{url}" not in value:
+        raise ValueError("import_url must contain {url} placeholder for URL replacement")
     if any(unicodedata.category(char) in _INVISIBLE_OR_SPACE_CATEGORIES for char in value):
         raise ValueError("import_url must not contain spaces or control characters")
     scheme = _IMPORT_URL_SCHEME.match(value)
@@ -301,13 +314,24 @@ class Application(BaseModel):
     platform: Platform
     download_links: list[DownloadLink]
 
-    @field_validator("import_url")
+    @field_validator("import_url", mode="wrap")
     @classmethod
-    def validate_import_url(cls, v: str) -> str:
+    def validate_import_url(cls, value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo) -> str:
         """Validate import_url contains {url} if not empty."""
-        if v and "{url}" not in v:
-            raise ValueError("import_url must contain {url} placeholder for URL replacement")
-        return check_import_url(v)
+        try:
+            return check_import_url(handler(value))
+        except ValueError:
+            logger.warning(
+                f"Application {info.data.get('name')!r} has an invalid stored import_url; its import button is hidden"
+            )
+            return ""
+
+
+class ApplicationInput(Application):
+    @field_validator("import_url", mode="wrap")
+    @classmethod
+    def validate_import_url(cls, value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo) -> str:
+        return check_import_url(handler(value))
 
 
 class CustomVariable(BaseModel):
@@ -550,3 +574,11 @@ class SettingsSchema(BaseModel):
     connection_limit: ConnectionLimit | None = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SubscriptionInput(Subscription):
+    applications: list[ApplicationInput] = Field(default_factory=list)
+
+
+class SettingsSchemaInput(SettingsSchema):
+    subscription: SubscriptionInput | None = Field(default=None)
