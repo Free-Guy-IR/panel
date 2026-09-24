@@ -89,3 +89,50 @@ async def test_limiter_release_re_enables_a_user_whose_admin_disabled_every_user
         f"the admin disabled every user of admin {admin_id} while user {user_id} was restricted; when the "
         f"restriction expired the limiter set the status back to {status} and pushed inbounds {live} to the node"
     )
+
+
+async def test_an_admin_disable_that_races_the_limiter_release_leaves_the_user_disabled_everywhere(monkeypatch):
+    user_id, node = await _restricted_user_on_a_node(monkeypatch)
+    email = str(user_id)
+
+    operation = UserOperation(operator_type=OperatorType.API)
+    async with TestSession() as db:
+        db_user = await get_user_by_id(db, user_id)
+        assert db_user.status == UserStatus.disabled
+
+        async with TestGetDB() as limiter_db:
+            await connection_limiter._release_due(limiter_db, None)
+        await settle()
+        assert email in node.live, "the limiter release did not put the user back on the node"
+
+        answer = await operation._set_user_disabled(db, db_user, UserStatusToggle(disabled=True), ADMIN)
+    await settle()
+
+    async with TestSession() as session:
+        stored = (await session.get(User, user_id)).status
+    assert (answer.status, stored, node.live.get(email)) == (UserStatus.disabled, UserStatus.disabled, None), (
+        f"the admin disabled user {email} after the limiter had already restored it: the API answered "
+        f"{answer.status}, the database holds {stored}, the node holds {node.live.get(email)}"
+    )
+
+
+async def test_an_admin_enable_that_races_the_limiter_release_answers_and_pushes_what_the_database_holds(
+    monkeypatch,
+):
+    user_id, node = await _restricted_user_on_a_node(monkeypatch)
+    email = str(user_id)
+
+    operation = UserOperation(operator_type=OperatorType.API)
+    async with TestSession() as db:
+        db_user = await get_user_by_id(db, user_id)
+        async with TestGetDB() as limiter_db:
+            await connection_limiter._release_due(limiter_db, None)
+        await settle()
+
+        answer = await operation._set_user_disabled(db, db_user, UserStatusToggle(disabled=False), ADMIN)
+    await settle()
+
+    async with TestSession() as session:
+        stored = (await session.get(User, user_id)).status
+    assert (answer.status, stored) == (UserStatus.active, UserStatus.active)
+    assert node.live.get(email), f"user {email} is active in the database but missing from the node"
