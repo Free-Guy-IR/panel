@@ -48,10 +48,11 @@ class TwoPhaseNode:
     def add(self, key, value: int) -> None:
         self.counters[key] = self.counters.get(key, 0) + value
 
-    def restart(self) -> None:
+    def restart(self, keep_held: bool = False) -> None:
         self.epoch = uuid4().hex
         self.seq = 0
-        self.pending = {}
+        if not keep_held:
+            self.pending = {}
 
     def _drain(self) -> dict:
         drained = {key: value for key, value in self.counters.items() if value}
@@ -76,17 +77,17 @@ class TwoPhaseNode:
         self.requests.append((StatType.Name(stat_type), hold, ack_epoch, ack_batch_id))
         if self.speaks_two_phase and hold and reset and not name:
             held = self.pending.get(stat_type)
-            if held is not None and ack_epoch == self.epoch and ack_batch_id >= held[0]:
+            if held is not None and ack_epoch == held[0] and ack_batch_id >= held[1]:
                 held = None
                 self.pending.pop(stat_type)
             if held is None:
                 drained = self._drain()
                 if drained:
                     self.seq += 1
-                    held = (self.seq, drained)
+                    held = (self.epoch, self.seq, drained)
                     self.pending[stat_type] = held
-            batch_id, values = held or (0, {})
-            response = SimpleNamespace(stats=self._stats(stat_type, values), batch_epoch=self.epoch, batch_id=batch_id)
+            epoch, batch_id, values = held or (self.epoch, 0, {})
+            response = SimpleNamespace(stats=self._stats(stat_type, values), batch_epoch=epoch, batch_id=batch_id)
         else:
             response = SimpleNamespace(stats=self._stats(stat_type, self._drain() if reset else dict(self.counters)))
         if self.delay:
@@ -443,3 +444,56 @@ async def test_a_two_phase_capable_bridge_talking_to_an_old_node_keeps_the_legac
     billed, charted = await usage_snapshot(recorder_db, user_ids)
     assert billed == {uid: 210}
     assert charted == billed
+
+
+@pytest.mark.asyncio
+async def test_a_held_batch_restored_after_a_node_restart_is_billed_once_under_its_original_epoch(
+    monkeypatch, recorder_db
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid, node_id = user_ids[0], node_ids[0]
+    node = TwoPhaseNode({uid: 4_200})
+    _install(monkeypatch, [(node_id, node)])
+
+    node.lose_next_response = True
+    await record_usages._record_user_usages_impl()
+    first_epoch = node.epoch
+
+    node.restart(keep_held=True)
+    node.add(uid, 90)
+    await record_usages._record_user_usages_impl()
+    billed, _ = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {uid: 4_200}
+    assert await _acks(recorder_db) == [(node_id, StatType.UsersStat, first_epoch, 1)]
+
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {uid: 4_290}
+    assert charted == billed
+    assert node.requests[-1][2:] == (first_epoch, 1)
+    assert await _acks(recorder_db) == [(node_id, StatType.UsersStat, node.epoch, 1)]
+
+
+@pytest.mark.asyncio
+async def test_a_restored_batch_that_was_already_billed_before_the_restart_is_not_billed_again(
+    monkeypatch, recorder_db
+):
+    _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    uid, node_id = user_ids[0], node_ids[0]
+    node = TwoPhaseNode({uid: 3_300})
+    _install(monkeypatch, [(node_id, node)])
+
+    await record_usages._record_user_usages_impl()
+    first_epoch = node.epoch
+    monkeypatch.setattr(stat_batches, "_epoch_by_node", {})
+
+    node.restart(keep_held=True)
+    node.add(uid, 44)
+    await record_usages._record_user_usages_impl()
+    await record_usages._record_user_usages_impl()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {uid: 3_344}
+    assert charted == billed
+    assert first_epoch not in {row[2] for row in await _acks(recorder_db)}
