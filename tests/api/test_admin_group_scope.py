@@ -224,3 +224,26 @@ async def test_clearing_usage_data_is_owner_only(access_token):
         assert allowed.status_code == status.HTTP_200_OK, allowed.text
     finally:
         await scene.cleanup()
+
+
+async def test_the_callers_own_total_users_counts_every_owned_user_even_outside_the_allowed_groups(access_token):
+    scene = _Scene(access_token)
+    try:
+        caller, headers = scene.caller({"users": {"read": {"scope": 1}}})
+        visible = await scene.seller_user(scene.allowed)
+        hidden = await scene.seller_user(scene.forbidden)
+        async with TestSession() as session:
+            caller_id = (
+                await session.execute(select(Admin.id).where(Admin.username == caller["username"]))
+            ).scalar_one()
+            await session.execute(
+                update(User).where(User.id.in_([visible["id"], hidden["id"]])).values(admin_id=caller_id)
+            )
+            await session.commit()
+
+        me = client.get("/api/admin", headers=headers)
+
+        assert me.status_code == status.HTTP_200_OK, me.text
+        assert me.json()["total_users"] == 2
+    finally:
+        await scene.cleanup()
