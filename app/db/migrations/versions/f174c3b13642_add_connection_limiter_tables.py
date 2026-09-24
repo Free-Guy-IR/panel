@@ -89,9 +89,5 @@ def downgrade() -> None:
 
     op.drop_table('user_connection_states')
     op.drop_table('user_connection_limits')
-    with op.batch_alter_table('connection_restrictions', schema=None) as batch_op:
-        batch_op.drop_index('ix_connection_restrictions_user_active')
-        batch_op.drop_index('ix_connection_restrictions_active')
-
     op.drop_table('connection_restrictions')
     # ### end Alembic commands ###
