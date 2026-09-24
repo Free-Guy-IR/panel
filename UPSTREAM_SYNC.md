@@ -91,6 +91,21 @@ code is in the tree. When P5's port of the node user-sync work is merged, move b
 - `857ead985c03717164f8024ce3fc80570382b48e` upstream/dev reliable node user synchronization (#896). Owner P5 ports it by design rather than by cherry-pick, because the fork's multicore connect_node, extra cores and attach push have to be re-expressed inside the new full-sync fence, together with the fresh-session snapshot, per-node snapshots in bulk connect and the fenced add_backend from the U1 audit.
 - `20858b02009b4fb49ed99c1e9804fa1a889e28c2` upstream/dev bumps pasarguard-node-bridge 0.9.1 to 0.9.2. The fork takes the bridge from Free-Guy-IR/node_bridge_py, where the 0.9.2 controller and storage were ported in 14890f8; owner P5 moves the panel's pin and uv.lock to that bridge together with 857ead985.
 
+## Side repositories (not read by the parity gate)
+
+The parity gate reads only PasarGuard/panel. These entries record forked side repositories whose
+upstream history the fork deliberately does not follow, so the drift is a decision on record rather
+than a silent gap.
+
+- Free-Guy-IR/subscription-template WAIVED AS A WHOLE: the fork repository shares no commit with
+  PasarGuard/subscription-template (no merge base; checked 2026-09-24 against upstream main
+  ba2d7865d618, latest tag v2.2.1, with all 60 upstream commits unreachable from the fork's main
+  315767afed97). The panel does not build or ship it: the subscription page in production is the
+  standalone Free-Guy-IR/pasarguard-sub-page index.html installed through
+  CUSTOM_TEMPLATES_DIRECTORY, and the React src/ in the fork repository is dead code. Revisit this
+  waiver if the fork ever builds the page from subscription-template again: the repository must
+  then be rebased onto upstream and each upstream commit ported or waived here.
+
 ## Known future conflicts
 
 - upstream/mtp (18a02ed066cba5581eb40a3be12004e3dff4ce4d, waived above as unmerged work) defines `ProxyProtocol.mtproto = 7`. In the fork 7 is hysteria2 and mtproto is 9 (app/models/protocol.py). If upstream releases MTProto, the port must keep the fork's enum values, map upstream's 7 to the fork's 9 wherever it is persisted or sent to nodes, and reconcile upstream's app/core/mtproto.py and settings with the fork's app/fork/cores/mtproto.py.
