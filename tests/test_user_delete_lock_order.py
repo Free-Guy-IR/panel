@@ -29,6 +29,10 @@ async def _seed_wireguard_user(recorder_db) -> int:
                 config={"interface_name": WG_TAG, "address": ["10.91.0.1/24"], "listen_port": 51820},
             )
         )
+        user = await session.get(User, user_ids[0])
+        proxy_settings = dict(user.proxy_settings or {})
+        proxy_settings["wireguard"] = {**(proxy_settings.get("wireguard") or {}), "peer_ips": ["10.91.0.2/32"]}
+        user.proxy_settings = proxy_settings
         await session.commit()
     return user_ids[0]
 
