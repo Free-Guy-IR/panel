@@ -927,13 +927,20 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             logger.error(f"Error getting system stats for node {node_id}: {e}")
             return None
 
-    async def get_user_online_stats_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> dict[int, int]:
+    async def get_user_online_stats_by_node(
+        self, db: AsyncSession, node_id: int, user_id: int, admin: AdminDetails
+    ) -> dict[int, int]:
+        await self._validate_stats_user(db, user_id, admin)
         return await self._get_user_online_stats_impl(db, node_id, user_id)
 
-    async def get_user_ip_list_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
+    async def get_user_ip_list_by_node(
+        self, db: AsyncSession, node_id: int, user_id: int, admin: AdminDetails
+    ) -> UserIPList:
+        await self._validate_stats_user(db, user_id, admin)
         return await self._get_user_ip_list_impl(db, node_id, user_id)
 
-    async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int) -> UserIPListAll:
+    async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserIPListAll:
+        await self._validate_stats_user(db, user_id, admin)
         return await self._get_user_ip_list_all_impl(db, user_id)
 
     async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> dict[str, int] | None:

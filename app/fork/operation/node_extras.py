@@ -3,17 +3,20 @@ import asyncio
 from packaging.version import InvalidVersion, Version
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
+from sqlalchemy import select
 
 from app.db import AsyncSession
 from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_nodes
-from app.db.models import Node, NodeStatus
+from app.db.models import Node, NodeStatus, User
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
+from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.operation.node_snapshots import check_fence, full_sync_fence, node_users_loader, resolve_users
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
 from app.models.stats import InboundUsageStatsList
 from app.node import node_manager
+from app.operation.permissions import get_allowed_group_ids
 from app.utils.logger import get_logger
 
 logger = get_logger("node-operation")
@@ -316,6 +319,26 @@ class NodeExtraCoresMixin:
                 problems.append(f"core {core_id}: {e}")
 
         return "; ".join(problems)[:1024]
+
+    async def _validate_stats_user(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> None:
+        await self.get_validated_user_by_id(
+            db,
+            user_id,
+            admin,
+            load_admin=False,
+            load_next_plan=False,
+            load_usage_logs=False,
+            load_groups=False,
+            scope_action="read",
+        )
+        allowed_group_ids = get_allowed_group_ids(admin)
+        if allowed_group_ids is None:
+            return
+        visible = await db.execute(
+            select(User.id).where(User.id == user_id, user_in_allowed_groups(User.id, allowed_group_ids))
+        )
+        if visible.first() is None:
+            await self.raise_error(message="User not found", code=404)
 
     async def restart_nodes_by_ids(self, db: AsyncSession, node_ids: list[int], admin: AdminDetails) -> None:
         if not node_ids:

@@ -238,7 +238,7 @@ class NodeWorkerService(BaseRpcService):
         if not node_id or not user_id:
             raise RuntimeError("node_id and user_id are required")
         async with GetDB() as db:
-            return await self._node_operator.get_user_online_stats_by_node(db, node_id, user_id)
+            return await self._node_operator._get_user_online_stats_impl(db, node_id, user_id)
 
     async def _get_user_ip_list_by_node(self, data: dict) -> dict:
         node_id = data.get("node_id")
@@ -246,7 +246,7 @@ class NodeWorkerService(BaseRpcService):
         if not node_id or not user_id:
             raise RuntimeError("node_id and user_id are required")
         async with GetDB() as db:
-            user_ips = await self._node_operator.get_user_ip_list_by_node(db, node_id, user_id)
+            user_ips = await self._node_operator._get_user_ip_list_impl(db, node_id, user_id)
         return user_ips.model_dump()
 
     async def _get_user_ip_list_all_nodes(self, data: dict) -> dict:
@@ -254,7 +254,7 @@ class NodeWorkerService(BaseRpcService):
         if not user_id:
             raise RuntimeError("user_id is required")
         async with GetDB() as db:
-            user_ips = await self._node_operator.get_user_ip_list_all_nodes(db, user_id)
+            user_ips = await self._node_operator._get_user_ip_list_all_impl(db, user_id)
         return user_ips.model_dump()
 
     async def _update_node_api(self, data: dict) -> dict:
