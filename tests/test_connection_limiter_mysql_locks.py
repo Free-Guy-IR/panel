@@ -2,6 +2,7 @@ import asyncio
 import os
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,11 +11,12 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.db.models import Admin, AdminRole, Base, User, UserStatus
+from app.db.models import Admin, AdminRole, Base, User, UserConnectionState, UserStatus
 from app.fork.jobs import connection_limiter as job
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.models.settings import ConnectionLimit
+from app.utils import connection_limiter as limiter
 
 MYSQL_URL = os.getenv("TEST_MYSQL_URL", "")
 
@@ -67,6 +69,31 @@ async def _fresh_schema(user_count: int) -> list[int]:
             return [user.id for user in users]
     finally:
         json_column.server_default = json_default
+        await engine.dispose()
+
+
+async def _seed_states_the_prune_keeps(user_ids: list[int]) -> None:
+    engine = create_async_engine(MYSQL_URL, poolclass=NullPool)
+    try:
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as db:
+            db.add_all(
+                [
+                    UserConnectionState(user_id=user_id, checked_at=datetime.now(UTC), verdict="within_limit")
+                    for user_id in user_ids
+                ]
+            )
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+
+async def _state_rows() -> int:
+    engine = create_async_engine(MYSQL_URL, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            return int((await conn.execute(text("SELECT COUNT(*) FROM user_connection_states"))).scalar_one())
+    finally:
         await engine.dispose()
 
 
@@ -140,8 +167,12 @@ async def test_connection_state_writes_do_not_deadlock_with_the_recorder_on_mysq
         thread.join(30)
         await engine.dispose()
 
-    deadlocks = await _deadlocks() - before
-    print(f"MYSQL-PROOF a2-usage-12 deadlocks={deadlocks} state_error={state_error} recorder={outcome}")
+    after = await _deadlocks()
+    deadlocks = after - before
+    print(
+        f"MYSQL-PROOF a2-usage-12 innodb_deadlocks_before={before} after={after} "
+        f"deadlocks={deadlocks} state_error={state_error} recorder={outcome}"
+    )
     assert paused["done"]
     assert "recorder_error" not in outcome
     assert (deadlocks, state_error) == (0, None)
@@ -151,7 +182,9 @@ async def test_connection_state_writes_do_not_deadlock_with_the_recorder_on_mysq
 async def test_a_prune_that_deleted_nothing_does_not_hold_user_locks_through_the_assessment(monkeypatch):
     monkeypatch.setattr(record_usages, "engine", record_usages.engine)
     monkeypatch.setattr(record_usages, "_dialect_cache", [])
+    monkeypatch.setattr(limiter, "STARTED_AT", datetime.now(UTC) - timedelta(hours=1))
     user_ids = await _fresh_schema(3)
+    await _seed_states_the_prune_keeps(user_ids)
     engine = create_async_engine(MYSQL_URL, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     outcome: dict = {}
@@ -185,6 +218,8 @@ async def test_a_prune_that_deleted_nothing_does_not_hold_user_locks_through_the
         thread.join(30)
         await engine.dispose()
 
-    print(f"MYSQL-PROOF a2-usage-12 latent recorder={outcome}")
+    kept = await _state_rows()
+    print(f"MYSQL-PROOF a2-usage-12 latent recorder={outcome} state_rows_kept={kept}")
+    assert kept == len(user_ids)
     assert "recorder_error" not in outcome
     assert outcome["recorder_waited_s"] < 1.0, outcome
