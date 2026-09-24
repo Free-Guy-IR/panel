@@ -1,9 +1,12 @@
-from sqlalchemy import select
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from sqlalchemy import and_, select
 from sqlalchemy.exc import DBAPIError
 
 from app.db import AsyncSession
-from app.db.crud.wireguard import lock_users_proxy_settings
-from app.db.models import User
+from app.db.crud.wireguard import _accessible_tags_stmt, lock_users_proxy_settings
+from app.db.models import Group, ProxyInbound, User, inbounds_groups_association
 from app.fork.operation.entitled_secrets import issue_missing_entitled_secrets, load_users_for_sync
 from app.fork.proxy_secrets import (
     BulkRepairProxySecrets,
@@ -15,12 +18,13 @@ from app.fork.proxy_secrets import (
     specs_for,
     write_stored_secret,
 )
-from app.fork.proxy_secrets.entitled import EntitledSecretField
+from app.fork.proxy_secrets.entitled import ENTITLED_SECRET_SPECS, EntitledSecretField
 from app.fork.proxy_secrets.locks import (
     LOCK_UNAVAILABLE_DETAIL,
     NamedLockMissing,
     acquire_proxy_secrets_lock,
     is_lock_unavailable,
+    read_committed_rows,
 )
 from app.fork.proxy_secrets.wireguard_scope import drop_unentitled_wireguard_keys
 from app.models.proxy import ProxyTable
@@ -38,6 +42,42 @@ def _user_mod():
     from app.operation import user as user_mod
 
     return user_mod
+
+
+@dataclass(frozen=True)
+class CommittedInbound:
+    tag: str
+
+
+@dataclass(frozen=True)
+class CommittedAccess:
+    inbounds: tuple[CommittedInbound, ...]
+    is_disabled: bool = False
+
+
+async def committed_access(db: AsyncSession, user_id: int, groups: Sequence[Group] | None) -> list[CommittedAccess]:
+    if groups is None:
+        statement = _accessible_tags_stmt(user_ids=[user_id])
+    else:
+        statement = (
+            select(inbounds_groups_association.c.group_id, ProxyInbound.tag)
+            .join(ProxyInbound, ProxyInbound.id == inbounds_groups_association.c.inbound_id)
+            .join(Group, and_(Group.id == inbounds_groups_association.c.group_id, Group.is_disabled.is_(False)))
+            .where(Group.id.in_([group.id for group in groups]))
+        )
+    tags = sorted({tag for _, tag in await read_committed_rows(db, statement)})
+    return [CommittedAccess(inbounds=tuple(CommittedInbound(tag) for tag in tags))]
+
+
+def keep_stored_entitled_secrets(incoming: ProxyTable, stored: ProxyTable) -> ProxyTable:
+    for spec in ENTITLED_SECRET_SPECS:
+        section = getattr(incoming, spec.protocol)
+        if getattr(section, spec.attribute):
+            continue
+        stored_value = getattr(getattr(stored, spec.protocol), spec.attribute)
+        if stored_value:
+            setattr(section, spec.attribute, stored_value)
+    return incoming
 
 
 async def prepare_fork_proxy_settings(
@@ -65,10 +105,13 @@ class UserExtrasMixin:
             raise exc
         await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
-    async def _lock_user_proxy_settings(self, db: AsyncSession, db_user: User) -> None:
+    async def _lock_user_proxy_settings(
+        self, db: AsyncSession, db_user: User, groups: Sequence[Group] | None = None
+    ) -> list[CommittedAccess]:
         try:
             await acquire_proxy_secrets_lock(db)
             await lock_users_proxy_settings(db, [db_user])
+            return await committed_access(db, db_user.id, groups)
         except (DBAPIError, NamedLockMissing) as exc:
             await self._raise_if_lock_unavailable(db, exc)
 
