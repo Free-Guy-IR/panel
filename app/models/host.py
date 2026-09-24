@@ -5,7 +5,12 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity, UserStatus
-from app.fork.config_text import check_dns_servers, check_host_addresses, check_single_line
+from app.fork.config_text import (
+    WIREGUARD_MAX_KEEPALIVE,
+    check_dns_servers,
+    check_host_addresses,
+    check_single_line,
+)
 
 from .validators import ListValidator, StringArrayValidator
 
@@ -628,7 +633,7 @@ class WireGuardHostOverrides(BaseModel):
     allowed_ips: list[str] | None = None
     mtu: int | None = Field(default=None, ge=576, le=9000)
     reserved: str | None = Field(default=None, max_length=64)
-    keepalive_seconds: int | None = Field(default=None, ge=0, le=86400)
+    keepalive_seconds: int | None = Field(default=None, ge=0, le=WIREGUARD_MAX_KEEPALIVE)
     dns: list[str] | None = Field(default=None)
 
     @field_validator("reserved", mode="before")

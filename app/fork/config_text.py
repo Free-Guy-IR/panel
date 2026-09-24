@@ -6,6 +6,7 @@ CONFIG_BREAKING_CHARACTERS = frozenset('<>"')
 LINE_BREAKING_CATEGORIES = frozenset({"Zl", "Zp"})
 HOST_ADDRESS_PUNCTUATION = frozenset(".-_:[]*{}")
 DNS_NAME_PUNCTUATION = frozenset(".-_")
+WIREGUARD_MAX_KEEPALIVE = 65535
 
 
 def _is_control(character: str) -> bool:
@@ -62,3 +63,9 @@ def check_single_line(value, field: str):
     if value is not None and not is_safe_config_value(value):
         raise ValueError(f"{field} must not contain control characters, <, > or \"")
     return value
+
+
+def wireguard_keepalive(value) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return min(value, WIREGUARD_MAX_KEEPALIVE)

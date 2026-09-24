@@ -1,7 +1,7 @@
 import io
 import zipfile
 
-from app.fork.config_text import all_safe_config_values
+from app.fork.config_text import all_safe_config_values, wireguard_keepalive
 from app.models.subscription import SubscriptionInboundData
 from app.utils.logger import get_logger
 
@@ -58,7 +58,7 @@ class WireGuardConfiguration(BaseSubscription):
         # Optional Peer settings
         if preshared_key := payload.get("presharedkey"):
             config_data["Peer"]["PresharedKey"] = preshared_key
-        if keepalive := payload.get("keepalive"):
+        if keepalive := wireguard_keepalive(payload.get("keepalive")):
             config_data["Peer"]["PersistentKeepalive"] = str(keepalive)
 
         if not all_safe_config_values(
