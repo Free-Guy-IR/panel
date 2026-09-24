@@ -5,10 +5,11 @@ must be listed here with a one-line justification. The CI workflow
 upstream-inventory.yml fails the PR if an override appears in a file not listed below.
 
 Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
-baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`).
-Current measurement: 460 diverged files — 299 fork-only, 36 pure-addition, 109 override,
-16 mechanical — 1397 override lines, and 4460 fork lines still living inside
-upstream-tracked files.
+baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`) and the
+upstream head is the commit pinned in the .upstream-sync-point file (upstream/dev @ `ec74c933`).
+Measurement on 2026-09-24, after the port of upstream dev: 585 diverged files — 404 fork-only,
+34 pure-addition, 127 override, 20 mechanical — 1770 override lines, and 5474 fork lines still
+living inside upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
 restored the four `dashboard/public/statics/locales/*.json` files to upstream byte-for-byte,
@@ -22,15 +23,20 @@ an additive section, rather than deleting the upstream implementation.
 
 The checker reads backticked file paths from this file; keep one `` `path` `` per entry.
 
-The gate measures divergence against the tag named in the .upstream-baseline file, not against
-`upstream/main`. That is deliberate: `upstream/main` moves every time PasarGuard publishes a
-release, and when v5.4.0 and v5.4.1 landed the gate went red with 76 "override" files that were
-simply upstream's own new migrations, jobs and NATS modules, none of which this fork has yet.
-A gate that turns red without anyone touching the fork is a gate people learn to ignore.
-Bumping that pin is therefore part of merging upstream, not a chore to do separately:
-merge the release, re-run the inventory, update the numbers above and the entries below, then move
-the pin. The scheduled report still runs against `upstream/main`, so how far behind the fork is
-stays visible.
+The gate measures divergence against two pinned upstream points, never against a moving branch.
+A file is an override only when it removes or changes lines relative to the baseline tag AND
+relative to the upstream sync point. A line upstream itself changed after v5.4.1, which the fork
+ported faithfully, is upstream's change and not a fork override; an upstream change the fork has
+not ported yet is reported by the parity gate below, not here. Both pins are deliberate: a gate
+that turns red without anyone touching the fork is a gate people learn to ignore. Moving
+.upstream-sync-point is part of porting upstream: port the commits, re-run the inventory, update
+the numbers above and the entries below, then move the pin.
+
+Whether the fork is behind upstream is a separate, deliberately loud gate. The same workflow runs
+the upstream parity gate on every event and daily: every non-merge upstream commit past the
+baseline, on every upstream branch and tag, must be cherry-picked with `-x` or listed with a
+reason in UPSTREAM_SYNC.md, and the bridge gate fails when the pinned pasarguard-node-bridge is
+behind upstream's latest release without an upstream-bridge-waiver.toml for exactly that release.
 
 ## Branding & fork infrastructure (not upstreamable)
 
