@@ -6,7 +6,7 @@ Create Date: 2026-09-11 22:10:00.000000
 
 """
 
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
@@ -19,6 +19,10 @@ branch_labels = None
 depends_on = None
 
 TABLES = ("node_usages", "node_user_usages", "node_inbound_usages", "node_usage_reset_logs")
+
+
+def data_loss_allowed() -> bool:
+    return context.get_x_argument(as_dictionary=True).get("allow_data_loss", "").lower() == "true"
 
 
 def get_fk_name(table_name, column_names):
@@ -94,7 +98,18 @@ def downgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    for table in TABLES:
+    orphaned = {
+        table: bind.execute(sa.text(f"SELECT COUNT(*) FROM {table} WHERE node_id IS NULL")).scalar()
+        for table in TABLES
+    }
+    doomed = {table: count for table, count in orphaned.items() if count}
+    if doomed and not data_loss_allowed():
+        raise RuntimeError(
+            f"Downgrading 3f7a9c2e1b45 deletes the usage history of deleted nodes {doomed}; "
+            "back it up and rerun with -x allow_data_loss=true to accept the loss"
+        )
+
+    for table in doomed:
         op.execute(sa.text(f"DELETE FROM {table} WHERE node_id IS NULL"))
 
     if dialect_name == "sqlite":

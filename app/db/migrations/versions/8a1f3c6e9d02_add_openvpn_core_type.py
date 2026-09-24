@@ -43,6 +43,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    remaining = bind.execute(sa.text("SELECT COUNT(*) FROM core_configs WHERE type = 'openvpn'")).scalar()
+    if remaining:
+        raise RuntimeError(f"{remaining} OpenVPN core(s) still exist; delete them before downgrading this revision")
     if bind.engine.name not in ("postgresql", "sqlite"):
         core_type = sa.Enum("xray", "wg", "mtproto", "singbox", name="coretype")
         op.alter_column(

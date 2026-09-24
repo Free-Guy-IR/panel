@@ -16,12 +16,13 @@ from app.db.models import (
     users_groups_association,
 )
 from app.models.protocol import ProxyProtocol
-from app.models.proxy import L2TPSettings
+from app.models.proxy import VLESS_NODE_FLOWS, L2TPSettings, XTLSFlows
 from app.utils.logger import get_logger
 
 logger = get_logger("node-user")
 
 _ALL_PROXY_PROTOCOLS = frozenset(ProxyProtocol)
+_MAX_NODE_CONNECTION_CAP = 2**32 - 1
 
 
 def _inbounds_from_loaded_groups(user: User) -> list[str] | None:
@@ -56,7 +57,36 @@ async def serialize_user(user: User, allowed_protocols: frozenset[ProxyProtocol]
         if inbounds is None:
             inbounds = await user.inbounds()
 
-    return _serialize_user_for_node(user.id, user_settings, inbounds, allowed_protocols, user.hwid_limit)
+    return _serialize_or_revoke(user.id, user_settings, inbounds, allowed_protocols, user.hwid_limit)
+
+
+def node_vless_flow(flow, user_id) -> str | None:
+    if flow == XTLSFlows.VISION_UDP443:
+        return XTLSFlows.VISION.value
+    if flow is None or (isinstance(flow, str) and flow in VLESS_NODE_FLOWS):
+        return flow
+    logger.warning(f"Dropping an unusable stored VLESS flow for user {user_id}")
+    return None
+
+
+def node_connection_cap(hwid_limit) -> int:
+    if isinstance(hwid_limit, bool) or not isinstance(hwid_limit, int) or hwid_limit <= 0:
+        return 0
+    return min(hwid_limit, _MAX_NODE_CONNECTION_CAP)
+
+
+def _serialize_or_revoke(
+    id: int,
+    user_settings: dict,
+    inbounds: list[str] | None = None,
+    allowed_protocols: frozenset[ProxyProtocol] | None = None,
+    hwid_limit: int | None = None,
+) -> ProtoUser:
+    try:
+        return _serialize_user_for_node(id, user_settings, inbounds, allowed_protocols, hwid_limit)
+    except (TypeError, ValueError, AttributeError) as exc:
+        logger.error(f"User {id} cannot be serialized for the nodes ({type(exc).__name__}); revoking it there instead")
+        return create_user(str(id), create_proxy(), [])
 
 
 
@@ -84,7 +114,7 @@ def _serialize_user_for_node(
     if ProxyProtocol.vless in allowed_protocols:
         vless_settings = user_settings.get("vless", {})
         proxy_kwargs["vless_id"] = vless_settings.get("id")
-        proxy_kwargs["vless_flow"] = vless_settings.get("flow")
+        proxy_kwargs["vless_flow"] = node_vless_flow(vless_settings.get("flow"), id)
     if ProxyProtocol.trojan in allowed_protocols:
         proxy_kwargs["trojan_password"] = user_settings.get("trojan", {}).get("password")
     if ProxyProtocol.shadowsocks in allowed_protocols:
@@ -105,7 +135,7 @@ def _serialize_user_for_node(
         # hwid_limit is reused here as a concurrent-connection cap (0/None = unlimited) -
         # OpenVPN has no device-fingerprint concept, so this is a different semantic
         # than hwid_limit's original meaning for Xray (distinct devices ever seen).
-        proxy_kwargs["openvpn_max_concurrent_connections"] = hwid_limit or 0
+        proxy_kwargs["openvpn_max_concurrent_connections"] = node_connection_cap(hwid_limit)
     if ProxyProtocol.mtproto in allowed_protocols:
         proxy_kwargs["mtproto_username"] = str(id)
         proxy_kwargs["mtproto_secret"] = user_settings.get("mtproto", {}).get("secret")
@@ -182,7 +212,9 @@ async def core_users(
 
     for row in results:
         inbound_tags = row.inbound_tags.split(",") if row.inbound_tags else []
-        if inbound_tags:
+        if not inbound_tags:
+            continue
+        try:
             bridge_users.append(
                 _serialize_user_for_node(
                     row.id,
@@ -192,6 +224,8 @@ async def core_users(
                     row.hwid_limit,
                 )
             )
+        except (TypeError, ValueError, AttributeError) as exc:
+            logger.error(f"User {row.id} cannot be serialized for the nodes ({type(exc).__name__}); leaving it out")
     return bridge_users
 
 
@@ -212,7 +246,7 @@ async def serialize_users_for_node(
                 inbounds_list = loaded_inbounds
 
         bridge_users.append(
-            _serialize_user_for_node(user.id, user.proxy_settings, inbounds_list, allowed_protocols, user.hwid_limit)
+            _serialize_or_revoke(user.id, user.proxy_settings, inbounds_list, allowed_protocols, user.hwid_limit)
         )
 
     return bridge_users

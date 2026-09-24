@@ -78,6 +78,7 @@ def _compare_type(context, inspected_column, metadata_column, inspected_type, me
     # metadata often renders as bare JSON(), which is not a schema change.
     # Keep JSON vs JSONB detection intact by only bypassing plain JSON pairs.
     if context.dialect.name == "postgresql":
+        metadata_type = metadata_type.dialect_impl(context.dialect)
         is_plain_json_pair = (
             isinstance(inspected_type, JSON)
             and isinstance(metadata_type, JSON)

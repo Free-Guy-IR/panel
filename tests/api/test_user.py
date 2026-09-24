@@ -1172,7 +1172,7 @@ def test_subscription_uses_inbound_flow_for_vless_udp443(access_token):
     )
 
     try:
-        assert user["proxy_settings"]["vless"].get("flow") is None
+        assert "flow" not in user["proxy_settings"]["vless"]
 
         response = client.get(f"{user['subscription_url']}/links")
         assert response.status_code == status.HTTP_200_OK

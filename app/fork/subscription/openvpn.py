@@ -1,8 +1,27 @@
 import io
 import zipfile
 
+from app.fork.config_text import all_safe_config_values, is_safe_config_value
 from app.models.subscription import SubscriptionInboundData
 from app.subscription.base import BaseSubscription
+from app.utils.logger import get_logger
+
+logger = get_logger("openvpn-subscription")
+
+LINE_FIELDS = ("address", "port", "protocol", "cipher", "auth", "username", "password")
+BLOCK_FIELDS = ("ca_cert", "tls_crypt_key")
+
+
+def _safe_component(component: dict) -> dict | None:
+    if not all_safe_config_values(component.get(field) for field in LINE_FIELDS):
+        return None
+    if not all(all_safe_config_values(str(component.get(field)).strip().splitlines()) for field in BLOCK_FIELDS):
+        return None
+    dns_servers = component.get("dns_servers") or []
+    safe_dns = [dns for dns in dns_servers if is_safe_config_value(dns)]
+    if len(safe_dns) != len(dns_servers):
+        logger.warning(f"Dropping {len(dns_servers) - len(safe_dns)} OpenVPN DNS value(s) that would break the profile")
+    return {**component, "dns_servers": safe_dns}
 
 
 class OpenVPNConfiguration(BaseSubscription):
@@ -50,7 +69,11 @@ class OpenVPNConfiguration(BaseSubscription):
         component = self._build_openvpn_components(remark, address, inbound, settings)
         if not component:
             return
-        self.components.append(component)
+        safe_component = _safe_component(component)
+        if safe_component is None:
+            logger.warning(f"Skipping OpenVPN remote for inbound {inbound.inbound_tag}: a value would break the profile")
+            return
+        self.components.append(safe_component)
 
     def _files(self) -> dict[str, str]:
         """One .ovpn per L4 protocol, each carrying every remote that speaks it.

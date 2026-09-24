@@ -1,9 +1,13 @@
 import io
 import zipfile
 
+from app.fork.config_text import all_safe_config_values
 from app.models.subscription import SubscriptionInboundData
+from app.utils.logger import get_logger
 
 from .base import BaseSubscription
+
+logger = get_logger("wireguard-subscription")
 
 
 class WireGuardConfiguration(BaseSubscription):
@@ -58,6 +62,12 @@ class WireGuardConfiguration(BaseSubscription):
             config_data["Peer"]["PresharedKey"] = preshared_key
         if keepalive := payload.get("keepalive"):
             config_data["Peer"]["PersistentKeepalive"] = str(keepalive)
+
+        if not all_safe_config_values(
+            value for params in config_data.values() for value in params.values() if value is not None
+        ):
+            logger.warning(f"Skipping WireGuard config for inbound {inbound.inbound_tag}: a value would break the file")
+            return
 
         config_content = self._render_config(config_data)
         self.configs.append((components["remark"], config_content))
