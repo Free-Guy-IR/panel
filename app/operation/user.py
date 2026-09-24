@@ -1598,6 +1598,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             admins=admins_filter,
             group_by_node=group_by_node,
             group_by_admin=query.group_by_admin,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
 
     async def get_users_count_metric(
@@ -1633,6 +1634,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             metric=metric,
             node_id=node_id,
             group_by_node=group_by_node,
+            allowed_group_ids=get_allowed_group_ids(admin),
         )
 
     @staticmethod
