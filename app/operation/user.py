@@ -982,7 +982,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
     async def _remove_user(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> dict:
         user = await self.validate_user(db_user, include_subscription_url=False)
-        await remove_user(db, db_user)
+        try:
+            await remove_user(db, db_user)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
         await sync_remove_users([db_user])
 
         asyncio.create_task(notification.remove_user(user, admin))
