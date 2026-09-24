@@ -39,12 +39,13 @@ def _forget_check(node_id: int, task: asyncio.Task) -> None:
         _checks_in_flight.pop(node_id, None)
 
 
-async def _resync_users(db_node: Node) -> None:
+async def _resync_users(db_node: Node) -> bool:
     try:
         async with GetDB() as db:
-            await NodeOperation._resync_node_users(db, db_node)
+            return await NodeOperation._resync_node_users(db, db_node)
     except Exception as exc:
         logger.error(f"[{db_node.name}] Could not push the current user list after attaching: {exc}")
+        return False
 
 
 async def _mark_abandoned_check(db_node: Node, node: PasarGuardNode, message: str) -> None:
@@ -272,6 +273,8 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
 
     # Update status for recovering nodes
     if db_node.status in (NodeStatus.connecting, NodeStatus.error) and health == Health.HEALTHY:
+        if db_node.id in NodeOperation._pending_user_sync and not await _resync_users(db_node):
+            return
         async with GetDB() as db:
             logger.info(f"Node '{db_node.name}' have been recovered")
             node_version, core_version = await node.get_versions()

@@ -140,6 +140,8 @@ class Remote:
             return service.Empty()
         if name == "GetBaseInfo":
             return self.info()
+        if name == "GetBackendStats":
+            return service.BackendStatsResponse()
         if not self.running:
             raise NodeAPIError(503, "core is not started yet")
         if name == "SyncUsers":
@@ -853,3 +855,33 @@ async def test_node_worker_commands_for_one_user_end_at_the_database_state(monke
         await asyncio.sleep(1.5)
 
         assert not h.remote(db_node).carries(h.email), f"{order}: a stale command payload won on the node"
+
+
+async def test_a_node_recovered_after_a_failed_attach_push_gets_its_users(monkeypatch):
+    from app.jobs import node_checker
+
+    async with Harness(monkeypatch) as h:
+        db_node = h.node(1)
+        db_node.status = NodeStatus.error
+        pg_node = await h.boot(db_node)
+        await h.disable(dispatch=False)
+        NodeOperation._pending_user_sync.add(db_node.id)
+        monkeypatch.setattr(node_checker, "GetDB", GetTestDB)
+        monkeypatch.setattr(node_checker, "after_healthy_node_check", AsyncMock())
+        monkeypatch.setattr(node_checker.notification, "recovered_node", AsyncMock())
+        statuses = []
+
+        async def record_status(db, node_id, status, message="", **kwargs):
+            statuses.append(status)
+
+        monkeypatch.setattr(NodeOperation, "_update_single_node_status", staticmethod(record_status))
+        try:
+            await node_checker.process_node_health_check(db_node, pg_node)
+        finally:
+            pending = db_node.id in NodeOperation._pending_user_sync
+            NodeOperation._pending_user_sync.discard(db_node.id)
+
+        assert await pg_node.get_health() is Health.HEALTHY
+        assert await h.cleared(db_node), "the node was marked recovered while it still ran its pre-restart users"
+        assert statuses == [NodeStatus.connected]
+        assert not pending

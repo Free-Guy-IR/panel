@@ -113,16 +113,19 @@ class NodeExtraCoresMixin:
             taken_types[db_core.type] = db_core.name
 
     @classmethod
-    async def _resync_node_users(cls, db: AsyncSession, db_node: Node) -> None:
+    async def _resync_node_users(cls, db: AsyncSession, db_node: Node) -> bool:
         if _connect_lock(db_node.id).locked():
-            return
+            return False
         async with _connect_lock(db_node.id):
             cores_by_id, users_by_core = await cls._get_core_users_map(db, set(cls._node_core_ids(db_node)), lazy=True)
             users = node_users_loader(
                 users_by_core.get(getattr(db_node, "core_config_id", None) or 1, []),
                 cls._extra_cores_for(db_node, cores_by_id, users_by_core),
             )
-            await node_manager.sync_full(db_node.id, users, flush_pending=True)
+            if await node_manager.sync_full(db_node.id, users, flush_pending=True) is None:
+                return False
+            cls._pending_user_sync.discard(db_node.id)
+            return True
 
     @classmethod
     def _extra_cores_for(cls, db_node: Node, cores_by_id: dict, users_by_core: dict) -> list[tuple]:
