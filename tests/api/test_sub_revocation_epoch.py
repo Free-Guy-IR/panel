@@ -40,9 +40,9 @@ def test_a_token_minted_through_apps_in_the_revoke_second_dies_with_the_revoke(a
     try:
         leaked = _token(user["subscription_url"])
         minted_at = time.time() + 0.9
-        monkeypatch.setattr(jwt_utils.time, "time", lambda: minted_at)
-        apps = client.get(f"/sub/{leaked}/apps")
-        monkeypatch.undo()
+        with monkeypatch.context() as frozen_clock:
+            frozen_clock.setattr(jwt_utils.time, "time", lambda: minted_at)
+            apps = client.get(f"/sub/{leaked}/apps")
         assert apps.status_code == 200
         refreshed = {_token(unquote(app["import_url"])) for app in apps.json() if "/sub/" in unquote(app["import_url"])}
         assert refreshed, apps.json()

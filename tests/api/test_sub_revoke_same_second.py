@@ -16,9 +16,9 @@ REVOKED_AT = 1_900_000_000.6
 async def test_a_token_minted_before_the_revoke_is_rejected(access_token, monkeypatch):
     user = create_user(access_token, payload={"username": unique_name("same_second")})
     try:
-        monkeypatch.setattr(jwt_utils.time, "time", lambda: MINTED_AT)
-        token = await jwt_utils.create_subscription_token(user["id"])
-        monkeypatch.undo()
+        with monkeypatch.context() as frozen_clock:
+            frozen_clock.setattr(jwt_utils.time, "time", lambda: MINTED_AT)
+            token = await jwt_utils.create_subscription_token(user["id"])
         async with TestSession() as db:
             await db.execute(
                 update(User)
