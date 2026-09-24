@@ -5,9 +5,17 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
+import urllib.error
+import urllib.request
 from collections import Counter
 from datetime import UTC, datetime
+from fnmatch import fnmatchcase
 from pathlib import Path
+
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
+from packaging.version import InvalidVersion, Version
 
 LOCKFILE_NAMES = {
     "uv.lock",
@@ -54,9 +62,43 @@ SYMBOL_RULES = [
 
 CATEGORY_ORDER = ["fork-only", "pure-addition", "override", "mechanical"]
 
+SYNC_POINT_FILE = ".upstream-sync-point"
+CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
+SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived"}
+SYNC_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
+SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
+SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
+SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
+REASON_STRIP = " \t-:\u2013\u2014"
+GLOB_CHARS = frozenset("*?[")
+DWIM_PREFIXES = ("", "refs/", "refs/tags/", "refs/heads/", "refs/remotes/")
+SHORT_REF_PREFIXES = ("refs/remotes/", "refs/upstream-tags/", "refs/tags/", "refs/heads/", "refs/")
+COVERAGE_LABELS = {
+    "trailer": "ported via cherry-pick -x trailer",
+    "ported-by-design": "ported by design (ledger)",
+    "waived": "waived (ledger)",
+    "patch-id": "patch-id equivalent of a covered commit",
+    "in-base": "patch-id equivalent already in the base",
+}
 
-def git(*args):
-    result = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+BRIDGE_PACKAGE = "pasarguard-node-bridge"
+BRIDGE_WAIVER_FILE = "upstream-bridge-waiver.toml"
+PYPI_URL = f"https://pypi.org/pypi/{BRIDGE_PACKAGE}/json"
+PYPI_TIMEOUT = 20
+BRIDGE_FLOOR_OPERATORS = {">=", "==", "~=", "==="}
+STATUS_NAMES = {"A": "added", "M": "modified", "D": "deleted"}
+
+
+def git(*args, stdin=None):
+    result = subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        input=stdin,
+        check=False,
+    )
     if result.returncode != 0:
         sys.stderr.write(f"error: git {' '.join(args)}\n{result.stderr.strip()}\n")
         raise SystemExit(2)
@@ -78,7 +120,14 @@ def is_mechanical_path(path):
 
 
 def head_blob(ref, path):
-    result = subprocess.run(["git", "show", f"{ref}:{path}"], capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["git", "show", f"{ref}:{path}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     return result.stdout if result.returncode == 0 else None
 
 
@@ -129,8 +178,12 @@ def scan_symbol(path, base_lines, lineno):
     return None
 
 
-def parse_file_diffs(base, head):
-    out = git("diff", "--no-color", "--no-ext-diff", "-U3", base, head)
+def tree_paths(ref):
+    return {p for p in git("ls-tree", "-r", "-z", "--name-only", ref).split("\0") if p}
+
+
+def parse_file_diffs(base, head, *extra):
+    out = git("diff", "--no-color", "--no-ext-diff", *extra, "-U3", base, head)
     files = {}
     current = None
     old_path = None
@@ -198,12 +251,18 @@ def attach_ranges_and_symbols(path, base, parsed):
     return [{"start": s, "end": e, "symbol": scan_symbol(path, base_lines, s)} for s, e in ranges]
 
 
-def classify(base, head):
+def empty_diff():
+    return {"added": [], "removed": []}
+
+
+def classify(base, head, upstream=None):
+    if upstream is not None:
+        return classify_dual(base, head, upstream)
     statuses = parse_name_status(base, head)
     parsed = parse_file_diffs(base, head)
     records = []
     for path, status in sorted(statuses.items()):
-        diff = parsed.get(path, {"added": [], "removed": []})
+        diff = parsed.get(path, empty_diff())
         if is_mechanical_path(path):
             category = "mechanical"
         elif status == "A":
@@ -216,7 +275,7 @@ def classify(base, head):
             category = "pure-addition"
         record = {
             "path": path,
-            "status": {"A": "added", "M": "modified", "D": "deleted"}[status],
+            "status": STATUS_NAMES[status],
             "category": category,
             "added_lines": 0,
             "removed_lines": len(diff["removed"]),
@@ -230,7 +289,83 @@ def classify(base, head):
     return records
 
 
-def build_report(base, head, records):
+def load_upstream_view(base, head, upstream):
+    return {
+        "ref": upstream,
+        "paths": tree_paths(upstream),
+        "statuses": parse_name_status(upstream, head),
+        "diffs": parse_file_diffs(upstream, head),
+        "changes": parse_file_diffs(base, upstream, "--no-renames"),
+    }
+
+
+def dual_category(path, status, diff, head, view):
+    if is_mechanical_path(path):
+        return "mechanical"
+    if status == "A" and path not in view["paths"]:
+        return "fork-only"
+    if looks_generated(head, path):
+        return "mechanical"
+    if path not in view["statuses"]:
+        return None
+    removed_vs_upstream = view["diffs"].get(path, empty_diff())["removed"]
+    if status == "A":
+        return "override" if removed_vs_upstream else "pure-addition"
+    if diff["removed"] and removed_vs_upstream:
+        return "override"
+    if diff["added"]:
+        return "pure-addition"
+    return None
+
+
+def dual_override_positions(path, status, diff, base, view):
+    upstream_removed = view["diffs"].get(path, empty_diff())["removed"]
+    if status == "A":
+        return upstream_removed, view["ref"]
+    ported = set(view["changes"].get(path, empty_diff())["removed"])
+    own = [n for n in diff["removed"] if n not in ported]
+    if own:
+        return own, base
+    return upstream_removed, view["ref"]
+
+
+def dual_added(status, diff, path, view):
+    upstream_added = view["diffs"].get(path, empty_diff())["added"]
+    if status == "A":
+        return upstream_added
+    return list((Counter(diff["added"]) & Counter(upstream_added)).elements())
+
+
+def classify_dual(base, head, upstream):
+    statuses = parse_name_status(base, head)
+    parsed = parse_file_diffs(base, head)
+    view = load_upstream_view(base, head, upstream)
+    records = []
+    for path, status in sorted(statuses.items()):
+        diff = parsed.get(path, empty_diff())
+        category = dual_category(path, status, diff, head, view)
+        if category is None:
+            continue
+        record = {
+            "path": path,
+            "status": STATUS_NAMES[status],
+            "category": category,
+            "added_lines": 0,
+            "removed_lines": len(diff["removed"]),
+        }
+        if category in ("pure-addition", "override"):
+            added = dual_added(status, diff, path, view)
+            record["added_lines"] = len(added)
+            record["added_hashes"] = sorted(set(added))
+        if category == "override":
+            positions, blob_ref = dual_override_positions(path, status, diff, base, view)
+            record["removed_lines"] = len(positions)
+            record["override_ranges"] = attach_ranges_and_symbols(path, blob_ref, {"removed": positions})
+        records.append(record)
+    return records
+
+
+def build_report(base, head, records, upstream=None):
     summary = {c: 0 for c in CATEGORY_ORDER}
     override_lines = 0
     added_tracked = 0
@@ -240,7 +375,7 @@ def build_report(base, head, records):
             override_lines += r["removed_lines"]
         if r["category"] in ("pure-addition", "override"):
             added_tracked += r["added_lines"]
-    return {
+    report = {
         "version": 1,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "base": {"ref": base, "sha": resolve_ref(base)},
@@ -254,6 +389,9 @@ def build_report(base, head, records):
         "files": [{k: v for k, v in r.items() if k != "added_hashes"} for r in records],
         "files_with_hashes": records,
     }
+    if upstream is not None:
+        report["upstream_head"] = {"ref": upstream, "sha": resolve_ref(upstream)}
+    return report
 
 
 def print_summary(report, top):
@@ -261,6 +399,9 @@ def print_summary(report, top):
     print("Upstream Inventory")
     print(f"  base: {report['base']['ref']} ({report['base']['sha'][:12]})")
     print(f"  head: {report['head']['ref']} ({report['head']['sha'][:12]})")
+    if "upstream_head" in report:
+        upstream = report["upstream_head"]
+        print(f"  upstream head: {upstream['ref']} ({upstream['sha'][:12]})")
     print()
     print(f"Files diverged: {s['total_files']}")
     for c in CATEGORY_ORDER:
@@ -354,12 +495,439 @@ def baseline_check(report, baseline_path):
     return violations
 
 
+def repo_root():
+    return Path(git("rev-parse", "--show-toplevel").strip())
+
+
+def sync_point_from_file():
+    path = repo_root() / SYNC_POINT_FILE
+    if not path.is_file():
+        return None
+    value = next((line.strip() for line in path.read_text().splitlines() if line.strip()), "")
+    if not value:
+        sys.stderr.write(f"error: {path} is empty; write the upstream sha the fork is synced to\n")
+        raise SystemExit(2)
+    return value
+
+
+def resolve_upstream_head(option):
+    value = sync_point_from_file() if option is None else option
+    if value is None or value.lower() == "none":
+        return None
+    resolve_ref(f"{value}^{{commit}}")
+    return value
+
+
+def short_ref(refname):
+    for prefix in SHORT_REF_PREFIXES:
+        if refname.startswith(prefix):
+            return refname[len(prefix) :]
+    return refname
+
+
+def list_commit_refs():
+    listing = git("for-each-ref", "--format=%(refname)%00%(symref)%00%(objecttype)%00%(*objecttype)")
+    refs = []
+    for line in listing.splitlines():
+        name, symref, objtype, peeled = line.split("\0")
+        if symref:
+            continue
+        if objtype == "commit" or (objtype == "tag" and peeled == "commit"):
+            refs.append(name)
+    return refs
+
+
+def expand_tracked(patterns):
+    all_refs = None
+    tracked = {}
+    for pattern in patterns:
+        if GLOB_CHARS & set(pattern):
+            if all_refs is None:
+                all_refs = list_commit_refs()
+            matched = [r for r in all_refs if any(fnmatchcase(r, prefix + pattern) for prefix in DWIM_PREFIXES)]
+            if not matched:
+                sys.stderr.write(f"error: --track {pattern} matched no commit refs\n")
+                raise SystemExit(2)
+            for refname in matched:
+                tracked.setdefault(refname, refname)
+        else:
+            tracked.setdefault(pattern, pattern)
+    names = {key: short_ref(key) for key in tracked}
+    counts = Counter(names.values())
+    return [(key, names[key] if counts[names[key]] == 1 else key) for key in sorted(tracked)]
+
+
+def shares_history(base, ref):
+    result = subprocess.run(["git", "merge-base", base, ref], capture_output=True, text=True, check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def upstream_commits(base, tracked):
+    containing = {}
+    active = []
+    skipped = []
+    for ref, name in tracked:
+        tip = resolve_ref(f"{ref}^{{commit}}")
+        shas = git("rev-list", "--no-merges", tip, f"^{base}").split()
+        if shas and not shares_history(base, tip):
+            skipped.append(name)
+            continue
+        if shas:
+            active.append((name, tip, len(shas)))
+        for sha in shas:
+            containing.setdefault(sha, []).append(name)
+    return containing, active, skipped
+
+
+def commit_metadata(base, tips):
+    if not tips:
+        return []
+    out = git(
+        "log",
+        "--no-merges",
+        "--topo-order",
+        "--reverse",
+        "--date=short",
+        "--format=%H%x00%ad%x00%s",
+        *sorted(set(tips)),
+        f"^{base}",
+    )
+    rows = []
+    for line in out.splitlines():
+        sha, date, subject = line.split("\0", 2)
+        rows.append({"sha": sha, "date": date, "subject": subject})
+    return rows
+
+
+def trailer_shas(head):
+    out = git("log", "--format=%B", "-F", "--grep=(cherry picked from commit ", head)
+    return set(CHERRY_PICK_RE.findall(out))
+
+
+def patch_ids(shas):
+    if not shas:
+        return {}
+    log = git(
+        "log",
+        "--no-walk=unsorted",
+        "--stdin",
+        "-p",
+        "--no-color",
+        "--no-ext-diff",
+        "--format=commit %H",
+        stdin="\n".join(shas) + "\n",
+    )
+    out = git("patch-id", "--stable", stdin=log)
+    ids = {}
+    for line in out.splitlines():
+        patch_id, sha = line.split()
+        ids[sha] = patch_id
+    return ids
+
+
+def parse_sync_ledger(path):
+    try:
+        text = Path(path).read_text()
+    except OSError as exc:
+        sys.stderr.write(f"error: cannot read ledger {path}: {exc}\n")
+        raise SystemExit(2)
+    entries = []
+    errors = []
+    section = None
+    for lineno, line in enumerate(text.splitlines(), 1):
+        heading = SYNC_HEADING_RE.match(line)
+        if heading:
+            section = SYNC_SECTIONS.get(heading.group(1).strip().lower())
+            continue
+        if section is None:
+            continue
+        item = SYNC_ITEM_RE.match(line)
+        if not item:
+            continue
+        where = f"{path}:{lineno}"
+        entry = SYNC_ENTRY_RE.match(item.group(1).strip())
+        if not entry:
+            errors.append(f"{where}: entry is not in the form - `<sha>` <reason>")
+            continue
+        token = entry.group(1).strip().lower()
+        reason = entry.group(2).strip(REASON_STRIP)
+        if not SHA_TOKEN_RE.match(token):
+            errors.append(f"{where}: `{entry.group(1)}` is not a commit sha of at least 9 hex characters")
+            continue
+        if not reason:
+            errors.append(f"{where}: `{token}` has no reason")
+            continue
+        entries.append({"token": token, "kind": section, "reason": reason, "where": where})
+    return entries, errors
+
+
+def resolve_sync_entries(entries, in_range):
+    resolved = {}
+    errors = []
+    stale = []
+    duplicates = []
+    for entry in entries:
+        token = entry["token"]
+        if len(token) == 40:
+            if token not in in_range:
+                stale.append(f"{entry['where']}: `{token}` is not an upstream commit past the base on a tracked ref")
+                continue
+            sha = token
+        else:
+            matches = [s for s in in_range if s.startswith(token)]
+            if len(matches) > 1:
+                errors.append(f"{entry['where']}: `{token}` is ambiguous ({len(matches)} upstream commits match)")
+                continue
+            if not matches:
+                errors.append(f"{entry['where']}: `{token}` matches no upstream commit past the base on a tracked ref")
+                continue
+            sha = matches[0]
+        if sha in resolved:
+            duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {resolved[sha]['where']}")
+            continue
+        resolved[sha] = entry
+    return resolved, errors, stale, duplicates
+
+
+def base_equivalents(base, tips):
+    equivalent = set()
+    for tip in tips:
+        for line in git("cherry", base, tip).splitlines():
+            marker, _, sha = line.partition(" ")
+            if marker == "-":
+                equivalent.add(sha.strip())
+    return equivalent
+
+
+def parity_gate(base, head, patterns, ledger_path):
+    tracked = expand_tracked(patterns)
+    containing, active, skipped = upstream_commits(base, tracked)
+    in_range = set(containing)
+    entries, ledger_errors = parse_sync_ledger(ledger_path)
+    resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
+    ledger_errors += resolve_errors
+
+    coverage = {}
+    for sha in in_range & trailer_shas(head):
+        coverage[sha] = "trailer"
+    for sha, entry in resolved.items():
+        coverage.setdefault(sha, entry["kind"])
+    ids = patch_ids(sorted(in_range))
+    covered_ids = {ids[sha] for sha in coverage if sha in ids}
+    for sha in in_range - set(coverage):
+        if ids.get(sha) in covered_ids:
+            coverage[sha] = "patch-id"
+    for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
+        coverage[sha] = "in-base"
+
+    rows = commit_metadata(base, [tip for _, tip, _ in active])
+    uncovered = [row for row in rows if row["sha"] not in coverage]
+    counts = Counter(coverage.values())
+
+    print()
+    print("Upstream Parity")
+    print(f"  base: {base} ({resolve_ref(base)[:12]})")
+    print(f"  head: {head} ({resolve_ref(head)[:12]})")
+    print(f"  ledger: {ledger_path}")
+    print(f"  tracked refs: {len(tracked)}, with commits past base: {len(active)}")
+    for name, _, count in active:
+        print(f"    {name}: {count}")
+    for name in skipped:
+        print(f"  warning: skipped {name}: it shares no history with {base}, so it is not upstream history")
+    print()
+    print(f"Upstream commits past base: {len(in_range)}")
+    for kind, label in COVERAGE_LABELS.items():
+        print(f"  {label:<42} {counts[kind]}")
+    print(f"  {'unported':<42} {len(uncovered)}")
+
+    if uncovered:
+        groups = {}
+        for row in uncovered:
+            groups.setdefault(tuple(sorted(containing[row["sha"]])), []).append(row)
+        print()
+        print(f"Unported upstream commits ({len(uncovered)}), grouped by the tracked refs that contain them:")
+        for refs, group in groups.items():
+            print(f"  on {', '.join(refs)} ({len(group)}):")
+            for row in group:
+                print(f"    {row['sha'][:12]}  {row['date']}  {row['subject']}")
+
+    if ledger_errors:
+        print()
+        print(f"Ledger errors ({len(ledger_errors)}):")
+        for message in ledger_errors:
+            print(f"  {message}")
+    notes = stale + duplicates
+    if notes:
+        print()
+        print(f"Ledger warnings ({len(notes)}):")
+        for message in notes:
+            print(f"  {message}")
+
+    print()
+    if uncovered or ledger_errors:
+        reasons = []
+        if uncovered:
+            reasons.append(f"{len(uncovered)} upstream commit(s) neither ported nor listed in {ledger_path}")
+        if ledger_errors:
+            reasons.append(f"{len(ledger_errors)} ledger error(s)")
+        print(f"Upstream parity gate FAILED: {'; '.join(reasons)}")
+        return 1
+    print(f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}")
+    return 0
+
+
+def pinned_bridge_version(head):
+    text = head_blob(head, "uv.lock")
+    if text is None:
+        sys.stderr.write(f"error: uv.lock not found on {head}\n")
+        return None
+    try:
+        lock = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        sys.stderr.write(f"error: uv.lock on {head} is not valid TOML: {exc}\n")
+        return None
+    raw = [p.get("version") for p in lock.get("package", []) if p.get("name") == BRIDGE_PACKAGE]
+    try:
+        versions = sorted((Version(v), v) for v in raw if v)
+    except InvalidVersion as exc:
+        sys.stderr.write(f"error: uv.lock on {head} has an invalid {BRIDGE_PACKAGE} version: {exc}\n")
+        return None
+    if not versions:
+        sys.stderr.write(f"error: uv.lock on {head} has no [[package]] named {BRIDGE_PACKAGE}\n")
+        return None
+    return versions[0][1]
+
+
+def pypi_latest_version():
+    request = urllib.request.Request(
+        PYPI_URL, headers={"Accept": "application/json", "User-Agent": "upstream-inventory"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=PYPI_TIMEOUT) as response:
+            payload = json.load(response)
+        return Version(payload["info"]["version"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        sys.stderr.write(f"error: cannot read the latest {BRIDGE_PACKAGE} release from {PYPI_URL}: {exc}\n")
+        return None
+
+
+def upstream_bridge_floor(upstream):
+    text = head_blob(upstream, "pyproject.toml")
+    if text is None:
+        return None, "no pyproject.toml"
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        return None, f"pyproject.toml is not valid TOML: {exc}"
+    best = None
+    for dependency in data.get("project", {}).get("dependencies", []):
+        try:
+            requirement = Requirement(dependency)
+        except InvalidRequirement:
+            continue
+        if canonicalize_name(requirement.name) != BRIDGE_PACKAGE:
+            continue
+        for spec in requirement.specifier:
+            if spec.operator not in BRIDGE_FLOOR_OPERATORS:
+                continue
+            try:
+                version = Version(spec.version)
+            except InvalidVersion:
+                continue
+            if best is None or version > best[0]:
+                best = (version, dependency)
+    if best is None:
+        return None, f"no {BRIDGE_PACKAGE} lower bound in [project].dependencies"
+    return best
+
+
+def bridge_waiver_verdict(head, latest):
+    text = head_blob(head, BRIDGE_WAIVER_FILE)
+    if text is None:
+        return 1, f"no {BRIDGE_WAIVER_FILE} on {head}; bump the bridge or add a waiver for {latest}"
+    try:
+        waiver = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        return 1, f"{BRIDGE_WAIVER_FILE} is not valid TOML: {exc}"
+    raw_version = waiver.get("upstream_version")
+    reason = waiver.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        return 1, f"{BRIDGE_WAIVER_FILE} has no reason"
+    try:
+        waived = Version(str(raw_version))
+    except InvalidVersion:
+        return 1, f"{BRIDGE_WAIVER_FILE} upstream_version {raw_version!r} is not a version"
+    if waived < latest:
+        return 1, f"{BRIDGE_WAIVER_FILE} is stale: it waives {waived} but upstream is now at {latest}"
+    if waived != latest:
+        return 1, f"{BRIDGE_WAIVER_FILE} waives {waived}, which does not match upstream {latest}"
+    return 0, f"waived by {BRIDGE_WAIVER_FILE} for {latest}: {reason.strip()}"
+
+
+def bridge_gate(head, upstream, latest_override):
+    print()
+    print("Bridge Version")
+    raw_pinned = pinned_bridge_version(head)
+    if raw_pinned is None:
+        print("Bridge version gate ERROR: cannot read the pinned version")
+        return 2
+    pinned = Version(Version(raw_pinned).public)
+    print(f"  pinned: {raw_pinned} (compared as {pinned}) from uv.lock on {head}")
+
+    sources = []
+    if latest_override is not None:
+        try:
+            override = Version(latest_override)
+        except InvalidVersion:
+            print(f"Bridge version gate ERROR: --bridge-latest {latest_override!r} is not a version")
+            return 2
+        sources.append((override, "--bridge-latest"))
+        print(f"  released: {override} from --bridge-latest (PyPI not queried)")
+    else:
+        released = pypi_latest_version()
+        if released is None:
+            print("Bridge version gate ERROR: the latest PyPI release could not be read")
+            return 2
+        sources.append((released, "PyPI"))
+        print(f"  released: {released} from {PYPI_URL}")
+    if upstream is None:
+        print("  upstream floor: not checked (no upstream head)")
+    else:
+        floor, detail = upstream_bridge_floor(upstream)
+        if floor is None:
+            print(f"  upstream floor: none found on {upstream} ({detail})")
+        else:
+            sources.append((floor, f"pyproject.toml on {upstream}"))
+            print(f"  upstream floor: {floor} from {detail!r} in pyproject.toml on {upstream}")
+
+    latest = max(version for version, _ in sources)
+    origins = [origin for version, origin in sources if version == latest]
+    print(f"  upstream latest: {latest} (from {', '.join(origins)})")
+
+    if pinned >= latest:
+        if head_blob(head, BRIDGE_WAIVER_FILE) is not None:
+            print(f"  note: {BRIDGE_WAIVER_FILE} is no longer needed")
+        print(f"Bridge version gate OK: pinned {pinned} is not behind upstream {latest}")
+        return 0
+    code, message = bridge_waiver_verdict(head, latest)
+    if code:
+        print(f"Bridge version gate FAILED: pinned {pinned} is behind upstream {latest}; {message}")
+    else:
+        print(f"Bridge version gate OK: pinned {pinned} is behind upstream {latest}, {message}")
+    return code
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Inventory fork divergence from upstream and guard the override boundary."
     )
     parser.add_argument("--base", default="upstream/main", help="upstream ref (default: upstream/main)")
     parser.add_argument("--head", default="HEAD", help="fork ref (default: HEAD)")
+    parser.add_argument(
+        "--upstream-head",
+        metavar="REF",
+        help=f"upstream commit the fork is synced to (default: the sha in {SYNC_POINT_FILE}; 'none' disables)",
+    )
     parser.add_argument("--json", action="store_true", help="print full JSON report to stdout")
     parser.add_argument("--json-file", metavar="PATH", help="write full JSON report to PATH")
     parser.add_argument(
@@ -373,28 +941,67 @@ def main():
         help="warn about new fork code in upstream files since a previous JSON report",
     )
     parser.add_argument("--top", type=int, default=15, help="number of top override files to show")
+    parser.add_argument(
+        "--track",
+        metavar="REF_OR_GLOB",
+        action="append",
+        default=[],
+        help="upstream ref or ref glob whose commits past --base must be ported or listed (repeatable)",
+    )
+    parser.add_argument(
+        "--fail-on-unported",
+        metavar="LEDGER",
+        help="exit 1 if a tracked upstream commit is neither cherry-picked with -x nor listed in LEDGER",
+    )
+    parser.add_argument(
+        "--check-bridge",
+        action="store_true",
+        help=f"exit 1 if the {BRIDGE_PACKAGE} pinned in uv.lock is behind upstream",
+    )
+    parser.add_argument(
+        "--bridge-latest",
+        metavar="VERSION",
+        help="use VERSION as the latest bridge release instead of querying PyPI",
+    )
     args = parser.parse_args()
+    if bool(args.track) != bool(args.fail_on_unported):
+        parser.error("--track and --fail-on-unported must be used together")
+    if args.bridge_latest and not args.check_bridge:
+        parser.error("--bridge-latest requires --check-bridge")
 
-    resolve_ref(args.base)
+    gate_only = bool(args.fail_on_unported or args.check_bridge)
+    run_inventory = bool(
+        args.json or args.json_file or args.fail_on_override_outside_ledger or args.baseline or not gate_only
+    )
     resolve_ref(args.head)
-    records = classify(args.base, args.head)
-    report = build_report(args.base, args.head, records)
+    upstream = resolve_upstream_head(args.upstream_head) if run_inventory or args.check_bridge else None
+    codes = [0]
 
-    if args.json:
-        json.dump(report, sys.stdout, indent=2)
-        sys.stdout.write("\n")
-    else:
-        print_summary(report, args.top)
+    if run_inventory:
+        resolve_ref(args.base)
+        records = classify(args.base, args.head, upstream)
+        report = build_report(args.base, args.head, records, upstream)
+        if args.json:
+            json.dump(report, sys.stdout, indent=2)
+            sys.stdout.write("\n")
+        else:
+            print_summary(report, args.top)
+        if args.json_file:
+            Path(args.json_file).write_text(json.dumps(report, indent=2) + "\n")
+        if args.fail_on_override_outside_ledger:
+            codes.append(1 if ledger_check(report, args.fail_on_override_outside_ledger) else 0)
+        if args.baseline:
+            baseline_check(report, args.baseline)
 
-    if args.json_file:
-        Path(args.json_file).write_text(json.dumps(report, indent=2) + "\n")
+    if args.fail_on_unported:
+        resolve_ref(args.base)
+        codes.append(parity_gate(args.base, args.head, args.track, args.fail_on_unported))
 
-    failed = False
-    if args.fail_on_override_outside_ledger:
-        failed = ledger_check(report, args.fail_on_override_outside_ledger)
-    if args.baseline:
-        baseline_check(report, args.baseline)
-    raise SystemExit(1 if failed else 0)
+    if args.check_bridge:
+        codes.append(bridge_gate(args.head, upstream, args.bridge_latest))
+
+    sys.stdout.flush()
+    raise SystemExit(max(codes))
 
 
 if __name__ == "__main__":

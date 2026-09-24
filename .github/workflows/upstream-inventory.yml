@@ -2,8 +2,10 @@ name: Upstream Inventory
 
 on:
   pull_request:
+  push:
+    branches: [main]
   schedule:
-    - cron: "24 6 * * 1"
+    - cron: "24 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -23,30 +25,30 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install checker dependencies
+        run: python -m pip install "packaging==26.3"
+
       - name: Fetch upstream
+        id: fetch
         run: |
           git remote add upstream https://github.com/PasarGuard/panel.git 2>/dev/null || \
             git remote set-url upstream https://github.com/PasarGuard/panel.git
           git for-each-ref --format='%(objectname) %(refname)' refs/tags > "$RUNNER_TEMP/fork-tags-before"
-          git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
+          git fetch --no-tags upstream "+refs/heads/*:refs/remotes/upstream/*"
           git fetch --no-tags upstream "+refs/tags/*:refs/upstream-tags/*"
           git for-each-ref --format='%(objectname) %(refname)' refs/tags > "$RUNNER_TEMP/fork-tags-after"
           diff "$RUNNER_TEMP/fork-tags-before" "$RUNNER_TEMP/fork-tags-after"
-          echo "BASELINE=$(cat .upstream-baseline)" >> "$GITHUB_ENV"
+          baseline=$(cat .upstream-baseline)
+          sync_point=$(cat .upstream-sync-point)
+          echo "BASELINE=$baseline" >> "$GITHUB_ENV"
+          echo "SYNC_POINT=$sync_point" >> "$GITHUB_ENV"
 
       - name: Inventory report
         run: |
           python scripts/upstream_inventory.py \
-            --base upstream/main --head HEAD \
+            --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" \
             --json-file upstream-inventory.json > inventory-summary.md
           cat inventory-summary.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Ledger gate
-        if: github.event_name == 'pull_request'
-        run: |
-          python scripts/upstream_inventory.py \
-            --base "refs/upstream-tags/$BASELINE" --head HEAD \
-            --fail-on-override-outside-ledger OVERRIDES.md
 
       - name: Upload report
         if: github.event_name != 'pull_request'
@@ -57,3 +59,34 @@ jobs:
             upstream-inventory.json
             inventory-summary.md
           retention-days: 30
+
+      - name: Ledger gate
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: |
+          python scripts/upstream_inventory.py \
+            --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" \
+            --fail-on-override-outside-ledger OVERRIDES.md
+
+      - name: Upstream parity gate
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: |
+          status=0
+          python scripts/upstream_inventory.py \
+            --base "refs/upstream-tags/$BASELINE" --head HEAD \
+            --track 'refs/remotes/upstream/*' --track 'refs/upstream-tags/*' \
+            --fail-on-unported UPSTREAM_SYNC.md > upstream-parity.txt 2>&1 || status=$?
+          cat upstream-parity.txt
+          {
+            echo "## Upstream parity"
+            echo
+            echo '```'
+            cat upstream-parity.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Bridge version gate
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: |
+          python scripts/upstream_inventory.py \
+            --head HEAD --upstream-head "$SYNC_POINT" --check-bridge

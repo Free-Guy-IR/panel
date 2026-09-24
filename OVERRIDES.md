@@ -5,10 +5,11 @@ must be listed here with a one-line justification. The CI workflow
 upstream-inventory.yml fails the PR if an override appears in a file not listed below.
 
 Generated from `scripts/upstream_inventory.py --base v5.4.1 --head HEAD`, where the
-baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`).
-Current measurement: 460 diverged files — 299 fork-only, 36 pure-addition, 109 override,
-16 mechanical — 1397 override lines, and 4460 fork lines still living inside
-upstream-tracked files.
+baseline is the upstream tag pinned in the .upstream-baseline file (v5.4.1 @ `b56ffe36`) and the
+upstream head is the commit pinned in the .upstream-sync-point file (upstream/dev @ `ec74c933`).
+Measurement on 2026-09-24, after the port of upstream dev: 585 diverged files — 404 fork-only,
+34 pure-addition, 127 override, 20 mechanical — 1770 override lines, and 5474 fork lines still
+living inside upstream-tracked files.
 
 The extraction moved 2102 fork lines out of upstream-tracked files (5246 to 3144) and
 restored the four `dashboard/public/statics/locales/*.json` files to upstream byte-for-byte,
@@ -22,15 +23,20 @@ an additive section, rather than deleting the upstream implementation.
 
 The checker reads backticked file paths from this file; keep one `` `path` `` per entry.
 
-The gate measures divergence against the tag named in the .upstream-baseline file, not against
-`upstream/main`. That is deliberate: `upstream/main` moves every time PasarGuard publishes a
-release, and when v5.4.0 and v5.4.1 landed the gate went red with 76 "override" files that were
-simply upstream's own new migrations, jobs and NATS modules, none of which this fork has yet.
-A gate that turns red without anyone touching the fork is a gate people learn to ignore.
-Bumping that pin is therefore part of merging upstream, not a chore to do separately:
-merge the release, re-run the inventory, update the numbers above and the entries below, then move
-the pin. The scheduled report still runs against `upstream/main`, so how far behind the fork is
-stays visible.
+The gate measures divergence against two pinned upstream points, never against a moving branch.
+A file is an override only when it removes or changes lines relative to the baseline tag AND
+relative to the upstream sync point. A line upstream itself changed after v5.4.1, which the fork
+ported faithfully, is upstream's change and not a fork override; an upstream change the fork has
+not ported yet is reported by the parity gate below, not here. Both pins are deliberate: a gate
+that turns red without anyone touching the fork is a gate people learn to ignore. Moving
+.upstream-sync-point is part of porting upstream: port the commits, re-run the inventory, update
+the numbers above and the entries below, then move the pin.
+
+Whether the fork is behind upstream is a separate, deliberately loud gate. The same workflow runs
+the upstream parity gate on every event and daily: every non-merge upstream commit past the
+baseline, on every upstream branch and tag, must be cherry-picked with `-x` or listed with a
+reason in UPSTREAM_SYNC.md, and the bridge gate fails when the pinned pasarguard-node-bridge is
+behind upstream's latest release without an upstream-bridge-waiver.toml for exactly that release.
 
 ## Branding & fork infrastructure (not upstreamable)
 
@@ -51,7 +57,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/core/manager.py`
 - `app/core/xray.py`
 - `app/db/crud/admin.py` — except-fix; plus `reset_admin_usage` subtracts the logged value with a relative SQL update (`used_traffic = used_traffic - logged`) instead of assigning 0, so bytes a usage tick bills between the admin's read and the reset commit stay on the counter while the usage log still records the pre-reset value (v5.34.25)
-- `app/db/crud/general.py`
+- `app/db/crud/general.py` — except-fix; plus upstream's complete-period-bucket helpers `_get_next_period_boundary` and `get_complete_period_start_for_filter` (upstream a04bf498c, 56cb06e62) are removed on purpose by fork 1519b6bbb: usage ranges are additive half-open [start, end) windows, so a query no longer drops its partial first bucket
 - `app/lifecycle.py`
 - `app/nats/router.py`
 - `app/telegram/fsm_storage.py`
@@ -66,9 +72,9 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 ## connect_node multicore generalization (upstream PR candidate)
 
 - `app/operation/node.py` — connect_node generalized across cores with bounded concurrency; the local log-stream getter also returns the fork's fork_log_stream seam so the traffic-log collector stays the only reader of the node's shared log channel; attaching to an already-running core now re-pushes the user list, because without it a core that came up without users rejects every client forever; `modify_node` forces a Start only when the stored `core_config_id`, additional cores or `keep_alive` actually changed, where upstream forced one on every edit and the fork previously forced one whenever the fields were merely present in the body, which the dashboard sends on every save, so renaming a node or changing its coefficient stopped and restarted its core (v5.34.25, A3)
-- `app/db/crud/node.py` — core_config_id-aware node filtering, and the per-node resource-history query compares its HAVING clause against the `period_start` alias the way the usage query already did; re-emitting the truncation expression made MySQL reject the whole statement with `Unknown column 'node_stats.created_at' in 'having clause'`, which is why that endpoint answered 503 on every node
+- `app/db/crud/node.py` — core_config_id-aware node filtering including additional cores; the complete-bucket HAVING clauses of the node usage and resource-history queries are removed with general.py's helpers (1519b6bbb), which also ends the MySQL `Unknown column 'node_stats.created_at' in 'having clause'` error that made the resource-history endpoint answer 503; removing a node keeps its usage rows with `node_id` set to NULL instead of deleting them (see the app/db/models.py entry); `clear_usage_data` compares timezone-aware bounds
 - `app/node/manager_sync.py` — call-site update for new connect_node signature
-- `app/node/sync.py` — _serialize_user_for_node signature update
+- `app/node/sync.py` — _serialize_user_for_node signature update; the fork's `remove_user`, `remove_users` and upstream's `remove_user_awaited` (d5e641545) pass the user's `hwid_limit`
 - `app/node/user.py` — node user serialization carries vless id
 - `tests/test_connect_concurrency.py` — test updated to new connect_node signature
 - `tests/test_node_start_timeout.py` — the attach path now refreshes the user list, so the doubles carry sync_users and an id
@@ -144,10 +150,10 @@ These eight files already failed the ledger gate at `72ad0e4a5`; each carried a 
 without an entry here.
 
 - `app/app_factory.py` — 1 upstream line; the shutdown hook awaits `drain_usage_jobs` before `stop_job_leader`, so a usage tick that has already reset the node counters finishes billing them instead of being dropped mid-write on a redeploy
-- `app/db/crud/wireguard.py` — subnet reconcile passes `shared_wireguard_public_keys()` for each loaded chunk into `_ensure_wireguard_keys()`, so WireGuard-bound users that share a key get a fresh unique pair (v5.34.25, E1); the fork's pool-backed allocation and reconcile also live in this upstream file
+- `app/db/crud/wireguard.py` — subnet reconcile passes `shared_wireguard_public_keys()` for each loaded chunk into `_ensure_wireguard_keys(shared_keys=...)`, so WireGuard-bound users that share a key get a fresh unique pair (v5.34.25, E1); `sync_users_allocations` uses upstream's own collision repair from b606dbc26, which replaced the fork's shared-key pass there; the fork's pool-backed allocation and reconcile also live in this upstream file
 - `app/operation/system.py` — 1 upstream line; for a non-owner admin the users-stats response carries that admin's coefficient-adjusted usage as `admin_used_traffic` and leaves `outgoing_bandwidth` at 0, instead of passing accounted usage off as raw downlink bandwidth
 - `app/telegram/utils/texts.py` — 1 upstream line; the bot's start message shows `admin_used_traffic`, when present, as "Accounted Usage (coefficient-adjusted)" instead of summing it into "Total Data Usage" as if it were raw bandwidth
-- `dashboard/src/components/charts/all-nodes-stacked-bar-chart.tsx` — D4: when the backend returns only the aggregate series (key `'-1'`), the chart shows a "per-node breakdown unavailable" state with the measured total instead of dividing the aggregate evenly across the nodes, which drew per-node numbers nobody measured. D5 (v5.34.25): the series building moved to `buildAllNodesSeries` in the fork module dashboard/src/fork/charts/all-nodes-series.ts, and usage of deleted nodes (key `'0'`) is drawn as a "Deleted nodes" series stacked last and as the last pie slice, so the header total equals the sum of what is drawn
+- `dashboard/src/components/charts/all-nodes-stacked-bar-chart.tsx` — D4: when the backend returns only the aggregate series (key `'-1'`), the chart shows a "per-node breakdown unavailable" state with the measured total instead of dividing the aggregate evenly across the nodes, which drew per-node numbers nobody measured. D5 (v5.34.25): the series building moved to the fork module dashboard/src/fork/charts/all-nodes-series.ts, and usage of deleted nodes (key `'0'`) is drawn as a "Deleted nodes" series stacked last and as the last pie slice, so the header total equals the sum of what is drawn. Upstream's per-core and per-admin breakdown (889b591d3) is kept whole; its series go through the same `buildUsageSeries`, so D4 and D5 hold in the node and core views, and the admin view keeps upstream's "No admin" series for key 0
 - `dashboard/src/features/dashboard/components/dashboard-statistics.tsx` — when the stats response carries `admin_used_traffic`, the traffic card labels it "Accounted usage" and hides the incoming/outgoing split, which does not exist for that figure; most of the 14 upstream lines are the split block re-indented under the condition
 - `dashboard/src/features/users/dialogs/usage-modal.tsx` — D4 in the per-user usage modal: an aggregate-only response shows the "per-node breakdown unavailable" state and the measured total instead of an even split across nodes, so the memo returns the chart rows together with that flag and the aggregate total
 - `tests/api/conftest.py` — 2 upstream lines; the autouse fixture also points the `GetDB` that app/utils/jwt.py imports at the test database, because the JWT secret is read from the database and the tests must sign and verify with the test database's key; the package import is the absolute `from tests.api import ...` form instead of upstream's relative one, with no behaviour change
@@ -157,6 +163,7 @@ without an entry here.
 - `build_dashboard.sh` — dashboard build command change
 - `dashboard/package.json` — @pasarguard/core-kit version bump
 - `dashboard/vite.config.mts` — emptyOutDir enabled to stop chunk pile-up
+- `pyproject.toml` — the fork adds ruff per-file-ignores (including F401/I001 for upstream's app/routers/passkey.py, so that upstream file stays byte-identical) and takes pasarguard-node-bridge from the Free-Guy-IR git source; upstream's `pasarguard-node-bridge>=0.9.2` line (20858b020) stays at `>=0.9.1` until the fork bridge 0.9.2+singbox lands with owner P5's port of 857ead985
 
 ## Fork boundary seam (minimum cost of the extraction)
 
@@ -173,9 +180,9 @@ The ledger gate was already failing on these 27 files before the boundary work s
 they carry 201 override lines between them. They are listed here so the gate reflects the
 real boundary, and each one still needs its own justification or a revert.
 
-- `dashboard/src/features/nodes/components/cores/logs.tsx` — 121 upstream lines removed, the largest inherited override; the upstream WebSocket log viewer was replaced wholesale and the reason is not recorded
+- `dashboard/src/features/nodes/components/cores/logs.tsx` — the file is deleted (123 upstream lines). It is dead code upstream too: nothing imports it at v5.4.1, and the live log viewer is pages/_dashboard.nodes.logs.tsx, which the fork leaves unchanged
 - `dashboard/src/features/admins/components/admins-table.tsx` — 14 lines; upstream's `dangerouslySetInnerHTML` confirm prompts were replaced with escaped rendering
-- `app/db/models.py` — 14 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size, and those `node_id` foreign keys became nullable `ondelete="SET NULL"` so deleting a node no longer walks its usage rows. The file now also ends with `_register_fork_model_tables`, which imports the fork model modules so their tables join the shared declarative metadata, and `fk_id_column` forwards a `name` keyword through to `ForeignKey` so a fork table can pin a constraint name short enough for PostgreSQL's 63-character identifier limit
+- `app/db/models.py` — 14 lines; the ORM cascade relationships on the node usage tables were dropped because cascading deletes deadlock on MySQL at this fleet size, and those `node_id` foreign keys became nullable `ondelete="SET NULL"` so deleting a node no longer walks its usage rows. The file now also ends with `_register_fork_model_tables`, which imports the fork model modules so their tables join the shared declarative metadata, and `fk_id_column` forwards a `name` keyword through to `ForeignKey` so a fork table can pin a constraint name short enough for PostgreSQL's 63-character identifier limit. The passkey models upstream added in 98befb122 and after carry three ruff fixes the fork's `ruff check --no-fix` gate needs: the unused `LargeBinary` import dropped, the `app.db.compiles_types` import list sorted, and the `list["AdminPasskey"]` annotation unquoted
 - `app/operation/permissions.py` — 4 lines, reason not recorded
 - `app/subscription/base.py` — 5 lines, reason not recorded
 - `app/notification/webhook/__init__.py` — 1 line, reason not recorded

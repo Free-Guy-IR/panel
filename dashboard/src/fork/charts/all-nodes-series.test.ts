@@ -4,7 +4,7 @@ import en from '../locales/en.json'
 import fa from '../locales/fa.json'
 import ru from '../locales/ru.json'
 import zh from '../locales/zh.json'
-import { type AllNodesSeries, type AllNodesUsageStat, DELETED_NODES_KEY, buildAllNodesSeries, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from './all-nodes-series'
+import { type AllNodesSeries, type AllNodesUsageStat, DELETED_NODES_KEY, buildAllNodesSeries, buildUsageSeries, getTrafficBytes, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from './all-nodes-series'
 
 const GIB = 1024 * 1024 * 1024
 const P1 = '2026-09-20T00:00:00Z'
@@ -151,5 +151,51 @@ describe('deleted-nodes presentation helpers', () => {
   it('returns a row without deleted-node usage unchanged', () => {
     const row = { time: 't', _period_start: P1, node1: 1 }
     expect(relabelDeletedNodesRow(row, 'Deleted nodes')).toBe(row)
+  })
+})
+
+describe('buildUsageSeries for the core and admin breakdowns', () => {
+  const total = (stats: AllNodesUsageStat[]) => stats.reduce((sum, point) => sum + getTrafficBytes(point), 0)
+
+  it('stacks deleted-node usage after the cores so the core total matches the node total', () => {
+    const coreSeries = [
+      { key: 'core-a', stats: [stat(P1, 1, 1), stat(P3, 2, 0)] },
+      { key: 'No core', stats: [stat(P2, 0, 3)] },
+    ]
+    const deleted = [stat(P1, 2, 1)]
+    const series = buildUsageSeries({ '1': coreSeries[0].stats, '2': coreSeries[1].stats, '0': deleted }, coreSeries, labelFor, deleted)
+
+    expect(series.seriesKeys).toEqual(['core-a', 'No core', DELETED_NODES_KEY])
+    expect(series.totalBytes).toBe(total(coreSeries[0].stats) + total(coreSeries[1].stats) + total(deleted))
+    expect(drawnBytes(series)).toBe(series.totalBytes)
+    expect(pieBytes(series)).toBe(series.totalBytes)
+  })
+
+  it('draws users without an admin as their own series and adds no deleted-nodes series', () => {
+    const adminSeries = [
+      { key: 'alice', stats: [stat(P1, 0, 4)] },
+      { key: 'No admin', stats: [stat(P2, 1, 0)] },
+    ]
+    const series = buildUsageSeries({ '5': adminSeries[0].stats, '0': adminSeries[1].stats }, adminSeries, labelFor)
+
+    expect(series.seriesKeys).toEqual(['alice', 'No admin'])
+    expect(series.totalBytes).toBe(5 * GIB)
+    expect(drawnBytes(series)).toBe(series.totalBytes)
+  })
+
+  it('builds rows only for periods of the drawn series when the view is scoped', () => {
+    const scoped = [{ key: 'node1', stats: [stat(P1, 1, 0)] }]
+    const series = buildUsageSeries({ '1': scoped[0].stats, '2': [stat(P2, 7, 7)] }, scoped, labelFor)
+
+    expect(series.rows.map(row => row._period_start)).toEqual([P1])
+    expect(series.totalBytes).toBe(1 * GIB)
+  })
+
+  it('reports an aggregate-only response as unavailable for every breakdown', () => {
+    const series = buildUsageSeries({ '-1': [stat(P1, 3, 1)] }, [{ key: 'core-a', stats: [] }], labelFor)
+
+    expect(series.perNodeBreakdownUnavailable).toBe(true)
+    expect(series.totalBytes).toBe(4 * GIB)
+    expect(series.seriesKeys).toEqual([])
   })
 })

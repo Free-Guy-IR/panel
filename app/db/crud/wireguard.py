@@ -20,6 +20,7 @@ from app.db.models import (
     inbounds_groups_association,
     users_groups_association,
 )
+from app.subscription.config_cache import clear_sub_config_cache
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
 from app.utils.logger import get_logger
 
@@ -275,24 +276,45 @@ async def shared_wireguard_public_keys(db: AsyncSession, users: Iterable[User]) 
     )
 
 
-def _ensure_wireguard_keys(db_user: User, shared_keys: frozenset[str] = frozenset()) -> bool:
-    """Fill missing WG keys in proxy_settings. Returns True if the user was changed."""
+def _wireguard_candidate_public_key(settings: dict | None) -> str | None:
+    wg = (settings or {}).get("wireguard") or {}
+    private_key = wg.get("private_key")
+    public_key = wg.get("public_key")
+    if private_key:
+        return public_key or get_wireguard_public_key(private_key)
+    return public_key or None
+
+
+def _ensure_wireguard_keys(
+    db_user: User,
+    *,
+    shared_keys: set[str] | frozenset[str] = frozenset(),
+    occupied_keys: set[str] | None = None,
+) -> bool:
+    """Fill WG keys and repair keys known to collide with another peer.
+
+    ``shared_keys`` contains public keys already held by another user in the
+    current allocation operation or by an existing database user. Only the
+    user currently being reconciled is rotated; existing outside users keep
+    their stable key and will be considered when they are next reconciled.
+    """
     proxy_settings = dict(db_user.proxy_settings or {})
     wg = dict(proxy_settings.get("wireguard") or {})
     private_key = wg.get("private_key")
-    public_key = wg.get("public_key")
-    if public_key and public_key in shared_keys:
-        wg["private_key"], wg["public_key"] = generate_wireguard_keypair()
-    elif private_key and public_key:
+    public_key = _wireguard_candidate_public_key(proxy_settings)
+    if private_key and wg.get("public_key") and public_key not in shared_keys:
         return False
-    elif private_key:
-        derived = get_wireguard_public_key(private_key)
-        if derived in shared_keys:
-            wg["private_key"], wg["public_key"] = generate_wireguard_keypair()
-        else:
-            wg["public_key"] = derived
+
+    if private_key and not wg.get("public_key") and public_key not in shared_keys:
+        wg["public_key"] = public_key
     else:
-        wg["private_key"], wg["public_key"] = generate_wireguard_keypair()
+        occupied = occupied_keys if occupied_keys is not None else set()
+        while True:
+            new_private, new_public = generate_wireguard_keypair()
+            if new_public not in occupied:
+                break
+        wg["private_key"], wg["public_key"] = new_private, new_public
+        occupied.add(new_public)
     proxy_settings["wireguard"] = wg
     db_user.proxy_settings = proxy_settings
     return True
@@ -368,6 +390,27 @@ async def get_users_accessible_tags_by_inbound_tags(
     for user_id, tag in (await db.execute(_accessible_tags_stmt(tags=tag_list))).all():
         tags_by_user.setdefault(user_id, set()).add(tag)
     return tags_by_user
+
+
+async def _stored_wireguard_keys_in_use(
+    db: AsyncSession,
+    public_keys: Iterable[str],
+    excluded_user_ids: Iterable[int],
+) -> set[str]:
+    """Find stored public keys held by users outside the current allocation batch."""
+    keys = sorted({key for key in public_keys if key})
+    excluded = set(excluded_user_ids)
+    if not keys:
+        return set()
+
+    public_key = User.proxy_settings["wireguard"]["public_key"].as_string()
+    found: set[str] = set()
+    for start in range(0, len(keys), 500):
+        stmt = select(User.id, public_key).where(public_key.in_(keys[start : start + 500]))
+        for user_id, stored_key in (await db.execute(stmt)).all():
+            if user_id not in excluded and stored_key:
+                found.add(stored_key)
+    return found
 
 
 def _peer_ips_present_clause():
@@ -464,6 +507,29 @@ async def sync_users_allocations(
     if tags_by_user is None:
         tags_by_user = await get_users_accessible_tags(db, [user.id for user in users])
 
+    targets_by_user = {
+        user.id: {ns.key for ns in namespaces.values() if ns.tags & tags_by_user.get(user.id, set())}
+        for user in users
+    }
+    candidate_keys = {
+        candidate
+        for user in users
+        if targets_by_user[user.id]
+        and (candidate := _wireguard_candidate_public_key(user.proxy_settings)) is not None
+    }
+    outside_keys = await _stored_wireguard_keys_in_use(
+        db, candidate_keys, [user.id for user in users]
+    )
+    by_candidate: dict[str, list[int]] = {}
+    for user in users:
+        if not targets_by_user[user.id]:
+            continue
+        candidate = _wireguard_candidate_public_key(user.proxy_settings)
+        if candidate:
+            by_candidate.setdefault(candidate, []).append(user.id)
+    shared_keys = outside_keys | {key for key, ids in by_candidate.items() if len(ids) > 1}
+    occupied_keys = candidate_keys | outside_keys
+
     touched_keys: set[str] = set()
     for user in users:
         tags = tags_by_user.get(user.id, set())
@@ -474,17 +540,9 @@ async def sync_users_allocations(
                 touched_keys.add(ns.key)
     rows = await _lock_subnet_rows(db, touched_keys)
 
-    wg_bound_users = [
-        user
-        for user in users
-        if any(ns.tags & tags_by_user.get(user.id, set()) for ns in namespaces.values())
-    ]
-    shared_keys = await shared_wireguard_public_keys(db, wg_bound_users)
-
     changed: list[User] = []
     for user in users:
-        tags = tags_by_user.get(user.id, set())
-        targets = {ns.key for ns in namespaces.values() if ns.tags & tags}
+        targets = targets_by_user[user.id]
         old_ips = _user_peer_ips(user.proxy_settings)
 
         kept: dict[str, int] = {}
@@ -512,13 +570,17 @@ async def sync_users_allocations(
         if new_ips != old_ips:
             _set_user_peer_ips(user, new_ips)
             user_changed = True
-        if targets and _ensure_wireguard_keys(user, shared_keys):
+        if targets and _ensure_wireguard_keys(
+            user, shared_keys=shared_keys, occupied_keys=occupied_keys
+        ):
             user_changed = True
         if user_changed:
             changed.append(user)
 
     if changed or rows:
         await db.flush()
+    if changed:
+        clear_sub_config_cache()
     return changed
 
 
@@ -648,7 +710,7 @@ async def reconcile_wireguard_subnets(db: AsyncSession) -> list[int]:
             for user in users:
                 _set_user_peer_ips(user, desired[user.id])
                 if desired[user.id]:
-                    _ensure_wireguard_keys(user, shared)
+                    _ensure_wireguard_keys(user, shared_keys=shared)
 
     # rebuild pool rows from the used sets; drop rows for dead namespaces
     if used:
