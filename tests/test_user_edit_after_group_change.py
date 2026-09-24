@@ -56,7 +56,7 @@ def quiet(monkeypatch):
 
     monkeypatch.setattr(group_module, "sync_users", nothing)
     monkeypatch.setattr(user_module, "sync_user", nothing)
-    monkeypatch.setattr(user_module, "sync_remove_user", nothing)
+    monkeypatch.setattr(user_module, "sync_remove_users", nothing)
     monkeypatch.setattr(UserOperation, "generate_subscription_url", staticmethod(no_url))
     for name in ("modify_group", "remove_group", "modify_user", "user_status_change", "remove_user"):
         monkeypatch.setattr(notification, name, nothing)
