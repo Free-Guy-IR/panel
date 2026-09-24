@@ -76,11 +76,11 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 ## New proxy cores: openvpn / l2tp / mtproto / singbox
 
 - `app/core/hosts.py` — openvpn/l2tp subscription inbound data plus except-fixes
-- `app/models/host.py` — host override models reshuffled for new cores; `CreateHost` validates addresses (letters, digits and `.-_:[]*{}`), the OpenVPN and WireGuard DNS overrides and WireGuard `reserved`, so a newline cannot inject directives into a downloaded .ovpn or .conf (v5.34.25, a5-surface-3)
+- `app/models/host.py` — host override models reshuffled for new cores; `CreateHost` validates addresses (letters, digits and `.-_:[]*{}`), the OpenVPN and WireGuard DNS overrides and WireGuard `reserved`, so a newline cannot inject directives into a downloaded .ovpn or .conf (v5.34.25, a5-surface-3); `WireGuardHostOverrides.keepalive_seconds` tops out at 65535, WireGuard's own maximum, instead of 86400
 - `app/models/user.py` — proxy_settings import and field update; `UserWithValidator` bounds `hwid_limit` to 0..2^31-1 and `auto_delete_in_days` to at most 36500 on input only, so stored legacy rows still read (v5.34.25, a4-users-2/10)
 - `app/models/user_template.py` — pure addition: `UserTemplateWithValidator` bounds `hwid_limit` to 0..2^31-1 (v5.34.25, a4-users-2)
 - `app/models/proxy.py` — pure addition: upstream's `XTLSFlows` allowed values come back with a lenient stored read, and `ProxyTableInput` refuses an unknown VLESS flow or an OpenVPN password that could break the .ovpn (v5.34.25, a4-users-1, u2-1)
-- `app/subscription/wireguard.py` — pure addition: a config whose values carry a control character, `<`, `>` or `"` is skipped with a warning instead of being rendered into the .conf, where a newline could add a PostUp hook (v5.34.25, a5-surface-3)
+- `app/subscription/wireguard.py` — a config whose values carry a control character, `<`, `>` or `"` is skipped with a warning instead of being rendered into the .conf, where a newline could add a PostUp hook (v5.34.25, a5-surface-3); the `PersistentKeepalive` line is only written for 1..65535, clamped from above, because `wg` refuses anything larger
 - `app/db/crud/core.py` — CoreConfig/Node import update
 - `dashboard/src/features/hosts/dialogs/host-modal.tsx` — host mode resolution for new protocols
 - `dashboard/src/features/nodes/dialogs/core-config-modal.tsx` — config modal beyond xray/wg

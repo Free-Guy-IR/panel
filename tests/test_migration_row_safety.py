@@ -228,3 +228,47 @@ def test_sanitize_migration_changes_nothing_on_clean_data(tmp_path):
 
     with create_engine(url).connect() as connection:
         assert connection.execute(text("SELECT * FROM users")).all() == before
+
+
+KEEPALIVE_REVISION = "0374ac83604b"
+KEEPALIVE_PARENT = "6d8eb8fba21b"
+
+
+def test_keepalive_migration_clamps_only_values_wireguard_refuses(tmp_path):
+    url = f"sqlite:///{tmp_path / 'keepalive.sqlite3'}"
+    _run(url, upgrade, KEEPALIVE_PARENT)
+    seeded = {
+        1: json.dumps({"keepalive_seconds": 86400, "mtu": 1280}),
+        2: json.dumps({"keepalive_seconds": 65536}),
+        3: json.dumps({"keepalive_seconds": 65535}),
+        4: json.dumps({"keepalive_seconds": 25, "dns": ["1.1.1.1"]}),
+        5: json.dumps({"mtu": 1420}),
+        6: None,
+        7: "not json",
+    }
+    with create_engine(url).begin() as connection:
+        for host_id, overrides in seeded.items():
+            connection.execute(
+                text(
+                    "INSERT INTO hosts (id, remark, address, priority, wireguard_overrides) "
+                    "VALUES (:id, :remark, 'wg.example.com', 1, :overrides)"
+                ),
+                {"id": host_id, "remark": f"h{host_id}", "overrides": overrides},
+            )
+
+    _run(url, upgrade, KEEPALIVE_REVISION)
+
+    with create_engine(url).connect() as connection:
+        stored = dict(connection.execute(text("SELECT id, wireguard_overrides FROM hosts")).all())
+    assert json.loads(stored[1]) == {"keepalive_seconds": 65535, "mtu": 1280}
+    assert json.loads(stored[2]) == {"keepalive_seconds": 65535}
+    for untouched in (3, 4, 5, 6, 7):
+        assert stored[untouched] == seeded[untouched], untouched
+
+    _run(url, downgrade, KEEPALIVE_PARENT)
+    assert _revision(url) == KEEPALIVE_PARENT
+    with create_engine(url).connect() as connection:
+        assert json.loads(connection.execute(text("SELECT wireguard_overrides FROM hosts WHERE id = 1")).scalar()) == {
+            "keepalive_seconds": 65535,
+            "mtu": 1280,
+        }
