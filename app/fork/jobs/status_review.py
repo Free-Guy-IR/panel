@@ -1,11 +1,19 @@
+import asyncio
 from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import GetDB
-from app.db.crud.user import DELETE_CHUNK_SIZE, _review_user_select_stmt, start_users_expire, update_users_status
+from app.db.crud.user import (
+    DELETE_CHUNK_SIZE,
+    _delete_locked_users,
+    _review_user_select_stmt,
+    start_users_expire,
+    update_users_status,
+)
 from app.db.models import User, UserStatus
+from app.node.sync import remove_users as sync_remove_users
 
 USER_TRANSITION_BATCH_SIZE = 500
 EXPIRABLE = (User.status == UserStatus.active, User.is_expired)
@@ -86,18 +94,53 @@ async def disable_on_hold_users_under_lock(user_ids: Iterable[int]) -> None:
             await apply_status_changes(db, disabled, UserStatus.disabled)
 
 
+async def users_matching(db: AsyncSession, user_ids: list[int], predicates: tuple) -> list[User]:
+    stmt = (
+        _review_user_select_stmt()
+        .where(User.id.in_(user_ids), *predicates)
+        .order_by(User.id)
+        .execution_options(populate_existing=True)
+    )
+    return list((await db.execute(stmt)).unique().scalars().all())
+
+
 async def remove_on_hold_users_under_lock(user_ids: Iterable[int]) -> None:
-    from app.jobs.review_users import remove_on_hold_users
+    from app.jobs import review_users
 
     batches = _batches(user_ids, DELETE_CHUNK_SIZE)
     if not batches:
         return
 
     await start_on_hold_users_under_lock([user_id for batch in batches for user_id in batch], CAME_ONLINE)
-    async with GetDB() as db:
-        for batch in batches:
-            users = await lock_users_matching(db, batch, TIMED_OUT)
+    for batch in batches:
+        async with GetDB() as db:
+            users = await users_matching(db, batch, TIMED_OUT)
             if not users:
                 await db.commit()
                 continue
-            await remove_on_hold_users(db, users)
+            responses = {
+                user.id: await review_users.user_operator.validate_user(user, include_subscription_url=False)
+                for user in users
+            }
+            await db.commit()
+
+            for response in responses.values():
+                await review_users.sync_remove_user_awaited(response)
+
+            try:
+                removed = await _delete_locked_users(db, list(responses), *TIMED_OUT)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+
+            removed_ids = {row.id for row in removed}
+            if removed:
+                await sync_remove_users(removed)
+            kept_ids = [user_id for user_id in responses if user_id not in removed_ids]
+            if kept_ids:
+                await review_users.sync_users(await users_matching(db, kept_ids, ()))
+
+        for user_id in sorted(removed_ids):
+            asyncio.create_task(review_users.notification.remove_user(responses[user_id], review_users.SYSTEM_ADMIN))
+            review_users.logger.info(f'User "{responses[user_id].username}" removed after on-hold timeout')
