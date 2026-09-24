@@ -64,7 +64,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_content_filter_assignments_node", table_name="content_filter_assignments")
-    op.drop_index("ix_content_filter_assignments_profile", table_name="content_filter_assignments")
     op.drop_table("content_filter_assignments")
     op.drop_table("content_filter_profiles")

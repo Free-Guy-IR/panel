@@ -43,7 +43,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("user_subscription_accesses", schema=None) as batch_op:
-        batch_op.drop_index("idx_user_subscription_accesses_user_kind_created")
-
     op.drop_table("user_subscription_accesses")
