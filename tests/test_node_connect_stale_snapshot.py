@@ -805,3 +805,25 @@ async def test_a_stale_bulk_copy_pushed_after_a_newer_single_change_does_not_win
             await asyncio.sleep(1.0)
 
         assert not h.remote(db_node).carries(h.email), "a bulk push of a copy loaded earlier re-enabled the user"
+
+
+async def test_a_node_disabled_right_after_it_was_registered_is_not_started(monkeypatch):
+    async with Harness(monkeypatch) as h:
+        db_node = h.node(1)
+        db_node.status = NodeStatus.error
+        operation = _operation()
+        disconnects = []
+
+        async def disabled_by_the_admin():
+            db_node.status = NodeStatus.disabled
+            disconnects.append(asyncio.create_task(operation._disconnect_single_node_local(db_node.id)))
+
+        h.wrap_update_node(after=disabled_by_the_admin)
+        async with TestSession() as db:
+            await operation.connect_single_node(db, db_node.id)
+        await asyncio.gather(*disconnects)
+
+        assert await node_manager.get_node(db_node.id) is None
+        assert await eventually(lambda: not h.remote(db_node).running), (
+            "a node disabled during its reconnect was left running"
+        )
