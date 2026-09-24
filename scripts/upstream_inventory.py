@@ -64,6 +64,7 @@ CATEGORY_ORDER = ["fork-only", "pure-addition", "override", "mechanical"]
 
 SYNC_POINT_FILE = ".upstream-sync-point"
 CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
+UPSTREAM_TRAILER_RE = re.compile(r"^Upstream:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
 UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived"}
@@ -564,7 +565,7 @@ def shares_history(base, ref):
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
-def upstream_commits(base, tracked):
+def upstream_commits(base, tracked, require_shared_history=True):
     containing = {}
     active = []
     skipped = []
@@ -572,7 +573,7 @@ def upstream_commits(base, tracked):
     for ref, name in tracked:
         tip = resolve_ref(f"{ref}^{{commit}}")
         shas = git("rev-list", "--no-merges", tip, f"^{base}").split()
-        if shas and not shares_history(base, tip):
+        if shas and require_shared_history and not shares_history(base, tip):
             skipped.append(name)
             continue
         heads.append((tip, name))
@@ -659,8 +660,8 @@ def commit_metadata(base, tips):
 
 
 def trailer_shas(head):
-    out = git("log", "--format=%B", "-F", "--grep=(cherry picked from commit ", head)
-    return set(CHERRY_PICK_RE.findall(out))
+    out = git("log", "--format=%B", head)
+    return set(CHERRY_PICK_RE.findall(out)) | set(UPSTREAM_TRAILER_RE.findall(out))
 
 
 def patch_ids(shas):
@@ -771,9 +772,18 @@ def base_equivalents(base, tips):
     return equivalent
 
 
-def parity_gate(base, head, patterns, ledger_path, snapshot_path=None, write_snapshot=False, today=None):
+def parity_gate(
+    base,
+    head,
+    patterns,
+    ledger_path,
+    snapshot_path=None,
+    write_snapshot=False,
+    today=None,
+    require_shared_history=True,
+):
     tracked = expand_tracked(patterns)
-    containing, active, skipped, heads = upstream_commits(base, tracked)
+    containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
     snapshot_errors = []
     unrecorded = []
     snapshot_kept = []
