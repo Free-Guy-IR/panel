@@ -69,10 +69,11 @@ def set_on_leadership_lost(callback: Callable[[], Awaitable[None] | None] | None
 
 async def _ensure_kv() -> KeyValue | None:
     global _nc, _kv
-    if _kv is not None:
+    if _kv is not None and not (_nc is not None and _nc.is_closed):
         return _kv
     if not is_nats_enabled():
         return None
+    _kv = None
     _nc = await create_nats_client()
     if _nc is None:
         return None

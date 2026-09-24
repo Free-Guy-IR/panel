@@ -9,18 +9,20 @@ from fastapi.routing import APIRoute
 from sqlalchemy.exc import DBAPIError
 
 from app.db.base import database_pool_summary
-from app.lifecycle import on_shutdown, on_startup
+from app.lifecycle import on_shutdown, on_shutdown_final, on_shutdown_first, on_startup, shutdown_time_left
 from app.middlewares import setup_middleware
 from app.nats import is_multi_worker, require_nats_if_multiworker
 from app.nats.message import MessageTopic
 from app.nats.router import router
 from app.settings import handle_settings_message
-from app.subscription.client_templates import handle_client_template_message
+from app.subscription.client_templates import handle_client_template_message, refresh_client_templates_cache
 from app.utils.logger import get_logger
 from app.version import __version__
 from config import database_settings, runtime_settings, server_settings, subscription_env_settings
 
 logger = get_logger("app-factory")
+
+USAGE_DRAIN_TAIL_S = 0.25
 
 # Swagger UI ships no dark theme; hand-tune one instead of the harsher filter-invert hack
 # (and instead of swagger-ui-dist's built-in `html.dark-mode` theme, which reads too dark).
@@ -157,6 +159,19 @@ async def _ignore_worker_sync_message(_: dict):
     return None
 
 
+async def _resync_settings() -> None:
+    await handle_settings_message({})
+
+
+def _usage_drain_timeout() -> float:
+    from app.jobs import record_usages
+
+    time_left = shutdown_time_left()
+    if time_left is None:
+        return record_usages.USAGE_SHUTDOWN_GRACE_S
+    return max(min(record_usages.USAGE_SHUTDOWN_GRACE_S, time_left - USAGE_DRAIN_TAIL_S), 0.0)
+
+
 async def database_operational_error_handler(request: Request, exc: DBAPIError):
     orig = getattr(exc, "orig", None)
     error_summary = f"{type(orig).__name__}: {orig}" if orig else type(exc).__name__
@@ -201,8 +216,10 @@ def _register_nats_handlers(
         on_shutdown(router.stop)
     if enable_settings:
         router.register_handler(MessageTopic.SETTING, handle_settings_message)
+        router.register_resync_handler(_resync_settings)
     if enable_client_templates:
         router.register_handler(MessageTopic.CLIENT_TEMPLATE, handle_client_template_message)
+        router.register_resync_handler(refresh_client_templates_cache)
     if ignore_host_messages:
         router.register_handler(MessageTopic.HOST, _ignore_worker_sync_message)
     if enable_node_sync:
@@ -215,9 +232,12 @@ def _register_nats_handlers(
 
 
 def _register_scheduler_hooks():
+    from app.fork.notification_spool import persist_notification_backlog, restore_notification_backlog
     from app.notification.queue_manager import initialize_queues
 
     on_startup(initialize_queues)
+    on_startup(restore_notification_backlog)
+    on_shutdown_final(persist_notification_backlog)
 
     # APScheduler is needed by node and scheduler roles to run their jobs
     if not (runtime_settings.role.runs_node or runtime_settings.role.runs_scheduler):
@@ -236,7 +256,7 @@ def _register_scheduler_hooks():
         start_job_leader,
         stop_job_leader,
     )
-    from app.scheduler import scheduler
+    from app.scheduler import cancel_running_jobs, scheduler
 
     started_notifications = {"value": False}
     reclaim_task: dict[str, asyncio.Task | None] = {"task": None}
@@ -286,6 +306,9 @@ def _register_scheduler_hooks():
             started_notifications["value"] = False
         if scheduler.running:
             scheduler.pause()
+            cancelled = cancel_running_jobs(scheduler)
+            if cancelled:
+                logger.warning("Cancelled %s running job(s) after losing scheduler leadership", cancelled)
         _ensure_reclaim_task()
 
     set_on_leadership_lost(_pause_jobs_on_leadership_lost)
@@ -322,11 +345,11 @@ def _register_scheduler_hooks():
         try:
             from app.jobs.record_usages import drain_usage_jobs
 
-            await drain_usage_jobs()
+            await drain_usage_jobs(timeout=_usage_drain_timeout())
         finally:
             await stop_job_leader()
 
-    on_shutdown(_stop_scheduler_and_leader)
+    on_shutdown_first(_stop_scheduler_and_leader)
 
 
 def _register_jobs():

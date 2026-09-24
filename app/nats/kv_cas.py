@@ -58,6 +58,15 @@ async def kv_get_json(kv: CasKv, key: str) -> tuple[dict[str, Any] | None, int]:
     return json.loads(entry.value), entry.revision
 
 
+async def _cas_write_landed(kv: CasKv, key: str, payload: bytes, revision: int) -> bool:
+    try:
+        entry = await kv.get(key)
+    except Exception as exc:
+        logger.warning("NATS KV CAS outcome for key=%s is unknown and taken as lost: %s", key, exc)
+        return False
+    return bool(entry) and entry.value == payload and (entry.revision or 0) > revision
+
+
 async def kv_cas_json(kv: CasKv, key: str, value: dict[str, Any], revision: int) -> bool:
     payload = json.dumps(value, separators=(",", ":")).encode()
     try:
@@ -66,9 +75,19 @@ async def kv_cas_json(kv: CasKv, key: str, value: dict[str, Any], revision: int)
         else:
             await kv.update(key, payload, last=revision)
         return True
-    except nats_errors.Error as exc:
+    except (nats_js_errors.KeyWrongLastSequenceError, nats_js_errors.APIError) as exc:
         logger.debug("NATS KV CAS attempt failed for key=%s revision=%s: %s", key, revision, exc)
         return False
+    except nats_errors.Error as exc:
+        landed = await _cas_write_landed(kv, key, payload, revision)
+        logger.debug(
+            "NATS KV CAS write for key=%s revision=%s raised %s; the write %s",
+            key,
+            revision,
+            exc,
+            "landed" if landed else "did not land",
+        )
+        return landed
 
 
 async def kv_put_json(kv: CasKv, key: str, value: dict[str, Any]) -> int:

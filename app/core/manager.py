@@ -20,12 +20,13 @@ from app.fork.registry import extra_core_types
 from app.models.core import CoreListQuery
 from app.nats import is_multi_worker, is_nats_enabled
 from app.nats.client import setup_nats_kv
-from app.nats.kv_cas import is_kv_miss
 from app.nats.message import MessageTopic
 from app.nats.router import router
 from app.utils.logger import get_logger
 
 load_fork()
+
+DB_RELOAD_ATTEMPTS = 3
 
 
 class CoreManager:
@@ -48,6 +49,7 @@ class CoreManager:
         self._js: JetStreamContext | None = None
         self._kv: KeyValue | None = None
         self._logger = get_logger("core-manager")
+        self._generation = 0
         self._update_core_impl = (
             self._update_core_nats if (self._nats_enabled and self._multi_worker) else self._update_core_local
         )
@@ -73,50 +75,57 @@ class CoreManager:
         except Exception as exc:
             self._logger.warning(f"Failed to persist core state to NATS KV: {exc}")
 
-    async def _load_state_from_cache(self) -> bool:
-        if not self._kv:
-            return False
-
-        try:
-            entry = await self._kv.get(self.STATE_CACHE_KEY)
-            if not entry or not entry.value:
-                return False
-
-            # Deserialize state using JSON
+    async def _cores_from_db(self, db) -> dict[int, AbstractCore]:
+        core_configs, _ = await get_core_configs(db, CoreListQuery())
+        cores: dict[int, AbstractCore] = {}
+        for config in core_configs:
             try:
-                cached_state = json.loads(entry.value.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                self._logger.warning("Failed to decode CoreManager state as JSON, ignoring...")
+                core_config = self.validate_core(
+                    config.config,
+                    config.exclude_inbound_tags,
+                    config.fallbacks_inbound_tags,
+                    config.type,
+                )
+            except Exception as exc:
+                # Broken DB cores must not take down the process (restart loop).
+                self._logger.error(
+                    "Skipping broken core id=%s name=%r type=%s: %s",
+                    config.id,
+                    getattr(config, "name", None),
+                    config.type,
+                    exc,
+                )
+                continue
+            cores[config.id] = core_config
+        return cores
+
+    async def _install_cores(self, cores: dict[int, AbstractCore], generation: int) -> bool:
+        async with self._lock:
+            if generation != self._generation:
                 return False
+            self._cores = cores
+            self._generation += 1
+        await self.update_inbounds()
+        await self._persist_state()
+        return True
 
-            # Reconstruct Core objects
-            cores = {}
-            for core_id, core_data in cached_state.get("cores", {}).items():
-                try:
-                    cores[int(core_id)] = self._core_from_json(core_data)
-                except Exception as exc:
-                    self._logger.warning(f"Failed to reconstruct core {core_id} from JSON: {exc}")
-                    continue
-
-            async with self._lock:
-                self._cores = cores
-                self._inbounds = cached_state.get("inbounds", [])
-                self._inbounds_by_tag = cached_state.get("inbounds_by_tag", {})
-
-            await self.get_inbounds.cache.clear()
-            await self.get_inbounds_by_tag.cache.clear()
-            return True
-        except Exception as exc:
-            if is_kv_miss(exc):
-                self._logger.debug("Core manager state cache is empty")
-                return False
-            self._logger.error(f"Error loading core state from cache: {exc}")
-            return False
+    async def _reload_from_db(self) -> bool:
+        for _ in range(DB_RELOAD_ATTEMPTS):
+            generation = self._generation
+            async with GetDB() as db:
+                cores = await self._cores_from_db(db)
+            if await self._install_cores(cores, generation):
+                return True
+        self._logger.warning(
+            "CoreManager kept its in-memory cores: they changed during each of %s database reloads", DB_RELOAD_ATTEMPTS
+        )
+        return False
 
     async def _reload_from_cache(self):
-        loaded = await self._load_state_from_cache()
-        if loaded:
-            self._logger.debug("CoreManager state reloaded from JetStream KV cache")
+        if not self._nats_enabled:
+            return
+        if await self._reload_from_db():
+            self._logger.debug("CoreManager state reloaded from the database")
 
     def _core_payload_from_db(self, db_core_config: CoreConfig) -> dict:
         return {
@@ -217,42 +226,16 @@ class CoreManager:
     async def initialize(self, db):
         # Register handler with global router
         router.register_handler(MessageTopic.CORE, self._handle_core_message)
+        router.register_resync_handler(self._reload_from_cache)
 
         # Initialize NATS if enabled
         if self._nats_enabled:
             self._nc, self._js, self._kv = await setup_nats_kv(self.KV_BUCKET_NAME)
 
-        cached_loaded = await self._load_state_from_cache()
-        if cached_loaded:
-            return
-
-        core_configs, _ = await get_core_configs(db, CoreListQuery())
-        cores: dict[int, AbstractCore] = {}
-        for config in core_configs:
-            try:
-                core_config = self.validate_core(
-                    config.config,
-                    config.exclude_inbound_tags,
-                    config.fallbacks_inbound_tags,
-                    config.type,
-                )
-            except Exception as exc:
-                # Broken DB cores must not take down the process (restart loop).
-                self._logger.error(
-                    "Skipping broken core id=%s name=%r type=%s: %s",
-                    config.id,
-                    getattr(config, "name", None),
-                    config.type,
-                    exc,
-                )
-                continue
-            cores[config.id] = core_config
-
-        async with self._lock:
-            self._cores = cores
-
-        await self.update_inbounds()
-        await self._persist_state()
+        generation = self._generation
+        cores = await self._cores_from_db(db)
+        if not await self._install_cores(cores, generation):
+            await self._reload_from_db()
 
     async def update_inbounds(self):
         async with self._lock:
@@ -286,6 +269,7 @@ class CoreManager:
 
         async with self._lock:
             self._cores.update({db_core_config.id: core_config})
+            self._generation += 1
 
         await self.update_inbounds()
         await self._persist_state()
@@ -310,6 +294,7 @@ class CoreManager:
             core = self._cores.get(core_id, None)
             if core:
                 del self._cores[core_id]
+                self._generation += 1
             else:
                 return
 

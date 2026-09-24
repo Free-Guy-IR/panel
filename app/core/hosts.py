@@ -9,7 +9,7 @@ from nats.js.kv import KeyValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import on_shutdown, on_startup
-from app.core.manager import core_manager
+from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
 from app.db.models import ProxyHostSecurity
@@ -33,7 +33,6 @@ from app.models.subscription import (
 )
 from app.nats import is_multi_worker, is_nats_enabled
 from app.nats.client import setup_nats_kv
-from app.nats.kv_cas import is_kv_miss
 from app.nats.message import MessageTopic
 from app.nats.router import router
 from app.subscription.base import normalize_and_remove_none_values
@@ -532,6 +531,7 @@ class HostManager:
         self._js: JetStreamContext | None = None
         self._kv: KeyValue | None = None
         self._logger = get_logger("host-manager")
+        self._generation = 0
         self._add_hosts_impl = (
             self._add_hosts_nats if (self._nats_enabled and self._multi_worker) else self._add_hosts_local
         )
@@ -558,51 +558,39 @@ class HostManager:
         except Exception as exc:
             self._logger.warning(f"Failed to persist host state to NATS KV: {exc}")
 
-    async def _load_state_from_cache(self) -> bool:
-        if not self._kv:
-            return False
+    async def _hosts_from_db(self, db: AsyncSession) -> dict[int, SubscriptionInboundData]:
+        inbounds_list = await core_manager.get_inbounds()
+        hosts = {}
+        for db_host in await get_hosts(db):
+            result = await self._prepare_host_entry(db, BaseHost.model_validate(db_host), inbounds_list)
+            if result:
+                host_id, host_data = result
+                hosts[host_id] = host_data
+        return hosts
 
-        try:
-            entry = await self._kv.get(self.STATE_CACHE_KEY)
-            if not entry or not entry.value:
-                return False
-
-            value = entry.value
-            # Deserialize state using JSON
-            try:
-                cached_state = json.loads(value.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                self._logger.warning("Failed to decode HostManager state as JSON, ignoring...")
-                return False
-
-            # Convert dict values back to SubscriptionInboundData models
-            converted_state = {}
-            for host_id_str, host_data in cached_state.items():
-                try:
-                    host_id = int(host_id_str)
-                    if isinstance(host_data, dict):
-                        converted_state[host_id] = SubscriptionInboundData.model_validate(host_data)
-                    else:
-                        converted_state[host_id] = host_data
-                except (ValueError, TypeError):
-                    self._logger.warning(f"Failed to convert host data for host ID {host_id_str}: {host_data}")
-                    continue
-
+    async def _reload_from_db(self) -> bool:
+        for _ in range(DB_RELOAD_ATTEMPTS):
+            generation = self._generation
+            async with GetDB() as db:
+                hosts = await self._hosts_from_db(db)
             async with self._lock:
-                self._hosts = converted_state
-            await self._reset_cache()
+                if generation != self._generation:
+                    continue
+                self._hosts = hosts
+                self._generation += 1
+                await self._reset_cache()
+            await self._persist_state()
             return True
-        except Exception as exc:
-            if is_kv_miss(exc):
-                self._logger.debug("Host manager state cache is empty")
-                return False
-            self._logger.error(f"Error loading host state from cache: {exc}")
-            return False
+        self._logger.warning(
+            "HostManager kept its in-memory hosts: they changed during each of %s database reloads", DB_RELOAD_ATTEMPTS
+        )
+        return False
 
     async def _reload_from_cache(self):
-        loaded = await self._load_state_from_cache()
-        if loaded:
-            self._logger.debug("HostManager state reloaded from JetStream KV cache")
+        if not self._nats_enabled:
+            return
+        if await self._reload_from_db():
+            self._logger.debug("HostManager state reloaded from the database")
 
     async def _handle_host_message(self, data: dict):
         """Handle incoming host messages from router."""
@@ -629,16 +617,13 @@ class HostManager:
     async def setup(self, db: AsyncSession):
         # Register handler with global router
         router.register_handler(MessageTopic.HOST, self._handle_host_message)
+        router.register_resync_handler(self._reload_from_cache)
 
         # Initialize NATS if enabled
         if self._nats_enabled:
             self._nc, self._js, self._kv = await setup_nats_kv(self.KV_BUCKET_NAME)
 
-        if await self._load_state_from_cache():
-            return
-
-        db_hosts = await get_hosts(db)
-        await self.add_hosts(db, db_hosts)
+        await self.setup_local(db)
 
     async def setup_local(self, db: AsyncSession):
         db_hosts = await get_hosts(db)
@@ -685,6 +670,7 @@ class HostManager:
                     self._hosts[host_id] = SubscriptionInboundData.model_validate(host_data)
                 else:
                     self._hosts[host_id] = host_data
+            self._generation += 1
             await self._reset_cache()
 
     async def _add_hosts_local(self, db: AsyncSession, hosts: list[BaseHost]):
@@ -707,6 +693,7 @@ class HostManager:
         async with self._lock:
             for host_id in hosts_to_remove:
                 self._hosts.pop(host_id, None)
+            self._generation += 1
 
         await self._persist_state()
 
@@ -738,6 +725,7 @@ class HostManager:
         async with self._lock:
             for host_id in hosts_to_remove:
                 self._hosts.pop(host_id, None)
+            self._generation += 1
 
         # Persist state to NATS KV
         await self._persist_state()
@@ -749,6 +737,7 @@ class HostManager:
     async def _remove_host_local(self, id: int):
         async with self._lock:
             self._hosts.pop(id, None)
+            self._generation += 1
             await self._reset_cache()
         await self._persist_state()
 

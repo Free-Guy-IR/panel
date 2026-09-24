@@ -53,7 +53,7 @@ behind upstream's latest release without an upstream-bridge-waiver.toml for exac
 Upstream uses the Python-2-style `except A, B:` which is a SyntaxError on Python 3;
 the fork parenthesizes every occurrence. Each file below is that fix unless noted.
 
-- `main.py`
+- `main.py` — except-fix, plus `timeout_graceful_shutdown=HTTP_DRAIN_TIMEOUT_S` (1.5 s) on the uvicorn run call. Without it, uvicorn waits for every in-flight request before lifespan shutdown starts, so one slow request could use up Docker's 10 s stop window and the usage drain would never run (v5.34.25, P12)
 - `app/core/manager.py`
 - `app/core/xray.py`
 - `app/db/crud/admin.py` — except-fix; plus `reset_admin_usage` subtracts the logged value with a relative SQL update (`used_traffic = used_traffic - logged`) instead of assigning 0, so bytes a usage tick bills between the admin's read and the reset commit stay on the counter while the usage log still records the pre-reset value (v5.34.25)
@@ -160,6 +160,28 @@ without an entry here.
 - `dashboard/src/features/dashboard/components/dashboard-statistics.tsx` — when the stats response carries `admin_used_traffic`, the traffic card labels it "Accounted usage" and hides the incoming/outgoing split, which does not exist for that figure; most of the 14 upstream lines are the split block re-indented under the condition
 - `dashboard/src/features/users/dialogs/usage-modal.tsx` — D4 in the per-user usage modal: an aggregate-only response shows the "per-node breakdown unavailable" state and the measured total instead of an even split across nodes, so the memo returns the chart rows together with that flag and the aggregate total
 - `tests/api/conftest.py` — 2 upstream lines; the autouse fixture also points the `GetDB` that app/utils/jwt.py imports at the test database, because the JWT secret is read from the database and the tests must sign and verify with the test database's key; the package import is the absolute `from tests.api import ...` form instead of upstream's relative one, with no behaviour change
+
+## Runtime resilience: NATS, boot, shutdown and notifications (v5.34.25, P12)
+
+Every file below changed for the A7 runtime findings. Most matter only with NATS_ENABLED=1. With NATS off (production), the single-process path stays the same except for three things: the settings TTL, the shutdown order and stop-window budget, and the notification spool.
+
+- `app/nats/client.py` — clients connect with `max_reconnect_attempts=-1`, so a NATS outage longer than 2 minutes no longer closes every client for good. Rate-limited error, disconnect, reconnect and close logs replace the default traceback every 2 s, and a reconnect-listener registry lets the router resync after a reconnect
+- `app/nats/router.py` — `_listen` is a supervisor. It subscribes again with backoff when the subscription ends and replaces a closed client. After every subscribe and every reconnect of its own client it runs the registered resync handlers, because core NATS drops the messages sent while a worker was deaf. A resync also runs every 5 minutes, so a single lost publish cannot leave a sibling stale forever
+- `app/nats/leader.py` — 2 lines; `_ensure_kv` replaces a closed client instead of reusing it forever, so leadership can be regained after an outage
+- `app/nats/kv_cas.py` — on a timeout or a closed connection, `kv_cas_json` reads the key back and counts the write as won when its own payload landed. Before, a lease or dedup claim that was applied but whose reply was lost counted as lost: a phantom 15 s leader lease, or a notification every worker skipped
+- `app/core/manager.py` — cores are always built from the database at boot and on resync, and the JetStream KV snapshot is never read. A generation counter makes a reload that raced a newer update retry, instead of overwriting it
+- `app/core/hosts.py` — same for hosts. Boot loads locally without broadcasting a stale snapshot to siblings, and a resync replaces the whole map, so hosts deleted while messages were missed disappear. P10's `_reset_cache` hook is untouched
+- `app/settings/__init__.py` — the seven settings caches expire after 60 s, so a missed SETTING invalidation cannot last forever
+- `app/scheduler.py` — `cancel_running_jobs`. When a worker loses the leader lease, its running jobs are cancelled instead of continuing next to the new leader's; usage ticks stay shielded and finish what they already read
+- `app/app_factory.py` — `_stop_scheduler_and_leader` is the first shutdown step, so the scheduler stops and the usage drain runs before the network flushes, within what is left of the shutdown budget. Leadership loss cancels the running jobs. Settings and client-template caches are resynced after a router reconnect. The notification spool is registered to restore at startup and to persist at the end of shutdown
+- `app/lifecycle.py` — Docker's 10 s stop window is split into a 1.5 s uvicorn HTTP drain (`HTTP_DRAIN_TIMEOUT_S`) followed by a 7.25 s lifespan shutdown budget, which gives about 9.2 s end to end. The last 0.5 s of that budget is reserved for `on_shutdown_final` callbacks. Each callback runs as a task. One that overruns is cancelled and left behind, even if it swallows the cancellation, and callbacks skipped once the budget is spent are logged by name. `on_shutdown_first` and `shutdown_time_left` support the ordering
+- `app/notification/nats_queue.py` — NATS: an item is acked only after it is processed, a cancelled one is nak'd for redelivery, a poison message is terminated with an error log, and `in_progress` keeps a long send from being redelivered. In-memory: `release` puts items back at the front, and `drain_nowait` hands the shutdown spool the whole backlog in order
+- `app/notification/client.py` — `process_queued_notification` acks after processing and releases the item when it is cancelled, so the dispatcher never drops an in-flight notification
+- `app/jobs/process_notification_queues.py` — 1 line; the flush and the periodic job go through `process_queued_notification`
+- `app/jobs/send_notifications.py` — webhook items are acked per sent batch. On cancellation every unsent item is handed back in order, instead of being requeued as new messages from a `finally`. Unreadable or exhausted items are dropped with a log line. The old parse-failure branch referenced an unbound variable
+- `app/subscription/sub_update_buffer.py` — a flush cancelled mid-write puts its batch back (`except BaseException`), so the shutdown cancel no longer drops up to 100 rows. A size-triggered flush task is held in a set until it finishes, so it cannot be garbage-collected mid-write, and its failure is consumed after it has been logged
+- `app/telegram/__init__.py` — with NATS on, a worker's shutdown or restart no longer deletes the shared webhook. A settings change deletes it only for the worker that wins the compare-and-set claim, and only when the new settings no longer want it for that token. The claim is atomic, and a restart re-checks `getWebhookInfo`, which heals a webhook deleted by older versions. The NATS-off path is unchanged
+- `app/telegram/fsm_storage.py` — a KV put or delete that fails, or is skipped while the KV is unreachable, marks the key unsynced. Reads serve memory for that key and retry the write, so a stale KV state is never preferred over the newer one
 
 ## Build & packaging
 

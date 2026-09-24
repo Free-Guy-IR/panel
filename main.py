@@ -9,6 +9,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from app import create_app  # noqa: F401
+from app.lifecycle import HTTP_DRAIN_TIMEOUT_S
 from app.nats import require_nats_if_multiworker
 from app.utils.logger import LOGGING_CONFIG, get_logger
 from config import logging_settings, runtime_settings, server_settings
@@ -161,6 +162,7 @@ Then, navigate to {click.style(f"http://{ip}:{server_settings.port}", bold=True)
             loop=server_settings.loop,
             proxy_headers=server_settings.proxy_headers,
             forwarded_allow_ips=server_settings.forwarded_allow_ips,
+            timeout_graceful_shutdown=HTTP_DRAIN_TIMEOUT_S,
         )
     except FileNotFoundError:  # to prevent error on removing unix sock
         pass

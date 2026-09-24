@@ -74,6 +74,7 @@ class NatsFSMStorage(BaseStorage):
         self._next_connect_try_at = 0.0
 
         self._nats_enabled = is_nats_enabled()
+        self._unsynced: dict[str, bytes | None] = {}
 
     def create_isolation(
         self,
@@ -133,7 +134,35 @@ class NatsFSMStorage(BaseStorage):
             logger.warning("NATS KV unavailable for Telegram FSM, using in-memory fallback")
             return None
 
+    async def _write(self, kv_key: str, value: bytes | None) -> None:
+        if not self._nats_enabled:
+            return
+        kv = await self.ensure_kv()
+        if not kv:
+            self._unsynced[kv_key] = value
+            return
+        try:
+            if value is None:
+                await kv.delete(kv_key)
+            else:
+                await kv.put(kv_key, value)
+        except Exception as exc:
+            self._unsynced[kv_key] = value
+            logger.warning(
+                f"Failed to sync Telegram FSM record to NATS KV; serving it from memory until it syncs: {exc}"
+            )
+            return
+        self._unsynced.pop(kv_key, None)
+
+    async def _kv_is_current(self, kv_key: str) -> bool:
+        if kv_key not in self._unsynced:
+            return True
+        await self._write(kv_key, self._unsynced[kv_key])
+        return kv_key not in self._unsynced
+
     async def _safe_get(self, kv_key: str) -> KeyValue.Entry | None:
+        if not await self._kv_is_current(kv_key):
+            return None
         kv = await self.ensure_kv()
         if not kv:
             return None
@@ -149,23 +178,10 @@ class NatsFSMStorage(BaseStorage):
     async def set_state(self, key: StorageKey, state: StateType = None) -> None:
         normalized_state = self._normalize_state(state)
         await self._memory.set_state(key, normalized_state)
-
-        kv = await self.ensure_kv()
-        if not kv:
-            return
-
-        kv_key = self.build_kv_key(key, "state")
-        if normalized_state is None:
-            try:
-                await kv.delete(kv_key)
-            except Exception:
-                pass
-            return
-
-        try:
-            await kv.put(kv_key, normalized_state.encode("utf-8"))
-        except Exception as exc:
-            logger.warning(f"Failed to write Telegram FSM state to NATS KV: {exc}")
+        await self._write(
+            self.build_kv_key(key, "state"),
+            None if normalized_state is None else normalized_state.encode("utf-8"),
+        )
 
     async def get_state(self, key: StorageKey) -> str | None:
         entry = await self._safe_get(self.build_kv_key(key, "state"))
@@ -188,16 +204,9 @@ class NatsFSMStorage(BaseStorage):
         normalized_data = data.copy()
         await self._memory.set_data(key, normalized_data)
 
-        kv = await self.ensure_kv()
-        if not kv:
-            return
-
         kv_key = self.build_kv_key(key, "data")
         if not normalized_data:
-            try:
-                await kv.delete(kv_key)
-            except Exception:
-                pass
+            await self._write(kv_key, None)
             return
 
         try:
@@ -207,13 +216,11 @@ class NatsFSMStorage(BaseStorage):
             else:
                 encoded = payload.encode("utf-8")
         except TypeError:
-            logger.warning("Telegram FSM data is not JSON-serializable; skipped NATS KV sync")
+            logger.warning("Telegram FSM data is not JSON-serializable; kept in memory and cleared from NATS KV")
+            await self._write(kv_key, None)
             return
 
-        try:
-            await kv.put(kv_key, encoded)
-        except Exception as exc:
-            logger.warning(f"Failed to write Telegram FSM data to NATS KV: {exc}")
+        await self._write(kv_key, encoded)
 
     async def get_data(self, key: StorageKey) -> dict[str, Any]:
         entry = await self._safe_get(self.build_kv_key(key, "data"))

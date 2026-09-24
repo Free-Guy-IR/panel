@@ -9,6 +9,7 @@ from app.db import GetDB
 from app.db.models import NotificationReminder
 from app.fork.jobs import webhook_request
 from app.models.settings import Webhook
+from app.notification.nats_queue import NotificationQueue
 from app.notification.queue_manager import (
     WebhookNotification,
     enqueue_webhook,
@@ -50,6 +51,13 @@ async def send_to_all_webhooks(client: aiohttp.ClientSession, notifications, web
     return any(results)
 
 
+async def _settle(queue: NotificationQueue, unsettled: list[dict], items: list[dict]) -> None:
+    settled_ids = {id(item) for item in items}
+    unsettled[:] = [item for item in unsettled if id(item) not in settled_ids]
+    for item in items:
+        await queue.ack(item)
+
+
 async def send_notifications():
     """Drain queued webhooks through a client-scoped trusted TLS context."""
     settings: Webhook = await webhook_settings()
@@ -59,14 +67,15 @@ async def send_notifications():
     logger.debug("Processing notifications batch")
 
     processed = 0
-    failed_to_requeue = []
-    ready_notifications = []
+    failed_to_requeue: list[tuple[dict, WebhookNotification]] = []
+    ready_notifications: list[tuple[dict, WebhookNotification]] = []
+    unsettled: list[dict] = []
     current_time = dt.now(UTC).timestamp()
-    should_requeue = settings.enable
+    webhook_queue = get_webhook_queue()
+    cancelled = False
 
     try:
         async with create_outbound_http_session(proxy=settings.proxy_url if settings.proxy_url else None) as client:
-            webhook_queue = get_webhook_queue()
             while True:
                 try:
                     item = await webhook_queue.dequeue(timeout=1)
@@ -77,19 +86,24 @@ async def send_notifications():
                 if not item:
                     break
 
+                unsettled.append(item)
                 try:
                     notification = WebhookNotification(**item)
+                except Exception as err:
+                    logger.error(f"Dropping an unreadable webhook notification: {err}")
+                    await _settle(webhook_queue, unsettled, [item])
+                    continue
 
-                    if notification.tries >= settings.recurrent:
-                        continue
+                if notification.tries >= settings.recurrent:
+                    logger.warning(f"Dropping a webhook notification after {notification.tries} failed tries")
+                    await _settle(webhook_queue, unsettled, [item])
+                    continue
 
-                    if notification.send_at > current_time:
-                        failed_to_requeue.append(notification)
-                        continue
+                if notification.send_at > current_time:
+                    failed_to_requeue.append((item, notification))
+                    continue
 
-                    ready_notifications.append(notification)
-                except Exception:
-                    failed_to_requeue.append(notification)
+                ready_notifications.append((item, notification))
 
             if ready_notifications:
                 batch_size = 50
@@ -100,24 +114,43 @@ async def send_notifications():
                         f"(chunk {start // batch_size + 1})"
                     )
                     # Extract payloads from WebhookNotification objects
-                    payloads = [notif.payload for notif in batch]
+                    payloads = [notif.payload for _, notif in batch]
                     success = await send_to_all_webhooks(client, payloads, settings.webhooks)
 
-                    if not success:
+                    if success:
+                        await _settle(webhook_queue, unsettled, [item for item, _ in batch])
+                    else:
                         retry_at = dt.now(UTC).timestamp()
-                        for notification in batch:
+                        for item, notification in batch:
                             notification.tries += 1
                             if notification.tries < settings.recurrent:
                                 notification.send_at = retry_at + settings.timeout
-                                failed_to_requeue.append(notification)
+                                failed_to_requeue.append((item, notification))
+                            else:
+                                logger.warning(
+                                    f"Dropping a webhook notification after {notification.tries} failed tries"
+                                )
+                                await _settle(webhook_queue, unsettled, [item])
 
                     processed += len(batch)
 
+    except asyncio.CancelledError:
+        cancelled = True
+        await webhook_queue.release(*unsettled)
+        unsettled.clear()
+        raise
     finally:
-        if should_requeue:
+        if not cancelled:
             # Requeue failed items at the end
-            for notif in failed_to_requeue:
-                await enqueue_webhook(notif.payload, send_at=notif.send_at, tries=notif.tries)
+            for item, notif in failed_to_requeue:
+                try:
+                    await enqueue_webhook(notif.payload, send_at=notif.send_at, tries=notif.tries)
+                except Exception as err:
+                    logger.error(f"Could not requeue a webhook notification; handing the original back: {err}")
+                    continue
+                await _settle(webhook_queue, unsettled, [item])
+            if unsettled:
+                await webhook_queue.release(*unsettled)
 
         if processed or failed_to_requeue:
             logger.info(f"Processed {processed} notifications, requeued {len(failed_to_requeue)}")
