@@ -237,3 +237,107 @@ async def test_an_admin_wide_activate_after_a_tick_billed_a_disabled_user_over_i
 
     assert await _status(recorder_db, user_id) == UserStatus.limited
     assert _last_push(pushes, user_id) == UserStatus.limited, pushes
+
+
+async def _give_inbound(recorder_db, user_ids: list[int]) -> None:
+    from uuid import uuid4
+
+    from app.db.models import Group, ProxyInbound, users_groups_association
+
+    tag = f"merge-delivery-{uuid4().hex[:8]}"
+    async with recorder_db() as session:
+        inbound = ProxyInbound(tag=tag)
+        group = Group(name=tag[:64], inbounds=[inbound])
+        session.add_all([inbound, group])
+        await session.flush()
+        await session.execute(
+            users_groups_association.insert(), [{"user_id": user_id, "groups_id": group.id} for user_id in user_ids]
+        )
+        await session.commit()
+
+
+@pytest.fixture(name="deliver")
+def deliver_fixture(monkeypatch: pytest.MonkeyPatch, recorder_db):
+    from app.node import sync as node_sync
+
+    monkeypatch.setattr(node_sync, "GetDB", record_usages.GetDB)
+    monkeypatch.setattr(node_sync, "_current_state", node_sync.CurrentStateReader(query_timeout=BOUND))
+
+    async def deliver(user_id: int) -> list[str]:
+        (payload,) = await asyncio.wait_for(node_sync.refresh_node_users("node-1", [str(user_id)]), BOUND)
+        assert payload.email == str(user_id)
+        return list(payload.inbounds)
+
+    return deliver
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("job", sorted(JOBS))
+async def test_a_delivery_of_a_review_job_push_sends_the_admin_wide_disable_that_committed_after_it(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, deliver, job
+):
+    admin_id, (user_id,), _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
+    await _give_inbound(recorder_db, [user_id])
+    await _set(recorder_db, user_id, **_candidate_state(job))
+    candidates_name, run_job = JOBS[job]
+    real_candidates = getattr(review_users, candidates_name)
+
+    async def read_then_admin_disables_every_user(db):
+        stale = await real_candidates(db)
+        await _admin_wide(recorder_db, admin_id, "_disable_all_active_users_for_admin")
+        return stale
+
+    monkeypatch.setattr(review_users, candidates_name, read_then_admin_disables_every_user)
+    await asyncio.wait_for(run_job(), BOUND)
+
+    assert await _status(recorder_db, user_id) == UserStatus.disabled
+    assert await deliver(user_id) == []
+
+
+@pytest.mark.asyncio
+async def test_deliveries_of_pushes_queued_in_any_order_all_send_the_state_committed_last(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, deliver
+):
+    admin_id, (user_id, other_id), _ = await seed_users_and_nodes(recorder_db, user_count=2, node_count=0)
+    await _give_inbound(recorder_db, [user_id, other_id])
+    real_visible = AdminOperation._visible_users_of
+
+    async def enable_then_reread(db, db_admin, caller):
+        await _single_user_toggle(recorder_db, user_id, disabled=False)
+        return await real_visible(db, db_admin, caller)
+
+    monkeypatch.setattr(AdminOperation, "_visible_users_of", staticmethod(enable_then_reread))
+    await _admin_wide(recorder_db, admin_id, "_disable_all_active_users_for_admin")
+
+    queued = [pushed_id for _source, pushed_id, _status in pushes]
+    assert queued.count(user_id) >= 1 and queued.count(other_id) >= 1
+    for pushed_id in reversed(queued):
+        expected = [] if pushed_id == other_id else None
+        delivered = await deliver(pushed_id)
+        if expected is None:
+            assert delivered, (pushed_id, delivered)
+        else:
+            assert delivered == expected, (pushed_id, delivered)
+
+
+@pytest.mark.asyncio
+async def test_a_delivery_after_an_admin_wide_activate_races_a_tick_over_the_limit_removes_the_user(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, deliver
+):
+    admin_id, (user_id,), (node_id,) = await seed_users_and_nodes(recorder_db, user_count=1, node_count=1)
+    await _give_inbound(recorder_db, [user_id])
+    await _set(recorder_db, user_id, status=UserStatus.disabled, data_limit=1000, used_traffic=900)
+    _one_node_billing(monkeypatch, node_id, user_id, 200)
+    real_context = record_usages.load_user_usage_context
+
+    async def context_then_admin_activates(uids):
+        context = await real_context(uids)
+        await _admin_wide(recorder_db, admin_id, "_activate_all_disabled_users_for_admin")
+        assert await deliver(user_id)
+        return context
+
+    monkeypatch.setattr(record_usages, "load_user_usage_context", context_then_admin_activates)
+    await asyncio.wait_for(record_usages._record_user_usages_impl(), BOUND)
+
+    assert await _status(recorder_db, user_id) == UserStatus.limited
+    assert await deliver(user_id) == []
