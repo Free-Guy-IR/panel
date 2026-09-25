@@ -113,18 +113,17 @@ review, or waive it for good if upstream abandons it.
 
 ## Side repositories (not read by the parity gate)
 
-The parity gate reads only PasarGuard/panel. These entries record forked side repositories whose
-upstream history the fork deliberately does not follow, so the drift is a decision on record rather
-than a silent gap.
+The parity gate reads only PasarGuard/panel. Every other forked repository is tracked commit by
+commit by `scripts/upstream_forks.py` against `upstream-forks/forks.toml`, with one ledger per
+repository under `upstream-forks/`.
 
-- Free-Guy-IR/subscription-template WAIVED AS A WHOLE: the fork repository shares no commit with
-  PasarGuard/subscription-template (no merge base; checked 2026-09-24 against upstream main
-  ba2d7865d618, latest tag v2.2.1, with all 60 upstream commits unreachable from the fork's main
-  315767afed97). The panel does not build or ship it: the subscription page in production is the
+- Free-Guy-IR/subscription-template: the fork's root commit is upstream 8965004 re-rooted, so the
+  two histories share no commit (checked 2026-09-24 against upstream main ba2d7865d618, latest tag
+  v2.2.1). The panel does not build or ship it: the subscription page in production is the
   standalone Free-Guy-IR/pasarguard-sub-page index.html installed through
-  CUSTOM_TEMPLATES_DIRECTORY, and the React src/ in the fork repository is dead code. Revisit this
-  waiver if the fork ever builds the page from subscription-template again: the repository must
-  then be rebased onto upstream and each upstream commit ported or waived here.
+  CUSTOM_TEMPLATES_DIRECTORY, and the React src/ in that repository is dead code. Each upstream
+  commit has its decision in `upstream-forks/subscription-template.md`. If the fork ever builds the
+  page from subscription-template again, it must be rebased onto upstream first.
 
 ## Known future conflicts
 
