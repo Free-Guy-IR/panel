@@ -36,7 +36,7 @@ class OutboundNode:
 
 
 def _starts_with(prefix: str):
-    return lambda statement: " ".join(statement.upper().split()).startswith(prefix)
+    return lambda statement: " ".join(statement.upper().replace("`", "").replace('"', "").split()).startswith(prefix)
 
 
 async def _install(monkeypatch: pytest.MonkeyPatch, recorder_db, nodes: dict[int, OutboundNode]) -> None:

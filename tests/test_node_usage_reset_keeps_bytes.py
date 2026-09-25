@@ -97,7 +97,10 @@ async def test_bytes_landing_between_the_locked_read_and_the_reset_stay_on_the_c
         normalized = " ".join(statement.upper().split())
         if not landed["done"] and normalized.startswith("UPDATE NODES SET UPLINK=(NODES.UPLINK -"):
             landed["done"] = True
-            cursor.execute("UPDATE nodes SET uplink = uplink + 70, downlink = downlink + 90 WHERE id = ?", (node_id,))
+            marker = "?" if conn.dialect.paramstyle == "qmark" else "%s"
+            cursor.execute(
+                f"UPDATE nodes SET uplink = uplink + 70, downlink = downlink + 90 WHERE id = {marker}", (node_id,)
+            )
 
     event.listen(engine, "before_cursor_execute", increment_before_the_reset)
     try:
