@@ -81,7 +81,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     _clear_unusable_flows(bind)
     for table in ("users", "user_templates"):
-        _apply_if_any(bind, table, "hwid_limit < 0", "hwid_limit = NULL", "negative hwid_limit")
+        _apply_if_any(bind, table, "hwid_limit < 0", f"hwid_limit = {MAX_HWID_LIMIT}", "negative hwid_limit")
         _apply_if_any(
             bind,
             table,
