@@ -340,7 +340,8 @@ async def test_a_group_change_takes_its_row_locks_in_ascending_user_id_order(ses
         template = await db.get(User, first_id)
         group = (await db.execute(select(Group).where(Group.name == f"{PREFIX}vpn"))).scalar_one()
         for index, openvpn in enumerate(["already-issued", None, None]):
-            settings = dict(template.proxy_settings)
+            settings = ProxyTable().dict()
+            settings["mtproto"] = dict(template.proxy_settings["mtproto"])
             settings["openvpn"] = {"password": openvpn}
             extra = User(username=f"{USERNAME}{index}", proxy_settings=settings, admin_id=template.admin_id)
             extra.groups = [group]

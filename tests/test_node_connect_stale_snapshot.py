@@ -309,7 +309,9 @@ class Harness:
     async def _seed_user(self, tags: list[str]) -> int:
         async with TestSession() as session:
             group = Group(name=unique_name("snap_group"), inbounds=[ProxyInbound(tag=tag) for tag in tags])
-            user = User(username=unique_name("snap_user"), proxy_settings=SETTINGS, status=UserStatus.active)
+            user = User(
+                username=unique_name("snap_user"), proxy_settings=ProxyTable().dict(no_obj=True), status=UserStatus.active
+            )
             session.add_all([group, user])
             await session.flush()
             await session.execute(users_groups_association.insert(), [{"user_id": user.id, "groups_id": group.id}])

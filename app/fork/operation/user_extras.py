@@ -125,6 +125,7 @@ async def prepare_fork_proxy_settings(
     *,
     exclude_user_id: int | None = None,
     reserved: ReservedSecrets | None = None,
+    explicit_fields: frozenset = frozenset(),
 ) -> ProxyTable:
     user_mod = _user_mod()
     prepare_openvpn = getattr(user_mod, "prepare_openvpn_password", prepare_openvpn_password)
@@ -134,7 +135,9 @@ async def prepare_fork_proxy_settings(
     proxy_settings = await prepare_openvpn(db, proxy_settings, groups)
     proxy_settings = await prepare_mtproto(db, proxy_settings, groups)
     proxy_settings = await prepare_l2tp(db, proxy_settings, groups)
-    return await enforce_unique_proxy_secrets(db, proxy_settings, exclude_user_id=exclude_user_id, reserved=reserved)
+    return await enforce_unique_proxy_secrets(
+        db, proxy_settings, exclude_user_id=exclude_user_id, reserved=reserved, explicit_fields=explicit_fields
+    )
 
 
 class UserExtrasMixin:

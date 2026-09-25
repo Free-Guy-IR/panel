@@ -14,6 +14,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.db import AsyncSession
 from app.db.crud.wireguard import get_users_accessible_tags
 from app.db.models import CoreConfig, CoreType, User
+from app.fork.proxy_secrets.claims import claim_stored_proxy_secrets, claimed_values, guarded_field
 from app.fork.proxy_secrets.errors import describe_failure
 from app.fork.proxy_secrets.locks import (
     NamedLockMissing,
@@ -209,7 +210,12 @@ async def put_entitled_secret(
 ) -> bool:
     statement = conditional_secret_update(db.get_bind().dialect.name, spec, user_id, expected, value)
     result = await db.execute(statement)
-    return result.rowcount == 1
+    if result.rowcount != 1:
+        return False
+    field = guarded_field(spec)
+    if field is not None:
+        await claim_stored_proxy_secrets(db, [user_id], frozenset({field}))
+    return True
 
 
 async def entitled_core_tags(
@@ -233,6 +239,9 @@ async def secret_values_in_use(db: AsyncSession, spec: EntitledSecretSpec, value
         chunk = ordered[start : start + LOOKUP_CHUNK]
         rows = await read_committed_rows(db, select(column).where(column.in_(chunk)))
         found.update(row[0] for row in rows if row[0])
+    field = guarded_field(spec)
+    if field is not None:
+        found.update(await claimed_values(db, field, [value for value in ordered if value not in found]))
     return found
 
 

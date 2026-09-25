@@ -26,8 +26,8 @@ LEGACY_BAD = [
 ]
 
 
-def _stored(password):
-    return {"vmess": {"id": "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"}, "l2tp": {"password": password}}
+def _stored(password, vmess_id="b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"):
+    return {"vmess": {"id": vmess_id}, "l2tp": {"password": password}}
 
 
 @pytest.mark.parametrize("password", LEGACY_BAD)
@@ -118,8 +118,9 @@ async def _seed_legacy_rows(db):
     group = Group(name="l2tp", inbounds=[inbound])
     db.add(group)
     await db.flush()
+    vmess_ids = {"poisoned": "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e", "healthy": "d9d2b8a0-5a3d-4c1e-9f0a-6c2a3b4d5e6f"}
     for username in ("poisoned", "healthy"):
-        user = User(username=username, proxy_settings=_stored(HEALTHY), admin_id=admin.id)
+        user = User(username=username, proxy_settings=_stored(HEALTHY, vmess_ids[username]), admin_id=admin.id)
         user.groups = [group]
         db.add(user)
     await db.commit()

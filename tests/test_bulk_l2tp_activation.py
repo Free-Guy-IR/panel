@@ -20,7 +20,6 @@ L2TP = "l2tp-de"
 VLESS = "vless-in"
 KEPT = "AlreadyHasOne1234567"
 HELD = "HeldByAnotherUser123"
-VMESS_ID = "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"
 EDITED_VMESS_ID = "c8c1a7ff-4f2c-4b0d-8e9f-5b1f2a3d4e5f"
 
 
@@ -60,7 +59,6 @@ def synced(monkeypatch):
 
 def _settings(l2tp=None):
     settings = ProxyTable().dict()
-    settings["vmess"] = {"id": VMESS_ID}
     settings["l2tp"] = {"password": l2tp}
     return settings
 

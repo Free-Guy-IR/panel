@@ -70,7 +70,7 @@ from app.fork.operation.user_guards import (
     ensure_owner_target_allowed,
     reject_negative_next_plan,
 )
-from app.fork.proxy_secrets import ProxySecretUniquenessError
+from app.fork.proxy_secrets import ProxySecretUniquenessError, supplied_secret_fields
 from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
@@ -407,6 +407,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 groups,
                 user_to_create.proxy_settings,
                 reserved_secrets=reserved_secrets,
+                explicit_fields=supplied_secret_fields(user_to_create.proxy_settings),
             )
 
         duplicate_key = _duplicate_wireguard_public_key_usernames(users_to_create)
@@ -470,6 +471,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         *,
         exclude_user_id: int | None = None,
         reserved_secrets=None,
+        explicit_fields: frozenset = frozenset(),
     ) -> ProxyTable:
         try:
             proxy_settings = await prepare_wireguard_keys(
@@ -484,6 +486,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
                 reserved=reserved_secrets,
+                explicit_fields=explicit_fields,
             )
         except ProxySecretUniquenessError as exc:
             await self.raise_error(message=str(exc), code=409, db=db)
@@ -731,7 +734,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_admin = await get_admin(db, admin.username, load_users=False, load_usage_logs=False)
         # peer IPs are never taken from input; the subnet pool assigns them at creation
         new_user.proxy_settings.wireguard.peer_ips = []
-        new_user.proxy_settings = await self._prepare_user_proxy_settings(db, all_groups, new_user.proxy_settings)
+        new_user.proxy_settings = await self._prepare_user_proxy_settings(
+            db, all_groups, new_user.proxy_settings, explicit_fields=supplied_secret_fields(new_user.proxy_settings)
+        )
 
         try:
             db_user = await create_user(db, new_user, all_groups, db_admin)
@@ -882,6 +887,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             effective_groups,
             proxy_settings_to_prepare,
             exclude_user_id=db_user.id,
+            explicit_fields=supplied_secret_fields(modified_user.proxy_settings),
         )
         if modified_user.proxy_settings is not None or prepared_proxy_settings.dict() != current_proxy_settings_data:
             modified_user.proxy_settings = prepared_proxy_settings
