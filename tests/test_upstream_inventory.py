@@ -104,6 +104,17 @@ def repo(tmp_path_factory):
     git(path, "cherry-pick", shas["u3"])
     shas["g"] = git(path, "rev-parse", "HEAD")
 
+    git(path, "checkout", "-q", "-b", "rel-merged", shas["u5"])
+    git(path, "merge", "-q", "--no-ff", "-m", "merge feat/x", "feat-x")
+    git(path, "checkout", "-q", "-b", "rel-rebased", shas["u5"])
+    git(path, "cherry-pick", shas["f1"])
+    shas["f1_copy"] = git(path, "rev-parse", "HEAD")
+    git(path, "checkout", "-q", "-b", "rel-empty", shas["u5"])
+    git(path, "commit", "-q", "--allow-empty", "-m", "upstream empty commit")
+    shas["empty"] = git(path, "rev-parse", "HEAD")
+    for name in ("merged", "rebased", "empty"):
+        git(path, "update-ref", f"refs/upstream-release/{name}", git(path, "rev-parse", f"rel-{name}"))
+
     for ref, sha in (("main", "base"), ("dev", "u5"), ("feat/x", "f2"), ("feat/y", "g")):
         git(path, "update-ref", f"refs/remotes/upstream/{ref}", git(path, "rev-parse", shas[sha]))
     git(path, "symbolic-ref", "refs/remotes/upstream/HEAD", "refs/remotes/upstream/main")
@@ -111,7 +122,7 @@ def repo(tmp_path_factory):
     git(path, "checkout", "-q", "--orphan", "main", shas["base"])
     git(path, "commit", "-q", "-m", "fork root")
     git(path, "tag", "v1.0-fork")
-    git(path, "branch", "-q", "-D", "up", "feat-x", "feat-y")
+    git(path, "branch", "-q", "-D", "up", "feat-x", "feat-y", "rel-merged", "rel-rebased", "rel-empty")
     commit(
         path,
         "fork changes",
@@ -380,10 +391,8 @@ def test_an_old_tag_whose_commits_are_already_in_the_base_is_covered(tmp_path):
 )
 def test_a_dated_decision_covers_only_until_its_date(repo, tmp_path, today, code, message):
     shas = repo["shas"]
-    text = (
-        "## Waived\n\n"
-        f"- `{shas['u3']}` pending: tracked feature branch, re-check until: 2026-10-25\n"
-        + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2"))
+    text = f"## Waived\n\n- `{shas['f1']}` pending: tracked feature branch, re-check until: 2026-10-25\n" + "".join(
+        f"- `{shas[k]}` reason\n" for k in ("u3", "u5", "f2")
     )
     result = parity(repo, ledger(tmp_path, text), "--today", today)
     assert result.returncode == code, result.stdout + result.stderr
@@ -463,3 +472,125 @@ def test_a_snapshot_head_that_is_not_in_the_clone_is_an_error(tmp_path):
     result = _gate(path)
     assert result.returncode == 1
     assert f"snapshot head {ghost[:12]} of upstream/gone is not in this clone" in result.stdout
+
+
+def covering_ledger(tmp_path, repo, f1_reason="rewritten as fork code"):
+    shas = repo["shas"]
+    return ledger(
+        tmp_path,
+        "## Ported by design\n\n"
+        f"- `{shas['f2']}` folded into the fork feature\n\n"
+        "## Waived\n\n"
+        f"- `{shas['f1']}` {f1_reason}\n"
+        f"- `{shas['u3']}` the fork keeps c as it is\n"
+        f"- `{shas['u5']}` the fork bridge has its own floor\n",
+    )
+
+
+CONDITIONAL_REASONS = [
+    "UNMERGED-WIP: only on upstream feat/x",
+    "pending: tracked feature branch upstream/feat/x, port it when it merges. until: 2099-01-01",
+]
+
+
+@pytest.mark.parametrize("reason", CONDITIONAL_REASONS)
+def test_a_conditional_waiver_holds_while_the_commit_stays_off_the_release_lines(repo, tmp_path, reason):
+    result = parity(repo, covering_ledger(tmp_path, repo, reason))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "waived (ledger)") == 3
+
+
+@pytest.mark.parametrize("reason", CONDITIONAL_REASONS)
+def test_a_conditional_waiver_expires_when_upstream_merges_the_commit(repo, tmp_path, reason):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, reason),
+        "--track",
+        "refs/upstream-release/merged",
+        "--release-ref",
+        "refs/upstream-release/merged",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is waived only while unmerged, but upstream now carries it on upstream-release/merged" in result.stdout
+    assert repo["shas"]["f1"][:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize("reason", CONDITIONAL_REASONS)
+def test_a_conditional_waiver_does_not_cover_a_rebased_copy_on_a_release_line(repo, tmp_path, reason):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, reason),
+        "--track",
+        "refs/upstream-release/rebased",
+        "--release-ref",
+        "refs/upstream-release/rebased",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert repo["shas"]["f1_copy"][:12] in unported_block(result.stdout)
+    assert "which is waived only while unmerged, so the copy needs its own decision" in result.stdout
+
+
+def test_a_plain_waiver_still_covers_a_rebased_copy(repo, tmp_path):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo),
+        "--track",
+        "refs/upstream-release/rebased",
+        "--release-ref",
+        "refs/upstream-release/rebased",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "patch-id equivalent of a covered commit") == 3
+
+
+def test_a_conditional_waiver_without_any_release_ref_is_an_error(repo, tmp_path):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, CONDITIONAL_REASONS[0]),
+        "--release-ref",
+        "refs/nowhere/*",
+    )
+    assert result.returncode == 1
+    assert "UNMERGED-WIP and pending waivers need at least one existing --release-ref" in result.stdout
+
+
+def test_an_empty_upstream_commit_needs_no_decision(repo, tmp_path):
+    result = parity(repo, covering_ledger(tmp_path, repo), "--track", "refs/upstream-release/empty")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "changes no file") == 1
+    assert repo["shas"]["empty"][:12] not in result.stdout
+
+
+def test_a_fork_based_gate_without_shared_history_never_passes_vacuously(repo, tmp_path):
+    empty = ledger(tmp_path, "## Waived\n")
+    common = ["--base", "main", "--head", "main", "--track", "refs/remotes/upstream/*", "--fail-on-unported", empty]
+    vacuous = run(repo["path"], *common, "--upstream-head", "none")
+    assert vacuous.returncode == 2
+    assert "pass --unrelated-history" in vacuous.stderr
+    related = run(repo["path"], *common, "--upstream-head", "none", "--unrelated-history")
+    assert related.returncode == 1, related.stdout + related.stderr
+    shas = repo["shas"]
+    block = unported_block(related.stdout)
+    assert {sha for sha in shas.values() if sha[:12] in block} == {
+        shas["u3"],
+        shas["u5"],
+        shas["f1"],
+        shas["f2"],
+        shas["g"],
+    }
+    assert tally(related.stdout, "patch-id equivalent already in the base") == 1
+    fork_sync_point = run(repo["path"], *common, "--unrelated-history", "--upstream-head", "main")
+    assert fork_sync_point.returncode == 2
+    assert "it must be an upstream commit, not a fork commit" in fork_sync_point.stderr
+
+
+def test_the_sync_point_must_be_upstream_history_on_a_tracked_ref(repo, tmp_path):
+    fork_point = run(repo["path"], "--base", "v1.0", "--head", "main", "--upstream-head", "main")
+    assert fork_point.returncode == 2
+    assert "it must be an upstream commit, not a fork commit" in fork_point.stderr
+    untracked = parity(repo, covering_ledger(tmp_path, repo), "--upstream-head", "refs/upstream-release/empty")
+    assert untracked.returncode == 1
+    assert "is not on any tracked upstream ref" in untracked.stdout
+    behind = parity(repo, covering_ledger(tmp_path, repo), "--upstream-head", repo["shas"]["u4"])
+    assert behind.returncode == 0, behind.stdout + behind.stderr
+    assert "is 1 commit(s) behind upstream/dev" in behind.stdout

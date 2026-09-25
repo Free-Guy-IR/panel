@@ -82,7 +82,10 @@ COVERAGE_LABELS = {
     "waived": "waived (ledger)",
     "patch-id": "patch-id equivalent of a covered commit",
     "in-base": "patch-id equivalent already in the base",
+    "empty": "changes no file",
 }
+CONDITIONAL_TAG_RE = re.compile(r"^(?:UNMERGED-WIP|pending)\b", re.IGNORECASE)
+DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
 BRIDGE_WAIVER_FILE = "upstream-bridge-waiver.toml"
@@ -540,7 +543,14 @@ def list_commit_refs():
     return refs
 
 
-def expand_tracked(patterns):
+def ref_exists(ref):
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0
+
+
+def expand_tracked(patterns, option="--track", strict=True):
     all_refs = None
     tracked = {}
     for pattern in patterns:
@@ -548,12 +558,12 @@ def expand_tracked(patterns):
             if all_refs is None:
                 all_refs = list_commit_refs()
             matched = [r for r in all_refs if any(fnmatchcase(r, prefix + pattern) for prefix in DWIM_PREFIXES)]
-            if not matched:
-                sys.stderr.write(f"error: --track {pattern} matched no commit refs\n")
+            if not matched and strict:
+                sys.stderr.write(f"error: {option} {pattern} matched no commit refs\n")
                 raise SystemExit(2)
             for refname in matched:
                 tracked.setdefault(refname, refname)
-        else:
+        elif strict or ref_exists(pattern):
             tracked.setdefault(pattern, pattern)
     names = {key: short_ref(key) for key in tracked}
     counts = Counter(names.values())
@@ -648,15 +658,61 @@ def commit_metadata(base, tips):
         "--topo-order",
         "--reverse",
         "--date=short",
-        "--format=%H%x00%ad%x00%s",
+        "--format=%H%x00%T%x00%P%x00%ad%x00%s",
         *sorted(set(tips)),
         f"^{base}",
     )
     rows = []
     for line in out.splitlines():
-        sha, date, subject = line.split("\0", 2)
-        rows.append({"sha": sha, "date": date, "subject": subject})
+        sha, tree, parents, day, subject = line.split("\0", 4)
+        parent = parents.split()[0] if parents else None
+        rows.append({"sha": sha, "tree": tree, "parent": parent, "date": day, "subject": subject})
     return rows
+
+
+def empty_commits(rows):
+    parents = sorted({row["parent"] for row in rows if row["parent"]})
+    if not parents:
+        return set()
+    out = git("log", "--no-walk=unsorted", "--stdin", "--format=%H %T", stdin="\n".join(parents) + "\n")
+    trees = dict(line.split() for line in out.splitlines())
+    return {row["sha"] for row in rows if row["parent"] and trees.get(row["parent"]) == row["tree"]}
+
+
+def commits_on_refs(base, refs):
+    names = {}
+    for ref, name in refs:
+        tip = resolve_ref(f"{ref}^{{commit}}")
+        for sha in git("rev-list", "--no-merges", tip, f"^{base}").split():
+            names.setdefault(sha, []).append(name)
+    return names
+
+
+def is_ancestor(ancestor, descendant):
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant], capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0
+
+
+def sync_point_findings(upstream, tracked, release_refs):
+    errors = []
+    notes = []
+    sync_sha = resolve_ref(f"{upstream}^{{commit}}")
+    ordered = release_refs + [pair for pair in tracked if pair not in release_refs]
+    if not any(is_ancestor(sync_sha, resolve_ref(f"{ref}^{{commit}}")) for ref, _ in ordered):
+        errors.append(f"sync point {upstream} is not on any tracked upstream ref")
+    for ref, name in release_refs:
+        if not ref.startswith("refs/remotes/"):
+            continue
+        tip = resolve_ref(f"{ref}^{{commit}}")
+        if tip == sync_sha or not is_ancestor(sync_sha, tip):
+            continue
+        behind = git("rev-list", "--count", "--no-merges", tip, f"^{sync_sha}").strip()
+        notes.append(
+            f"sync point {sync_sha[:12]} is {behind} commit(s) behind {name} ({tip[:12]}); bump {SYNC_POINT_FILE}"
+        )
+    return errors, notes
 
 
 def trailer_shas(head):
@@ -730,7 +786,8 @@ def parse_sync_ledger(path, today=None):
                     "or record a new decision"
                 )
                 continue
-        entries.append({"token": token, "kind": section, "reason": reason, "where": where})
+        conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
+        entries.append({"token": token, "kind": section, "reason": reason, "where": where, "conditional": conditional})
     return entries, errors
 
 
@@ -781,6 +838,8 @@ def parity_gate(
     write_snapshot=False,
     today=None,
     require_shared_history=True,
+    release_patterns=(),
+    upstream=None,
 ):
     tracked = expand_tracked(patterns)
     containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
@@ -795,10 +854,29 @@ def parity_gate(
         unrecorded = [(sha, name) for sha, name in heads if (sha, name) not in recorded]
         missing, snapshot_kept = snapshot_commits(base, pairs, {sha for sha, _ in heads}, containing, active)
         snapshot_errors += missing
+    if skipped and not active:
+        sys.stderr.write(
+            f"error: every tracked ref with commits past {base} shares no history with it; "
+            "pass --unrelated-history when the fork does not share history with upstream\n"
+        )
+        raise SystemExit(2)
     in_range = set(containing)
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
     ledger_errors += resolve_errors
+    release_refs = expand_tracked(release_patterns or DEFAULT_RELEASE_REFS, option="--release-ref", strict=False)
+    on_release = commits_on_refs(base, release_refs)
+    copy_notes = []
+
+    conditional = {sha for sha, entry in resolved.items() if entry["conditional"]}
+    if conditional and not release_refs:
+        ledger_errors.append("UNMERGED-WIP and pending waivers need at least one existing --release-ref")
+    for sha in sorted(conditional & set(on_release)):
+        entry = resolved.pop(sha)
+        ledger_errors.append(
+            f"{entry['where']}: `{sha[:12]}` is waived only while unmerged, but upstream now carries it on "
+            f"{', '.join(sorted(on_release[sha]))}; port it or record a new decision"
+        )
 
     coverage = {}
     for sha in in_range & trailer_shas(head):
@@ -806,14 +884,30 @@ def parity_gate(
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
     ids = patch_ids(sorted(in_range))
-    covered_ids = {ids[sha] for sha in coverage if sha in ids}
-    for sha in in_range - set(coverage):
-        if ids.get(sha) in covered_ids:
-            coverage[sha] = "patch-id"
+    sources = {}
+    for sha in coverage:
+        if sha in ids:
+            sources.setdefault(ids[sha], []).append(sha)
+    for sha in sorted(in_range - set(coverage)):
+        origin = sources.get(ids.get(sha), [])
+        if not origin:
+            continue
+        if sha in on_release and all(s in conditional for s in origin):
+            copy_notes.append(
+                f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
+                "which is waived only while unmerged, so the copy needs its own decision"
+            )
+            continue
+        coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
         coverage[sha] = "in-base"
 
+    sync_errors, sync_notes = sync_point_findings(upstream, tracked, release_refs) if upstream else ([], [])
+    ledger_errors += sync_errors
+
     rows = commit_metadata(base, [tip for _, tip, _ in active])
+    for sha in empty_commits([row for row in rows if row["sha"] not in coverage]):
+        coverage[sha] = "empty"
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
 
@@ -862,7 +956,7 @@ def parity_gate(
             print(f"  upstream head {name} at {sha[:12]} is not recorded in {snapshot_path}")
         if unrecorded:
             print(f"  record the reviewed heads with --write-refs-snapshot {snapshot_path}")
-    notes = stale + duplicates
+    notes = stale + duplicates + copy_notes + sync_notes
     if notes:
         print()
         print(f"Ledger warnings ({len(notes)}):")
@@ -1073,6 +1167,20 @@ def main():
     )
     parser.add_argument("--today", metavar="YYYY-MM-DD", help="date used for until: deadlines (default: today, UTC)")
     parser.add_argument(
+        "--release-ref",
+        metavar="REF_OR_GLOB",
+        action="append",
+        default=[],
+        help="upstream release line that ends UNMERGED-WIP and pending waivers (repeatable; default: "
+        + ", ".join(DEFAULT_RELEASE_REFS)
+        + ")",
+    )
+    parser.add_argument(
+        "--unrelated-history",
+        action="store_true",
+        help="the fork shares no history with upstream, so tracked refs unrelated to --base are not skipped",
+    )
+    parser.add_argument(
         "--check-bridge",
         action="store_true",
         help=f"exit 1 if the {BRIDGE_PACKAGE} pinned in uv.lock is behind upstream",
@@ -1103,7 +1211,19 @@ def main():
         args.json or args.json_file or args.fail_on_override_outside_ledger or args.baseline or not gate_only
     )
     resolve_ref(args.head)
-    upstream = resolve_upstream_head(args.upstream_head) if run_inventory or args.check_bridge else None
+    upstream = resolve_upstream_head(args.upstream_head)
+    if upstream is not None:
+        resolve_ref(args.base)
+        if args.unrelated_history:
+            misplaced = shares_history(args.head, upstream)
+        else:
+            misplaced = not shares_history(args.base, upstream)
+        if misplaced:
+            sys.stderr.write(
+                f"error: upstream head {upstream} is not upstream history relative to --base {args.base} "
+                f"and --head {args.head}; it must be an upstream commit, not a fork commit\n"
+            )
+            raise SystemExit(2)
     codes = [0]
 
     if run_inventory:
@@ -1133,6 +1253,9 @@ def main():
                 args.refs_snapshot,
                 args.write_refs_snapshot,
                 today,
+                require_shared_history=not args.unrelated_history,
+                release_patterns=args.release_ref,
+                upstream=upstream,
             )
         )
 

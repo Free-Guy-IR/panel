@@ -25,6 +25,12 @@ deliberately does not take.
 A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date. After it the gate
 fails and the commit needs a new decision. Pending upstream feature branches are recorded this way.
 
+A `Waived` reason that starts with `UNMERGED-WIP` or `pending` is also conditional on upstream: it covers
+the commit only while upstream keeps it off its release lines (upstream/main, upstream/dev and every
+upstream tag). When upstream merges that commit, or a rebased copy of it with the same patch-id, the gate
+fails at once, whatever the `until:` date says, and the commit needs a new decision. Any other `Waived`
+reason is permanent and also covers rebased copies.
+
 The gate also reads `.upstream-refs`, the snapshot of every upstream branch and tag head the fork
 has reviewed. It fails while a live upstream head is missing from the snapshot, and it keeps
 tracking the commits of every recorded head after upstream deletes or force-pushes the branch.

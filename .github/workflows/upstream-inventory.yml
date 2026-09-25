@@ -84,6 +84,9 @@ jobs:
             --base "refs/upstream-tags/$BASELINE" --head HEAD \
             --track 'refs/remotes/upstream/*' --track 'refs/upstream-tags/*' \
             --fail-on-unported UPSTREAM_SYNC.md \
+            --upstream-head "$SYNC_POINT" \
+            --release-ref refs/remotes/upstream/main --release-ref refs/remotes/upstream/dev \
+            --release-ref 'refs/upstream-tags/*' \
             --refs-snapshot .upstream-refs > upstream-parity.txt 2>&1 || status=$?
           cat upstream-parity.txt
           {
@@ -117,4 +120,4 @@ jobs:
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: |
           python scripts/upstream_inventory.py \
-            --head HEAD --upstream-head "$SYNC_POINT" --check-bridge
+            --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" --check-bridge
