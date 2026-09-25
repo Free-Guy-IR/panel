@@ -118,6 +118,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `dashboard/src/features/users/dialogs/user-hwids-modal.tsx` — hwid query invalidation
 - `dashboard/src/utils/subscription-config.ts` — subscription content format types
 - `dashboard/src/locales/i18n.ts` — locale loadPath under base URL
+- `dashboard/src/features/users/dialogs/user-modal.tsx` — Regenerate all builds its payload through dashboard/src/fork/users/proxy-credentials.ts and sends an explicit new value for every credential in the API proxy table (openvpn, hysteria2, tuic, mtproto and l2tp included), keeping vless.flow, shadowsocks.method and wireguard.peer_ips, because the backend now keeps stored entitled secrets an edit leaves empty; Revoke loads the server's revoked proxy_settings into the open edit form, only for the same user, so a later Save cannot write the pre-revoke credentials back.
 
 ## Backend operations & CRUD
 
