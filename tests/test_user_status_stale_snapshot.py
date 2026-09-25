@@ -257,6 +257,7 @@ async def test_next_plan_removed_after_the_load_is_not_applied(sessions):
 
     from app.db.crud.user import reset_user_by_next
     from app.db.models import NextPlan
+    from app.fork.crud.user_locks import NextPlanUnavailable
 
     ids = await _seed(sessions, target={"status": UserStatus.limited, "data_limit": 1000, "used_traffic": 1000})
     async with sessions() as session:
@@ -267,7 +268,9 @@ async def test_next_plan_removed_after_the_load_is_not_applied(sessions):
         async with sessions() as other_admin:
             await other_admin.execute(delete(NextPlan).where(NextPlan.user_id == ids["target"]))
             await other_admin.commit()
-        await reset_user_by_next(request_session, db_user)
+        with pytest.raises(NextPlanUnavailable):
+            await reset_user_by_next(request_session, db_user)
+        await request_session.rollback()
     async with sessions() as check:
         final = (
             await check.execute(select(User.status, User.data_limit, User.used_traffic).where(User.id == ids["target"]))
