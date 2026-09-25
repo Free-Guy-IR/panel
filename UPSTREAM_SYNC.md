@@ -61,6 +61,8 @@ ec74c933405c554dccf0dd5b6d0eab05ac5f78cc by comparing the final trees of the tou
 - `632b2f52b1b5f473f872b5ca9fc676a639ed4ffb` DUPLICATE-OF-DEV: upstream branch ruff-format chmod of cli/main.py and pasarguard-cli.py to 100755 is part of 3fbb26d3fa381f01fc68b921ee7bbea21f877bcf (#721, in v5.4.1). Both files are 100755 in the fork.
 - `5a3559298e66e510dd04c42c1e05a0683dc8f212` ALREADY-IN-FORK: upstream branch telegram/tests makes local test runs delete the configured SQLite file instead of CWD test.db. The fork already does this in tests/api/__init__.py:125-135 (`_reset_local_database`, called at :147, fork commit ccaf7133f).
 - `9e466167d4f6d0ad24ed0a6cbf6556b5a9e9d969` ALREADY-IN-FORK: upstream branch telegram/tests pathlib rewrite of the same configured-SQLite-path deletion. The fork already covers this in tests/api/__init__.py:125-135 (`_reset_local_database` removes the path plus -wal/-shm).
+- `857ead985c03717164f8024ce3fc80570382b48e` upstream/dev reliable node user synchronization (#896), ported by design on release/v5.34.25-p5 (d46a03b65..9b5ca1182): the fork's multicore connect_node, extra cores and attach push are re-expressed inside the full-sync fence with the fresh-session snapshot, per-node snapshot reuse, the fenced add_backend and the recovered-node resync; every touched upstream file is listed in OVERRIDES.md.
+- `20858b02009b4fb49ed99c1e9804fa1a889e28c2` upstream/dev bumps pasarguard-node-bridge 0.9.1 to 0.9.2, ported on release/v5.34.25-p5 in 9b5ca1182: the requirement is >=0.9.2 and [tool.uv.sources] pins Free-Guy-IR/node_bridge_py at rev a9cbcde4c068d36901a4a3c3fc0b3ff0962635b6 (0.9.2+singbox), which app/fork/node_bridge_guard.py requires at startup.
 
 ## Waived
 
@@ -81,15 +83,6 @@ ec74c933405c554dccf0dd5b6d0eab05ac5f78cc by comparing the final trees of the tou
 - `ca008096ede9b6e189c10a2c8af8750bd6dbf132` UNMERGED-WIP: upstream branch telegram/tests test-only fixes (FakeMessage.answer_photo, TRUNCATE instead of drop_all in tests/test_record_usages.py, and a CWD test.db deletion the branch later replaced). None of it is on upstream/dev or production code.
 - `ce485d7e04f14ca3b1dfbb058169d47ab6f93e81` UNMERGED-WIP: upstream branch telegram/tests test-only patch of telegram_settings in tests/telegram/handlers/test_base.py, a file that exists only on that branch.
 - `51e57e1471078391693db7b2a8679c0de929134d` UNMERGED-WIP: upstream branch telegram/tests adds 35 lines of test cases to tests/telegram/handlers/admin/test_user.py, a file that exists only on that branch. Test-only, with no production change.
-
-## Pending: ported by design by owner P5 (not counted until P5 lands)
-
-The parity gate ignores this section, so it keeps reporting these two commits as unported until the
-code is in the tree. When P5's port of the node user-sync work is merged, move both lines under
-`## Ported by design`.
-
-- `857ead985c03717164f8024ce3fc80570382b48e` upstream/dev reliable node user synchronization (#896). Owner P5 ports it by design rather than by cherry-pick, because the fork's multicore connect_node, extra cores and attach push have to be re-expressed inside the new full-sync fence, together with the fresh-session snapshot, per-node snapshots in bulk connect and the fenced add_backend from the U1 audit.
-- `20858b02009b4fb49ed99c1e9804fa1a889e28c2` upstream/dev bumps pasarguard-node-bridge 0.9.1 to 0.9.2. The fork takes the bridge from Free-Guy-IR/node_bridge_py, where the 0.9.2 controller and storage were ported in 14890f8; owner P5 moves the panel's pin and uv.lock to that bridge together with 857ead985.
 
 ## Side repositories (not read by the parity gate)
 
