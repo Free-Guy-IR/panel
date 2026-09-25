@@ -23,6 +23,7 @@ def test_the_installed_bridge_carries_the_reliable_user_sync():
         (bridge_controller.Controller, "quarantined_users"),
         (bridge_grpclib.Node, "_probe_capabilities"),
         (bridge_grpclib, "RetirableChannel"),
+        (bridge_controller, "deliver_stream_error"),
     ],
 )
 def test_a_bridge_without_the_reliable_user_sync_refuses_to_start(monkeypatch, owner, name):
