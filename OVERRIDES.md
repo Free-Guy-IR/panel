@@ -122,6 +122,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `dashboard/src/features/users/dialogs/user-hwids-modal.tsx` — hwid query invalidation
 - `dashboard/src/utils/subscription-config.ts` — subscription content format types
 - `dashboard/src/locales/i18n.ts` — locale loadPath under base URL
+- `dashboard/src/features/templates/forms/client-template-form.ts` — the default Xray client template opens its socks and http inbounds on 127.0.0.1 instead of 0.0.0.0, from open upstream PR #879 (reviewed 2026-09-25): with 0.0.0.0 and `auth: noauth`, every device on the user's network could use the user's proxy and quota. Migration bfd88026565b rewrites the seeded system template the same way
 
 ## Backend operations & CRUD
 
