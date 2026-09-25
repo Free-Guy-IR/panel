@@ -49,3 +49,39 @@ Also, `git diff 72ad0e4a5 -- '*.py' '*.ts' '*.tsx'` must show no added comment o
 
 ## 7. Production deploy (main session only)
 Apply D-G2 from plan.md on the production panel host, then verify `docker inspect` LogConfig and that the file log survives a recreate.
+
+Before v5.34.25 goes live, build and push the rollback image from branch `hotfix/v5-prod-accept-v4` (production d46a03b65 plus v4 link acceptance) and record its tag next to the v5.34.25 tag. v5.34.25 is not deployed while no rollback image exists.
+
+## 8. Rollback to the v5.34.24 line (main session only)
+The rollback target is the image built from `hotfix/v5-prod-accept-v4`. Never roll back to bare d46a03b65 or the v5.34.24-usage-integrity image: v5.34.25 mints `v4,<id>,<ts>,<epoch>` subscription links, bare v5.34.24 answers every one of them with 404, and the rollback image accepts them with the revocation rule v5.34.25 enforces.
+
+The database goes back to exactly `e5a9c3f1b7d2`, the v5.34.24 head, through one entry point that ships in the v5.34.25 image. Run every step with the v5.34.25 image still selected, because only that image carries the downgrades.
+
+1. Back up the database (mysqldump, pg_dump, or a copy of the SQLite file) and note the running v5.34.25 image tag.
+2. Stop the panel and every other container that writes to the database: `docker compose stop pasarguard`.
+3. Preview: `docker compose run --rm --no-deps --entrypoint python pasarguard -m app.fork.db_rollback --to e5a9c3f1b7d2 --dry-run`
+   It must print `revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, b176d23e434c, b4c7e8f1a2d3, e9a7edd9de06, f7c63e209a37, fd33c6013baa`.
+4. Roll back: `docker compose run --rm --no-deps --entrypoint python pasarguard -m app.fork.db_rollback --to e5a9c3f1b7d2`
+   Expected steps, in this order: `alembic downgrade e5a9c3f1b7d2`, `alembic downgrade b4c7e8f1a2d3@-1`, `alembic downgrade 9a5c2e7f1b4d@-1`, then `done: the database is at e5a9c3f1b7d2`. Exit code 0 is success. Exit code 2 prints `rollback refused: ...`, and any other failure exits non-zero with a traceback. On either, the database stays at the last step printed. Rerun step 4 once the cause is fixed, or restore the backup from step 1.
+5. Check: `docker compose run --rm --no-deps --entrypoint python pasarguard -m alembic current` must print exactly one revision line: `e5a9c3f1b7d2 (branchpoint)` under the v5.34.25 image. Under the rollback image, the same line reads `e5a9c3f1b7d2 (head)`.
+6. Pin the rollback image in docker-compose.override.yml and `docker compose up -d`. Its start.sh runs `alembic upgrade head`, which is a no-op at `e5a9c3f1b7d2`.
+7. Verify in a real browser that the dashboard renders. Check that a subscription link v5.34.25 handed out still opens (`/sub/<token>/info` gives 200), and that a test user's old link gives 404 after a revoke.
+
+Never run these commands:
+- `alembic downgrade e5a9c3f1b7d2` on its own. It removes only the descendants of `e5a9c3f1b7d2`. The upstream passkey branch (`9a5c2e7f1b4d`, `b4c7e8f1a2d3`) forks off `48a6bcb8bba1` and stays in alembic_version, and the v5.34.24 image then crash-loops on `Can't locate revision identified by 'b4c7e8f1a2d3'`. If this has already happened, run step 4: the entry point repairs the two-head state.
+- `alembic downgrade b4c7e8f1a2d3-2`. Without `@`, it walks the main chain down to `48a6bcb8bba1` and drops the content-filter tables, `usage_epoch` and the subscription accesses.
+- `alembic downgrade -1` with two heads. It is ambiguous.
+
+What the rollback discards, and what it keeps:
+- Discarded:
+  - admin passkeys: `admin_passkeys` and `passkey_challenges` are dropped, and the built-in roles lose `admins.passkeys`;
+  - pending user resync markers (`pending_user_resyncs`) and node stat acks (`node_stat_acks`). After the rollback image starts, check the nodes' user counts and resync any node that disagrees.
+- Kept: the content-filter tables and all their rows. The data fixes of v5.34.25 also stay, because their downgrades are no-ops: VLESS flows no core accepts stay cleared, WireGuard keepalive stays clamped to 65535, a negative `hwid_limit` stays 2147483647, and `auto_delete_in_days` stays capped at 36500. On PostgreSQL, the jsonb columns go back to json.
+- Links:
+  - A v4 link keeps opening on the rollback image until the user's next revoke.
+  - The rollback image mints v3 links again.
+  - Two revokes of one user within the same second behave as they did on v5.34.24. v5.34.25 fixed that case with the revocation epoch.
+
+Roll forward by deploying v5.34.25 again. Its start.sh upgrades from `e5a9c3f1b7d2` to head.
+
+`tests/test_migration_rollback_to_prod.py` proves this procedure. It rolls back from head and from the two-head state and compares schema and rows with a database that never left `e5a9c3f1b7d2`. It then runs the real d46a03b65 tree's `alembic upgrade head` against the result.

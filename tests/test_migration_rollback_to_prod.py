@@ -168,7 +168,10 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
 
     assert _versions(sync_url) == heads_before
     printed = capsys.readouterr().out
-    assert "revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d" in printed
+    assert (
+        "revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, "
+        "b176d23e434c, b4c7e8f1a2d3, e9a7edd9de06, f7c63e209a37, fd33c6013baa\n"
+    ) in printed
 
 
 def _prod_tree(tmp_path):
