@@ -1,10 +1,20 @@
 import re
+import unicodedata
 from enum import Enum, StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
 
 from app.models.proxy import ShadowsocksMethods
+from app.utils.logger import get_logger
 
 from .notification_enable import NotificationEnable
 from .validators import DiscordValidator, ProxyValidator, URLValidator
@@ -246,6 +256,54 @@ class DownloadLink(BaseModel):
     language: Language
 
 
+logger = get_logger("settings")
+
+IMPORT_URL_SCHEMES = frozenset(
+    {
+        "https",
+        "http",
+        "happ",
+        "v2rayng",
+        "v2box",
+        "v2raytun",
+        "streisand",
+        "sing-box",
+        "hiddify",
+        "karing",
+        "clash",
+        "clashmeta",
+        "flclash",
+        "koala-clash",
+        "stash",
+        "foxray",
+        "shadowrocket",
+        "sub",
+        "sn",
+        "husi",
+        "incy",
+        "loon",
+        "surge",
+        "quantumult-x",
+        "npvtsub",
+    }
+)
+_IMPORT_URL_SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.\-]*):")
+_INVISIBLE_OR_SPACE_CATEGORIES = frozenset({"Cc", "Cf", "Zs", "Zl", "Zp"})
+
+
+def check_import_url(value: str) -> str:
+    if not value:
+        return value
+    if "{url}" not in value:
+        raise ValueError("import_url must contain {url} placeholder for URL replacement")
+    if any(unicodedata.category(char) in _INVISIBLE_OR_SPACE_CATEGORIES for char in value):
+        raise ValueError("import_url must not contain spaces or control characters")
+    scheme = _IMPORT_URL_SCHEME.match(value)
+    if scheme is None or scheme.group(1).lower() not in IMPORT_URL_SCHEMES:
+        raise ValueError(f"import_url must start with one of these schemes: {', '.join(sorted(IMPORT_URL_SCHEMES))}")
+    return value
+
+
 class Application(BaseModel):
     name: str = Field(max_length=32)
     icon_url: str = Field(default="", max_length=512)
@@ -256,13 +314,24 @@ class Application(BaseModel):
     platform: Platform
     download_links: list[DownloadLink]
 
-    @field_validator("import_url")
+    @field_validator("import_url", mode="wrap")
     @classmethod
-    def validate_import_url(cls, v: str) -> str:
+    def validate_import_url(cls, value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo) -> str:
         """Validate import_url contains {url} if not empty."""
-        if v and "{url}" not in v:
-            raise ValueError("import_url must contain {url} placeholder for URL replacement")
-        return v
+        try:
+            return check_import_url(handler(value))
+        except ValueError:
+            logger.warning(
+                f"Application {info.data.get('name')!r} has an invalid stored import_url; its import button is hidden"
+            )
+            return ""
+
+
+class ApplicationInput(Application):
+    @field_validator("import_url", mode="wrap")
+    @classmethod
+    def validate_import_url(cls, value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo) -> str:
+        return check_import_url(handler(value))
 
 
 class CustomVariable(BaseModel):
@@ -512,3 +581,11 @@ class SettingsSchema(BaseModel):
     connection_limit: ConnectionLimit | None = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SubscriptionInput(Subscription):
+    applications: list[ApplicationInput] = Field(default_factory=list)
+
+
+class SettingsSchemaInput(SettingsSchema):
+    subscription: SubscriptionInput | None = Field(default=None)

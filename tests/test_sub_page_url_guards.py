@@ -1,10 +1,12 @@
+import re
 from html.parser import HTMLParser
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from app.db.models import UserStatus
-from app.models.settings import Application
+from app.models.settings import IMPORT_URL_SCHEMES, Application
 from app.templates import render_template
 
 HOSTILE = [
@@ -114,3 +116,22 @@ def test_links_reach_the_copy_handler_as_data_not_code():
     handlers = [value for _, name, value in _attributes(page) if name == "onclick" and value.startswith("copyLink(")]
     assert handlers == ["copyLink(this.dataset.link, this)"]
     assert ("button", "data-link", link) in _attributes(page)
+
+
+def test_the_import_button_uses_the_same_scheme_allow_list_as_the_settings_validator():
+    template = Path("app/templates/subscription/index.html").read_text()
+    listed = re.search(r"set app_schemes = \[([^\]]*)\]", template)
+    assert listed is not None
+    assert {name.strip().strip("'") for name in listed.group(1).split(",")} == set(IMPORT_URL_SCHEMES)
+
+
+@pytest.mark.parametrize("import_url", ["nekobox://install-config?url=x", "ftp://example.com/x", "Karing://import/x"])
+def test_the_import_button_only_opens_allow_listed_schemes(import_url):
+    page = _render(apps=[_app(import_url=import_url)])
+    assert not [value for _, name, value in _attributes(page) if name == "data-url"]
+
+
+@pytest.mark.parametrize("scheme", sorted(IMPORT_URL_SCHEMES))
+def test_every_allow_listed_scheme_gets_an_import_button(scheme):
+    page = _render(apps=[_app(import_url=f"{scheme}://import/x")])
+    assert ("button", "data-url", f"{scheme}://import/x") in _attributes(page)

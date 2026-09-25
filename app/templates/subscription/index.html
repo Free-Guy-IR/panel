@@ -2,10 +2,11 @@
 {%- set url = (value or '') | string | trim -%}
 {%- if url[:8].lower() == 'https://' or url[:7].lower() == 'http://' -%}{{ url }}{%- endif -%}
 {%- endmacro -%}
+{%- set app_schemes = ['https', 'http', 'happ', 'v2rayng', 'v2box', 'v2raytun', 'streisand', 'sing-box', 'hiddify', 'karing', 'clash', 'clashmeta', 'flclash', 'koala-clash', 'stash', 'foxray', 'shadowrocket', 'sub', 'sn', 'husi', 'incy', 'loon', 'surge', 'quantumult-x', 'npvtsub'] -%}
 {%- macro app_url(value) -%}
 {%- set url = (value or '') | string | trim -%}
 {%- set scheme = url.split(':', 1)[0] -%}
-{%- if ':' in url and scheme[:1].isalpha() and not scheme.strip('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-') and scheme.lower() not in ('javascript', 'data', 'vbscript', 'file', 'blob', 'about') -%}{{ url }}{%- endif -%}
+{%- if ':' in url and scheme.isascii() and scheme.lower() in app_schemes -%}{{ url }}{%- endif -%}
 {%- endmacro -%}
 {%- macro image_url(value) -%}
 {%- set url = (value or '') | string | trim -%}
