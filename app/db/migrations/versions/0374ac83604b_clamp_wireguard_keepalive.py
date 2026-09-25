@@ -11,6 +11,7 @@ depends_on = None
 logger = logging.getLogger("alembic.runtime.migration")
 
 WIREGUARD_MAX_KEEPALIVE = 65535
+MYSQL_FAMILY = ("mysql", "mariadb")
 
 CANDIDATES = {
     "sqlite": f"""
@@ -51,7 +52,8 @@ def _too_long(value) -> bool:
 
 def upgrade() -> None:
     bind = op.get_bind()
-    query = CANDIDATES.get(bind.dialect.name)
+    dialect = "mysql" if bind.dialect.name in MYSQL_FAMILY else bind.dialect.name
+    query = CANDIDATES.get(dialect)
     if query is None:
         return
     clamped = 0

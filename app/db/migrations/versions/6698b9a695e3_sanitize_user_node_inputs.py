@@ -13,6 +13,7 @@ logger = logging.getLogger("alembic.runtime.migration")
 VLESS_USER_FLOWS = ("", "xtls-rprx-vision", "xtls-rprx-vision-udp443")
 MAX_HWID_LIMIT = 2**31 - 1
 MAX_AUTO_DELETE_IN_DAYS = 36500
+MYSQL_FAMILY = ("mysql", "mariadb")
 
 FLOW_CANDIDATES = {
     "sqlite": """
@@ -51,7 +52,8 @@ users = sa.table("users", sa.column("id", sa.BigInteger()), sa.column("proxy_set
 
 
 def _clear_unusable_flows(bind) -> None:
-    query = FLOW_CANDIDATES.get(bind.dialect.name)
+    dialect = "mysql" if bind.dialect.name in MYSQL_FAMILY else bind.dialect.name
+    query = FLOW_CANDIDATES.get(dialect)
     if query is None:
         return
     candidate_ids = [row[0] for row in bind.execute(sa.text(query))]
