@@ -56,8 +56,7 @@ def test_stored_proxy_settings_without_l2tp_do_not_regenerate_on_read():
     assert stored == {**stored}
 
     proto = _serialize_user_for_node(9, stored, ["tag"], None, None)
-    assert proto.proxies.l2tp.username == "9"
-    assert proto.proxies.l2tp.password == ""
+    assert not proto.proxies.HasField("l2tp")
     assert proto.proxies.trojan.password == "legacy-trojan-password"
     assert proto.proxies.mtproto.username == "9"
 
