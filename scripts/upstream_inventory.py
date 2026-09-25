@@ -7,11 +7,12 @@ import subprocess
 import sys
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import UTC, date, datetime
 from fnmatch import fnmatchcase
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
@@ -93,6 +94,15 @@ PYPI_URL = f"https://pypi.org/pypi/{BRIDGE_PACKAGE}/json"
 PYPI_TIMEOUT = 20
 BRIDGE_FLOOR_OPERATORS = {">=", "==", "~=", "==="}
 STATUS_NAMES = {"A": "added", "M": "modified", "D": "deleted"}
+
+NPM_REGISTRY = "https://registry.npmjs.org"
+NPM_TIMEOUT = 20
+NPM_WAIVER_FILE = "upstream-npm-waivers.toml"
+NPM_DEFAULT_LOCK = "dashboard/bun.lock"
+NPM_DEFAULT_SCOPE = "@pasarguard"
+NPM_SPEC_RE = re.compile(r"^(?:[\^~=v]|>=|>)*\s*(\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?)")
+NPM_DEPENDENCY_FIELDS = ("dependencies", "devDependencies", "optionalDependencies")
+NPM_LOCK_SPEC_RE = re.compile(r"^(@[^/@]+/[^@]+|[^@]+)@(.*)$")
 
 
 def git(*args, stdin=None):
@@ -1119,6 +1129,242 @@ def bridge_gate(head, upstream, latest_override):
     return code
 
 
+def strip_trailing_commas(text):
+    out = []
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text):
+        if in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == ",":
+            rest = text[index + 1 :].lstrip()
+            if rest[:1] in ("}", "]"):
+                continue
+        out.append(char)
+    return "".join(out)
+
+
+def npm_lock_entries(lock, scope):
+    entries = []
+    for key, value in sorted((lock.get("packages") or {}).items()):
+        if not isinstance(value, list) or not value or not isinstance(value[0], str):
+            continue
+        match = NPM_LOCK_SPEC_RE.match(value[0])
+        if not match or not match.group(1).startswith(scope + "/"):
+            continue
+        entries.append({"key": key, "name": match.group(1), "resolved": match.group(2)})
+    return entries
+
+
+def upstream_npm_floors(upstream, lock_path):
+    package_path = str(PurePosixPath(lock_path).with_name("package.json"))
+    text = head_blob(upstream, package_path)
+    if text is None:
+        return {}, f"no {package_path}"
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        return {}, f"{package_path} is not valid JSON: {exc}"
+    floors = {}
+    for field in NPM_DEPENDENCY_FIELDS:
+        for name, spec in (data.get(field) or {}).items():
+            match = NPM_SPEC_RE.match(spec.strip()) if isinstance(spec, str) else None
+            if not match:
+                continue
+            try:
+                version = Version(match.group(1))
+            except InvalidVersion:
+                continue
+            if name not in floors or version > floors[name][0]:
+                floors[name] = (version, spec)
+    return floors, package_path
+
+
+def load_bun_lock(ref, lock_path):
+    text = head_blob(ref, lock_path)
+    if text is None:
+        return None
+    return json.loads(strip_trailing_commas(text))
+
+
+def upstream_npm_resolved(upstream, lock_path, scope):
+    try:
+        lock = load_bun_lock(upstream, lock_path)
+    except ValueError:
+        return {}
+    resolved = {}
+    for entry in npm_lock_entries(lock or {}, scope):
+        try:
+            version = Version(entry["resolved"])
+        except InvalidVersion:
+            continue
+        if entry["name"] not in resolved or version > resolved[entry["name"]]:
+            resolved[entry["name"]] = version
+    return resolved
+
+
+def npm_latest_version(name):
+    url = f"{NPM_REGISTRY}/{urllib.parse.quote(name, safe='@')}"
+    request = urllib.request.Request(
+        url, headers={"Accept": "application/vnd.npm.install-v1+json", "User-Agent": "upstream-inventory"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=NPM_TIMEOUT) as response:
+            payload = json.load(response)
+        return Version(payload["dist-tags"]["latest"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        sys.stderr.write(f"error: cannot read the latest {name} release from {url}: {exc}\n")
+        return None
+
+
+def load_npm_waivers(head):
+    text = head_blob(head, NPM_WAIVER_FILE)
+    if text is None:
+        return {}, []
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        return {}, [f"{NPM_WAIVER_FILE} is not valid TOML: {exc}"]
+    waivers = {}
+    errors = []
+    for index, waiver in enumerate(data.get("waiver", []), 1):
+        where = f"{NPM_WAIVER_FILE} waiver {index}"
+        package = waiver.get("package")
+        reason = waiver.get("reason")
+        if not isinstance(package, str) or not package:
+            errors.append(f"{where} has no package")
+            continue
+        if not isinstance(reason, str) or not reason.strip():
+            errors.append(f"{where} ({package}) has no reason")
+            continue
+        try:
+            version = Version(str(waiver.get("upstream_version")))
+        except InvalidVersion:
+            errors.append(f"{where} ({package}) upstream_version {waiver.get('upstream_version')!r} is not a version")
+            continue
+        until = waiver.get("until")
+        if until is not None and not isinstance(until, date):
+            try:
+                until = date.fromisoformat(str(until))
+            except ValueError:
+                errors.append(f"{where} ({package}) until {until!r} is not a YYYY-MM-DD date")
+                continue
+        waivers.setdefault(package, []).append((version, reason.strip(), until))
+    return waivers, errors
+
+
+def npm_waiver_verdict(waivers, name, latest, today):
+    listed = waivers.get(name, [])
+    for version, reason, until in listed:
+        if version != latest:
+            continue
+        if until is not None and today > until:
+            return 1, f"the waiver in {NPM_WAIVER_FILE} for {latest} expired on {until.isoformat()}; re-check it"
+        return 0, f"waived by {NPM_WAIVER_FILE} for {latest}: {reason}"
+    if not listed:
+        return 1, f"no waiver in {NPM_WAIVER_FILE}"
+    newest = max(version for version, _, _ in listed)
+    if newest < latest:
+        return 1, f"the waiver in {NPM_WAIVER_FILE} is stale: it waives {newest} but upstream is now at {latest}"
+    return 1, f"the waiver in {NPM_WAIVER_FILE} waives {newest}, which does not match upstream {latest}"
+
+
+def parse_npm_overrides(values):
+    overrides = {}
+    for value in values:
+        name, sep, version = value.rpartition("=")
+        if not sep or not name:
+            sys.stderr.write(f"error: --npm-latest {value!r} is not NAME=VERSION\n")
+            raise SystemExit(2)
+        try:
+            overrides[name] = Version(version)
+        except InvalidVersion:
+            sys.stderr.write(f"error: --npm-latest {value!r} has an invalid version\n")
+            raise SystemExit(2)
+    return overrides
+
+
+def npm_gate(head, upstream, lock_path, scope, overrides, today):
+    print()
+    print("Npm Packages")
+    text = head_blob(head, lock_path)
+    if text is None:
+        print(f"Npm package gate ERROR: {lock_path} not found on {head}")
+        return 2
+    try:
+        lock = json.loads(strip_trailing_commas(text))
+    except ValueError as exc:
+        print(f"Npm package gate ERROR: {lock_path} on {head} is not a readable bun.lock: {exc}")
+        return 2
+    entries = npm_lock_entries(lock, scope)
+    if not entries:
+        print(f"Npm package gate ERROR: no {scope} packages in {lock_path} on {head}")
+        return 2
+    print(f"  lock: {lock_path} on {head}, {len(entries)} {scope} entries")
+    floors, floor_origin = upstream_npm_floors(upstream, lock_path) if upstream else ({}, None)
+    upstream_resolved = upstream_npm_resolved(upstream, lock_path, scope) if upstream else {}
+    if upstream is None:
+        print("  upstream floor: not checked (no upstream head)")
+    elif not floors:
+        print(f"  upstream floor: none found on {upstream} ({floor_origin})")
+    waivers, waiver_errors = load_npm_waivers(head)
+    latest_seen = {}
+    behind = []
+    for entry in entries:
+        name = entry["name"]
+        floor = floors.get(name)
+        try:
+            pinned = Version(entry["resolved"])
+        except InvalidVersion:
+            required = f"; upstream requires {floor[1]}" if floor else ""
+            print(f"  {entry['key']}: built from {entry['resolved']}, not version-gated here{required}")
+            continue
+        if name not in latest_seen:
+            if name in overrides:
+                latest_seen[name] = (overrides[name], "--npm-latest")
+            else:
+                released = npm_latest_version(name)
+                if released is None:
+                    print(f"Npm package gate ERROR: the latest {name} release could not be read")
+                    return 2
+                latest_seen[name] = (released, "npm")
+        sources = [latest_seen[name]]
+        if floor:
+            sources.append((floor[0], f"{floor[1]!r} in {floor_origin} on {upstream}"))
+        if name in upstream_resolved:
+            sources.append((upstream_resolved[name], f"{lock_path} on {upstream}"))
+        latest = max(version for version, _ in sources)
+        origins = ", ".join(origin for version, origin in sources if version == latest)
+        if pinned >= latest:
+            print(f"  {entry['key']}: {pinned} is current (upstream latest {latest} from {origins})")
+            continue
+        code, message = npm_waiver_verdict(waivers, name, latest, today)
+        print(f"  {entry['key']}: {pinned} is behind upstream {latest} (from {origins}); {message}")
+        if code:
+            behind.append(entry["key"])
+    for message in waiver_errors:
+        print(f"  waiver error: {message}")
+    if behind or waiver_errors:
+        reasons = []
+        if behind:
+            reasons.append(f"{len(behind)} lock entries behind upstream without a matching waiver")
+        if waiver_errors:
+            reasons.append(f"{len(waiver_errors)} waiver error(s)")
+        print(f"Npm package gate FAILED: {'; '.join(reasons)}")
+        return 1
+    print(f"Npm package gate OK: every {scope} registry package in {lock_path} is current or waived")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Inventory fork divergence from upstream and guard the override boundary."
@@ -1190,11 +1436,32 @@ def main():
         metavar="VERSION",
         help="use VERSION as the latest bridge release instead of querying PyPI",
     )
+    parser.add_argument(
+        "--check-npm",
+        action="store_true",
+        help="exit 1 if a registry package of --npm-scope in --npm-lock is behind upstream",
+    )
+    parser.add_argument(
+        "--npm-lock", metavar="PATH", default=NPM_DEFAULT_LOCK, help=f"bun.lock to check (default: {NPM_DEFAULT_LOCK})"
+    )
+    parser.add_argument(
+        "--npm-scope", metavar="SCOPE", default=NPM_DEFAULT_SCOPE, help=f"npm scope (default: {NPM_DEFAULT_SCOPE})"
+    )
+    parser.add_argument(
+        "--npm-latest",
+        metavar="NAME=VERSION",
+        action="append",
+        default=[],
+        help="use VERSION as the latest NAME release instead of querying npm (repeatable)",
+    )
     args = parser.parse_args()
     if bool(args.track) != bool(args.fail_on_unported):
         parser.error("--track and --fail-on-unported must be used together")
     if args.bridge_latest and not args.check_bridge:
         parser.error("--bridge-latest requires --check-bridge")
+    if args.npm_latest and not args.check_npm:
+        parser.error("--npm-latest requires --check-npm")
+    npm_overrides = parse_npm_overrides(args.npm_latest)
     if (args.refs_snapshot or args.write_refs_snapshot) and not args.fail_on_unported:
         parser.error("--refs-snapshot and --write-refs-snapshot require --fail-on-unported")
     if args.write_refs_snapshot and not args.refs_snapshot:
@@ -1206,7 +1473,7 @@ def main():
         except ValueError:
             parser.error("--today must be YYYY-MM-DD")
 
-    gate_only = bool(args.fail_on_unported or args.check_bridge)
+    gate_only = bool(args.fail_on_unported or args.check_bridge or args.check_npm)
     run_inventory = bool(
         args.json or args.json_file or args.fail_on_override_outside_ledger or args.baseline or not gate_only
     )
@@ -1261,6 +1528,18 @@ def main():
 
     if args.check_bridge:
         codes.append(bridge_gate(args.head, upstream, args.bridge_latest))
+
+    if args.check_npm:
+        codes.append(
+            npm_gate(
+                args.head,
+                upstream,
+                args.npm_lock,
+                args.npm_scope,
+                npm_overrides,
+                today or datetime.now(UTC).date(),
+            )
+        )
 
     sys.stdout.flush()
     raise SystemExit(max(codes))

@@ -37,6 +37,13 @@ the upstream parity gate on every event and daily: every non-merge upstream comm
 baseline, on every upstream branch and tag, must be cherry-picked with `-x` or listed with a
 reason in UPSTREAM_SYNC.md, and the bridge gate fails when the pinned pasarguard-node-bridge is
 behind upstream's latest release without an upstream-bridge-waiver.toml for exactly that release.
+The npm gate does the same for every @pasarguard package that dashboard/bun.lock resolves from the
+npm registry, including copies nested under the forked kits: each must be at least the newest of
+the npm release, upstream's dashboard/package.json and upstream's dashboard/bun.lock at the sync
+point, unless a [[waiver]] in upstream-npm-waivers.toml (package, upstream_version, reason and an
+optional until date) names exactly that release and has not expired. Kits
+built from the Free-Guy-IR forks are listed but not version-gated here; their own upstream parity
+is tracked through upstream-forks/forks.toml.
 
 ## Branding & fork infrastructure (not upstreamable)
 

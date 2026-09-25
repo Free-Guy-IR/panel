@@ -121,3 +121,9 @@ jobs:
         run: |
           python scripts/upstream_inventory.py \
             --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" --check-bridge
+
+      - name: Npm package gate
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: |
+          python scripts/upstream_inventory.py \
+            --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" --check-npm

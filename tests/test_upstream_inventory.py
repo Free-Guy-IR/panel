@@ -25,6 +25,35 @@ def lock(version):
     return f'version = 1\n\n[[package]]\nname = "pasarguard-node-bridge"\nversion = "{version}"\n'
 
 
+def dashboard_package(xray_spec):
+    return json.dumps(
+        {"name": "dash", "dependencies": {"@pasarguard/core-kit": "0.2.9", "@pasarguard/xray-config-kit": xray_spec}}
+    )
+
+
+def bun_lock(top, nested):
+    return (
+        "{\n"
+        '  "lockfileVersion": 1,\n'
+        '  "workspaces": {\n'
+        '    "": {\n'
+        '      "name": "dash",\n'
+        '      "dependencies": {\n'
+        '        "@pasarguard/core-kit": "file:../../core-kit",\n'
+        '        "@pasarguard/xray-config-kit": "^0.3.8",\n'
+        "      },\n"
+        "    },\n"
+        "  },\n"
+        '  "packages": {\n'
+        '    "@pasarguard/core-kit": ["@pasarguard/core-kit@file:../../core-kit", { "dependencies": {} }],\n'
+        f'    "@pasarguard/core-kit/@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@{nested}", "", {{}}, "sha512-n"],\n'
+        f'    "@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@{top}", "", {{}}, "sha512-t"],\n'
+        '    "zod": ["zod@3.23.8", "", {}, "sha512-z"],\n'
+        "  }\n"
+        "}\n"
+    )
+
+
 def pyproject(floor):
     return f'[project]\nname = "panel"\ndependencies = [\n    "pasarguard-node-bridge>={floor}",\n]\n'
 
@@ -76,6 +105,7 @@ def repo(tmp_path_factory):
             "d.py": lines("d"),
             "pyproject.toml": pyproject("0.9.1"),
             "uv.lock": lock("0.9.1"),
+            "dashboard/package.json": dashboard_package("^0.3.8"),
         },
     )
     git(path, "tag", "v1.0")
@@ -112,7 +142,11 @@ def repo(tmp_path_factory):
     git(path, "checkout", "-q", "-b", "rel-empty", shas["u5"])
     git(path, "commit", "-q", "--allow-empty", "-m", "upstream empty commit")
     shas["empty"] = git(path, "rev-parse", "HEAD")
-    for name in ("merged", "rebased", "empty"):
+    git(path, "checkout", "-q", "-b", "rel-npm-floor", shas["u5"])
+    commit(path, "upstream raises the xray kit floor", {"dashboard/package.json": dashboard_package("^0.3.9")})
+    git(path, "checkout", "-q", "-b", "rel-npm-lock", shas["u5"])
+    commit(path, "upstream locks the newer xray kit", {"dashboard/bun.lock": bun_lock("0.3.8", "0.3.9")})
+    for name in ("merged", "rebased", "empty", "npm-floor", "npm-lock"):
         git(path, "update-ref", f"refs/upstream-release/{name}", git(path, "rev-parse", f"rel-{name}"))
 
     for ref, sha in (("main", "base"), ("dev", "u5"), ("feat/x", "f2"), ("feat/y", "g")):
@@ -122,7 +156,20 @@ def repo(tmp_path_factory):
     git(path, "checkout", "-q", "--orphan", "main", shas["base"])
     git(path, "commit", "-q", "-m", "fork root")
     git(path, "tag", "v1.0-fork")
-    git(path, "branch", "-q", "-D", "up", "feat-x", "feat-y", "rel-merged", "rel-rebased", "rel-empty")
+    git(
+        path,
+        "branch",
+        "-q",
+        "-D",
+        "up",
+        "feat-x",
+        "feat-y",
+        "rel-merged",
+        "rel-rebased",
+        "rel-empty",
+        "rel-npm-floor",
+        "rel-npm-lock",
+    )
     commit(
         path,
         "fork changes",
@@ -131,6 +178,7 @@ def repo(tmp_path_factory):
             "fork_only.py": lines("k", 3),
             "d.py": lines("d", overrides={4: "D4-fork"}),
             "c.py": lines("c", extra=["fork c line"]),
+            "dashboard/bun.lock": bun_lock("0.3.8", "0.3.8"),
         },
     )
     git(path, "cherry-pick", "-x", shas["u1"])
@@ -159,6 +207,30 @@ def repo(tmp_path_factory):
     )
     git(path, "checkout", "-q", "-b", "waiver-noreason", "main")
     commit(path, "waive bridge badly", {"upstream-bridge-waiver.toml": 'upstream_version = "0.9.2"\nreason = ""\n'})
+    git(path, "checkout", "-q", "-b", "npm-waiver-ok", "main")
+    commit(
+        path,
+        "waive xray kit",
+        {
+            "upstream-npm-waivers.toml": (
+                '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
+                'reason = "0.3.9 only changes docs"\n'
+            )
+        },
+    )
+    git(path, "checkout", "-q", "-b", "npm-waiver-dated", "main")
+    commit(
+        path,
+        "waive xray kit for a while",
+        {
+            "upstream-npm-waivers.toml": (
+                '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
+                'reason = "nodes still run an older Xray-core"\nuntil = 2026-10-25\n'
+            )
+        },
+    )
+    git(path, "checkout", "-q", "-b", "npm-nested-behind", "main")
+    commit(path, "core-kit pins an older xray kit", {"dashboard/bun.lock": bun_lock("0.3.8", "0.3.7")})
     git(path, "checkout", "-q", "main")
 
     (path / ".upstream-sync-point").write_text(shas["u5"] + "\n")
@@ -594,3 +666,58 @@ def test_the_sync_point_must_be_upstream_history_on_a_tracked_ref(repo, tmp_path
     behind = parity(repo, covering_ledger(tmp_path, repo), "--upstream-head", repo["shas"]["u4"])
     assert behind.returncode == 0, behind.stdout + behind.stderr
     assert "is 1 commit(s) behind upstream/dev" in behind.stdout
+
+
+@pytest.mark.parametrize(
+    ("head", "args", "code", "message"),
+    [
+        ("main", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8"], 0, "Npm package gate OK"),
+        ("main", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9"], 1, "0.3.8 is behind upstream 0.3.9"),
+        (
+            "main",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8", "--upstream-head", "refs/upstream-release/npm-floor"],
+            1,
+            "(from '^0.3.9' in dashboard/package.json on refs/upstream-release/npm-floor)",
+        ),
+        ("npm-waiver-ok", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9"], 0, "waived by upstream-npm-waivers"),
+        ("npm-waiver-ok", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.10"], 1, "is stale: it waives 0.3.9"),
+        (
+            "main",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8", "--upstream-head", "refs/upstream-release/npm-lock"],
+            1,
+            "0.3.8 is behind upstream 0.3.9 (from dashboard/bun.lock on refs/upstream-release/npm-lock)",
+        ),
+        (
+            "npm-waiver-dated",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-25"],
+            0,
+            "waived by upstream-npm-waivers.toml for 0.3.9",
+        ),
+        (
+            "npm-waiver-dated",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-26"],
+            1,
+            "expired on 2026-10-25; re-check it",
+        ),
+        (
+            "npm-nested-behind",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8"],
+            1,
+            "@pasarguard/core-kit/@pasarguard/xray-config-kit: 0.3.7 is behind upstream 0.3.8",
+        ),
+    ],
+)
+def test_npm_gate(repo, head, args, code, message):
+    result = run(repo["path"], "--head", head, "--check-npm", *args)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message in result.stdout
+    assert "@pasarguard/core-kit: built from file:../../core-kit, not version-gated here" in result.stdout
+    assert "zod" not in result.stdout
+
+
+def test_npm_gate_usage_errors(repo):
+    bad_override = run(repo["path"], "--check-npm", "--npm-latest", "nonsense")
+    assert bad_override.returncode == 2
+    missing = run(repo["path"], "--check-npm", "--npm-latest", "x=1", "--npm-lock", "nowhere/bun.lock")
+    assert missing.returncode == 2
+    assert "nowhere/bun.lock not found" in missing.stdout
