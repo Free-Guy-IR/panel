@@ -121,12 +121,15 @@ async def status_change(user: UserNotificationResponse):
         await notify(UserEnabled(username=user.username, user=user))
 
 
+WEBHOOK_EXCLUDED_FIELDS = {"user": {"proxy_settings"}}
+
+
 async def notify(message: type[Notification]) -> None:
     if (await webhook_settings()).enable:
-        await enqueue_webhook(jsonable_encoder(message))
+        await enqueue_webhook(jsonable_encoder(message, exclude=WEBHOOK_EXCLUDED_FIELDS))
 
 
 async def bulk_notify(messages: list[type[Notification]]) -> None:
     if (await webhook_settings()).enable:
         for message in messages:
-            await enqueue_webhook(jsonable_encoder(message))
+            await enqueue_webhook(jsonable_encoder(message, exclude=WEBHOOK_EXCLUDED_FIELDS))
