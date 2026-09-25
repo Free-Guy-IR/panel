@@ -101,8 +101,14 @@ async def _deadlocks() -> int:
     engine = create_async_engine(MYSQL_URL, poolclass=NullPool)
     try:
         async with engine.connect() as conn:
-            row = (await conn.execute(text("SHOW GLOBAL STATUS LIKE 'Innodb_deadlocks'"))).one()
-            return int(row[1])
+            await conn.execute(text("SET GLOBAL innodb_monitor_enable = 'lock_deadlocks'"))
+            return int(
+                (
+                    await conn.execute(
+                        text("SELECT `COUNT` FROM information_schema.INNODB_METRICS WHERE NAME = 'lock_deadlocks'")
+                    )
+                ).scalar_one()
+            )
     finally:
         await engine.dispose()
 
@@ -170,7 +176,7 @@ async def test_connection_state_writes_do_not_deadlock_with_the_recorder_on_mysq
     after = await _deadlocks()
     deadlocks = after - before
     print(
-        f"MYSQL-PROOF a2-usage-12 innodb_deadlocks_before={before} after={after} "
+        f"MYSQL-PROOF a2-usage-12 lock_deadlocks_before={before} after={after} "
         f"deadlocks={deadlocks} state_error={state_error} recorder={outcome}"
     )
     assert paused["done"]
