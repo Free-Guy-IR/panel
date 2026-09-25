@@ -174,6 +174,8 @@ class UserExtrasMixin:
                 shared[spec.field] = (spec, values)
 
         candidates = await get_users_with_duplicate_secrets(db, shared, bulk_model, _allowed_group_ids(admin))
+        if not bulk_model.dry_run:
+            candidates = await lock_users_proxy_settings(db, candidates)
 
         taken = {field: set(values) for field, (_, values) in shared.items()}
         to_update: list[tuple[User, dict]] = []
