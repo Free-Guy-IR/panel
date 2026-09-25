@@ -938,19 +938,22 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         toggle: UserStatusToggle,
         admin: AdminDetails,
     ) -> UserResponse:
-        await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
-        closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
-        old_status = db_user.status
-        new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
+        try:
+            await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
+            closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
+            old_status = db_user.status
+            new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
-        if db_user.status != new_status:
-            db_user.status = new_status
-            db_user.last_status_change = dt.now(UTC)
-            await db.commit()
-            await load_user_attrs(db_user, load_admin_role=True)
-        elif closed:
-            await db.commit()
-            await load_user_attrs(db_user, load_admin_role=True)
+            if db_user.status != new_status:
+                db_user.status = new_status
+                db_user.last_status_change = dt.now(UTC)
+                await db.commit()
+                await load_user_attrs(db_user, load_admin_role=True)
+            elif closed:
+                await db.commit()
+                await load_user_attrs(db_user, load_admin_role=True)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
         user = await self.update_user(db_user)
 
