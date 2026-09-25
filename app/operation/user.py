@@ -481,13 +481,11 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def _prepare_revoked_proxy_settings(self, db: AsyncSession, db_user: User) -> ProxyTable:
-        groups = db_user.__dict__.get("groups")
-        if groups is None:
-            groups = await db_user.awaitable_attrs.groups
+        access = await self._lock_user_proxy_settings(db, db_user)
 
         return await self._prepare_user_proxy_settings(
             db,
-            groups,
+            access,
             ProxyTable.model_validate(build_revoked_proxy_settings(db_user)),
             exclude_user_id=db_user.id,
         )
@@ -1165,7 +1163,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         )
 
         proxy_settings_by_user_id = {
-            db_user.id: (await self._prepare_revoked_proxy_settings(db, db_user)).dict() for db_user in db_users
+            db_user.id: (await self._prepare_revoked_proxy_settings(db, db_user)).dict()
+            for db_user in sorted(db_users, key=lambda user: user.id)
         }
         db_users = await bulk_revoke_user_sub(db, db_users, proxy_settings_by_user_id=proxy_settings_by_user_id)
         await sync_users(db_users)
