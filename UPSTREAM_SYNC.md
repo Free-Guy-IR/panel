@@ -125,6 +125,25 @@ repository under `upstream-forks/`.
   commit has its decision in `upstream-forks/subscription-template.md`. If the fork ever builds the
   page from subscription-template again, it must be rebased onto upstream first.
 
+## Upstream PR candidates (not read by the parity gate)
+
+Upstream bugs the fork fixes in its own code. Main submits them upstream after full verification.
+
+- On-hold timeout action applied to users who came online (upstream d5e6415451a6, #901; in the
+  fork as 36d8a382532d): `on_hold_to_active_users_job` runs the disable or delete action on every
+  user `get_on_hold_to_active_users` returns, and that query also returns users whose `online_at`
+  passed their `edit_at`, i.e. users who connected. With "delete" selected, a user's first
+  connection gets it deleted on the next tick; with "disable", disabled. The fork activates the
+  users that came online and applies the action only to users whose timeout passed with
+  `online_at` still empty (app/fork/jobs/status_review.py, `CAME_ONLINE` / `TIMED_OUT`). Tests:
+  tests/test_on_hold_timeout_action_under_lock.py::test_a_user_that_came_online_is_activated_whatever_the_timeout_action,
+  ::test_a_first_connection_billed_after_the_read_activates_instead_of_the_timeout_action,
+  ::test_disable_action_disables_a_timed_out_user_and_pushes_it and
+  ::test_delete_action_removes_a_timed_out_user_from_the_nodes_before_the_row.
+- The plain WireGuard .conf writes `Reserved` into [Interface], which wg setconf and the official
+  clients reject (see the app/subscription/wireguard.py entry in OVERRIDES.md; test
+  tests/test_subscription_wireguard_conf.py).
+
 ## Known future conflicts
 
 - upstream/mtp (18a02ed066cba5581eb40a3be12004e3dff4ce4d, waived above as unmerged work) defines `ProxyProtocol.mtproto = 7`. In the fork 7 is hysteria2 and mtproto is 9 (app/models/protocol.py). If upstream releases MTProto, the port must keep the fork's enum values, map upstream's 7 to the fork's 9 wherever it is persisted or sent to nodes, and reconcile upstream's app/core/mtproto.py and settings with the fork's app/fork/cores/mtproto.py.
