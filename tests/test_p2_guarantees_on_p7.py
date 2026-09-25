@@ -12,10 +12,12 @@ from sqlalchemy.pool import NullPool
 from app.db.crud.user import get_user_by_id
 from app.db.models import Base, User
 from app.fork.models.pending_user_resync import PendingUserResync
-from app.models.group import BulkGroup
+from app.models.group import BulkGroup, BulkGroupSelection
+from app.models.proxy import ProxyTable
 from app.models.user import UserModify
 from app.operation import OperatorType
 from app.operation.user import UserOperation
+from app.utils.crypto import generate_wireguard_keypair
 from config import database_settings
 from tests.test_group_secret_lock_503 import (
     FAILURES,
@@ -491,3 +493,125 @@ async def test_a_user_edit_without_the_openvpn_password_keeps_the_stored_one(ses
     assert granted.openvpn
     assert state.openvpn == granted.openvpn
     assert state.peer_ips == granted.peer_ips
+
+
+async def _wireguard_and_openvpn(sessions, user_id):
+    async with sessions() as db:
+        settings = await db.scalar(select(User.proxy_settings).where(User.id == user_id))
+    table = ProxyTable.model_validate(settings)
+    return SimpleNamespace(
+        private_key=table.wireguard.private_key,
+        public_key=table.wireguard.public_key,
+        peer_ips=list(table.wireguard.peer_ips or []),
+        openvpn=table.openvpn.password,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_partial_edit_keeps_the_wireguard_keypair_of_an_entitled_user(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    users = _users_operation(monkeypatch)
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    async with sessions() as db:
+        await enable(db)
+    granted = await _wireguard_and_openvpn(sessions, member)
+
+    await _user_edit(users, sessions, member)
+
+    after = await _wireguard_and_openvpn(sessions, member)
+    assert granted.private_key and granted.openvpn and granted.peer_ips
+    assert (after.private_key, after.public_key) == (granted.private_key, granted.public_key)
+    assert after.peer_ips == granted.peer_ips
+    assert after.openvpn == granted.openvpn
+
+
+@pytest.mark.asyncio
+async def test_a_stale_edit_after_a_grant_keeps_the_granted_wireguard_keypair(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    users = _users_operation(monkeypatch)
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+
+    async with sessions() as edit_session:
+        stale = await get_user_by_id(edit_session, member, load_admin_role=True)
+        async with sessions() as db:
+            await enable(db)
+        granted = await _wireguard_and_openvpn(sessions, member)
+        await users._modify_user(edit_session, stale, _edit(member), OWNER, skip_role_limits=True)
+
+    after = await _wireguard_and_openvpn(sessions, member)
+    assert granted.private_key and granted.openvpn
+    assert (after.private_key, after.public_key) == (granted.private_key, granted.public_key)
+    assert after.peer_ips == granted.peer_ips
+    assert after.openvpn == granted.openvpn
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_new_wireguard_keypair_still_applies(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    users = _users_operation(monkeypatch)
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    async with sessions() as db:
+        await enable(db)
+    granted = await _wireguard_and_openvpn(sessions, member)
+    private_key, public_key = generate_wireguard_keypair()
+
+    async with sessions() as db:
+        db_user = await get_user_by_id(db, member, load_admin_role=True)
+        modified = UserModify(proxy_settings={"wireguard": {"private_key": private_key, "public_key": public_key}})
+        await users._modify_user(db, db_user, modified, OWNER, skip_role_limits=True)
+
+    after = await _wireguard_and_openvpn(sessions, member)
+    assert (after.private_key, after.public_key) == (private_key, public_key)
+    assert after.peer_ips == granted.peer_ips
+
+
+@pytest.mark.asyncio
+async def test_a_partial_edit_does_not_keep_a_wireguard_key_another_user_holds(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    users = _users_operation(monkeypatch)
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    async with sessions() as db:
+        await enable(db)
+    granted = await _wireguard_and_openvpn(sessions, member)
+    async with sessions() as db:
+        sharer = await db.get(User, seed.users["outsider"])
+        sharer.proxy_settings = {
+            **sharer.proxy_settings,
+            "wireguard": {"private_key": granted.private_key, "public_key": granted.public_key, "peer_ips": []},
+        }
+        await db.commit()
+
+    await _user_edit(users, sessions, member)
+
+    after = await _wireguard_and_openvpn(sessions, member)
+    assert after.private_key and after.public_key
+    assert after.public_key != granted.public_key
+    assert after.peer_ips == granted.peer_ips
+
+
+@pytest.mark.asyncio
+async def test_a_group_disabled_between_the_edits_read_and_its_lock_stops_the_carry_over(sessions, monkeypatch, repair):
+    seed = await _seed(sessions)
+    member = seed.users["paused_member"]
+    users = _users_operation(monkeypatch)
+    operation = _groups()
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    async with sessions() as db:
+        await enable(db)
+    granted = await _wireguard_and_openvpn(sessions, member)
+
+    async with sessions() as edit_session:
+        stale = await get_user_by_id(edit_session, member, load_admin_role=True)
+        async with sessions() as db:
+            await operation.bulk_set_groups_disabled(
+                db, BulkGroupSelection(ids={seed.groups["paused"]}), OWNER, is_disabled=True
+            )
+        await users._modify_user(edit_session, stale, _edit(member), OWNER, skip_role_limits=True)
+
+    after = await _wireguard_and_openvpn(sessions, member)
+    assert granted.openvpn
+    assert after.openvpn is None

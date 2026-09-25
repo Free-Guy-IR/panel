@@ -5,7 +5,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.crud.user import get_user_by_id, modify_user, revoke_user_sub
+from app.db.crud.user import bulk_revoke_user_sub, get_user_by_id, modify_user, revoke_user_sub
 from app.db.models import Admin, AdminRole, Base, CoreConfig, Group, ProxyInbound, User
 from app.models.core import CoreType
 from app.models.proxy import ProxyTable
@@ -151,3 +151,51 @@ async def test_revoking_the_subscription_still_resets_every_entitled_secret(sess
     for protocol, (attribute, value) in STORED.items():
         assert stored[protocol][attribute]
         assert stored[protocol][attribute] != value
+
+
+@pytest.mark.parametrize("flow", ["xtls-rprx-vision", "xtls-rprx-vision-udp443"])
+@pytest.mark.asyncio
+async def test_revoking_the_subscription_keeps_the_vless_flow_and_rotates_the_vless_id(sessions, flow):
+    user_id = await _seed(sessions)
+    async with sessions() as db:
+        user = await db.get(User, user_id)
+        user.proxy_settings = {**user.proxy_settings, "vless": {"id": NEW_VLESS_ID, "flow": flow}}
+        await db.commit()
+
+    async with sessions() as db:
+        db_user = await get_user_by_id(db, user_id, load_admin_role=True)
+        revoked = await _operation()._prepare_revoked_proxy_settings(db, db_user)
+        await revoke_user_sub(db, db_user, proxy_settings=revoked.dict())
+
+    stored = await _stored(sessions, user_id)
+    assert stored["vless"]["flow"] == flow
+    assert stored["vless"]["id"] != NEW_VLESS_ID
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_revoke_without_prepared_settings_keeps_the_vless_flow(sessions):
+    user_id = await _seed(sessions)
+    async with sessions() as db:
+        user = await db.get(User, user_id)
+        user.proxy_settings = {**user.proxy_settings, "vless": {"id": NEW_VLESS_ID, "flow": "xtls-rprx-vision"}}
+        await db.commit()
+
+    async with sessions() as db:
+        db_user = await get_user_by_id(db, user_id, load_admin_role=True)
+        await bulk_revoke_user_sub(db, [db_user])
+
+    stored = await _stored(sessions, user_id)
+    assert stored["vless"]["flow"] == "xtls-rprx-vision"
+    assert stored["vless"]["id"] != NEW_VLESS_ID
+
+
+@pytest.mark.asyncio
+async def test_revoking_a_user_with_no_vless_flow_leaves_it_empty(sessions):
+    user_id = await _seed(sessions)
+
+    async with sessions() as db:
+        db_user = await get_user_by_id(db, user_id, load_admin_role=True)
+        await bulk_revoke_user_sub(db, [db_user])
+
+    stored = await _stored(sessions, user_id)
+    assert not stored["vless"].get("flow")

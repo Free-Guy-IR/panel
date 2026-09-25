@@ -5,7 +5,13 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import DBAPIError
 
 from app.db import AsyncSession
-from app.db.crud.wireguard import _accessible_tags_stmt, lock_users_proxy_settings
+from app.db.crud.wireguard import (
+    _accessible_tags_stmt,
+    get_wg_cores,
+    lock_users_proxy_settings,
+    tags_from_groups,
+    wg_core_tags,
+)
 from app.db.models import Group, ProxyInbound, User, inbounds_groups_association
 from app.fork.operation.entitled_secrets import issue_missing_entitled_secrets, load_users_for_sync
 from app.fork.proxy_secrets import (
@@ -18,7 +24,7 @@ from app.fork.proxy_secrets import (
     specs_for,
     write_stored_secret,
 )
-from app.fork.proxy_secrets.entitled import ENTITLED_SECRET_SPECS, EntitledSecretField
+from app.fork.proxy_secrets.entitled import ENTITLED_SECRET_SPECS, EntitledSecretField, entitled_core_tags
 from app.fork.proxy_secrets.locks import (
     LOCK_UNAVAILABLE_DETAIL,
     NamedLockMissing,
@@ -74,14 +80,41 @@ async def committed_access(db: AsyncSession, user_id: int, groups: Sequence[Grou
     return [CommittedAccess(inbounds=tuple(CommittedInbound(tag) for tag in tags))]
 
 
-def keep_stored_entitled_secrets(incoming: ProxyTable, stored: ProxyTable) -> ProxyTable:
+async def _wireguard_key_held_by_another_user(db: AsyncSession, public_key: str, user_id: int) -> bool:
+    column = User.proxy_settings["wireguard"]["public_key"].as_string()
+    statement = select(User.id).where(column == public_key, User.id != user_id).limit(1)
+    return bool(await read_committed_rows(db, statement))
+
+
+async def _keep_stored_wireguard_keys(
+    db: AsyncSession, incoming: ProxyTable, stored: ProxyTable, reachable: set[str], user_id: int
+) -> None:
+    wanted, kept = incoming.wireguard, stored.wireguard
+    if wanted.private_key or wanted.public_key or not kept.private_key:
+        return
+    if not wg_core_tags(await get_wg_cores(db)) & reachable:
+        return
+    if kept.public_key and await _wireguard_key_held_by_another_user(db, kept.public_key, user_id):
+        return
+    wanted.private_key = kept.private_key
+    wanted.public_key = kept.public_key
+
+
+async def keep_stored_secrets(
+    db: AsyncSession, incoming: ProxyTable, stored: ProxyTable, access: Sequence, user_id: int
+) -> ProxyTable:
+    reachable = await tags_from_groups(access)
+    tags_by_field = await entitled_core_tags(db, ENTITLED_SECRET_SPECS)
     for spec in ENTITLED_SECRET_SPECS:
+        if not tags_by_field.get(spec.field, set()) & reachable:
+            continue
         section = getattr(incoming, spec.protocol)
         if getattr(section, spec.attribute):
             continue
         stored_value = getattr(getattr(stored, spec.protocol), spec.attribute)
         if stored_value:
             setattr(section, spec.attribute, stored_value)
+    await _keep_stored_wireguard_keys(db, incoming, stored, reachable, user_id)
     return incoming
 
 

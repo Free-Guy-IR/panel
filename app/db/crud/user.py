@@ -40,7 +40,7 @@ from app.fork.crud.user_locks import (
     refresh_user_state_for_update,
 )
 from app.fork.operation.usage_guard import execute_with_statement_timeout
-from app.models.proxy import ProxyTable
+from app.models.proxy import ProxyTable, VlessSettings
 from app.models.stats import (
     Period,
     UserCountMetric,
@@ -1428,6 +1428,8 @@ def build_revoked_proxy_settings(db_user: User) -> dict:
         "method", "chacha20-ietf-poly1305"
     )
     proxy_settings.wireguard.peer_ips = db_user.proxy_settings.get("wireguard", {}).get("peer_ips", []) or []
+    stored_flow = (db_user.proxy_settings.get("vless") or {}).get("flow")
+    proxy_settings.vless.flow = VlessSettings.model_validate({"flow": stored_flow}).flow
     return proxy_settings.dict()
 
 
