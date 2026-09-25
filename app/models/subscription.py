@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from app.fork.subscription.usage_span import ensure_usage_span
 from app.models.host import FinalMask
 from app.models.stats import Period
 
@@ -307,6 +308,11 @@ class SubscriptionUsageQuery(BaseModel):
     period: Period = Field(default=Period.hour)
     start: OptionalAwareDatetime = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
     end: OptionalAwareDatetime = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])
+
+    @model_validator(mode="after")
+    def bounded_span(self):
+        ensure_usage_span(self.period, self.start, self.end)
+        return self
 
 
 class SubscriptionHeaders(BaseModel):
