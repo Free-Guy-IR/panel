@@ -128,7 +128,9 @@ def test_listing_users_with_links_does_not_query_each_users_revocation(access_to
     event.listen(engine.sync_engine, "before_cursor_execute", _record)
     try:
         response = client.get(
-            "/api/users", params={"load_sub": "true", "limit": 50}, headers=auth_headers(access_token)
+            "/api/users",
+            params={"load_sub": "true", "limit": 50, "username": [user["username"] for user in users]},
+            headers=auth_headers(access_token),
         )
         assert response.status_code == 200
         listed = [u for u in response.json()["users"] if u["username"] in {user["username"] for user in users}]
