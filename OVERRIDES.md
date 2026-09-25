@@ -79,6 +79,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/node/user.py` — node user serialization carries vless id; the pushed VLESS flow is only `''` or `xtls-rprx-vision` (udp443 maps to vision, as upstream d54fcdfac did), the OpenVPN connection cap is clamped to the uint32 field, and a user that still cannot be serialized is revoked on the nodes instead of failing the batch or the core Start (v5.34.25, a4-users-1/2); plus upstream 857ead985 (#896): `core_users(user_ids=...)` and `node_payload_signature`
 - `tests/test_connect_concurrency.py` — test updated to new connect_node signature; since v5.34.25 (P5) registration goes through `_register_if_wanted`, which the test stubs
 - `tests/test_node_start_timeout.py` — the attach path now refreshes the user list, so the doubles carry sync_users and an id; since v5.34.25 (P5) an attach after a timed-out Start must push the users, and the health check's attach must resync them
+- `tests/test_node_reconnect_recovery.py` — upstream's file from 857ead985 (#896); P5's port shares a bulk-connect snapshot only among nodes that were ready before the read began and gives every deferred core read its own session, so the two upstream tests that asserted one shared read and one shared session now assert those fork guarantees, and the fake session carries a `bind` (v5.34.25, P5)
 
 ## New proxy cores: openvpn / l2tp / mtproto / singbox
 
