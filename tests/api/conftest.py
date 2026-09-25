@@ -26,6 +26,8 @@ def mock_db_session(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.subscription.client_templates.GetDB", GetTestDB)
     monkeypatch.setattr("app.subscription.sub_update_buffer.GetDB", GetTestDB)
     monkeypatch.setattr("app.utils.jwt.GetDB", GetTestDB)
+    monkeypatch.setattr("app.operation.node.GetDB", GetTestDB)
+    monkeypatch.setattr("app.node.sync.GetDB", GetTestDB)
     return db_session
 
 
