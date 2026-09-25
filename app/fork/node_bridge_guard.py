@@ -16,6 +16,7 @@ REQUIRED_BRIDGE_API = (
     (controller.Controller, "quarantined_users"),
     (grpclib.Node, "_probe_capabilities"),
     (grpclib, "RetirableChannel"),
+    (controller, "deliver_stream_error"),
 )
 
 
