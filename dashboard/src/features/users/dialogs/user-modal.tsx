@@ -46,6 +46,7 @@ import { parseDateInput } from '@/utils/dateTimeParsing'
 import { bytesToFormGigabytes, formatBytes, gbToBytes } from '@/utils/formatByte'
 import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
 import { generateWireGuardKeyPair, getWireGuardPublicKey } from '@/utils/wireguard'
+import { type ProxySettingsValues, regenerateAllProxyCredentials, revokeSubscriptionIntoForm } from '@/fork/users/proxy-credentials'
 import { hasPermission, hasScopeAll } from '@/utils/rbac'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -1248,20 +1249,14 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   }
 
   const generateAllProxySettings = React.useCallback(() => {
-    const keyPair = generateWireGuardKeyPair()
-    const newSettings = {
-      vmess: { id: uuidv4() },
-      vless: { id: uuidv4() },
-      trojan: { password: generatePassword() },
-      shadowsocks: { password: generatePassword() },
-      hysteria: { auth: uuidv4() },
-      wireguard: {
-        private_key: keyPair.privateKey,
-        public_key: keyPair.publicKey,
-      },
-      mtproto: { secret: generateMtprotoSecret() },
-      l2tp: { password: generateL2tpPassword() },
-    }
+    const newSettings = regenerateAllProxyCredentials(form.getValues('proxy_settings') as ProxySettingsValues | undefined, {
+      uuid: () => uuidv4(),
+      password: () => generatePassword(),
+      wireguardKeyPair: generateWireGuardKeyPair,
+      openvpnPassword: () => generatePassword(),
+      mtprotoSecret: generateMtprotoSecret,
+      l2tpPassword: generateL2tpPassword,
+    })
     form.setValue('proxy_settings', newSettings as any, { shouldDirty: true, shouldValidate: true })
     handleFieldChange('proxy_settings', newSettings)
     toast.success(t('userDialog.proxySettings.allGenerated', { defaultValue: 'All proxy credentials regenerated' }))
@@ -1407,7 +1402,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   const confirmRevokeSubscription = async () => {
     if (!currentUserId || !currentUsername) return
     try {
-      await revokeUserSubscriptionMutation.mutateAsync({ userId: currentUserId })
+      await revokeSubscriptionIntoForm(() => revokeUserSubscriptionMutation.mutateAsync({ userId: currentUserId }), form)
       toast.success(t('userDialog.revokeSubSuccess', { name: currentUsername }))
       setRevokeSubDialogOpen(false)
     } catch (error: any) {
