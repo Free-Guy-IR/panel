@@ -97,10 +97,13 @@ async def test_bytes_landing_between_the_locked_read_and_the_reset_stay_on_the_c
         normalized = " ".join(statement.upper().split())
         if not landed["done"] and normalized.startswith("UPDATE NODES SET UPLINK=(NODES.UPLINK -"):
             landed["done"] = True
-            marker = "?" if conn.dialect.paramstyle == "qmark" else "%s"
-            cursor.execute(
-                f"UPDATE nodes SET uplink = uplink + 70, downlink = downlink + 90 WHERE id = {marker}", (node_id,)
+            concurrent_increment = (
+                update(Node)
+                .where(Node.id == node_id)
+                .values(uplink=Node.uplink + 70, downlink=Node.downlink + 90)
+                .compile(dialect=conn.dialect, compile_kwargs={"literal_binds": True})
             )
+            cursor.execute(str(concurrent_increment))
 
     event.listen(engine, "before_cursor_execute", increment_before_the_reset)
     try:
