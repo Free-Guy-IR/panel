@@ -67,6 +67,15 @@ jobs:
             --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" \
             --fail-on-override-outside-ledger OVERRIDES.md
 
+      - name: Fetch upstream heads kept by the refs snapshot
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: |
+          if [ -f .upstream-refs ]; then
+            awk '{print $1}' .upstream-refs | sort -u | while read -r sha; do
+              git cat-file -e "$sha^{commit}" 2>/dev/null || git fetch --no-tags upstream "$sha" || true
+            done
+          fi
+
       - name: Upstream parity gate
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: |
@@ -74,13 +83,32 @@ jobs:
           python scripts/upstream_inventory.py \
             --base "refs/upstream-tags/$BASELINE" --head HEAD \
             --track 'refs/remotes/upstream/*' --track 'refs/upstream-tags/*' \
-            --fail-on-unported UPSTREAM_SYNC.md > upstream-parity.txt 2>&1 || status=$?
+            --fail-on-unported UPSTREAM_SYNC.md \
+            --refs-snapshot .upstream-refs > upstream-parity.txt 2>&1 || status=$?
           cat upstream-parity.txt
           {
             echo "## Upstream parity"
             echo
             echo '```'
             cat upstream-parity.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Fork tracker coverage
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          python scripts/upstream_forks.py --config upstream-forks/forks.toml --owner Free-Guy-IR \
+            > fork-trackers.txt 2>&1 || status=$?
+          cat fork-trackers.txt
+          {
+            echo "## Fork tracker coverage"
+            echo
+            echo '```'
+            cat fork-trackers.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"

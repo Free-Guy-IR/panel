@@ -368,3 +368,98 @@ def test_an_old_tag_whose_commits_are_already_in_the_base_is_covered(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert tally(result.stdout, "patch-id equivalent already in the base") == 1
     assert tally(result.stdout, "unported") == 0
+
+
+@pytest.mark.parametrize(
+    ("today", "code", "message"),
+    [
+        ("2026-10-24", 0, "Upstream parity gate OK"),
+        ("2026-10-25", 0, "Upstream parity gate OK"),
+        ("2026-10-26", 1, "was decided only until 2026-10-25"),
+    ],
+)
+def test_a_dated_decision_covers_only_until_its_date(repo, tmp_path, today, code, message):
+    shas = repo["shas"]
+    text = (
+        "## Waived\n\n"
+        f"- `{shas['u3']}` pending: tracked feature branch, re-check until: 2026-10-25\n"
+        + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2"))
+    )
+    result = parity(repo, ledger(tmp_path, text), "--today", today)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message in result.stdout
+
+
+def _snapshot_repo(tmp_path):
+    path = tmp_path / "snapshot-repo"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r")})
+    git(path, "tag", "v1.0")
+    git(path, "checkout", "-q", "-b", "feature")
+    feature = commit(path, "feature work", {"f.py": lines("f", 2)})
+    git(path, "update-ref", "refs/remotes/upstream/feature", feature)
+    git(path, "update-ref", "refs/remotes/upstream/main", git(path, "rev-parse", "v1.0"))
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    (path / "UPSTREAM_SYNC.md").write_text("## Ported by design\n\n## Waived\n")
+    return path, feature
+
+
+def _gate(path, *extra):
+    return run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--refs-snapshot",
+        ".upstream-refs",
+        *extra,
+    )
+
+
+def test_an_upstream_head_missing_from_the_snapshot_fails_the_gate(tmp_path):
+    path, feature = _snapshot_repo(tmp_path)
+    (path / "UPSTREAM_SYNC.md").write_text(f"## Waived\n\n- `{feature}` feature branch work, not merged\n")
+    result = _gate(path)
+    assert result.returncode == 1
+    assert f"upstream head upstream/feature at {feature[:12]} is not recorded" in result.stdout
+    recorded = _gate(path, "--write-refs-snapshot")
+    assert recorded.returncode == 0, recorded.stdout + recorded.stderr
+    assert f"{feature} upstream/feature" in (path / ".upstream-refs").read_text()
+
+
+def test_a_deleted_upstream_branch_stays_tracked_through_the_snapshot(tmp_path):
+    path, feature = _snapshot_repo(tmp_path)
+    (path / ".upstream-refs").write_text(f"{feature} upstream/feature\n")
+    git(path, "update-ref", "-d", "refs/remotes/upstream/feature")
+    recorded_main = git(path, "rev-parse", "v1.0")
+    (path / ".upstream-refs").write_text(f"{feature} upstream/feature\n{recorded_main} upstream/main\n")
+
+    result = _gate(path)
+
+    assert result.returncode == 1
+    assert f"upstream/feature@{feature[:12]} (snapshot)" in result.stdout
+    assert feature[:12] in unported_block(result.stdout)
+    (path / "UPSTREAM_SYNC.md").write_text(f"## Waived\n\n- `{feature}` deleted upstream without merge\n")
+    assert _gate(path).returncode == 0
+
+
+def test_a_snapshot_head_that_is_not_in_the_clone_is_an_error(tmp_path):
+    path, _ = _snapshot_repo(tmp_path)
+    ghost = "0123456789abcdef0123456789abcdef01234567"
+    live = "".join(
+        f"{git(path, 'rev-parse', ref)} upstream/{ref.rsplit('/', 1)[-1]}\n"
+        for ref in ("refs/remotes/upstream/feature", "refs/remotes/upstream/main")
+    )
+    (path / ".upstream-refs").write_text(live + f"{ghost} upstream/gone\n")
+    result = _gate(path)
+    assert result.returncode == 1
+    assert f"snapshot head {ghost[:12]} of upstream/gone is not in this clone" in result.stdout

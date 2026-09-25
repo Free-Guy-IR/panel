@@ -9,7 +9,7 @@ import tomllib
 import urllib.error
 import urllib.request
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from fnmatch import fnmatchcase
 from pathlib import Path
 
@@ -64,6 +64,9 @@ CATEGORY_ORDER = ["fork-only", "pure-addition", "override", "mechanical"]
 
 SYNC_POINT_FILE = ".upstream-sync-point"
 CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
+UPSTREAM_TRAILER_RE = re.compile(r"^Upstream:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
+UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
+SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived"}
 SYNC_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
@@ -562,21 +565,78 @@ def shares_history(base, ref):
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
-def upstream_commits(base, tracked):
+def upstream_commits(base, tracked, require_shared_history=True):
     containing = {}
     active = []
     skipped = []
+    heads = []
     for ref, name in tracked:
         tip = resolve_ref(f"{ref}^{{commit}}")
         shas = git("rev-list", "--no-merges", tip, f"^{base}").split()
-        if shas and not shares_history(base, tip):
+        if shas and require_shared_history and not shares_history(base, tip):
             skipped.append(name)
             continue
+        heads.append((tip, name))
         if shas:
             active.append((name, tip, len(shas)))
         for sha in shas:
             containing.setdefault(sha, []).append(name)
-    return containing, active, skipped
+    return containing, active, skipped, heads
+
+
+def load_refs_snapshot(path):
+    try:
+        text = Path(path).read_text()
+    except FileNotFoundError:
+        return [], []
+    except OSError as exc:
+        sys.stderr.write(f"error: cannot read refs snapshot {path}: {exc}\n")
+        raise SystemExit(2)
+    pairs = []
+    errors = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        match = SNAPSHOT_LINE_RE.match(stripped)
+        if not match:
+            errors.append(f"{path}:{lineno}: expected '<40-hex sha> <ref name>'")
+            continue
+        pairs.append((match.group(1), match.group(2)))
+    return pairs, errors
+
+
+def write_refs_snapshot(path, previous, heads):
+    merged = sorted(set(previous) | set(heads), key=lambda pair: (pair[1], pair[0]))
+    Path(path).write_text("".join(f"{sha} {name}\n" for sha, name in merged))
+    return merged
+
+
+def commit_exists(sha):
+    result = subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True, check=False)
+    return result.returncode == 0
+
+
+def snapshot_commits(base, pairs, live_tips, containing, active):
+    errors = []
+    kept = []
+    for sha, name in pairs:
+        if sha in live_tips:
+            continue
+        if not commit_exists(sha):
+            errors.append(
+                f"snapshot head {sha[:12]} of {name} is not in this clone; fetch it with "
+                f"git fetch upstream {sha}, or record its commits by full sha in the ledger"
+            )
+            continue
+        label = f"{name}@{sha[:12]} (snapshot)"
+        shas = git("rev-list", "--no-merges", sha, f"^{base}").split()
+        if shas:
+            active.append((label, sha, len(shas)))
+            kept.append(label)
+        for commit_sha in shas:
+            containing.setdefault(commit_sha, []).append(label)
+    return errors, kept
 
 
 def commit_metadata(base, tips):
@@ -600,8 +660,8 @@ def commit_metadata(base, tips):
 
 
 def trailer_shas(head):
-    out = git("log", "--format=%B", "-F", "--grep=(cherry picked from commit ", head)
-    return set(CHERRY_PICK_RE.findall(out))
+    out = git("log", "--format=%B", head)
+    return set(CHERRY_PICK_RE.findall(out)) | set(UPSTREAM_TRAILER_RE.findall(out))
 
 
 def patch_ids(shas):
@@ -625,7 +685,7 @@ def patch_ids(shas):
     return ids
 
 
-def parse_sync_ledger(path):
+def parse_sync_ledger(path, today=None):
     try:
         text = Path(path).read_text()
     except OSError as exc:
@@ -657,6 +717,19 @@ def parse_sync_ledger(path):
         if not reason:
             errors.append(f"{where}: `{token}` has no reason")
             continue
+        until = UNTIL_RE.search(reason)
+        if until:
+            try:
+                deadline = date.fromisoformat(until.group(1))
+            except ValueError:
+                errors.append(f"{where}: `{token}` has an invalid until date {until.group(1)}")
+                continue
+            if (today or datetime.now(UTC).date()) > deadline:
+                errors.append(
+                    f"{where}: `{token}` was decided only until {deadline.isoformat()}; re-check it, then port it "
+                    "or record a new decision"
+                )
+                continue
         entries.append({"token": token, "kind": section, "reason": reason, "where": where})
     return entries, errors
 
@@ -699,11 +772,31 @@ def base_equivalents(base, tips):
     return equivalent
 
 
-def parity_gate(base, head, patterns, ledger_path):
+def parity_gate(
+    base,
+    head,
+    patterns,
+    ledger_path,
+    snapshot_path=None,
+    write_snapshot=False,
+    today=None,
+    require_shared_history=True,
+):
     tracked = expand_tracked(patterns)
-    containing, active, skipped = upstream_commits(base, tracked)
+    containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
+    snapshot_errors = []
+    unrecorded = []
+    snapshot_kept = []
+    if snapshot_path:
+        pairs, snapshot_errors = load_refs_snapshot(snapshot_path)
+        if write_snapshot and not snapshot_errors:
+            pairs = write_refs_snapshot(snapshot_path, pairs, heads)
+        recorded = set(pairs)
+        unrecorded = [(sha, name) for sha, name in heads if (sha, name) not in recorded]
+        missing, snapshot_kept = snapshot_commits(base, pairs, {sha for sha, _ in heads}, containing, active)
+        snapshot_errors += missing
     in_range = set(containing)
-    entries, ledger_errors = parse_sync_ledger(ledger_path)
+    entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
     ledger_errors += resolve_errors
 
@@ -734,6 +827,10 @@ def parity_gate(base, head, patterns, ledger_path):
         print(f"    {name}: {count}")
     for name in skipped:
         print(f"  warning: skipped {name}: it shares no history with {base}, so it is not upstream history")
+    if snapshot_path:
+        print(f"  refs snapshot: {snapshot_path}, heads kept only by the snapshot: {len(snapshot_kept)}")
+        for label in snapshot_kept:
+            print(f"    {label}")
     print()
     print(f"Upstream commits past base: {len(in_range)}")
     for kind, label in COVERAGE_LABELS.items():
@@ -756,6 +853,15 @@ def parity_gate(base, head, patterns, ledger_path):
         print(f"Ledger errors ({len(ledger_errors)}):")
         for message in ledger_errors:
             print(f"  {message}")
+    if snapshot_errors or unrecorded:
+        print()
+        print(f"Refs snapshot errors ({len(snapshot_errors) + len(unrecorded)}):")
+        for message in snapshot_errors:
+            print(f"  {message}")
+        for sha, name in unrecorded:
+            print(f"  upstream head {name} at {sha[:12]} is not recorded in {snapshot_path}")
+        if unrecorded:
+            print(f"  record the reviewed heads with --write-refs-snapshot {snapshot_path}")
     notes = stale + duplicates
     if notes:
         print()
@@ -764,12 +870,14 @@ def parity_gate(base, head, patterns, ledger_path):
             print(f"  {message}")
 
     print()
-    if uncovered or ledger_errors:
+    if uncovered or ledger_errors or snapshot_errors or unrecorded:
         reasons = []
         if uncovered:
             reasons.append(f"{len(uncovered)} upstream commit(s) neither ported nor listed in {ledger_path}")
         if ledger_errors:
             reasons.append(f"{len(ledger_errors)} ledger error(s)")
+        if snapshot_errors or unrecorded:
+            reasons.append(f"{len(snapshot_errors) + len(unrecorded)} refs snapshot error(s)")
         print(f"Upstream parity gate FAILED: {'; '.join(reasons)}")
         return 1
     print(f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}")
@@ -954,6 +1062,17 @@ def main():
         help="exit 1 if a tracked upstream commit is neither cherry-picked with -x nor listed in LEDGER",
     )
     parser.add_argument(
+        "--refs-snapshot",
+        metavar="FILE",
+        help="upstream heads seen so far; their commits stay tracked after the branch is deleted or rewritten",
+    )
+    parser.add_argument(
+        "--write-refs-snapshot",
+        action="store_true",
+        help="add the current upstream heads to the --refs-snapshot file before gating",
+    )
+    parser.add_argument("--today", metavar="YYYY-MM-DD", help="date used for until: deadlines (default: today, UTC)")
+    parser.add_argument(
         "--check-bridge",
         action="store_true",
         help=f"exit 1 if the {BRIDGE_PACKAGE} pinned in uv.lock is behind upstream",
@@ -968,6 +1087,16 @@ def main():
         parser.error("--track and --fail-on-unported must be used together")
     if args.bridge_latest and not args.check_bridge:
         parser.error("--bridge-latest requires --check-bridge")
+    if (args.refs_snapshot or args.write_refs_snapshot) and not args.fail_on_unported:
+        parser.error("--refs-snapshot and --write-refs-snapshot require --fail-on-unported")
+    if args.write_refs_snapshot and not args.refs_snapshot:
+        parser.error("--write-refs-snapshot requires --refs-snapshot")
+    today = None
+    if args.today:
+        try:
+            today = date.fromisoformat(args.today)
+        except ValueError:
+            parser.error("--today must be YYYY-MM-DD")
 
     gate_only = bool(args.fail_on_unported or args.check_bridge)
     run_inventory = bool(
@@ -995,7 +1124,17 @@ def main():
 
     if args.fail_on_unported:
         resolve_ref(args.base)
-        codes.append(parity_gate(args.base, args.head, args.track, args.fail_on_unported))
+        codes.append(
+            parity_gate(
+                args.base,
+                args.head,
+                args.track,
+                args.fail_on_unported,
+                args.refs_snapshot,
+                args.write_refs_snapshot,
+                today,
+            )
+        )
 
     if args.check_bridge:
         codes.append(bridge_gate(args.head, upstream, args.bridge_latest))

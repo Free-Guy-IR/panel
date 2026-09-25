@@ -1,0 +1,123 @@
+[[repo]]
+name = "panel"
+mode = "self"
+fork = "Free-Guy-IR/panel"
+upstream = "PasarGuard/panel"
+tracker_path = ".github/workflows/upstream-inventory.yml"
+reason = "tracked by this repository's upstream parity gate against UPSTREAM_SYNC.md and .upstream-refs"
+
+[[repo]]
+name = "node"
+mode = "workflow"
+fork = "Free-Guy-IR/node"
+upstream = "PasarGuard/node"
+tracker_branch = "main"
+tracker_path = ".github/workflows/upstream-drift.yml"
+pending_until = "2026-10-02"
+pending_reason = "the drift check (scripts/upstream_drift.sh with .github/upstream-waivers.txt, node commit ed5fd64) is on the node release/v0.6.21 and v0.6.22 branches and reaches main with the 0.6.21 release"
+reason = "the node repository tracks every PasarGuard/node branch, tag, release and advisory itself, plus Xray-core, sing-box, sing-quic and mtg"
+
+[[repo]]
+name = "scripts"
+mode = "workflow"
+fork = "Free-Guy-IR/scripts"
+upstream = "PasarGuard/scripts"
+tracker_branch = "main"
+tracker_path = ".github/workflows/upstream-parity.yml"
+pending_until = "2026-10-02"
+pending_reason = "the parity check (tools/check-upstream-parity.sh with parity/ledger.tsv) is on owner S1's branch fix/pr32-pgbouncer and reaches main with that merge"
+reason = "the scripts repository tracks every PasarGuard/scripts branch, tag and pull request itself"
+
+[[repo]]
+name = "node_bridge_py"
+mode = "ledger"
+fork = "Free-Guy-IR/node_bridge_py"
+upstream = "PasarGuard/node_bridge_py"
+ported_ref = "main"
+ledger = "upstream-forks/node_bridge_py.md"
+snapshot = "upstream-forks/node_bridge_py.refs"
+reason = "no tracker of its own; its proto-drift workflow only compares protobuf files"
+
+[[repo]]
+name = "core-kit"
+mode = "ledger"
+fork = "Free-Guy-IR/core-kit"
+upstream = "PasarGuard/core-kit"
+ported_ref = "main"
+ledger = "upstream-forks/core-kit.md"
+snapshot = "upstream-forks/core-kit.refs"
+reason = "no tracker of its own"
+
+[[repo]]
+name = "wireguard-config-kit"
+mode = "ledger"
+fork = "Free-Guy-IR/wireguard-config-kit"
+upstream = "PasarGuard/wireguard-config-kit"
+ported_ref = "main"
+ledger = "upstream-forks/wireguard-config-kit.md"
+snapshot = "upstream-forks/wireguard-config-kit.refs"
+reason = "no tracker of its own"
+
+[[repo]]
+name = "subscription-template"
+mode = "ledger"
+fork = "Free-Guy-IR/subscription-template"
+upstream = "PasarGuard/subscription-template"
+ported_ref = "main"
+ledger = "upstream-forks/subscription-template.md"
+snapshot = "upstream-forks/subscription-template.refs"
+reason = "no tracker of its own"
+
+[[repo]]
+name = "mtg"
+mode = "covered-by"
+fork = "Free-Guy-IR/mtg"
+upstream = "9seconds/mtg"
+covered_by = "node"
+reason = "the node drift check watches mtg releases, advisories and security commits against the pin in the node go.mod"
+
+[[repo]]
+name = "sing-box"
+mode = "covered-by"
+fork = "Free-Guy-IR/sing-box"
+upstream = "SagerNet/sing-box"
+covered_by = "node"
+reason = "the node drift check watches sing-box and sing-quic releases, advisories and security commits against the pin in the node Dockerfile"
+
+[[repo]]
+name = "singbox-config-kit"
+mode = "original"
+fork = "Free-Guy-IR/singbox-config-kit"
+reason = "written for the fork; it has no upstream"
+
+[[repo]]
+name = "l2tp-config-kit"
+mode = "original"
+fork = "Free-Guy-IR/l2tp-config-kit"
+reason = "written for the fork; it has no upstream"
+
+[[repo]]
+name = "mtproto-config-kit"
+mode = "original"
+fork = "Free-Guy-IR/mtproto-config-kit"
+reason = "written for the fork; it has no upstream"
+
+[[repo]]
+name = "openvpn-config-kit"
+mode = "original"
+fork = "Free-Guy-IR/openvpn-config-kit"
+reason = "written for the fork; it has no upstream"
+
+[[repo]]
+name = "pasarguard-sub-page"
+mode = "original"
+fork = "Free-Guy-IR/pasarguard-sub-page"
+reason = "written for the fork; it has no upstream"
+
+[[image]]
+name = "ghcr.io/pasarguard/panel"
+upstream = "PasarGuard/panel"
+
+[[image]]
+name = "ghcr.io/pasarguard/node"
+upstream = "PasarGuard/node"
