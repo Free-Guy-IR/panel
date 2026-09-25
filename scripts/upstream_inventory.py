@@ -725,9 +725,87 @@ def sync_point_findings(upstream, tracked, release_refs):
     return errors, notes
 
 
+REVERT_RE = re.compile(r"This reverts commit ([0-9a-f]{40})")
+
+
 def trailer_shas(head):
-    out = git("log", "--format=%B", head)
-    return set(CHERRY_PICK_RE.findall(out)) | set(UPSTREAM_TRAILER_RE.findall(out))
+    return set(trailer_picks(head))
+
+
+def trailer_picks(head):
+    picks = {}
+    for chunk in git("log", "--format=%H%x00%B%x01", head).split("\x01"):
+        sha, sep, body = chunk.strip("\n").partition("\x00")
+        if not sep:
+            continue
+        for upstream_sha in set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body)):
+            picks.setdefault(upstream_sha, []).append(sha)
+    return picks
+
+
+def reverted_commits(head):
+    return set(REVERT_RE.findall(git("log", "--format=%B", head)))
+
+
+def added_lines_by_file(sha):
+    files = {}
+    current = None
+    for line in git("show", "--format=", "--no-color", "--no-ext-diff", "-U0", "-M", sha).splitlines():
+        if line.startswith("+++ "):
+            target = line[4:]
+            current = None if target == "/dev/null" else target.removeprefix("b/")
+            continue
+        if current and line.startswith("+"):
+            text = line[1:].strip()
+            if text:
+                files.setdefault(current, set()).add(text)
+    return files
+
+
+def stripped_lines(ref, path):
+    content = head_blob(ref, path)
+    return None if content is None else {line.strip() for line in content.splitlines()}
+
+
+def missing_pick_lines(upstream_sha, reference, head):
+    expected = 0
+    missing = []
+    for path, added in sorted(added_lines_by_file(upstream_sha).items()):
+        kept_upstream = stripped_lines(reference, path)
+        if kept_upstream is None:
+            continue
+        present = stripped_lines(head, path) or set()
+        for text in sorted(added & kept_upstream):
+            expected += 1
+            if text not in present:
+                missing.append((path, text))
+    return expected, missing
+
+
+def pick_reference(sha, upstream, containing_tips):
+    if upstream and is_ancestor(sha, upstream):
+        return upstream
+    return containing_tips[0] if containing_tips else sha
+
+
+def ineffective_picks(head, candidates, upstream, tips_for):
+    picks = trailer_picks(head)
+    reverted = reverted_commits(head)
+    findings = {}
+    for sha in sorted(candidates):
+        fork_commits = picks.get(sha, [])
+        live = [commit for commit in fork_commits if commit not in reverted]
+        if not live:
+            findings[sha] = f"every fork commit carrying its trailer is reverted ({', '.join(c[:12] for c in fork_commits)})"
+            continue
+        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head)
+        if missing:
+            path, text = missing[0]
+            findings[sha] = (
+                f"{len(missing)} of {expected} upstream line(s) it adds are not in {head}, "
+                f"for example in {path}: {text[:80]!r}"
+            )
+    return findings
 
 
 def patch_ids(shas):
@@ -888,8 +966,16 @@ def parity_gate(
             f"{', '.join(sorted(on_release[sha]))}; port it or record a new decision"
         )
 
+    tip_by_name = {name: tip for name, tip, _ in active}
+    tip_by_name.update({name: sha for sha, name in heads})
+    ineffective = ineffective_picks(
+        head,
+        in_range & trailer_shas(head),
+        upstream,
+        lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
+    )
     coverage = {}
-    for sha in in_range & trailer_shas(head):
+    for sha in (in_range & trailer_shas(head)) - set(ineffective):
         coverage[sha] = "trailer"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
@@ -951,6 +1037,14 @@ def parity_gate(
             print(f"  on {', '.join(refs)} ({len(group)}):")
             for row in group:
                 print(f"    {row['sha'][:12]}  {row['date']}  {row['subject']}")
+
+    unlisted_picks = {sha: why for sha, why in ineffective.items() if sha not in coverage}
+    if ineffective:
+        print()
+        print(f"Cherry-picked upstream commits whose change is not all in {head} ({len(ineffective)}):")
+        for sha, why in ineffective.items():
+            state = "needs a Ported by design or Waived entry" if sha in unlisted_picks else "covered by its ledger entry"
+            print(f"  {sha[:12]}: {why}; {state}")
 
     if ledger_errors:
         print()

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "upstream_inventory.py"
+ADAPTED_PICKS = {}
 ENV = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")} | {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
@@ -182,6 +183,7 @@ def repo(tmp_path_factory):
         },
     )
     git(path, "cherry-pick", "-x", shas["u1"])
+    shas["u1_pick"] = git(path, "rev-parse", "HEAD")
     commit(path, "fork extends a", {"a.py": lines("a", overrides={3: "A3"}, extra=["fork a line"])})
     git(path, "cherry-pick", "-x", shas["u2"])
     commit(
@@ -231,7 +233,15 @@ def repo(tmp_path_factory):
     )
     git(path, "checkout", "-q", "-b", "npm-nested-behind", "main")
     commit(path, "core-kit pins an older xray kit", {"dashboard/bun.lock": bun_lock("0.3.8", "0.3.7")})
+    git(path, "checkout", "-q", "-b", "reverted-pick", "main")
+    git(path, "revert", "--no-edit", shas["u1_pick"])
     git(path, "checkout", "-q", "main")
+    ADAPTED_PICKS.update(
+        {
+            shas["u2"]: "the fork replaces upstream's X2 in b2.py with its own line",
+            shas["u4"]: "the fork replaces upstream's m3 in new2.py with its own line",
+        }
+    )
 
     (path / ".upstream-sync-point").write_text(shas["u5"] + "\n")
     plain = root / "no-sync-point"
@@ -246,9 +256,12 @@ def inventory(cwd, out, *extra):
     return report, {f["path"]: f for f in report["files"]}
 
 
-def ledger(tmp_path, text):
+def ledger(tmp_path, text, adapted=True):
     path = tmp_path / "UPSTREAM_SYNC.md"
-    path.write_text("# ledger\n\n    - `0000000000` example in the intro is ignored\n\n" + text)
+    extra = ""
+    if adapted:
+        extra = "\n## Ported by design\n\n" + "".join(f"- `{sha}` {why}\n" for sha, why in ADAPTED_PICKS.items())
+    path.write_text("# ledger\n\n    - `0000000000` example in the intro is ignored\n\n" + text + extra)
     return str(path)
 
 
@@ -335,7 +348,8 @@ def test_unported_gate_lists_exactly_the_uncovered_commits(repo, tmp_path):
     assert "on upstream/feat/x (2):" in block
     assert "upstream/HEAD" not in result.stdout
     assert "warning: skipped v1.0-fork" in result.stdout
-    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 3
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+    assert tally(result.stdout, "ported by design (ledger)") == 2
     assert tally(result.stdout, "patch-id equivalent of a covered commit") == 1
     assert tally(result.stdout, "unported") == 5
     assert "Upstream parity gate FAILED" in result.stdout
@@ -354,8 +368,8 @@ def test_ledger_entries_and_patch_id_copies_cover(repo, tmp_path):
     )
     result = parity(repo, ledger(tmp_path, text))
     assert result.returncode == 0, result.stdout + result.stderr
-    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 3
-    assert tally(result.stdout, "ported by design (ledger)") == 2
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+    assert tally(result.stdout, "ported by design (ledger)") == 4
     assert tally(result.stdout, "waived (ledger)") == 2
     assert tally(result.stdout, "patch-id equivalent of a covered commit") == 2
     assert tally(result.stdout, "unported") == 0
@@ -721,3 +735,70 @@ def test_npm_gate_usage_errors(repo):
     missing = run(repo["path"], "--check-npm", "--npm-latest", "x=1", "--npm-lock", "nowhere/bun.lock")
     assert missing.returncode == 2
     assert "nowhere/bun.lock not found" in missing.stdout
+
+
+def test_a_reverted_cherry_pick_no_longer_counts_as_ported(repo, tmp_path):
+    shas = repo["shas"]
+    result = run(
+        repo["path"],
+        "--base",
+        "v1.0",
+        "--head",
+        "reverted-pick",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--track",
+        "v1.*",
+        "--fail-on-unported",
+        covering_ledger(tmp_path, repo),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{shas['u1'][:12]}: every fork commit carrying its trailer is reverted" in result.stdout
+    assert shas["u1"][:12] in unported_block(result.stdout)
+
+
+def test_a_cherry_pick_the_fork_changed_needs_a_decision(repo, tmp_path):
+    shas = repo["shas"]
+    text = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u3", "u5", "f1", "f2"))
+    unlisted = parity(repo, ledger(tmp_path, text, adapted=False))
+    assert unlisted.returncode == 1
+    block = unported_block(unlisted.stdout)
+    assert {sha for sha in shas.values() if sha[:12] in block} == {shas["u2"], shas["u4"]}
+    assert f"{shas['u2'][:12]}: 1 of 2 upstream line(s) it adds are not in main" in unlisted.stdout
+    assert "needs a Ported by design or Waived entry" in unlisted.stdout
+    listed = parity(repo, ledger(tmp_path, text))
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert "covered by its ledger entry" in listed.stdout
+
+
+def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path):
+    path = tmp_path / "later"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r")})
+    git(path, "tag", "v1.0")
+    first = commit(path, "upstream sets r2", {"r.py": lines("r", overrides={2: "R2-first"})})
+    second = commit(path, "upstream changes r2 again", {"r.py": lines("r", overrides={2: "R2-second"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", second)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "cherry-pick", "-x", first)
+    git(path, "cherry-pick", "-x", second)
+    (path / "UPSTREAM_SYNC.md").write_text("## Ported by design\n\n## Waived\n")
+    result = run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--upstream-head",
+        second,
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 2
