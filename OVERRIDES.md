@@ -71,7 +71,7 @@ the fork parenthesizes every occurrence. Each file below is that fix unless note
 - `app/telegram/fsm_storage.py`
 - `app/telegram/handlers/admin/bulk_actions.py`
 - `app/utils/crypto.py`
-- `app/utils/jwt.py`
+- `app/utils/jwt.py` — except-fix; plus, from open upstream PR #756 (reviewed 2026-09-25), an admin token must carry `iat`, and must carry `exp` whenever JWT_ACCESS_TOKEN_EXPIRE_MINUTES is above 0. Every PasarGuard release, and Marzban since 16ab598a7 (2023-10-27), mints `iat`, so only tokens older than that are refused; a token minted while the lifetime was 0 stops working once a lifetime is set, and an unreadable `iat` is refused instead of raising
 - `app/jobs/record_usages.py` — except-fix plus NodeUsage/NodeUserUsage import update; since v5.34.25 (A2-r) a cohort's chart write, billing and admin update run in one retried transaction, with the fence filtering the chart rows, so a failed cohort rolls back whole and is safe to retry, and (A9) the billed user ids go to the fork's `enforce_user_limits_now`, so a user who crosses the limit is limited in the same tick
 - `app/scheduler.py` — job_defaults max_instances 30 -> 1 with coalesce, so a job that does not set it cannot overlap itself; since v5.34.25 (A6) also misfire_grace_time 30, so a job that starts up to 30 s late still runs instead of being skipped
 - `app/subscription/share.py` — except-fixes plus WireGuardConfiguration union update
