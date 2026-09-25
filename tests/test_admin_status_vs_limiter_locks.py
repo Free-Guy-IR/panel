@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app import notification
 from app.db.crud.user import get_user_by_id
@@ -38,6 +40,22 @@ def quiet(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(notification, "user_status_change", AsyncMock())
 
 
+async def _deadlocks() -> int:
+    engine = create_async_engine(_database_url(), poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SET GLOBAL innodb_monitor_enable = 'lock_deadlocks'"))
+            return int(
+                (
+                    await conn.execute(
+                        text("SELECT `COUNT` FROM information_schema.INNODB_METRICS WHERE NAME = 'lock_deadlocks'")
+                    )
+                ).scalar_one()
+            )
+    finally:
+        await engine.dispose()
+
+
 async def _state(recorder_db, user_id: int) -> tuple[UserStatus, int]:
     async with recorder_db() as session:
         status = (await session.execute(select(User.status).where(User.id == user_id))).scalar_one()
@@ -55,7 +73,10 @@ async def _state(recorder_db, user_id: int) -> tuple[UserStatus, int]:
     return status, active
 
 
-async def _admin_disable_while(recorder_db, monkeypatch, user_id: int, limiter_step) -> list[str]:
+async def _admin_disable_while(
+    recorder_db, monkeypatch, user_id: int, limiter_step, label: str
+) -> tuple[list[str], int]:
+    before = await _deadlocks()
     real_close = user_module.close_active_restriction
     events: list[str] = []
     started: list[asyncio.Task] = []
@@ -82,8 +103,9 @@ async def _admin_disable_while(recorder_db, monkeypatch, user_id: int, limiter_s
         events.append("limiter committed")
     except Exception as exc:
         events.append(f"limiter aborted: {type(exc).__name__}")
-    print(f"lock-order events: {events}")
-    return events
+    deadlocks = await _deadlocks() - before
+    print(f"MYSQL-PROOF {label} lock_deadlocks={deadlocks} events={events}")
+    return events, deadlocks
 
 
 @pytest.mark.asyncio
@@ -109,7 +131,9 @@ async def test_an_admin_disable_overlapping_the_limiter_release_keeps_the_admin_
         async with recorder_db() as limiter_db:
             await connection_limiter._release_due(limiter_db, SETTINGS)
 
-    events = await _admin_disable_while(recorder_db, monkeypatch, user_id, limiter_release)
+    events, _deadlocks_seen = await _admin_disable_while(
+        recorder_db, monkeypatch, user_id, limiter_release, "admin-disable-vs-release"
+    )
     async with recorder_db() as limiter_db:
         await connection_limiter._release_due(limiter_db, SETTINGS)
 
@@ -131,7 +155,9 @@ async def test_an_admin_disable_overlapping_the_limiter_enforcement_keeps_the_ad
         async with recorder_db() as limiter_db:
             await connection_limiter._enforce(limiter_db, [over_limit], SETTINGS)
 
-    events = await _admin_disable_while(recorder_db, monkeypatch, user_id, limiter_enforce)
+    events, deadlocks = await _admin_disable_while(
+        recorder_db, monkeypatch, user_id, limiter_enforce, "admin-disable-vs-enforce"
+    )
 
-    assert events == ["admin committed on attempt 1", "limiter committed"], events
+    assert (deadlocks, events) == (0, ["admin committed on attempt 1", "limiter committed"]), events
     assert await _state(recorder_db, user_id) == (UserStatus.disabled, 0), events

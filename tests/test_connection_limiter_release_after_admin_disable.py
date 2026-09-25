@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 from app import notification
 from app.db.crud.user import get_user_by_id
-from app.db.models import Admin, User, UserStatus
+from app.db.models import Admin, AdminRole, User, UserStatus
 from app.fork.jobs import connection_limiter
 from app.fork.models.connection import ConnectionRestriction
 from app.models.user import UserStatusToggle
@@ -74,7 +74,10 @@ async def test_limiter_release_re_enables_a_user_whose_admin_disabled_every_user
     from app.operation.admin import AdminOperation
 
     async with TestSession() as session:
-        owner_admin = Admin(username=unique_name("a1_admin"), hashed_password="x", role_id=3)
+        role = AdminRole(name=unique_name("a1_role"), is_owner=False, permissions={}, limits={}, features={}, access={})
+        session.add(role)
+        await session.flush()
+        owner_admin = Admin(username=unique_name("a1_admin"), hashed_password="x", role_id=role.id)
         session.add(owner_admin)
         await session.commit()
         admin_id = owner_admin.id
