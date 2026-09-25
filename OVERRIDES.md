@@ -54,6 +54,7 @@ is tracked through upstream-forks/forks.toml.
 - `README-zh-cn.md` — fork branding, Chinese edition
 - `dashboard/src/components/layout/footer.tsx` — footer branding and repo link
 - `docker-compose.yml` — fork container image ghcr.io/free-guy-ir/panel
+- `.github/dependabot.yml` — the uv and github-actions updates target `main`, the fork's only long-lived branch, instead of upstream's `dev`, which the fork does not have, so dependabot never opened a pull request here. The bun section stays commented out as upstream has it: dashboard/bun.lock resolves the six config kits from sibling checkouts (`file:../../<kit>`) that dependabot cannot fetch, so every bun update job would fail; the @pasarguard registry packages are gated by the npm package gate in upstream-inventory.yml instead
 
 ## Python `except (A, B)` syntax fixes (upstream PR candidates)
 
