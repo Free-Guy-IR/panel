@@ -150,13 +150,15 @@ async def test_every_push_path_racing_the_worker_converges_to_the_database(monke
         edited = [user_id for user_id in ids if user_id not in victims]
         extended = rng.sample(hold_ids, 2)
 
-        async def writer(seed):
+        async def writer(seed, edited=edited, round_number=round_number, edit=edit):
             local = random.Random(seed)
             for step in range(3):
                 await edit(local.choice(edited), f"r{round_number}-{seed}-{step}")
                 await asyncio.sleep(local.choice((0, 0.01, 0.05)))
 
-        async def deleter():
+        async def deleter(
+            victims=victims, rng=rng, round_number=round_number, edit=edit, delete=delete, bulk_delete=bulk_delete
+        ):
             await asyncio.sleep(rng.choice((0, 0.02, 0.1)))
             await edit(victims[0], f"r{round_number}-before-delete")
             await delete(victims[0])
@@ -179,7 +181,9 @@ async def test_every_push_path_racing_the_worker_converges_to_the_database(monke
 
         monkeypatch.setattr(review_users, "sync_remove_user_awaited", admin_extends_mid_pass)
 
-        async def hold_pass():
+        async def hold_pass(
+            rng=rng, extend_first=extend_first, hold_ids=hold_ids, extend=extend, on_hold_pass=on_hold_pass
+        ):
             await asyncio.sleep(rng.choice((0, 0.02, 0.1)))
             for user_id in extend_first:
                 await extend(user_id)
