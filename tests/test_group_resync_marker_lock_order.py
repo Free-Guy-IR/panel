@@ -335,3 +335,49 @@ async def test_a_lock_that_frees_up_for_the_retry_lets_the_group_change_finish(s
     assert scheduled == []
     retries = [record.getMessage() for record in caplog.records if "retrying once" in record.getMessage()]
     assert len(retries) == 1 and "resync markers" in retries[0]
+
+
+GROUP_CHANGE_TABLES = ("groups", "users_groups_association", "inbounds_groups_association")
+
+
+def _deadlock_on_the_first_group_write(engine):
+    seen = SimpleNamespace(marked=False, failed=[])
+
+    def fail(conn, cursor, statement, *rest):
+        text = " ".join(statement.split()).lower()
+        if text.startswith("insert into pending_user_resyncs"):
+            seen.marked = True
+            return
+        if not seen.marked or seen.failed:
+            return
+        for prefix in ("insert into ", "update ", "delete from "):
+            if text.startswith(prefix) and text[len(prefix) :].split(" ", 1)[0] in GROUP_CHANGE_TABLES:
+                seen.failed.append(text[:60])
+                raise OperationalError(statement, {}, _DriverError(1213, "Deadlock found when trying to get lock"))
+
+    event.listen(engine.sync_engine, "before_cursor_execute", fail)
+    return seen
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", PATHS)
+async def test_a_deadlock_in_the_group_changes_own_write_answers_503_and_stores_nothing(
+    engine, sessions, monkeypatch, path
+):
+    from app.fork.proxy_secrets import group_repair
+
+    seed = await _seed(sessions)
+    before = await _stored(sessions)
+    scheduled = []
+    monkeypatch.setattr(group_repair, "schedule_allocation_repair", lambda user_ids: scheduled.append(user_ids))
+    seen = _deadlock_on_the_first_group_write(engine)
+
+    async with sessions() as db:
+        with pytest.raises(HTTPException) as refused:
+            await _run(_operation(), db, seed, path)
+
+    assert seen.failed, "the group change never wrote its own rows"
+    assert refused.value.status_code == 503
+    assert refused.value.detail == LOCK_UNAVAILABLE_DETAIL
+    assert await _stored(sessions) == before
+    assert scheduled == []
