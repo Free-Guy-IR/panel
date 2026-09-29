@@ -40,6 +40,7 @@ from app.fork.operation.node_extras import (
     _known_node_version,
     _l2tp_unsupported_message,
     _node_lacks_l2tp,
+    note_ambiguous_start,
 )
 from app.fork.operation.node_snapshots import (
     NO_ATTACH_PUSH,
@@ -647,6 +648,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 return None
 
             if e.code == -1:
+                note_ambiguous_start(db_node)
                 # A timed-out Start has an ambiguous outcome: cancelling the panel-side
                 # request does not guarantee that the remote node stopped starting. Probe
                 # it before reporting an error so a late success is attached instead of

@@ -10,6 +10,7 @@ from app.db.crud.node import get_limited_nodes, get_nodes
 from app.db.models import Node, NodeStatus
 from app.fork.jobs import after_healthy_node_check
 from app.fork.node_health import hold_for_usage_collection
+from app.fork.operation.node_extras import resync_while_a_start_may_land
 from app.fork.operation.node_snapshots import drain_node_usage, flush_drained_usage
 from app.models.node import NodeListQuery, NodeNotification
 from app.nats import is_multi_worker, needs_shared_bridge_memory
@@ -183,6 +184,9 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
         async with GetDB() as db:
             await node_operator.connect_single_node(db, db_node.id)
         return
+
+    if health == Health.HEALTHY:
+        await resync_while_a_start_may_land(db_node, _resync_users)
 
     if await hold_for_usage_collection(db_node, health):
         await after_healthy_node_check(node, db_node)

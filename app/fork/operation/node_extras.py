@@ -1,4 +1,6 @@
 import asyncio
+import time
+from collections.abc import Awaitable, Callable
 
 from packaging.version import InvalidVersion, Version
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
@@ -27,6 +29,29 @@ _CONNECT_LOCKS: dict[int, asyncio.Lock] = {}
 
 def _connect_lock(node_id: int) -> asyncio.Lock:
     return _CONNECT_LOCKS.setdefault(node_id, asyncio.Lock())
+
+
+AMBIGUOUS_START_MIN_WINDOW_SECONDS = 120.0
+
+_ambiguous_starts: dict[int, float] = {}
+
+
+def ambiguous_start_window(db_node: Node) -> float:
+    timeout = getattr(db_node, "default_timeout", None) or 0
+    return max(AMBIGUOUS_START_MIN_WINDOW_SECONDS, 4 * float(timeout))
+
+
+def note_ambiguous_start(db_node: Node) -> None:
+    _ambiguous_starts[db_node.id] = time.monotonic() + ambiguous_start_window(db_node)
+
+
+async def resync_while_a_start_may_land(db_node: Node, resync: Callable[[Node], Awaitable[bool]]) -> None:
+    until = _ambiguous_starts.get(db_node.id)
+    if until is None:
+        return
+    started = time.monotonic()
+    if await resync(db_node) and started >= until and _ambiguous_starts.get(db_node.id) == until:
+        _ambiguous_starts.pop(db_node.id, None)
 
 
 L2TP_MIN_NODE_VERSION = "0.6.4"
