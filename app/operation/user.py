@@ -742,6 +742,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db_user = await create_user(db, new_user, all_groups, db_admin)
         except IntegrityError:
             await self.raise_error(message="User already exists", code=409, db=db)
+        except ProxySecretUniquenessError as exc:
+            await self.raise_error(message=str(exc), code=409, db=db)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
 
@@ -918,6 +920,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await close_active_restriction(db, db_user.id, "an admin set the user's status")
         try:
             db_user = await crud_modify_user(db, db_user, modified_user, groups=validated_groups)
+        except ProxySecretUniquenessError as exc:
+            await self.raise_error(message=str(exc), code=409, db=db)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
         if await node_payload_signature(db_user) == before:

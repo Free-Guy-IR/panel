@@ -188,7 +188,9 @@ def test_nodes_never_receive_an_empty_hysteria_credential(access_token):
     try:
         protos = asyncio.run(pushed())
     finally:
-        asyncio.run(write_settings({**original, "hysteria": {"auth": _fresh_auth()}, "hysteria2": {"password": _fresh_auth()}}))
+        asyncio.run(
+            write_settings({**original, "hysteria": {"auth": _fresh_auth()}, "hysteria2": {"password": _fresh_auth()}})
+        )
     assert protos
     for proto in protos:
         assert not proto.proxies.HasField("hysteria"), proto.proxies
@@ -242,3 +244,36 @@ def test_links_served_right_after_a_credential_change_carry_the_new_credential(a
     finally:
         for host in hosts:
             client.delete(f"/api/host/{host['id']}", headers=auth_headers(access_token))
+
+
+@pytest.fixture
+def guard_bypassed(monkeypatch):
+    from app.fork.operation import user_extras
+
+    async def let_everything_through(db, proxy_settings, **kwargs):
+        return proxy_settings
+
+    monkeypatch.setattr(user_extras, "enforce_unique_proxy_secrets", let_everything_through)
+
+
+def test_a_create_refused_only_by_the_claims_table_still_answers_409(access_token, guard_bypassed):
+    value = _fresh_auth()
+    create_user(access_token, payload={"proxy_settings": {"hysteria": {"auth": value}}})
+    username = unique_name("racer")
+
+    response = _post_user(access_token, username, {"hysteria": {"auth": value}})
+
+    assert response.status_code == status.HTTP_409_CONFLICT, response.text
+    assert _stored_settings(username) is None
+
+
+def test_a_modify_refused_only_by_the_claims_table_still_answers_409(access_token, guard_bypassed):
+    value = _fresh_auth()
+    create_user(access_token, payload={"proxy_settings": {"hysteria": {"auth": value}}})
+    victim = create_user(access_token)
+    before = _stored_settings(victim["username"])
+
+    response = _put_user(access_token, victim["username"], {**victim["proxy_settings"], "hysteria": {"auth": value}})
+
+    assert response.status_code == status.HTTP_409_CONFLICT, response.text
+    assert _stored_settings(victim["username"])["hysteria"] == before["hysteria"]
