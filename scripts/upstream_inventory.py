@@ -783,9 +783,12 @@ def missing_pick_lines(upstream_sha, reference, head):
 
 
 def pick_reference(sha, upstream, containing_tips):
+    if containing_tips:
+        dated = git("log", "--no-walk=unsorted", "--format=%ct %H", *sorted(set(containing_tips))).split("\n")
+        return max((line.split() for line in dated if line.strip()), key=lambda item: int(item[0]))[1]
     if upstream and is_ancestor(sha, upstream):
         return upstream
-    return containing_tips[0] if containing_tips else sha
+    return sha
 
 
 def ineffective_picks(head, candidates, upstream, tips_for):

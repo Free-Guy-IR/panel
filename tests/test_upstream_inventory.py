@@ -771,7 +771,8 @@ def test_a_cherry_pick_the_fork_changed_needs_a_decision(repo, tmp_path):
     assert "covered by its ledger entry" in listed.stdout
 
 
-def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path):
+@pytest.mark.parametrize("sync_point", ["first", "second"])
+def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path, sync_point):
     path = tmp_path / "later"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
@@ -794,7 +795,7 @@ def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path):
         "--head",
         "main",
         "--upstream-head",
-        second,
+        first if sync_point == "first" else second,
         "--track",
         "refs/remotes/upstream/*",
         "--fail-on-unported",
