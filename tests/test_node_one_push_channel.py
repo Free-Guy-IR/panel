@@ -41,6 +41,16 @@ def silence_side_effects(monkeypatch):
     monkeypatch.setattr(status_review, "GetDB", TestGetDB)
 
 
+class ReaderBehindWriters(node_sync.CurrentStateReader):
+    def __init__(self, writers: asyncio.Lock):
+        super().__init__()
+        self._writers = writers
+
+    async def _query(self, user_ids):
+        async with self._writers:
+            return await super()._query(user_ids)
+
+
 async def drained(node, timeout=15.0):
     async with asyncio.timeout(timeout):
         while True:
@@ -123,6 +133,7 @@ async def test_every_push_path_racing_the_worker_converges_to_the_database(monke
         isolate_node_manager(monkeypatch, node_manager, {3200 + round_number: node})
 
         one_writer = asyncio.Lock()
+        monkeypatch.setattr(node_sync, "_current_state", ReaderBehindWriters(one_writer))
 
         async def edit(user_id, note, one_writer=one_writer):
             async with one_writer, TestSession() as db:
