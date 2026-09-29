@@ -71,7 +71,9 @@ Never run these commands:
 - `alembic downgrade e5a9c3f1b7d2` on its own. It removes only the descendants of `e5a9c3f1b7d2`. The upstream passkey branch (`9a5c2e7f1b4d`, `b4c7e8f1a2d3`) forks off `48a6bcb8bba1` and would stay in alembic_version, and the v5.34.24 image then crash-loops on `Can't locate revision identified by 'b4c7e8f1a2d3'`.
   - The fork's merge revision `fd33c6013baa` now refuses that downgrade unless the entry point runs it. The plain command exits 1 with `Refusing to downgrade fd33c6013baa on its own` and leaves the database at `fd33c6013baa`. The main chain above it is already gone at that point, so the v5.34.24 image cannot start on it either.
   - Run step 4 from there. The entry point also repairs the two-head state `b4c7e8f1a2d3, e5a9c3f1b7d2`, which an earlier v5.34.25 build without the refusal could leave.
-  - Every other path that would remove `fd33c6013baa` is refused the same way, for example `alembic downgrade 48a6bcb8bba1`, `alembic downgrade 9a5c2e7f1b4d` or `alembic downgrade base`.
+  - Every other path that would remove `fd33c6013baa` is refused the same way, and step 4 repairs each of them to exactly `e5a9c3f1b7d2`:
+    - `alembic downgrade 48a6bcb8bba1` and `alembic downgrade base` stop at `fd33c6013baa`;
+    - `alembic downgrade 9a5c2e7f1b4d` stops at two heads, `0374ac83604b, fd33c6013baa`. The fork chain above `e5a9c3f1b7d2` is not a descendant of `9a5c2e7f1b4d`, so that downgrade leaves it in place.
 - `alembic downgrade b4c7e8f1a2d3-2`. Without `@`, it walks the main chain down to `48a6bcb8bba1` and drops the content-filter tables, `usage_epoch` and the subscription accesses.
 - `alembic downgrade -1` with two heads. It is ambiguous.
 
