@@ -38,7 +38,10 @@ async def create_admin_token(admin_id: int | None, username: str) -> str:
 
 async def get_admin_payload(token: str) -> dict | None:
     try:
-        payload = jwt.decode(token, await get_secret_key(), algorithms=["HS256"], leeway=5)
+        required = ["iat", "exp"] if jwt_settings.access_token_expire_minutes > 0 else ["iat"]
+        payload = jwt.decode(
+            token, await get_secret_key(), algorithms=["HS256"], leeway=5, options={"require": required}
+        )
         username: str = payload.get("sub")
         access: str = payload.get("access")
         admin_id = payload.get("aid")
@@ -51,8 +54,8 @@ async def get_admin_payload(token: str) -> dict | None:
             return
         try:
             created_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
-        except KeyError:
-            created_at = None
+        except (OverflowError, OSError, ValueError):
+            return
 
         return {
             "admin_id": admin_id,

@@ -1,5 +1,5 @@
 revision = "8158387867c9"
-down_revision = ("0374ac83604b", "fd33c6013baa")
+down_revision = ("0374ac83604b", "bfd88026565b")
 branch_labels = None
 depends_on = None
 

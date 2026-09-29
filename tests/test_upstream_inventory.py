@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "upstream_inventory.py"
+ADAPTED_PICKS = {}
 ENV = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")} | {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
@@ -23,6 +24,35 @@ def lines(prefix, count=10, overrides=None, extra=()):
 
 def lock(version):
     return f'version = 1\n\n[[package]]\nname = "pasarguard-node-bridge"\nversion = "{version}"\n'
+
+
+def dashboard_package(xray_spec):
+    return json.dumps(
+        {"name": "dash", "dependencies": {"@pasarguard/core-kit": "0.2.9", "@pasarguard/xray-config-kit": xray_spec}}
+    )
+
+
+def bun_lock(top, nested):
+    return (
+        "{\n"
+        '  "lockfileVersion": 1,\n'
+        '  "workspaces": {\n'
+        '    "": {\n'
+        '      "name": "dash",\n'
+        '      "dependencies": {\n'
+        '        "@pasarguard/core-kit": "file:../../core-kit",\n'
+        '        "@pasarguard/xray-config-kit": "^0.3.8",\n'
+        "      },\n"
+        "    },\n"
+        "  },\n"
+        '  "packages": {\n'
+        '    "@pasarguard/core-kit": ["@pasarguard/core-kit@file:../../core-kit", { "dependencies": {} }],\n'
+        f'    "@pasarguard/core-kit/@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@{nested}", "", {{}}, "sha512-n"],\n'
+        f'    "@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@{top}", "", {{}}, "sha512-t"],\n'
+        '    "zod": ["zod@3.23.8", "", {}, "sha512-z"],\n'
+        "  }\n"
+        "}\n"
+    )
 
 
 def pyproject(floor):
@@ -76,6 +106,7 @@ def repo(tmp_path_factory):
             "d.py": lines("d"),
             "pyproject.toml": pyproject("0.9.1"),
             "uv.lock": lock("0.9.1"),
+            "dashboard/package.json": dashboard_package("^0.3.8"),
         },
     )
     git(path, "tag", "v1.0")
@@ -104,6 +135,21 @@ def repo(tmp_path_factory):
     git(path, "cherry-pick", shas["u3"])
     shas["g"] = git(path, "rev-parse", "HEAD")
 
+    git(path, "checkout", "-q", "-b", "rel-merged", shas["u5"])
+    git(path, "merge", "-q", "--no-ff", "-m", "merge feat/x", "feat-x")
+    git(path, "checkout", "-q", "-b", "rel-rebased", shas["u5"])
+    git(path, "cherry-pick", shas["f1"])
+    shas["f1_copy"] = git(path, "rev-parse", "HEAD")
+    git(path, "checkout", "-q", "-b", "rel-empty", shas["u5"])
+    git(path, "commit", "-q", "--allow-empty", "-m", "upstream empty commit")
+    shas["empty"] = git(path, "rev-parse", "HEAD")
+    git(path, "checkout", "-q", "-b", "rel-npm-floor", shas["u5"])
+    commit(path, "upstream raises the xray kit floor", {"dashboard/package.json": dashboard_package("^0.3.9")})
+    git(path, "checkout", "-q", "-b", "rel-npm-lock", shas["u5"])
+    commit(path, "upstream locks the newer xray kit", {"dashboard/bun.lock": bun_lock("0.3.8", "0.3.9")})
+    for name in ("merged", "rebased", "empty", "npm-floor", "npm-lock"):
+        git(path, "update-ref", f"refs/upstream-release/{name}", git(path, "rev-parse", f"rel-{name}"))
+
     for ref, sha in (("main", "base"), ("dev", "u5"), ("feat/x", "f2"), ("feat/y", "g")):
         git(path, "update-ref", f"refs/remotes/upstream/{ref}", git(path, "rev-parse", shas[sha]))
     git(path, "symbolic-ref", "refs/remotes/upstream/HEAD", "refs/remotes/upstream/main")
@@ -111,7 +157,20 @@ def repo(tmp_path_factory):
     git(path, "checkout", "-q", "--orphan", "main", shas["base"])
     git(path, "commit", "-q", "-m", "fork root")
     git(path, "tag", "v1.0-fork")
-    git(path, "branch", "-q", "-D", "up", "feat-x", "feat-y")
+    git(
+        path,
+        "branch",
+        "-q",
+        "-D",
+        "up",
+        "feat-x",
+        "feat-y",
+        "rel-merged",
+        "rel-rebased",
+        "rel-empty",
+        "rel-npm-floor",
+        "rel-npm-lock",
+    )
     commit(
         path,
         "fork changes",
@@ -120,9 +179,11 @@ def repo(tmp_path_factory):
             "fork_only.py": lines("k", 3),
             "d.py": lines("d", overrides={4: "D4-fork"}),
             "c.py": lines("c", extra=["fork c line"]),
+            "dashboard/bun.lock": bun_lock("0.3.8", "0.3.8"),
         },
     )
     git(path, "cherry-pick", "-x", shas["u1"])
+    shas["u1_pick"] = git(path, "rev-parse", "HEAD")
     commit(path, "fork extends a", {"a.py": lines("a", overrides={3: "A3"}, extra=["fork a line"])})
     git(path, "cherry-pick", "-x", shas["u2"])
     commit(
@@ -148,7 +209,39 @@ def repo(tmp_path_factory):
     )
     git(path, "checkout", "-q", "-b", "waiver-noreason", "main")
     commit(path, "waive bridge badly", {"upstream-bridge-waiver.toml": 'upstream_version = "0.9.2"\nreason = ""\n'})
+    git(path, "checkout", "-q", "-b", "npm-waiver-ok", "main")
+    commit(
+        path,
+        "waive xray kit",
+        {
+            "upstream-npm-waivers.toml": (
+                '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
+                'reason = "0.3.9 only changes docs"\n'
+            )
+        },
+    )
+    git(path, "checkout", "-q", "-b", "npm-waiver-dated", "main")
+    commit(
+        path,
+        "waive xray kit for a while",
+        {
+            "upstream-npm-waivers.toml": (
+                '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
+                'reason = "nodes still run an older Xray-core"\nuntil = 2026-10-25\n'
+            )
+        },
+    )
+    git(path, "checkout", "-q", "-b", "npm-nested-behind", "main")
+    commit(path, "core-kit pins an older xray kit", {"dashboard/bun.lock": bun_lock("0.3.8", "0.3.7")})
+    git(path, "checkout", "-q", "-b", "reverted-pick", "main")
+    git(path, "revert", "--no-edit", shas["u1_pick"])
     git(path, "checkout", "-q", "main")
+    ADAPTED_PICKS.update(
+        {
+            shas["u2"]: "the fork replaces upstream's X2 in b2.py with its own line",
+            shas["u4"]: "the fork replaces upstream's m3 in new2.py with its own line",
+        }
+    )
 
     (path / ".upstream-sync-point").write_text(shas["u5"] + "\n")
     plain = root / "no-sync-point"
@@ -163,9 +256,12 @@ def inventory(cwd, out, *extra):
     return report, {f["path"]: f for f in report["files"]}
 
 
-def ledger(tmp_path, text):
+def ledger(tmp_path, text, adapted=True):
     path = tmp_path / "UPSTREAM_SYNC.md"
-    path.write_text("# ledger\n\n    - `0000000000` example in the intro is ignored\n\n" + text)
+    extra = ""
+    if adapted:
+        extra = "\n## Ported by design\n\n" + "".join(f"- `{sha}` {why}\n" for sha, why in ADAPTED_PICKS.items())
+    path.write_text("# ledger\n\n    - `0000000000` example in the intro is ignored\n\n" + text + extra)
     return str(path)
 
 
@@ -252,7 +348,8 @@ def test_unported_gate_lists_exactly_the_uncovered_commits(repo, tmp_path):
     assert "on upstream/feat/x (2):" in block
     assert "upstream/HEAD" not in result.stdout
     assert "warning: skipped v1.0-fork" in result.stdout
-    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 3
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+    assert tally(result.stdout, "ported by design (ledger)") == 2
     assert tally(result.stdout, "patch-id equivalent of a covered commit") == 1
     assert tally(result.stdout, "unported") == 5
     assert "Upstream parity gate FAILED" in result.stdout
@@ -271,8 +368,8 @@ def test_ledger_entries_and_patch_id_copies_cover(repo, tmp_path):
     )
     result = parity(repo, ledger(tmp_path, text))
     assert result.returncode == 0, result.stdout + result.stderr
-    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 3
-    assert tally(result.stdout, "ported by design (ledger)") == 2
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+    assert tally(result.stdout, "ported by design (ledger)") == 4
     assert tally(result.stdout, "waived (ledger)") == 2
     assert tally(result.stdout, "patch-id equivalent of a covered commit") == 2
     assert tally(result.stdout, "unported") == 0
@@ -380,10 +477,8 @@ def test_an_old_tag_whose_commits_are_already_in_the_base_is_covered(tmp_path):
 )
 def test_a_dated_decision_covers_only_until_its_date(repo, tmp_path, today, code, message):
     shas = repo["shas"]
-    text = (
-        "## Waived\n\n"
-        f"- `{shas['u3']}` pending: tracked feature branch, re-check until: 2026-10-25\n"
-        + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2"))
+    text = f"## Waived\n\n- `{shas['f1']}` pending: tracked feature branch, re-check until: 2026-10-25\n" + "".join(
+        f"- `{shas[k]}` reason\n" for k in ("u3", "u5", "f2")
     )
     result = parity(repo, ledger(tmp_path, text), "--today", today)
     assert result.returncode == code, result.stdout + result.stderr
@@ -463,3 +558,248 @@ def test_a_snapshot_head_that_is_not_in_the_clone_is_an_error(tmp_path):
     result = _gate(path)
     assert result.returncode == 1
     assert f"snapshot head {ghost[:12]} of upstream/gone is not in this clone" in result.stdout
+
+
+def covering_ledger(tmp_path, repo, f1_reason="rewritten as fork code"):
+    shas = repo["shas"]
+    return ledger(
+        tmp_path,
+        "## Ported by design\n\n"
+        f"- `{shas['f2']}` folded into the fork feature\n\n"
+        "## Waived\n\n"
+        f"- `{shas['f1']}` {f1_reason}\n"
+        f"- `{shas['u3']}` the fork keeps c as it is\n"
+        f"- `{shas['u5']}` the fork bridge has its own floor\n",
+    )
+
+
+CONDITIONAL_REASONS = [
+    "UNMERGED-WIP: only on upstream feat/x",
+    "pending: tracked feature branch upstream/feat/x, port it when it merges. until: 2099-01-01",
+]
+
+
+@pytest.mark.parametrize("reason", CONDITIONAL_REASONS)
+def test_a_conditional_waiver_holds_while_the_commit_stays_off_the_release_lines(repo, tmp_path, reason):
+    result = parity(repo, covering_ledger(tmp_path, repo, reason))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "waived (ledger)") == 3
+
+
+@pytest.mark.parametrize("reason", CONDITIONAL_REASONS)
+def test_a_conditional_waiver_expires_when_upstream_merges_the_commit(repo, tmp_path, reason):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, reason),
+        "--track",
+        "refs/upstream-release/merged",
+        "--release-ref",
+        "refs/upstream-release/merged",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is waived only while unmerged, but upstream now carries it on upstream-release/merged" in result.stdout
+    assert repo["shas"]["f1"][:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize("reason", CONDITIONAL_REASONS)
+def test_a_conditional_waiver_does_not_cover_a_rebased_copy_on_a_release_line(repo, tmp_path, reason):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, reason),
+        "--track",
+        "refs/upstream-release/rebased",
+        "--release-ref",
+        "refs/upstream-release/rebased",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert repo["shas"]["f1_copy"][:12] in unported_block(result.stdout)
+    assert "which is waived only while unmerged, so the copy needs its own decision" in result.stdout
+
+
+def test_a_plain_waiver_still_covers_a_rebased_copy(repo, tmp_path):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo),
+        "--track",
+        "refs/upstream-release/rebased",
+        "--release-ref",
+        "refs/upstream-release/rebased",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "patch-id equivalent of a covered commit") == 3
+
+
+def test_a_conditional_waiver_without_any_release_ref_is_an_error(repo, tmp_path):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, CONDITIONAL_REASONS[0]),
+        "--release-ref",
+        "refs/nowhere/*",
+    )
+    assert result.returncode == 1
+    assert "UNMERGED-WIP and pending waivers need at least one existing --release-ref" in result.stdout
+
+
+def test_an_empty_upstream_commit_needs_no_decision(repo, tmp_path):
+    result = parity(repo, covering_ledger(tmp_path, repo), "--track", "refs/upstream-release/empty")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "changes no file") == 1
+    assert repo["shas"]["empty"][:12] not in result.stdout
+
+
+def test_a_fork_based_gate_without_shared_history_never_passes_vacuously(repo, tmp_path):
+    empty = ledger(tmp_path, "## Waived\n")
+    common = ["--base", "main", "--head", "main", "--track", "refs/remotes/upstream/*", "--fail-on-unported", empty]
+    vacuous = run(repo["path"], *common, "--upstream-head", "none")
+    assert vacuous.returncode == 2
+    assert "pass --unrelated-history" in vacuous.stderr
+    related = run(repo["path"], *common, "--upstream-head", "none", "--unrelated-history")
+    assert related.returncode == 1, related.stdout + related.stderr
+    shas = repo["shas"]
+    block = unported_block(related.stdout)
+    assert {sha for sha in shas.values() if sha[:12] in block} == {
+        shas["u3"],
+        shas["u5"],
+        shas["f1"],
+        shas["f2"],
+        shas["g"],
+    }
+    assert tally(related.stdout, "patch-id equivalent already in the base") == 1
+    fork_sync_point = run(repo["path"], *common, "--unrelated-history", "--upstream-head", "main")
+    assert fork_sync_point.returncode == 2
+    assert "it must be an upstream commit, not a fork commit" in fork_sync_point.stderr
+
+
+def test_the_sync_point_must_be_upstream_history_on_a_tracked_ref(repo, tmp_path):
+    fork_point = run(repo["path"], "--base", "v1.0", "--head", "main", "--upstream-head", "main")
+    assert fork_point.returncode == 2
+    assert "it must be an upstream commit, not a fork commit" in fork_point.stderr
+    untracked = parity(repo, covering_ledger(tmp_path, repo), "--upstream-head", "refs/upstream-release/empty")
+    assert untracked.returncode == 1
+    assert "is not on any tracked upstream ref" in untracked.stdout
+    behind = parity(repo, covering_ledger(tmp_path, repo), "--upstream-head", repo["shas"]["u4"])
+    assert behind.returncode == 0, behind.stdout + behind.stderr
+    assert "is 1 commit(s) behind upstream/dev" in behind.stdout
+
+
+@pytest.mark.parametrize(
+    ("head", "args", "code", "message"),
+    [
+        ("main", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8"], 0, "Npm package gate OK"),
+        ("main", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9"], 1, "0.3.8 is behind upstream 0.3.9"),
+        (
+            "main",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8", "--upstream-head", "refs/upstream-release/npm-floor"],
+            1,
+            "(from '^0.3.9' in dashboard/package.json on refs/upstream-release/npm-floor)",
+        ),
+        ("npm-waiver-ok", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9"], 0, "waived by upstream-npm-waivers"),
+        ("npm-waiver-ok", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.10"], 1, "is stale: it waives 0.3.9"),
+        (
+            "main",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8", "--upstream-head", "refs/upstream-release/npm-lock"],
+            1,
+            "0.3.8 is behind upstream 0.3.9 (from dashboard/bun.lock on refs/upstream-release/npm-lock)",
+        ),
+        (
+            "npm-waiver-dated",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-25"],
+            0,
+            "waived by upstream-npm-waivers.toml for 0.3.9",
+        ),
+        (
+            "npm-waiver-dated",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-26"],
+            1,
+            "expired on 2026-10-25; re-check it",
+        ),
+        (
+            "npm-nested-behind",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.8"],
+            1,
+            "@pasarguard/core-kit/@pasarguard/xray-config-kit: 0.3.7 is behind upstream 0.3.8",
+        ),
+    ],
+)
+def test_npm_gate(repo, head, args, code, message):
+    result = run(repo["path"], "--head", head, "--check-npm", *args)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message in result.stdout
+    assert "@pasarguard/core-kit: built from file:../../core-kit, not version-gated here" in result.stdout
+    assert "zod" not in result.stdout
+
+
+def test_npm_gate_usage_errors(repo):
+    bad_override = run(repo["path"], "--check-npm", "--npm-latest", "nonsense")
+    assert bad_override.returncode == 2
+    missing = run(repo["path"], "--check-npm", "--npm-latest", "x=1", "--npm-lock", "nowhere/bun.lock")
+    assert missing.returncode == 2
+    assert "nowhere/bun.lock not found" in missing.stdout
+
+
+def test_a_reverted_cherry_pick_no_longer_counts_as_ported(repo, tmp_path):
+    shas = repo["shas"]
+    result = run(
+        repo["path"],
+        "--base",
+        "v1.0",
+        "--head",
+        "reverted-pick",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--track",
+        "v1.*",
+        "--fail-on-unported",
+        covering_ledger(tmp_path, repo),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{shas['u1'][:12]}: every fork commit carrying its trailer is reverted" in result.stdout
+    assert shas["u1"][:12] in unported_block(result.stdout)
+
+
+def test_a_cherry_pick_the_fork_changed_needs_a_decision(repo, tmp_path):
+    shas = repo["shas"]
+    text = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u3", "u5", "f1", "f2"))
+    unlisted = parity(repo, ledger(tmp_path, text, adapted=False))
+    assert unlisted.returncode == 1
+    block = unported_block(unlisted.stdout)
+    assert {sha for sha in shas.values() if sha[:12] in block} == {shas["u2"], shas["u4"]}
+    assert f"{shas['u2'][:12]}: 1 of 2 upstream line(s) it adds are not in main" in unlisted.stdout
+    assert "needs a Ported by design or Waived entry" in unlisted.stdout
+    listed = parity(repo, ledger(tmp_path, text))
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert "covered by its ledger entry" in listed.stdout
+
+
+@pytest.mark.parametrize("sync_point", ["first", "second"])
+def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path, sync_point):
+    path = tmp_path / "later"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r")})
+    git(path, "tag", "v1.0")
+    first = commit(path, "upstream sets r2", {"r.py": lines("r", overrides={2: "R2-first"})})
+    second = commit(path, "upstream changes r2 again", {"r.py": lines("r", overrides={2: "R2-second"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", second)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "cherry-pick", "-x", first)
+    git(path, "cherry-pick", "-x", second)
+    (path / "UPSTREAM_SYNC.md").write_text("## Ported by design\n\n## Waived\n")
+    result = run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--upstream-head",
+        first if sync_point == "first" else second,
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 2

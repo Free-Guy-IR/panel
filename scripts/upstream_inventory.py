@@ -7,11 +7,12 @@ import subprocess
 import sys
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import UTC, date, datetime
 from fnmatch import fnmatchcase
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
@@ -82,7 +83,10 @@ COVERAGE_LABELS = {
     "waived": "waived (ledger)",
     "patch-id": "patch-id equivalent of a covered commit",
     "in-base": "patch-id equivalent already in the base",
+    "empty": "changes no file",
 }
+CONDITIONAL_TAG_RE = re.compile(r"^(?:UNMERGED-WIP|pending)\b", re.IGNORECASE)
+DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
 BRIDGE_WAIVER_FILE = "upstream-bridge-waiver.toml"
@@ -90,6 +94,15 @@ PYPI_URL = f"https://pypi.org/pypi/{BRIDGE_PACKAGE}/json"
 PYPI_TIMEOUT = 20
 BRIDGE_FLOOR_OPERATORS = {">=", "==", "~=", "==="}
 STATUS_NAMES = {"A": "added", "M": "modified", "D": "deleted"}
+
+NPM_REGISTRY = "https://registry.npmjs.org"
+NPM_TIMEOUT = 20
+NPM_WAIVER_FILE = "upstream-npm-waivers.toml"
+NPM_DEFAULT_LOCK = "dashboard/bun.lock"
+NPM_DEFAULT_SCOPE = "@pasarguard"
+NPM_SPEC_RE = re.compile(r"^(?:[\^~=v]|>=|>)*\s*(\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?)")
+NPM_DEPENDENCY_FIELDS = ("dependencies", "devDependencies", "optionalDependencies")
+NPM_LOCK_SPEC_RE = re.compile(r"^(@[^/@]+/[^@]+|[^@]+)@(.*)$")
 
 
 def git(*args, stdin=None):
@@ -540,7 +553,14 @@ def list_commit_refs():
     return refs
 
 
-def expand_tracked(patterns):
+def ref_exists(ref):
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0
+
+
+def expand_tracked(patterns, option="--track", strict=True):
     all_refs = None
     tracked = {}
     for pattern in patterns:
@@ -548,12 +568,12 @@ def expand_tracked(patterns):
             if all_refs is None:
                 all_refs = list_commit_refs()
             matched = [r for r in all_refs if any(fnmatchcase(r, prefix + pattern) for prefix in DWIM_PREFIXES)]
-            if not matched:
-                sys.stderr.write(f"error: --track {pattern} matched no commit refs\n")
+            if not matched and strict:
+                sys.stderr.write(f"error: {option} {pattern} matched no commit refs\n")
                 raise SystemExit(2)
             for refname in matched:
                 tracked.setdefault(refname, refname)
-        else:
+        elif strict or ref_exists(pattern):
             tracked.setdefault(pattern, pattern)
     names = {key: short_ref(key) for key in tracked}
     counts = Counter(names.values())
@@ -648,20 +668,147 @@ def commit_metadata(base, tips):
         "--topo-order",
         "--reverse",
         "--date=short",
-        "--format=%H%x00%ad%x00%s",
+        "--format=%H%x00%T%x00%P%x00%ad%x00%s",
         *sorted(set(tips)),
         f"^{base}",
     )
     rows = []
     for line in out.splitlines():
-        sha, date, subject = line.split("\0", 2)
-        rows.append({"sha": sha, "date": date, "subject": subject})
+        sha, tree, parents, day, subject = line.split("\0", 4)
+        parent = parents.split()[0] if parents else None
+        rows.append({"sha": sha, "tree": tree, "parent": parent, "date": day, "subject": subject})
     return rows
 
 
+def empty_commits(rows):
+    parents = sorted({row["parent"] for row in rows if row["parent"]})
+    if not parents:
+        return set()
+    out = git("log", "--no-walk=unsorted", "--stdin", "--format=%H %T", stdin="\n".join(parents) + "\n")
+    trees = dict(line.split() for line in out.splitlines())
+    return {row["sha"] for row in rows if row["parent"] and trees.get(row["parent"]) == row["tree"]}
+
+
+def commits_on_refs(base, refs):
+    names = {}
+    for ref, name in refs:
+        tip = resolve_ref(f"{ref}^{{commit}}")
+        for sha in git("rev-list", "--no-merges", tip, f"^{base}").split():
+            names.setdefault(sha, []).append(name)
+    return names
+
+
+def is_ancestor(ancestor, descendant):
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant], capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0
+
+
+def sync_point_findings(upstream, tracked, release_refs):
+    errors = []
+    notes = []
+    sync_sha = resolve_ref(f"{upstream}^{{commit}}")
+    ordered = release_refs + [pair for pair in tracked if pair not in release_refs]
+    if not any(is_ancestor(sync_sha, resolve_ref(f"{ref}^{{commit}}")) for ref, _ in ordered):
+        errors.append(f"sync point {upstream} is not on any tracked upstream ref")
+    for ref, name in release_refs:
+        if not ref.startswith("refs/remotes/"):
+            continue
+        tip = resolve_ref(f"{ref}^{{commit}}")
+        if tip == sync_sha or not is_ancestor(sync_sha, tip):
+            continue
+        behind = git("rev-list", "--count", "--no-merges", tip, f"^{sync_sha}").strip()
+        notes.append(
+            f"sync point {sync_sha[:12]} is {behind} commit(s) behind {name} ({tip[:12]}); bump {SYNC_POINT_FILE}"
+        )
+    return errors, notes
+
+
+REVERT_RE = re.compile(r"This reverts commit ([0-9a-f]{40})")
+
+
 def trailer_shas(head):
-    out = git("log", "--format=%B", head)
-    return set(CHERRY_PICK_RE.findall(out)) | set(UPSTREAM_TRAILER_RE.findall(out))
+    return set(trailer_picks(head))
+
+
+def trailer_picks(head):
+    picks = {}
+    for chunk in git("log", "--format=%H%x00%B%x01", head).split("\x01"):
+        sha, sep, body = chunk.strip("\n").partition("\x00")
+        if not sep:
+            continue
+        for upstream_sha in set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body)):
+            picks.setdefault(upstream_sha, []).append(sha)
+    return picks
+
+
+def reverted_commits(head):
+    return set(REVERT_RE.findall(git("log", "--format=%B", head)))
+
+
+def added_lines_by_file(sha):
+    files = {}
+    current = None
+    for line in git("show", "--format=", "--no-color", "--no-ext-diff", "-U0", "-M", sha).splitlines():
+        if line.startswith("+++ "):
+            target = line[4:]
+            current = None if target == "/dev/null" else target.removeprefix("b/")
+            continue
+        if current and line.startswith("+"):
+            text = line[1:].strip()
+            if text:
+                files.setdefault(current, set()).add(text)
+    return files
+
+
+def stripped_lines(ref, path):
+    content = head_blob(ref, path)
+    return None if content is None else {line.strip() for line in content.splitlines()}
+
+
+def missing_pick_lines(upstream_sha, reference, head):
+    expected = 0
+    missing = []
+    for path, added in sorted(added_lines_by_file(upstream_sha).items()):
+        kept_upstream = stripped_lines(reference, path)
+        if kept_upstream is None:
+            continue
+        present = stripped_lines(head, path) or set()
+        for text in sorted(added & kept_upstream):
+            expected += 1
+            if text not in present:
+                missing.append((path, text))
+    return expected, missing
+
+
+def pick_reference(sha, upstream, containing_tips):
+    if containing_tips:
+        dated = git("log", "--no-walk=unsorted", "--format=%ct %H", *sorted(set(containing_tips))).split("\n")
+        return max((line.split() for line in dated if line.strip()), key=lambda item: int(item[0]))[1]
+    if upstream and is_ancestor(sha, upstream):
+        return upstream
+    return sha
+
+
+def ineffective_picks(head, candidates, upstream, tips_for):
+    picks = trailer_picks(head)
+    reverted = reverted_commits(head)
+    findings = {}
+    for sha in sorted(candidates):
+        fork_commits = picks.get(sha, [])
+        live = [commit for commit in fork_commits if commit not in reverted]
+        if not live:
+            findings[sha] = f"every fork commit carrying its trailer is reverted ({', '.join(c[:12] for c in fork_commits)})"
+            continue
+        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head)
+        if missing:
+            path, text = missing[0]
+            findings[sha] = (
+                f"{len(missing)} of {expected} upstream line(s) it adds are not in {head}, "
+                f"for example in {path}: {text[:80]!r}"
+            )
+    return findings
 
 
 def patch_ids(shas):
@@ -730,7 +877,8 @@ def parse_sync_ledger(path, today=None):
                     "or record a new decision"
                 )
                 continue
-        entries.append({"token": token, "kind": section, "reason": reason, "where": where})
+        conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
+        entries.append({"token": token, "kind": section, "reason": reason, "where": where, "conditional": conditional})
     return entries, errors
 
 
@@ -781,6 +929,8 @@ def parity_gate(
     write_snapshot=False,
     today=None,
     require_shared_history=True,
+    release_patterns=(),
+    upstream=None,
 ):
     tracked = expand_tracked(patterns)
     containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
@@ -795,25 +945,68 @@ def parity_gate(
         unrecorded = [(sha, name) for sha, name in heads if (sha, name) not in recorded]
         missing, snapshot_kept = snapshot_commits(base, pairs, {sha for sha, _ in heads}, containing, active)
         snapshot_errors += missing
+    if skipped and not active:
+        sys.stderr.write(
+            f"error: every tracked ref with commits past {base} shares no history with it; "
+            "pass --unrelated-history when the fork does not share history with upstream\n"
+        )
+        raise SystemExit(2)
     in_range = set(containing)
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
     ledger_errors += resolve_errors
+    release_refs = expand_tracked(release_patterns or DEFAULT_RELEASE_REFS, option="--release-ref", strict=False)
+    on_release = commits_on_refs(base, release_refs)
+    copy_notes = []
 
+    conditional = {sha for sha, entry in resolved.items() if entry["conditional"]}
+    if conditional and not release_refs:
+        ledger_errors.append("UNMERGED-WIP and pending waivers need at least one existing --release-ref")
+    for sha in sorted(conditional & set(on_release)):
+        entry = resolved.pop(sha)
+        ledger_errors.append(
+            f"{entry['where']}: `{sha[:12]}` is waived only while unmerged, but upstream now carries it on "
+            f"{', '.join(sorted(on_release[sha]))}; port it or record a new decision"
+        )
+
+    tip_by_name = {name: tip for name, tip, _ in active}
+    tip_by_name.update({name: sha for sha, name in heads})
+    ineffective = ineffective_picks(
+        head,
+        in_range & trailer_shas(head),
+        upstream,
+        lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
+    )
     coverage = {}
-    for sha in in_range & trailer_shas(head):
+    for sha in (in_range & trailer_shas(head)) - set(ineffective):
         coverage[sha] = "trailer"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
     ids = patch_ids(sorted(in_range))
-    covered_ids = {ids[sha] for sha in coverage if sha in ids}
-    for sha in in_range - set(coverage):
-        if ids.get(sha) in covered_ids:
-            coverage[sha] = "patch-id"
+    sources = {}
+    for sha in coverage:
+        if sha in ids:
+            sources.setdefault(ids[sha], []).append(sha)
+    for sha in sorted(in_range - set(coverage)):
+        origin = sources.get(ids.get(sha), [])
+        if not origin:
+            continue
+        if sha in on_release and all(s in conditional for s in origin):
+            copy_notes.append(
+                f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
+                "which is waived only while unmerged, so the copy needs its own decision"
+            )
+            continue
+        coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
         coverage[sha] = "in-base"
 
+    sync_errors, sync_notes = sync_point_findings(upstream, tracked, release_refs) if upstream else ([], [])
+    ledger_errors += sync_errors
+
     rows = commit_metadata(base, [tip for _, tip, _ in active])
+    for sha in empty_commits([row for row in rows if row["sha"] not in coverage]):
+        coverage[sha] = "empty"
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
 
@@ -848,6 +1041,14 @@ def parity_gate(
             for row in group:
                 print(f"    {row['sha'][:12]}  {row['date']}  {row['subject']}")
 
+    unlisted_picks = {sha: why for sha, why in ineffective.items() if sha not in coverage}
+    if ineffective:
+        print()
+        print(f"Cherry-picked upstream commits whose change is not all in {head} ({len(ineffective)}):")
+        for sha, why in ineffective.items():
+            state = "needs a Ported by design or Waived entry" if sha in unlisted_picks else "covered by its ledger entry"
+            print(f"  {sha[:12]}: {why}; {state}")
+
     if ledger_errors:
         print()
         print(f"Ledger errors ({len(ledger_errors)}):")
@@ -862,7 +1063,7 @@ def parity_gate(
             print(f"  upstream head {name} at {sha[:12]} is not recorded in {snapshot_path}")
         if unrecorded:
             print(f"  record the reviewed heads with --write-refs-snapshot {snapshot_path}")
-    notes = stale + duplicates
+    notes = stale + duplicates + copy_notes + sync_notes
     if notes:
         print()
         print(f"Ledger warnings ({len(notes)}):")
@@ -1025,6 +1226,242 @@ def bridge_gate(head, upstream, latest_override):
     return code
 
 
+def strip_trailing_commas(text):
+    out = []
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text):
+        if in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == ",":
+            rest = text[index + 1 :].lstrip()
+            if rest[:1] in ("}", "]"):
+                continue
+        out.append(char)
+    return "".join(out)
+
+
+def npm_lock_entries(lock, scope):
+    entries = []
+    for key, value in sorted((lock.get("packages") or {}).items()):
+        if not isinstance(value, list) or not value or not isinstance(value[0], str):
+            continue
+        match = NPM_LOCK_SPEC_RE.match(value[0])
+        if not match or not match.group(1).startswith(scope + "/"):
+            continue
+        entries.append({"key": key, "name": match.group(1), "resolved": match.group(2)})
+    return entries
+
+
+def upstream_npm_floors(upstream, lock_path):
+    package_path = str(PurePosixPath(lock_path).with_name("package.json"))
+    text = head_blob(upstream, package_path)
+    if text is None:
+        return {}, f"no {package_path}"
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        return {}, f"{package_path} is not valid JSON: {exc}"
+    floors = {}
+    for field in NPM_DEPENDENCY_FIELDS:
+        for name, spec in (data.get(field) or {}).items():
+            match = NPM_SPEC_RE.match(spec.strip()) if isinstance(spec, str) else None
+            if not match:
+                continue
+            try:
+                version = Version(match.group(1))
+            except InvalidVersion:
+                continue
+            if name not in floors or version > floors[name][0]:
+                floors[name] = (version, spec)
+    return floors, package_path
+
+
+def load_bun_lock(ref, lock_path):
+    text = head_blob(ref, lock_path)
+    if text is None:
+        return None
+    return json.loads(strip_trailing_commas(text))
+
+
+def upstream_npm_resolved(upstream, lock_path, scope):
+    try:
+        lock = load_bun_lock(upstream, lock_path)
+    except ValueError:
+        return {}
+    resolved = {}
+    for entry in npm_lock_entries(lock or {}, scope):
+        try:
+            version = Version(entry["resolved"])
+        except InvalidVersion:
+            continue
+        if entry["name"] not in resolved or version > resolved[entry["name"]]:
+            resolved[entry["name"]] = version
+    return resolved
+
+
+def npm_latest_version(name):
+    url = f"{NPM_REGISTRY}/{urllib.parse.quote(name, safe='@')}"
+    request = urllib.request.Request(
+        url, headers={"Accept": "application/vnd.npm.install-v1+json", "User-Agent": "upstream-inventory"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=NPM_TIMEOUT) as response:
+            payload = json.load(response)
+        return Version(payload["dist-tags"]["latest"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        sys.stderr.write(f"error: cannot read the latest {name} release from {url}: {exc}\n")
+        return None
+
+
+def load_npm_waivers(head):
+    text = head_blob(head, NPM_WAIVER_FILE)
+    if text is None:
+        return {}, []
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        return {}, [f"{NPM_WAIVER_FILE} is not valid TOML: {exc}"]
+    waivers = {}
+    errors = []
+    for index, waiver in enumerate(data.get("waiver", []), 1):
+        where = f"{NPM_WAIVER_FILE} waiver {index}"
+        package = waiver.get("package")
+        reason = waiver.get("reason")
+        if not isinstance(package, str) or not package:
+            errors.append(f"{where} has no package")
+            continue
+        if not isinstance(reason, str) or not reason.strip():
+            errors.append(f"{where} ({package}) has no reason")
+            continue
+        try:
+            version = Version(str(waiver.get("upstream_version")))
+        except InvalidVersion:
+            errors.append(f"{where} ({package}) upstream_version {waiver.get('upstream_version')!r} is not a version")
+            continue
+        until = waiver.get("until")
+        if until is not None and not isinstance(until, date):
+            try:
+                until = date.fromisoformat(str(until))
+            except ValueError:
+                errors.append(f"{where} ({package}) until {until!r} is not a YYYY-MM-DD date")
+                continue
+        waivers.setdefault(package, []).append((version, reason.strip(), until))
+    return waivers, errors
+
+
+def npm_waiver_verdict(waivers, name, latest, today):
+    listed = waivers.get(name, [])
+    for version, reason, until in listed:
+        if version != latest:
+            continue
+        if until is not None and today > until:
+            return 1, f"the waiver in {NPM_WAIVER_FILE} for {latest} expired on {until.isoformat()}; re-check it"
+        return 0, f"waived by {NPM_WAIVER_FILE} for {latest}: {reason}"
+    if not listed:
+        return 1, f"no waiver in {NPM_WAIVER_FILE}"
+    newest = max(version for version, _, _ in listed)
+    if newest < latest:
+        return 1, f"the waiver in {NPM_WAIVER_FILE} is stale: it waives {newest} but upstream is now at {latest}"
+    return 1, f"the waiver in {NPM_WAIVER_FILE} waives {newest}, which does not match upstream {latest}"
+
+
+def parse_npm_overrides(values):
+    overrides = {}
+    for value in values:
+        name, sep, version = value.rpartition("=")
+        if not sep or not name:
+            sys.stderr.write(f"error: --npm-latest {value!r} is not NAME=VERSION\n")
+            raise SystemExit(2)
+        try:
+            overrides[name] = Version(version)
+        except InvalidVersion:
+            sys.stderr.write(f"error: --npm-latest {value!r} has an invalid version\n")
+            raise SystemExit(2)
+    return overrides
+
+
+def npm_gate(head, upstream, lock_path, scope, overrides, today):
+    print()
+    print("Npm Packages")
+    text = head_blob(head, lock_path)
+    if text is None:
+        print(f"Npm package gate ERROR: {lock_path} not found on {head}")
+        return 2
+    try:
+        lock = json.loads(strip_trailing_commas(text))
+    except ValueError as exc:
+        print(f"Npm package gate ERROR: {lock_path} on {head} is not a readable bun.lock: {exc}")
+        return 2
+    entries = npm_lock_entries(lock, scope)
+    if not entries:
+        print(f"Npm package gate ERROR: no {scope} packages in {lock_path} on {head}")
+        return 2
+    print(f"  lock: {lock_path} on {head}, {len(entries)} {scope} entries")
+    floors, floor_origin = upstream_npm_floors(upstream, lock_path) if upstream else ({}, None)
+    upstream_resolved = upstream_npm_resolved(upstream, lock_path, scope) if upstream else {}
+    if upstream is None:
+        print("  upstream floor: not checked (no upstream head)")
+    elif not floors:
+        print(f"  upstream floor: none found on {upstream} ({floor_origin})")
+    waivers, waiver_errors = load_npm_waivers(head)
+    latest_seen = {}
+    behind = []
+    for entry in entries:
+        name = entry["name"]
+        floor = floors.get(name)
+        try:
+            pinned = Version(entry["resolved"])
+        except InvalidVersion:
+            required = f"; upstream requires {floor[1]}" if floor else ""
+            print(f"  {entry['key']}: built from {entry['resolved']}, not version-gated here{required}")
+            continue
+        if name not in latest_seen:
+            if name in overrides:
+                latest_seen[name] = (overrides[name], "--npm-latest")
+            else:
+                released = npm_latest_version(name)
+                if released is None:
+                    print(f"Npm package gate ERROR: the latest {name} release could not be read")
+                    return 2
+                latest_seen[name] = (released, "npm")
+        sources = [latest_seen[name]]
+        if floor:
+            sources.append((floor[0], f"{floor[1]!r} in {floor_origin} on {upstream}"))
+        if name in upstream_resolved:
+            sources.append((upstream_resolved[name], f"{lock_path} on {upstream}"))
+        latest = max(version for version, _ in sources)
+        origins = ", ".join(origin for version, origin in sources if version == latest)
+        if pinned >= latest:
+            print(f"  {entry['key']}: {pinned} is current (upstream latest {latest} from {origins})")
+            continue
+        code, message = npm_waiver_verdict(waivers, name, latest, today)
+        print(f"  {entry['key']}: {pinned} is behind upstream {latest} (from {origins}); {message}")
+        if code:
+            behind.append(entry["key"])
+    for message in waiver_errors:
+        print(f"  waiver error: {message}")
+    if behind or waiver_errors:
+        reasons = []
+        if behind:
+            reasons.append(f"{len(behind)} lock entries behind upstream without a matching waiver")
+        if waiver_errors:
+            reasons.append(f"{len(waiver_errors)} waiver error(s)")
+        print(f"Npm package gate FAILED: {'; '.join(reasons)}")
+        return 1
+    print(f"Npm package gate OK: every {scope} registry package in {lock_path} is current or waived")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Inventory fork divergence from upstream and guard the override boundary."
@@ -1073,6 +1510,20 @@ def main():
     )
     parser.add_argument("--today", metavar="YYYY-MM-DD", help="date used for until: deadlines (default: today, UTC)")
     parser.add_argument(
+        "--release-ref",
+        metavar="REF_OR_GLOB",
+        action="append",
+        default=[],
+        help="upstream release line that ends UNMERGED-WIP and pending waivers (repeatable; default: "
+        + ", ".join(DEFAULT_RELEASE_REFS)
+        + ")",
+    )
+    parser.add_argument(
+        "--unrelated-history",
+        action="store_true",
+        help="the fork shares no history with upstream, so tracked refs unrelated to --base are not skipped",
+    )
+    parser.add_argument(
         "--check-bridge",
         action="store_true",
         help=f"exit 1 if the {BRIDGE_PACKAGE} pinned in uv.lock is behind upstream",
@@ -1082,11 +1533,32 @@ def main():
         metavar="VERSION",
         help="use VERSION as the latest bridge release instead of querying PyPI",
     )
+    parser.add_argument(
+        "--check-npm",
+        action="store_true",
+        help="exit 1 if a registry package of --npm-scope in --npm-lock is behind upstream",
+    )
+    parser.add_argument(
+        "--npm-lock", metavar="PATH", default=NPM_DEFAULT_LOCK, help=f"bun.lock to check (default: {NPM_DEFAULT_LOCK})"
+    )
+    parser.add_argument(
+        "--npm-scope", metavar="SCOPE", default=NPM_DEFAULT_SCOPE, help=f"npm scope (default: {NPM_DEFAULT_SCOPE})"
+    )
+    parser.add_argument(
+        "--npm-latest",
+        metavar="NAME=VERSION",
+        action="append",
+        default=[],
+        help="use VERSION as the latest NAME release instead of querying npm (repeatable)",
+    )
     args = parser.parse_args()
     if bool(args.track) != bool(args.fail_on_unported):
         parser.error("--track and --fail-on-unported must be used together")
     if args.bridge_latest and not args.check_bridge:
         parser.error("--bridge-latest requires --check-bridge")
+    if args.npm_latest and not args.check_npm:
+        parser.error("--npm-latest requires --check-npm")
+    npm_overrides = parse_npm_overrides(args.npm_latest)
     if (args.refs_snapshot or args.write_refs_snapshot) and not args.fail_on_unported:
         parser.error("--refs-snapshot and --write-refs-snapshot require --fail-on-unported")
     if args.write_refs_snapshot and not args.refs_snapshot:
@@ -1098,12 +1570,24 @@ def main():
         except ValueError:
             parser.error("--today must be YYYY-MM-DD")
 
-    gate_only = bool(args.fail_on_unported or args.check_bridge)
+    gate_only = bool(args.fail_on_unported or args.check_bridge or args.check_npm)
     run_inventory = bool(
         args.json or args.json_file or args.fail_on_override_outside_ledger or args.baseline or not gate_only
     )
     resolve_ref(args.head)
-    upstream = resolve_upstream_head(args.upstream_head) if run_inventory or args.check_bridge else None
+    upstream = resolve_upstream_head(args.upstream_head)
+    if upstream is not None:
+        resolve_ref(args.base)
+        if args.unrelated_history:
+            misplaced = shares_history(args.head, upstream)
+        else:
+            misplaced = not shares_history(args.base, upstream)
+        if misplaced:
+            sys.stderr.write(
+                f"error: upstream head {upstream} is not upstream history relative to --base {args.base} "
+                f"and --head {args.head}; it must be an upstream commit, not a fork commit\n"
+            )
+            raise SystemExit(2)
     codes = [0]
 
     if run_inventory:
@@ -1133,11 +1617,26 @@ def main():
                 args.refs_snapshot,
                 args.write_refs_snapshot,
                 today,
+                require_shared_history=not args.unrelated_history,
+                release_patterns=args.release_ref,
+                upstream=upstream,
             )
         )
 
     if args.check_bridge:
         codes.append(bridge_gate(args.head, upstream, args.bridge_latest))
+
+    if args.check_npm:
+        codes.append(
+            npm_gate(
+                args.head,
+                upstream,
+                args.npm_lock,
+                args.npm_scope,
+                npm_overrides,
+                today or datetime.now(UTC).date(),
+            )
+        )
 
     sys.stdout.flush()
     raise SystemExit(max(codes))

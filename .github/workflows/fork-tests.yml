@@ -1,0 +1,40 @@
+name: Fork Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite-frozen-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TEST_FROM: local
+      TESTING: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
+
+      - name: Install exactly the locked dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Import the node runtime against the locked bridge
+        run: uv run --frozen python -c "import app.node, app.app_factory"
+
+      - name: Run the test suite on SQLite
+        run: uv run --frozen pytest tests -q -p no:cacheprovider

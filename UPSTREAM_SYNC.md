@@ -25,6 +25,12 @@ deliberately does not take.
 A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date. After it the gate
 fails and the commit needs a new decision. Pending upstream feature branches are recorded this way.
 
+A `Waived` reason that starts with `UNMERGED-WIP` or `pending` is also conditional on upstream: it covers
+the commit only while upstream keeps it off its release lines (upstream/main, upstream/dev and every
+upstream tag). When upstream merges that commit, or a rebased copy of it with the same patch-id, the gate
+fails at once, whatever the `until:` date says, and the commit needs a new decision. Any other `Waived`
+reason is permanent and also covers rebased copies.
+
 The gate also reads `.upstream-refs`, the snapshot of every upstream branch and tag head the fork
 has reviewed. It fails while a live upstream head is missing from the snapshot, and it keeps
 tracking the commits of every recorded head after upstream deletes or force-pushes the branch.
@@ -38,6 +44,10 @@ branch into a dev commit that is inside the v5.4.1 baseline (DUPLICATE-OF-DEV), 
 the same change through its own code (ALREADY-IN-FORK). Checked on 2026-09-24 against upstream/dev
 ec74c933405c554dccf0dd5b6d0eab05ac5f78cc by comparing the final trees of the touched files.
 
+- `d5e6415451a6363052a892105215fc2243d73734` cherry-picked with -x (36d8a3825) and adapted: the awaited on-hold removal passes the user's hwid_limit like the fork's remove_user (a808adaa3), and tests/api/test_node.py keeps the fork's superset of upstream's record_background_connect double.
+- `b606dbc26900873d5a8a88b01fb9f1972b8f3d07` cherry-picked with -x (970b69a74) without its three clear_sub_config_cache() hooks in app/core/hosts.py, app/settings/__init__.py and app/subscription/client_templates.py, which fix owner P10 adds byte-identically on its branch; the fork keeps shared_wireguard_public_keys for subnet reconcile next to upstream's collision repair.
+- `98befb12269db8154d9333f29979f8c638376cf7` cherry-picked with -x (d97ebcde0); the fork drops the unused LargeBinary import and unquotes the list["AdminPasskey"] annotation in app/db/models.py for its ruff --no-fix gate (ce9599ea0).
+- `889b591d3ed31644a22ce802f7f64fcd7ee81c47` cherry-picked with -x (1f52f1b34); all-nodes-stacked-bar-chart.tsx builds its series through the fork's buildUsageSeries so the D4 aggregate-only state and the D5 deleted-nodes series hold in every breakdown, which replaces upstream's inline series code in that file.
 - `be67c4c122956801606c85115c2c91cd2c8a728a` DUPLICATE-OF-DEV: upstream branch feat/on_hold_timeout_action was squashed into dev d5e6415451a6363052a892105215fc2243d73734 (#901), whose tree equals the branch tip for all 10 touched files. The fork already carries that dev commit as 36d8a382532dc4bcad867edf62b389177aa57fd7.
 - `1fadd9f55177479211d07645661a28f9299dd178` DUPLICATE-OF-DEV: upstream branch feat/on_hold_timeout_action commit squashed into dev d5e6415451a6363052a892105215fc2243d73734 (dashboard/src/service/api/index.ts blob identical to the branch tip). The fork carries it as 36d8a382532dc4bcad867edf62b389177aa57fd7.
 - `516c50b44948520447832e721c27ff4582eb1293` DUPLICATE-OF-DEV: upstream branch feat/on_hold_timeout_action next_plan disabled-status fix squashed into dev d5e6415451a6363052a892105215fc2243d73734 (app/jobs/review_users.py blob identical to the branch tip). The fork carries it as 36d8a382532dc4bcad867edf62b389177aa57fd7.
@@ -110,6 +120,7 @@ review, or waive it for good if upstream abandons it.
 - `02dde45a51e5e992cdfecd0798467aaaf264b418` pending: tracked feature branch upstream/amaziaWG (AmneziaWG v1-v3.1 for WireGuard hosts and subscriptions, commit "Fix CodeRabbit comments on this PR"). Checked 2026-09-25: its pull request PasarGuard/panel#932 into dev is open with comment-only reviews and was still being revised on 2026-09-24, and upstream node dev 4a9d0cf has no AmneziaWG support, so the feature is not merge-ready upstream; port it when #932 merges. until: 2026-10-25
 - `92cc7dc80b16f5a8d46e7eaa6a9385dcb81279bd` pending: tracked feature branch upstream/amaziaWG (AmneziaWG v1-v3.1 for WireGuard hosts and subscriptions, commit "fix: update Amnezia properties and validation for random_trailers and disable_cookies"). Checked 2026-09-25: its pull request PasarGuard/panel#932 into dev is open with comment-only reviews and was still being revised on 2026-09-24, and upstream node dev 4a9d0cf has no AmneziaWG support, so the feature is not merge-ready upstream; port it when #932 merges. until: 2026-10-25
 - `ac167e4244f1c9fcaeab6ffaf37768832f24b469` pending: tracked feature branch upstream/amaziaWG (AmneziaWG v1-v3.1 for WireGuard hosts and subscriptions, commit "docs: document AmneziaWG validation, subscription generation, and host presets"). Checked 2026-09-25: its pull request PasarGuard/panel#932 into dev is open with comment-only reviews and was still being revised on 2026-09-24, and upstream node dev 4a9d0cf has no AmneziaWG support, so the feature is not merge-ready upstream; port it when #932 merges. until: 2026-10-25
+- `2f60c83098103ebf36d7b833f893309c883bc8d7` pending: tracked dependabot branch upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.1, which raises sqlalchemy[asyncio] to >=2.1.1. Checked 2026-09-29: upstream has not merged it into dev, and SQLAlchemy 2.1 is a new minor line with deprecations removed, so the fork takes it only together with upstream and after a full MySQL and PostgreSQL run. until: 2026-10-29
 
 ## Side repositories (not read by the parity gate)
 
