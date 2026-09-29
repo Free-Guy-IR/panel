@@ -210,9 +210,9 @@ def test_sanitize_migration_clears_only_unusable_values(tmp_path):
     assert cleared["vless"] == {"id": "80c60e6c-a23e-4fd3-a4d4-b99ec6866c4a", "flow": None}
     assert cleared["trojan"] == {"password": "keep"}
     assert json.loads(rows[6].proxy_settings)["vless"]["flow"] is None
-    assert [rows[user_id].hwid_limit for user_id in (1, 2, 3, 4)] == [None, 5, 2**31 - 1, None]
+    assert [rows[user_id].hwid_limit for user_id in (1, 2, 3, 4)] == [2**31 - 1, 5, 2**31 - 1, None]
     assert [rows[user_id].auto_delete_in_days for user_id in (1, 2, 3, 4)] == [36500, 30, -1, 36500]
-    assert templates == {1: None, 2: 4}
+    assert templates == {1: 2**31 - 1, 2: 4}
 
 
 def test_sanitize_migration_changes_nothing_on_clean_data(tmp_path):
