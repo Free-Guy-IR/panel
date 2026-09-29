@@ -3,6 +3,7 @@ import sys
 import warnings
 
 import pytest
+from aiorwlock import RWLock
 from pydantic import PydanticDeprecatedSince20
 
 # Add the project root directory to the Python path
@@ -28,3 +29,10 @@ def ignore_all_warnings():
     warnings.filterwarnings("ignore", category=UserWarning)
     warnings.filterwarnings("ignore", category=FutureWarning)
     warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+
+@pytest.fixture(autouse=True)
+def node_manager_lock_per_test_loop(monkeypatch):
+    module = sys.modules.get("app.node")
+    if module is not None:
+        monkeypatch.setattr(module.node_manager, "_lock", RWLock(fast=True))
