@@ -23,6 +23,7 @@ STOP_WINDOW_S = 9.5
 UVICORN_SHUTDOWN_OVERHEAD_S = 0.2
 PROCESS_EXIT_MARGIN_S = 0.3
 TICK_DURATION_S = 4.0
+LOOP_CLOCK_TOLERANCE_S = 0.001
 
 SERVER_SCRIPT = textwrap.dedent(
     """
@@ -47,7 +48,7 @@ SERVER_SCRIPT = textwrap.dedent(
 
     def mark(name):
         with open(marks_path, "a") as handle:
-            handle.write(f"{name} {time.monotonic()}\\n")
+            handle.write(f"{name} {time.monotonic()} {asyncio.get_running_loop().time()}\\n")
 
 
     scheduler = AsyncIOScheduler(timezone="UTC")
@@ -127,10 +128,13 @@ def _get(url: str, timeout: float) -> int:
         return response.status
 
 
-def _marks(path: Path) -> dict[str, float]:
+def _marks(path: Path) -> dict[str, tuple[float, float]]:
     if not path.exists():
         return {}
-    return {name: float(stamp) for name, stamp in (line.split() for line in path.read_text().splitlines() if line)}
+    return {
+        name: (float(monotonic), float(loop_time))
+        for name, monotonic, loop_time in (line.split() for line in path.read_text().splitlines() if line)
+    }
 
 
 def _wait_for(predicate, timeout: float) -> bool:
@@ -228,8 +232,9 @@ def test_a_slow_request_and_a_slow_flush_still_exit_inside_the_stop_window_with_
     assert elapsed <= STOP_WINDOW_S, f"the process took {elapsed:.2f}s to exit after SIGTERM\n{output[-3000:]}"
     assert "tick-persisted" in marks, f"the usage tick was lost at shutdown\n{output[-3000:]}"
     assert "flush-started" in marks
-    assert marks["tick-persisted"] < marks["flush-started"]
-    assert marks["tick-persisted"] - marks["tick-read"] >= TICK_DURATION_S
+    assert marks["tick-persisted"][0] < marks["flush-started"][0]
+    tick_on_loop_clock = marks["tick-persisted"][1] - marks["tick-read"][1]
+    assert tick_on_loop_clock >= TICK_DURATION_S - LOOP_CLOCK_TOLERANCE_S
 
 
 def _swallow(func, *args) -> None:
