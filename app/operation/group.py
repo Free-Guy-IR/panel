@@ -76,8 +76,7 @@ class GroupOperation(BaseOperation):
 
     async def _mark_pending_resync(self, db: AsyncSession, mark, *args) -> None:
         try:
-            await group_repair.acquire_proxy_secrets_lock(db)
-            await mark(db, *args)
+            await group_repair.mark_under_the_lock(db, mark, *args)
         except (DBAPIError, NamedLockMissing) as exc:
             if not is_lock_unavailable(exc):
                 raise
@@ -251,7 +250,9 @@ class GroupOperation(BaseOperation):
         for db_group in groups_to_update:
             db_group.is_disabled = is_disabled
 
-        await self._mark_pending_resync(db, resync_markers.mark_group_members, [db_group.id for db_group in groups_to_update])
+        await self._mark_pending_resync(
+            db, resync_markers.mark_group_members, [db_group.id for db_group in groups_to_update]
+        )
         await db.commit()
 
         for db_group in groups_to_update:

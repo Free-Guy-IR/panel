@@ -1,9 +1,11 @@
+import logging
 from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 from sqlalchemy import event, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import Admin, AdminRole, Base, Group, ProxyInbound, User, users_groups_association
@@ -190,3 +192,146 @@ async def test_a_group_change_that_cannot_take_the_secrets_lock_stores_nothing(s
     assert await _stored(sessions) == before
     assert before.markers == []
     assert scheduled == []
+
+
+class _DriverError(Exception):
+    def __init__(self, code, message, sqlstate=None):
+        super().__init__(code, message)
+        self.sqlstate = sqlstate
+
+
+def _lock_wait_timeout(dialect_name):
+    if dialect_name == "postgresql":
+        return OperationalError("UPDATE named_locks", {}, _DriverError(None, "lock timeout", sqlstate="55P03"))
+    return OperationalError("UPDATE named_locks", {}, _DriverError(1205, "Lock wait timeout exceeded"))
+
+
+class _Cursor:
+    def __init__(self, driver):
+        self.driver = driver
+        self.row = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+    async def execute(self, sql, args=None):
+        self.row = (self.driver.lock_wait,)
+        if args:
+            self.driver.lock_wait = args[0]
+
+    async def fetchone(self):
+        return self.row
+
+
+class _Driver:
+    def __init__(self):
+        self.lock_wait = 50
+
+    def cursor(self):
+        return _Cursor(self)
+
+
+class _Connection:
+    def __init__(self, driver):
+        self.driver = driver
+
+    async def get_raw_connection(self):
+        return SimpleNamespace(driver_connection=self.driver)
+
+    async def invalidate(self):
+        raise AssertionError("a healthy connection was discarded")
+
+
+class _Session:
+    def __init__(self, dialect_name):
+        self.dialect_name = dialect_name
+        self.driver = _Driver()
+        self.held = _Connection(self.driver)
+
+    def get_bind(self):
+        return SimpleNamespace(dialect=SimpleNamespace(name=self.dialect_name))
+
+    async def connection(self):
+        return self.held
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dialect_name", ["mysql", "mariadb"])
+async def test_the_lock_and_the_markers_wait_no_longer_than_the_in_request_bound(monkeypatch, dialect_name):
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session(dialect_name)
+    seen = []
+    failures = [_lock_wait_timeout(dialect_name)]
+
+    async def acquire(session):
+        seen.append(("lock", db.driver.lock_wait))
+        if failures:
+            raise failures.pop()
+
+    async def mark(session, user_ids):
+        seen.append(("marker", db.driver.lock_wait, user_ids))
+
+    monkeypatch.setattr(group_repair, "acquire_proxy_secrets_lock", acquire)
+
+    await group_repair.mark_under_the_lock(db, mark, [7])
+
+    bound = group_repair.IN_REQUEST_LOCK_WAIT_SECONDS
+    assert seen == [("lock", bound), ("lock", bound), ("marker", bound, [7])]
+    assert db.driver.lock_wait == 50
+
+
+@pytest.mark.asyncio
+async def test_a_postgresql_lock_error_is_not_retried_inside_the_aborted_transaction(monkeypatch):
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session("postgresql")
+    attempts = []
+
+    async def acquire(session):
+        attempts.append(session)
+        raise _lock_wait_timeout("postgresql")
+
+    async def mark(session, user_ids):
+        raise AssertionError("markers written without the lock")
+
+    monkeypatch.setattr(group_repair, "acquire_proxy_secrets_lock", acquire)
+
+    with pytest.raises(OperationalError):
+        await group_repair.mark_under_the_lock(db, mark, [7])
+    assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", PATHS)
+async def test_a_lock_that_frees_up_for_the_retry_lets_the_group_change_finish(sessions, monkeypatch, caplog, path):
+    from app.fork.proxy_secrets import group_repair
+
+    seed = await _seed(sessions)
+    before = await _stored(sessions)
+    real_acquire = group_repair.acquire_proxy_secrets_lock
+    calls = SimpleNamespace(count=0)
+    scheduled = []
+
+    async def busy_once(db):
+        calls.count += 1
+        if calls.count == 1:
+            raise NamedLockMissing("the 'proxy_secrets' named lock row could not be taken")
+        return await real_acquire(db)
+
+    monkeypatch.setattr(group_repair, "acquire_proxy_secrets_lock", busy_once)
+    monkeypatch.setattr(group_repair, "schedule_allocation_repair", lambda user_ids: scheduled.append(user_ids))
+
+    with caplog.at_level(logging.WARNING):
+        async with sessions() as db:
+            await _run(_operation(), db, seed, path)
+
+    after = await _stored(sessions)
+    assert after.groups != before.groups or after.members != before.members
+    assert after.markers == []
+    assert scheduled == []
+    retries = [record.getMessage() for record in caplog.records if "retrying once" in record.getMessage()]
+    assert len(retries) == 1 and "resync markers" in retries[0]

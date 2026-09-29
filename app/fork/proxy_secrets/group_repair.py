@@ -166,6 +166,32 @@ async def allocate_and_grant_with_one_retry(db: AsyncSession, users: Sequence[Us
         await _attempt_twice(db, users, user_ids)
 
 
+def _retry_keeps_the_transaction(db: AsyncSession, exc: BaseException) -> bool:
+    return isinstance(exc, NamedLockMissing) or db.get_bind().dialect.name != "postgresql"
+
+
+async def _lock_with_one_retry(db: AsyncSession) -> None:
+    try:
+        await acquire_proxy_secrets_lock(db)
+        return
+    except LOCK_FAILURES as exc:
+        if not is_lock_unavailable(exc) or not _retry_keeps_the_transaction(db, exc):
+            raise
+        failure = exc
+    logger.warning(
+        f"a group change could not take the proxy secrets lock before writing its resync markers "
+        f"({describe_failure(failure)}); retrying once in {IN_REQUEST_RETRY_PAUSE_SECONDS:g}s"
+    )
+    await asyncio.sleep(IN_REQUEST_RETRY_PAUSE_SECONDS)
+    await acquire_proxy_secrets_lock(db)
+
+
+async def mark_under_the_lock(db: AsyncSession, mark: Callable[..., Awaitable[None]], *args) -> None:
+    async with _bounded_lock_wait(db):
+        await _lock_with_one_retry(db)
+        await mark(db, *args)
+
+
 async def pending_resync_markers(db: AsyncSession, user_ids: Iterable[int]) -> list[resync_markers.Marker]:
     return await resync_markers.markers_for(db, user_ids)
 
