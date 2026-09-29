@@ -1,7 +1,4 @@
-import importlib.util
-import subprocess
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 from sqlalchemy import update
@@ -9,23 +6,12 @@ from sqlalchemy import update
 from app.db.models import User
 from tests.api import GetTestDB, TestSession, client
 from tests.api.helpers import auth_headers, create_user, delete_user, unique_name
-
-ROOT = Path(__file__).resolve().parents[2]
-RELEASE_COMMIT = "b3044efa2"
+from tests.release_jwt import load_release_jwt
 
 
 @pytest.fixture
-def release(tmp_path, monkeypatch):
-    source = subprocess.run(
-        ["git", "show", f"{RELEASE_COMMIT}:app/utils/jwt.py"], cwd=ROOT, capture_output=True, text=True, check=False
-    )
-    if source.returncode:
-        pytest.skip(f"release commit {RELEASE_COMMIT} is not in this checkout")
-    path = tmp_path / "release_jwt.py"
-    path.write_text(source.stdout)
-    spec = importlib.util.spec_from_file_location("release_jwt_api", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+def release(monkeypatch):
+    module = load_release_jwt("release_jwt_api")
     monkeypatch.setattr(module, "GetDB", GetTestDB)
     return module
 

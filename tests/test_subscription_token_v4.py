@@ -1,8 +1,8 @@
 import asyncio
+import hashlib
 import hmac
-import importlib.util
 import subprocess
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -13,9 +13,16 @@ from fastapi import HTTPException
 import app.operation as operation_module
 from app.operation import BaseOperation, OperatorType
 from app.utils import jwt as jwt_utils
+from tests.release_jwt import (
+    RELEASE_COMMIT,
+    RELEASE_JWT,
+    RELEASE_JWT_SHA256,
+    TOKEN_CONTRACT_SHA256,
+    load_release_jwt,
+    token_contract_sha256,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_COMMIT = "b3044efa2"
 SECRET = "a-secret-that-only-the-server-knows"
 CREATED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -139,29 +146,45 @@ def test_v3_tokens_keep_the_time_rule(secret, store):
     assert _refused(token)
 
 
-def _release_jwt(tmp_path):
-    source = subprocess.run(
-        ["git", "show", f"{RELEASE_COMMIT}:app/utils/jwt.py"], cwd=ROOT, capture_output=True, text=True, check=False
-    )
-    if source.returncode:
-        pytest.skip(f"release commit {RELEASE_COMMIT} is not in this checkout")
-    path = tmp_path / "release_jwt.py"
-    path.write_text(source.stdout)
-    spec = importlib.util.spec_from_file_location("release_jwt", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture
-def release(tmp_path, monkeypatch):
-    module = _release_jwt(tmp_path)
+def release(monkeypatch):
+    module = load_release_jwt("release_jwt")
 
     async def _secret():
         return SECRET
 
     monkeypatch.setattr(module, "get_secret_key", _secret)
     return module
+
+
+def test_the_vendored_release_minter_is_intact_and_carries_the_release_token_contract():
+    source = RELEASE_JWT.read_bytes()
+    assert hashlib.sha256(source).hexdigest() == RELEASE_JWT_SHA256
+    assert token_contract_sha256(source.decode("utf-8")) == TOKEN_CONTRACT_SHA256
+
+
+def test_the_vendored_release_minter_is_the_release_commit_file():
+    shown = subprocess.run(
+        ["git", "show", f"{RELEASE_COMMIT}:app/utils/jwt.py"], cwd=ROOT, capture_output=True, check=False
+    )
+    if shown.returncode:
+        pytest.skip(f"release commit {RELEASE_COMMIT} is not in this checkout; the sha256 pin still holds")
+    assert shown.stdout == RELEASE_JWT.read_bytes()
+
+
+def test_the_rollback_image_still_mints_v3(secret):
+    token = asyncio.run(jwt_utils.create_subscription_token(42))
+    body = token.rpartition(".")[0]
+    payload = b64decode(body + "=" * (-len(body) % 4), altchars=b"-_").decode("utf-8")
+    assert payload.split(",")[0] == "v3"
+    assert len(payload.split(",")) == 3
+
+
+def test_a_v4_token_issued_before_the_revoke_instant_opens_while_its_epoch_is_current(secret, store):
+    revoked = datetime(2026, 9, 1, 12, 0, 0, 600_000, tzinfo=UTC)
+    store[42] = _User(sub_revoked_at=revoked)
+    token = _v4(42, revoked - timedelta(seconds=10), jwt_utils.revocation_epoch(revoked))
+    assert _resolve(token).id == 42
 
 
 def test_a_link_the_release_minted_opens_after_the_rollback(secret, store, release):
