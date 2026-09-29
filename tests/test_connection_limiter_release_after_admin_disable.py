@@ -105,11 +105,10 @@ async def test_an_admin_disable_that_races_the_limiter_release_leaves_the_user_d
 
         async with TestGetDB() as limiter_db:
             await connection_limiter._release_due(limiter_db, None)
-        await settle()
-        assert email in node.live, "the limiter release did not put the user back on the node"
+        assert await settle(lambda: email in node.live), "the limiter release did not put the user back on the node"
 
         answer = await operation._set_user_disabled(db, db_user, UserStatusToggle(disabled=True), ADMIN)
-    await settle()
+    await settle(lambda: email not in node.live)
 
     async with TestSession() as session:
         stored = (await session.get(User, user_id)).status
@@ -138,4 +137,6 @@ async def test_an_admin_enable_that_races_the_limiter_release_answers_and_pushes
     async with TestSession() as session:
         stored = (await session.get(User, user_id)).status
     assert (answer.status, stored) == (UserStatus.active, UserStatus.active)
-    assert node.live.get(email), f"user {email} is active in the database but missing from the node"
+    assert await settle(lambda: bool(node.live.get(email))), (
+        f"user {email} is active in the database but missing from the node"
+    )

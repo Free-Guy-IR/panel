@@ -60,6 +60,7 @@ from app.db.models import User, UserStatus, UserTemplate
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     NextPlanUnavailable,
+    lock_user_rows,
     refresh_next_plan_for_update,
     refresh_user_state_for_update,
     refresh_users_state_for_update,
@@ -939,8 +940,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         admin: AdminDetails,
     ) -> UserResponse:
         try:
-            await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
+            await lock_user_rows(db, [db_user.id])
             closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
+            await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
             old_status = db_user.status
             new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
@@ -1332,13 +1334,13 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     ) -> list[UserNotificationResponse]:
         try:
             locked = await refresh_users_state_for_update(db, db_users)
+            decided = locked if disabled else [db_user for db_user in locked if db_user.status == UserStatus.disabled]
+            await close_active_restrictions(db, [db_user.id for db_user in decided], ADMIN_STATUS_DECISION)
+            locked = await refresh_users_state_for_update(db, locked)
             if disabled:
                 targets = [db_user for db_user in locked if db_user.status != UserStatus.disabled]
-                decided = locked
             else:
                 targets = [db_user for db_user in locked if db_user.status == UserStatus.disabled]
-                decided = targets
-            await close_active_restrictions(db, [db_user.id for db_user in decided], ADMIN_STATUS_DECISION)
         except (DBAPIError, NamedLockMissing) as exc:
             await self._raise_if_lock_unavailable(db, exc)
         if not targets:

@@ -150,7 +150,9 @@ async def test_a_bulk_disable_that_loaded_the_user_before_the_limiter_released_i
 
     status, active = await _stored(user_id)
     assert (status, active) == (UserStatus.disabled, []), (status, active)
-    assert str(user_id) not in node.live, f"user {user_id} is disabled in the database but still on the node"
+    assert await settle(lambda: str(user_id) not in node.live), (
+        f"user {user_id} is disabled in the database but still on the node: {node.deliveries}"
+    )
 
 
 async def test_a_bulk_disable_of_a_user_the_limiter_disabled_after_the_load_outlives_the_restriction(monkeypatch):
@@ -173,7 +175,7 @@ async def test_a_bulk_disable_of_a_user_the_limiter_disabled_after_the_load_outl
     await settle()
     status_after_release, _ = await _stored(user_id)
     assert (status, active, status_after_release) == (UserStatus.disabled, [], UserStatus.disabled)
-    assert str(user_id) not in node.live
+    assert await settle(lambda: str(user_id) not in node.live)
 
 
 async def test_a_bulk_enable_of_a_user_the_limiter_already_released_changes_nothing(monkeypatch):
@@ -184,4 +186,6 @@ async def test_a_bulk_enable_of_a_user_the_limiter_already_released_changes_noth
 
     status, active = await _stored(user_id)
     assert (status, active) == (UserStatus.active, [])
-    assert node.live.get(str(user_id)), f"user {user_id} is active in the database but missing from the node"
+    assert await settle(lambda: bool(node.live.get(str(user_id)))), (
+        f"user {user_id} is active in the database but missing from the node"
+    )

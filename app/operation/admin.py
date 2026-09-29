@@ -228,6 +228,7 @@ class AdminOperation(BaseOperation):
         query = visible_users_query(caller)
         if query is None:
             return []
+        await db.commit()
         return await get_users(db, query=query, admin=db_admin, load_admin_role=True)
 
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):

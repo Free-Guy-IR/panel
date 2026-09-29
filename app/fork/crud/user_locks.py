@@ -42,6 +42,13 @@ async def refresh_user_state_for_update(db: AsyncSession, db_user: User, keys: S
     return True
 
 
+async def lock_user_rows(db: AsyncSession, user_ids: Iterable[int]) -> None:
+    ordered_ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
+    for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
+        chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
+        await db.execute(select(User.id).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
+
+
 async def refresh_users_state_for_update(
     db: AsyncSession, users: Iterable[User], keys: Sequence[str] = MODIFY_STATUS_KEYS
 ) -> list[User]:
