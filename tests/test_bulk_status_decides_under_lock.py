@@ -142,17 +142,25 @@ async def _restricted_and_released_after_load(monkeypatch, user_id: int, operati
 
 
 async def test_a_bulk_disable_that_loaded_the_user_before_the_limiter_released_it_still_disables_it(monkeypatch):
-    user_id, node = await _user_on_a_node(monkeypatch)
+    from app.operation import user as user_module
+
+    user_id, _node = await _user_on_a_node(monkeypatch)
     await _limiter_disables(user_id)
     assert (await _stored(user_id))[0] == UserStatus.disabled
+    real_sync_users = user_module.sync_users
+    bulk_pushes: list[tuple[int, UserStatus]] = []
+
+    async def record_bulk_push(users):
+        bulk_pushes.extend((user.id, user.status) for user in users)
+        await real_sync_users(users)
+
+    monkeypatch.setattr(user_module, "sync_users", record_bulk_push)
 
     await _restricted_and_released_after_load(monkeypatch, user_id, "bulk_disable_users")
 
     status, active = await _stored(user_id)
     assert (status, active) == (UserStatus.disabled, []), (status, active)
-    assert await settle(lambda: str(user_id) not in node.live), (
-        f"user {user_id} is disabled in the database but still on the node: {node.deliveries}"
-    )
+    assert bulk_pushes == [(user_id, UserStatus.disabled)], bulk_pushes
 
 
 async def test_a_bulk_disable_of_a_user_the_limiter_disabled_after_the_load_outlives_the_restriction(monkeypatch):
