@@ -185,6 +185,7 @@ class UserExtrasMixin:
         except (DBAPIError, NamedLockMissing) as exc:
             await self._raise_if_lock_unavailable(db, exc)
         prepared = []
+        reserved: ReservedSecrets = {}
         for user in ordered:
             access = access_by_user[user.id]
             settings = await self._prepare_user_proxy_settings(
@@ -192,6 +193,7 @@ class UserExtrasMixin:
                 access,
                 ProxyTable.model_validate(build_revoked_proxy_settings(user)),
                 exclude_user_id=user.id,
+                reserved_secrets=reserved,
                 unentitled_wireguard_from_locked_row=True,
             )
             prepared.append((user, settings, await user_has_wireguard_access(db, access)))

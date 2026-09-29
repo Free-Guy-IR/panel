@@ -1,14 +1,16 @@
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text, update
+from sqlalchemy import Select, Update, event, select, text, update
 
 from app import notification
 from app.db.crud.bulk import update_users_proxy_settings
 from app.db.crud.user import get_user_by_id
 from app.db.models import CoreConfig, Group, ProxyInbound, User
+from app.fork.operation import user_extras as user_extras_module
 from app.models.core import CoreType
 from app.models.proxy import ShadowsocksMethods
 from app.models.settings import HWIDSettings
@@ -387,3 +389,73 @@ async def test_a_bulk_revoke_takes_the_user_rows_in_the_usage_recorders_order(mo
         (first, 1, True),
         (second, 1, True),
     ]
+
+
+def _lock_order_recorder(order: list[str]):
+    def before_execute(conn, statement, multiparams, params, execution_options):
+        if isinstance(statement, Update) and statement.table.name in ("named_locks", "users"):
+            order.append("named lock" if statement.table.name == "named_locks" else "user row")
+        elif (
+            isinstance(statement, Select)
+            and statement._for_update_arg is not None
+            and any(getattr(table, "name", None) == "users" for table in statement.get_final_froms())
+        ):
+            order.append("user row")
+
+    return before_execute
+
+
+@pytest.mark.parametrize("revoked", ["one-without-wireguard", "one-with-wireguard", "both-in-bulk"])
+async def test_a_revoke_takes_the_proxy_secrets_lock_before_any_user_row(monkeypatch, revoked):
+    _quiet(monkeypatch)
+    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups("10.86.0.1/24", "10.85.0.1/24")
+    operation = UserOperation(OperatorType.API)
+    without_wireguard, with_wireguard = await seed_user(plain_group_id), await seed_user(plain_group_id)
+    async with TestSession() as db:
+        await operation.modify_user_by_id(db, with_wireguard, UserModify(group_ids=[wireguard_group_id]), OWNER)
+
+    order: list[str] = []
+    recorder = _lock_order_recorder(order)
+    event.listen(engine.sync_engine, "before_execute", recorder)
+    try:
+        async with TestSession() as db:
+            if revoked == "both-in-bulk":
+                await operation.bulk_revoke_user_sub(
+                    db, BulkUsersSelection(ids={with_wireguard, without_wireguard}), OWNER
+                )
+            else:
+                user_id = without_wireguard if revoked == "one-without-wireguard" else with_wireguard
+                await operation._revoke_user_sub(db, await get_user_by_id(db, user_id), OWNER)
+    finally:
+        event.remove(engine.sync_engine, "before_execute", recorder)
+
+    assert "named lock" in order and "user row" in order, order
+    assert order.index("named lock") < order.index("user row"), (
+        f"a revoke ({revoked}) locked a user row before the proxy secrets lock, the reverse of every other secrets "
+        f"writer, so it can deadlock against them: {order}"
+    )
+
+
+async def test_a_bulk_revoke_never_gives_two_of_its_users_the_same_new_secret(monkeypatch):
+    _quiet(monkeypatch)
+    plain_group_id = (await _two_wireguard_groups("10.84.0.1/24", "10.83.0.1/24"))[2]
+    operation = UserOperation(OperatorType.API)
+    first, second = await seed_user(plain_group_id), await seed_user(plain_group_id)
+    old_ids = {user_id: (await _stored_settings(user_id))["vless"]["id"] for user_id in (first, second)}
+    colliding = str(uuid4())
+    real_build = user_extras_module.build_revoked_proxy_settings
+
+    def build_with_a_colliding_vless_id(db_user):
+        settings = real_build(db_user)
+        settings["vless"]["id"] = colliding
+        return settings
+
+    monkeypatch.setattr(user_extras_module, "build_revoked_proxy_settings", build_with_a_colliding_vless_id)
+    async with TestSession() as db:
+        await operation.bulk_revoke_user_sub(db, BulkUsersSelection(ids={first, second}), OWNER)
+
+    new_ids = {user_id: (await _stored_settings(user_id))["vless"]["id"] for user_id in (first, second)}
+    assert new_ids[first] != new_ids[second], (
+        f"a bulk revoke generated the same VLESS id for users {first} and {second} and stored it for both: {new_ids}"
+    )
+    assert not set(new_ids.values()) & set(old_ids.values()), (old_ids, new_ids)
