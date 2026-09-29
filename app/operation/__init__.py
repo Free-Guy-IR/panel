@@ -27,7 +27,7 @@ from app.models.user import UserCreate, UserModify
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
 from app.operation.permissions import apply_group_access, get_scope_admin_id
 from app.utils.helpers import ensure_datetime_timezone
-from app.utils.jwt import get_subscription_payload
+from app.utils.jwt import get_subscription_payload, revocation_epoch
 
 
 class OperatorType(IntEnum):
@@ -176,7 +176,12 @@ class BaseOperation:
         if (
             not db_user
             or db_user.created_at.astimezone(UTC) > sub["created_at"]
-            or (db_user.sub_revoked_at and db_user.sub_revoked_at.astimezone(UTC) > sub["created_at"])
+            or ("revocation_epoch" in sub and sub["revocation_epoch"] != revocation_epoch(db_user.sub_revoked_at))
+            or (
+                "revocation_epoch" not in sub
+                and db_user.sub_revoked_at
+                and db_user.sub_revoked_at.astimezone(UTC) > sub["created_at"]
+            )
         ):
             await self.raise_error(message="Not Found", code=404)
 

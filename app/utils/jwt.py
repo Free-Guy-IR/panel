@@ -12,6 +12,8 @@ from app.db import GetDB
 from app.db.crud.general import get_jwt_secret_key
 from config import jwt_settings
 
+_UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
 
 @cached(ttl=60)
 async def get_secret_key():
@@ -58,6 +60,15 @@ async def get_admin_payload(token: str) -> dict | None:
         return
 
 
+def revocation_epoch(sub_revoked_at: datetime | None) -> int:
+    if sub_revoked_at is None:
+        return 0
+    if sub_revoked_at.tzinfo is None:
+        sub_revoked_at = sub_revoked_at.replace(tzinfo=UTC)
+    microseconds = (sub_revoked_at - _UNIX_EPOCH) // timedelta(microseconds=1)
+    return (microseconds + 500_000) // 1_000_000
+
+
 async def create_subscription_token(user_id: int) -> str:
     data = "v3," + str(user_id) + "," + str(ceil(time.time()))
     data_b64_str = b64encode(data.encode("utf-8"), altchars=b"-_").decode("utf-8").rstrip("=")
@@ -79,6 +90,20 @@ async def create_subscription_token(user_id: int) -> str:
 def _parse_subscription_data(data_str: str) -> dict | None:
     """Parse the decoded subscription payload string into a result dict."""
     parts = data_str.split(",")
+    if len(parts) == 4 and parts[0] == "v4":
+        _, u_user_id_str, u_created_at_str, u_epoch_str = parts
+        try:
+            u_user_id = int(u_user_id_str)
+            u_created_at = int(u_created_at_str)
+            u_epoch = int(u_epoch_str)
+        except ValueError:
+            return
+        return {
+            "user_id": u_user_id,
+            "created_at": datetime.fromtimestamp(u_created_at, tz=UTC),
+            "revocation_epoch": u_epoch,
+        }
+
     if len(parts) == 3 and parts[0] in ("v2", "v3"):
         _, u_user_id_str, u_created_at_str = parts
         try:
