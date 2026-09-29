@@ -74,7 +74,12 @@ from app.fork.operation.user_guards import (
     reject_negative_next_plan,
 )
 from app.fork.proxy_secrets import ProxySecretUniquenessError
-from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
+from app.fork.proxy_secrets.locks import (
+    LOCK_UNAVAILABLE_DETAIL,
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_unavailable,
+)
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
@@ -1376,19 +1381,23 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
             await self.raise_error(message="User doesn't have next plan", code=404)
-        await refresh_user_state_for_update(db, db_user)
-        if await refresh_next_plan_for_update(db, db_user) is None:
-            await self.raise_error(message="User doesn't have next plan", code=404, db=db)
-
-        old_status = db_user.status
         try:
-            db_user = await reset_user_by_next(
-                db=db,
-                db_user=db_user,
-                clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
-            )
-        except NextPlanUnavailable:
-            await self.raise_error(message="User doesn't have next plan", code=404, db=db)
+            await acquire_proxy_secrets_lock(db)
+            await refresh_user_state_for_update(db, db_user)
+            if await refresh_next_plan_for_update(db, db_user) is None:
+                await self.raise_error(message="User doesn't have next plan", code=404, db=db)
+
+            old_status = db_user.status
+            try:
+                db_user = await reset_user_by_next(
+                    db=db,
+                    db_user=db_user,
+                    clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+                )
+            except NextPlanUnavailable:
+                await self.raise_error(message="User doesn't have next plan", code=404, db=db)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
         user = await self.update_user(db_user)
 
         if user.status != old_status:

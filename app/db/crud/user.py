@@ -1445,6 +1445,9 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
     Returns:
         User: The updated user object.
     """
+    from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock
+
+    await acquire_proxy_secrets_lock(db)
     await refresh_user_state_for_update(db, db_user)
     if await refresh_next_plan_for_update(db, db_user) is None:
         raise NextPlanUnavailable(db_user.id)
