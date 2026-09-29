@@ -11,6 +11,7 @@ from alembic.script import ScriptDirectory
 from alembic.util import CommandError
 
 ROOT = Path(__file__).resolve().parents[2]
+ROLLBACK_FLAG = "fork_db_rollback"
 
 
 class RollbackError(RuntimeError):
@@ -91,7 +92,11 @@ def rollback(
     while removals:
         step = _next_step(script, heads, target, removals)
         echo(f"alembic downgrade {step}")
-        command.downgrade(config, step)
+        config.attributes[ROLLBACK_FLAG] = True
+        try:
+            command.downgrade(config, step)
+        finally:
+            config.attributes.pop(ROLLBACK_FLAG, None)
         heads = current_heads(config)
         remaining = revisions_to_remove(script, heads, target)
         if not remaining < removals:

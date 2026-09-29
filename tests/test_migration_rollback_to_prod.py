@@ -6,10 +6,12 @@ from pathlib import Path
 
 import pytest
 from alembic.command import downgrade, upgrade
+from alembic.config import Config
 from alembic.script import ScriptDirectory
+from alembic.util import CommandError
 from sqlalchemy import create_engine, inspect, text
 
-from app.fork.db_rollback import RollbackError, current_heads, default_config, main, rollback
+from app.fork.db_rollback import ROLLBACK_FLAG, RollbackError, current_heads, default_config, main, rollback
 
 ROOT = Path(__file__).resolve().parents[1]
 PROD_REVISION = "e5a9c3f1b7d2"
@@ -18,6 +20,8 @@ PROD_GRAPH_SIZE = 181
 PROD_GRAPH_FINGERPRINT = "d79312d7f29e86ea99c3c6f540ad366673bbe6c109d4c576c2e3e7551b63e040"
 PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
 RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks"}
+RELEASE_HEAD = "8158387867c9"
+GUARDED_MERGE = "fd33c6013baa"
 
 
 def _database(tmp_path, name="rollback.sqlite3"):
@@ -123,9 +127,62 @@ def test_rollback_leaves_exactly_the_prod_revision_with_the_prod_schema_and_data
     ]
 
 
-def test_rollback_repairs_a_database_the_plain_downgrade_left_with_two_heads(tmp_path):
+def _unguarded_plain_downgrade(config, target):
+    config.attributes[ROLLBACK_FLAG] = True
+    try:
+        downgrade(config, target)
+    finally:
+        config.attributes.pop(ROLLBACK_FLAG, None)
+
+
+def test_a_plain_downgrade_past_the_passkey_merge_is_refused_before_it_can_leave_two_heads(tmp_path):
     config, sync_url, (schema_before, rows_before) = _at_release_head(tmp_path)
-    downgrade(config, PROD_REVISION)
+
+    with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+        downgrade(config, PROD_REVISION)
+
+    assert _versions(sync_url) == [GUARDED_MERGE]
+    assert ROLLBACK_FLAG not in config.attributes
+    rollback(config, PROD_REVISION, echo=lambda _line: None)
+    assert _versions(sync_url) == [PROD_REVISION]
+    assert _schema(sync_url) == schema_before
+    assert _rows(sync_url) == rows_before
+
+
+def test_a_plain_downgrade_in_one_transaction_is_refused_and_changes_nothing(tmp_path):
+    _config, sync_url, _before = _at_release_head(tmp_path)
+    schema_at_head = _schema(sync_url)
+    single = Config("alembic.ini")
+    single.set_main_option("sqlalchemy.url", sync_url)
+
+    with (
+        pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"),
+        create_engine(sync_url).begin() as connection,
+    ):
+        single.attributes["connection"] = connection
+        downgrade(single, PROD_REVISION)
+
+    assert _versions(sync_url) == [RELEASE_HEAD]
+    assert _schema(sync_url) == schema_at_head
+
+
+def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
+    config, sync_url, _before = _at_release_head(tmp_path)
+    downgrade(config, "0374ac83604b")
+    assert _versions(sync_url) == ["0374ac83604b", GUARDED_MERGE]
+
+    for target in ("9a5c2e7f1b4d", "48a6bcb8bba1", "base"):
+        with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+            downgrade(config, target)
+        assert GUARDED_MERGE in _versions(sync_url)
+    with pytest.raises(CommandError, match="Ambiguous walk"):
+        downgrade(config, "b4c7e8f1a2d3@-1")
+    assert GUARDED_MERGE in _versions(sync_url)
+
+
+def test_rollback_repairs_a_database_an_older_release_left_with_two_heads(tmp_path):
+    config, sync_url, (schema_before, rows_before) = _at_release_head(tmp_path)
+    _unguarded_plain_downgrade(config, PROD_REVISION)
     assert _versions(sync_url) == ["b4c7e8f1a2d3", PROD_REVISION]
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
@@ -207,7 +264,7 @@ def _prod_alembic(tree, url, *arguments):
     )
 
 
-def test_the_prod_image_starts_on_the_rolled_back_database_and_not_on_the_plain_downgrade(tmp_path):
+def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain_downgrade(tmp_path):
     tree = _prod_tree(tmp_path)
     assert "python -m alembic upgrade head" in (tree / "start.sh").read_text()
     prod_script = ScriptDirectory(str(tree / "app" / "db" / "migrations"))
@@ -215,10 +272,19 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_on_the_plain_
     assert _prod_graph_fingerprint(prod_script, PROD_REVISION) == (PROD_GRAPH_SIZE, PROD_GRAPH_FINGERPRINT)
 
     config, sync_url, _before = _at_release_head(tmp_path)
-    downgrade(config, PROD_REVISION)
-    refused = _prod_alembic(tree, config.get_main_option("sqlalchemy.url"), "upgrade", "head")
+    url = config.get_main_option("sqlalchemy.url")
+    _unguarded_plain_downgrade(config, PROD_REVISION)
+    refused = _prod_alembic(tree, url, "upgrade", "head")
     assert refused.returncode != 0
     assert "Can't locate revision identified by 'b4c7e8f1a2d3'" in refused.stdout + refused.stderr
+
+    rollback(config, PROD_REVISION, echo=lambda _line: None)
+    upgrade(config, "heads")
+    with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+        downgrade(config, PROD_REVISION)
+    refused = _prod_alembic(tree, url, "upgrade", "head")
+    assert refused.returncode != 0
+    assert f"Can't locate revision identified by '{GUARDED_MERGE}'" in refused.stdout + refused.stderr
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
     started = _prod_alembic(tree, config.get_main_option("sqlalchemy.url"), "upgrade", "head")
