@@ -19,7 +19,7 @@ from app.fork.jobs import connection_limiter
 from app.fork.models.connection import ConnectionRestriction
 from app.models.settings import ConnectionLimit
 from app.models.user import BulkUsersSelection, UserModify
-from app.node import node_manager, sync as node_sync
+from app.node import bridge as node_bridge, node_manager, sync as node_sync
 from app.node.bridge import QueuedGrpcNode
 from app.operation import OperatorType
 from app.operation.user import UserOperation
@@ -116,6 +116,7 @@ async def test_an_older_single_push_dispatched_late_never_overrides_a_newer_bulk
         monkeypatch.setattr(notification, name, AsyncMock())
     monkeypatch.setattr(node_sync, "GetDB", TestGetDB)
     monkeypatch.setattr(connection_limiter, "GetDB", TestGetDB)
+    monkeypatch.setattr(node_bridge, "_refresh_handler", node_sync.refresh_node_users)
     real_single = node_sync._dispatch_user_update
     operator = UserOperation(OperatorType.API)
     failures = []
