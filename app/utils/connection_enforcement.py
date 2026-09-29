@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.models import ConnectionRestriction, User, UserStatus
+from app.fork.proxy_secrets.locks import read_committed_rows
 from app.models.settings import ConnectionLimit
 from app.utils.logger import get_logger
 
@@ -37,6 +38,7 @@ logger = get_logger("connection-enforcement")
 
 # A step of 0 is a warning and touches nothing; -1 disables until a person
 # lifts it. Anything else is a disable of that many minutes.
+RELEASE_LOCK_BATCH_SIZE = 500
 WARNING_ONLY = 0
 UNTIL_LIFTED = -1
 
@@ -128,6 +130,18 @@ async def restrict(
     return restriction
 
 
+async def _lock_user_rows(db: AsyncSession, user_ids: list[int]) -> list[int]:
+    locked: list[int] = []
+    for start in range(0, len(user_ids), RELEASE_LOCK_BATCH_SIZE):
+        chunk = user_ids[start : start + RELEASE_LOCK_BATCH_SIZE]
+        locked.extend(
+            (await db.execute(select(User.id).where(User.id.in_(chunk)).order_by(User.id).with_for_update()))
+            .scalars()
+            .all()
+        )
+    return locked
+
+
 async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tuple[ConnectionRestriction, User]]:
     """Restrictions whose time is up - or all of them, when enforcement is off.
 
@@ -140,15 +154,27 @@ async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tu
             ConnectionRestriction.restore_at.is_not(None),
             ConnectionRestriction.restore_at <= datetime.now(UTC),
         ]
-    locked = (
-        await db.execute(
-            select(ConnectionRestriction.id)
-            .join(User, User.id == ConnectionRestriction.user_id)
-            .where(*due)
-            .order_by(User.id, ConnectionRestriction.id)
-            .with_for_update()
+    candidates = sorted(
+        {user_id for (user_id,) in await read_committed_rows(db, select(ConnectionRestriction.user_id).where(*due))}
+    )
+    locked_users = await _lock_user_rows(db, candidates)
+    if not locked_users:
+        return []
+    locked: list[int] = []
+    for start in range(0, len(locked_users), RELEASE_LOCK_BATCH_SIZE):
+        chunk = locked_users[start : start + RELEASE_LOCK_BATCH_SIZE]
+        locked.extend(
+            (
+                await db.execute(
+                    select(ConnectionRestriction.id)
+                    .where(ConnectionRestriction.user_id.in_(chunk), *due)
+                    .order_by(ConnectionRestriction.user_id, ConnectionRestriction.id)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
         )
-    ).scalars().all()
     if not locked:
         return []
     stmt = (

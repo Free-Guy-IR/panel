@@ -19,7 +19,12 @@ from app.models.user import UserStatusToggle
 from app.operation import OperatorType, admin as admin_operation, user as user_operation
 from app.operation.admin import AdminOperation
 from app.operation.user import UserOperation
-from tests.test_recorder_harness import CountingNode, recorder_db_fixture, seed_users_and_nodes  # noqa: F401
+from tests.test_recorder_harness import (  # noqa: F401
+    CountingNode,
+    _database_url,
+    recorder_db_fixture,
+    seed_users_and_nodes,
+)
 
 OWNER = AdminDetails(id=None, username="owner", role=AdminRoleData(id=1, name="owner", is_owner=True))
 BOUND = 30
@@ -159,19 +164,46 @@ async def test_an_admin_wide_disable_inside_a_single_user_enable_is_overridden_b
     monkeypatch: pytest.MonkeyPatch, recorder_db, pushes
 ):
     admin_id, (user_id,), _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
-    real_close = user_operation.close_active_restriction
+    real_lock = user_operation.lock_user_rows
 
-    async def admin_disables_every_user_then_close(db, closed_id, reason):
+    async def admin_disables_every_user_then_lock(db, user_ids):
         await _admin_wide(recorder_db, admin_id, "_disable_all_active_users_for_admin")
         assert await _status(recorder_db, user_id) == UserStatus.disabled
-        return await real_close(db, closed_id, reason)
+        return await real_lock(db, user_ids)
 
-    monkeypatch.setattr(user_operation, "close_active_restriction", admin_disables_every_user_then_close)
+    monkeypatch.setattr(user_operation, "lock_user_rows", admin_disables_every_user_then_lock)
 
     await _single_user_toggle(recorder_db, user_id, disabled=False)
 
     assert await _status(recorder_db, user_id) == UserStatus.active
     assert _last_push(pushes, user_id) == UserStatus.active, pushes
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(_database_url().startswith("sqlite"), reason="needs a server database with row locks")
+async def test_an_admin_wide_disable_arriving_while_a_single_user_enable_holds_the_row_pushes_the_state_committed_last(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes
+):
+    admin_id, (user_id,), _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
+    await _set(recorder_db, user_id, status=UserStatus.disabled)
+    real_close = user_operation.close_active_restriction
+    admin_wide: list[asyncio.Task] = []
+
+    async def admin_disables_every_user_meanwhile(db, closed_id, reason):
+        admin_wide.append(
+            asyncio.create_task(_admin_wide(recorder_db, admin_id, "_disable_all_active_users_for_admin"))
+        )
+        await asyncio.sleep(1.5)
+        return await real_close(db, closed_id, reason)
+
+    monkeypatch.setattr(user_operation, "close_active_restriction", admin_disables_every_user_meanwhile)
+
+    await _single_user_toggle(recorder_db, user_id, disabled=False)
+    await asyncio.wait_for(admin_wide[0], BOUND)
+
+    final = await _status(recorder_db, user_id)
+    assert final in (UserStatus.active, UserStatus.disabled), final
+    assert _last_push(pushes, user_id) == final, pushes
 
 
 def _one_node_billing(monkeypatch: pytest.MonkeyPatch, node_id: int, user_id: int, value: int) -> CountingNode:
