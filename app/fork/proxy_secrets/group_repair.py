@@ -112,7 +112,7 @@ async def _driver_scalar(driver_connection, sql: str, args=None):
     return row[0] if row else None
 
 
-async def _restore_lock_wait(connection, driver_connection, previous) -> None:
+async def _restore_lock_wait(connection, driver_connection, previous) -> Exception | None:
     with anyio.CancelScope(shield=True):
         try:
             await _driver_scalar(driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (previous,))
@@ -122,7 +122,10 @@ async def _restore_lock_wait(connection, driver_connection, previous) -> None:
                 f"{describe_failure(exc)}"
             )
             await connection.invalidate()
-            raise
+            if not isinstance(exc, Exception):
+                raise
+            return exc
+    return None
 
 
 @asynccontextmanager
@@ -138,8 +141,12 @@ async def _bounded_lock_wait(db: AsyncSession) -> AsyncIterator[None]:
             driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (IN_REQUEST_LOCK_WAIT_SECONDS,)
         )
         yield
-    finally:
+    except BaseException:
         await _restore_lock_wait(connection, driver_connection, previous)
+        raise
+    failure = await _restore_lock_wait(connection, driver_connection, previous)
+    if failure is not None:
+        raise failure
 
 
 async def _attempt_twice(db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]) -> None:

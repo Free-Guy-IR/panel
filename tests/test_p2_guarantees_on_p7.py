@@ -477,6 +477,101 @@ async def test_a_request_cancelled_during_the_bounded_wait_still_restores_the_co
     assert after == before
 
 
+class _DriverClosedOnCancel(Exception):
+    pass
+
+
+class _Cursor:
+    def __init__(self, driver):
+        self.driver = driver
+        self.row = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+    async def execute(self, sql, args=None):
+        if self.driver.closed:
+            raise _DriverClosedOnCancel(0, "Cancelled during execution")
+        self.driver.statements.append((sql, args))
+        self.row = (self.driver.lock_wait,)
+        if args:
+            self.driver.lock_wait = args[0]
+
+    async def fetchone(self):
+        return self.row
+
+
+class _Driver:
+    def __init__(self):
+        self.closed = False
+        self.lock_wait = 50
+        self.statements = []
+
+    def cursor(self):
+        return _Cursor(self)
+
+
+class _Connection:
+    def __init__(self, driver):
+        self.driver = driver
+        self.invalidated = False
+
+    async def get_raw_connection(self):
+        return SimpleNamespace(driver_connection=self.driver)
+
+    async def invalidate(self):
+        self.invalidated = True
+
+
+class _Session:
+    def __init__(self):
+        self.driver = _Driver()
+        self.held = _Connection(self.driver)
+
+    def get_bind(self):
+        return SimpleNamespace(dialect=SimpleNamespace(name="mysql"))
+
+    async def connection(self):
+        return self.held
+
+
+@pytest.mark.parametrize(
+    "failure", [asyncio.CancelledError, HTTPException, None], ids=["cancelled", "request-error", "no-error"]
+)
+@pytest.mark.asyncio
+async def test_a_driver_that_closed_on_cancel_never_hides_the_requests_own_outcome(failure):
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session()
+    expected = failure or _DriverClosedOnCancel
+    with pytest.raises(expected):
+        async with group_repair._bounded_lock_wait(db):
+            assert db.driver.lock_wait == group_repair.IN_REQUEST_LOCK_WAIT_SECONDS
+            db.driver.closed = True
+            if failure is HTTPException:
+                raise HTTPException(status_code=503)
+            if failure is not None:
+                raise failure
+
+    assert db.held.invalidated
+
+
+@pytest.mark.asyncio
+async def test_a_bounded_wait_on_a_healthy_connection_restores_the_previous_lock_wait():
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session()
+    with pytest.raises(asyncio.CancelledError):
+        async with group_repair._bounded_lock_wait(db):
+            raise asyncio.CancelledError
+
+    assert db.driver.lock_wait == 50
+    assert not db.held.invalidated
+
+
 @pytest.mark.asyncio
 async def test_a_user_edit_without_the_openvpn_password_keeps_the_stored_one(sessions, monkeypatch, repair):
     seed = await _seed(sessions)
