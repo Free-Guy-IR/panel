@@ -57,6 +57,7 @@ def exec_words(value):
             index += 1
         if index >= len(value):
             break
+        is_executable = not words
         word = []
         quote = None
         while index < len(value):
@@ -71,7 +72,7 @@ def exec_words(value):
                 index += 1
                 assert value[index] in SIMPLE_ESCAPES, f"unsupported escape in {value!r}"
                 word.append(SIMPLE_ESCAPES[value[index]])
-            elif char == "$":
+            elif char == "$" and not is_executable:
                 assert value[index + 1 : index + 2] == "$", f"variable expansion in {value!r}"
                 word.append("$")
                 index += 1
@@ -79,7 +80,10 @@ def exec_words(value):
                 word.append(char)
             index += 1
         assert quote is None, f"unterminated quote in {value!r}"
-        words.append("".join(word))
+        word = "".join(word)
+        if is_executable:
+            assert not any(char in word for char in "\"'\\"), f"systemd refuses the executable name {word!r}"
+        words.append(word)
     return words
 
 
@@ -110,10 +114,13 @@ def run_installer(tmp_path, directory_name):
     return result, unit_file, install_dir.resolve()
 
 
-SAFE_NAMES = ["plain", "pasar guard", "pasar%hguard", "pasar${HOME}guard", "pa\"sar", "pa'sar", "pa\\nsar", "a;b", "-dash"]
+SAFE_NAMES = ["plain", "pasar guard", "pasar%hguard", "pasar${HOME}guard", "pasar$$guard", "a;b", "-dash"]
 UNSAFE_NAMES = [
     "panel\nExecStartPre=/bin/touch /tmp/pwned",
     "trailing-backslash\\",
+    "pa\"sar",
+    "pa'sar",
+    "pa\\nsar",
     "tab\tinside",
     "edge space ",
     "carriage\rreturn",

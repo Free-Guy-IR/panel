@@ -12,17 +12,15 @@ resolved_dir="$(pwd -P && printf x)" || {
 INSTALL_DIR=${resolved_dir%$'\n'x}
 
 case $INSTALL_DIR in
-  *[[:cntrl:]]* | [[:space:]]* | *[[:space:]] | *\\)
-    echo "Refusing to install from this directory: systemd would read a control character, leading or trailing whitespace, or a trailing backslash in its path differently." >&2
+  *[[:cntrl:]]* | [[:space:]]* | *[[:space:]] | *[\"\'\\]*)
+    echo "Refusing to install from this directory: systemd refuses an executable path with a quote, a backslash or a control character, and trims leading and trailing whitespace." >&2
     exit 1
     ;;
 esac
 
 UNIT_WORKING_DIRECTORY=${INSTALL_DIR//%/%%}
-UNIT_EXEC_DIR=${INSTALL_DIR//\\/\\\\}
-UNIT_EXEC_DIR=${UNIT_EXEC_DIR//\"/\\\"}
-UNIT_EXEC_DIR=${UNIT_EXEC_DIR//%/%%}
-UNIT_EXEC_DIR=${UNIT_EXEC_DIR//\$/\$\$}
+UNIT_EXECUTABLE_DIR=${INSTALL_DIR//%/%%}
+UNIT_ARGUMENT_DIR=${UNIT_EXECUTABLE_DIR//\$/\$\$}
 
 cat > "$SERVICE_FILE" <<EOF_UNIT
 [Unit]
@@ -31,7 +29,7 @@ Documentation=$SERVICE_DOCUMENTATION
 After=network.target nss-lookup.target
 
 [Service]
-ExecStart="$UNIT_EXEC_DIR/.venv/bin/python3" "$UNIT_EXEC_DIR/main.py"
+ExecStart="$UNIT_EXECUTABLE_DIR/.venv/bin/python3" "$UNIT_ARGUMENT_DIR/main.py"
 Restart=on-failure
 WorkingDirectory=$UNIT_WORKING_DIRECTORY
 
