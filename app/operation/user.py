@@ -761,6 +761,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         admin: AdminDetails,
         *,
         skip_role_limits: bool = False,
+        template: UserTemplate | None = None,
     ):
         modified_fields = modified_user.model_fields_set
         hwid_limit_was_changed = "hwid_limit" in modified_fields
@@ -881,6 +882,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         # peer IPs are pool-managed: whatever the client sent, keep the stored allocation
         proxy_settings_to_prepare.wireguard.peer_ips = list(current_proxy_settings.wireguard.peer_ips or [])
+        if template is not None:
+            proxy_settings_to_prepare = self.apply_settings(
+                UserModify.model_construct(proxy_settings=proxy_settings_to_prepare), template
+            ).proxy_settings
 
         prepared_proxy_settings = await self._prepare_user_proxy_settings(
             db,
@@ -1836,6 +1841,19 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         )
         return await self.create_user(db, new_user, admin, skip_role_limits=True)
 
+    async def _prepare_template_modify(
+        self, db: AsyncSession, db_user: User, user_template: UserTemplate, note: str | None, admin: AdminDetails
+    ) -> tuple[UserModify, list | None]:
+        try:
+            modify_user = UserModify(**self.load_base_user_args(user_template), note=note)
+        except ValidationError as e:
+            error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            await self.raise_error(message=error_messages, code=400)
+        validated_groups = await self._prepare_modified_user(
+            db, db_user, modify_user, admin, skip_role_limits=True, template=user_template
+        )
+        return modify_user, validated_groups
+
     async def _modify_user_with_template(
         self, db: AsyncSession, db_user: User, modified_template: ModifyUserByTemplate, admin: AdminDetails
     ) -> UserResponse:
@@ -1845,17 +1863,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         if user_template.is_disabled:
             await self.raise_error("this template is disabled", 403)
 
-        user_args = self.load_base_user_args(user_template)
-        user_args["proxy_settings"] = db_user.proxy_settings
-
-        try:
-            modify_user = UserModify(**user_args, note=modified_template.note)
-        except ValidationError as e:
-            error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
-            await self.raise_error(message=error_messages, code=400)
-
-        modify_user = self.apply_settings(modify_user, user_template)
-        validated_groups = await self._prepare_modified_user(db, db_user, modify_user, admin, skip_role_limits=True)
+        modify_user, validated_groups = await self._prepare_template_modify(
+            db, db_user, user_template, modified_template.note, admin
+        )
 
         if user_template.reset_usages:
             suppress_reset_status_change = (
@@ -1866,6 +1876,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 db_user,
                 admin,
                 emit_status_change_notification=not suppress_reset_status_change,
+            )
+            modify_user, validated_groups = await self._prepare_template_modify(
+                db, db_user, user_template, modified_template.note, admin
             )
 
         await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
@@ -1977,17 +1990,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         prepared_updates = []
         for db_user in db_users:
             original_status = db_user.status
-            user_args = self.load_base_user_args(user_template)
-            user_args["proxy_settings"] = db_user.proxy_settings
-
-            try:
-                modify_user = UserModify(**user_args, note=body.note)
-            except ValidationError as e:
-                error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
-                await self.raise_error(message=error_messages, code=400)
-
-            modify_user = self.apply_settings(modify_user, user_template)
-            validated_groups = await self._prepare_modified_user(db, db_user, modify_user, admin, skip_role_limits=True)
+            modify_user, validated_groups = await self._prepare_template_modify(
+                db, db_user, user_template, body.note, admin
+            )
             emit_reset_status_change = not (
                 user_template.status == UserStatus.on_hold and original_status != UserStatus.active
             )
