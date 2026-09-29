@@ -216,25 +216,7 @@ class NodeManager:
         return list(users_to_sync)
 
     async def _sync_users_to_node(self, node_id: int, node: PasarGuardNode, users: list[ProtoUser]):
-        # The bridge exposes the fence methods on local nodes too, but the
-        # process-local store cannot provide shared fencing/recovery. Keep the
-        # direct path unless the complete shared protocol is available.
-        if self._supports_shared_sync(node):
-            # Bulk updates use the same durable, fenced delivery as single
-            # updates only when the shared-store protocol is available.
-            await node.update_users(users)
-            return
-
-        batch_size = max(1, nats_settings.node_update_users_batch_size)
-        lock = self._user_sync_locks.setdefault(node_id, asyncio.Lock())
-        failed_count = 0
-
-        async with lock:
-            for batch in self._chunk_users(users, batch_size):
-                failed_count += len(await self._sync_user_batch_to_node(node, batch))
-
-        if failed_count:
-            raise RuntimeError(f"failed to sync {failed_count}/{len(users)} users to node {node_id}")
+        await node.update_users(users)
 
     @staticmethod
     def _supports_shared_sync(node: PasarGuardNode) -> bool:
