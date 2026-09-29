@@ -25,7 +25,6 @@ from app.db.crud.bulk import (
 )
 from app.db.crud.hwid import get_user_hwid_count
 from app.db.crud.user import (
-    build_revoked_proxy_settings,
     bulk_reset_user_data_usage,
     bulk_revoke_user_sub,
     bulk_set_owner,
@@ -456,6 +455,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         *,
         exclude_user_id: int | None = None,
         reserved_secrets=None,
+        unentitled_wireguard_from_locked_row: bool = False,
     ) -> ProxyTable:
         try:
             proxy_settings = await prepare_wireguard_keys(
@@ -470,6 +470,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
                 reserved=reserved_secrets,
+                unentitled_wireguard_from_locked_row=unentitled_wireguard_from_locked_row,
             )
         except ProxySecretUniquenessError as exc:
             await self.raise_error(message=str(exc), code=409, db=db)
@@ -479,16 +480,6 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             if not is_lock_unavailable(exc):
                 raise
             await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
-
-    async def _prepare_revoked_proxy_settings(self, db: AsyncSession, db_user: User) -> ProxyTable:
-        access = await self._lock_user_proxy_settings(db, db_user)
-
-        return await self._prepare_user_proxy_settings(
-            db,
-            access,
-            ProxyTable.model_validate(build_revoked_proxy_settings(db_user)),
-            exclude_user_id=db_user.id,
-        )
 
     async def _get_validated_template_with_access(
         self, db: AsyncSession, template_id: int, admin: AdminDetails
@@ -1130,8 +1121,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         return self._build_bulk_action_response(users)
 
     async def _revoke_user_sub(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
-        proxy_settings = await self._prepare_revoked_proxy_settings(db, db_user)
-        db_user = await revoke_user_sub(db=db, db_user=db_user, proxy_settings=proxy_settings.dict())
+        proxy_settings = (await self._prepare_revoked_users(db, [db_user]))[db_user.id]
+        db_user = await revoke_user_sub(db=db, db_user=db_user, proxy_settings=proxy_settings)
         user = await self.update_user(db_user)
 
         asyncio.create_task(notification.user_subscription_revoked(user, admin))
@@ -1162,10 +1153,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="revoke_sub"
         )
 
-        proxy_settings_by_user_id = {
-            db_user.id: (await self._prepare_revoked_proxy_settings(db, db_user)).dict()
-            for db_user in sorted(db_users, key=lambda user: user.id)
-        }
+        proxy_settings_by_user_id = await self._prepare_revoked_users(db, db_users)
         db_users = await bulk_revoke_user_sub(db, db_users, proxy_settings_by_user_id=proxy_settings_by_user_id)
         await sync_users(db_users)
 
