@@ -121,7 +121,12 @@ async def _restore_lock_wait(connection, driver_connection, previous) -> Excepti
                 f"could not restore {LOCK_WAIT_VARIABLE} on a pooled connection, discarding it: "
                 f"{describe_failure(exc)}"
             )
-            await connection.invalidate()
+            try:
+                await connection.invalidate()
+            except Exception as discard_failure:
+                logger.warning(
+                    f"could not discard the connection after that either: {describe_failure(discard_failure)}"
+                )
             if not isinstance(exc, Exception):
                 raise
             return exc

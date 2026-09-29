@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 from sqlalchemy import event, select, text
+from sqlalchemy.exc import ResourceClosedError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -477,6 +478,53 @@ async def test_a_request_cancelled_during_the_bounded_wait_still_restores_the_co
     assert after == before
 
 
+@pytest.mark.asyncio
+async def test_a_request_cancelled_while_reading_the_lock_wait_is_a_cancel_and_leaves_the_pool_usable(
+    engine, monkeypatch, repair
+):
+    from app.fork.proxy_secrets import group_repair
+
+    if engine.dialect.name not in MYSQL_FAMILY:
+        pytest.skip(reason="the bounded lock wait is a MySQL and MariaDB session variable")
+    single = create_async_engine(engine.url, pool_size=1, max_overflow=0)
+    victim_sessions = async_sessionmaker(single, class_=AsyncSession, autoflush=False, expire_on_commit=False)
+    holder_sessions = async_sessionmaker(engine, class_=AsyncSession, autoflush=False, expire_on_commit=False)
+    seed = await _seed(holder_sessions)
+    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    real_scalar = group_repair._driver_scalar
+    reading = asyncio.Event()
+
+    async def slow_first_read(driver_connection, sql, args=None):
+        if sql.startswith("SELECT @@SESSION.") and not reading.is_set():
+            reading.set()
+            return await real_scalar(driver_connection, f"SELECT SLEEP(30) + {sql.removeprefix('SELECT ')}", args)
+        return await real_scalar(driver_connection, sql, args)
+
+    monkeypatch.setattr(group_repair, "_driver_scalar", slow_first_read)
+    try:
+        async with single.connect() as connection:
+            before = await connection.scalar(text("SELECT @@SESSION.innodb_lock_wait_timeout"))
+
+        async def victim():
+            async with victim_sessions() as db:
+                await enable(db)
+
+        waiting = asyncio.create_task(victim())
+        await asyncio.wait_for(reading.wait(), timeout=30)
+        await asyncio.sleep(1)
+        waiting.cancel()
+        outcome = (await asyncio.gather(asyncio.wait_for(waiting, timeout=30), return_exceptions=True))[0]
+        async with single.connect() as connection:
+            after = await connection.scalar(text("SELECT @@SESSION.innodb_lock_wait_timeout"))
+            alive = await connection.scalar(text("SELECT 1"))
+    finally:
+        await single.dispose()
+
+    assert isinstance(outcome, asyncio.CancelledError), repr(outcome)
+    assert after == before
+    assert alive == 1
+
+
 class _DriverClosedOnCancel(Exception):
     pass
 
@@ -495,6 +543,10 @@ class _Cursor:
     async def execute(self, sql, args=None):
         if self.driver.closed:
             raise _DriverClosedOnCancel(0, "Cancelled during execution")
+        if self.driver.cancel_next:
+            self.driver.cancel_next = False
+            self.driver.closed = True
+            raise asyncio.CancelledError
         self.driver.statements.append((sql, args))
         self.row = (self.driver.lock_wait,)
         if args:
@@ -507,6 +559,7 @@ class _Cursor:
 class _Driver:
     def __init__(self):
         self.closed = False
+        self.cancel_next = False
         self.lock_wait = 50
         self.statements = []
 
@@ -518,11 +571,14 @@ class _Connection:
     def __init__(self, driver):
         self.driver = driver
         self.invalidated = False
+        self.closed_by_its_session = False
 
     async def get_raw_connection(self):
         return SimpleNamespace(driver_connection=self.driver)
 
     async def invalidate(self):
+        if self.closed_by_its_session:
+            raise ResourceClosedError("This Connection is closed")
         self.invalidated = True
 
 
@@ -557,6 +613,41 @@ async def test_a_driver_that_closed_on_cancel_never_hides_the_requests_own_outco
                 raise failure
 
     assert db.held.invalidated
+
+
+@pytest.mark.parametrize(
+    "failure", [asyncio.CancelledError, HTTPException, None], ids=["cancelled", "request-error", "no-error"]
+)
+@pytest.mark.asyncio
+async def test_a_connection_that_cannot_be_discarded_never_hides_the_requests_own_outcome(failure):
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session()
+    db.held.closed_by_its_session = True
+    expected = failure or _DriverClosedOnCancel
+    with pytest.raises(expected):
+        async with group_repair._bounded_lock_wait(db):
+            db.driver.closed = True
+            if failure is HTTPException:
+                raise HTTPException(status_code=503)
+            if failure is not None:
+                raise failure
+
+
+@pytest.mark.asyncio
+async def test_a_request_cancelled_while_reading_the_lock_wait_stays_a_cancel_and_sets_nothing():
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session()
+    db.driver.cancel_next = True
+    body_ran = False
+    with pytest.raises(asyncio.CancelledError):
+        async with group_repair._bounded_lock_wait(db):
+            body_ran = True
+
+    assert not body_ran
+    assert db.driver.statements == []
+    assert db.driver.lock_wait == 50
 
 
 @pytest.mark.asyncio
