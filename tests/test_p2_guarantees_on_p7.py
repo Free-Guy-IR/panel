@@ -117,17 +117,29 @@ async def repair(monkeypatch, sessions):
 
 def _switchable_lock(monkeypatch):
     from app.fork.proxy_secrets import entitled as entitled_module, group_repair
+    from app.operation.group import GroupOperation
 
-    switch = SimpleNamespace(failing=True)
+    switch = SimpleNamespace(failing=True, marking=False)
     for module in (entitled_module, group_repair):
         real_acquire = module.acquire_proxy_secrets_lock
 
         async def acquire(db, real_acquire=real_acquire):
-            if switch.failing:
+            if switch.failing and not switch.marking:
                 raise FAILURES["lock-row-missing"]
             return await real_acquire(db)
 
         monkeypatch.setattr(module, "acquire_proxy_secrets_lock", acquire)
+
+    real_mark = GroupOperation._mark_pending_resync
+
+    async def mark_holding_the_lock(self, db, mark, *args):
+        switch.marking = True
+        try:
+            return await real_mark(self, db, mark, *args)
+        finally:
+            switch.marking = False
+
+    monkeypatch.setattr(GroupOperation, "_mark_pending_resync", mark_holding_the_lock)
     return switch
 
 
