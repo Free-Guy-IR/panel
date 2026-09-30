@@ -60,7 +60,8 @@ The database goes back to exactly `e5a9c3f1b7d2`, the v5.34.24 head, through one
 1. Back up the database (mysqldump, pg_dump, or a copy of the SQLite file) and note the running v5.34.25 image tag.
 2. Stop the panel and every other container that writes to the database: `docker compose stop pasarguard`.
 3. Preview: `docker compose run --rm --no-deps --entrypoint python pasarguard -m app.fork.db_rollback --to e5a9c3f1b7d2 --dry-run`
-   It must print `revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, b176d23e434c, b4c7e8f1a2d3, e9a7edd9de06, f7c63e209a37, fd33c6013baa`.
+   It must print `revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e9a7edd9de06, f7c63e209a37, fd33c6013baa`.
+   The entry point reads the database URL from the image's environment. A URL passed with `--url` must use the async driver the panel itself uses (`sqlite+aiosqlite://`, `mysql+asyncmy://` or `postgresql+asyncpg://`); a sync URL such as `sqlite:///` fails before anything is changed.
 4. Roll back: `docker compose run --rm --no-deps --entrypoint python pasarguard -m app.fork.db_rollback --to e5a9c3f1b7d2`
    Expected steps, in this order: `alembic downgrade e5a9c3f1b7d2`, `alembic downgrade b4c7e8f1a2d3@-1`, `alembic downgrade 9a5c2e7f1b4d@-1`, then `done: the database is at e5a9c3f1b7d2`. Exit code 0 is success. Exit code 2 prints `rollback refused: ...`, and any other failure exits non-zero with a traceback. On either, the database stays at the last step printed. Rerun step 4 once the cause is fixed, or restore the backup from step 1.
 5. Check: `docker compose run --rm --no-deps --entrypoint python pasarguard -m alembic current` must print exactly one revision line: `e5a9c3f1b7d2 (branchpoint)` under the v5.34.25 image. Under the rollback image, the same line reads `e5a9c3f1b7d2 (head)`.
@@ -81,7 +82,7 @@ What the rollback discards, and what it keeps:
 - Discarded:
   - admin passkeys: `admin_passkeys` and `passkey_challenges` are dropped, and the built-in roles lose `admins.passkeys`;
   - pending user resync markers (`pending_user_resyncs`) and node stat acks (`node_stat_acks`). After the rollback image starts, check the nodes' user counts and resync any node that disagrees.
-- Kept: the content-filter tables and all their rows. The data fixes of v5.34.25 also stay, because their downgrades are no-ops: VLESS flows no core accepts stay cleared, WireGuard keepalive stays clamped to 65535, a negative `hwid_limit` stays 2147483647, and `auto_delete_in_days` stays capped at 36500. On PostgreSQL, the jsonb columns go back to json.
+- Kept: the content-filter tables and all their rows. The data fixes of v5.34.25 also stay, because their downgrades are no-ops: VLESS flows no core accepts stay cleared, WireGuard keepalive stays clamped to 65535, a negative `hwid_limit` stays 2147483647, `auto_delete_in_days` stays capped at 36500, and the seeded system Xray client template keeps its socks and http listeners on 127.0.0.1 (upstream #879's migration `bfd88026565b`, whose downgrade is a no-op upstream too). On PostgreSQL, the jsonb columns go back to json.
 - Links:
   - A v4 link keeps opening on the rollback image until the user's next revoke.
   - The rollback image mints v3 links again.
