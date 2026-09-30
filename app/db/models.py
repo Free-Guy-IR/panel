@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_object_session
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
+from sqlalchemy.orm import Mapped, MappedAsDataclass, mapped_column, query_expression, relationship
 from sqlalchemy.sql.expression import select, text
 
 from app.db.base import Base
@@ -73,7 +73,7 @@ class AdminStatus(str, Enum):
     limited = "limited"
 
 
-class IdMixin:
+class IdMixin(MappedAsDataclass):
     id: Mapped[int] = mapped_column(SqliteCompatibleBigInteger, primary_key=True, init=False, autoincrement=True)
 
 
