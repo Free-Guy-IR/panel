@@ -1,5 +1,7 @@
 import hashlib
+import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +24,7 @@ PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
 RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks"}
 RELEASE_HEAD = "8158387867c9"
 GUARDED_MERGE = "fd33c6013baa"
+LOOPBACK_REWRITE = "bfd88026565b"
 
 
 def _database(tmp_path, name="rollback.sqlite3"):
@@ -82,11 +85,35 @@ def _seed(sync_url):
         )
 
 
+def _loopback_rewrite():
+    path = next((ROOT / "app" / "db" / "migrations" / "versions").glob(f"{LOOPBACK_REWRITE}_*.py"))
+    spec = importlib.util.spec_from_file_location(f"migration_{LOOPBACK_REWRITE}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.bind_client_listeners_to_loopback
+
+
+def _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name):
+    copy = tmp_path / f"expected-{name}"
+    shutil.copyfile(sync_url.removeprefix("sqlite:///"), copy)
+    rewrite = _loopback_rewrite()
+    with create_engine(f"sqlite:///{copy}").begin() as connection:
+        templates = connection.execute(
+            text("SELECT id, content FROM client_templates WHERE template_type = 'xray_subscription' AND is_system = 1")
+        ).all()
+        for template_id, content in templates:
+            connection.execute(
+                text("UPDATE client_templates SET content = :content WHERE id = :id"),
+                {"content": rewrite(content), "id": template_id},
+            )
+    return _rows(f"sqlite:///{copy}")
+
+
 def _at_release_head(tmp_path, name="rollback.sqlite3"):
     config, sync_url = _database(tmp_path, name)
     upgrade(config, PROD_REVISION)
     _seed(sync_url)
-    before = (_schema(sync_url), _rows(sync_url))
+    before = (_schema(sync_url), _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name))
     upgrade(config, "heads")
     tables = set(inspect(create_engine(sync_url)).get_table_names())
     assert PASSKEY_TABLES | RELEASE_ONLY_TABLES <= tables
@@ -169,7 +196,7 @@ def test_a_plain_downgrade_in_one_transaction_is_refused_and_changes_nothing(tmp
 def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
     config, sync_url, _before = _at_release_head(tmp_path)
     downgrade(config, "0374ac83604b")
-    assert _versions(sync_url) == ["0374ac83604b", GUARDED_MERGE]
+    assert _versions(sync_url) == ["0374ac83604b", LOOPBACK_REWRITE]
 
     for target in ("9a5c2e7f1b4d", "48a6bcb8bba1", "base"):
         with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
@@ -227,7 +254,7 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert (
         "revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, "
-        "b176d23e434c, b4c7e8f1a2d3, e9a7edd9de06, f7c63e209a37, fd33c6013baa\n"
+        "b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e9a7edd9de06, f7c63e209a37, fd33c6013baa\n"
     ) in printed
 
 
@@ -290,3 +317,26 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
     started = _prod_alembic(tree, config.get_main_option("sqlalchemy.url"), "upgrade", "head")
     assert started.returncode == 0, started.stdout + started.stderr
     assert _versions(sync_url) == [PROD_REVISION]
+
+
+def test_the_only_data_a_rollback_keeps_from_the_release_is_the_loopback_rewrite_of_the_system_xray_template(
+    tmp_path,
+):
+    config, sync_url = _database(tmp_path)
+    upgrade(config, PROD_REVISION)
+    _seed(sync_url)
+    exact_prod_rows = _rows(sync_url)
+    expected = _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, "rollback.sqlite3")
+    upgrade(config, "heads")
+
+    rollback(config, PROD_REVISION, echo=lambda _line: None)
+
+    after = _rows(sync_url)
+    assert after == expected
+    changed = {table for table in after if after[table] != exact_prod_rows[table]}
+    assert changed == {"client_templates"}
+    with create_engine(sync_url).connect() as connection:
+        listeners = connection.execute(
+            text("SELECT content FROM client_templates WHERE template_type = 'xray_subscription' AND is_system = 1")
+        ).scalar_one()
+    assert '"0.0.0.0"' not in listeners.split('"inbounds"', 1)[1].split("]", 1)[0]
