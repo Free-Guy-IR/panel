@@ -136,5 +136,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DELETE FROM proxy_secret_claims")
     op.drop_index("ix_proxy_secret_claims_user_id", table_name="proxy_secret_claims")
     op.drop_table("proxy_secret_claims")
