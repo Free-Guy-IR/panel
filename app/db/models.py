@@ -229,6 +229,7 @@ class User(Base, CreatedAtUTCMixin):
         Index("idx_users_admin_online", "admin_id", "online_at"),
         Index("idx_users_admin_status", "admin_id", "status"),
         Index("idx_users_admin_created", "admin_id", "created_at"),
+        {"sqlite_autoincrement": True},
     )
     username: Mapped[str] = mapped_column(CaseSensitiveString(128), unique=True, index=True)
     node_usages: Mapped[list[NodeUserUsage]] = relationship(
@@ -687,6 +688,7 @@ class NodeStatus(str, Enum):
 
 class Node(Base, CreatedAtUTCMixin):
     __tablename__ = "nodes"
+    __table_args__ = ({"sqlite_autoincrement": True},)
     name: Mapped[str] = mapped_column(CaseSensitiveString(256), unique=True)
     address: Mapped[str] = mapped_column(String(256), unique=False, nullable=False)
     port: Mapped[int] = mapped_column(unique=False, nullable=False)
