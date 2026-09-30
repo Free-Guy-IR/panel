@@ -631,7 +631,9 @@ async def test_a_group_request_waits_at_most_twice_the_bounded_lock_wait_and_res
     assert 2 * bound - 1 <= waited <= 2 * bound + 6, waited
     assert set(connection_ids) == {after_id}
     assert after == before
-    assert repair.scheduled == [[seed.users["paused_member"]]]
+    assert repair.scheduled == []
+    async with holder_sessions() as db:
+        assert await db.scalar(select(Group.is_disabled).where(Group.id == seed.groups["paused"])) is True
 
 
 @pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
