@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 import warnings
@@ -32,7 +33,12 @@ def ignore_all_warnings():
 
 
 @pytest.fixture(autouse=True)
-def node_manager_lock_per_test_loop(monkeypatch):
-    module = sys.modules.get("app.node")
-    if module is not None:
-        monkeypatch.setattr(module.node_manager, "_lock", RWLock(fast=True))
+def loop_bound_node_state_per_test_loop(monkeypatch):
+    node = sys.modules.get("app.node")
+    if node is not None:
+        monkeypatch.setattr(node.node_manager, "_lock", RWLock(fast=True))
+    bridge_memory = sys.modules.get("app.node.nats_memory")
+    if bridge_memory is not None:
+        for name in ("_nc", "_user_sync_kv", "_lifecycle_kv", "_user_sync_store", "_lifecycle_coordinator"):
+            monkeypatch.setattr(bridge_memory, name, None)
+        monkeypatch.setattr(bridge_memory, "_init_lock", asyncio.Lock())
