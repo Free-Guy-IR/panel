@@ -149,9 +149,12 @@ async def test_a_failed_backend_restart_is_reported_and_not_added():
 
 
 @pytest.mark.asyncio
-async def test_a_healthy_node_is_force_started_instead_of_attached():
+async def test_a_healthy_node_is_force_started_instead_of_attached(monkeypatch):
     from PasarGuardNodeBridge.storage import LifecycleStatus
 
+    from app.operation import node as node_operation
+
+    monkeypatch.setattr(node_operation, "needs_shared_bridge_memory", lambda: False)
     calls = []
 
     class HealthyNode:

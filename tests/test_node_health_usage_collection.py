@@ -135,6 +135,7 @@ def side_effects(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(notification, "recovered_node", recovered_node)
     monkeypatch.setattr(node_checker.node_operator, "connect_single_node", connect_single_node)
     monkeypatch.setattr(node_checker, "after_healthy_node_check", after_healthy_node_check)
+    monkeypatch.setattr(node_checker, "needs_shared_bridge_memory", lambda: False)
     return seen
 
 
