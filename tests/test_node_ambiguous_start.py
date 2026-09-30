@@ -18,9 +18,10 @@ from app.operation.node import NodeOperation
 from app.operation.user import UserOperation
 from tests.api import GetTestDB, TestSession
 from tests.api.helpers import unique_name
-from tests.test_node_connect_stale_snapshot import SETTINGS, Harness, Remote, _bulk
+from tests.test_node_connect_stale_snapshot import SETTINGS, Harness, Remote, _bulk, eventually
 
 OWNER = SimpleNamespace(username="owner", is_owner=True, role=None, id=None)
+WINDOW_SECONDS = 4.0
 
 
 def quiet_side_effects(monkeypatch):
@@ -204,19 +205,23 @@ async def late_start_round(monkeypatch, round_number: int) -> str | None:
         remote.defer_start = False
         doomed = [h.user_id, *rng.sample(others, 1)]
         disabled = [user_id for user_id in others if user_id not in doomed][:1]
+        withdrawn: list[str] = []
 
         async def delete_later(user_id, delay):
             await asyncio.sleep(delay)
             async with writers:
                 await delete_user(user_id)
+            withdrawn.append(str(user_id))
 
         async def disable_later(user_id, delay):
             await asyncio.sleep(delay)
             async with writers, TestSession() as db:
                 await operator.modify_user_by_id(db, user_id, UserModify(status=UserStatus.disabled), OWNER)
+            withdrawn.append(str(user_id))
 
         async def late_start(delay):
             await asyncio.sleep(delay)
+            await eventually(lambda: not any(remote.carries(email) for email in list(withdrawn)), timeout=3.0)
             remote.apply_late_start()
 
         async def tick(delay):
@@ -226,11 +231,11 @@ async def late_start_round(monkeypatch, round_number: int) -> str | None:
 
         actions = [delete_later(user_id, rng.choice((0, 0.05, 0.15))) for user_id in doomed]
         actions += [disable_later(user_id, rng.choice((0, 0.05, 0.15))) for user_id in disabled]
-        actions.append(late_start(rng.choice((0.01, 0.1, 0.3))))
-        actions += [tick(rng.choice((0, 0.1, 0.2, 0.4))) for _ in range(3)]
+        actions.append(late_start(rng.choice((0.1, 0.2, 0.3))))
+        actions += [tick(rng.choice((0, 0.2, 0.6, 1.2))) for _ in range(3)]
         rng.shuffle(actions)
         await asyncio.gather(*actions)
-        await asyncio.sleep(0.7)
+        await asyncio.sleep(WINDOW_SECONDS)
         await health_tick(monkeypatch, db_node, pg_node)
         await asyncio.sleep(0.3)
         async with TestSession() as session:
@@ -245,9 +250,9 @@ async def late_start_round(monkeypatch, round_number: int) -> str | None:
 async def test_late_starts_racing_deletes_edits_and_health_ticks_converge_after_the_window(monkeypatch):
     quiet_side_effects(monkeypatch)
     extras = importlib.import_module("app.fork.operation.node_extras")
-    monkeypatch.setattr(extras, "ambiguous_start_window", lambda db_node: 0.6)
+    monkeypatch.setattr(extras, "ambiguous_start_window", lambda db_node: WINDOW_SECONDS)
     failures = []
-    for round_number in range(5):
+    for round_number in range(8):
         with monkeypatch.context() as round_patch:
             failure = await late_start_round(round_patch, round_number)
         if failure:
