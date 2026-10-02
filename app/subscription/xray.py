@@ -1,9 +1,10 @@
 import json
+from contextlib import suppress
 from random import choice
 
 from pydantic import BaseModel
 
-from app.models.host import prune_blank_values, to_xray_finalmask
+from app.models.host import FinalMask, prune_blank_values, to_xray_finalmask
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -684,6 +685,11 @@ class XrayConfiguration(BaseSubscription):
         if finalmask is not None:
             if isinstance(finalmask, BaseModel):
                 finalmask = finalmask.model_dump(exclude_none=True, by_alias=True, mode="json")
+            else:
+                with suppress(TypeError, ValueError):
+                    finalmask = FinalMask.model_validate(finalmask).model_dump(
+                        exclude_none=True, by_alias=True, mode="json"
+                    )
             finalmask = to_xray_finalmask(finalmask)
             # Blank optional fields must be dropped rather than emitted: Xray
             # reads a present-but-empty value as 0 and rejects the whole config.
