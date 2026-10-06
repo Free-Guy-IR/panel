@@ -76,6 +76,7 @@ from app.fork.operation.user_guards import (
 from app.fork.proxy_secrets import ProxySecretUniquenessError
 from app.fork.proxy_secrets.locks import (
     LOCK_UNAVAILABLE_DETAIL,
+    TEMPLATE_RESET_KEPT_DETAIL,
     NamedLockMissing,
     acquire_proxy_secrets_lock,
     is_lock_unavailable,
@@ -951,13 +952,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             old_status = db_user.status
             new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
-            if db_user.status != new_status:
+            changed = db_user.status != new_status
+            if changed:
                 db_user.status = new_status
                 db_user.last_status_change = dt.now(UTC)
-                await db.commit()
-                await load_user_attrs(db_user, load_admin_role=True)
-            elif closed:
-                await db.commit()
+            await db.commit()
+            if changed or closed:
                 await load_user_attrs(db_user, load_admin_role=True)
         except (DBAPIError, NamedLockMissing) as exc:
             await self._raise_if_lock_unavailable(db, exc)
@@ -1878,19 +1878,29 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         modify_user = self.apply_settings(modify_user, user_template)
         validated_groups = await self._prepare_modified_user(db, db_user, modify_user, admin, skip_role_limits=True)
 
-        if user_template.reset_usages:
-            suppress_reset_status_change = (
-                user_template.status == UserStatus.on_hold and original_status != UserStatus.active
-            )
-            await self._reset_user_data_usage(
-                db,
-                db_user,
-                admin,
-                emit_status_change_notification=not suppress_reset_status_change,
-            )
+        unavailable = LOCK_UNAVAILABLE_DETAIL
+        try:
+            if user_template.reset_usages:
+                suppress_reset_status_change = (
+                    user_template.status == UserStatus.on_hold and original_status != UserStatus.active
+                )
+                await self._reset_user_data_usage(
+                    db,
+                    db_user,
+                    admin,
+                    emit_status_change_notification=not suppress_reset_status_change,
+                )
+                unavailable = TEMPLATE_RESET_KEPT_DETAIL
+                await acquire_proxy_secrets_lock(db)
+                await lock_user_rows(db, [db_user.id])
+                validated_groups = await self._prepare_modified_user(
+                    db, db_user, modify_user, admin, skip_role_limits=True
+                )
 
-        await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
-        return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
+            await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
+            return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc, unavailable)
 
     async def modify_user_with_template(
         self, db: AsyncSession, username: str, modified_template: ModifyUserByTemplate, admin: AdminDetails
@@ -1996,7 +2006,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self.raise_error("this template is disabled", 403)
 
         prepared_updates = []
-        for db_user in db_users:
+        for db_user in sorted(db_users, key=lambda user: user.id):
             original_status = db_user.status
             user_args = self.load_base_user_args(user_template)
             user_args["proxy_settings"] = db_user.proxy_settings
@@ -2038,6 +2048,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
             await close_active_restrictions(db, modified_user_ids, ADMIN_STATUS_DECISION)
             await db.commit()
+        except (DBAPIError, NamedLockMissing) as exc:
+            await db.rollback()
+            await self._raise_if_lock_unavailable(db, exc)
         except Exception:
             await db.rollback()
             raise

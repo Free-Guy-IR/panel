@@ -138,10 +138,12 @@ async def prepare_fork_proxy_settings(
 
 
 class UserExtrasMixin:
-    async def _raise_if_lock_unavailable(self, db: AsyncSession, exc: Exception) -> None:
+    async def _raise_if_lock_unavailable(
+        self, db: AsyncSession, exc: Exception, detail: str = LOCK_UNAVAILABLE_DETAIL
+    ) -> None:
         if not is_lock_unavailable(exc):
             raise exc
-        await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+        await self.raise_error(message=detail, code=503, db=db)
 
     async def _lock_user_proxy_settings(
         self, db: AsyncSession, db_user: User, groups: Sequence[Group] | None = None

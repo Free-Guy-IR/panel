@@ -8,14 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.db.models import Admin, Base, ConnectionRestriction, Group, User, UserStatus
 from app.fork.jobs import connection_limiter
+from app.fork.operation.admin_scope import close_visible_restrictions
+from app.models.admin import AdminDetails, AdminRoleData
 from app.models.proxy import ProxyTable
 from app.models.settings import ConnectionLimit
 from app.utils.connection_enforcement import (
     close_active_restriction,
-    close_active_restrictions_for_admin,
     restrict,
 )
 
+OWNER = AdminDetails(id=None, username="owner", role=AdminRoleData(id=1, name="owner", is_owner=True))
 ENFORCING = ConnectionLimit(enforcement_enabled=True, monitor_only=False, persistence_cycles=1, punishment_steps=[30])
 
 
@@ -186,7 +188,7 @@ async def test_closing_for_an_admin_closes_only_the_restrictions_of_that_admins_
     await _restrict_now(session_factory, second_user)
 
     async with session_factory() as db:
-        closed = await close_active_restrictions_for_admin(db, first_admin, "the admin disabled every user")
+        closed = await close_visible_restrictions(db, first_admin, OWNER, "the admin disabled every user")
         await db.commit()
 
     assert closed == 1

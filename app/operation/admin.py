@@ -2,7 +2,7 @@ import asyncio
 import warnings
 from datetime import datetime as dt
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app import notification
 from app.db import AsyncSession
@@ -23,7 +23,12 @@ from app.db.crud.bulk import activate_all_disabled_users, disable_all_active_use
 from app.db.crud.user import get_users, remove_users
 from app.db.models import Admin, AdminStatus, User
 from app.fork.crud.admin_limits import lock_admin_row, lock_admin_status
-from app.fork.operation.admin_scope import admin_details_for, close_visible_restrictions, visible_users_query
+from app.fork.operation.admin_scope import (
+    admin_details_for,
+    answer_503_if_lock_unavailable,
+    close_visible_restrictions,
+    visible_users_query,
+)
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
@@ -233,8 +238,11 @@ class AdminOperation(BaseOperation):
 
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Disable all active users under a specific admin."""
-        await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
-        await disable_all_active_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+        try:
+            await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
+            await disable_all_active_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+        except DBAPIError as exc:
+            await answer_503_if_lock_unavailable(self, db, exc)
         await sync_users(await self._visible_users_of(db, db_admin, admin))
         logger.info(f'Admin "{db_admin.username}" users has been disabled by admin "{admin.username}"')
 
@@ -255,8 +263,11 @@ class AdminOperation(BaseOperation):
 
     async def _activate_all_disabled_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Activate all disabled users under a specific admin."""
-        await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
-        await activate_all_disabled_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+        try:
+            await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
+            await activate_all_disabled_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+        except DBAPIError as exc:
+            await answer_503_if_lock_unavailable(self, db, exc)
         await sync_users(await self._visible_users_of(db, db_admin, admin))
         logger.info(f'Admin "{db_admin.username}" users has been activated by admin "{admin.username}"')
 

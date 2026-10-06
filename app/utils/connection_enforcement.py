@@ -218,15 +218,18 @@ def release(restriction: ConnectionRestriction, user: User) -> bool:
 
 async def close_active_restrictions(db: AsyncSession, user_ids: Iterable[int], reason: str) -> int:
     ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
-    if not ids:
-        return 0
-    result = await db.execute(
-        update(ConnectionRestriction)
-        .where(ConnectionRestriction.user_id.in_(ids), ConnectionRestriction.active.is_(True))
-        .values(active=False, restored_at=datetime.now(UTC))
-        .execution_options(synchronize_session=False)
-    )
-    closed = result.rowcount or 0
+    closed = 0
+    for start in range(0, len(ids), RELEASE_LOCK_BATCH_SIZE):
+        result = await db.execute(
+            update(ConnectionRestriction)
+            .where(
+                ConnectionRestriction.user_id.in_(ids[start : start + RELEASE_LOCK_BATCH_SIZE]),
+                ConnectionRestriction.active.is_(True),
+            )
+            .values(active=False, restored_at=datetime.now(UTC))
+            .execution_options(synchronize_session=False)
+        )
+        closed += result.rowcount or 0
     if closed:
         logger.info("closed %d device-limit restriction(s): %s", closed, reason)
     return closed
@@ -234,22 +237,6 @@ async def close_active_restrictions(db: AsyncSession, user_ids: Iterable[int], r
 
 async def close_active_restriction(db: AsyncSession, user_id: int, reason: str) -> bool:
     return await close_active_restrictions(db, [user_id], reason) > 0
-
-
-async def close_active_restrictions_for_admin(db: AsyncSession, admin_id: int | None, reason: str) -> int:
-    owned = select(User.id)
-    if admin_id is not None:
-        owned = owned.where(User.admin_id == admin_id)
-    result = await db.execute(
-        update(ConnectionRestriction)
-        .where(ConnectionRestriction.user_id.in_(owned), ConnectionRestriction.active.is_(True))
-        .values(active=False, restored_at=datetime.now(UTC))
-        .execution_options(synchronize_session=False)
-    )
-    closed = result.rowcount or 0
-    if closed:
-        logger.info("closed %d device-limit restriction(s): %s", closed, reason)
-    return closed
 
 
 async def forget_old(db: AsyncSession, retention_days: int) -> int:
