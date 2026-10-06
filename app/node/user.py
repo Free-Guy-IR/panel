@@ -15,6 +15,7 @@ from app.db.models import (
     inbounds_groups_association,
     users_groups_association,
 )
+from app.fork.node_credentials import omit_empty_credentials
 from app.models.protocol import ProxyProtocol
 from app.models.proxy import VLESS_NODE_FLOWS, L2TPSettings, XTLSFlows
 from app.utils.logger import get_logger
@@ -86,7 +87,7 @@ def _serialize_or_revoke(
         return _serialize_user_for_node(id, user_settings, inbounds, allowed_protocols, hwid_limit)
     except (TypeError, ValueError, AttributeError) as exc:
         logger.error(f"User {id} cannot be serialized for the nodes ({type(exc).__name__}); revoking it there instead")
-        return create_user(str(id), create_proxy(), [])
+        return create_user(str(id), omit_empty_credentials(create_proxy()), [])
 
 
 
@@ -160,7 +161,7 @@ def _serialize_user_for_node(
 
     return create_user(
         str(id),
-        create_proxy(**proxy_kwargs),
+        omit_empty_credentials(create_proxy(**proxy_kwargs)),
         inbounds,
     )
 

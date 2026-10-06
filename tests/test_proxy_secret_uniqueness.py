@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import Admin, Base, User
@@ -92,10 +92,12 @@ async def _admin(db):
 
 
 async def _add_user(db, admin, username, values=None):
-    user = User(username=username, proxy_settings=_stored(values), admin_id=admin.id)
+    user = User(username=username, proxy_settings=ProxyTable().dict(), admin_id=admin.id)
     db.add(user)
     await db.flush()
+    await db.execute(update(User.__table__).where(User.__table__.c.id == user.id).values(proxy_settings=_stored(values)))
     await db.commit()
+    await db.refresh(user)
     return user
 
 
@@ -221,14 +223,15 @@ async def test_repair_dry_run_changes_nothing(db, synced):
 @pytest.mark.asyncio
 async def test_repair_touches_only_the_requested_protocol(db, synced):
     admin = await _admin(db)
-    for name in ("bot-one", "bot-two"):
-        await _add_user(db, admin, name, {HY2: SHARED[HY2], HY1: SHARED[HY1]})
+    own_hysteria = {name: f"{name}-own-hysteria-auth" for name in ("bot-one", "bot-two")}
+    for name, auth in own_hysteria.items():
+        await _add_user(db, admin, name, {HY2: SHARED[HY2], HY1: auth})
 
     await _operation().bulk_repair_duplicate_proxy_secrets(db, BulkRepairProxySecrets(secret_fields={HY2}))
 
     rows = await _reload(db)
     assert len({_value(user, HY2) for user in rows.values()}) == 2
-    assert {_value(user, HY1) for user in rows.values()} == {SHARED[HY1]}
+    assert {name: _value(user, HY1) for name, user in rows.items()} == own_hysteria
 
 
 @pytest.mark.asyncio

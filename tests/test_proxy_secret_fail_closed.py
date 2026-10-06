@@ -141,7 +141,7 @@ async def test_without_a_shared_reservation_the_database_only_check_lets_both_th
 
 
 @pytest.mark.asyncio
-async def test_a_bulk_create_does_not_persist_two_users_with_the_same_guarded_secret(db, monkeypatch):
+async def test_a_bulk_create_that_submits_one_secret_for_two_users_is_refused_whole(db, monkeypatch):
     from app.operation import user as user_module
 
     admin = await _admin(db)
@@ -158,11 +158,43 @@ async def test_a_bulk_create_does_not_persist_two_users_with_the_same_guarded_se
         UserCreate(username="bulk-two", proxy_settings={"hysteria2": {"password": TAKEN}}),
     ]
 
+    with pytest.raises(HTTPException) as refused:
+        await _operation()._persist_bulk_users(
+            db,
+            SimpleNamespace(is_owner=True),
+            admin,
+            users,
+            [],
+            skip_per_user_limits=True,
+            sync=False,
+        )
+
+    assert refused.value.status_code == 409
+    assert "users" not in captured
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_create_regenerates_generated_secrets_that_collide_inside_the_batch(db, monkeypatch):
+    from app.operation import user as user_module
+
+    admin = await _admin(db)
+    captured = {}
+
+    async def fake_create_users_bulk(session, users_to_create, groups, db_admin, commit=True):
+        captured["users"] = list(users_to_create)
+        return []
+
+    monkeypatch.setattr(user_module, "create_users_bulk", fake_create_users_bulk)
+
+    first = UserCreate(username="bulk-one")
+    second = UserCreate(username="bulk-two")
+    second.proxy_settings.hysteria2.password = first.proxy_settings.hysteria2.password
+
     await _operation()._persist_bulk_users(
         db,
         SimpleNamespace(is_owner=True),
         admin,
-        users,
+        [first, second],
         [],
         skip_per_user_limits=True,
         sync=False,
@@ -175,7 +207,7 @@ async def test_a_bulk_create_does_not_persist_two_users_with_the_same_guarded_se
 
 
 @pytest.mark.asyncio
-async def test_a_bulk_create_still_guards_against_users_already_in_the_database(db, monkeypatch):
+async def test_a_bulk_create_refuses_a_submitted_secret_a_stored_user_holds(db, monkeypatch):
     from app.operation import user as user_module
 
     admin = await _admin(db)
@@ -190,16 +222,18 @@ async def test_a_bulk_create_still_guards_against_users_already_in_the_database(
 
     users = [UserCreate(username="bulk-one", proxy_settings={"hysteria2": {"password": TAKEN}})]
 
-    await _operation()._persist_bulk_users(
-        db,
-        SimpleNamespace(is_owner=True),
-        admin,
-        users,
-        [],
-        skip_per_user_limits=True,
-        sync=False,
-    )
+    with pytest.raises(HTTPException) as refused:
+        await _operation()._persist_bulk_users(
+            db,
+            SimpleNamespace(is_owner=True),
+            admin,
+            users,
+            [],
+            skip_per_user_limits=True,
+            sync=False,
+        )
 
+    assert refused.value.status_code == 409
     stored = (await db.execute(select(User.username))).scalars().all()
     assert stored == ["existing"]
-    assert captured["users"][0].proxy_settings.hysteria2.password != TAKEN
+    assert "users" not in captured

@@ -21,8 +21,8 @@ PROD_COMMIT = "d46a03b65e2afc126aa18ed11638ec143585f725"
 PROD_GRAPH_SIZE = 181
 PROD_GRAPH_FINGERPRINT = "d79312d7f29e86ea99c3c6f540ad366673bbe6c109d4c576c2e3e7551b63e040"
 PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
-RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks"}
-RELEASE_HEAD = "8158387867c9"
+RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks", "proxy_secret_claims"}
+RELEASE_HEAD = "e79833e2a0b2"
 GUARDED_MERGE = "fd33c6013baa"
 LOOPBACK_REWRITE = "bfd88026565b"
 
@@ -254,7 +254,7 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert (
         "revisions to remove: 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, "
-        "b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e9a7edd9de06, f7c63e209a37, fd33c6013baa\n"
+        "b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, fd33c6013baa\n"
     ) in printed
 
 

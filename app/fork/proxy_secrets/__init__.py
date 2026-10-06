@@ -1,3 +1,4 @@
+from app.fork.proxy_secrets.claims import ProxySecretClaimConflict, secret_digest
 from app.fork.proxy_secrets.fields import (
     SECRET_FIELD_SPECS,
     SPEC_BY_FIELD,
@@ -9,6 +10,7 @@ from app.fork.proxy_secrets.repair import duplicate_secret_values, get_users_wit
 from app.fork.proxy_secrets.schemas import BulkRepairProxySecrets
 from app.fork.proxy_secrets.uniqueness import (
     MAX_REGENERATION_ATTEMPTS,
+    ProxySecretConflictError,
     ProxySecretUniquenessError,
     ReservedSecrets,
     enforce_unique_proxy_secrets,
@@ -18,6 +20,7 @@ from app.fork.proxy_secrets.uniqueness import (
     reserved_secret_collisions,
     secret_column,
     secret_holder_counts,
+    supplied_secret_fields,
     write_secret,
     write_stored_secret,
 )
@@ -27,6 +30,8 @@ __all__ = [
     "SECRET_FIELD_SPECS",
     "SPEC_BY_FIELD",
     "BulkRepairProxySecrets",
+    "ProxySecretClaimConflict",
+    "ProxySecretConflictError",
     "ProxySecretField",
     "ProxySecretUniquenessError",
     "ReservedSecrets",
@@ -39,8 +44,10 @@ __all__ = [
     "reserve_secret_values",
     "reserved_secret_collisions",
     "secret_column",
+    "secret_digest",
     "secret_holder_counts",
     "specs_for",
+    "supplied_secret_fields",
     "write_secret",
     "write_stored_secret",
 ]

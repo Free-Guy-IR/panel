@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.db import AsyncSession
 from app.db.models import User
 from app.fork.proxy_secrets.fields import ProxySecretField, SecretFieldSpec
+from app.fork.proxy_secrets.locks import read_committed_rows
 from app.fork.proxy_secrets.uniqueness import secret_column
 
 
@@ -17,7 +18,7 @@ async def duplicate_secret_values(db: AsyncSession, spec: SecretFieldSpec) -> se
         .group_by(column)
         .having(func.count(User.id) > 1)
     )
-    return {row[0] for row in (await db.execute(stmt)).all() if row[0]}
+    return {row[0] for row in await read_committed_rows(db, stmt) if row[0]}
 
 
 async def get_users_with_duplicate_secrets(
@@ -35,9 +36,9 @@ async def get_users_with_duplicate_secrets(
     if not candidates:
         return []
 
-    stmt = (
-        select(User)
-        .where(and_(_create_final_filter(bulk_model, allowed_group_ids), or_(*candidates)))
-        .options(selectinload(User.groups))
-    )
+    matching = select(User.id).where(and_(_create_final_filter(bulk_model, allowed_group_ids), or_(*candidates)))
+    user_ids = sorted({row[0] for row in await read_committed_rows(db, matching)})
+    if not user_ids:
+        return []
+    stmt = select(User).where(User.id.in_(user_ids)).order_by(User.id).options(selectinload(User.groups))
     return list((await db.execute(stmt)).scalars().all())

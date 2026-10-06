@@ -439,7 +439,12 @@ def create_app() -> FastAPI:
 
     app.add_exception_handler(DBAPIError, database_operational_error_handler)
 
+    from app.fork.proxy_secrets import ProxySecretClaimConflict
     from app.operation.permissions import LimitExceeded, PermissionDenied
+
+    @app.exception_handler(ProxySecretClaimConflict)
+    async def proxy_secret_claim_conflict_handler(request: Request, exc: ProxySecretClaimConflict):
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
 
     @app.exception_handler(PermissionDenied)
     async def permission_denied_handler(request: Request, exc: PermissionDenied):

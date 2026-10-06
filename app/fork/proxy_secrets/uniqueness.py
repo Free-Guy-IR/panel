@@ -87,7 +87,25 @@ class ProxySecretUniquenessError(ValueError):
         )
 
 
+class ProxySecretConflictError(ProxySecretUniquenessError):
+    def __init__(self, fields) -> None:
+        self.fields = sorted(field.value for field in fields)
+        ValueError.__init__(
+            self,
+            f"proxy credential unavailable for {', '.join(self.fields)}; "
+            "choose a different value or omit it to get a generated one",
+        )
+
+
 ReservedSecrets = dict[ProxySecretField, set[str]]
+DIGEST_MARK = "sha256:"
+
+
+def _reservation_keys(field: ProxySecretField, value: str) -> tuple[str, ...]:
+    from app.fork.proxy_secrets.claims import secret_digest
+
+    digest = secret_digest(field, value)
+    return (value,) if digest is None else (value, DIGEST_MARK + digest)
 
 
 def reserved_secret_collisions(
@@ -96,7 +114,11 @@ def reserved_secret_collisions(
 ) -> set[ProxySecretField]:
     if not reserved:
         return set()
-    return {field for field, value in pending.items() if value in reserved.get(field, ())}
+    return {
+        field
+        for field, value in pending.items()
+        if any(key in reserved.get(field, ()) for key in _reservation_keys(field, value))
+    }
 
 
 def reserve_secret_values(proxy_settings: ProxyTable, reserved: ReservedSecrets | None, *, fields=None) -> None:
@@ -105,7 +127,35 @@ def reserve_secret_values(proxy_settings: ProxyTable, reserved: ReservedSecrets 
     for spec in specs_for(fields):
         value = read_secret(proxy_settings, spec)
         if value:
-            reserved.setdefault(spec.field, set()).add(value)
+            reserved.setdefault(spec.field, set()).update(_reservation_keys(spec.field, value))
+
+
+def supplied_secret_fields(proxy_settings) -> frozenset[ProxySecretField]:
+    if proxy_settings is None:
+        return frozenset()
+    supplied_sections = getattr(proxy_settings, "model_fields_set", set())
+    supplied = set()
+    for spec in specs_for(None):
+        if spec.protocol not in supplied_sections:
+            continue
+        section = getattr(proxy_settings, spec.protocol, None)
+        if section is not None and spec.attribute in getattr(section, "model_fields_set", set()):
+            supplied.add(spec.field)
+    return frozenset(supplied)
+
+
+async def colliding_secret_fields(
+    db: AsyncSession,
+    pending: dict[ProxySecretField, str],
+    *,
+    exclude_user_id: int | None = None,
+    reserved: ReservedSecrets | None = None,
+) -> set[ProxySecretField]:
+    from app.fork.proxy_secrets.claims import foreign_claims
+
+    stored_holders = await secret_holder_counts(db, pending, exclude_user_id=exclude_user_id)
+    claimed = await foreign_claims(db, pending, user_id=exclude_user_id)
+    return {*stored_holders, *claimed, *reserved_secret_collisions(pending, reserved)}
 
 
 async def enforce_unique_proxy_secrets(
@@ -115,6 +165,7 @@ async def enforce_unique_proxy_secrets(
     exclude_user_id: int | None = None,
     fields=None,
     reserved: ReservedSecrets | None = None,
+    explicit_fields: frozenset[ProxySecretField] = frozenset(),
 ) -> ProxyTable:
     await acquire_proxy_secrets_lock(db)
     pending: dict[ProxySecretField, str] = {}
@@ -124,28 +175,26 @@ async def enforce_unique_proxy_secrets(
             pending[spec.field] = value
 
     for regenerations_done in range(MAX_REGENERATION_ATTEMPTS + 1):
-        stored_holders = await secret_holder_counts(db, pending, exclude_user_id=exclude_user_id)
-        batch_holders = reserved_secret_collisions(pending, reserved)
-        if not stored_holders and not batch_holders:
+        colliding = await colliding_secret_fields(db, pending, exclude_user_id=exclude_user_id, reserved=reserved)
+        if not colliding:
             reserve_secret_values(proxy_settings, reserved, fields=fields)
             return proxy_settings
+
+        refused = colliding & explicit_fields
+        if refused:
+            logger.warning(
+                f"refusing submitted proxy secret(s) {sorted(field.value for field in refused)}: the value is held "
+                "or was used by another user"
+            )
+            raise ProxySecretConflictError(refused)
 
         if regenerations_done == MAX_REGENERATION_ATTEMPTS:
             break
 
         pending = {}
-        for field in dict.fromkeys((*stored_holders, *batch_holders)):
+        for field in sorted(colliding):
             spec = SPEC_BY_FIELD[field]
-            if field in stored_holders:
-                logger.warning(
-                    f"proxy secret {field.value} submitted for this user is already stored by "
-                    f"{stored_holders[field]} other user(s); replacing it with a freshly generated unique value"
-                )
-            else:
-                logger.warning(
-                    f"proxy secret {field.value} submitted for this user was already taken by an earlier user "
-                    "in the same request; replacing it with a freshly generated unique value"
-                )
+            logger.warning(f"generated proxy secret {field.value} collided with a held or used value; regenerating it")
             replacement = spec.generate()
             write_secret(proxy_settings, spec, replacement)
             pending[field] = str(replacement)

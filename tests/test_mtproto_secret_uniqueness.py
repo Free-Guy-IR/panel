@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import event, select
+from sqlalchemy import event, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.crud.user import create_user, get_user_by_id, modify_user
+from app.db.crud.user import create_user, get_user_by_id
 from app.db.models import Admin, AdminRole, Base, CoreConfig, Group, ProxyInbound, User
 from app.fork.proxy_secrets import SECRET_FIELD_SPECS, SPEC_BY_FIELD, BulkRepairProxySecrets
 from app.models.core import CoreType
@@ -122,17 +122,16 @@ async def test_a_supplied_mtproto_secret_held_by_another_user_is_replaced_on_cre
 
 
 @pytest.mark.asyncio
-async def test_a_supplied_mtproto_secret_held_by_another_user_is_replaced_on_modify(engine, db, warnings_seen):
+async def test_a_supplied_mtproto_secret_held_by_another_user_is_refused_on_modify(engine, db, warnings_seen):
     seed = await _seed(db)
     db_user = await get_user_by_id(db, seed.ids["other"], load_admin_role=True)
     modified = UserModify(proxy_settings={"mtproto": {"secret": HELD}})
 
-    await _operation()._prepare_modified_user(db, db_user, modified, OWNER, skip_role_limits=True)
-    await modify_user(db, db_user, modified)
+    with pytest.raises(HTTPException) as refused:
+        await _operation()._prepare_modified_user(db, db_user, modified, OWNER, skip_role_limits=True)
 
-    stored = await _stored_secret(engine, "other")
-    assert stored != HELD
-    assert HEX32.fullmatch(stored)
+    assert refused.value.status_code == 409
+    assert await _stored_secret(engine, "other") == "fedcba9876543210fedcba9876543210"
     assert await _stored_secret(engine, "holder") == HELD
     assert _collision_warnings(warnings_seen)
 
@@ -156,7 +155,11 @@ async def test_the_duplicate_repair_accepts_and_fixes_the_mtproto_secret(engine,
 
     seed = await _seed(db)
     other = await db.get(User, seed.ids["other"])
-    other.proxy_settings = {**other.proxy_settings, "mtproto": {"secret": HELD}}
+    await db.execute(
+        update(User.__table__)
+        .where(User.__table__.c.id == other.id)
+        .values(proxy_settings={**other.proxy_settings, "mtproto": {"secret": HELD}})
+    )
     await db.commit()
 
     async def no_sync(users):

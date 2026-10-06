@@ -1,6 +1,7 @@
 from app.fork.models.named_lock import NamedLock
 from app.fork.models.node_stat_ack import NodeStatAck
 from app.fork.models.pending_user_resync import PendingUserResync
+from app.fork.models.proxy_secret_claim import ProxySecretClaim
 
 __all__ = [
     "ConnectionRestriction",
@@ -11,6 +12,7 @@ __all__ = [
     "NodeInboundUsage",
     "NodeStatAck",
     "PendingUserResync",
+    "ProxySecretClaim",
     "TrafficLogIdentity",
     "TrafficLogRecord",
     "TrafficLogState",

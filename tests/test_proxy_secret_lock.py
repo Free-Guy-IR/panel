@@ -25,7 +25,9 @@ from app.db.models import (
     template_group_association,
     users_groups_association,
 )
+from app.fork.models.proxy_secret_claim import ProxySecretClaim
 from app.fork.proxy_secrets import SPEC_BY_FIELD, ProxySecretField, enforce_unique_proxy_secrets, secret_column
+from app.fork.proxy_secrets.claims import secret_digest
 from app.models.core import CoreType
 from app.models.proxy import ProxyTable
 from app.models.user import UserCreate
@@ -71,6 +73,11 @@ async def _purge(engine):
         await conn.execute(delete(CoreConfig.__table__).where(CoreConfig.name.like(f"{PREFIX}%")))
         await conn.execute(delete(Admin.__table__).where(Admin.username.like(f"{PREFIX}%")))
         await conn.execute(delete(AdminRole.__table__).where(AdminRole.name.like(f"{PREFIX}%")))
+        for field, value in ((ProxySecretField.trojan_password, TROJAN), (ProxySecretField.vless_id, VLESS_ID)):
+            claims = ProxySecretClaim.__table__
+            await conn.execute(
+                delete(claims).where(claims.c.kind == field.value, claims.c.digest == secret_digest(field, value))
+            )
 
 
 async def _seed_lock_row(engine):
