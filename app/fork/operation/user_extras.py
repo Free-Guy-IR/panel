@@ -5,12 +5,15 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import DBAPIError
 
 from app.db import AsyncSession
+from app.db.crud.user import build_revoked_proxy_settings
 from app.db.crud.wireguard import (
+    RECONCILE_USER_CHUNK,
     _accessible_tags_stmt,
     get_wg_cores,
     lock_users_proxy_settings,
     tags_from_groups,
     wg_core_tags,
+    with_stored_peer_ips,
 )
 from app.db.models import Group, ProxyInbound, User, inbounds_groups_association
 from app.fork.operation.entitled_secrets import issue_missing_entitled_secrets, load_users_for_sync
@@ -66,18 +69,37 @@ class CommittedAccess:
     is_disabled: bool = False
 
 
+def _access_from_tags(tags: set[str]) -> list[CommittedAccess]:
+    return [CommittedAccess(inbounds=tuple(CommittedInbound(tag) for tag in sorted(tags)))]
+
+
+async def committed_access_by_user(db: AsyncSession, user_ids: Sequence[int]) -> dict[int, list[CommittedAccess]]:
+    ordered = sorted(set(user_ids))
+    tags_by_user: dict[int, set[str]] = {user_id: set() for user_id in ordered}
+    for start in range(0, len(ordered), RECONCILE_USER_CHUNK):
+        statement = _accessible_tags_stmt(user_ids=ordered[start : start + RECONCILE_USER_CHUNK])
+        for user_id, tag in await read_committed_rows(db, statement):
+            tags_by_user[user_id].add(tag)
+    return {user_id: _access_from_tags(tags) for user_id, tags in tags_by_user.items()}
+
+
 async def committed_access(db: AsyncSession, user_id: int, groups: Sequence[Group] | None) -> list[CommittedAccess]:
     if groups is None:
-        statement = _accessible_tags_stmt(user_ids=[user_id])
-    else:
-        statement = (
-            select(inbounds_groups_association.c.group_id, ProxyInbound.tag)
-            .join(ProxyInbound, ProxyInbound.id == inbounds_groups_association.c.inbound_id)
-            .join(Group, and_(Group.id == inbounds_groups_association.c.group_id, Group.is_disabled.is_(False)))
-            .where(Group.id.in_([group.id for group in groups]))
-        )
-    tags = sorted({tag for _, tag in await read_committed_rows(db, statement)})
-    return [CommittedAccess(inbounds=tuple(CommittedInbound(tag) for tag in tags))]
+        return (await committed_access_by_user(db, [user_id]))[user_id]
+    statement = (
+        select(inbounds_groups_association.c.group_id, ProxyInbound.tag)
+        .join(ProxyInbound, ProxyInbound.id == inbounds_groups_association.c.inbound_id)
+        .join(Group, and_(Group.id == inbounds_groups_association.c.group_id, Group.is_disabled.is_(False)))
+        .where(Group.id.in_([group.id for group in groups]))
+    )
+    return _access_from_tags({tag for _, tag in await read_committed_rows(db, statement)})
+
+
+def settle_revoked_proxy_settings(prepared: ProxyTable, db_user: User) -> dict:
+    kept = build_revoked_proxy_settings(db_user)
+    prepared.shadowsocks.method = kept["shadowsocks"]["method"]
+    prepared.vless.flow = kept["vless"].get("flow")
+    return with_stored_peer_ips(prepared.dict(), db_user.proxy_settings)
 
 
 async def _wireguard_key_held_by_another_user(db: AsyncSession, public_key: str, user_id: int) -> bool:
@@ -126,12 +148,16 @@ async def prepare_fork_proxy_settings(
     exclude_user_id: int | None = None,
     reserved: ReservedSecrets | None = None,
     explicit_fields: frozenset = frozenset(),
+    keep_unentitled_wireguard: bool = True,
 ) -> ProxyTable:
     user_mod = _user_mod()
     prepare_openvpn = getattr(user_mod, "prepare_openvpn_password", prepare_openvpn_password)
     prepare_mtproto = getattr(user_mod, "prepare_mtproto_secret", prepare_mtproto_secret)
     prepare_l2tp = getattr(user_mod, "prepare_l2tp_password", prepare_l2tp_password)
-    proxy_settings = await drop_unentitled_wireguard_keys(db, proxy_settings, groups, exclude_user_id=exclude_user_id)
+    if keep_unentitled_wireguard:
+        proxy_settings = await drop_unentitled_wireguard_keys(
+            db, proxy_settings, groups, exclude_user_id=exclude_user_id
+        )
     proxy_settings = await prepare_openvpn(db, proxy_settings, groups)
     proxy_settings = await prepare_mtproto(db, proxy_settings, groups)
     proxy_settings = await prepare_l2tp(db, proxy_settings, groups)
@@ -155,6 +181,32 @@ class UserExtrasMixin:
             return await committed_access(db, db_user.id, groups)
         except (DBAPIError, NamedLockMissing) as exc:
             await self._raise_if_lock_unavailable(db, exc)
+
+    async def _prepare_revoked_users(self, db: AsyncSession, users: Sequence[User]) -> dict[int, dict]:
+        ordered = sorted(users, key=lambda user: user.id)
+        try:
+            await acquire_proxy_secrets_lock(db)
+            access_by_user = await committed_access_by_user(db, [user.id for user in ordered])
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
+        prepared = []
+        reserved: ReservedSecrets = {}
+        for user in ordered:
+            access = access_by_user[user.id]
+            settings = await self._prepare_user_proxy_settings(
+                db,
+                access,
+                ProxyTable.model_validate(build_revoked_proxy_settings(user)),
+                exclude_user_id=user.id,
+                reserved_secrets=reserved,
+                keep_unentitled_wireguard=False,
+            )
+            prepared.append((user, settings))
+        try:
+            await lock_users_proxy_settings(db, ordered)
+        except DBAPIError as exc:
+            await self._raise_if_lock_unavailable(db, exc)
+        return {user.id: settle_revoked_proxy_settings(settings, user) for user, settings in prepared}
 
     async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
         return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password, admin)

@@ -144,8 +144,8 @@ async def test_revoking_the_subscription_still_resets_every_entitled_secret(sess
 
     async with sessions() as db:
         db_user = await get_user_by_id(db, user_id, load_admin_role=True)
-        revoked = await _operation()._prepare_revoked_proxy_settings(db, db_user)
-        await revoke_user_sub(db, db_user, proxy_settings=revoked.dict())
+        revoked = (await _operation()._prepare_revoked_users(db, [db_user]))[db_user.id]
+        await revoke_user_sub(db, db_user, proxy_settings=revoked)
 
     stored = await _stored(sessions, user_id)
     for protocol, (attribute, value) in STORED.items():
@@ -164,8 +164,8 @@ async def test_revoking_the_subscription_keeps_the_vless_flow_and_rotates_the_vl
 
     async with sessions() as db:
         db_user = await get_user_by_id(db, user_id, load_admin_role=True)
-        revoked = await _operation()._prepare_revoked_proxy_settings(db, db_user)
-        await revoke_user_sub(db, db_user, proxy_settings=revoked.dict())
+        revoked = (await _operation()._prepare_revoked_users(db, [db_user]))[db_user.id]
+        await revoke_user_sub(db, db_user, proxy_settings=revoked)
 
     stored = await _stored(sessions, user_id)
     assert stored["vless"]["flow"] == flow

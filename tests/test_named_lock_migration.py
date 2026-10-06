@@ -62,14 +62,52 @@ def test_upgrade_creates_the_seeded_table_and_downgrade_drops_it(tmp_path):
         engine.dispose()
 
 
-@pytest.mark.skipif(not GITHUB_MODE, reason="needs-a-migrated-server-database")
+def _lock_rows(connection) -> list[tuple]:
+    return sorted(tuple(row) for row in connection.execute(text("SELECT name, acquired_at FROM named_locks")).all())
+
+
+def _run_the_migration_in_place_of_the_current_table(connection):
+    module = _migration_module()
+    existed = "named_locks" in inspect(connection).get_table_names()
+    held = _lock_rows(connection) if existed else []
+    with Operations.context(MigrationContext.configure(connection)):
+        if existed:
+            module.downgrade()
+        try:
+            module.upgrade()
+            seeded = _lock_rows(connection)
+            module.downgrade()
+            dropped = "named_locks" not in inspect(connection).get_table_names()
+        finally:
+            if existed:
+                if "named_locks" not in inspect(connection).get_table_names():
+                    module.upgrade()
+                connection.execute(text("DELETE FROM named_locks"))
+                for name, acquired_at in held:
+                    connection.execute(
+                        text("INSERT INTO named_locks (name, acquired_at) VALUES (:name, :acquired_at)"),
+                        {"name": name, "acquired_at": acquired_at},
+                    )
+    return seeded, dropped
+
+
+@pytest.mark.skipif(not GITHUB_MODE, reason="needs-a-server-database")
 @pytest.mark.asyncio
-async def test_the_migrated_database_holds_the_proxy_secrets_row():
+async def test_the_migration_seeds_the_proxy_secrets_row_on_the_configured_database():
     engine = create_async_engine(database_settings.url, poolclass=NullPool)
     try:
-        async with engine.connect() as connection:
-            names = (await connection.execute(text("SELECT name FROM named_locks"))).scalars().all()
+        async with engine.begin() as connection:
+            before = sorted(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
+            rows_before = await connection.run_sync(_lock_rows) if "named_locks" in before else []
+        async with engine.begin() as connection:
+            seeded, dropped = await connection.run_sync(_run_the_migration_in_place_of_the_current_table)
+        async with engine.begin() as connection:
+            after = sorted(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
+            rows_after = await connection.run_sync(_lock_rows) if "named_locks" in after else []
     finally:
         await engine.dispose()
 
-    assert "proxy_secrets" in names
+    assert seeded == [("proxy_secrets", None)]
+    assert dropped is True
+    assert after == before
+    assert rows_after == rows_before

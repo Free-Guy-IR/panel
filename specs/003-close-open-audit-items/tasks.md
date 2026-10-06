@@ -227,7 +227,8 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 - [X] T025 [US2] P2: create `app/fork/proxy_secrets/wireguard_scope.py` with `async def drop_unentitled_wireguard_keys(db, proxy_settings, groups, *, exclude_user_id=None) -> ProxyTable`.
   - When `user_has_wireguard_access(db, groups)` is false, it sets `proxy_settings.wireguard` to the stored value of `exclude_user_id`, or to the empty default on create.
   - Call it first in `prepare_fork_proxy_settings` (`app/fork/operation/user_extras.py:35-50`).
-  - Proof: T015.
+  - Revoke skips it (D-E1(b), 2026-09-30): `_prepare_revoked_users` passes `keep_unentitled_wireguard=False`, so a user without WireGuard access is revoked to no keys and an entitled user gets a fresh pair, as upstream.
+  - Proof: T015, plus `tests/test_revoke_peer_ips.py` and `tests/test_wireguard_client_keys_scope.py`.
 - [X] T026 [US2] P2: add `ProxySecretField.mtproto_secret = "mtproto.secret"` and its `SecretFieldSpec("mtproto", "secret", <token_hex(16) generator>)` in `app/fork/proxy_secrets/fields.py`.
   - Check that `app/fork/proxy_secrets/repair.py` and the `BulkRepairProxySecrets` schema accept the new field.
   - Keep format validation in `app/utils/mtproto.py`.

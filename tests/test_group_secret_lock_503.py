@@ -41,6 +41,8 @@ SUBNET = "10.77.0.0/24"
 OWNER = SimpleNamespace(username=f"{PREFIX}owner", is_owner=True)
 BALLAST_ROWS = 10
 DEADLOCK_SETUP_SECONDS = 0.3
+VICTIM_REACHES_THE_LOCK_SECONDS = 75.0
+VICTIM_FINISHES_SECONDS = 90.0
 REPAIR_HOLD_SECONDS = 1.0
 BOUNDED_LOCK_WAIT_SECONDS = 10
 
@@ -664,6 +666,24 @@ async def test_an_unrelated_database_error_in_a_group_change_is_not_turned_into_
     assert repair.scheduled == []
 
 
+async def _until_it_waits_for_the_lock(announced: asyncio.Event, victim: asyncio.Task) -> None:
+    announcement = asyncio.create_task(announced.wait())
+    try:
+        done, _ = await asyncio.wait(
+            {announcement, victim}, timeout=VICTIM_REACHES_THE_LOCK_SECONDS, return_when=asyncio.FIRST_COMPLETED
+        )
+    finally:
+        announcement.cancel()
+    if announcement in done:
+        return
+    if victim in done:
+        victim.result()
+        raise AssertionError("the group change finished without ever asking for the proxy secrets lock")
+    raise AssertionError(
+        f"the group change did not reach the proxy secrets lock within {VICTIM_REACHES_THE_LOCK_SECONDS:g}s"
+    )
+
+
 @pytest.mark.asyncio
 async def test_a_group_change_waiting_for_the_lock_holds_no_row_its_holder_needs_and_does_its_step_once(
     engine, sessions, monkeypatch, repair
@@ -696,13 +716,18 @@ async def test_a_group_change_waiting_for_the_lock_holds_no_row_its_holder_needs
         await acquire_named_lock(holder, PROXY_SECRETS_LOCK)
         await holder.execute(update(User).where(User.id.in_(seed.ballast)).values(note="ballast"))
         waiting = asyncio.create_task(victim())
-        await victim_waits_for_the_lock.wait()
-        await asyncio.sleep(DEADLOCK_SETUP_SECONDS)
-        await holder.execute(update(User).where(User.id == member).values(note="holder"))
-        await holder.commit()
+        try:
+            await _until_it_waits_for_the_lock(victim_waits_for_the_lock, waiting)
+            await asyncio.sleep(DEADLOCK_SETUP_SECONDS)
+            await holder.execute(update(User).where(User.id == member).values(note="holder"))
+            await holder.commit()
+        except BaseException:
+            await holder.rollback()
+            await asyncio.gather(asyncio.wait_for(waiting, VICTIM_FINISHES_SECONDS), return_exceptions=True)
+            raise
 
-    outcome = (await asyncio.gather(waiting, return_exceptions=True))[0]
-    assert not isinstance(outcome, BaseException)
+    outcome = (await asyncio.gather(asyncio.wait_for(waiting, VICTIM_FINISHES_SECONDS), return_exceptions=True))[0]
+    assert not isinstance(outcome, BaseException), outcome
     assert repair.scheduled == []
 
     state = await _phase_two_state(sessions, member)

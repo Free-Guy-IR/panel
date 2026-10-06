@@ -28,6 +28,10 @@ The operator delegated every decision to the spec author; each is resolved with 
 - Q: What does a writer get if it cannot take the secret lock in time? → A: The database's own lock-wait timeout applies; the write fails and nothing is stored; user create/modify/bulk-create and bulk-activation endpoints answer HTTP 503 (retryable), other callers keep their existing error mapping. Reason: failing closed is the only choice that can never store a duplicate; the wait is bounded by the database timeout.
 - Q: Where does the deleted-nodes series sit and what colour is it? → A: Stacked last (top of each bar, last pie slice) in the theme's muted neutral colour, with its own legend entry; it is omitted when its total is zero. Reason: it must be visible without being mistaken for a live node.
 
+### Session 2026-09-30
+
+- Q: E1 on a subscription revoke — does a user without WireGuard access keep its stored keypair? → A: No (owner decision D-E1(b)). A revoke behaves like upstream dev da871f475: a user without WireGuard access is left with no WireGuard keys (private and public key empty, peer IPs kept), and a WireGuard-entitled user gets a fresh unique keypair. Create, bulk create and modify keep the E1 answer above. Reason: a revoke is an explicit rotation request, so it must not keep a dormant pair that a sales bot planted on thousands of users; E1's reason for leaving stored keys alone (no mass rewrite of the existing sharers) does not apply to a user the operator chose to revoke.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Billing and quota enforcement are exact and prompt (Priority: P1)
@@ -140,7 +144,7 @@ Regression pins exist for B1 (relative owner-change update), D4 (no fake per-nod
 - **FR-003 (A2-r)**: For one cohort the chart write (fenced users excluded), the billing and the admin update MUST commit together or not at all, and a failed cohort MUST be retried up to the existing bound.
 - **FR-004 (reset_admin_usage)**: Resetting admin usage MUST subtract exactly the logged value relative to the stored counter.
 - **FR-005 (A3)**: A node update that changes only name and/or usage coefficient MUST NOT stop, restart or rebuild the node connection.
-- **FR-006 (E1)**: WireGuard subnet reconciliation MUST regenerate any shared key for the users it processes; client-supplied WireGuard keypairs for users without WireGuard access MUST NOT be stored.
+- **FR-006 (E1)**: WireGuard subnet reconciliation MUST regenerate any shared key for the users it processes; client-supplied WireGuard keypairs for users without WireGuard access MUST NOT be stored; a subscription revoke MUST leave a user without WireGuard access with no WireGuard keys (peer IPs kept) and MUST give a WireGuard-entitled user a fresh unique keypair.
 - **FR-007 (E3)**: Writing any of the 8 guarded secret paths (plus the MTProto secret per FR-009) MUST be serialized so that a check-then-write race cannot store a duplicate, without a users-table schema change. A writer that cannot obtain serialization within the database lock timeout MUST fail without storing anything; user create, modify, bulk create and bulk activation endpoints answer HTTP 503, other paths keep their existing error mapping.
 - **FR-008 (E4b)**: Bulk L2TP activation MUST use the guarded entitled-secret path.
 - **FR-009 (E4b)**: The MTProto secret MUST join the guarded set: a supplied value held by another user is replaced by a fresh unique value on create and modify (WARNING logged), with 409 only after the existing regeneration attempts are exhausted.

@@ -120,8 +120,8 @@ async def _holders_of(sessions, auth):
 async def _revoke(sessions, user_id):
     async with sessions() as db:
         db_user = await get_user_by_id(db, user_id, load_admin_role=True)
-        prepared = await _operation()._prepare_revoked_proxy_settings(db, db_user)
-        await revoke_user_sub(db, db_user, proxy_settings=prepared.dict())
+        prepared = (await _operation()._prepare_revoked_users(db, [db_user]))[db_user.id]
+        await revoke_user_sub(db, db_user, proxy_settings=prepared)
 
 
 def _refusals(outcomes):
