@@ -13,7 +13,7 @@ from app.db.crud.user import create_user, get_user_by_id, revoke_user_sub
 from app.db.models import Admin, AdminRole, Base, User
 from app.fork.models.proxy_secret_claim import ProxySecretClaim
 from app.fork.proxy_secrets import ProxySecretClaimConflict, supplied_secret_fields
-from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, named_lock_seed_statement
+from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, is_deadlock, named_lock_seed_statement
 from app.models.proxy import ProxyTable
 from app.models.user import UserCreate
 from app.operation import OperatorType
@@ -194,7 +194,9 @@ async def test_two_unguarded_writers_racing_for_one_auth_leave_one_holder(sessio
 
     outcomes = await asyncio.gather(write(first_id), write(second_id), return_exceptions=True)
 
-    assert len([outcome for outcome in outcomes if isinstance(outcome, ProxySecretClaimConflict)]) == 1, outcomes
+    refused = [outcome for outcome in outcomes if isinstance(outcome, ProxySecretClaimConflict) or is_deadlock(outcome)]
+    assert len(refused) == 1, outcomes
+    assert outcomes.count(None) == 1, outcomes
     assert len(await _holders_of(sessions, auth)) == 1
 
 
