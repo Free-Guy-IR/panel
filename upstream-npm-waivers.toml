@@ -1,5 +1,5 @@
 [[waiver]]
 package = "@pasarguard/xray-config-kit"
 upstream_version = "0.3.9"
-until = 2026-10-02
-reason = "Decision: bump, not waive. The forked core-kit branch update/2026-09-24 (28d8bd2, core-kit 0.3.1) already pins @pasarguard/xray-config-kit 0.3.9; its push waits for the owner to enable GitHub Actions on Free-Guy-IR/core-kit. Once it is published, dashboard/bun.lock moves to 0.3.9 and this waiver is deleted."
+until = 2026-10-20
+reason = "Decision: bump, not waive. Re-checked 2026-10-06: Free-Guy-IR/core-kit main is still edd6185 (xray-config-kit 0.3.7), and the commits that move it to 0.3.9 (merge 81e6713 carrying upstream d2ecb5bd, version bump 28d8bd2, branch head f245986 on update/2026-09-24) are still unpublished, waiting for the owner to enable GitHub Actions on the fork; upstream-forks/core-kit.md owes d2ecb5bd in its port queue until the same date. Once the kit is published, dashboard/bun.lock moves to 0.3.9 and this waiver is deleted."
