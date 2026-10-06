@@ -22,7 +22,7 @@ from app.fork.jobs import connection_limiter
 from app.fork.models.connection import ConnectionRestriction
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.settings import ConnectionLimit
-from app.models.user import ModifyUserByTemplate, UserStatusToggle
+from app.models.user import BulkUsersApplyTemplate, ModifyUserByTemplate, UserStatusToggle
 from app.operation import OperatorType, admin as admin_operation, user as user_operation
 from app.operation.admin import AdminOperation
 from app.operation.user import UserOperation
@@ -41,7 +41,7 @@ TEMPLATE_DATA_LIMIT = 10**9
 HOLD_SECONDS = 0.4
 STAGGER_SECONDS = 0.1
 BOUND = 120
-OPS = ("release", "activate_all", "disable_all", "template", "toggle", "enforce")
+OPS = ("release", "activate_all", "disable_all", "template", "bulk_template", "toggle", "enforce")
 ORDERS = [OPS[start:] + OPS[:start] for start in range(len(OPS))] + [
     tuple(reversed(OPS[start:] + OPS[:start])) for start in range(0, len(OPS), 2)
 ]
@@ -74,9 +74,13 @@ def pushes_fixture(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int, User
     async def user_push(db_user):
         pushes.append(("user", db_user.id, db_user.status))
 
+    async def bulk_push(users):
+        pushes.extend(("bulk", user.id, user.status) for user in users)
+
     monkeypatch.setattr(connection_limiter, "_push_to_nodes", limiter_push)
     monkeypatch.setattr(admin_operation, "sync_users", admin_push)
     monkeypatch.setattr(user_operation, "sync_user", user_push)
+    monkeypatch.setattr(user_operation, "sync_users", bulk_push)
     return pushes
 
 
@@ -152,6 +156,15 @@ async def _seed(recorder_db) -> SimpleNamespace:
     )
 
 
+def _newest_first(monkeypatch) -> None:
+    real_load = UserOperation._get_validated_users_by_ids
+
+    async def newest_first(self, *args, **kwargs):
+        return sorted(await real_load(self, *args, **kwargs), key=lambda user: user.id, reverse=True)
+
+    monkeypatch.setattr(UserOperation, "_get_validated_users_by_ids", newest_first)
+
+
 def _hold_after(monkeypatch, module, name: str) -> None:
     real = getattr(module, name)
 
@@ -189,6 +202,14 @@ def _steps(recorder_db, seed) -> dict:
                 db, db_user, ModifyUserByTemplate(user_template_id=seed.template_id), OWNER
             )
 
+    async def bulk_template():
+        async with recorder_db() as db:
+            await UserOperation(OperatorType.API).bulk_apply_template_to_users(
+                db,
+                BulkUsersApplyTemplate(ids=[seed.restricted, seed.bystander], user_template_id=seed.template_id),
+                OWNER,
+            )
+
     async def toggle():
         async with recorder_db() as db:
             db_user = await get_user_by_id(db, seed.toggled, load_admin_role=True)
@@ -214,6 +235,7 @@ def _steps(recorder_db, seed) -> dict:
         "activate_all": admin_wide("_activate_all_disabled_users_for_admin"),
         "disable_all": admin_wide("_disable_all_active_users_for_admin"),
         "template": template,
+        "bulk_template": bulk_template,
         "toggle": toggle,
         "enforce": enforce,
     }
@@ -240,6 +262,7 @@ async def test_release_admin_wide_template_toggle_and_enforcement_overlapping_in
     _hold_after(monkeypatch, admin_operation, "close_visible_restrictions")
     _hold_after(monkeypatch, user_operation, "close_active_restriction")
     _hold_after(monkeypatch, connection_limiter, "restrict")
+    _newest_first(monkeypatch)
     steps = _steps(recorder_db, seed)
     outcomes: dict[str, str] = {}
     deadlocks_before = await _deadlocks()
@@ -270,13 +293,25 @@ async def test_release_admin_wide_template_toggle_and_enforcement_overlapping_in
             await session.execute(select(User.used_traffic, User.data_limit).where(User.id == seed.renewed))
         ).one()
         resets = (
-            (await session.execute(select(UserUsageResetLogs.id).where(UserUsageResetLogs.user_id == seed.renewed)))
+            (
+                await session.execute(
+                    select(UserUsageResetLogs.user_id).where(UserUsageResetLogs.user_id.in_(seed.users))
+                )
+            )
             .scalars()
             .all()
         )
+        limits = dict((await session.execute(select(User.id, User.data_limit).where(User.id.in_(seed.users)))).all())
     assert all(status == UserStatus.disabled for _user_id, status in in_force), (in_force, after, outcomes)
     if outcomes["template"] == "committed":
-        assert (renewed.used_traffic, renewed.data_limit, len(resets)) == (0, TEMPLATE_DATA_LIMIT, 1), outcomes
+        assert (renewed.used_traffic, renewed.data_limit, resets.count(seed.renewed)) == (
+            0,
+            TEMPLATE_DATA_LIMIT,
+            1,
+        ), outcomes
+    if outcomes["bulk_template"] == "committed":
+        for user_id in (seed.restricted, seed.bystander):
+            assert (limits[user_id], resets.count(user_id)) == (TEMPLATE_DATA_LIMIT, 1), (user_id, outcomes)
     for user_id, status in after.items():
         if status != before[user_id]:
             told = [pushed for _source, pushed_id, pushed in pushes if pushed_id == user_id]

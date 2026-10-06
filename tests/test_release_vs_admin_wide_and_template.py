@@ -26,7 +26,7 @@ from app.fork.proxy_secrets import locks as locks_module
 from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, PROXY_SECRETS_LOCK
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.settings import ConnectionLimit
-from app.models.user import ModifyUserByTemplate
+from app.models.user import BulkUsersApplyTemplate, ModifyUserByTemplate
 from app.operation import OperatorType, admin as admin_operation, user as user_operation
 from app.operation.admin import AdminOperation
 from app.operation.user import UserOperation
@@ -298,6 +298,90 @@ async def test_closing_the_restrictions_of_many_users_goes_in_bounded_batches_an
     assert closed == len(user_ids)
     assert len(batches) == 3, batches
     assert [(await _row(recorder_db, user_id)).active_restrictions for user_id in user_ids] == [0] * len(user_ids)
+
+
+async def _bulk_apply(recorder_db, user_ids: list[int], template_id: int) -> None:
+    async with recorder_db() as db:
+        await UserOperation(OperatorType.API).bulk_apply_template_to_users(
+            db, BulkUsersApplyTemplate(ids=user_ids, user_template_id=template_id), OWNER
+        )
+
+
+def _newest_first(monkeypatch) -> None:
+    real_load = UserOperation._get_validated_users_by_ids
+
+    async def newest_first(self, *args, **kwargs):
+        return sorted(await real_load(self, *args, **kwargs), key=lambda user: user.id, reverse=True)
+
+    monkeypatch.setattr(UserOperation, "_get_validated_users_by_ids", newest_first)
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_template_apply_locks_its_users_in_ascending_id_order_whatever_order_it_loaded_them(
+    monkeypatch, recorder_db
+):
+    _, user_ids, _ = await seed_users_and_nodes(recorder_db, user_count=3, node_count=0)
+    template_id = await _template(recorder_db, reset_usages=True)
+    monkeypatch.setattr(user_operation, "sync_users", AsyncMock())
+    _newest_first(monkeypatch)
+    first_locked: list[int] = []
+
+    def on_orm(state):
+        statement = state.statement
+        if not state.is_select or statement._for_update_arg is None:
+            return
+        if {t.name for f in statement.get_final_froms() for t in find_tables(f)} != {"users"}:
+            return
+        for value in statement.compile().params.values():
+            for user_id in value if isinstance(value, list | tuple) else [value]:
+                if user_id in user_ids and user_id not in first_locked:
+                    first_locked.append(user_id)
+
+    event.listen(Session, "do_orm_execute", on_orm)
+    try:
+        await _bulk_apply(recorder_db, list(user_ids), template_id)
+    finally:
+        event.remove(Session, "do_orm_execute", on_orm)
+
+    assert first_locked == sorted(user_ids), first_locked
+    assert [(await _row(recorder_db, user_id)).data_limit for user_id in user_ids] == [TEMPLATE_DATA_LIMIT] * 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [_deadlock, _lock_wait_timeout], ids=["deadlock", "lock-wait-timeout"])
+async def test_a_bulk_template_apply_that_loses_a_lock_while_writing_answers_503_and_stores_nothing(
+    monkeypatch, recorder_db, error
+):
+    _, user_ids, _ = await seed_users_and_nodes(recorder_db, user_count=2, node_count=0)
+    async with recorder_db() as session:
+        await session.execute(
+            update(User)
+            .where(User.id.in_(user_ids))
+            .values(used_traffic=SEEDED_USED_TRAFFIC, data_limit=SEEDED_DATA_LIMIT)
+        )
+        await session.commit()
+    template_id = await _template(recorder_db, reset_usages=True)
+    monkeypatch.setattr(user_operation, "sync_users", AsyncMock())
+    real_modify = user_operation.crud_modify_user
+    calls: list[int] = []
+
+    async def lose_the_lock_on_the_second_user(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise error()
+        return await real_modify(*args, **kwargs)
+
+    monkeypatch.setattr(user_operation, "crud_modify_user", lose_the_lock_on_the_second_user)
+
+    with pytest.raises(HTTPException) as answer:
+        await _bulk_apply(recorder_db, list(user_ids), template_id)
+
+    assert (answer.value.status_code, answer.value.detail) == (503, LOCK_UNAVAILABLE_DETAIL)
+    kept = [await _row(recorder_db, user_id) for user_id in user_ids]
+    assert [(row.used_traffic, row.data_limit, row.resets) for row in kept] == [
+        (SEEDED_USED_TRAFFIC, SEEDED_DATA_LIMIT, 0)
+    ] * 2
+    user_operation.sync_users.assert_not_awaited()
 
 
 @pytest.mark.asyncio
