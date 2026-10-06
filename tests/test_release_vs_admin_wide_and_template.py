@@ -240,6 +240,67 @@ async def test_an_admin_wide_change_locks_its_users_before_it_closes_their_restr
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("error", [_deadlock, _lock_wait_timeout], ids=["deadlock", "lock-wait-timeout"])
+@pytest.mark.parametrize(
+    ("action", "crud_name"),
+    [
+        ("_activate_all_disabled_users_for_admin", "activate_all_disabled_users"),
+        ("_disable_all_active_users_for_admin", "disable_all_active_users"),
+    ],
+)
+async def test_an_admin_wide_change_that_loses_a_lock_answers_503_and_stores_nothing(
+    monkeypatch, recorder_db, error, action, crud_name
+):
+    admin_id, user_id = await _restricted_user(recorder_db)
+
+    async def lose_the_lock(*_args, **_kwargs):
+        raise error()
+
+    monkeypatch.setattr(admin_operation, crud_name, lose_the_lock)
+
+    with pytest.raises(HTTPException) as answer:
+        await _admin_wide(recorder_db, admin_id, action)
+
+    assert (answer.value.status_code, answer.value.detail) == (503, LOCK_UNAVAILABLE_DETAIL)
+    kept = await _row(recorder_db, user_id)
+    assert (kept.status, kept.active_restrictions) == (UserStatus.disabled, 1)
+    admin_operation.sync_users.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_closing_the_restrictions_of_many_users_goes_in_bounded_batches_and_closes_them_all(
+    monkeypatch, recorder_db
+):
+    _, user_ids, _ = await seed_users_and_nodes(recorder_db, user_count=5, node_count=0)
+    async with recorder_db() as session:
+        session.add_all(
+            ConnectionRestriction(
+                user_id=user_id, previous_status=UserStatus.active.value, disable_minutes=30, active=True
+            )
+            for user_id in user_ids
+        )
+        await session.commit()
+    monkeypatch.setattr(connection_enforcement, "RELEASE_LOCK_BATCH_SIZE", 2)
+    batches: list[str] = []
+
+    def on_orm(state):
+        if state.is_update and state.statement.table.name == "connection_restrictions":
+            batches.append(state.statement.table.name)
+
+    event.listen(Session, "do_orm_execute", on_orm)
+    try:
+        async with recorder_db() as db:
+            closed = await connection_enforcement.close_active_restrictions(db, reversed(user_ids), "test")
+            await db.commit()
+    finally:
+        event.remove(Session, "do_orm_execute", on_orm)
+
+    assert closed == len(user_ids)
+    assert len(batches) == 3, batches
+    assert [(await _row(recorder_db, user_id)).active_restrictions for user_id in user_ids] == [0] * len(user_ids)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("reset_usages", [True, False], ids=["reset-usages", "keep-usages"])
 async def test_a_template_renewal_closes_the_restriction_only_while_it_holds_the_named_lock_and_the_user_row(
     recorder_db, lock_trace, reset_usages
