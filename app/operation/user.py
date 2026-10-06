@@ -989,9 +989,12 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         validated_groups = await self._prepare_modified_user(
             db, db_user, modified_user, admin, skip_role_limits=skip_role_limits
         )
-        return await self._apply_modified_user(
-            db, db_user, modified_user, admin, validated_groups=validated_groups, before=before
-        )
+        try:
+            return await self._apply_modified_user(
+                db, db_user, modified_user, admin, validated_groups=validated_groups, before=before
+            )
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
     async def modify_user(
         self, db: AsyncSession, username: str, modified_user: UserModify, admin: AdminDetails

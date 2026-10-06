@@ -15,11 +15,19 @@ from app.db.crud.user import (
 )
 from app.db.models import User, UserStatus
 from app.fork.proxy_secrets.errors import describe_failure
-from app.fork.proxy_secrets.locks import NamedLockMissing, acquire_proxy_secrets_lock, is_deadlock, is_lock_unavailable
+from app.fork.proxy_secrets.locks import (
+    PROXY_SECRETS_LOCK,
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_deadlock,
+    is_lock_unavailable,
+)
 from app.node.sync import remove_users as sync_remove_users
 
 USER_TRANSITION_BATCH_SIZE = 500
 NEXT_PLAN_ATTEMPTS = 3
+NEXT_PLAN_POSTPONEMENTS_BEFORE_ERROR = 5
+_postponed_renewals: dict[int, int] = {}
 EXPIRABLE = (User.status == UserStatus.active, User.is_expired)
 STARTABLE = (User.status == UserStatus.on_hold, User.become_online)
 CAME_ONLINE = (*STARTABLE, User.online_at.isnot(None))
@@ -61,6 +69,7 @@ async def renew_next_plan_users(
                 await acquire_proxy_secrets_lock(db)
                 await apply_status_changes(db, await lock_users(db, [user_id]), status)
                 await db.commit()
+                _postponed_renewals.pop(user_id, None)
                 break
             except (DBAPIError, NamedLockMissing) as exc:
                 await db.rollback()
@@ -68,10 +77,16 @@ async def renew_next_plan_users(
                     raise
                 if is_deadlock(exc) and attempt < NEXT_PLAN_ATTEMPTS:
                     continue
-                logger.error(
-                    f"next plan of user {user_id} was not applied because the locks it needs were unavailable "
-                    f"after {attempt} attempt(s); the next run retries it ({describe_failure(exc)})"
+                runs = _postponed_renewals[user_id] = _postponed_renewals.get(user_id, 0) + 1
+                message = (
+                    f"next plan of user {user_id} was postponed on {runs} consecutive run(s) because the "
+                    f"{PROXY_SECRETS_LOCK!r} named lock or the user's row stayed unavailable after {attempt} "
+                    f"attempt(s); the user stays eligible and the next run retries it ({describe_failure(exc)})"
                 )
+                if runs >= NEXT_PLAN_POSTPONEMENTS_BEFORE_ERROR:
+                    logger.error(message)
+                else:
+                    logger.warning(message)
                 break
 
 
