@@ -455,7 +455,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         *,
         exclude_user_id: int | None = None,
         reserved_secrets=None,
-        unentitled_wireguard_from_locked_row: bool = False,
+        keep_unentitled_wireguard: bool = True,
     ) -> ProxyTable:
         try:
             proxy_settings = await prepare_wireguard_keys(
@@ -470,7 +470,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 groups,
                 exclude_user_id=exclude_user_id,
                 reserved=reserved_secrets,
-                unentitled_wireguard_from_locked_row=unentitled_wireguard_from_locked_row,
+                keep_unentitled_wireguard=keep_unentitled_wireguard,
             )
         except ProxySecretUniquenessError as exc:
             await self.raise_error(message=str(exc), code=409, db=db)

@@ -24,15 +24,11 @@ def _wireguard_settings(section) -> WireGuardSettings:
         )
 
 
-def stored_wireguard_section(stored) -> WireGuardSettings:
-    return _wireguard_settings(stored.get("wireguard") if isinstance(stored, dict) else None)
-
-
 async def stored_wireguard_settings(db: AsyncSession, user_id: int | None) -> WireGuardSettings:
     if user_id is None:
         return WireGuardSettings()
     stored = await db.scalar(select(User.proxy_settings).where(User.id == user_id).with_for_update())
-    return stored_wireguard_section(stored)
+    return _wireguard_settings(stored.get("wireguard") if isinstance(stored, dict) else None)
 
 
 async def drop_unentitled_wireguard_keys(

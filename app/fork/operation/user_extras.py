@@ -35,7 +35,7 @@ from app.fork.proxy_secrets.locks import (
     is_lock_unavailable,
     read_committed_rows,
 )
-from app.fork.proxy_secrets.wireguard_scope import drop_unentitled_wireguard_keys, stored_wireguard_section
+from app.fork.proxy_secrets.wireguard_scope import drop_unentitled_wireguard_keys
 from app.models.proxy import ProxyTable
 from app.models.user import BulkOperationDryRunResponse, BulkUserFilter
 from app.operation import OperatorType
@@ -43,7 +43,6 @@ from app.utils.l2tp import prepare_l2tp_password
 from app.utils.logger import get_logger
 from app.utils.mtproto import prepare_mtproto_secret
 from app.utils.openvpn import prepare_openvpn_password
-from app.utils.wireguard import user_has_wireguard_access
 
 logger = get_logger("user-operation")
 
@@ -91,12 +90,10 @@ async def committed_access(db: AsyncSession, user_id: int, groups: Sequence[Grou
     return _access_from_tags({tag for _, tag in await read_committed_rows(db, statement)})
 
 
-def settle_revoked_proxy_settings(prepared: ProxyTable, db_user: User, *, wireguard_entitled: bool) -> dict:
+def settle_revoked_proxy_settings(prepared: ProxyTable, db_user: User) -> dict:
     kept = build_revoked_proxy_settings(db_user)
     prepared.shadowsocks.method = kept["shadowsocks"]["method"]
     prepared.vless.flow = kept["vless"]["flow"]
-    if not wireguard_entitled:
-        prepared.wireguard = stored_wireguard_section(db_user.proxy_settings)
     return with_stored_peer_ips(prepared.dict(), db_user.proxy_settings)
 
 
@@ -145,13 +142,13 @@ async def prepare_fork_proxy_settings(
     *,
     exclude_user_id: int | None = None,
     reserved: ReservedSecrets | None = None,
-    unentitled_wireguard_from_locked_row: bool = False,
+    keep_unentitled_wireguard: bool = True,
 ) -> ProxyTable:
     user_mod = _user_mod()
     prepare_openvpn = getattr(user_mod, "prepare_openvpn_password", prepare_openvpn_password)
     prepare_mtproto = getattr(user_mod, "prepare_mtproto_secret", prepare_mtproto_secret)
     prepare_l2tp = getattr(user_mod, "prepare_l2tp_password", prepare_l2tp_password)
-    if not unentitled_wireguard_from_locked_row:
+    if keep_unentitled_wireguard:
         proxy_settings = await drop_unentitled_wireguard_keys(
             db, proxy_settings, groups, exclude_user_id=exclude_user_id
         )
@@ -194,17 +191,14 @@ class UserExtrasMixin:
                 ProxyTable.model_validate(build_revoked_proxy_settings(user)),
                 exclude_user_id=user.id,
                 reserved_secrets=reserved,
-                unentitled_wireguard_from_locked_row=True,
+                keep_unentitled_wireguard=False,
             )
-            prepared.append((user, settings, await user_has_wireguard_access(db, access)))
+            prepared.append((user, settings))
         try:
             await lock_users_proxy_settings(db, ordered)
         except DBAPIError as exc:
             await self._raise_if_lock_unavailable(db, exc)
-        return {
-            user.id: settle_revoked_proxy_settings(settings, user, wireguard_entitled=entitled)
-            for user, settings, entitled in prepared
-        }
+        return {user.id: settle_revoked_proxy_settings(settings, user) for user, settings in prepared}
 
     async def bulk_activate_l2tp_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter):
         return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.l2tp_password)
