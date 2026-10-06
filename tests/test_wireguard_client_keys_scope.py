@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -17,6 +18,8 @@ from app.utils.crypto import generate_wireguard_keypair
 WG_TAG = "WG_1"
 VLESS = "vless-in"
 OWNER = SimpleNamespace(username="owner", is_owner=True, role=None)
+OWNER_DETAILS = SimpleNamespace(username="owner", is_owner=True, role=None, permission_overrides=None)
+LEFTOVER_PEER_IP = "10.0.0.7/32"
 STORED_PRIVATE, STORED_PUBLIC = generate_wireguard_keypair()
 CLIENT_PRIVATE, CLIENT_PUBLIC = generate_wireguard_keypair()
 
@@ -153,13 +156,36 @@ async def test_a_wireguard_entitled_user_keeps_the_unique_keypair_it_sent(engine
 
 
 @pytest.mark.asyncio
-async def test_revoking_a_user_without_wireguard_access_keeps_its_stored_keys(engine, db):
+async def test_bulk_created_users_without_wireguard_access_do_not_store_client_keys(engine, db):
+    seed = await _seed(db)
+    operation = _operation()
+    operation.generate_subscription_url = AsyncMock(return_value="")
+    users = [UserCreate(username=name, proxy_settings=_client_wireguard()) for name in ("bulk_a", "bulk_b")]
+
+    await operation._persist_bulk_users(
+        db, OWNER_DETAILS, seed.admin, users, [seed.groups["plain"]], skip_per_user_limits=True, sync=False
+    )
+
+    for name in ("bulk_a", "bulk_b"):
+        stored = await _stored_wireguard(engine, name)
+        assert (stored.get("private_key"), stored.get("public_key")) == (None, None), (name, stored)
+
+
+@pytest.mark.asyncio
+async def test_revoking_a_user_without_wireguard_access_clears_its_stored_keys_and_keeps_its_peer_ips(engine, db):
     seed = await _seed(db)
     db_user = await _load(db, seed.legacy_id)
+    stored_settings = dict(db_user.proxy_settings)
+    stored_settings["wireguard"] = {**stored_settings["wireguard"], "peer_ips": [LEFTOVER_PEER_IP]}
+    db_user.proxy_settings = stored_settings
+    await db.commit()
 
     revoked = (await _operation()._prepare_revoked_users(db, [db_user]))[db_user.id]
     await revoke_user_sub(db, db_user, proxy_settings=revoked)
 
     stored = await _stored_wireguard(engine, "legacy")
-    assert stored["private_key"] == STORED_PRIVATE
-    assert stored["public_key"] == STORED_PUBLIC
+    assert (stored.get("private_key"), stored.get("public_key"), stored.get("peer_ips")) == (
+        None,
+        None,
+        [LEFTOVER_PEER_IP],
+    )

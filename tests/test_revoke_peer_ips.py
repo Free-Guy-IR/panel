@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -12,21 +13,23 @@ from app.db.crud.user import get_user_by_id
 from app.db.models import CoreConfig, Group, ProxyInbound, User
 from app.fork.operation import user_extras as user_extras_module
 from app.models.core import CoreType
+from app.models.group import BulkGroup
 from app.models.proxy import ShadowsocksMethods
 from app.models.settings import HWIDSettings
 from app.models.user import BulkUsersProxy, BulkUsersSelection, UserModify
 from app.node import node_manager
 from app.operation import OperatorType, user as user_operation_module
+from app.operation.group import GroupOperation
 from app.operation.user import UserOperation
-from app.utils.crypto import generate_wireguard_keypair
-from tests.a1_bridge_harness import RecordingNode, isolate_node_manager, seed_user, settle
+from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
+from tests.a1_bridge_harness import INFO, RecordingNode, isolate_node_manager, seed_group, seed_user, settle
 from tests.api import TestSession, engine
 from tests.api.helpers import unique_name
 
 OWNER = SimpleNamespace(username="owner", is_owner=True, role=None, id=None)
 
 
-def _quiet(monkeypatch):
+def _quiet(monkeypatch) -> RecordingNode:
     node = RecordingNode(2201)
     isolate_node_manager(monkeypatch, node_manager, {2201: node})
     monkeypatch.setattr(UserOperation, "generate_subscription_url", staticmethod(AsyncMock(return_value="")))
@@ -39,6 +42,7 @@ def _quiet(monkeypatch):
     ):
         monkeypatch.setattr(notification, name, AsyncMock())
     monkeypatch.setattr(user_operation_module, "hwid_settings", AsyncMock(return_value=HWIDSettings()))
+    return node
 
 
 async def _stored_settings(user_id: int) -> dict:
@@ -56,7 +60,7 @@ async def test_a_revoke_that_loaded_the_user_before_a_group_change_does_not_writ
             CoreConfig(
                 name=wg_tag,
                 type=CoreType.wg,
-                config={"interface_name": wg_tag, "address": ["10.97.0.1/24"], "listen_port": 51820},
+                config={"interface_name": wg_tag, "address": ["10.127.0.1/24"], "listen_port": 51820},
             )
         )
         wg_group = Group(name=unique_name("adv_wg_group"), inbounds=[ProxyInbound(tag=wg_tag)])
@@ -105,7 +109,7 @@ async def test_a_bulk_revoke_that_loaded_the_users_before_a_group_change_does_no
             CoreConfig(
                 name=wg_tag,
                 type=CoreType.wg,
-                config={"interface_name": wg_tag, "address": ["10.98.0.1/24"], "listen_port": 51820},
+                config={"interface_name": wg_tag, "address": ["10.128.0.1/24"], "listen_port": 51820},
             )
         )
         wg_group = Group(name=unique_name("adv_wg_group"), inbounds=[ProxyInbound(tag=wg_tag)])
@@ -171,21 +175,21 @@ async def test_a_revoke_that_loaded_the_user_before_its_wireguard_address_moved_
     monkeypatch,
 ):
     _quiet(monkeypatch)
-    first_group_id, second_group_id, plain_group_id = await _two_wireguard_groups("10.96.0.1/24", "10.95.0.1/24")
+    first_group_id, second_group_id, plain_group_id = await _two_wireguard_groups("10.126.0.1/24", "10.125.0.1/24")
 
     operation = UserOperation(OperatorType.API)
     moved = await seed_user(plain_group_id)
     async with TestSession() as db:
         await operation.modify_user_by_id(db, moved, UserModify(group_ids=[first_group_id]), OWNER)
     old_ips = (await _stored_settings(moved))["wireguard"]["peer_ips"]
-    assert old_ips and old_ips[0].startswith("10.96.")
+    assert old_ips and old_ips[0].startswith("10.126.")
 
     async with TestSession() as revoke_db:
         stale = await get_user_by_id(revoke_db, moved)
         async with TestSession() as db:
             await operation.modify_user_by_id(db, moved, UserModify(group_ids=[second_group_id]), OWNER)
         new_ips = (await _stored_settings(moved))["wireguard"]["peer_ips"]
-        assert new_ips and new_ips[0].startswith("10.95.")
+        assert new_ips and new_ips[0].startswith("10.125.")
         await operation._revoke_user_sub(revoke_db, stale, OWNER)
 
     after_revoke = (await _stored_settings(moved))["wireguard"]["peer_ips"]
@@ -199,7 +203,7 @@ async def test_a_bulk_revoke_that_loaded_the_users_before_their_wireguard_addres
     monkeypatch,
 ):
     _quiet(monkeypatch)
-    first_group_id, second_group_id, plain_group_id = await _two_wireguard_groups("10.94.0.1/24", "10.93.0.1/24")
+    first_group_id, second_group_id, plain_group_id = await _two_wireguard_groups("10.124.0.1/24", "10.123.0.1/24")
 
     operation = UserOperation(OperatorType.API)
     moved = [await seed_user(plain_group_id) for _ in range(2)]
@@ -207,7 +211,7 @@ async def test_a_bulk_revoke_that_loaded_the_users_before_their_wireguard_addres
         async with TestSession() as db:
             await operation.modify_user_by_id(db, user_id, UserModify(group_ids=[first_group_id]), OWNER)
     old_ips = {user_id: (await _stored_settings(user_id))["wireguard"]["peer_ips"] for user_id in moved}
-    assert all(ips and ips[0].startswith("10.94.") for ips in old_ips.values()), old_ips
+    assert all(ips and ips[0].startswith("10.124.") for ips in old_ips.values()), old_ips
 
     new_ips = {}
     real_get = operation._get_validated_users_by_ids
@@ -225,7 +229,7 @@ async def test_a_bulk_revoke_that_loaded_the_users_before_their_wireguard_addres
         await operation.bulk_revoke_user_sub(revoke_db, BulkUsersSelection(ids=set(moved)), OWNER)
     monkeypatch.setattr(operation, "_get_validated_users_by_ids", real_get)
 
-    assert all(ips and ips[0].startswith("10.93.") for ips in new_ips.values()), new_ips
+    assert all(ips and ips[0].startswith("10.123.") for ips in new_ips.values()), new_ips
     after_revoke = {user_id: (await _stored_settings(user_id))["wireguard"]["peer_ips"] for user_id in moved}
     assert after_revoke == new_ips, (
         f"users {moved} moved from {old_ips} to {new_ips} while a bulk revoke that had loaded them earlier was "
@@ -236,7 +240,7 @@ async def test_a_bulk_revoke_that_loaded_the_users_before_their_wireguard_addres
 @pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
 async def test_a_revoke_that_loaded_the_user_before_its_method_and_flow_changed_keeps_the_new_ones(monkeypatch, bulk):
     _quiet(monkeypatch)
-    plain_group_id = (await _two_wireguard_groups("10.92.0.1/24", "10.91.0.1/24"))[2]
+    plain_group_id = (await _two_wireguard_groups("10.122.0.1/24", "10.121.0.1/24"))[2]
     operation = UserOperation(OperatorType.API)
     user_id = await seed_user(plain_group_id)
     before = await _stored_settings(user_id)
@@ -285,11 +289,11 @@ async def test_a_revoke_that_loaded_the_user_before_its_method_and_flow_changed_
     )
 
 
-async def test_a_revoke_that_loaded_the_user_before_its_keys_changed_and_it_lost_wireguard_keeps_the_new_keys(
+async def test_a_revoke_that_loaded_the_user_before_it_lost_wireguard_clears_its_keys_and_writes_no_old_address(
     monkeypatch,
 ):
     _quiet(monkeypatch)
-    first_group_id, _, plain_group_id = await _two_wireguard_groups("10.90.0.1/24", "10.89.0.1/24")
+    first_group_id, _, plain_group_id = await _two_wireguard_groups("10.120.0.1/24", "10.119.0.1/24")
     operation = UserOperation(OperatorType.API)
     user_id = await seed_user(plain_group_id)
     async with TestSession() as db:
@@ -314,10 +318,10 @@ async def test_a_revoke_that_loaded_the_user_before_its_keys_changed_and_it_lost
         await operation._revoke_user_sub(revoke_db, stale, OWNER)
 
     after = (await _stored_settings(user_id))["wireguard"]
-    assert (after["private_key"], after["public_key"], after["peer_ips"]) == (private_key, public_key, []), (
+    assert (after["private_key"], after["public_key"], after["peer_ips"]) == (None, None, []), (
         f"user {user_id} changed its WireGuard keys and then lost WireGuard access while a revoke that had loaded it "
-        f"earlier was running; the revoke stored public key {after['public_key']} (old {old['public_key']}, new "
-        f"{public_key}) and peer IPs {after['peer_ips']}"
+        f"earlier was running; the revoke stored public key {after['public_key']} (old {old['public_key']}, changed "
+        f"to {public_key}) and peer IPs {after['peer_ips']} instead of no keys and no address"
     )
 
 
@@ -348,7 +352,7 @@ async def test_a_bulk_revoke_takes_the_user_rows_in_the_usage_recorders_order(mo
     if dialect not in LOCK_WAITERS:
         pytest.skip(reason="row locks and a deadlock detector are what this proves; SQLite locks the whole file")
     _quiet(monkeypatch)
-    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups("10.88.0.1/24", "10.87.0.1/24")
+    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups("10.118.0.1/24", "10.117.0.1/24")
     first, second = sorted([await seed_user(plain_group_id), await seed_user(plain_group_id)])
     operation = UserOperation(OperatorType.API)
     async with TestSession() as db:
@@ -408,7 +412,7 @@ def _lock_order_recorder(order: list[str]):
 @pytest.mark.parametrize("revoked", ["one-without-wireguard", "one-with-wireguard", "both-in-bulk"])
 async def test_a_revoke_takes_the_proxy_secrets_lock_before_any_user_row(monkeypatch, revoked):
     _quiet(monkeypatch)
-    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups("10.86.0.1/24", "10.85.0.1/24")
+    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups("10.116.0.1/24", "10.115.0.1/24")
     operation = UserOperation(OperatorType.API)
     without_wireguard, with_wireguard = await seed_user(plain_group_id), await seed_user(plain_group_id)
     async with TestSession() as db:
@@ -438,7 +442,7 @@ async def test_a_revoke_takes_the_proxy_secrets_lock_before_any_user_row(monkeyp
 
 async def test_a_bulk_revoke_never_gives_two_of_its_users_the_same_new_secret(monkeypatch):
     _quiet(monkeypatch)
-    plain_group_id = (await _two_wireguard_groups("10.84.0.1/24", "10.83.0.1/24"))[2]
+    plain_group_id = (await _two_wireguard_groups("10.114.0.1/24", "10.113.0.1/24"))[2]
     operation = UserOperation(OperatorType.API)
     first, second = await seed_user(plain_group_id), await seed_user(plain_group_id)
     old_ids = {user_id: (await _stored_settings(user_id))["vless"]["id"] for user_id in (first, second)}
@@ -459,3 +463,182 @@ async def test_a_bulk_revoke_never_gives_two_of_its_users_the_same_new_secret(mo
         f"a bulk revoke generated the same VLESS id for users {first} and {second} and stored it for both: {new_ids}"
     )
     assert not set(new_ids.values()) & set(old_ids.values()), (old_ids, new_ids)
+
+
+async def _plant_wireguard_keys(user_ids, private_key: str, public_key: str) -> None:
+    async with TestSession() as session:
+        for user_id in user_ids:
+            stored = (await session.execute(select(User.proxy_settings).where(User.id == user_id))).scalar_one()
+            wireguard = {**(stored.get("wireguard") or {}), "private_key": private_key, "public_key": public_key}
+            await session.execute(
+                update(User).where(User.id == user_id).values(proxy_settings={**stored, "wireguard": wireguard})
+            )
+        await session.commit()
+
+
+async def _holders_of(public_key: str) -> list[int]:
+    column = User.proxy_settings["wireguard"]["public_key"].as_string()
+    async with TestSession() as session:
+        return sorted((await session.execute(select(User.id).where(column == public_key))).scalars().all())
+
+
+@pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
+async def test_a_revoke_clears_the_wireguard_keys_of_a_user_without_wireguard_access(monkeypatch, bulk):
+    _quiet(monkeypatch)
+    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups("10.129.0.1/24", "10.130.0.1/24")
+    operation = UserOperation(OperatorType.API)
+    revoked, bystander, entitled = [await seed_user(plain_group_id) for _ in range(3)]
+    async with TestSession() as db:
+        await operation.modify_user_by_id(db, entitled, UserModify(group_ids=[wireguard_group_id]), OWNER)
+    entitled_before = (await _stored_settings(entitled))["wireguard"]
+    shared_private, shared_public = generate_wireguard_keypair()
+    await _plant_wireguard_keys([revoked, bystander], shared_private, shared_public)
+
+    if bulk:
+        async with TestSession() as db:
+            await operation.bulk_revoke_user_sub(db, BulkUsersSelection(ids={revoked, entitled}), OWNER)
+    else:
+        for user_id in (revoked, entitled):
+            async with TestSession() as db:
+                await operation._revoke_user_sub(db, await get_user_by_id(db, user_id), OWNER)
+
+    after = (await _stored_settings(revoked))["wireguard"]
+    assert (after.get("private_key"), after.get("public_key"), after.get("peer_ips")) == (None, None, []), (
+        f"user {revoked} has no WireGuard access and was revoked, but it still holds the WireGuard keypair it "
+        f"shared with user {bystander}: {after}"
+    )
+    assert await _holders_of(shared_public) == [bystander]
+    entitled_after = (await _stored_settings(entitled))["wireguard"]
+    assert entitled_after["public_key"] not in (None, entitled_before["public_key"])
+    assert get_wireguard_public_key(entitled_after["private_key"]) == entitled_after["public_key"]
+    assert entitled_after["peer_ips"] == entitled_before["peer_ips"]
+    assert await _holders_of(entitled_after["public_key"]) == [entitled]
+
+
+MOVES = ("revoke", "edit", "group change")
+GRANTS = {"grants-wireguard": True, "keeps-no-wireguard": False}
+
+
+async def _interleaving_setup(monkeypatch, first_address: str, second_address: str, *, grants_wireguard: bool):
+    node = _quiet(monkeypatch)
+    await node.connect(INFO.node_version, INFO.core_version)
+    pushed: list[tuple[str, str | None, list[str]]] = []
+    deliver = node._apply
+
+    def record_and_deliver(kind, users):
+        for user in users:
+            wireguard = user.proxies.wireguard
+            pushed.append((user.email, wireguard.public_key or None, list(wireguard.peer_ips)))
+        deliver(kind, users)
+
+    monkeypatch.setattr(node, "_apply", record_and_deliver)
+    wireguard_group_id, _, plain_group_id = await _two_wireguard_groups(first_address, second_address)
+    added_group_id = wireguard_group_id if grants_wireguard else await seed_group(unique_name("adv_p_added"))
+    target, bystander = await seed_user(plain_group_id), await seed_user(plain_group_id)
+    shared_private, shared_public = generate_wireguard_keypair()
+    await _plant_wireguard_keys([target, bystander], shared_private, shared_public)
+    groups = GroupOperation(operator_type=OperatorType.API)
+    groups.check_inbound_tags = AsyncMock(return_value=None)
+    return SimpleNamespace(
+        grants_wireguard=grants_wireguard,
+        added_group_id=added_group_id,
+        target=target,
+        bystander=bystander,
+        shared_private=shared_private,
+        shared_public=shared_public,
+        before=await _stored_settings(target),
+        users=UserOperation(OperatorType.API),
+        groups=groups,
+        pushed=pushed,
+    )
+
+
+def _edit_request(case) -> UserModify:
+    proxy_settings = {"vless": {"flow": "xtls-rprx-vision"}}
+    if not case.grants_wireguard:
+        proxy_settings["wireguard"] = {"private_key": case.shared_private, "public_key": case.shared_public}
+    return UserModify(proxy_settings=proxy_settings)
+
+
+async def _run_move(case, move: str, revoke_db=None, stale=None) -> None:
+    if move == "revoke":
+        await case.users._revoke_user_sub(revoke_db, stale, OWNER)
+        return
+    async with TestSession() as db:
+        if move == "edit":
+            await case.users.modify_user_by_id(db, case.target, _edit_request(case), OWNER)
+        else:
+            await case.groups.bulk_add_groups(
+                db, BulkGroup(group_ids={case.added_group_id}, users={case.target}), OWNER
+            )
+
+
+async def _assert_the_wireguard_keys_ended_right(case, wireguard: dict, label: str) -> None:
+    if not case.grants_wireguard:
+        assert (wireguard.get("private_key"), wireguard.get("public_key"), wireguard.get("peer_ips")) == (
+            None,
+            None,
+            [],
+        ), (
+            f"{label}: user {case.target} never had WireGuard access, was revoked and was sent the WireGuard pair it "
+            f"shared with user {case.bystander}, but it ends with {wireguard}"
+        )
+        return
+    assert wireguard.get("public_key") and wireguard["public_key"] != case.shared_public, (
+        f"{label}: user {case.target} got WireGuard access and was revoked, but it ends with WireGuard keys "
+        f"{wireguard.get('public_key')!r} (the shared pair is {case.shared_public!r})"
+    )
+    assert get_wireguard_public_key(wireguard["private_key"]) == wireguard["public_key"], label
+    assert await _holders_of(wireguard["public_key"]) == [case.target], label
+    assert len(wireguard["peer_ips"]) == 1, (label, wireguard["peer_ips"])
+
+
+async def _assert_the_interleaving_ended_consistent(case, label: str) -> None:
+    await settle()
+    after = await _stored_settings(case.target)
+    wireguard = after["wireguard"]
+    await _assert_the_wireguard_keys_ended_right(case, wireguard, label)
+    assert await _holders_of(case.shared_public) == [case.bystander], label
+    assert after["vless"]["flow"] == "xtls-rprx-vision", (label, after["vless"])
+    assert after["vless"]["id"] != case.before["vless"]["id"], label
+    async with TestSession() as session:
+        revoked_at = (await session.execute(select(User.sub_revoked_at).where(User.id == case.target))).scalar_one()
+    assert revoked_at is not None, label
+    pushes = [push for push in case.pushed if push[0] == str(case.target)]
+    assert pushes, f"{label}: nothing about user {case.target} reached the node"
+    assert pushes[-1] == (str(case.target), wireguard.get("public_key"), wireguard.get("peer_ips") or []), (
+        f"{label}: the node was last sent WireGuard key {pushes[-1][1]!r} and peer IPs {pushes[-1][2]} for user "
+        f"{case.target}, but the database holds {wireguard.get('public_key')!r} and {wireguard.get('peer_ips')}; "
+        f"every push for the user: {pushes}"
+    )
+
+
+@pytest.mark.parametrize("grants", GRANTS)
+@pytest.mark.parametrize("order", list(itertools.permutations(MOVES)), ids=" then ".join)
+async def test_a_revoke_interleaved_with_an_edit_and_a_group_change_ends_consistent(monkeypatch, order, grants):
+    case = await _interleaving_setup(monkeypatch, "10.131.0.1/24", "10.132.0.1/24", grants_wireguard=GRANTS[grants])
+    async with TestSession() as revoke_db:
+        stale = await get_user_by_id(revoke_db, case.target)
+        for move in order:
+            await _run_move(case, move, revoke_db, stale)
+    await _assert_the_interleaving_ended_consistent(case, f"{grants}: {' then '.join(order)}")
+
+
+@pytest.mark.parametrize("grants", GRANTS)
+async def test_a_revoke_racing_an_edit_and_a_group_change_ends_consistent(monkeypatch, grants):
+    if engine.dialect.name not in ("mysql", "mariadb", "postgresql"):
+        pytest.skip(reason="real concurrency needs row locks; SQLite serializes whole-file writers")
+    case = await _interleaving_setup(monkeypatch, "10.133.0.1/24", "10.134.0.1/24", grants_wireguard=GRANTS[grants])
+
+    async def revoke():
+        async with TestSession() as revoke_db:
+            await _run_move(case, "revoke", revoke_db, await get_user_by_id(revoke_db, case.target))
+
+    outcomes = await asyncio.gather(
+        asyncio.wait_for(revoke(), timeout=60),
+        asyncio.wait_for(_run_move(case, "edit"), timeout=60),
+        asyncio.wait_for(_run_move(case, "group change"), timeout=60),
+        return_exceptions=True,
+    )
+    assert outcomes == [None, None, None], outcomes
+    await _assert_the_interleaving_ended_consistent(case, f"{grants}: concurrent")

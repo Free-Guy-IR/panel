@@ -54,6 +54,7 @@ All facts were read at 72ad0e4a5 on 2026-09-23 through read-only exploration of 
 - Rationale:
   - It stops new sharers (91 per 24 h) without rewriting the 3,056 existing rows.
   - The v5.34.23 grant path regenerates a shared key when a user becomes WireGuard-bound.
+- Revoke is excluded (2026-09-30): a revoke clears the keys of a user without WireGuard access and gives an entitled user a fresh pair, like upstream. See plan D-E1(b).
 
 ## R6b E4b: MTProto collision policy
 - Decision: regenerate, like the 8 guarded secrets (uniqueness.py:132-148).

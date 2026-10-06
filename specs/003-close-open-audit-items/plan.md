@@ -181,7 +181,10 @@ No `create_node` and no `_shutdown_node`. `_node_usage_coefficient` (record_usag
 - **(b) Client keys.** Add the new `app/fork/proxy_secrets/wireguard_scope.py::drop_unentitled_wireguard_keys(db, proxy_settings, groups, *, exclude_user_id)` and call it first in `prepare_fork_proxy_settings`.
   - It runs only when `user_has_wireguard_access(db, groups)` is false.
   - When it runs, it replaces `proxy_settings.wireguard` with the stored value: `exclude_user_id`'s row, or empty on create.
-  - Revoke (`_prepare_revoked_proxy_settings`) calls the same seam, so a non-entitled user keeps its stored keys there too.
+  - Revoke does not use this seam (decision 2026-09-30, main's GO after P2-2's evidence: a revoke is an explicit rotation request, and E1's rationale of not mass-rewriting the existing sharers and blocking new plants does not need a revoked user to keep a dormant shared pair).
+    - A user without WireGuard access gets no keys on revoke (private and public key None, peer IPs kept), as upstream dev da871f475 does.
+    - A WireGuard-entitled user gets a fresh unique keypair from `prepare_wireguard_keys`.
+    - Create, bulk create and modify keep E1: incoming keys are ignored and the stored ones kept.
   - The existing sharers are not rewritten. They are regenerated on grant by the v5.34.23 path.
 
 ### D-E3 Named lock row + fresh read (P2)
