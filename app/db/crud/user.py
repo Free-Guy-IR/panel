@@ -30,6 +30,7 @@ from app.db.models import (
     inbounds_groups_association,
     users_groups_association,
 )
+from app.fork.crud import node_removals
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.crud.owner_traffic import lock_owner_rows, shift_admin_traffic
 from app.fork.crud.user_locks import (
@@ -1100,6 +1101,7 @@ async def _delete_user_dependencies(db: AsyncSession, user_ids: list[int]):
         return
 
     await db.execute(users_groups_association.delete().where(users_groups_association.c.user_id.in_(user_ids)))
+    await node_removals.mark_node_removals(db, user_ids)
 
 
 async def _delete_locked_users(

@@ -1,5 +1,6 @@
 from app.fork.models.named_lock import NamedLock
 from app.fork.models.node_stat_ack import NodeStatAck
+from app.fork.models.pending_node_removal import PendingNodeRemoval
 from app.fork.models.pending_user_resync import PendingUserResync
 from app.fork.models.proxy_secret_claim import ProxySecretClaim
 
@@ -11,6 +12,7 @@ __all__ = [
     "NamedLock",
     "NodeInboundUsage",
     "NodeStatAck",
+    "PendingNodeRemoval",
     "PendingUserResync",
     "ProxySecretClaim",
     "TrafficLogIdentity",

@@ -63,6 +63,7 @@ from app.fork.crud.user_locks import (
     refresh_user_state_for_update,
 )
 from app.fork.operation.base_extras import restrict_users_query_by_groups
+from app.fork.operation.node_push_decision import locked_node_state, node_state_changed
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.fork.operation.user_extras import UserExtrasMixin, keep_stored_secrets, prepare_fork_proxy_settings
 from app.fork.operation.user_guards import (
@@ -117,7 +118,6 @@ from app.models.user import (
     UserUsageQuery,
 )
 from app.node.sync import remove_users as sync_remove_users, sync_user, sync_users
-from app.node.user import node_payload_signature
 from app.operation import BaseOperation, OperatorType
 from app.operation.permissions import (
     PermissionDenied,
@@ -909,11 +909,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         admin: AdminDetails,
         *,
         validated_groups=None,
-        before: tuple | None = None,
     ) -> UserNotificationResponse:
-        old_status = db_user.status
-        if before is None:
-            before = await node_payload_signature(db_user)
+        before = await locked_node_state(db, db_user)
+        old_status = before.status
 
         self._apply_explicit_null_hwid_limit(db_user, modified_user)
         if modified_user.status is not None:
@@ -924,7 +922,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self.raise_error(message=str(exc), code=409, db=db)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
-        if await node_payload_signature(db_user) == before:
+        if not await node_state_changed(db_user, before):
             # Nothing a node receives changed (credentials, inbounds from
             # enabled groups, status incl. implicit flips): no fan-out to nodes.
             user = await self.validate_user(db_user)
@@ -987,14 +985,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         if not skip_role_limits:
             await self._enforce_manual_user_write_access(admin, db)
 
-        # Canonical node payload before anything is prepared or written.
-        before = await node_payload_signature(db_user)
         validated_groups = await self._prepare_modified_user(
             db, db_user, modified_user, admin, skip_role_limits=skip_role_limits
         )
-        return await self._apply_modified_user(
-            db, db_user, modified_user, admin, validated_groups=validated_groups, before=before
-        )
+        return await self._apply_modified_user(db, db_user, modified_user, admin, validated_groups=validated_groups)
 
     async def modify_user(
         self, db: AsyncSession, username: str, modified_user: UserModify, admin: AdminDetails

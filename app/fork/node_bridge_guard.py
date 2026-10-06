@@ -1,6 +1,6 @@
 import PasarGuardNodeBridge
 from packaging.version import InvalidVersion, Version
-from PasarGuardNodeBridge import controller, grpclib, storage
+from PasarGuardNodeBridge import controller, grpclib, log_stream, storage
 
 MINIMUM_BRIDGE_VERSION = Version("0.9.2")
 REQUIRED_BRIDGE_API = (
@@ -12,10 +12,9 @@ REQUIRED_BRIDGE_API = (
     (storage.InMemoryUserSyncStore, "retire_captured"),
     (storage.InMemoryUserSyncStore, "fence_state"),
     (storage.InMemoryUserSyncStore, "has_pending"),
-    (controller.Controller, "_deliver_isolating_rejects"),
-    (controller.Controller, "quarantined_users"),
     (grpclib.Node, "_probe_capabilities"),
     (grpclib, "RetirableChannel"),
+    (log_stream, "deliver_stream_error"),
 )
 
 

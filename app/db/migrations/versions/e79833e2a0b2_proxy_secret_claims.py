@@ -8,7 +8,7 @@ from alembic import op
 from app.db.compiles_types import SqliteCompatibleBigInteger
 
 revision = "e79833e2a0b2"
-down_revision = "8158387867c9"
+down_revision = "fd192e9628a5"
 branch_labels = None
 depends_on = None
 

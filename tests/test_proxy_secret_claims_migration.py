@@ -13,7 +13,7 @@ from app.fork.proxy_secrets.claims import secret_digest
 from app.fork.proxy_secrets.fields import ProxySecretField
 from app.models.proxy import ProxyTable
 
-BEFORE_CLAIMS = "8158387867c9"
+BEFORE_CLAIMS = "fd192e9628a5"
 CLAIMS = "e79833e2a0b2"
 
 pytestmark = pytest.mark.skipif(not base.database_settings.is_sqlite, reason="the migration fixture builds a SQLite file")

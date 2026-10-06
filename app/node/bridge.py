@@ -129,7 +129,10 @@ class _QueuedBatchSync:
         if handler is None:
             return users
         fresh = {user.email: user for user in await handler(self.node_id, [user.email for user in users])}
-        return [fresh.get(user.email, user) for user in users]
+        return [
+            fresh[user.email] if user.email in fresh else User(email=user.email) if user.email.isdigit() else user
+            for user in users
+        ]
 
     async def sync_users_chunked(self, users, chunk_size=100, flush_pending=False, timeout=None):
         if not _queued_sync.get() or not users:
