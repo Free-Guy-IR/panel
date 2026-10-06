@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app import notification
 from app.db.models import NodeStatus, User, UserStatus, users_groups_association
 from app.jobs import node_checker
+from app.models.proxy import ProxyTable
 from app.models.user import UserModify
 from app.node import node_manager, sync as node_sync
 from app.operation import OperatorType, node as node_operation
@@ -18,7 +19,7 @@ from app.operation.node import NodeOperation
 from app.operation.user import UserOperation
 from tests.api import GetTestDB, TestSession
 from tests.api.helpers import unique_name
-from tests.test_node_connect_stale_snapshot import SETTINGS, Harness, Remote, _bulk, eventually
+from tests.test_node_connect_stale_snapshot import Harness, Remote, _bulk, eventually
 
 OWNER = SimpleNamespace(username="owner", is_owner=True, role=None, id=None)
 WINDOW_SECONDS = 4.0
@@ -57,7 +58,11 @@ async def seed_user_in_the_same_group(user_id: int) -> int:
                 select(users_groups_association.c.groups_id).where(users_groups_association.c.user_id == user_id)
             )
         ).scalar_one()
-        user = User(username=unique_name("late_start_user"), proxy_settings=SETTINGS, status=UserStatus.active)
+        user = User(
+            username=unique_name("late_start_user"),
+            proxy_settings=ProxyTable().dict(no_obj=True),
+            status=UserStatus.active,
+        )
         session.add(user)
         await session.flush()
         await session.execute(users_groups_association.insert(), [{"user_id": user.id, "groups_id": group_id}])
