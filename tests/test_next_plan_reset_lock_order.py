@@ -69,6 +69,8 @@ def quiet(monkeypatch: pytest.MonkeyPatch, recorder_db):
         return None
 
     monkeypatch.setattr(status_review, "GetDB", record_usages.GetDB)
+    monkeypatch.setattr(review_users, "GetDB", record_usages.GetDB)
+    monkeypatch.setattr(status_review, "_postponed_renewals", {}, raising=False)
     monkeypatch.setattr(review_users, "sync_users", AsyncMock())
     monkeypatch.setattr(review_users, "_notify_status_change", nothing)
     monkeypatch.setattr(review_users, "_notify_next_plan", nothing)
@@ -285,7 +287,7 @@ async def test_a_job_renewal_that_keeps_deadlocking_is_left_for_the_next_run_wit
 
     monkeypatch.setattr(review_users, "reset_user_by_next", always_deadlocks)
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         if path == "expire_job":
             await status_review.expire_users_under_lock([stuck, other])
         else:
@@ -296,7 +298,7 @@ async def test_a_job_renewal_that_keeps_deadlocking_is_left_for_the_next_run_wit
     async with recorder_db() as session:
         status = (await session.execute(select(User.status).where(User.id == stuck))).scalar_one()
     assert status == UserStatus.active
-    assert any(str(stuck) in record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR)
+    assert any(str(stuck) in record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING)
 
 
 @pytest.mark.asyncio
@@ -317,7 +319,7 @@ async def test_a_job_renewal_whose_lock_wait_times_out_is_left_for_the_next_run_
 
     monkeypatch.setattr(review_users, "reset_user_by_next", times_out)
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         if path == "expire_job":
             await status_review.expire_users_under_lock([waiting, other])
         else:
@@ -325,7 +327,7 @@ async def test_a_job_renewal_whose_lock_wait_times_out_is_left_for_the_next_run_
 
     assert attempts.count(waiting) == 1, attempts
     assert (await _plan_left(recorder_db, waiting), await _plan_left(recorder_db, other)) == (True, False)
-    assert any(str(waiting) in record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR)
+    assert any(str(waiting) in record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING)
 
 
 async def _delete_unrelated(recorder_db, _renewing: int, bystander: int) -> str:
