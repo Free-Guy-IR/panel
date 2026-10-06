@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.db.models import Group, ProxyInbound, User, UserStatus
+from app.fork.operation import node_push_decision
 from app.models.proxy import ProxyTable
 from app.models.user import UserModify
 from app.nats.node_rpc import encode_node_command
@@ -61,8 +62,8 @@ async def _apply(monkeypatch, db_user, mutate):
         ),
         raising=False,
     )
-    before = await user_operation.node_payload_signature(db_user)
-    await operation._apply_modified_user(None, db_user, UserModify(), SimpleNamespace(username="admin"), before=before)
+    monkeypatch.setattr(node_push_decision, "refresh_user_state_for_update", AsyncMock())
+    await operation._apply_modified_user(None, db_user, UserModify(), SimpleNamespace(username="admin"))
     await asyncio.sleep(0)
     return synced.await_count
 
