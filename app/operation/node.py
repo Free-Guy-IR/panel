@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator, Awaitable, Callable
+import itertools
+from collections import Counter
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from typing import ClassVar
 
 from fastapi import HTTPException
@@ -65,9 +67,10 @@ from app.models.stats import (
 )
 from app.nats import needs_shared_bridge_memory
 from app.nats.node_rpc import node_nats_client
-from app.node import core_users, node_manager
+from app.node import node_manager
 from app.node.manager_sync import publish_node_sync
 from app.node.nats_memory import clear_bridge_memory_for_node
+from app.node.user import core_users_from_rows, fetch_core_user_rows
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
 from config import runtime_settings
@@ -75,9 +78,49 @@ from config import runtime_settings
 MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
 CONNECT_CONCURRENCY = 10
+CORE_USERS_GATHER_SECONDS = 0.005
 type CoreUsers = list | Callable[[], Awaitable[list]]
 
 logger = get_logger("node-operation")
+
+
+class CoreUsersSnapshots:
+    def __init__(self, db: AsyncSession, cores: dict[int, object]):
+        self._db = db
+        self._cores = cores
+        self._lock = asyncio.Lock()
+        self._clock = itertools.count()
+        self._waiting: Counter[int] = Counter()
+        self._latest: dict[int, tuple[int, list]] = {}
+
+    async def read(self, core_ids: Iterable[int], db: AsyncSession | None = None) -> dict[int, list]:
+        cores = {core_id: self._cores[core_id] for core_id in core_ids}
+        inbound_tag_sets = [core.inbounds for core in cores.values()]
+        if db is None:
+            async with AsyncSession(bind=self._db.bind) as session:
+                rows = await fetch_core_user_rows(db=session, inbound_tag_sets=inbound_tag_sets)
+        else:
+            rows = await fetch_core_user_rows(db=db, inbound_tag_sets=inbound_tag_sets)
+        return {core_id: core_users_from_rows(rows, core.inbounds, core.protocols) for core_id, core in cores.items()}
+
+    def loader(self, core_id: int) -> Callable[[], Awaitable[list]]:
+        async def load() -> list:
+            called = next(self._clock)
+            self._waiting[core_id] += 1
+            try:
+                async with self._lock:
+                    latest = self._latest.get(core_id)
+                    if latest is None or latest[0] < called:
+                        await asyncio.sleep(CORE_USERS_GATHER_SECONDS)
+                        started = next(self._clock)
+                        waiting = sorted(waiting_id for waiting_id, count in self._waiting.items() if count)
+                        for read_id, users in (await self.read(waiting)).items():
+                            self._latest[read_id] = (started, users)
+                    return self._latest[core_id][1]
+            finally:
+                self._waiting[core_id] -= 1
+
+        return load
 
 
 class NodeOperation(BaseOperation):
@@ -230,33 +273,16 @@ class NodeOperation(BaseOperation):
 
         resolved_cores = await core_manager.get_cores(core_ids | {1})
         default_core = resolved_cores.get(1)
-        cores_by_id: dict[int, object | None] = {}
-        users_by_core: dict[int, CoreUsers] = {}
-        loaded_users: dict[int, list] = {}
-        load_lock = asyncio.Lock()
-
-        def user_loader(core_id, core):
-            async def load():
-                # Bulk connects share one session. Serialize first reads and reuse
-                # the same snapshot for nodes that actually need a Start RPC.
-                async with load_lock:
-                    if core_id not in loaded_users:
-                        loaded_users[core_id] = await core_users(
-                            db=db, inbound_tags=core.inbounds, allowed_protocols=core.protocols
-                        )
-                    return loaded_users[core_id]
-
-            return load
-
-        for core_id in core_ids:
-            core = resolved_cores.get(core_id) or default_core
-            cores_by_id[core_id] = core
-            if core is None:
-                users_by_core[core_id] = []
-                continue
-
-            load = user_loader(core_id, core)
-            users_by_core[core_id] = load if lazy else await load()
+        cores_by_id: dict[int, object | None] = {
+            core_id: resolved_cores.get(core_id) or default_core for core_id in core_ids
+        }
+        cores = {core_id: core for core_id, core in cores_by_id.items() if core is not None}
+        users_by_core: dict[int, CoreUsers] = {core_id: [] for core_id in cores_by_id.keys() - cores.keys()}
+        snapshots = CoreUsersSnapshots(db, cores)
+        if lazy:
+            users_by_core.update({core_id: snapshots.loader(core_id) for core_id in cores})
+        else:
+            users_by_core.update(await snapshots.read(cores, db))
 
         return cores_by_id, users_by_core
 
@@ -762,6 +788,7 @@ class NodeOperation(BaseOperation):
 
         core_ids = {node.core_config_id or 1 for node in nodes}
         cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids, lazy=True)
+        await db.commit()
         sem = asyncio.Semaphore(CONNECT_CONCURRENCY)
 
         async def connect_single(node: Node) -> dict | None:
@@ -849,6 +876,7 @@ class NodeOperation(BaseOperation):
 
         core_id = db_node.core_config_id or 1
         cores_by_id, users_by_core = await self._get_core_users_map(db, {core_id}, lazy=True)
+        await db.commit()
         core = cores_by_id.get(core_id)
         users = users_by_core.get(core_id, [])
 
@@ -1139,6 +1167,7 @@ class NodeOperation(BaseOperation):
             # fence, after any queued deltas were drained, so nothing created
             # between the read and the flush can be lost.
             _, users_by_core = await self._get_core_users_map(db, {core_id}, lazy=True)
+            await db.commit()
             users = users_by_core.get(core_id, [])
             if await node_manager.sync_full(node_id, users, flush_pending=flush_users) is None:
                 await self.raise_error(message="Node is not connected", code=409)

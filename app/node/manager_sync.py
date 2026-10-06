@@ -61,6 +61,7 @@ async def handle_node_message(data: dict) -> None:
                 return
             core_id = db_node.core_config_id or 1
             cores_by_id, users_by_core = await NodeOperation._get_core_users_map(db, {core_id}, lazy=True)
+            await db.commit()
             core = cores_by_id.get(core_id)
             users = users_by_core.get(core_id, [])
 

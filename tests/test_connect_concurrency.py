@@ -40,7 +40,7 @@ async def test_connect_nodes_bulk_local_caps_concurrency(monkeypatch: pytest.Mon
     nodes = [
         SimpleNamespace(id=i, status=NodeStatus.connecting, core_config_id=1, name=f"n{i}") for i in range(25)
     ]
-    await op._connect_nodes_bulk_local(MagicMock(), nodes)
+    await op._connect_nodes_bulk_local(MagicMock(commit=AsyncMock()), nodes)
 
     assert peak <= CONNECT_CONCURRENCY
     assert peak > 1
