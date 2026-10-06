@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 from app import notification
 from app.db.crud.user import get_user_by_id
-from app.db.models import Admin, User, UserStatus
+from app.db.models import Admin, AdminRole, User, UserStatus
 from app.fork.jobs import connection_limiter
 from app.fork.models.connection import ConnectionRestriction
 from app.models.user import UserStatusToggle
@@ -74,7 +74,10 @@ async def test_limiter_release_re_enables_a_user_whose_admin_disabled_every_user
     from app.operation.admin import AdminOperation
 
     async with TestSession() as session:
-        owner_admin = Admin(username=unique_name("a1_admin"), hashed_password="x", role_id=3)
+        role = AdminRole(name=unique_name("a1_role"), is_owner=False, permissions={}, limits={}, features={}, access={})
+        session.add(role)
+        await session.flush()
+        owner_admin = Admin(username=unique_name("a1_admin"), hashed_password="x", role_id=role.id)
         session.add(owner_admin)
         await session.commit()
         admin_id = owner_admin.id
@@ -102,11 +105,10 @@ async def test_an_admin_disable_that_races_the_limiter_release_leaves_the_user_d
 
         async with TestGetDB() as limiter_db:
             await connection_limiter._release_due(limiter_db, None)
-        await settle()
-        assert email in node.live, "the limiter release did not put the user back on the node"
+        assert await settle(lambda: email in node.live), "the limiter release did not put the user back on the node"
 
         answer = await operation._set_user_disabled(db, db_user, UserStatusToggle(disabled=True), ADMIN)
-    await settle()
+    await settle(lambda: email not in node.live)
 
     async with TestSession() as session:
         stored = (await session.get(User, user_id)).status
@@ -135,4 +137,6 @@ async def test_an_admin_enable_that_races_the_limiter_release_answers_and_pushes
     async with TestSession() as session:
         stored = (await session.get(User, user_id)).status
     assert (answer.status, stored) == (UserStatus.active, UserStatus.active)
-    assert node.live.get(email), f"user {email} is active in the database but missing from the node"
+    assert await settle(lambda: bool(node.live.get(email))), (
+        f"user {email} is active in the database but missing from the node"
+    )

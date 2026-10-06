@@ -35,6 +35,7 @@ from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.crud.owner_traffic import lock_owner_rows, shift_admin_traffic
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
+    NextPlanUnavailable,
     auto_delete_due,
     reactivate_limited_users,
     refresh_next_plan_for_update,
@@ -1446,11 +1447,12 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
     Returns:
         User: The updated user object.
     """
+    from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock
+
+    await acquire_proxy_secrets_lock(db)
     await refresh_user_state_for_update(db, db_user)
     if await refresh_next_plan_for_update(db, db_user) is None:
-        await db.commit()
-        await refresh_and_load_user(db, db_user)
-        return db_user
+        raise NextPlanUnavailable(db_user.id)
 
     remaining_traffic = (db_user.data_limit or 0) - db_user.used_traffic
     if db_user.next_plan.user_template_id is None:

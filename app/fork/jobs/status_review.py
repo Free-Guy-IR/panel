@@ -1,7 +1,8 @@
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import GetDB
@@ -13,9 +14,20 @@ from app.db.crud.user import (
     update_users_status,
 )
 from app.db.models import User, UserStatus
+from app.fork.proxy_secrets.errors import describe_failure
+from app.fork.proxy_secrets.locks import (
+    PROXY_SECRETS_LOCK,
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_deadlock,
+    is_lock_unavailable,
+)
 from app.node.sync import remove_users as sync_remove_users
 
 USER_TRANSITION_BATCH_SIZE = 500
+NEXT_PLAN_ATTEMPTS = 3
+NEXT_PLAN_POSTPONEMENTS_BEFORE_ERROR = 5
+_postponed_renewals: dict[int, int] = {}
 EXPIRABLE = (User.status == UserStatus.active, User.is_expired)
 STARTABLE = (User.status == UserStatus.on_hold, User.become_online)
 CAME_ONLINE = (*STARTABLE, User.online_at.isnot(None))
@@ -43,6 +55,41 @@ def _batches(user_ids: Iterable[int], size: int = USER_TRANSITION_BATCH_SIZE) ->
     return [ordered[i : i + size] for i in range(0, len(ordered), size)]
 
 
+async def renew_next_plan_users(
+    db: AsyncSession,
+    user_ids: Iterable[int],
+    lock_users: Callable[[AsyncSession, list[int]], Awaitable[list[User]]],
+    status: UserStatus,
+) -> None:
+    from app.jobs.review_users import apply_status_changes, logger
+
+    for user_id in user_ids:
+        for attempt in range(1, NEXT_PLAN_ATTEMPTS + 1):
+            try:
+                await acquire_proxy_secrets_lock(db)
+                await apply_status_changes(db, await lock_users(db, [user_id]), status)
+                await db.commit()
+                _postponed_renewals.pop(user_id, None)
+                break
+            except (DBAPIError, NamedLockMissing) as exc:
+                await db.rollback()
+                if not is_lock_unavailable(exc):
+                    raise
+                if is_deadlock(exc) and attempt < NEXT_PLAN_ATTEMPTS:
+                    continue
+                runs = _postponed_renewals[user_id] = _postponed_renewals.get(user_id, 0) + 1
+                message = (
+                    f"next plan of user {user_id} was postponed on {runs} consecutive run(s) because the "
+                    f"{PROXY_SECRETS_LOCK!r} named lock or the user's row stayed unavailable after {attempt} "
+                    f"attempt(s); the user stays eligible and the next run retries it ({describe_failure(exc)})"
+                )
+                if runs >= NEXT_PLAN_POSTPONEMENTS_BEFORE_ERROR:
+                    logger.error(message)
+                else:
+                    logger.warning(message)
+                break
+
+
 async def expire_users_under_lock(user_ids: Iterable[int]) -> None:
     from app.jobs.review_users import apply_status_changes
 
@@ -50,14 +97,17 @@ async def expire_users_under_lock(user_ids: Iterable[int]) -> None:
     if not batches:
         return
 
+    async def lock_expirable(db: AsyncSession, ids: list[int]) -> list[User]:
+        return await lock_users_matching(db, ids, EXPIRABLE)
+
     async with GetDB() as db:
         for batch in batches:
             users = await lock_users_matching(db, batch, EXPIRABLE)
             await apply_status_changes(db, [user for user in users if user.next_plan is None], UserStatus.expired)
             await db.commit()
-            for user_id in [user.id for user in users if user.next_plan is not None]:
-                await apply_status_changes(db, await lock_users_matching(db, [user_id], EXPIRABLE), UserStatus.expired)
-                await db.commit()
+            await renew_next_plan_users(
+                db, [user.id for user in users if user.next_plan is not None], lock_expirable, UserStatus.expired
+            )
 
 
 async def start_on_hold_users_under_lock(user_ids: Iterable[int], predicates: tuple = STARTABLE) -> None:

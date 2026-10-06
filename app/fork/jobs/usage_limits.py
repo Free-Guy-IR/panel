@@ -31,6 +31,7 @@ async def _lock_limitable_users(db: AsyncSession, user_ids: list[int], statuses:
 
 
 async def limit_users_under_lock(user_ids: Iterable[int], statuses: Iterable[UserStatus]) -> None:
+    from app.fork.jobs.status_review import renew_next_plan_users
     from app.jobs.review_users import apply_status_changes
 
     ordered_ids = sorted(set(user_ids))
@@ -38,14 +39,17 @@ async def limit_users_under_lock(user_ids: Iterable[int], statuses: Iterable[Use
     if not ordered_ids:
         return
 
+    async def lock_limitable(db: AsyncSession, ids: list[int]) -> list[User]:
+        return await _lock_limitable_users(db, ids, allowed)
+
     async with GetDB() as db:
         for start in range(0, len(ordered_ids), USER_LIMIT_BATCH_SIZE):
             users = await _lock_limitable_users(db, ordered_ids[start : start + USER_LIMIT_BATCH_SIZE], allowed)
             await apply_status_changes(db, [user for user in users if user.next_plan is None], UserStatus.limited)
             await db.commit()
-            for user_id in [user.id for user in users if user.next_plan is not None]:
-                await apply_status_changes(db, await _lock_limitable_users(db, [user_id], allowed), UserStatus.limited)
-                await db.commit()
+            await renew_next_plan_users(
+                db, [user.id for user in users if user.next_plan is not None], lock_limitable, UserStatus.limited
+            )
 
 
 async def enforce_user_limits_now(user_ids: Iterable[int]) -> None:

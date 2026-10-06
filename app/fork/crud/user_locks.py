@@ -20,6 +20,10 @@ MODIFY_STATUS_KEYS = ("status", "used_traffic", "data_limit", "_expire", "on_hol
 USER_LOCK_BATCH_SIZE = 500
 
 
+class NextPlanUnavailable(LookupError):
+    pass
+
+
 def _set_unmodified(db_user: User, values: dict[str, object]) -> None:
     state = inspect(db_user)
     for key, value in values.items():
@@ -36,6 +40,29 @@ async def refresh_user_state_for_update(db: AsyncSession, db_user: User, keys: S
         return False
     _set_unmodified(db_user, dict(zip(keys, row, strict=True)))
     return True
+
+
+async def lock_user_rows(db: AsyncSession, user_ids: Iterable[int]) -> None:
+    ordered_ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
+    for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
+        chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
+        await db.execute(select(User.id).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
+
+
+async def refresh_users_state_for_update(
+    db: AsyncSession, users: Iterable[User], keys: Sequence[str] = MODIFY_STATUS_KEYS
+) -> list[User]:
+    by_id = {db_user.id: db_user for db_user in users if db_user.id is not None}
+    ordered_ids = sorted(by_id)
+    columns = [User.__mapper__.attrs[key].columns[0] for key in keys]
+    present: set[int] = set()
+    for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
+        chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
+        rows = await db.execute(select(User.id, *columns).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
+        for user_id, *values in rows.all():
+            _set_unmodified(by_id[user_id], dict(zip(keys, values, strict=True)))
+            present.add(user_id)
+    return [db_user for db_user in by_id.values() if db_user.id in present]
 
 
 async def refresh_next_plan_for_update(db: AsyncSession, db_user: User) -> NextPlan | None:

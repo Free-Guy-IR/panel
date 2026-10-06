@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.models import ConnectionRestriction, User, UserStatus
+from app.fork.proxy_secrets.locks import read_committed_rows
 from app.models.settings import ConnectionLimit
 from app.utils.logger import get_logger
 
@@ -37,6 +38,7 @@ logger = get_logger("connection-enforcement")
 
 # A step of 0 is a warning and touches nothing; -1 disables until a person
 # lifts it. Anything else is a disable of that many minutes.
+RELEASE_LOCK_BATCH_SIZE = 500
 WARNING_ONLY = 0
 UNTIL_LIFTED = -1
 
@@ -128,6 +130,18 @@ async def restrict(
     return restriction
 
 
+async def _lock_user_rows(db: AsyncSession, user_ids: list[int]) -> list[int]:
+    locked: list[int] = []
+    for start in range(0, len(user_ids), RELEASE_LOCK_BATCH_SIZE):
+        chunk = user_ids[start : start + RELEASE_LOCK_BATCH_SIZE]
+        locked.extend(
+            (await db.execute(select(User.id).where(User.id.in_(chunk)).order_by(User.id).with_for_update()))
+            .scalars()
+            .all()
+        )
+    return locked
+
+
 async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tuple[ConnectionRestriction, User]]:
     """Restrictions whose time is up - or all of them, when enforcement is off.
 
@@ -140,15 +154,27 @@ async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tu
             ConnectionRestriction.restore_at.is_not(None),
             ConnectionRestriction.restore_at <= datetime.now(UTC),
         ]
-    locked = (
-        await db.execute(
-            select(ConnectionRestriction.id)
-            .join(User, User.id == ConnectionRestriction.user_id)
-            .where(*due)
-            .order_by(User.id, ConnectionRestriction.id)
-            .with_for_update()
+    candidates = sorted(
+        {user_id for (user_id,) in await read_committed_rows(db, select(ConnectionRestriction.user_id).where(*due))}
+    )
+    locked_users = await _lock_user_rows(db, candidates)
+    if not locked_users:
+        return []
+    locked: list[int] = []
+    for start in range(0, len(locked_users), RELEASE_LOCK_BATCH_SIZE):
+        chunk = locked_users[start : start + RELEASE_LOCK_BATCH_SIZE]
+        locked.extend(
+            (
+                await db.execute(
+                    select(ConnectionRestriction.id)
+                    .where(ConnectionRestriction.user_id.in_(chunk), *due)
+                    .order_by(ConnectionRestriction.user_id, ConnectionRestriction.id)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
         )
-    ).scalars().all()
     if not locked:
         return []
     stmt = (
@@ -192,15 +218,18 @@ def release(restriction: ConnectionRestriction, user: User) -> bool:
 
 async def close_active_restrictions(db: AsyncSession, user_ids: Iterable[int], reason: str) -> int:
     ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
-    if not ids:
-        return 0
-    result = await db.execute(
-        update(ConnectionRestriction)
-        .where(ConnectionRestriction.user_id.in_(ids), ConnectionRestriction.active.is_(True))
-        .values(active=False, restored_at=datetime.now(UTC))
-        .execution_options(synchronize_session=False)
-    )
-    closed = result.rowcount or 0
+    closed = 0
+    for start in range(0, len(ids), RELEASE_LOCK_BATCH_SIZE):
+        result = await db.execute(
+            update(ConnectionRestriction)
+            .where(
+                ConnectionRestriction.user_id.in_(ids[start : start + RELEASE_LOCK_BATCH_SIZE]),
+                ConnectionRestriction.active.is_(True),
+            )
+            .values(active=False, restored_at=datetime.now(UTC))
+            .execution_options(synchronize_session=False)
+        )
+        closed += result.rowcount or 0
     if closed:
         logger.info("closed %d device-limit restriction(s): %s", closed, reason)
     return closed
@@ -208,22 +237,6 @@ async def close_active_restrictions(db: AsyncSession, user_ids: Iterable[int], r
 
 async def close_active_restriction(db: AsyncSession, user_id: int, reason: str) -> bool:
     return await close_active_restrictions(db, [user_id], reason) > 0
-
-
-async def close_active_restrictions_for_admin(db: AsyncSession, admin_id: int | None, reason: str) -> int:
-    owned = select(User.id)
-    if admin_id is not None:
-        owned = owned.where(User.admin_id == admin_id)
-    result = await db.execute(
-        update(ConnectionRestriction)
-        .where(ConnectionRestriction.user_id.in_(owned), ConnectionRestriction.active.is_(True))
-        .values(active=False, restored_at=datetime.now(UTC))
-        .execution_options(synchronize_session=False)
-    )
-    closed = result.rowcount or 0
-    if closed:
-        logger.info("closed %d device-limit restriction(s): %s", closed, reason)
-    return closed
 
 
 async def forget_old(db: AsyncSession, retention_days: int) -> int:

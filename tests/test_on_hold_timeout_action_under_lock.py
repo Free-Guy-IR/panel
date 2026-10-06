@@ -316,7 +316,8 @@ async def test_delete_action_overlapping_a_group_changing_modify_neither_deadloc
     if extends_the_hold:
         assert await _status(recorder_db, user_id) == UserStatus.on_hold
         assert hold_events["removed_after_commit"] == []
-        assert hold_events["pushed"] == [[(user_id, UserStatus.on_hold)]]
+        repushed = [[(user_id, UserStatus.on_hold)]] if hold_events["node_removed"] else []
+        assert hold_events["pushed"] == repushed, hold_events
     else:
         assert await _status(recorder_db, user_id) is None
         assert hold_events["removed_after_commit"] == [[user_id]]

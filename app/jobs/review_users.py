@@ -17,6 +17,7 @@ from app.db.crud.user import (
     update_users_status,
 )
 from app.db.models import ReminderType, User, UserStatus
+from app.fork.crud.user_locks import NextPlanUnavailable
 from app.fork.jobs.status_review import (
     disable_on_hold_users_under_lock,
     expire_users_under_lock,
@@ -75,13 +76,18 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
 
     reset_users: list[User] = []
     for db_user in next_plan_users:
-        reset_users.append(
-            await reset_user_by_next(
-                db,
-                db_user,
-                clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+        try:
+            reset_users.append(
+                await reset_user_by_next(
+                    db,
+                    db_user,
+                    clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+                )
             )
-        )
+        except NextPlanUnavailable:
+            await apply_status_changes(db, [db_user], status)
+    if not reset_users:
+        return
     await sync_users(reset_users)
     for db_user in reset_users:
         await _notify_next_plan(db_user)

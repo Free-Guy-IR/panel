@@ -58,8 +58,11 @@ from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
+    NextPlanUnavailable,
+    lock_user_rows,
     refresh_next_plan_for_update,
     refresh_user_state_for_update,
+    refresh_users_state_for_update,
 )
 from app.fork.operation.base_extras import restrict_users_query_by_groups
 from app.fork.operation.node_push_decision import locked_node_state, node_state_changed
@@ -71,7 +74,13 @@ from app.fork.operation.user_guards import (
     reject_negative_next_plan,
 )
 from app.fork.proxy_secrets import ProxySecretUniquenessError, supplied_secret_fields
-from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
+from app.fork.proxy_secrets.locks import (
+    LOCK_UNAVAILABLE_DETAIL,
+    TEMPLATE_RESET_KEPT_DETAIL,
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_unavailable,
+)
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
@@ -938,19 +947,22 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         toggle: UserStatusToggle,
         admin: AdminDetails,
     ) -> UserResponse:
-        closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
-        await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
-        old_status = db_user.status
-        new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
+        try:
+            await lock_user_rows(db, [db_user.id])
+            closed = await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
+            await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
+            old_status = db_user.status
+            new_status = UserStatus.disabled if toggle.disabled else _resolve_enabled_user_status(db_user)
 
-        if db_user.status != new_status:
-            db_user.status = new_status
-            db_user.last_status_change = dt.now(UTC)
+            changed = db_user.status != new_status
+            if changed:
+                db_user.status = new_status
+                db_user.last_status_change = dt.now(UTC)
             await db.commit()
-            await load_user_attrs(db_user, load_admin_role=True)
-        elif closed:
-            await db.commit()
-            await load_user_attrs(db_user, load_admin_role=True)
+            if changed or closed:
+                await load_user_attrs(db_user, load_admin_role=True)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
         user = await self.update_user(db_user)
 
@@ -977,7 +989,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         validated_groups = await self._prepare_modified_user(
             db, db_user, modified_user, admin, skip_role_limits=skip_role_limits
         )
-        return await self._apply_modified_user(db, db_user, modified_user, admin, validated_groups=validated_groups)
+        try:
+            return await self._apply_modified_user(db, db_user, modified_user, admin, validated_groups=validated_groups)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
     async def modify_user(
         self, db: AsyncSession, username: str, modified_user: UserModify, admin: AdminDetails
@@ -1318,20 +1333,32 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         return users
 
+    async def _bulk_toggle_users_under_lock(
+        self, db: AsyncSession, db_users: list[User], disabled: bool, admin: AdminDetails
+    ) -> list[UserNotificationResponse]:
+        try:
+            locked = await refresh_users_state_for_update(db, db_users)
+            decided = locked if disabled else [db_user for db_user in locked if db_user.status == UserStatus.disabled]
+            await close_active_restrictions(db, [db_user.id for db_user in decided], ADMIN_STATUS_DECISION)
+            locked = await refresh_users_state_for_update(db, locked)
+            if disabled:
+                targets = [db_user for db_user in locked if db_user.status != UserStatus.disabled]
+            else:
+                targets = [db_user for db_user in locked if db_user.status == UserStatus.disabled]
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
+        if not targets:
+            await db.commit()
+            return []
+        return await self._bulk_set_users_disabled(db, targets, disabled, admin)
+
     async def bulk_disable_users(
         self, db: AsyncSession, bulk_users: BulkUsersSelection, admin: AdminDetails
     ) -> BulkUsersActionResponse:
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="update"
         )
-        closed = await close_active_restrictions(db, [db_user.id for db_user in db_users], ADMIN_STATUS_DECISION)
-        users_to_disable = [db_user for db_user in db_users if db_user.status != UserStatus.disabled]
-
-        users = await self._bulk_set_users_disabled(db, users_to_disable, True, admin)
-        if closed and not users_to_disable:
-            await db.commit()
-
-        return self._build_bulk_action_response(users)
+        return self._build_bulk_action_response(await self._bulk_toggle_users_under_lock(db, db_users, True, admin))
 
     async def bulk_enable_users(
         self, db: AsyncSession, bulk_users: BulkUsersSelection, admin: AdminDetails
@@ -1339,14 +1366,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await self._get_validated_users_by_ids(
             db, bulk_users.ids, admin, load_usage_logs=False, scope_action="update"
         )
-        closed = await close_active_restrictions(db, [db_user.id for db_user in db_users], ADMIN_STATUS_DECISION)
-        users_to_enable = [db_user for db_user in db_users if db_user.status == UserStatus.disabled]
-
-        users = await self._bulk_set_users_disabled(db, users_to_enable, False, admin)
-        if closed and not users_to_enable:
-            await db.commit()
-
-        return self._build_bulk_action_response(users)
+        return self._build_bulk_action_response(await self._bulk_toggle_users_under_lock(db, db_users, False, admin))
 
     async def reset_users_data_usage(self, db: AsyncSession, admin: AdminDetails):
         """Reset all users data usage — requires scope=all, resets every user."""
@@ -1360,16 +1380,23 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
             await self.raise_error(message="User doesn't have next plan", code=404)
-        await refresh_user_state_for_update(db, db_user)
-        if await refresh_next_plan_for_update(db, db_user) is None:
-            await self.raise_error(message="User doesn't have next plan", code=404, db=db)
+        try:
+            await acquire_proxy_secrets_lock(db)
+            await refresh_user_state_for_update(db, db_user)
+            if await refresh_next_plan_for_update(db, db_user) is None:
+                await self.raise_error(message="User doesn't have next plan", code=404, db=db)
 
-        old_status = db_user.status
-        db_user = await reset_user_by_next(
-            db=db,
-            db_user=db_user,
-            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
-        )
+            old_status = db_user.status
+            try:
+                db_user = await reset_user_by_next(
+                    db=db,
+                    db_user=db_user,
+                    clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+                )
+            except NextPlanUnavailable:
+                await self.raise_error(message="User doesn't have next plan", code=404, db=db)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
         user = await self.update_user(db_user)
 
         if user.status != old_status:
@@ -1852,22 +1879,29 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db, db_user, user_template, modified_template.note, admin
         )
 
-        if user_template.reset_usages:
-            suppress_reset_status_change = (
-                user_template.status == UserStatus.on_hold and original_status != UserStatus.active
-            )
-            await self._reset_user_data_usage(
-                db,
-                db_user,
-                admin,
-                emit_status_change_notification=not suppress_reset_status_change,
-            )
-            modify_user, validated_groups = await self._prepare_template_modify(
-                db, db_user, user_template, modified_template.note, admin
-            )
+        unavailable = LOCK_UNAVAILABLE_DETAIL
+        try:
+            if user_template.reset_usages:
+                suppress_reset_status_change = (
+                    user_template.status == UserStatus.on_hold and original_status != UserStatus.active
+                )
+                await self._reset_user_data_usage(
+                    db,
+                    db_user,
+                    admin,
+                    emit_status_change_notification=not suppress_reset_status_change,
+                )
+                unavailable = TEMPLATE_RESET_KEPT_DETAIL
+                await acquire_proxy_secrets_lock(db)
+                await lock_user_rows(db, [db_user.id])
+                modify_user, validated_groups = await self._prepare_template_modify(
+                    db, db_user, user_template, modified_template.note, admin
+                )
 
-        await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
-        return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
+            await close_active_restriction(db, db_user.id, ADMIN_STATUS_DECISION)
+            return await self._apply_modified_user(db, db_user, modify_user, admin, validated_groups=validated_groups)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc, unavailable)
 
     async def modify_user_with_template(
         self, db: AsyncSession, username: str, modified_template: ModifyUserByTemplate, admin: AdminDetails
@@ -1973,7 +2007,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self.raise_error("this template is disabled", 403)
 
         prepared_updates = []
-        for db_user in db_users:
+        for db_user in sorted(db_users, key=lambda user: user.id):
             original_status = db_user.status
             modify_user, validated_groups = await self._prepare_template_modify(
                 db, db_user, user_template, body.note, admin
@@ -2007,6 +2041,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
             await close_active_restrictions(db, modified_user_ids, ADMIN_STATUS_DECISION)
             await db.commit()
+        except (DBAPIError, NamedLockMissing) as exc:
+            await db.rollback()
+            await self._raise_if_lock_unavailable(db, exc)
         except Exception:
             await db.rollback()
             raise

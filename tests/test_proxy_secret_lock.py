@@ -6,7 +6,7 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 from sqlalchemy import delete, event, func, select, text, update
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -514,8 +514,8 @@ async def _seed_next_plan(sessions, admin_id):
 
 
 @pytest.mark.asyncio
-async def test_a_next_plan_whose_grant_times_out_on_the_lock_is_still_applied(engine, sessions, admin_id):
-    from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, acquire_named_lock
+async def test_a_next_plan_that_cannot_take_the_lock_in_time_is_left_whole_for_the_next_run(engine, sessions, admin_id):
+    from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, acquire_named_lock, is_lock_wait_timeout
 
     if engine.dialect.name == "sqlite":
         pytest.skip(reason="sqlite locks the whole database, so the plan itself would wait for the holder")
@@ -526,16 +526,20 @@ async def test_a_next_plan_whose_grant_times_out_on_the_lock_is_still_applied(en
         async with sessions() as reviewer:
             await _short_lock_timeout(reviewer)
             db_user = await get_user_by_id(reviewer, user_id)
-            await reset_user_by_next(reviewer, db_user)
+            with pytest.raises(DBAPIError) as raised:
+                await reset_user_by_next(reviewer, db_user)
+            await reviewer.rollback()
         await holder.rollback()
 
+    assert is_lock_wait_timeout(raised.value), raised.value
     async with sessions() as db:
         stored = await get_user_by_id(db, user_id)
         groups = sorted(group.name for group in stored.groups)
         openvpn_password = ProxyTable.model_validate(stored.proxy_settings).openvpn.password
         data_limit, used_traffic = stored.data_limit, stored.used_traffic
+        plan_left = (await db.execute(select(NextPlan.id).where(NextPlan.user_id == user_id))).scalars().all()
 
-    assert groups == [f"{PREFIX}vpn"]
-    assert data_limit == 5 * 1024**3
-    assert used_traffic == 0
+    assert groups == [f"{PREFIX}plain"]
+    assert (data_limit, used_traffic) == (1024**3, 1024**3)
     assert openvpn_password is None
+    assert plan_left
