@@ -50,12 +50,14 @@ Also, `git diff 72ad0e4a5 -- '*.py' '*.ts' '*.tsx'` must show no added comment o
 ## 7. Production deploy (main session only)
 Apply D-G2 from plan.md on the production panel host, then verify `docker inspect` LogConfig and that the file log survives a recreate.
 
-Before v5.34.25 goes live, build and push the rollback image from branch `hotfix/v5-prod-accept-v4` (production d46a03b65 plus v4 link acceptance) and record its tag next to the v5.34.25 tag. v5.34.25 is not deployed while no rollback image exists.
+Production runs the v5.34.24-usage-integrity image, tree 72ad0e4a5, with the database at `d8b2c4f60a17` (checked read-only on 2026-10-07). Upgrading it to v5.34.25 applies 15 revisions: `e5a9c3f1b7d2` (named_locks) and the 14 that step 3 of the rollback lists.
+
+Before v5.34.25 goes live, build and push the rollback image from branch `hotfix/v5-prod-accept-v4` and record its tag next to the v5.34.25 tag. That branch is d46a03b65 plus v4 link acceptance. d46a03b65 is the P1-P4 stage of release/v5.34.25, not what production runs: it carries named_locks (`e5a9c3f1b7d2`) and the P1-P4 fixes on top of 72ad0e4a5, so the rollback image is itself a build production has never run and must pass the test server first. No image of that branch existed on 2026-10-07. v5.34.25 is not deployed while no rollback image exists.
 
 ## 8. Rollback to the v5.34.24 line (main session only)
 The rollback target is the image built from `hotfix/v5-prod-accept-v4`. Never roll back to bare d46a03b65 or the v5.34.24-usage-integrity image: v5.34.25 mints `v4,<id>,<ts>,<epoch>` subscription links, bare v5.34.24 answers every one of them with 404, and the rollback image accepts them with the revocation rule v5.34.25 enforces.
 
-The database goes back to exactly `e5a9c3f1b7d2`, the v5.34.24 head, through one entry point that ships in the v5.34.25 image. Run every step with the v5.34.25 image still selected, because only that image carries the downgrades.
+The database goes back to exactly `e5a9c3f1b7d2`, the head of the rollback image (the v5.34.24-usage-integrity image heads at `d8b2c4f60a17` and cannot start on `e5a9c3f1b7d2`: its start.sh fails with `Can't locate revision`), through one entry point that ships in the v5.34.25 image. Run every step with the v5.34.25 image still selected, because only that image carries the downgrades.
 
 1. Back up the database (mysqldump, pg_dump, or a copy of the SQLite file) and note the running v5.34.25 image tag.
 2. Stop the panel and every other container that writes to the database: `docker compose stop pasarguard`.
