@@ -10,7 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
@@ -68,7 +68,9 @@ CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
 UPSTREAM_TRAILER_RE = re.compile(r"^Upstream:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
 UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
-SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived"}
+SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
+PORT_QUEUE = "port-queue"
+PORT_QUEUE_MAX_DAYS = 30
 SYNC_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
@@ -81,6 +83,7 @@ COVERAGE_LABELS = {
     "trailer": "ported via cherry-pick -x trailer",
     "ported-by-design": "ported by design (ledger)",
     "waived": "waived (ledger)",
+    PORT_QUEUE: "owed: in the port queue until its deadline",
     "patch-id": "patch-id equivalent of a covered commit",
     "in-base": "patch-id equivalent already in the base",
     "empty": "changes no file",
@@ -832,12 +835,13 @@ def patch_ids(shas):
     return ids
 
 
-def parse_sync_ledger(path, today=None):
+def parse_sync_ledger(path, today=None, token_re=SHA_TOKEN_RE, token_kind="a commit sha of at least 9 hex characters"):
     try:
         text = Path(path).read_text()
     except OSError as exc:
         sys.stderr.write(f"error: cannot read ledger {path}: {exc}\n")
         raise SystemExit(2)
+    today = today or datetime.now(UTC).date()
     entries = []
     errors = []
     section = None
@@ -856,29 +860,51 @@ def parse_sync_ledger(path, today=None):
         if not entry:
             errors.append(f"{where}: entry is not in the form - `<sha>` <reason>")
             continue
-        token = entry.group(1).strip().lower()
+        token = entry.group(1).strip()
+        if token_re is SHA_TOKEN_RE:
+            token = token.lower()
         reason = entry.group(2).strip(REASON_STRIP)
-        if not SHA_TOKEN_RE.match(token):
-            errors.append(f"{where}: `{entry.group(1)}` is not a commit sha of at least 9 hex characters")
+        if not token_re.match(token):
+            errors.append(f"{where}: `{entry.group(1)}` is not {token_kind}")
             continue
         if not reason:
             errors.append(f"{where}: `{token}` has no reason")
             continue
         until = UNTIL_RE.search(reason)
+        deadline = None
         if until:
             try:
                 deadline = date.fromisoformat(until.group(1))
             except ValueError:
                 errors.append(f"{where}: `{token}` has an invalid until date {until.group(1)}")
                 continue
-            if (today or datetime.now(UTC).date()) > deadline:
+            if today > deadline:
                 errors.append(
                     f"{where}: `{token}` was decided only until {deadline.isoformat()}; re-check it, then port it "
                     "or record a new decision"
                 )
                 continue
+        if section == PORT_QUEUE:
+            if deadline is None:
+                errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
+                continue
+            if (deadline - today).days > PORT_QUEUE_MAX_DAYS:
+                errors.append(
+                    f"{where}: `{token}` is queued until {deadline.isoformat()}, more than {PORT_QUEUE_MAX_DAYS} "
+                    "days ahead; a queued port needs a nearer deadline"
+                )
+                continue
         conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
-        entries.append({"token": token, "kind": section, "reason": reason, "where": where, "conditional": conditional})
+        entries.append(
+            {
+                "token": token,
+                "kind": section,
+                "reason": reason,
+                "where": where,
+                "conditional": conditional,
+                "deadline": deadline,
+            }
+        )
     return entries, errors
 
 
@@ -982,7 +1008,17 @@ def parity_gate(
         coverage[sha] = "trailer"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
+        if entry["kind"] == PORT_QUEUE and coverage[sha] == "trailer":
+            copy_notes.append(f"{entry['where']}: `{sha[:12]}` is ported now; delete it from the port queue")
     ids = patch_ids(sorted(in_range))
+    ported_ids = {ids[sha] for sha, kind in coverage.items() if kind == "trailer" and sha in ids}
+    for sha, entry in resolved.items():
+        if coverage[sha] == PORT_QUEUE and ids.get(sha) in ported_ids:
+            coverage[sha] = "patch-id"
+            copy_notes.append(
+                f"{entry['where']}: `{sha[:12]}` is ported now as a patch-identical copy; delete it from the port queue"
+            )
+    deadlines = {sha: entry["deadline"] for sha, entry in resolved.items() if coverage[sha] == PORT_QUEUE}
     sources = {}
     for sha in coverage:
         if sha in ids:
@@ -996,6 +1032,10 @@ def parity_gate(
                 f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
                 "which is waived only while unmerged, so the copy needs its own decision"
             )
+            continue
+        if all(coverage[s] == PORT_QUEUE for s in origin):
+            coverage[sha] = PORT_QUEUE
+            deadlines[sha] = min(deadlines[s] for s in origin)
             continue
         coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
@@ -1041,6 +1081,16 @@ def parity_gate(
             for row in group:
                 print(f"    {row['sha'][:12]}  {row['date']}  {row['subject']}")
 
+    owed = sorted(
+        (row for row in rows if coverage.get(row["sha"]) == PORT_QUEUE),
+        key=lambda row: (deadlines[row["sha"]], row["date"], row["sha"]),
+    )
+    if owed:
+        print()
+        print(f"Owed upstream ports ({len(owed)}), each covered only until its port-queue deadline:")
+        for row in owed:
+            print(f"    {row['sha'][:12]}  until {deadlines[row['sha']].isoformat()}  {row['date']}  {row['subject']}")
+
     unlisted_picks = {sha: why for sha, why in ineffective.items() if sha not in coverage}
     if ineffective:
         print()
@@ -1081,6 +1131,13 @@ def parity_gate(
             reasons.append(f"{len(snapshot_errors) + len(unrecorded)} refs snapshot error(s)")
         print(f"Upstream parity gate FAILED: {'; '.join(reasons)}")
         return 1
+    if owed:
+        print(
+            f"Upstream parity gate OK, NOT at parity: all {len(in_range)} upstream commit(s) are ported or decided in "
+            f"{ledger_path}, but {len(owed)} are owed ports; the gate fails on "
+            f"{(deadlines[owed[0]['sha']] + timedelta(days=1)).isoformat()} unless they are ported or re-decided"
+        )
+        return 0
     print(f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}")
     return 0
 

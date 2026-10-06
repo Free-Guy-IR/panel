@@ -209,3 +209,82 @@ def test_a_map_entry_without_a_reason_is_rejected(world):
     result = run(config)
     assert result.returncode == 1
     assert "repo kit has no reason" in result.stdout
+
+
+def covering_side_ledger(world, feature_reason):
+    shas = world["shas"]
+    return f"## Waived\n\n- `{shas['bumped']}` the fork versions itself\n- `{shas['feature']}` {feature_reason}\n"
+
+
+def test_release_refs_decide_when_a_conditional_waiver_ends(world):
+    ledger = covering_side_ledger(world, "UNMERGED-WIP: only on upstream feature until: 2026-10-25")
+    default = run(write_map(world, ledger_map(world), ledger), "--today", "2026-10-06")
+    assert default.returncode == 0, default.stdout + default.stderr
+    merged = run(
+        write_map(world, ledger_map(world, 'release_refs = ["refs/remotes/upstream/feature"]'), ledger),
+        "--today",
+        "2026-10-06",
+    )
+    assert merged.returncode == 1, merged.stdout + merged.stderr
+    assert "is waived only while unmerged, but upstream now carries it on upstream/feature" in merged.stdout
+
+
+def test_a_release_ref_that_matches_nothing_fails(world):
+    ledger = covering_side_ledger(world, "UNMERGED-WIP: only on upstream feature until: 2026-10-25")
+    config = write_map(world, ledger_map(world, 'release_refs = ["refs/remotes/upstream/master"]'), ledger)
+    result = run(config, "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "release_refs refs/remotes/upstream/master match no upstream ref" in result.stdout
+
+
+def test_release_refs_must_be_a_list_of_refs(world):
+    result = run(write_map(world, ledger_map(world, 'release_refs = "master"')))
+    assert result.returncode == 1
+    assert "repo kit release_refs must be a non-empty list of refs/... patterns" in result.stdout
+
+
+def test_a_repo_can_only_be_covered_by_a_repo_that_tracks_something(world):
+    extra = """
+[[repo]]
+name = "own"
+mode = "original"
+fork = "Owner/own"
+reason = "written for the fork"
+
+[[repo]]
+name = "dep"
+mode = "covered-by"
+fork = "Owner/dep"
+upstream = "Up/dep"
+covered_by = "own"
+reason = "pinned by own"
+"""
+    result = run(write_map(world, ledger_map(world) + extra))
+    assert result.returncode == 1
+    assert "repo dep is covered by own, which tracks nothing itself (original)" in result.stdout
+
+
+def test_a_pending_tracker_needs_a_near_date(world):
+    extra = 'pending_until = "2026-12-01"\npending_reason = "on the release branch"'
+    config = write_map(world, workflow_map(world, extra).replace("{path}", ".github/workflows/missing.yml"))
+    result = run(config, "--today", "2026-10-01")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "pending_until 2026-12-01 is more than 30 days ahead" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("today", "code", "message"),
+    [
+        ("2026-10-06", 0, "Upstream parity gate OK, NOT at parity"),
+        ("2026-10-14", 1, "was decided only until 2026-10-13"),
+    ],
+)
+def test_a_side_repo_port_queue_is_owed_until_its_deadline(world, today, code, message):
+    shas = world["shas"]
+    ledger = (
+        f"## Waived\n\n- `{shas['feature']}` UNMERGED-WIP: only on upstream feature until: 2026-10-25\n\n"
+        f"## Port queue\n\n- `{shas['bumped']}` the version bump lands with the next fork release until: 2026-10-13\n"
+    )
+    result = run(write_map(world, ledger_map(world), ledger), "--today", today)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message in result.stdout

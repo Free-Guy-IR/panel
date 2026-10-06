@@ -485,6 +485,87 @@ def test_a_dated_decision_covers_only_until_its_date(repo, tmp_path, today, code
     assert message in result.stdout
 
 
+OWED_LABEL = "owed: in the port queue until its deadline"
+
+
+def queue_ledger(tmp_path, repo, queue, waived=("f1", "f2")):
+    shas = repo["shas"]
+    return ledger(
+        tmp_path,
+        "## Waived\n\n"
+        + "".join(f"- `{shas[key]}` the fork does not take feature x\n" for key in waived)
+        + "\n## Port queue\n\n"
+        + "".join(f"- `{shas[key]}` {reason}\n" for key, reason in queue),
+    )
+
+
+@pytest.mark.parametrize(
+    ("today", "code", "message"),
+    [
+        ("2026-10-06", 0, "Upstream parity gate OK, NOT at parity"),
+        ("2026-10-13", 0, "the gate fails on 2026-10-14 unless they are ported or re-decided"),
+        ("2026-10-14", 1, "`{u5}` was decided only until 2026-10-13"),
+    ],
+)
+def test_a_queued_port_is_owed_and_covers_only_until_its_deadline(repo, tmp_path, today, code, message):
+    shas = repo["shas"]
+    queue = [("u3", "security fix, port after B1 until: 2026-10-20"), ("u5", "bridge floor, port until: 2026-10-13")]
+    result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", today)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message.format(u5=shas["u5"]) in result.stdout
+    if code == 0:
+        assert tally(result.stdout, OWED_LABEL) == 3
+        assert tally(result.stdout, "patch-id equivalent of a covered commit") == 1
+        owed = result.stdout.split("Owed upstream ports (3)", 1)[1].split("\n\n", 1)[0]
+        assert f"{shas['u5'][:12]}  until 2026-10-13" in owed
+        assert f"{shas['u3'][:12]}  until 2026-10-20" in owed
+        assert f"{shas['g'][:12]}  until 2026-10-20" in owed
+        assert "Upstream parity gate OK: all" not in result.stdout
+    else:
+        assert shas["u5"][:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize(
+    ("reason", "message"),
+    [
+        ("port it later", "is in the port queue without an until: YYYY-MM-DD deadline"),
+        ("port it later until: 2026-11-06", "more than 30 days ahead; a queued port needs a nearer deadline"),
+        ("port it later until: 2026-13-01", "has an invalid until date 2026-13-01"),
+    ],
+)
+def test_a_queued_port_needs_a_near_deadline(repo, tmp_path, reason, message):
+    queue = [("u3", reason), ("u5", "port until: 2026-10-13")]
+    result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+    assert repo["shas"]["u3"][:12] in unported_block(result.stdout)
+
+
+def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
+    queue = [(key, "port until: 2026-10-13") for key in ("u1", "dup", "u3", "u5")]
+    result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"`{repo['shas']['u1'][:12]}` is ported now; delete it from the port queue" in result.stdout
+    assert f"`{repo['shas']['dup'][:12]}` is ported now as a patch-identical copy; delete it" in result.stdout
+    assert tally(result.stdout, "patch-id equivalent of a covered commit") == 1
+    assert tally(result.stdout, OWED_LABEL) == 3
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
+def test_removing_one_decision_turns_the_gate_red(repo, tmp_path):
+    shas = repo["shas"]
+    queue = [("u3", "port until: 2026-10-13"), ("u5", "port until: 2026-10-13")]
+    green = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
+    assert green.returncode == 0, green.stdout + green.stderr
+    for dropped_queue, dropped_waiver in ((queue[:1], ("f1", "f2")), (queue, ("f1",))):
+        red = parity(repo, queue_ledger(tmp_path, repo, dropped_queue, dropped_waiver), "--today", "2026-10-06")
+        assert red.returncode == 1, red.stdout + red.stderr
+        block = unported_block(red.stdout)
+        missing = {shas[key] for key in ("u5", "f2") if shas[key][:12] in block}
+        assert len(missing) == 1
+        assert "Upstream parity gate FAILED: 1 upstream commit(s) neither ported nor listed" in red.stdout
+
+
 def _snapshot_repo(tmp_path):
     path = tmp_path / "snapshot-repo"
     path.mkdir()

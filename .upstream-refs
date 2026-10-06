@@ -1,8 +1,14 @@
 ac167e4244f1c9fcaeab6ffaf37768832f24b469 upstream/amaziaWG
 1ad2a186348bb5913b2f873bd3684babb8598885 upstream/coderabbit/improve-changed-function-docstrings/1c06464e
+e2707d99064e75acd1ea4d8e1d9bb4542906c5e8 upstream/dependabot/uv/dev/cryptography-50.0.2
+b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.142.2
+59a347e6517ec9888ffb21102b954430d492b6b4 upstream/dependabot/uv/dev/ruff-0.16.10
 2f60c83098103ebf36d7b833f893309c883bc8d7 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.1
+75f3788a312ef593f5642466faa380154ce95e09 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.2
+30b9f2d176cdaf3713493c8520ffaa386d96ba93 upstream/dependabot/uv/dev/uvloop-0.23.0
 d3fdded8243273e754f18b993dc3efdcec36d24a upstream/dependabot/uv/idna-3.15
 f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
+16ce46d8ad6d8a9e15d84bf25aebd580b7813115 upstream/dev
 26047f6b06e35366460288459f87e389eb924986 upstream/dev
 61150ba4eb22504ca67eaa87e0071c506acb4ab7 upstream/dev
 da871f475782da54ec547da1945d2478a35171b0 upstream/dev
@@ -11,6 +17,7 @@ da871f475782da54ec547da1945d2478a35171b0 upstream/dev
 29bc68f7e0cbdffdf88ea4c1561439ff99af63b9 upstream/free-threaded
 7b08b03960a12894b522565eed78b108402c4e83 upstream/hosts-group
 b56ffe369f542152c52c69733205baeaf3f6e4cd upstream/main
+4e98af8aca1f4db16bf00286370dffd027d33a96 upstream/masque
 18a02ed066cba5581eb40a3be12004e3dff4ce4d upstream/mtp
 dc988bfb3e1d666563a59b335935905939ac2591 upstream/node-online-users-count
 0913d7b19bd5033b35c51e13d0c704bf9ff4b69a upstream/nodes-shared-storage
