@@ -188,12 +188,14 @@ async def test_an_admin_wide_disable_arriving_while_a_single_user_enable_holds_t
     await _set(recorder_db, user_id, status=UserStatus.disabled)
     real_close = user_operation.close_active_restriction
     admin_wide: list[asyncio.Task] = []
+    finished_while_held: list[bool] = []
 
     async def admin_disables_every_user_meanwhile(db, closed_id, reason):
         admin_wide.append(
             asyncio.create_task(_admin_wide(recorder_db, admin_id, "_disable_all_active_users_for_admin"))
         )
         await asyncio.sleep(1.5)
+        finished_while_held.append(admin_wide[0].done())
         return await real_close(db, closed_id, reason)
 
     monkeypatch.setattr(user_operation, "close_active_restriction", admin_disables_every_user_meanwhile)
@@ -201,9 +203,9 @@ async def test_an_admin_wide_disable_arriving_while_a_single_user_enable_holds_t
     await _single_user_toggle(recorder_db, user_id, disabled=False)
     await asyncio.wait_for(admin_wide[0], BOUND)
 
-    final = await _status(recorder_db, user_id)
-    assert final in (UserStatus.active, UserStatus.disabled), final
-    assert _last_push(pushes, user_id) == final, pushes
+    assert finished_while_held == [False], "the admin-wide disable did not wait for the row the enable held"
+    assert await _status(recorder_db, user_id) == UserStatus.disabled
+    assert _last_push(pushes, user_id) == UserStatus.disabled, pushes
 
 
 def _one_node_billing(monkeypatch: pytest.MonkeyPatch, node_id: int, user_id: int, value: int) -> CountingNode:
