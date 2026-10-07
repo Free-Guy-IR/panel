@@ -2,8 +2,24 @@ import ast
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
-VERSIONS = Path(__file__).resolve().parents[1] / "app" / "db" / "migrations" / "versions"
+ROLLBACK_FLOOR = "e5a9c3f1b7d2"
+
+
+def _rollback_reachable_scripts():
+    script = ScriptDirectory.from_config(Config("alembic.ini"))
+    heads = script.get_heads()
+    reachable = []
+    for revision in script.iterate_revisions(heads, ROLLBACK_FLOOR):
+        if revision.revision == ROLLBACK_FLOOR:
+            continue
+        reachable.append(revision)
+    return {revision.revision: Path(revision.module.__file__) for revision in reachable}
+
+
+SCRIPTS = _rollback_reachable_scripts()
 
 
 def _str(node):
@@ -70,11 +86,11 @@ def _offending(path):
     return offending
 
 
-@pytest.mark.parametrize("migration", sorted(p.name for p in VERSIONS.glob("*.py")))
-def test_downgrade_never_drops_a_foreign_key_backing_index_before_its_table(migration):
-    offending = _offending(VERSIONS / migration)
+@pytest.mark.parametrize("revision", sorted(SCRIPTS))
+def test_rollback_reachable_downgrades_never_drop_a_foreign_key_backing_index_before_the_table(revision):
+    offending = _offending(SCRIPTS[revision])
     assert offending == [], (
-        f"{migration} drops an index that backs a foreign key before dropping its table; "
-        "MySQL/InnoDB refuses this with error 1553 and leaves the rollback partway. "
-        "Let op.drop_table remove the index and the constraint instead: " + str(offending)
+        f"migration {revision} is downgraded by app.fork.db_rollback and drops an index that backs a "
+        "foreign key before dropping its table; MySQL/InnoDB refuses this with error 1553 and leaves the "
+        "rollback partway. Let op.drop_table remove the index and the constraint instead: " + str(offending)
     )
