@@ -72,7 +72,7 @@ SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
 PORT_QUEUE = "port-queue"
 DECISION_MAX_DAYS = 30
-SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s*(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
 SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
@@ -89,7 +89,9 @@ COVERAGE_LABELS = {
     "in-base": "patch-id equivalent already in the base",
     "empty": "changes no file",
 }
-CONDITIONAL_TAG_RE = re.compile(r"^(?:UNMERGED-WIP|pending)\b", re.IGNORECASE)
+CONDITIONAL_TAG_RE = re.compile(r"^[\W_]*(?:UNMERGED[\W_]*WIP|pending)\b", re.IGNORECASE)
+UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
@@ -594,10 +596,15 @@ def upstream_commits(base, tracked, require_shared_history=True):
     active = []
     skipped = []
     heads = []
+    listed = []
     for ref, name in tracked:
         tip = resolve_ref(f"{ref}^{{commit}}")
         shas = git("rev-list", "--no-merges", tip, f"^{base}").split()
-        if shas and require_shared_history and not shares_history(base, tip):
+        related = not shas or not require_shared_history or shares_history(base, tip)
+        listed.append((ref, name, tip, shas, related))
+    upstream_related = any(related and shas for _, _, _, shas, related in listed)
+    for ref, name, tip, shas, related in listed:
+        if not related and not (upstream_related and ref.startswith(UPSTREAM_NAMESPACES)):
             skipped.append(name)
             continue
         heads.append((tip, name))
@@ -684,6 +691,36 @@ def commit_metadata(base, tips):
     return rows
 
 
+def merges_with_content(base, tips):
+    found = {}
+    for name, tip in sorted(tips.items()):
+        for sha in git("rev-list", "--merges", tip, f"^{base}").split():
+            found.setdefault(sha, []).append(name)
+    return {
+        sha: names
+        for sha, names in found.items()
+        if git("show", "--remerge-diff", "--format=", "--no-color", "--no-ext-diff", sha).strip()
+    }
+
+
+def merge_metadata(shas):
+    if not shas:
+        return []
+    out = git(
+        "log",
+        "--no-walk=unsorted",
+        "--stdin",
+        "--date=short",
+        "--format=%H%x00%T%x00%P%x00%ad%x00%s",
+        stdin="\n".join(shas) + "\n",
+    )
+    rows = []
+    for line in out.splitlines():
+        sha, tree, parents, day, subject = line.split("\0", 4)
+        rows.append({"sha": sha, "tree": tree, "parent": parents.split()[0], "date": day, "subject": subject})
+    return rows
+
+
 def empty_commits(rows):
     parents = sorted({row["parent"] for row in rows if row["parent"]})
     if not parents:
@@ -697,7 +734,7 @@ def commits_on_refs(base, refs):
     names = {}
     for ref, name in refs:
         tip = resolve_ref(f"{ref}^{{commit}}")
-        for sha in git("rev-list", "--no-merges", tip, f"^{base}").split():
+        for sha in git("rev-list", tip, f"^{base}").split():
             names.setdefault(sha, []).append(name)
     return names
 
@@ -751,19 +788,27 @@ def reverted_commits(head):
     return set(REVERT_RE.findall(git("log", "--format=%B", head)))
 
 
-def added_lines_by_file(sha):
-    files = {}
-    current = None
+def changed_lines_by_file(sha):
+    added = {}
+    removed = {}
+    old = new = None
     for line in git("show", "--format=", "--no-color", "--no-ext-diff", "-U0", "-M", sha).splitlines():
+        if line.startswith("--- "):
+            target = line[4:]
+            old = None if target == "/dev/null" else target.removeprefix("a/")
+            continue
         if line.startswith("+++ "):
             target = line[4:]
-            current = None if target == "/dev/null" else target.removeprefix("b/")
+            new = None if target == "/dev/null" else target.removeprefix("b/")
             continue
-        if current and line.startswith("+"):
-            text = line[1:].strip()
-            if text:
-                files.setdefault(current, set()).add(text)
-    return files
+        text = line[1:].strip()
+        if not text:
+            continue
+        if line.startswith("+") and new:
+            added.setdefault(new, set()).add(text)
+        elif line.startswith("-") and (new or old):
+            removed.setdefault(new or old, set()).add(text)
+    return added, removed
 
 
 def stripped_lines(ref, path):
@@ -774,15 +819,18 @@ def stripped_lines(ref, path):
 def missing_pick_lines(upstream_sha, reference, head):
     expected = 0
     missing = []
-    for path, added in sorted(added_lines_by_file(upstream_sha).items()):
+    added, removed = changed_lines_by_file(upstream_sha)
+    for path in sorted(set(added) | set(removed)):
         kept_upstream = stripped_lines(reference, path)
-        if kept_upstream is None:
-            continue
         present = stripped_lines(head, path) or set()
-        for text in sorted(added & kept_upstream):
+        for text in sorted(added.get(path, set()) & (kept_upstream or set())):
             expected += 1
             if text not in present:
                 missing.append((path, text))
+        for text in sorted(removed.get(path, set()) - (kept_upstream or set())):
+            expected += 1
+            if text in present:
+                missing.append((path, f"-{text}"))
     return expected, missing
 
 
@@ -809,7 +857,7 @@ def ineffective_picks(head, candidates, upstream, tips_for):
         if missing:
             path, text = missing[0]
             findings[sha] = (
-                f"{len(missing)} of {expected} upstream line(s) it adds are not in {head}, "
+                f"{len(missing)} of {expected} upstream line(s) it adds or removes are not reflected in {head}, "
                 f"for example in {path}: {text[:80]!r}"
             )
     return findings
@@ -828,7 +876,7 @@ def patch_ids(shas):
         "--format=commit %H",
         stdin="\n".join(shas) + "\n",
     )
-    out = git("patch-id", "--stable", stdin=log)
+    out = git("patch-id", "--verbatim", stdin=log)
     ids = {}
     for line in out.splitlines():
         patch_id, sha = line.split()
@@ -846,6 +894,7 @@ def parse_sync_ledger(path, today=None):
     except OSError as exc:
         sys.stderr.write(f"error: cannot read ledger {path}: {exc}\n")
         raise SystemExit(2)
+    text = HTML_COMMENT_RE.sub(lambda match: "\n" * match.group(0).count("\n"), text)
     today = today or datetime.now(UTC).date()
     entries = []
     errors = []
@@ -879,6 +928,10 @@ def parse_sync_ledger(path, today=None):
             continue
         if not reason:
             errors.append(f"{where}: `{token}` has no reason")
+            continue
+        dates = UNTIL_RE.findall(reason)
+        if len(dates) > 1:
+            errors.append(f"{where}: `{token}` names {len(dates)} until dates; keep exactly one")
             continue
         until = UNTIL_RE.search(reason)
         deadline = None
@@ -939,7 +992,12 @@ def resolve_sync_entries(entries, in_range):
                 continue
             sha = matches[0]
         if sha in resolved:
-            duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {resolved[sha]['where']}")
+            if resolved[sha]["kind"] != entry["kind"] or resolved[sha]["conditional"] != entry["conditional"]:
+                errors.append(
+                    f"{entry['where']}: {sha[:12]} is also decided differently at {resolved[sha]['where']}; keep one"
+                )
+            else:
+                duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {resolved[sha]['where']}")
             continue
         resolved[sha] = entry
     return resolved, errors, stale, duplicates
@@ -986,6 +1044,16 @@ def parity_gate(
             "pass --unrelated-history when the fork does not share history with upstream\n"
         )
         raise SystemExit(2)
+    merge_tips = {name: tip for tip, name in heads}
+    merge_tips.update({name: tip for name, tip, _ in active})
+    if snapshot_path:
+        live = {sha for sha, _ in heads}
+        merge_tips.update(
+            {f"{name}@{sha[:12]} (snapshot)": sha for sha, name in pairs if sha not in live and commit_exists(sha)}
+        )
+    content_merges = merges_with_content(base, merge_tips)
+    for sha, names in content_merges.items():
+        containing.setdefault(sha, []).extend(names)
     in_range = set(containing)
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
@@ -1008,7 +1076,7 @@ def parity_gate(
     tip_by_name.update({name: sha for sha, name in heads})
     ineffective = ineffective_picks(
         head,
-        in_range & trailer_shas(head),
+        (in_range & trailer_shas(head)) - set(content_merges),
         upstream,
         lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
     )
@@ -1055,8 +1123,8 @@ def parity_gate(
     sync_errors, sync_notes = sync_point_findings(upstream, tracked, release_refs) if upstream else ([], [])
     ledger_errors += sync_errors
 
-    rows = commit_metadata(base, [tip for _, tip, _ in active])
-    for sha in empty_commits([row for row in rows if row["sha"] not in coverage]):
+    rows = commit_metadata(base, [tip for _, tip, _ in active]) + merge_metadata(sorted(content_merges))
+    for sha in empty_commits([row for row in rows if row["sha"] not in coverage and row["sha"] not in content_merges]):
         coverage[sha] = "empty"
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
@@ -1076,7 +1144,7 @@ def parity_gate(
         for label in snapshot_kept:
             print(f"    {label}")
     print()
-    print(f"Upstream commits past base: {len(in_range)}")
+    print(f"Upstream commits past base: {len(in_range)}, of them merge commits with their own changes: {len(content_merges)}")
     for kind, label in COVERAGE_LABELS.items():
         print(f"  {label:<42} {counts[kind]}")
     print(f"  {'unported':<42} {len(uncovered)}")

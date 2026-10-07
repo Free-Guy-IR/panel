@@ -671,6 +671,132 @@ def test_owed_ports_are_annotated_on_github_actions(repo, tmp_path):
     assert any(repo["shas"]["u5"][:12] in line and "until 2026-10-13" in line for line in annotations)
 
 
+def standalone_repo(tmp_path, name):
+    path = tmp_path / name
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r"), "s.py": lines("s")})
+    git(path, "tag", "v1.0")
+    return path
+
+
+def standalone_gate(path, ledger_text, *extra):
+    (path / "UPSTREAM_SYNC.md").write_text(ledger_text)
+    return run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--today",
+        "2026-10-06",
+        *extra,
+    )
+
+
+def test_a_merge_commit_with_its_own_changes_needs_a_decision(tmp_path):
+    path = standalone_repo(tmp_path, "merges")
+    side = commit(path, "side change", {"s.py": lines("s", overrides={2: "S2"})})
+    git(path, "checkout", "-q", "-b", "dev", "v1.0")
+    main_change = commit(path, "dev change", {"r.py": lines("r", overrides={2: "R2"})})
+    commit(path, "clean tree", {"s.py": lines("s", overrides={2: "S2"})})
+    clean = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "clean")
+    commit(path, "evil tree", {"s.py": lines("s", overrides={2: "S2", 9: "EVIL"})})
+    evil = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "evil")
+    git(path, "update-ref", "refs/remotes/upstream/dev", evil)
+    git(path, "update-ref", "refs/remotes/upstream/clean", clean)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    decided = f"## Waived\n\n- `{side}` reason\n- `{main_change}` reason\n"
+    red = standalone_gate(path, decided)
+    assert red.returncode == 1, red.stdout + red.stderr
+    assert "of them merge commits with their own changes: 1" in red.stdout
+    assert evil[:12] in unported_block(red.stdout)
+    assert clean[:12] not in red.stdout
+    green = standalone_gate(path, decided + f"- `{evil}` the fork resolves this merge its own way\n")
+    assert green.returncode == 0, green.stdout + green.stderr
+
+
+def test_a_pick_that_keeps_the_lines_upstream_removed_is_not_a_port(tmp_path):
+    path = standalone_repo(tmp_path, "removal")
+    removal = commit(path, "drop the legacy path", {"r.py": lines("r", 6)})
+    git(path, "update-ref", "refs/remotes/upstream/dev", removal)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "commit", "-q", "--allow-empty", "-m", f"port\n\n(cherry picked from commit {removal})")
+    kept = standalone_gate(path, "## Waived\n")
+    assert kept.returncode == 1, kept.stdout + kept.stderr
+    assert f"{removal[:12]}: 4 of 4 upstream line(s) it adds or removes are not reflected in main" in kept.stdout
+    commit(path, f"really port\n\n(cherry picked from commit {removal})", {"r.py": lines("r", 6)})
+    ported = standalone_gate(path, "## Waived\n")
+    assert ported.returncode == 0, ported.stdout + ported.stderr
+
+
+def test_an_orphan_upstream_branch_is_tracked_when_the_base_is_upstream(tmp_path):
+    path = standalone_repo(tmp_path, "orphan")
+    fix = commit(path, "upstream fix", {"r.py": lines("r", overrides={1: "R1"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    orphan = git(path, "commit-tree", git(path, "rev-parse", f"{fix}^{{tree}}"), "-m", "v6 rewrite")
+    git(path, "update-ref", "refs/remotes/upstream/v6", orphan)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    result = standalone_gate(path, f"## Waived\n\n- `{fix}` reason\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert orphan[:12] in unported_block(result.stdout)
+    assert "warning: skipped upstream/v6" not in result.stdout
+
+
+def test_whitespace_changes_are_not_patch_identical_copies(tmp_path):
+    path = standalone_repo(tmp_path, "whitespace")
+    guarded = commit(path, "guarded call", {"g.py": "if allowed:\n    run()\n"})
+    git(path, "update-ref", "refs/remotes/upstream/guarded", guarded)
+    git(path, "checkout", "-q", "-b", "dev", "v1.0")
+    unguarded = commit(path, "unguarded call", {"g.py": "if allowed:\nrun()\n"})
+    git(path, "update-ref", "refs/remotes/upstream/dev", unguarded)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    result = standalone_gate(path, f"## Waived\n\n- `{guarded}` the fork never calls run\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert unguarded[:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize("reason", ["UNMERGED WIP: only on feat/x", "**UNMERGED-WIP**: only on feat/x", "Pending: feat/x"])
+def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_path, reason):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, reason),
+        "--track",
+        "refs/upstream-release/merged",
+        "--release-ref",
+        "refs/upstream-release/merged",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is waived only while unmerged" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("##Port queue\n\n- `{u3}` port it\n", "is in the port queue without an until"),
+        ("## Port queue\n\n- `{u3}` until 2026-10-08 or so; until: 2026-10-10\n", "names 2 until dates; keep exactly one"),
+        ("## Waived\n\n<!--\n- `{u3}` hidden decision\n-->\n", ""),
+        ("## Waived\n\n- `{u3}` reason\n\n## Port queue\n\n- `{u3}` port it until: 2026-10-10\n", "is also decided differently"),
+    ],
+)
+def test_ledger_forms_that_must_not_count_as_a_decision(repo, tmp_path, text, message):
+    shas = repo["shas"]
+    rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2")) + "\n"
+    result = parity(repo, ledger(tmp_path, rest + text.format(u3=shas["u3"])), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+
+
 def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
     queue = [(key, "port until: 2026-10-13") for key in ("u1", "dup", "u3", "u5")]
     result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
@@ -975,7 +1101,7 @@ def test_a_cherry_pick_the_fork_changed_needs_a_decision(repo, tmp_path):
     assert unlisted.returncode == 1
     block = unported_block(unlisted.stdout)
     assert {sha for sha in shas.values() if sha[:12] in block} == {shas["u2"], shas["u4"]}
-    assert f"{shas['u2'][:12]}: 1 of 2 upstream line(s) it adds are not in main" in unlisted.stdout
+    assert f"{shas['u2'][:12]}: 1 of 4 upstream line(s) it adds or removes are not reflected in main" in unlisted.stdout
     assert "needs a Ported by design or Waived entry" in unlisted.stdout
     listed = parity(repo, ledger(tmp_path, text))
     assert listed.returncode == 0, listed.stdout + listed.stderr
