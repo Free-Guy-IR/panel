@@ -50,5 +50,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_admin_notification_reminders_admin_id_type", table_name="admin_notification_reminders")
     op.drop_table("admin_notification_reminders")
