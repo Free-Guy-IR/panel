@@ -31,6 +31,7 @@ from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.operation import admin_sync
 from config import database_settings, runtime_settings
+from tests.test_recorder_harness import restore_seeded_rows, snapshot_seeded_rows
 
 
 class DummyNode:
@@ -74,6 +75,7 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
         proxy_column.server_default = None
 
     engine = create_async_engine(database_url, connect_args=connect_args, **engine_kwargs)
+    seeded = None if ":memory:" in database_url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
@@ -114,6 +116,8 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
+    if seeded is not None:
+        await restore_seeded_rows(engine, seeded)
     await engine.dispose()
     if needs_json_default_fix and proxy_column is not None:
         proxy_column.server_default = proxy_default

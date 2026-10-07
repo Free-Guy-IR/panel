@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, func, select, text
+from sqlalchemy import event, func, inspect, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
@@ -33,6 +33,46 @@ async def _set_sqlite_foreign_keys(engine, enabled: bool) -> None:
         await conn.commit()
 
 
+MIGRATION_SEEDED_TABLES = (
+    "admin_roles",
+    "client_templates",
+    "core_configs",
+    "jwt",
+    "named_locks",
+    "settings",
+    "system",
+)
+
+
+async def snapshot_seeded_rows(engine) -> dict[str, list[dict]]:
+    async with engine.connect() as conn:
+        present = set(await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names()))
+        return {
+            name: [dict(row) for row in (await conn.execute(select(base.Base.metadata.tables[name]))).mappings()]
+            for name in MIGRATION_SEEDED_TABLES
+            if name in present
+        }
+
+
+async def restore_seeded_rows(engine, seeded: dict[str, list[dict]]) -> None:
+    async with engine.begin() as conn:
+        for name, rows in seeded.items():
+            table = base.Base.metadata.tables[name]
+            if rows:
+                await conn.execute(table.insert(), rows)
+            column = table.autoincrement_column
+            if conn.dialect.name == "postgresql" and column is not None:
+                await conn.execute(
+                    select(
+                        func.setval(
+                            func.pg_get_serial_sequence(name, column.name),
+                            func.coalesce(func.max(column), 1),
+                            func.max(column).is_not(None),
+                        )
+                    )
+                )
+
+
 @pytest.fixture(name="recorder_db")
 async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     url = _database_url()
@@ -47,6 +87,7 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     else:
         engine = create_async_engine(url, poolclass=NullPool)
 
+    seeded = None if ":memory:" in url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
@@ -98,6 +139,8 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
+    if seeded is not None:
+        await restore_seeded_rows(engine, seeded)
     await engine.dispose()
     json_column.server_default = json_default
 
