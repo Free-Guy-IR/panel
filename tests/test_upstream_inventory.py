@@ -541,6 +541,24 @@ def test_a_queued_port_needs_a_near_deadline(repo, tmp_path, reason, message):
     assert repo["shas"]["u3"][:12] in unported_block(result.stdout)
 
 
+def test_a_section_name_counts_at_any_heading_level(repo, tmp_path):
+    shas = repo["shas"]
+    text = (
+        "## Waived\n\n"
+        f"- `{shas['f1']}` the fork does not take feature x\n\n"
+        "### Feature x follow-ups\n\n"
+        f"- `{shas['f2']}` still waived inside a subsection\n\n"
+        "### Port queue\n\n"
+        f"- `{shas['u3']}` port it until: 2026-11-30\n"
+        f"- `{shas['u5']}` port it until: 2026-10-13\n"
+    )
+    result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "more than 30 days ahead; a queued port needs a nearer deadline" in result.stdout
+    assert tally(result.stdout, "waived (ledger)") == 2
+    assert tally(result.stdout, OWED_LABEL) == 1
+
+
 def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
     queue = [(key, "port until: 2026-10-13") for key in ("u1", "dup", "u3", "u5")]
     result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")

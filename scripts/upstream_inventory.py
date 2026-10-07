@@ -71,7 +71,7 @@ SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
 PORT_QUEUE = "port-queue"
 PORT_QUEUE_MAX_DAYS = 30
-SYNC_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
+SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
 SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
@@ -835,7 +835,7 @@ def patch_ids(shas):
     return ids
 
 
-def parse_sync_ledger(path, today=None, token_re=SHA_TOKEN_RE, token_kind="a commit sha of at least 9 hex characters"):
+def parse_sync_ledger(path, today=None):
     try:
         text = Path(path).read_text()
     except OSError as exc:
@@ -848,7 +848,11 @@ def parse_sync_ledger(path, today=None, token_re=SHA_TOKEN_RE, token_kind="a com
     for lineno, line in enumerate(text.splitlines(), 1):
         heading = SYNC_HEADING_RE.match(line)
         if heading:
-            section = SYNC_SECTIONS.get(heading.group(1).strip().lower())
+            name = heading.group(2).strip().lower()
+            if name in SYNC_SECTIONS:
+                section = SYNC_SECTIONS[name]
+            elif len(heading.group(1)) <= 2:
+                section = None
             continue
         if section is None:
             continue
@@ -860,12 +864,10 @@ def parse_sync_ledger(path, today=None, token_re=SHA_TOKEN_RE, token_kind="a com
         if not entry:
             errors.append(f"{where}: entry is not in the form - `<sha>` <reason>")
             continue
-        token = entry.group(1).strip()
-        if token_re is SHA_TOKEN_RE:
-            token = token.lower()
+        token = entry.group(1).strip().lower()
         reason = entry.group(2).strip(REASON_STRIP)
-        if not token_re.match(token):
-            errors.append(f"{where}: `{entry.group(1)}` is not {token_kind}")
+        if not SHA_TOKEN_RE.match(token):
+            errors.append(f"{where}: `{entry.group(1)}` is not a commit sha of at least 9 hex characters")
             continue
         if not reason:
             errors.append(f"{where}: `{token}` has no reason")
