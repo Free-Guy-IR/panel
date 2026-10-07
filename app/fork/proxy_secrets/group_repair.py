@@ -133,6 +133,17 @@ async def _restore_lock_wait(connection, driver_connection, previous) -> Excepti
     return None
 
 
+async def _discard_cancelled_connection(connection) -> None:
+    with anyio.CancelScope(shield=True):
+        logger.warning(
+            f"a request was cancelled while reading {LOCK_WAIT_VARIABLE} on a pooled connection, discarding it"
+        )
+        try:
+            await connection.invalidate()
+        except Exception as discard_failure:
+            logger.warning(f"could not discard that connection: {describe_failure(discard_failure)}")
+
+
 @asynccontextmanager
 async def _bounded_lock_wait(db: AsyncSession) -> AsyncIterator[None]:
     if db.get_bind().dialect.name not in MYSQL_FAMILY:
@@ -140,7 +151,12 @@ async def _bounded_lock_wait(db: AsyncSession) -> AsyncIterator[None]:
         return
     connection = await db.connection()
     driver_connection = (await connection.get_raw_connection()).driver_connection
-    previous = await _driver_scalar(driver_connection, f"SELECT @@SESSION.{LOCK_WAIT_VARIABLE}")
+    try:
+        previous = await _driver_scalar(driver_connection, f"SELECT @@SESSION.{LOCK_WAIT_VARIABLE}")
+    except BaseException as exc:
+        if not isinstance(exc, Exception):
+            await _discard_cancelled_connection(connection)
+        raise
     try:
         await _driver_scalar(
             driver_connection, f"SET SESSION {LOCK_WAIT_VARIABLE} = %s", (IN_REQUEST_LOCK_WAIT_SECONDS,)

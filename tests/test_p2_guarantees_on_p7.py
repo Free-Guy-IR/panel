@@ -660,6 +660,21 @@ async def test_a_request_cancelled_while_reading_the_lock_wait_stays_a_cancel_an
     assert not body_ran
     assert db.driver.statements == []
     assert db.driver.lock_wait == 50
+    assert db.held.invalidated
+
+
+@pytest.mark.asyncio
+async def test_a_connection_cancelled_while_reading_the_lock_wait_that_cannot_be_discarded_stays_a_cancel():
+    from app.fork.proxy_secrets import group_repair
+
+    db = _Session()
+    db.driver.cancel_next = True
+    db.held.closed_by_its_session = True
+    with pytest.raises(asyncio.CancelledError):
+        async with group_repair._bounded_lock_wait(db):
+            pass
+
+    assert db.driver.statements == []
 
 
 @pytest.mark.asyncio
