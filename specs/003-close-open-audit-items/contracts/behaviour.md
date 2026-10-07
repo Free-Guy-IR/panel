@@ -1,8 +1,8 @@
-# Behaviour Contracts (v5.34.25)
+# Behaviour Contracts (v5.34.26)
 
 No new route. The existing routes change behaviour as follows.
 
-| Route / trigger | Before (v5.34.24) | After (v5.34.25) |
+| Route / trigger | Before (v5.34.24) | After (v5.34.26) |
 |---|---|---|
 | POST /api/users/bulk/l2tp_activate (users:update) | Whole-document replace, no uniqueness check | Same request/response shape as mtproto_activate/openvpn_activate (dry_run → missing count, else granted count); guarded per-key update; unique passwords |
 | POST /api/user, PUT /api/user/{username} (and /by-username, /by-id) with `proxy_settings.mtproto.secret` held by another user | Stored as a duplicate | Replaced by a fresh unique secret (WARNING logged), 200; 409 only after 5 failed regenerations — the rule the 8 guarded secrets already follow |

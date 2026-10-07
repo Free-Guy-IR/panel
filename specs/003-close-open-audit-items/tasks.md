@@ -1,4 +1,4 @@
-# Tasks: Close Open Audit Items (panel v5.34.25)
+# Tasks: Close Open Audit Items (panel v5.34.26)
 
 **Input**: specs/003-close-open-audit-items/ (spec.md, plan.md, research.md, data-model.md, contracts/behaviour.md, quickstart.md)
 **Base**: 72ad0e4a5 on branch `release/v5.34.25`
@@ -309,7 +309,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
 
 ## Phase 7: User Story 5 - Production logs survive redeploys and stay bounded (Priority: P3)
 
-**Goal**: G2. Owner: MAIN, at the v5.34.25 production deploy only. Nothing from this phase is committed.
+**Goal**: G2. Owner: MAIN, at the v5.34.26 production deploy only. Nothing from this phase is committed.
 
 - [ ] T037 [US5] MAIN (production deploy window, after T052): on the production panel host, run the D-G2 steps of plan.md in order:
   1. Back up `/opt/pasarguard/docker-compose.override.yml` and `/opt/pasarguard/.env` as `*.bak-v53425`.
@@ -379,7 +379,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - The release is not done without every approval.
 - [ ] T048 MAIN: rehearse the `named_locks` migration on a copy of production data on the test server. Record the duration and confirm that `users` is untouched: its row count and checksum are equal before and after.
 - [ ] T049 MAIN: before deploying, record the test server's p95 usage-tick duration on v5.34.24 from its log. This is the T013 baseline.
-  - Build and deploy the v5.34.25 image to the test server.
+  - Build and deploy the v5.34.26 image to the test server.
   - Apply the D-G2 logging block and log-file settings to the test server's compose override and `.env`, and verify them with the T038 checks. G2 is proven there before production.
 - [ ] T050 MAIN: prove each item on the test server with real traffic:
   - A9: a test user crosses the limit and is limited within one tick.
@@ -391,7 +391,7 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   
   Also complete T013.
 - [ ] T051 MAIN: push `release/v5.34.25`, open the PR, and verify CI for the exact head SHA. All five database jobs, the upstream-inventory ledger gate, dashboard-smoke and ruff must be green.
-- [ ] T052 MAIN: tag `v5.34.25-audit-closure`, the next patch after `v5.34.24-usage-integrity`. Build and push the image, then deploy to production. Run T037 and T038 in the same window.
+- [ ] T052 MAIN: tag `v5.34.26-audit-closure`, the patch after the rollback image's `v5.34.25-accept-v4`, which follows `v5.34.24-usage-integrity`. Build and push the image, then deploy to production. Run T037 and T038 in the same window.
 - [ ] T053 MAIN: after the production deploy, run the count-only checks from the audit: no duplicate groups on the 9 guarded fields, entitled-without-secret counts, and the sharer count not growing. Record everything in the KG entity "v5.34.25 release 2026-09-23".
 
 ---

@@ -1,4 +1,4 @@
-# Implementation Plan: Close Open Audit Items (panel v5.34.25)
+# Implementation Plan: Close Open Audit Items (panel v5.34.26)
 
 **Branch**: `release/v5.34.25` | **Date**: 2026-09-23 | **Spec**: [spec.md](spec.md)
 **Base**: 72ad0e4a5 (tag v5.34.24-usage-integrity, the production commit)
@@ -6,7 +6,7 @@
 
 ## Summary
 
-v5.34.25 closes every item the 2026-09-23 audit left OPEN on production v5.34.24:
+v5.34.26 closes every item the 2026-09-23 audit left OPEN on production v5.34.24:
 
 - Backend fixes:
   - A9: same-tick user limiting.
@@ -109,7 +109,7 @@ The work is split over four owners, P1 to P4, with disjoint files.
   - Key `'0'` is NULL `node_id` (SET NULL on node delete) passed through coalesce.
   - Locale overlays live in dashboard/src/fork/locales/{en,fa,ru,zh}.json. The dashboard/public/statics/locales files stay byte-identical to upstream.
 - **Ledger gate**: `scripts/upstream_inventory.py --base v5.4.1 --head HEAD --fail-on-override-outside-ledger OVERRIDES.md` fails at 72ad0e4a5, with 8 files unlisted. The check was run locally on 2026-09-23.
-- **Version**: The fork version exists only as the git tag and the image tag (latest `v5.34.24-usage-integrity`). pyproject.toml and app/version.py carry upstream's `5.4.1`.
+- **Version**: The fork version exists only as the git tag and the image tag. The latest used is `v5.34.24-usage-integrity`; the rollback image takes `v5.34.25-accept-v4` and this release `v5.34.26-<slug>` (decision of 2026-10-07). pyproject.toml and app/version.py carry upstream's `5.4.1`.
 - **File logging**: `LoggingSettings` (config.py:165-174) defaults to a RotatingFileHandler of 10 MiB × 72 when `SAVE_LOGS_TO_FILE=true` (app/utils/logger.py:76-94). docker-compose mounts `/var/lib/pasarguard`.
 
 ## Constitution Check
@@ -252,7 +252,7 @@ No `create_node` and no `_shutdown_node`. `_node_usage_coefficient` (record_usag
   - dashboard-smoke.yml gets a `bun run test` step after `bun install`.
 
 ### D-G2 Host ops (main session at deploy; never committed)
-**Where**: on the production panel host, during the v5.34.25 deploy window.
+**Where**: on the production panel host, during the v5.34.26 deploy window.
 
 **Changes**:
 1. Back up `/opt/pasarguard/docker-compose.override.yml` and `/opt/pasarguard/.env` to `*.bak-v53425`.

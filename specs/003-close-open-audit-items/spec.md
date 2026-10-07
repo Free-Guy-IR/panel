@@ -1,4 +1,4 @@
-# Feature Specification: Close Open Audit Items (panel v5.34.25)
+# Feature Specification: Close Open Audit Items (panel v5.34.26)
 
 **Feature Branch**: `release/v5.34.25` (spec directory `specs/003-close-open-audit-items`)
 
@@ -6,7 +6,7 @@
 
 **Status**: Draft (clarifications resolved by the spec author under delegated authority)
 
-**Input**: Close every item left OPEN by the 2026-09-23 production audit of v5.34.24 (commit 72ad0e4a5): A9, A6, A3, A2-r, D5, E1, E3, E4b, E6 residuals (a)(b), G5, G2 (deploy-time host ops), pinning tests for B1 and D4, and the reset_admin_usage lost update. Out of scope: B2, D6, D8, D10, D11, D12, E7, G6, A11, F2c, G1. Patch bump to v5.34.25 only.
+**Input**: Close every item left OPEN by the 2026-09-23 production audit of v5.34.24 (commit 72ad0e4a5): A9, A6, A3, A2-r, D5, E1, E3, E4b, E6 residuals (a)(b), G5, G2 (deploy-time host ops), pinning tests for B1 and D4, and the reset_admin_usage lost update. Out of scope: B2, D6, D8, D10, D11, D12, E7, G6, A11, F2c, G1. Patch bump to v5.34.26 only.
 
 ## Clarifications
 
@@ -100,7 +100,7 @@ The operator opens the all-nodes usage chart. Traffic recorded on nodes that wer
 
 ### User Story 5 - Production logs survive redeploys and stay bounded (Priority: P3)
 
-After the v5.34.25 deploy, panel logs are written to a file on the host data directory and Docker's own log is rotated, so recreating the container no longer erases history and the disk cannot fill with logs.
+After the v5.34.26 deploy, panel logs are written to a file on the host data directory and Docker's own log is rotated, so recreating the container no longer erases history and the disk cannot fill with logs.
 
 **Independent Test**: At deploy time, recreate the panel container and confirm the log file still holds pre-recreate lines, and `docker inspect` shows max-size 100m / max-file 5.
 
@@ -152,8 +152,8 @@ Regression pins exist for B1 (relative owner-change update), D4 (no fake per-nod
 - **FR-011 (E6b)**: A links request whose output would be empty because MTProto links were skipped for a missing secret MUST return 409 with the same message family as L2TP/OpenVPN; users with other deliverable links are unaffected.
 - **FR-012 (D5)**: The all-nodes chart MUST show deleted-nodes traffic as its own series in bars and pie with a localized label in every shipped locale, and the header total MUST equal the drawn sum.
 - **FR-013 (G5, B1, D4)**: Pinning tests MUST exist for the purge endpoint over HTTP, the B1 relative update and the D4 aggregate-only branch.
-- **FR-014 (G2)**: The production panel host MUST rotate Docker JSON logs for the panel service (json-file, max-size 100m, max-file 5) and persist panel logs to a rotating file on the host-mounted data directory, applied at the v5.34.25 deploy by the main session. Nothing host-specific is committed.
-- **FR-015**: The release MUST be tagged v5.34.25-<slug> (git tag and ghcr image tag), the next patch after v5.34.24-usage-integrity. No in-repo version string changes: pyproject.toml and app/version.py carry upstream's 5.4.1 and stay untouched.
+- **FR-014 (G2)**: The production panel host MUST rotate Docker JSON logs for the panel service (json-file, max-size 100m, max-file 5) and persist panel logs to a rotating file on the host-mounted data directory, applied at the v5.34.26 deploy by the main session. Nothing host-specific is committed.
+- **FR-015**: The release MUST be tagged v5.34.26-<slug> (git tag and ghcr image tag). The last version used is v5.34.24-usage-integrity (checked in local and remote git tags and the ghcr image tags on 2026-10-07). Its next patch, v5.34.25, goes to the rollback image `v5.34.25-accept-v4`, which is built and proven before go-live (decision of 2026-10-07), and the release takes the patch after that. No number is skipped. No in-repo version string changes: pyproject.toml and app/version.py carry upstream's 5.4.1 and stay untouched.
   - Confirmed at integration (2026-09-25, Option A): the image and tag tooling reads no in-repo version (build.yml tags `github.ref_name`, build-dev.yml uses `scripts/image_tag.py`), and app/version.py only feeds OpenAPI, /api/system, the CLI and the dashboard banner that compares against upstream PasarGuard releases, so keeping 5.4.1 keeps that banner accurate and upstream version bumps conflict-free. The release is published as a non-prerelease GitHub release, so build.yml builds both architectures and moves `:latest` (v5.34.23 and v5.34.24 were built outside build.yml, single-arch, and `:latest` still points at v5.34.22).
 - **FR-016 (ledger)**: OVERRIDES.md MUST list every upstream-tracked file this fork overrides, so the upstream-inventory ledger gate passes. At 72ad0e4a5 the gate already fails on 8 unlisted files: app/app_factory.py, app/db/crud/wireguard.py, app/operation/system.py, app/telegram/utils/texts.py, dashboard/src/components/charts/all-nodes-stacked-bar-chart.tsx, dashboard/src/features/dashboard/components/dashboard-statistics.tsx, dashboard/src/features/users/dialogs/usage-modal.tsx and tests/api/conftest.py. Any upstream file newly overridden by this release is added too.
 
@@ -172,7 +172,7 @@ Regression pins exist for B1 (relative owner-change update), D4 (no fake per-nod
 - **SC-004**: Renaming a node or changing its coefficient causes zero user disconnections.
 - **SC-005**: The chart header total equals the sum of drawn bars and pie slices in 100% of rendered periods.
 - **SC-006**: Panel logs from before a container recreate remain readable afterward; total log storage stays under about 1.3 GB (Docker 5 × 100 MB plus the file log at its default 10 MB × 72 rotation).
-- **SC-007**: Every new test fails on the unfixed behaviour (v5.34.24 code, or for the B1, D4 and G5 pins a scratch revert of the already-fixed line) and passes on v5.34.25 in TEST_FROM=local and TEST_FROM=github on PostgreSQL; the E3 snapshot case is proven on MySQL, the only backend whose request isolation exposes it.
+- **SC-007**: Every new test fails on the unfixed behaviour (v5.34.24 code, or for the B1, D4 and G5 pins a scratch revert of the already-fixed line) and passes on v5.34.26 in TEST_FROM=local and TEST_FROM=github on PostgreSQL; the E3 snapshot case is proven on MySQL, the only backend whose request isolation exposes it.
 
 ## Assumptions
 
@@ -181,4 +181,4 @@ Regression pins exist for B1 (relative owner-change update), D4 (no fake per-nod
 - The review job stays as the backstop for limiting.
 - The per-user usage modal (usage-modal.tsx) drops deleted-node traffic from its total AND its drawing consistently, so it undercounts but never disagrees with itself; it is not part of D5 and is left unchanged.
 - Pinning tests for items already fixed at 72ad0e4a5 (B1, D4) cannot fail on the base commit; their "fails before the fix" proof is a run against a scratch, uncommitted revert of the fixed line to its v5.34.22 form.
-- Production changes happen only at the v5.34.25 deploy, run by the main session after the test server proof.
+- Production changes happen only at the v5.34.26 deploy, run by the main session after the test server proof.

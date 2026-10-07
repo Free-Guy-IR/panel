@@ -1,4 +1,4 @@
-# Data Model: Close Open Audit Items (v5.34.25)
+# Data Model: Close Open Audit Items (v5.34.26)
 
 ## New table: named_locks (fork, P2)
 | Column | Type | Rules |
