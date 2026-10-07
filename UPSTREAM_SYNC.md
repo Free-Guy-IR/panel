@@ -28,6 +28,14 @@ owed port and says the fork is not at parity, and the day after the deadline the
 commit was ported (a `cherry-pick -x` trailer or a patch-identical copy of a ported commit, which the gate
 then reports as ready to delete from the queue) or decided again.
 
+A security-relevant upstream commit gets no grace in the port queue: while it is unported and has no
+`Ported by design` or `Waived` decision, the gate fails at once, whatever its `until:` date. A commit is
+security-relevant when its queue reason carries `(security)` or `[security]`, or when its subject names
+security, a CVE or GHSA id, a vulnerability, auth, authentication or authorization, permissions or
+privileges, API keys, JWT, tokens, sessions, passkeys or WebAuthn, credentials or passwords, injection,
+XSS, CSRF, SSRF, escaping or sanitizing. Its queue line stays in the ledger as the record of the decision
+to port it, and the gate turns green when the port lands.
+
 A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date, and the date may be at
 most 30 days ahead, so every dated decision is looked at again within a month. After it the gate fails and the
 commit needs a new decision. Pending upstream feature branches are recorded this way.

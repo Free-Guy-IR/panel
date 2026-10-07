@@ -90,6 +90,14 @@ COVERAGE_LABELS = {
     "empty": "changes no file",
 }
 CONDITIONAL_TAG_RE = re.compile(r"^[\W_]*(?:UNMERGED[\W_]*WIP|pending)\b", re.IGNORECASE)
+SECURITY_MARK_RE = re.compile(r"\(security\)|\[security\]", re.IGNORECASE)
+SECURITY_SUBJECT_RE = re.compile(
+    r"\b(?:security|cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3}|vulnerab\w*"
+    r"|auth(?:n|z|entication|enticate|orization|orize|orized)?|permissions?|privileges?|api[ _-]?keys?"
+    r"|jwt|tokens?|sessions?|passkeys?|webauthn|credentials?|passwords?"
+    r"|inject\w*|xss|csrf|ssrf|escap\w*|sanitiz\w*)\b",
+    re.IGNORECASE,
+)
 UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
@@ -884,6 +892,13 @@ def patch_ids(shas):
     return ids
 
 
+def security_reason(reason, subject):
+    if SECURITY_MARK_RE.search(reason):
+        return "marked (security) in the ledger"
+    match = SECURITY_SUBJECT_RE.search(subject)
+    return f"its subject names {match.group(0)!r}" if match else None
+
+
 def workflow_command_escape(text):
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
@@ -1096,6 +1111,7 @@ def parity_gate(
                 f"{entry['where']}: `{sha[:12]}` is ported now as a patch-identical copy; delete it from the port queue"
             )
     deadlines = {sha: entry["deadline"] for sha, entry in resolved.items() if coverage[sha] == PORT_QUEUE}
+    queue_origin = {}
     sources = {}
     for sha in coverage:
         if sha in ids:
@@ -1110,6 +1126,7 @@ def parity_gate(
         elif queued:
             coverage[sha] = PORT_QUEUE
             deadlines[sha] = min(deadlines[s] for s in queued)
+            queue_origin[sha] = queued[0]
         elif sha in on_release:
             copy_notes.append(
                 f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
@@ -1126,6 +1143,19 @@ def parity_gate(
     rows = commit_metadata(base, [tip for _, tip, _ in active]) + merge_metadata(sorted(content_merges))
     for sha in empty_commits([row for row in rows if row["sha"] not in coverage and row["sha"] not in content_merges]):
         coverage[sha] = "empty"
+    for row in rows:
+        sha = row["sha"]
+        if coverage.get(sha) != PORT_QUEUE:
+            continue
+        entry = resolved[queue_origin.get(sha, sha)]
+        why = security_reason(entry["reason"], row["subject"])
+        if why:
+            del coverage[sha]
+            deadlines.pop(sha)
+            ledger_errors.append(
+                f"{entry['where']}: `{sha[:12]}` is a security-relevant upstream commit ({why}); a security commit "
+                "gets no grace in the port queue: port it now or record a reasoned waiver"
+            )
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
 

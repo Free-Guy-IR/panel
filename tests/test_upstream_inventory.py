@@ -797,6 +797,66 @@ def test_ledger_forms_that_must_not_count_as_a_decision(repo, tmp_path, text, me
     assert message in result.stdout
 
 
+def security_repo(tmp_path):
+    path = standalone_repo(tmp_path, "security")
+    shas = {
+        "auth": commit(path, "fix(auth): invalidate tokens for replaced admin accounts (#938)", {"r.py": lines("r", overrides={1: "R1"})}),
+        "plain": commit(path, "chore(deps): bump a library", {"s.py": lines("s", overrides={1: "S1"})}),
+        "feature": commit(path, "feat(subscription): add a header option", {"r.py": lines("r", overrides={1: "R1", 2: "R2"})}),
+    }
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["feature"])
+    git(path, "checkout", "-q", "-b", "copy", "v1.0")
+    git(path, "cherry-pick", shas["auth"])
+    git(path, "commit", "-q", "--amend", "-m", "fix(auth): the same token fix on a release branch")
+    shas["copy"] = git(path, "rev-parse", "HEAD")
+    git(path, "update-ref", "refs/remotes/upstream/release", shas["copy"])
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    return path, shas
+
+
+def test_a_security_commit_gets_no_grace_in_the_port_queue(tmp_path):
+    path, shas = security_repo(tmp_path)
+    queued = (
+        "## Port queue\n\n"
+        f"- `{shas['auth']}` MUST-PORT: token invalidation until: 2026-10-13\n"
+        f"- `{shas['plain']}` port the bump until: 2026-10-13\n"
+        f"- `{shas['feature']}` port the option until: 2026-10-13\n"
+    )
+    red = standalone_gate(path, queued)
+    assert red.returncode == 1, red.stdout + red.stderr
+    assert f"`{shas['auth'][:12]}` is a security-relevant upstream commit (its subject names 'auth')" in red.stdout
+    block = unported_block(red.stdout)
+    assert {key for key, sha in shas.items() if sha[:12] in block} == {"auth", "copy"}
+    assert tally(red.stdout, OWED_LABEL) == 2
+
+
+def test_a_ledger_mark_makes_a_queued_port_security(tmp_path):
+    path, shas = security_repo(tmp_path)
+    text = (
+        "## Waived\n\n"
+        f"- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code\n\n"
+        "## Port queue\n\n"
+        f"- `{shas['plain']}` MUST-PORT (security): the bump ships an OpenSSL security release until: 2026-10-13\n"
+        f"- `{shas['feature']}` port the option until: 2026-10-13\n"
+    )
+    red = standalone_gate(path, text)
+    assert red.returncode == 1, red.stdout + red.stderr
+    assert f"`{shas['plain'][:12]}` is a security-relevant upstream commit (marked (security) in the ledger)" in red.stdout
+
+
+def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
+    path, shas = security_repo(tmp_path)
+    queue = f"## Port queue\n\n- `{shas['plain']}` port the bump until: 2026-10-13\n- `{shas['feature']}` port it until: 2026-10-13\n"
+    waived = standalone_gate(path, f"## Waived\n\n- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code\n\n" + queue)
+    assert waived.returncode == 0, waived.stdout + waived.stderr
+    assert tally(waived.stdout, OWED_LABEL) == 2
+    git(path, "cherry-pick", "-x", shas["auth"])
+    ported = standalone_gate(path, queue + f"- `{shas['auth']}` MUST-PORT: token invalidation until: 2026-10-13\n")
+    assert ported.returncode == 0, ported.stdout + ported.stderr
+    assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in ported.stdout
+
+
 def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
     queue = [(key, "port until: 2026-10-13") for key in ("u1", "dup", "u3", "u5")]
     result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
