@@ -857,6 +857,19 @@ def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
     assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in ported.stdout
 
 
+@pytest.mark.parametrize("queue_first", [True, False])
+def test_a_port_queue_line_next_to_a_ported_by_design_line_is_stale(repo, tmp_path, queue_first):
+    shas = repo["shas"]
+    queue = f"## Port queue\n\n- `{shas['u3']}` port it until: 2026-10-13\n\n"
+    design = f"## Ported by design\n\n- `{shas['u3']}` adapted by hand in the fork\n\n"
+    rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2")) + "\n"
+    text = rest + (queue + design if queue_first else design + queue)
+    result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"`{shas['u3'][:12]}` is ported by design now; delete it from the port queue" in result.stdout
+    assert tally(result.stdout, OWED_LABEL) == 0
+
+
 def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
     queue = [(key, "port until: 2026-10-13") for key in ("u1", "dup", "u3", "u5")]
     result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
