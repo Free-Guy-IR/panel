@@ -18,6 +18,7 @@ import upstream_inventory
 
 MODES = {"self", "ledger", "workflow", "covered-by", "original"}
 TRACKING_MODES = {"self", "ledger", "workflow"}
+UPSTREAM_REF_PREFIXES = ("refs/remotes/upstream/", "refs/upstream-tags/")
 VERSION_TAG_RE = re.compile(r"^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)$")
 ARCH_SUFFIX_RE = re.compile(r"-(amd64|arm64|armv7|arm)$")
 HTTP_TIMEOUT = 20
@@ -67,12 +68,16 @@ def load_config(path):
             if not entry.get(field):
                 errors.append(f"repo {name} ({mode}) needs {field}")
         release_refs = entry.get("release_refs")
-        if release_refs is not None and (
+        if release_refs is not None and mode != "ledger":
+            errors.append(f"repo {name} sets release_refs, which only a ledger repo uses")
+        elif release_refs is not None and (
             not isinstance(release_refs, list)
             or not release_refs
-            or not all(isinstance(ref, str) and ref.startswith("refs/") for ref in release_refs)
+            or not all(isinstance(ref, str) and ref.startswith(UPSTREAM_REF_PREFIXES) for ref in release_refs)
         ):
-            errors.append(f"repo {name} release_refs must be a non-empty list of refs/... patterns")
+            errors.append(
+                f"repo {name} release_refs must be a non-empty list of patterns under {' or '.join(UPSTREAM_REF_PREFIXES)}"
+            )
     modes = {entry.get("name"): entry.get("mode") for entry in repos}
     for entry in repos:
         target = entry.get("covered_by")
@@ -128,19 +133,19 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
         for pattern in ("refs/remotes/upstream/*", "refs/upstream-tags/*")
         if run_git(mirror, "for-each-ref", "--count=1", pattern.removesuffix("*")).stdout.strip()
     ]
-    missing_release = [
-        ref
-        for ref in entry.get("release_refs") or ()
-        if not run_git(mirror, "for-each-ref", "--count=1", ref).stdout.strip()
-    ]
-    if missing_release:
-        print(f"\n=== {name}: release_refs {', '.join(missing_release)} match no upstream ref")
-        return 1
     previous = Path.cwd()
     os.chdir(mirror)
     try:
         print(f"\n=== {name}: {entry['upstream']} tracked against {entry['fork']} {entry['ported_ref']}")
         sys.stdout.flush()
+        missing_release = [
+            ref
+            for ref in entry.get("release_refs") or ()
+            if not upstream_inventory.GLOB_CHARS & set(ref) and not upstream_inventory.ref_exists(ref)
+        ]
+        if missing_release:
+            print(f"  release_refs {', '.join(missing_release)} name no upstream ref")
+            return 1
         return upstream_inventory.parity_gate(
             base,
             base,

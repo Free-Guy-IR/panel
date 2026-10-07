@@ -234,13 +234,13 @@ def test_a_release_ref_that_matches_nothing_fails(world):
     config = write_map(world, ledger_map(world, 'release_refs = ["refs/remotes/upstream/master"]'), ledger)
     result = run(config, "--today", "2026-10-06")
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "release_refs refs/remotes/upstream/master match no upstream ref" in result.stdout
+    assert "release_refs refs/remotes/upstream/master name no upstream ref" in result.stdout
 
 
 def test_release_refs_must_be_a_list_of_refs(world):
     result = run(write_map(world, ledger_map(world, 'release_refs = "master"')))
     assert result.returncode == 1
-    assert "repo kit release_refs must be a non-empty list of refs/... patterns" in result.stdout
+    assert "repo kit release_refs must be a non-empty list of patterns under" in result.stdout
 
 
 def test_a_repo_can_only_be_covered_by_a_repo_that_tracks_something(world):
@@ -288,3 +288,30 @@ def test_a_side_repo_port_queue_is_owed_until_its_deadline(world, today, code, m
     result = run(write_map(world, ledger_map(world), ledger), "--today", today)
     assert result.returncode == code, result.stdout + result.stderr
     assert message in result.stdout
+
+
+def test_release_refs_must_name_upstream_refs(world):
+    result = run(write_map(world, ledger_map(world, 'release_refs = ["refs/remotes/fork/main"]')))
+    assert result.returncode == 1
+    assert "release_refs must be a non-empty list of patterns under refs/remotes/upstream/ or refs/upstream-tags/" in (
+        result.stdout
+    )
+
+
+def test_a_release_glob_without_matches_is_allowed(world):
+    ledger = covering_side_ledger(world, "UNMERGED-WIP: only on upstream feature until: 2026-10-25")
+    extra = 'release_refs = ["refs/remotes/upstream/main", "refs/upstream-tags/nightly-*"]'
+    result = run(write_map(world, ledger_map(world, extra), ledger), "--today", "2026-10-06")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_release_refs_belong_only_to_a_ledger_repo(world):
+    config = write_map(
+        world,
+        workflow_map(world, 'release_refs = ["refs/remotes/upstream/main"]').replace(
+            "{path}", ".github/workflows/upstream-drift.yml"
+        ),
+    )
+    result = run(config)
+    assert result.returncode == 1
+    assert "repo node sets release_refs, which only a ledger repo uses" in result.stdout

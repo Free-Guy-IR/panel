@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -70,7 +71,7 @@ UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
 PORT_QUEUE = "port-queue"
-PORT_QUEUE_MAX_DAYS = 30
+DECISION_MAX_DAYS = 30
 SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
@@ -835,6 +836,10 @@ def patch_ids(shas):
     return ids
 
 
+def workflow_command_escape(text):
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def parse_sync_ledger(path, today=None):
     try:
         text = Path(path).read_text()
@@ -845,13 +850,16 @@ def parse_sync_ledger(path, today=None):
     entries = []
     errors = []
     section = None
+    section_level = 0
     for lineno, line in enumerate(text.splitlines(), 1):
         heading = SYNC_HEADING_RE.match(line)
         if heading:
             name = heading.group(2).strip().lower()
+            level = len(heading.group(1))
             if name in SYNC_SECTIONS:
                 section = SYNC_SECTIONS[name]
-            elif len(heading.group(1)) <= 2:
+                section_level = level
+            elif section is None or level <= section_level:
                 section = None
             continue
         if section is None:
@@ -886,16 +894,15 @@ def parse_sync_ledger(path, today=None):
                     "or record a new decision"
                 )
                 continue
-        if section == PORT_QUEUE:
-            if deadline is None:
-                errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
-                continue
-            if (deadline - today).days > PORT_QUEUE_MAX_DAYS:
+            if (deadline - today).days > DECISION_MAX_DAYS:
                 errors.append(
-                    f"{where}: `{token}` is queued until {deadline.isoformat()}, more than {PORT_QUEUE_MAX_DAYS} "
-                    "days ahead; a queued port needs a nearer deadline"
+                    f"{where}: `{token}` is decided until {deadline.isoformat()}, more than {DECISION_MAX_DAYS} "
+                    "days ahead; a dated decision needs a nearer deadline"
                 )
                 continue
+        if section == PORT_QUEUE and deadline is None:
+            errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
+            continue
         conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
         entries.append(
             {
@@ -1029,17 +1036,19 @@ def parity_gate(
         origin = sources.get(ids.get(sha), [])
         if not origin:
             continue
-        if sha in on_release and all(s in conditional for s in origin):
+        queued = [s for s in origin if coverage[s] == PORT_QUEUE]
+        if any(coverage[s] != PORT_QUEUE and s not in conditional for s in origin):
+            coverage[sha] = "patch-id"
+        elif queued:
+            coverage[sha] = PORT_QUEUE
+            deadlines[sha] = min(deadlines[s] for s in queued)
+        elif sha in on_release:
             copy_notes.append(
                 f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
                 "which is waived only while unmerged, so the copy needs its own decision"
             )
-            continue
-        if all(coverage[s] == PORT_QUEUE for s in origin):
-            coverage[sha] = PORT_QUEUE
-            deadlines[sha] = min(deadlines[s] for s in origin)
-            continue
-        coverage[sha] = "patch-id"
+        else:
+            coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
         coverage[sha] = "in-base"
 
@@ -1092,6 +1101,10 @@ def parity_gate(
         print(f"Owed upstream ports ({len(owed)}), each covered only until its port-queue deadline:")
         for row in owed:
             print(f"    {row['sha'][:12]}  until {deadlines[row['sha']].isoformat()}  {row['date']}  {row['subject']}")
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            for row in owed:
+                message = f"{row['sha'][:12]} {row['subject']} is owed until {deadlines[row['sha']].isoformat()}"
+                print(f"::warning title=Owed upstream port::{workflow_command_escape(message)}")
 
     unlisted_picks = {sha: why for sha, why in ineffective.items() if sha not in coverage}
     if ineffective:

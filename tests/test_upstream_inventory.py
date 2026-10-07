@@ -278,6 +278,8 @@ def parity(repo, ledger_path, *extra):
         "v1.*",
         "--fail-on-unported",
         ledger_path,
+        "--today",
+        "2026-10-06",
         *extra,
     )
 
@@ -529,7 +531,7 @@ def test_a_queued_port_is_owed_and_covers_only_until_its_deadline(repo, tmp_path
     ("reason", "message"),
     [
         ("port it later", "is in the port queue without an until: YYYY-MM-DD deadline"),
-        ("port it later until: 2026-11-06", "more than 30 days ahead; a queued port needs a nearer deadline"),
+        ("port it later until: 2026-11-06", "more than 30 days ahead; a dated decision needs a nearer deadline"),
         ("port it later until: 2026-13-01", "has an invalid until date 2026-13-01"),
     ],
 )
@@ -554,9 +556,119 @@ def test_a_section_name_counts_at_any_heading_level(repo, tmp_path):
     )
     result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "more than 30 days ahead; a queued port needs a nearer deadline" in result.stdout
+    assert "more than 30 days ahead; a dated decision needs a nearer deadline" in result.stdout
     assert tally(result.stdout, "waived (ledger)") == 2
     assert tally(result.stdout, OWED_LABEL) == 1
+
+
+def test_an_unknown_heading_at_the_same_level_closes_a_section(repo, tmp_path):
+    shas = repo["shas"]
+    text = (
+        "### Waived\n\n"
+        f"- `{shas['f1']}` the fork does not take feature x\n\n"
+        "### Release notes\n\n"
+        f"- `{shas['f2']}` not a decision, only a note\n"
+        f"- `{shas['u3']}` not a decision either\n"
+        f"- `{shas['u5']}` nor this\n"
+    )
+    result = parity(repo, ledger(tmp_path, text, adapted=False), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert tally(result.stdout, "waived (ledger)") == 1
+    assert shas["f2"][:12] in unported_block(result.stdout)
+
+
+def mixed_origin_repo(tmp_path):
+    path = tmp_path / "mixed"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r")})
+    git(path, "tag", "v1.0")
+    git(path, "checkout", "-q", "-b", "feat-a", "v1.0")
+    shas = {"a": commit(path, "feature", {"x.py": lines("x", 3)})}
+    for name in ("feat-b", "rel"):
+        git(path, "checkout", "-q", "-b", name, "v1.0")
+        git(path, "cherry-pick", shas["a"])
+        git(path, "commit", "-q", "--amend", "-m", f"feature copy on {name}")
+        shas[name] = git(path, "rev-parse", "HEAD")
+    for name in ("feat-a", "feat-b", "rel"):
+        git(path, "update-ref", f"refs/remotes/upstream/{name}", git(path, "rev-parse", name))
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    (path / "UPSTREAM_SYNC.md").write_text(
+        "## Waived\n\n"
+        f"- `{shas['a']}` UNMERGED-WIP: only on upstream feat-a\n\n"
+        "## Port queue\n\n"
+        f"- `{shas['feat-b']}` port it until: 2026-10-13\n"
+    )
+    return path, shas
+
+
+@pytest.mark.parametrize(("today", "code"), [("2026-10-06", 0), ("2026-10-14", 1)])
+def test_a_release_copy_of_a_waived_and_a_queued_commit_is_owed(tmp_path, today, code):
+    path, shas = mixed_origin_repo(tmp_path)
+    result = run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--release-ref",
+        "refs/remotes/upstream/rel",
+        "--today",
+        today,
+    )
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert tally(result.stdout, OWED_LABEL) == 2
+        assert f"{shas['rel'][:12]}  until 2026-10-13" in result.stdout
+        assert tally(result.stdout, "patch-id equivalent of a covered commit") == 0
+    else:
+        assert shas["rel"][:12] in unported_block(result.stdout)
+
+
+def test_every_dated_decision_needs_a_near_deadline(repo, tmp_path):
+    shas = repo["shas"]
+    text = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u3", "u5", "f2"))
+    text += f"- `{shas['f1']}` UNMERGED-WIP: only on upstream feat/x until: 2026-11-30\n"
+    result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is decided until 2026-11-30, more than 30 days ahead" in result.stdout
+    assert shas["f1"][:12] in unported_block(result.stdout)
+
+
+def test_owed_ports_are_annotated_on_github_actions(repo, tmp_path):
+    queue = [("u3", "port until: 2026-10-20"), ("u5", "port until: 2026-10-13")]
+    args = [
+        sys.executable,
+        str(SCRIPT),
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--track",
+        "v1.*",
+        "--fail-on-unported",
+        queue_ledger(tmp_path, repo, queue),
+        "--today",
+        "2026-10-06",
+    ]
+    plain = subprocess.run(args, cwd=repo["path"], env=ENV, capture_output=True, text=True, check=False)
+    actions = subprocess.run(
+        args, cwd=repo["path"], env=ENV | {"GITHUB_ACTIONS": "true"}, capture_output=True, text=True, check=False
+    )
+    assert plain.returncode == actions.returncode == 0, actions.stdout + actions.stderr
+    assert "::warning" not in plain.stdout
+    annotations = [line for line in actions.stdout.splitlines() if line.startswith("::warning title=Owed upstream port::")]
+    assert len(annotations) == 3
+    assert any(repo["shas"]["u5"][:12] in line and "until 2026-10-13" in line for line in annotations)
 
 
 def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
@@ -674,7 +786,7 @@ def covering_ledger(tmp_path, repo, f1_reason="rewritten as fork code"):
 
 CONDITIONAL_REASONS = [
     "UNMERGED-WIP: only on upstream feat/x",
-    "pending: tracked feature branch upstream/feat/x, port it when it merges. until: 2099-01-01",
+    "pending: tracked feature branch upstream/feat/x, port it when it merges. until: 2026-10-25",
 ]
 
 
