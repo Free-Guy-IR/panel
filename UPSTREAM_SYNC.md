@@ -26,8 +26,9 @@ owed port and says the fork is not at parity, and the day after the deadline the
 commit was ported (a `cherry-pick -x` trailer or a patch-identical copy of a ported commit, which the gate
 then reports as ready to delete from the queue) or decided again.
 
-A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date. After it the gate
-fails and the commit needs a new decision. Pending upstream feature branches are recorded this way.
+A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date, and the date may be at
+most 30 days ahead, so every dated decision is looked at again within a month. After it the gate fails and the
+commit needs a new decision. Pending upstream feature branches are recorded this way.
 
 A `Waived` reason that starts with `UNMERGED-WIP` or `pending` is also conditional on upstream: it covers
 the commit only while upstream keeps it off its release lines (upstream/main, upstream/dev and every
@@ -125,21 +126,20 @@ review, or waive it for good if upstream abandons it.
 - `92cc7dc80b16f5a8d46e7eaa6a9385dcb81279bd` pending: tracked feature branch upstream/amaziaWG (AmneziaWG v1-v3.1 for WireGuard hosts and subscriptions, commit "fix: update Amnezia properties and validation for random_trailers and disable_cookies"). Checked 2026-09-25: its pull request PasarGuard/panel#932 into dev is open with comment-only reviews and was still being revised on 2026-09-24, and upstream node dev 4a9d0cf has no AmneziaWG support, so the feature is not merge-ready upstream; port it when #932 merges. until: 2026-10-25
 - `ac167e4244f1c9fcaeab6ffaf37768832f24b469` pending: tracked feature branch upstream/amaziaWG (AmneziaWG v1-v3.1 for WireGuard hosts and subscriptions, commit "docs: document AmneziaWG validation, subscription generation, and host presets"). Checked 2026-09-25: its pull request PasarGuard/panel#932 into dev is open with comment-only reviews and was still being revised on 2026-09-24, and upstream node dev 4a9d0cf has no AmneziaWG support, so the feature is not merge-ready upstream; port it when #932 merges. until: 2026-10-25
 - `4e98af8aca1f4db16bf00286370dffd027d33a96` UNMERGED-WIP: upstream branch masque, a "temp commit" on top of dev 15a61fc85 that adds MASQUE proxy handling to app/core/xray.py and app/subscription/xray.py. Checked 2026-10-06: it is on no upstream release line, and the matching node work (PasarGuard/node branch masque, Xray v26.9.30 prerelease) and node_bridge_py work (branch masque) are unmerged too, so there is no released feature to port. until: 2026-11-05
-- `e2707d99064e75acd1ea4d8e1d9bb4542906c5e8` pending: tracked dependabot branch upstream/dependabot/uv/dev/cryptography-50.0.2 (cryptography 50.0.1 to 50.0.2). Checked 2026-10-06: not merged into upstream dev; the fork takes the pin together with upstream, and the gate fails the moment upstream merges it. until: 2026-11-05
 - `b021d6f7be94bb5c7dc57cf6a648d4b89584e776` pending: tracked dependabot branch upstream/dependabot/uv/dev/fastapi-0.142.2 (fastapi floor 0.141.1 to 0.142.2). Checked 2026-10-06: not merged into upstream dev; the fork takes it together with upstream after the fork-tests suite, and the gate fails the moment upstream merges it. until: 2026-11-05
 - `59a347e6517ec9888ffb21102b954430d492b6b4` pending: tracked dependabot branch upstream/dependabot/uv/dev/ruff-0.16.10 (dev tool ruff 0.16.9 to 0.16.10). Checked 2026-10-06: not merged into upstream dev; the gate fails the moment upstream merges it. until: 2026-11-05
-- `75f3788a312ef593f5642466faa380154ce95e09` pending: tracked dependabot branch upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.2 (sqlalchemy[asyncio] floor 2.1.1 to 2.1.2, on top of dev's #958). Checked 2026-10-06: not merged into upstream dev; it follows the queued 1e654d9d5 port, and the gate fails the moment upstream merges it. until: 2026-11-05
 - `30b9f2d176cdaf3713493c8520ffaa386d96ba93` pending: tracked dependabot branch upstream/dependabot/uv/dev/uvloop-0.23.0 (uvloop floor 0.22.1 to 0.23.0). Checked 2026-10-06: not merged into upstream dev; the gate fails the moment upstream merges it. until: 2026-11-05
 
 ## Port queue
 
-Upstream release-line commits the fork must take and does not carry yet on this branch line. Checked on
+Upstream commits the fork must take and does not carry yet on this branch line. Checked on
 2026-10-07 with `git ls-remote` against PasarGuard/panel dev 6372404b8ed406fc536b987d78bbb88c1dcc1189 and
-main b56ffe369f542152c52c69733205baeaf3f6e4cd (= v5.4.1, the newest tag). Every line below is ported with a
-`(cherry picked from commit ...)` trailer on the unmerged branch parity/c2-port (PG-C2-PORT, based on int
+main b56ffe369f542152c52c69733205baeaf3f6e4cd (= v5.4.1, the newest tag). Every upstream dev commit below is ported
+with a `(cherry picked from commit ...)` trailer on the unmerged branch parity/c2-port (PG-C2-PORT, based on int
 5666201d2 and still being rewritten under review, so its pick shas are not recorded here); the first six are also
-ported on the unmerged release/v5.34.25-p13-sync.
-When either branch is merged, the gate reports each line as ported and the line is deleted in that merge.
+ported on the unmerged release/v5.34.25-p13-sync. The two dependabot bumps (cryptography 50.0.2 and SQLAlchemy
+2.1.2) are not on upstream dev and have no port yet. When a port is merged, the gate reports its line as ported and
+the line is deleted in that merge.
 
 - `76b42feedeac7791e41cc08ab731d752cf4e9f08` MUST-PORT: subscription header placement option for CDN-blocked headers (#959), app/models/settings.py, app/operation/subscription.py, app/subscription/share.py, the subscription settings page and tests/api/test_user.py. Picked on parity/c2-port and as d5d0b548a on release/v5.34.25-p13-sync. until: 2026-10-13
 - `c9b445a05300d1517382265ddc1473582bccd1bd` port: dashboard import-name fix that renames the passkey imports in nav-user.tsx and admin-modal.tsx to the orval-generated names and regenerates dashboard/src/service/api/index.ts; eb50bfd58 depends on it. Picked on parity/c2-port and as 52cb1c0df on release/v5.34.25-p13-sync; the dashboard build and the orval mutator contract must be re-checked when it lands. until: 2026-10-13
@@ -154,6 +154,8 @@ When either branch is merged, the gate reports each line as ported and the line 
 - `14c30eef2c208fa8b8776461b326c564f32fec1f` MUST-PORT (security): scoped API keys can no longer exceed the permissions of their admin (#940), app/operation/api_key.py. Picked on parity/c2-port. The C2-ADV review of 2026-10-07 found the upstream fix itself incomplete (a two-step PATCH still widens a key, and a key's permissions are checked against its admin only when it is written), so the fork's port must close both before it lands; both gaps are upstream submission candidates. until: 2026-10-13
 - `15a61fc85b73e367c1144b10ae9f3d1b9ff000d4` MUST-PORT (security): passkey enrollment requires an admin session (#942), app/routers/authentication.py and app/routers/passkey.py. Picked on parity/c2-port; the C2-ADV review found that an API key can still create login credentials through the admin-modify route, the same class of gap, which the port must close. until: 2026-10-13
 - `16ce46d8ad6d8a9e15d84bf25aebd580b7813115` MUST-PORT: the subscription url_prefix setting is stored with leading and trailing '/' stripped (field validator in app/models/settings.py). Picked on parity/c2-port. until: 2026-10-13
+- `e2707d99064e75acd1ea4d8e1d9bb4542906c5e8` MUST-PORT (security): upstream dependabot branch dev/cryptography-50.0.2, not merged into upstream dev yet. cryptography 50.0.2 (2026-09-30) rebuilds its wheels with OpenSSL 4.0.3, a security release (29 Sep 2026, most severe CVE High, including CVE-2026-84783, a use-after-free in the X.509 extension cache under concurrent use, and CVE-2026-54872, an EC timing side channel); the fork pins `cryptography==50.0.1` exactly and parses remote certificates with it in app/utils/reality_scan.py. Take this pin without waiting for upstream. until: 2026-10-13
+- `75f3788a312ef593f5642466faa380154ce95e09` port: upstream dependabot branch dev/sqlalchemy-asyncio--gte-2.1.2, not merged into upstream dev yet. SQLAlchemy 2.1.2 (2026-10-02) fixes 2.1 regressions, among them selectinload() ignoring extra criteria in a many-to-many relationship's primaryjoin and result rows that are tuple subclasses; take it together with 1e654d9d5 so the fork never ships 2.1.1 alone. until: 2026-10-13
 - `6372404b8ed406fc536b987d78bbb88c1dcc1189` port: the hosts dashboard reads and invalidates the hosts list with getGetHostsQueryKey() instead of the literal keys 'getGetHostsQueryKey' (the page and hosts-list.tsx) and 'getHostsQueryKey' (host-modal.tsx), which disagree with each other, so a host saved from the modal now refreshes the list the page shows (hosts-list.tsx, host-modal.tsx, _dashboard.hosts.tsx; the fork has the same literals at host-modal.tsx:712, :822 and :2285). Picked on parity/c2-port; host-modal.tsx is a fork override (see OVERRIDES.md), so the dashboard must be checked in a browser when it lands. until: 2026-10-13
 
 ## Side repositories (not read by the parity gate)
