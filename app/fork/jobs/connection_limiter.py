@@ -15,12 +15,14 @@ import time
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app import notification, scheduler
 from app.db import GetDB
 from app.db.crud.settings import get_settings
 from app.db.models import User, UserConnectionState, UserStatus
+from app.fork.proxy_secrets.errors import describe_failure
+from app.fork.proxy_secrets.locks import is_lock_unavailable
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import ConnectionLimit
 from app.operation import OperatorType
@@ -80,27 +82,54 @@ def _enforcing(settings) -> bool:
     return settings is not None and settings.enforcement_enabled and not settings.monitor_only
 
 
+RETRIABLE_WRITE_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 0.5
+
+
+async def _under_lock_retries(db, attempt, work: str):
+    for number in range(1, RETRIABLE_WRITE_ATTEMPTS + 1):
+        try:
+            return await attempt()
+        except DBAPIError as err:
+            await db.rollback()
+            if not is_lock_unavailable(err):
+                raise
+            if number == RETRIABLE_WRITE_ATTEMPTS:
+                logger.warning(
+                    "%s could not take its row locks after %d attempt(s); nothing was stored and the next run "
+                    "retries it (%s)",
+                    work,
+                    number,
+                    describe_failure(err),
+                )
+                return None
+            await asyncio.sleep(RETRY_BACKOFF_SECONDS * number)
+
+
 async def _release_due(db, settings) -> None:
     """Let go of anyone whose time is up, or of everyone when enforcement is off."""
     everyone = not _enforcing(settings)
-    pairs = await due_to_restore(db, everyone=everyone)
-    if not pairs:
-        return
 
-    restored = [user for restriction, user in pairs if release(restriction, user)]
-    await db.commit()
+    async def attempt():
+        pairs = await due_to_restore(db, everyone=everyone)
+        if not pairs:
+            return None
+        restored = [user for restriction, user in pairs if release(restriction, user)]
+        await db.commit()
+        return len(pairs), restored
+
+    released = await _under_lock_retries(db, attempt, "releasing the device-limit restrictions that are due")
+    if released is None:
+        return
+    count, restored = released
 
     await _push_to_nodes(restored)
     logger.info(
         "released %d user(s)%s, %d of them back to their earlier status",
-        len(pairs),
+        count,
         " because enforcement is off" if everyone else "",
         len(restored),
     )
-
-
-RETRIABLE_WRITE_ATTEMPTS = 3
-RETRY_BACKOFF_SECONDS = 0.5
 
 
 def _is_retriable_db_error(err) -> bool:
@@ -245,48 +274,55 @@ async def _enforce(db, observations, settings) -> None:
     if not over:
         return
 
-    still_active = (
-        (
-            await db.execute(
-                select(User.id)
-                .where(User.id.in_(sorted(o.user_id for o in over)), User.status == UserStatus.active)
-                .order_by(User.id)
-                .with_for_update()
+    async def attempt():
+        still_active = (
+            (
+                await db.execute(
+                    select(User.id)
+                    .where(User.id.in_(sorted(o.user_id for o in over)), User.status == UserStatus.active)
+                    .order_by(User.id)
+                    .with_for_update()
+                )
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
-    users = {
-        user.id: user
-        for user in (
-            await db.execute(
-                select(User)
-                .options(*USER_LOAD_OPTIONS)
-                .where(User.id.in_(still_active))
-                .execution_options(populate_existing=True)
+        users = {
+            user.id: user
+            for user in (
+                await db.execute(
+                    select(User)
+                    .options(*USER_LOAD_OPTIONS)
+                    .where(User.id.in_(still_active))
+                    .execution_options(populate_existing=True)
+                )
             )
-        )
-        .unique()
-        .scalars()
-        .all()
-    }
+            .unique()
+            .scalars()
+            .all()
+        }
 
-    changed = []
-    for observation in over:
-        user = users.get(observation.user_id)
-        if user is None:
-            continue
-        if await restrict(db, user, observation, settings) is not None:
-            changed.append(user)
+        changed = []
+        for observation in over:
+            user = users.get(observation.user_id)
+            if user is None:
+                continue
+            if await restrict(db, user, observation, settings) is not None:
+                changed.append(user)
 
-    await db.commit()
+        await db.commit()
+        return changed
+
+    changed = await _under_lock_retries(db, attempt, "restricting the users over the device limit")
     if changed:
         await _push_to_nodes(changed)
 
-    forgotten = await forget_old(db, settings.violation_retention_days)
-    if forgotten:
-        await db.commit()
+    async def forget():
+        forgotten = await forget_old(db, settings.violation_retention_days)
+        if forgotten:
+            await db.commit()
+
+    await _under_lock_retries(db, forget, "forgetting old device-limit violations")
 
 
 if runtime_settings.role.runs_scheduler:
