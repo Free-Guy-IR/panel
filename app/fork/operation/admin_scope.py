@@ -11,9 +11,10 @@ from app.operation.permissions import get_allowed_group_ids
 from app.utils.connection_enforcement import close_active_restrictions
 
 
-async def close_visible_restrictions(db: AsyncSession, admin_id: int, caller: AdminDetails, reason: str) -> int:
+async def close_visible_restrictions(db: AsyncSession, admin_id: int, caller: AdminDetails, reason: str) -> list[int]:
     locked = await lock_admin_users(db, admin_id, get_allowed_group_ids(caller))
-    return await close_active_restrictions(db, locked, reason)
+    await close_active_restrictions(db, locked, reason)
+    return locked
 
 
 async def answer_503_if_lock_unavailable(operation, db: AsyncSession, exc: Exception) -> None:

@@ -15,6 +15,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
+from app.fork.crud.admin_scope import locked_targets
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
@@ -87,7 +88,11 @@ async def reset_all_users_data_usage(
 
 
 async def disable_all_active_users(
-    db: AsyncSession, admin: Admin | None = None, *, allowed_group_ids: list[int] | None = None
+    db: AsyncSession,
+    admin: Admin | None = None,
+    *,
+    allowed_group_ids: list[int] | None = None,
+    user_ids: list[int] | None = None,
 ):
     """
     Disable all active users or users under a specific admin.
@@ -97,23 +102,25 @@ async def disable_all_active_users(
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
     query = update(User).where(User.status.in_((UserStatus.active, UserStatus.on_hold)))
-    if admin:
+    if admin and user_ids is None:
         query = query.filter(User.admin_id == admin.id)
     if allowed_group_ids is not None:
         query = query.filter(user_in_allowed_groups(User.id, allowed_group_ids))
 
-    await db.execute(
-        query.values(
-            {User.status: UserStatus.disabled, User.last_status_change: dt.now(UTC)},
-        )
-    )
+    query = query.values({User.status: UserStatus.disabled, User.last_status_change: dt.now(UTC)})
+    for statement in locked_targets(query, user_ids):
+        await db.execute(statement)
 
     await db.commit()
     await db.refresh(admin)
 
 
 async def activate_all_disabled_users(
-    db: AsyncSession, admin: Admin | None = None, *, allowed_group_ids: list[int] | None = None
+    db: AsyncSession,
+    admin: Admin | None = None,
+    *,
+    allowed_group_ids: list[int] | None = None,
+    user_ids: list[int] | None = None,
 ):
     """
     Activate all disabled users or users under a specific admin.
@@ -126,7 +133,7 @@ async def activate_all_disabled_users(
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
     filters = [User.status == UserStatus.disabled]
-    if admin:
+    if admin and user_ids is None:
         filters.append(User.admin_id == admin.id)
     if allowed_group_ids is not None:
         filters.append(user_in_allowed_groups(User.id, allowed_group_ids))
@@ -142,13 +149,15 @@ async def activate_all_disabled_users(
         else_=literal(UserStatus.active, status_type),
     )
 
-    await db.execute(
+    query = (
         update(User)
         .where(and_(*filters))
         .values(
             {User.status: status_case, User.last_status_change: dt.now(UTC)},
         )
     )
+    for statement in locked_targets(query, user_ids):
+        await db.execute(statement)
 
     await db.commit()
     await db.refresh(admin)

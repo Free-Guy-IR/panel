@@ -239,8 +239,10 @@ class AdminOperation(BaseOperation):
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Disable all active users under a specific admin."""
         try:
-            await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
-            await disable_all_active_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+            locked = await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
+            await disable_all_active_users(
+                db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin), user_ids=locked
+            )
         except DBAPIError as exc:
             await answer_503_if_lock_unavailable(self, db, exc)
         await sync_users(await self._visible_users_of(db, db_admin, admin))
@@ -264,8 +266,10 @@ class AdminOperation(BaseOperation):
     async def _activate_all_disabled_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Activate all disabled users under a specific admin."""
         try:
-            await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
-            await activate_all_disabled_users(db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin))
+            locked = await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
+            await activate_all_disabled_users(
+                db=db, admin=db_admin, allowed_group_ids=get_allowed_group_ids(admin), user_ids=locked
+            )
         except DBAPIError as exc:
             await answer_503_if_lock_unavailable(self, db, exc)
         await sync_users(await self._visible_users_of(db, db_admin, admin))

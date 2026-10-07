@@ -188,10 +188,10 @@ async def test_closing_for_an_admin_closes_only_the_restrictions_of_that_admins_
     await _restrict_now(session_factory, second_user)
 
     async with session_factory() as db:
-        closed = await close_visible_restrictions(db, first_admin, OWNER, "the admin disabled every user")
+        locked = await close_visible_restrictions(db, first_admin, OWNER, "the admin disabled every user")
         await db.commit()
 
-    assert closed == 1
+    assert locked == [first_user]
     assert (await _status_and_restriction(session_factory, first_user)) == (UserStatus.disabled, False)
     assert (await _status_and_restriction(session_factory, second_user)) == (UserStatus.disabled, True)
 

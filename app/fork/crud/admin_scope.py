@@ -3,13 +3,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User
 from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE, lock_user_rows
+from app.fork.proxy_secrets.locks import read_committed_rows
 
 
-async def lock_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int] | None) -> list[int]:
+def _admin_users(admin_id: int, allowed_group_ids: list[int] | None):
     stmt = select(User.id).where(User.admin_id == admin_id)
     if allowed_group_ids is not None:
         stmt = stmt.where(user_in_allowed_groups(User.id, allowed_group_ids))
-    return list((await db.execute(stmt.order_by(User.id).with_for_update())).scalars().all())
+    return stmt
+
+
+def id_batches(user_ids: list[int]) -> list[list[int]]:
+    ordered = sorted(set(user_ids))
+    return [ordered[start : start + USER_LOCK_BATCH_SIZE] for start in range(0, len(ordered), USER_LOCK_BATCH_SIZE)]
+
+
+def locked_targets(statement, user_ids: list[int] | None) -> list:
+    if user_ids is None:
+        return [statement]
+    return [statement.where(User.id.in_(batch)) for batch in id_batches(user_ids)]
+
+
+async def lock_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int] | None) -> list[int]:
+    candidates = [user_id for (user_id,) in await read_committed_rows(db, _admin_users(admin_id, allowed_group_ids))]
+    await lock_user_rows(db, candidates)
+    locked: list[int] = []
+    for batch in id_batches(candidates):
+        stmt = _admin_users(admin_id, allowed_group_ids).where(User.id.in_(batch))
+        locked.extend(user_id for (user_id,) in await read_committed_rows(db, stmt))
+    return sorted(locked)
 
 
 async def count_visible_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int]) -> int:
