@@ -20,6 +20,10 @@ PROD_REVISION = "e5a9c3f1b7d2"
 PROD_COMMIT = "d46a03b65e2afc126aa18ed11638ec143585f725"
 PROD_GRAPH_SIZE = 181
 PROD_GRAPH_FINGERPRINT = "d79312d7f29e86ea99c3c6f540ad366673bbe6c109d4c576c2e3e7551b63e040"
+OFFICIAL_REVISION = "d8b2c4f60a17"
+OFFICIAL_COMMIT = "72ad0e4a53dd5ce56d651a98ca005c3014cae0c3"
+OFFICIAL_GRAPH_SIZE = 180
+OFFICIAL_GRAPH_FINGERPRINT = "9f251514d0c297e705615cce4fa14bb5ccb8466e889d6b9eac07062b27b44023"
 PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
 RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks", "proxy_secret_claims", "pending_node_removals"}
 RELEASE_HEAD = "e79833e2a0b2"
@@ -109,15 +113,15 @@ def _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name):
     return _rows(f"sqlite:///{copy}")
 
 
-def _at_release_head(tmp_path, name="rollback.sqlite3"):
+def _at_release_head(tmp_path, name="rollback.sqlite3", revision=PROD_REVISION):
     config, sync_url = _database(tmp_path, name)
-    upgrade(config, PROD_REVISION)
+    upgrade(config, revision)
     _seed(sync_url)
     before = (_schema(sync_url), _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name))
     upgrade(config, "heads")
     tables = set(inspect(create_engine(sync_url)).get_table_names())
     assert PASSKEY_TABLES | RELEASE_ONLY_TABLES <= tables
-    assert current_heads(config) != (PROD_REVISION,)
+    assert current_heads(config) != (revision,)
     return config, sync_url, before
 
 
@@ -259,15 +263,15 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     ) in printed
 
 
-def _prod_tree(tmp_path):
+def _prod_tree(tmp_path, commit=PROD_COMMIT, name="prod"):
     if subprocess.run(
-        ["git", "cat-file", "-e", f"{PROD_COMMIT}^{{commit}}"], cwd=ROOT, capture_output=True, check=False
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT, capture_output=True, check=False
     ).returncode:
-        pytest.skip(f"the prod commit {PROD_COMMIT} is not in this checkout")
-    tree = tmp_path / "prod"
+        pytest.skip(f"the prod commit {commit} is not in this checkout")
+    tree = tmp_path / name
     tree.mkdir()
     archive = subprocess.run(
-        ["git", "archive", PROD_COMMIT, "app", "config.py", "role.py", "alembic.ini", "start.sh"],
+        ["git", "archive", commit, "app", "config.py", "role.py", "alembic.ini", "start.sh"],
         cwd=ROOT,
         capture_output=True,
         check=True,
@@ -341,3 +345,59 @@ def test_the_only_data_a_rollback_keeps_from_the_release_is_the_loopback_rewrite
             text("SELECT content FROM client_templates WHERE template_type = 'xray_subscription' AND is_system = 1")
         ).scalar_one()
     assert '"0.0.0.0"' not in listeners.split('"inbounds"', 1)[1].split("]", 1)[0]
+
+
+def test_the_official_rollback_revision_is_exactly_the_lineage_the_production_image_knows():
+    script = ScriptDirectory.from_config(default_config())
+    assert _prod_graph_fingerprint(script, OFFICIAL_REVISION) == (OFFICIAL_GRAPH_SIZE, OFFICIAL_GRAPH_FINGERPRINT)
+
+
+def test_the_official_rollback_leaves_exactly_the_production_revision_with_its_schema_and_data(tmp_path):
+    config, sync_url, (schema_before, rows_before) = _at_release_head(tmp_path, revision=OFFICIAL_REVISION)
+    steps = []
+
+    assert rollback(config, OFFICIAL_REVISION, echo=steps.append) == (OFFICIAL_REVISION,)
+
+    assert _versions(sync_url) == [OFFICIAL_REVISION]
+    assert _schema(sync_url) == schema_before
+    assert _rows(sync_url) == rows_before
+    assert "named_locks" not in _schema(sync_url)
+    assert not (PASSKEY_TABLES | RELEASE_ONLY_TABLES) & set(_schema(sync_url))
+    assert [line for line in steps if line.startswith("alembic downgrade")] == [
+        f"alembic downgrade {OFFICIAL_REVISION}",
+        "alembic downgrade b4c7e8f1a2d3@-1",
+        "alembic downgrade 9a5c2e7f1b4d@-1",
+    ]
+
+
+def test_the_official_dry_run_lists_every_revision_the_rollback_removes(tmp_path, capsys):
+    config, sync_url, _before = _at_release_head(tmp_path, revision=OFFICIAL_REVISION)
+    heads_before = _versions(sync_url)
+
+    assert main(["--to", OFFICIAL_REVISION, "--url", config.get_main_option("sqlalchemy.url"), "--dry-run"]) == 0
+
+    assert _versions(sync_url) == heads_before
+    assert (
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, "
+        "b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, "
+        "fd192e9628a5, fd33c6013baa\n"
+    ) in capsys.readouterr().out
+
+
+def test_the_production_image_starts_only_on_a_database_rolled_back_to_the_official_revision(tmp_path):
+    tree = _prod_tree(tmp_path, OFFICIAL_COMMIT, "production")
+    assert "python -m alembic upgrade head" in (tree / "start.sh").read_text()
+    prod_script = ScriptDirectory(str(tree / "app" / "db" / "migrations"))
+    assert prod_script.get_heads() == [OFFICIAL_REVISION]
+    assert _prod_graph_fingerprint(prod_script, OFFICIAL_REVISION) == (OFFICIAL_GRAPH_SIZE, OFFICIAL_GRAPH_FINGERPRINT)
+
+    config, sync_url, _before = _at_release_head(tmp_path, revision=OFFICIAL_REVISION)
+    url = config.get_main_option("sqlalchemy.url")
+    refused = _prod_alembic(tree, url, "upgrade", "head")
+    assert refused.returncode != 0
+    assert "Can't locate revision identified by" in refused.stdout + refused.stderr
+
+    rollback(config, OFFICIAL_REVISION, echo=lambda _line: None)
+    started = _prod_alembic(tree, url, "upgrade", "head")
+    assert started.returncode == 0, started.stdout + started.stderr
+    assert _versions(sync_url) == [OFFICIAL_REVISION]
