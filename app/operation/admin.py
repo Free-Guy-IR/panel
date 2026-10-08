@@ -20,9 +20,10 @@ from app.db.crud.admin import (
     update_admin,
 )
 from app.db.crud.bulk import activate_all_disabled_users, disable_all_active_users
-from app.db.crud.user import get_users, remove_users
+from app.db.crud.user import get_users, get_users_by_ids, remove_users
 from app.db.models import Admin, AdminStatus, User
 from app.fork.crud.admin_limits import lock_admin_row, lock_admin_status
+from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE
 from app.fork.operation.admin_scope import (
     admin_details_for,
     answer_503_if_lock_unavailable,
@@ -236,8 +237,26 @@ class AdminOperation(BaseOperation):
         await db.commit()
         return await get_users(db, query=query, admin=db_admin, load_admin_role=True)
 
+    @staticmethod
+    async def _users_changed_but_no_longer_visible(db: AsyncSession, locked: list[int], visible: list) -> list:
+        seen = {db_user.id for db_user in visible}
+        missing = [user_id for user_id in locked if user_id not in seen]
+        found: list = []
+        for start in range(0, len(missing), USER_LOCK_BATCH_SIZE):
+            found.extend(
+                await get_users_by_ids(db, missing[start : start + USER_LOCK_BATCH_SIZE], load_admin_role=True)
+            )
+        return found
+
+    async def _push_admin_wide_change(
+        self, db: AsyncSession, db_admin: Admin, admin: AdminDetails, locked: list[int]
+    ) -> None:
+        visible = await self._visible_users_of(db, db_admin, admin)
+        await sync_users([*visible, *await self._users_changed_but_no_longer_visible(db, locked, visible)])
+
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Disable all active users under a specific admin."""
+        locked: list[int] = []
         try:
             locked = await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
             await disable_all_active_users(
@@ -245,7 +264,7 @@ class AdminOperation(BaseOperation):
             )
         except DBAPIError as exc:
             await answer_503_if_lock_unavailable(self, db, exc)
-        await sync_users(await self._visible_users_of(db, db_admin, admin))
+        await self._push_admin_wide_change(db, db_admin, admin, locked)
         logger.info(f'Admin "{db_admin.username}" users has been disabled by admin "{admin.username}"')
 
     async def disable_all_active_users_by_id(self, db: AsyncSession, admin_id: int, admin: AdminDetails):
@@ -265,6 +284,7 @@ class AdminOperation(BaseOperation):
 
     async def _activate_all_disabled_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
         """Activate all disabled users under a specific admin."""
+        locked: list[int] = []
         try:
             locked = await close_visible_restrictions(db, db_admin.id, admin, "an admin changed all users' status")
             await activate_all_disabled_users(
@@ -272,7 +292,7 @@ class AdminOperation(BaseOperation):
             )
         except DBAPIError as exc:
             await answer_503_if_lock_unavailable(self, db, exc)
-        await sync_users(await self._visible_users_of(db, db_admin, admin))
+        await self._push_admin_wide_change(db, db_admin, admin, locked)
         logger.info(f'Admin "{db_admin.username}" users has been activated by admin "{admin.username}"')
 
     async def activate_all_disabled_users_by_id(self, db: AsyncSession, admin_id: int, admin: AdminDetails):

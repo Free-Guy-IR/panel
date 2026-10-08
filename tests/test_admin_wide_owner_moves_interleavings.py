@@ -165,6 +165,57 @@ async def _run(label: str, step, outcomes: dict[str, str]) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("action", list(ACTIONS))
+async def test_an_admin_wide_change_pushes_a_user_moved_out_after_it_was_changed_but_before_the_push_reread(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, action
+):
+    method, before, after = ACTIONS[action]
+    home, (user_id,), _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
+    away, _, _ = await seed_users_and_nodes(recorder_db, user_count=0, node_count=0)
+    async with recorder_db() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(status=before, last_status_change=datetime.now(UTC) - timedelta(minutes=40))
+        )
+        if before == UserStatus.disabled:
+            session.add(
+                ConnectionRestriction(
+                    user_id=user_id,
+                    created_at=datetime.now(UTC) - timedelta(minutes=30),
+                    previous_status=UserStatus.active.value,
+                    disable_minutes=30,
+                    restore_at=datetime.now(UTC) + timedelta(minutes=30),
+                    active=True,
+                )
+            )
+        await session.commit()
+
+    real_visible = AdminOperation._visible_users_of
+
+    async def move_out_then_reread(db, db_admin, caller):
+        async with recorder_db() as mover:
+            await mover.execute(update(User).where(User.id == user_id).values(admin_id=away))
+            await mover.commit()
+        return await real_visible(db, db_admin, caller)
+
+    monkeypatch.setattr(AdminOperation, "_visible_users_of", staticmethod(move_out_then_reread))
+
+    async with recorder_db() as db:
+        db_admin = await get_admin_by_id(db, home)
+        await getattr(AdminOperation(OperatorType.API), method)(db, db_admin, OWNER)
+
+    async with recorder_db() as session:
+        row = (await session.execute(select(User.admin_id, User.status).where(User.id == user_id))).one()
+    assert row.admin_id == away
+    assert row.status == after
+    assert (user_id, after) in pushes, (
+        "the admin-wide change did not push a user it changed and that was moved out before the push re-read",
+        pushes,
+    )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("first", ["admin-wide-first", "mover-first"])
 @pytest.mark.parametrize("direction", ["into", "out", "into-and-out"])
 @pytest.mark.parametrize("mover", ["set_owner", "bulk_set_owner"])
