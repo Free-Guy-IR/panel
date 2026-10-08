@@ -3,11 +3,10 @@ from collections.abc import Sequence
 
 from app.db import AsyncSession, GetDB
 from app.db.crud.admin_role import get_role
-from app.db.crud.user import get_role_users_for_node_sync, get_users
+from app.db.crud.user import get_admin_users_for_node_sync, get_role_users_for_node_sync
 from app.db.models import Admin, AdminRole, AdminStatus, UserStatus
 from app.fork.crud.admin_limits import get_active_to_limited_admin_ids, limit_admin_if_over_quota
 from app.fork.operation.admin_transition import admin_transition_lock
-from app.models.user import UserListQuery
 from app.node.sync import remove_users as sync_remove_users, sync_users
 from app.utils.logger import get_logger
 
@@ -48,14 +47,14 @@ async def sync_admin_users_for_block_transition(
         return 0
 
     if is_blocked:
-        users = await get_users(
+        users = await get_admin_users_for_node_sync(
             db,
-            query=UserListQuery(status=[UserStatus.active, UserStatus.on_hold]),
-            admin=admin,
+            admin.id,
+            statuses=[UserStatus.active, UserStatus.on_hold],
         )
         await sync_remove_users(users)
     else:
-        users = await get_users(db, query=UserListQuery(), admin=admin, load_admin_role=True)
+        users = await get_admin_users_for_node_sync(db, admin.id)
         await sync_users(users)
 
     return len(users)
