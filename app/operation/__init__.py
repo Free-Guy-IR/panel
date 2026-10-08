@@ -175,12 +175,12 @@ class BaseOperation:
 
         if (
             not db_user
-            or db_user.created_at.astimezone(UTC) > sub["created_at"]
+            or ensure_datetime_timezone(db_user.created_at) > sub["created_at"]
             or ("revocation_epoch" in sub and sub["revocation_epoch"] != revocation_epoch(db_user.sub_revoked_at))
             or (
                 "revocation_epoch" not in sub
                 and db_user.sub_revoked_at
-                and db_user.sub_revoked_at.astimezone(UTC) > sub["created_at"]
+                and ensure_datetime_timezone(db_user.sub_revoked_at) > sub["created_at"]
             )
         ):
             await self.raise_error(message="Not Found", code=404)

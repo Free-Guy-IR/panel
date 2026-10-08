@@ -189,9 +189,10 @@ async def get_subscription_payload(token: str) -> dict | None:
         b64_resign = b64encode(digest, altchars=b"-_").decode("utf-8")[:10]
         hex_resign = digest.hex()[:10]
         if not (
-            hmac.compare_digest(u_signature, b64_resign) or hmac.compare_digest(u_signature, hex_resign)
+            hmac.compare_digest(u_signature.encode("utf-8"), b64_resign.encode("utf-8"))
+            or hmac.compare_digest(u_signature.encode("utf-8"), hex_resign.encode("utf-8"))
         ):
             return
         return _parse_subscription_data(u_token_dec_str)
-    except jwt.exceptions.PyJWTError:
+    except (jwt.exceptions.PyJWTError, OverflowError, OSError, ValueError):
         return
