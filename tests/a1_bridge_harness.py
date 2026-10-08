@@ -176,16 +176,16 @@ def db_node_for(node_id: int, status=NodeStatus.connected):
     )
 
 
-async def seed_group(tag: str) -> int:
-    async with TestSession() as session:
+async def seed_group(tag: str, *, sessions=TestSession) -> int:
+    async with sessions() as session:
         group = Group(name=unique_name("a1_group"), inbounds=[ProxyInbound(tag=tag)])
         session.add(group)
         await session.commit()
         return group.id
 
 
-async def seed_user(group_id: int, **fields) -> int:
-    async with TestSession() as session:
+async def seed_user(group_id: int, *, sessions=TestSession, **fields) -> int:
+    async with sessions() as session:
         user = User(
             username=unique_name("a1_user"), proxy_settings=ProxyTable().dict(no_obj=True), status=UserStatus.active
         )
@@ -199,8 +199,10 @@ async def seed_user(group_id: int, **fields) -> int:
 
 
 class TestGetDB:
+    sessions = TestSession
+
     def __init__(self):
-        self.db = TestSession()
+        self.db = self.sessions()
 
     async def __aenter__(self):
         return self.db
@@ -209,6 +211,15 @@ class TestGetDB:
         if exc_type is not None:
             await self.db.rollback()
         await self.db.close()
+
+
+def get_db_for(sessions) -> type[TestGetDB]:
+    return type("SessionsGetDB", (TestGetDB,), {"sessions": sessions})
+
+
+@asynccontextmanager
+async def concurrent_sessions():
+    yield TestSession
 
 
 async def settle(predicate=None, timeout: float = 5.0):
