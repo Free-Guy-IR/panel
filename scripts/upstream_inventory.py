@@ -90,12 +90,13 @@ COVERAGE_LABELS = {
     "empty": "changes no file",
 }
 CONDITIONAL_TAG_RE = re.compile(r"^[\W_]*(?:UNMERGED[\W_]*WIP|pending)\b", re.IGNORECASE)
+SECURITY_FLAG_RE = re.compile(r"\bsecurity:\s*(yes|no)\b", re.IGNORECASE)
 SECURITY_MARK_RE = re.compile(r"\(security\)|\[security\]", re.IGNORECASE)
 SECURITY_SUBJECT_RE = re.compile(
-    r"\b(?:security|cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3}|vulnerab\w*"
+    r"\b(?:security|cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3}|vulnerab\w*|exploit\w*|disclosur\w*"
     r"|auth(?:n|z|entication|enticate|orization|orize|orized)?|permissions?|privileges?|api[ _-]?keys?"
     r"|jwt|tokens?|sessions?|passkeys?|webauthn|credentials?|passwords?"
-    r"|inject\w*|xss|csrf|ssrf|escap\w*|sanitiz\w*)\b",
+    r"|inject\w*|xss|csrf|ssrf|escap\w*|sanitiz\w*|traversal|bypass\w*|spoof\w*|hijack\w*|forger\w*|rce)\b",
     re.IGNORECASE,
 )
 UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
@@ -892,11 +893,12 @@ def patch_ids(shas):
     return ids
 
 
-def security_reason(reason, subject):
+def security_hint(reason, subject):
+    reason = SECURITY_FLAG_RE.sub("", reason)
     if SECURITY_MARK_RE.search(reason):
-        return "marked (security) in the ledger"
-    match = SECURITY_SUBJECT_RE.search(subject)
-    return f"its subject names {match.group(0)!r}" if match else None
+        return "its reason is marked (security)"
+    match = SECURITY_SUBJECT_RE.search(f"{subject}\n{reason}")
+    return f"it names {match.group(0)!r}" if match else None
 
 
 def workflow_command_escape(text):
@@ -968,9 +970,19 @@ def parse_sync_ledger(path, today=None):
                     "days ahead; a dated decision needs a nearer deadline"
                 )
                 continue
-        if section == PORT_QUEUE and deadline is None:
-            errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
-            continue
+        security = None
+        if section == PORT_QUEUE:
+            if deadline is None:
+                errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
+                continue
+            flags = SECURITY_FLAG_RE.findall(reason)
+            if len(flags) != 1:
+                errors.append(
+                    f"{where}: `{token}` in the port queue needs exactly one security: yes|no classification "
+                    f"with a reason (found {len(flags)})"
+                )
+                continue
+            security = flags[0].lower() == "yes"
         conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
         entries.append(
             {
@@ -980,6 +992,7 @@ def parse_sync_ledger(path, today=None):
                 "where": where,
                 "conditional": conditional,
                 "deadline": deadline,
+                "security": security,
             }
         )
     return entries, errors
@@ -1152,14 +1165,19 @@ def parity_gate(
         if coverage.get(sha) != PORT_QUEUE:
             continue
         entry = resolved[queue_origin.get(sha, sha)]
-        why = security_reason(entry["reason"], row["subject"])
-        if why:
+        if entry["security"]:
             del coverage[sha]
             deadlines.pop(sha)
             ledger_errors.append(
-                f"{entry['where']}: `{sha[:12]}` is a security-relevant upstream commit ({why}); a security commit "
-                "gets no grace in the port queue: port it now or record a reasoned waiver"
+                f"{entry['where']}: `{sha[:12]}` is classified security: yes; a security port gets no grace: "
+                "port it now or record a Waived or Ported by design decision"
             )
+        else:
+            hint = security_hint(entry["reason"], row["subject"])
+            if hint:
+                copy_notes.append(
+                    f"{entry['where']}: `{sha[:12]}` is classified security: no but {hint}; re-review the classification"
+                )
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
 

@@ -283,7 +283,7 @@ def test_a_side_repo_port_queue_is_owed_until_its_deadline(world, today, code, m
     shas = world["shas"]
     ledger = (
         f"## Waived\n\n- `{shas['feature']}` UNMERGED-WIP: only on upstream feature until: 2026-10-25\n\n"
-        f"## Port queue\n\n- `{shas['bumped']}` the version bump lands with the next fork release until: 2026-10-13\n"
+        f"## Port queue\n\n- `{shas['bumped']}` the version bump lands with the next fork release security: no until: 2026-10-13\n"
     )
     result = run(write_map(world, ledger_map(world), ledger), "--today", today)
     assert result.returncode == code, result.stdout + result.stderr

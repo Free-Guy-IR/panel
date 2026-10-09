@@ -492,12 +492,18 @@ OWED_LABEL = "owed: in the port queue until its deadline"
 
 def queue_ledger(tmp_path, repo, queue, waived=("f1", "f2")):
     shas = repo["shas"]
+
+    def line(key, reason):
+        if "security:" not in reason:
+            reason = f"{reason} security: no"
+        return f"- `{shas[key]}` {reason}\n"
+
     return ledger(
         tmp_path,
         "## Waived\n\n"
         + "".join(f"- `{shas[key]}` the fork does not take feature x\n" for key in waived)
         + "\n## Port queue\n\n"
-        + "".join(f"- `{shas[key]}` {reason}\n" for key, reason in queue),
+        + "".join(line(key, reason) for key, reason in queue),
     )
 
 
@@ -551,8 +557,8 @@ def test_a_section_name_counts_at_any_heading_level(repo, tmp_path):
         "### Feature x follow-ups\n\n"
         f"- `{shas['f2']}` still waived inside a subsection\n\n"
         "### Port queue\n\n"
-        f"- `{shas['u3']}` port it until: 2026-11-30\n"
-        f"- `{shas['u5']}` port it until: 2026-10-13\n"
+        f"- `{shas['u3']}` port it security: no until: 2026-11-30\n"
+        f"- `{shas['u5']}` port it security: no until: 2026-10-13\n"
     )
     result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
     assert result.returncode == 1, result.stdout + result.stderr
@@ -600,7 +606,7 @@ def mixed_origin_repo(tmp_path):
         "## Waived\n\n"
         f"- `{shas['a']}` UNMERGED-WIP: only on upstream feat-a\n\n"
         "## Port queue\n\n"
-        f"- `{shas['feat-b']}` port it until: 2026-10-13\n"
+        f"- `{shas['feat-b']}` port it security: no until: 2026-10-13\n"
     )
     return path, shas
 
@@ -783,10 +789,21 @@ def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ("##Port queue\n\n- `{u3}` port it\n", "is in the port queue without an until"),
-        ("## Port queue\n\n- `{u3}` until 2026-10-08 or so; until: 2026-10-10\n", "names 2 until dates; keep exactly one"),
+        ("##Port queue\n\n- `{u3}` port it security: no\n", "is in the port queue without an until"),
+        (
+            "## Port queue\n\n- `{u3}` until 2026-10-08 or so; security: no until: 2026-10-10\n",
+            "names 2 until dates; keep exactly one",
+        ),
         ("## Waived\n\n<!--\n- `{u3}` hidden decision\n-->\n", ""),
-        ("## Waived\n\n- `{u3}` reason\n\n## Port queue\n\n- `{u3}` port it until: 2026-10-10\n", "is also decided differently"),
+        (
+            "## Waived\n\n- `{u3}` reason\n\n## Port queue\n\n- `{u3}` port it security: no until: 2026-10-10\n",
+            "is also decided differently",
+        ),
+        ("## Port queue\n\n- `{u3}` port it until: 2026-10-10\n", "needs exactly one security: yes|no classification"),
+        (
+            "## Port queue\n\n- `{u3}` port it security: yes security: no until: 2026-10-10\n",
+            "needs exactly one security: yes|no classification",
+        ),
     ],
 )
 def test_ledger_forms_that_must_not_count_as_a_decision(repo, tmp_path, text, message):
@@ -815,44 +832,58 @@ def security_repo(tmp_path):
     return path, shas
 
 
-def test_a_security_commit_gets_no_grace_in_the_port_queue(tmp_path):
+def test_an_unclassified_queue_entry_fails_the_gate(tmp_path):
     path, shas = security_repo(tmp_path)
     queued = (
         "## Port queue\n\n"
-        f"- `{shas['auth']}` MUST-PORT: token invalidation until: 2026-10-13\n"
+        f"- `{shas['auth']}` MUST-PORT: token invalidation security: yes until: 2026-10-13\n"
         f"- `{shas['plain']}` port the bump until: 2026-10-13\n"
-        f"- `{shas['feature']}` port the option until: 2026-10-13\n"
+        f"- `{shas['feature']}` port the option security: no until: 2026-10-13\n"
     )
     red = standalone_gate(path, queued)
     assert red.returncode == 1, red.stdout + red.stderr
-    assert f"`{shas['auth'][:12]}` is a security-relevant upstream commit (its subject names 'auth')" in red.stdout
-    block = unported_block(red.stdout)
-    assert {key for key, sha in shas.items() if sha[:12] in block} == {"auth", "copy"}
-    assert tally(red.stdout, OWED_LABEL) == 2
+    assert f"`{shas['plain']}` in the port queue needs exactly one security: yes|no classification" in red.stdout
+    assert shas["plain"][:12] in unported_block(red.stdout)
 
 
-def test_a_ledger_mark_makes_a_queued_port_security(tmp_path):
+def test_a_security_yes_entry_gets_no_grace_even_with_an_innocuous_subject(tmp_path):
     path, shas = security_repo(tmp_path)
-    text = (
-        "## Waived\n\n"
-        f"- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code\n\n"
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["plain"])
+    queued = (
         "## Port queue\n\n"
-        f"- `{shas['plain']}` MUST-PORT (security): the bump ships an OpenSSL security release until: 2026-10-13\n"
-        f"- `{shas['feature']}` port the option until: 2026-10-13\n"
+        f"- `{shas['plain']}` port the bump; it ships an OpenSSL security release security: yes until: 2026-10-13\n"
     )
-    red = standalone_gate(path, text)
+    red = standalone_gate(path, queued)
     assert red.returncode == 1, red.stdout + red.stderr
-    assert f"`{shas['plain'][:12]}` is a security-relevant upstream commit (marked (security) in the ledger)" in red.stdout
+    assert f"`{shas['plain'][:12]}` is classified security: yes; a security port gets no grace" in red.stdout
+    assert shas["plain"][:12] in unported_block(red.stdout)
+
+
+def test_a_keyword_only_non_security_commit_keeps_grace_but_is_flagged(tmp_path):
+    path = standalone_repo(tmp_path, "session-tab")
+    ui = commit(path, "feat(ui): remember the last open session tab", {"r.py": lines("r", overrides={1: "R1"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", ui)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    green = standalone_gate(path, f"## Port queue\n\n- `{ui}` ships a UI tab, not security security: no until: 2026-10-13\n")
+    assert green.returncode == 0, green.stdout + green.stderr
+    assert tally(green.stdout, OWED_LABEL) == 1
+    assert f"`{ui[:12]}` is classified security: no but it names 'session'; re-review the classification" in green.stdout
+    assert "is classified security: yes" not in green.stdout
 
 
 def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
     path, shas = security_repo(tmp_path)
-    queue = f"## Port queue\n\n- `{shas['plain']}` port the bump until: 2026-10-13\n- `{shas['feature']}` port it until: 2026-10-13\n"
+    queue = (
+        "## Port queue\n\n"
+        f"- `{shas['plain']}` port the bump security: no until: 2026-10-13\n"
+        f"- `{shas['feature']}` port it security: no until: 2026-10-13\n"
+    )
     waived = standalone_gate(path, f"## Waived\n\n- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code\n\n" + queue)
     assert waived.returncode == 0, waived.stdout + waived.stderr
     assert tally(waived.stdout, OWED_LABEL) == 2
     git(path, "cherry-pick", "-x", shas["auth"])
-    ported = standalone_gate(path, queue + f"- `{shas['auth']}` MUST-PORT: token invalidation until: 2026-10-13\n")
+    ported = standalone_gate(path, queue + f"- `{shas['auth']}` MUST-PORT: token invalidation security: yes until: 2026-10-13\n")
     assert ported.returncode == 0, ported.stdout + ported.stderr
     assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in ported.stdout
 
@@ -860,7 +891,7 @@ def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
 @pytest.mark.parametrize("queue_first", [True, False])
 def test_a_port_queue_line_next_to_a_ported_by_design_line_is_stale(repo, tmp_path, queue_first):
     shas = repo["shas"]
-    queue = f"## Port queue\n\n- `{shas['u3']}` port it until: 2026-10-13\n\n"
+    queue = f"## Port queue\n\n- `{shas['u3']}` port it security: no until: 2026-10-13\n\n"
     design = f"## Ported by design\n\n- `{shas['u3']}` adapted by hand in the fork\n\n"
     rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2")) + "\n"
     text = rest + (queue + design if queue_first else design + queue)
