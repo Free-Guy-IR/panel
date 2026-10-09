@@ -342,6 +342,10 @@ No shared prerequisite. The four owners start in parallel as soon as Phase 1 is 
   - Session B adds 300 to X through a relative update and commits.
   - A runs the `set_owner` operation that moves U to Y and commits. Then X is 1800 and Y is its old value + 500.
   - Fail-first: run it against a scratch revert of `app/db/crud/user.py:1877-1885` to the v5.34.22 ORM-literal form (`old_admin.used_traffic -= db_user.used_traffic`), never committed. It must fail with X equal to 1500.
+- [X] T054 [P] [US6] HOTFIX: create `tests/test_subscription_token_range.py` (HOTFIX-F-D1, found while proving the `v5.34.25-accept-v4` rollback image).
+  - A signed subscription token whose timestamp is out of range for `datetime.fromtimestamp` is refused (404), not a 500, in every shape: HMAC v4, v3, v2 and two-part; legacy-signature v4, v3 and two-part; and a subscription JWT whose `iat` is out of range.
+  - An error while reading the secret (refused or timed-out connection, OSError, ValueError, OverflowError) still raises, so a database outage is never answered as a missing subscription.
+  - Fail-first: 30 failed on 66a27ee5c. The fix in `app/utils/jwt.py` catches only around the timestamp conversions; widening `get_subscription_payload`'s own except is the rejected form, because it swallows the secret read.
 
 ---
 

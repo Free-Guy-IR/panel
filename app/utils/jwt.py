@@ -116,13 +116,13 @@ def _parse_subscription_data(data_str: str) -> dict | None:
         _, u_user_id_str, u_created_at_str, u_epoch_str = parts
         try:
             u_user_id = int(u_user_id_str)
-            u_created_at = int(u_created_at_str)
+            u_created_at = datetime.fromtimestamp(int(u_created_at_str), tz=UTC)
             u_epoch = int(u_epoch_str)
-        except ValueError:
+        except (OverflowError, OSError, ValueError):
             return
         return {
             "user_id": u_user_id,
-            "created_at": datetime.fromtimestamp(u_created_at, tz=UTC),
+            "created_at": u_created_at,
             "revocation_epoch": u_epoch,
         }
 
@@ -130,23 +130,23 @@ def _parse_subscription_data(data_str: str) -> dict | None:
         _, u_user_id_str, u_created_at_str = parts
         try:
             u_user_id = int(u_user_id_str)
-            u_created_at = int(u_created_at_str)
-        except ValueError:
+            u_created_at = datetime.fromtimestamp(int(u_created_at_str), tz=UTC)
+        except (OverflowError, OSError, ValueError):
             return
         return {
             "user_id": u_user_id,
-            "created_at": datetime.fromtimestamp(u_created_at, tz=UTC),
+            "created_at": u_created_at,
         }
 
     if len(parts) == 2:
         u_username, u_created_at_str = parts
         try:
-            u_created_at = int(u_created_at_str)
-        except ValueError:
+            u_created_at = datetime.fromtimestamp(int(u_created_at_str), tz=UTC)
+        except (OverflowError, OSError, ValueError):
             return
         return {
             "username": u_username,
-            "created_at": datetime.fromtimestamp(u_created_at, tz=UTC),
+            "created_at": u_created_at,
         }
     return
 
@@ -174,9 +174,13 @@ async def get_subscription_payload(token: str) -> dict | None:
                 username = payload.get("sub")
                 if not username:
                     return
+                try:
+                    created_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
+                except (OverflowError, OSError, ValueError):
+                    return
                 return {
                     "username": username,
-                    "created_at": datetime.fromtimestamp(payload["iat"], tz=UTC),
+                    "created_at": created_at,
                 }
             else:
                 return
