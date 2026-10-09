@@ -110,6 +110,7 @@ ec74c933405c554dccf0dd5b6d0eab05ac5f78cc by comparing the final trees of the tou
 
 - `517f2bac48cdeb4f570a29b6ea94a3f5cd8158cf` upstream/dev rewrites .github/workflows/github-notifications-bot.yml, upstream's Telegram push and pull-request notifier that posts with upstream's TELEGRAM_BOT_TOKEN and TELEGRAM_TARGETS. The fork deleted that workflow on purpose in 535c1aa01 because it has neither secret nor channel, so the modify/delete conflict is resolved by keeping the deletion.
 - `ff6e596e090dd8901f073d32fefb4b96e2338ebd` upstream/dev (#980) escapes commit messages in .github/workflows/github-notifications-bot.yml, upstream's Telegram notifier, which the fork deleted on purpose in 535c1aa01 (see 517f2bac above); there is no file to apply it to.
+- `f8f4e0f7ddcc948de040f2c7ec24d58212e87814` upstream branch fix/telegram-notify-no-previews disables link previews and switches to a read-only token in .github/workflows/github-notifications-bot.yml, upstream's Telegram notifier, which the fork deleted on purpose in 535c1aa01 (see 517f2bac above); there is no file to apply it to.
 - `159e5cb7b5a05aeeceec50930060a2ec5978cc18` upstream branch fix/telegram-notify-escape, the pre-merge commit of #980 (ff6e596e0): the same change to the Telegram notifier workflow the fork deleted in 535c1aa01.
 - `9350d5967e563377a90889deb3c3626cb972eec4` UNMERGED-WIP: upstream branch deprecated-apis test fixups for dd088ef8f's switch from username to id routes. Upstream never merged it, and dev and the fork tests still call the /{username} routes.
 - `dd088ef8ff961db65d5851410f2ded8e0b26de00` UNMERGED-WIP: upstream branch deprecated-apis would replace the legacy /api/admin/{username}, /api/user/{username} and node online_stats/{username} routes with /{id}. upstream/dev (app/routers/admin.py:98) and the fork (:98) still serve /{username} alongside /by-username/ and /by-id/ from 71a739d4f (#410). If upstream ships it, that is a breaking API change for username-addressed clients of the fork.
@@ -153,7 +154,7 @@ review, or waive it for good if upstream abandons it.
 ## Port queue
 
 Upstream commits the fork must take and does not carry yet on this branch line. Checked on
-2026-10-09 with `git ls-remote` against PasarGuard/panel dev ff6e596e090dd8901f073d32fefb4b96e2338ebd and
+2026-10-09 09:34 UTC with `git ls-remote` against PasarGuard/panel dev 7f670cf30f62e30a4ab671bf3549fcbe768db703 and
 main b56ffe369f542152c52c69733205baeaf3f6e4cd (= v5.4.1, the newest tag). The upstream dev commits up to
 6372404b8 are ported with `(cherry picked from commit ...)` trailers on the unmerged branch parity/c2-port
 (PG-C2-PORT, still being rewritten under review, so its pick shas are not recorded here); the first six are
@@ -203,6 +204,10 @@ its line as ported and the line is deleted in that merge.
 - `59a347e6517ec9888ffb21102b954430d492b6b4` port: dev tool ruff 0.16.9 to 0.16.10, merged into upstream dev on 2026-10-08 (#968); its earlier conditional waiver ended with that merge. No port yet. security: no until: 2026-10-23
 - `30b9f2d176cdaf3713493c8520ffaa386d96ba93` port: uvloop floor 0.22.1 to 0.23.0, merged into upstream dev on 2026-10-08 (#970); its earlier conditional waiver ended with that merge. No port yet. security: no until: 2026-10-23
 - `40d1a326f67bdae36e8a81202d58d848c3f2d4de` port: fastapi floor 0.141.1 to 0.142.2 (#969), merged into upstream dev on 2026-10-08; 0.142.1 and 0.142.2 fix router wrapping and an OpenTelemetry start-up failure, so it needs the fork-tests suite before it lands. No port yet. security: no until: 2026-10-23
+- `4f446d8b426cffce25dd017d9d2106047c4a7176` MUST-PORT (security): aiohttp floor 3.14.3 to 3.14.4 (#982), pyproject.toml and uv.lock. aiohttp 3.14.4 patches five advisories published 2026-10-07 (GHSA-f9xw-jh8m-3mwq request scheme spoofing, GHSA-494j-54xm-rwp3 Secure cookie attribute, GHSA-5wr8-gcqf-gqf3 missing header timeout, GHSA-6cjc-53gc-5rqm connector pool exhaustion, GHSA-gx76-c99x-2c96 subdomain cookie scope, all low); the fork uses aiohttp as an HTTP client in app/utils/http_client.py, app/notification/client.py and app/jobs/send_notifications.py. No port yet. security: yes until: 2026-10-23
+- `33ab3ac762a1a9395e9a632b93ad13ff3c2ed051` port: sqlalchemy[asyncio] floor 2.1.2 to 2.1.3 (#981), pyproject.toml and uv.lock; 2.1.3 fixes the regression where columns from an unmapped MappedAsDataclass mixin lose their declared order in the Table, which matters for IdMixin (0cce8f15e), so it lands with 1e654d9d5, 75f3788a3 and 0cce8f15e. No port yet. security: no until: 2026-10-23
+- `7f670cf30f62e30a4ab671bf3549fcbe768db703` port: feat(finalmask) adds the Xray udphop UDP mask and the exp noise type (#974) in app/core/hosts.py, app/models/host.py, the host FinalMask editors, locales, the generated dashboard/src/service/api/index.ts and the FinalMask tests; it builds on fe7c5f903, which the fork adapts, so the port must keep the fork's FinalMask pipeline. No port yet. security: no until: 2026-10-23
+- `eb54a7ef085580dce55628f9bed0f4d855dd60ea` port: perf(dashboard) defers the user dialogs and chart dependencies (#856): lazy dialog wrappers, deferred-chunk check scripts and dashboard/vite.config.mts; the fork's dashboard build resolves the config kits through file: links, so the port must keep the fork's vite configuration working. No port yet. security: no until: 2026-10-23
 
 ## Side repositories (not read by the parity gate)
 
