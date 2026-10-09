@@ -4,6 +4,7 @@ import importlib.util
 import random
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from PasarGuardNodeBridge.storage import get_default_lifecycle_coordinator
@@ -13,7 +14,7 @@ from sqlalchemy.exc import OperationalError
 import app.node.bridge as node_bridge
 import app.operation.user as user_operation
 from app import notification
-from app.db.models import User, UserStatus
+from app.db.models import User, UserStatus, users_groups_association
 from app.jobs import node_checker
 from app.models.user import BulkUsersSelection, UserModify
 from app.nats.node_rpc import node_nats_client
@@ -24,7 +25,14 @@ from app.operation.node import NodeOperation
 from app.operation.user import UserOperation
 from config import runtime_settings
 from role import Role
-from tests.a1_bridge_harness import RecordingNode, TestGetDB, isolate_node_manager, seed_group, seed_user
+from tests.a1_bridge_harness import (
+    RecordingNode,
+    concurrent_sessions,
+    get_db_for,
+    isolate_node_manager,
+    seed_group,
+    seed_user,
+)
 from tests.api import GetTestDB, TestSession
 from tests.test_node_connect_stale_snapshot import Harness, _bulk, eventually
 
@@ -239,72 +247,172 @@ async def drained(node, timeout=15.0):
                     return
 
 
+def removal_outbox_reads_through(monkeypatch, sessions):
+    removals = importlib.import_module("app.fork.node_removals")
+    get_db = get_db_for(sessions)
+    monkeypatch.setattr(removals, "GetDB", get_db)
+    monkeypatch.setattr(node_sync, "GetDB", get_db)
+    monkeypatch.setattr(node_bridge, "_refresh_handler", node_sync.refresh_node_users)
+    return removals
+
+
+async def database_state(sessions, ids):
+    async with sessions() as session:
+        users = (await session.execute(select(User.id, User.status).where(User.id.in_(ids)))).all()
+        grouped = (
+            await session.execute(
+                select(users_groups_association.c.user_id).where(users_groups_association.c.user_id.in_(ids))
+            )
+        ).scalars()
+        return {row.id: row.status for row in users}, set(grouped)
+
+
+def serving(statuses) -> set[str]:
+    return {str(user_id) for user_id, status in statuses.items() if status in (UserStatus.active, UserStatus.on_hold)}
+
+
+def carried(node, ids) -> set[str]:
+    return {email for email in node.live if email in {str(user_id) for user_id in ids}}
+
+
+class AnotherRequest:
+    def __init__(self, sessions):
+        self.sessions = sessions
+        self.ended: list[str] = []
+
+    async def ends_with(self, outcome: str) -> None:
+        async with self.sessions() as other:
+            await other.execute(select(User.id).limit(1))
+            if outcome == "commit":
+                await other.commit()
+        self.ended.append(outcome)
+
+
+TEARS = {
+    "rolled_back_between_its_dependencies_and_its_row": ("rollback", None),
+    "committed_after_its_dependencies_then_rolled_back_before_its_commit": ("commit", "rollback"),
+}
+
+
+@pytest.mark.parametrize("tear", sorted(TEARS))
+async def test_a_delete_stays_whole_while_other_sessions_commit_and_roll_back_around_it(monkeypatch, tear):
+    quiet_side_effects(monkeypatch)
+    after_dependencies, before_commit = TEARS[tear]
+    crud_removals = importlib.import_module("app.fork.crud.node_removals")
+    real_mark = crud_removals.mark_node_removals
+    async with concurrent_sessions() as sessions:
+        removals = removal_outbox_reads_through(monkeypatch, sessions)
+        monkeypatch.setattr(node_sync, "_current_state", node_sync.CurrentStateReader())
+        other = AnotherRequest(sessions)
+        tag = f"outbox_tear_{uuid4().hex[:8]}"
+        group_id = await seed_group(tag, sessions=sessions)
+        victim, survivor = [await seed_user(group_id, sessions=sessions) for _ in range(2)]
+        node = QueuedRecordingNode(3700)
+        await node.connect("0.6.4", "26.3.27")
+        node.live.update({str(victim): [tag], str(survivor): [tag]})
+        isolate_node_manager(monkeypatch, node_manager, {3700: node})
+
+        async def mark_while_another_request_ends(db, user_ids):
+            await real_mark(db, user_ids)
+            await other.ends_with(after_dependencies)
+
+        monkeypatch.setattr(crud_removals, "mark_node_removals", mark_while_another_request_ends)
+        try:
+            async with sessions() as db:
+                if before_commit is not None:
+                    commit = db.commit
+
+                    async def another_request_ends_first():
+                        await other.ends_with(before_commit)
+                        await commit()
+
+                    db.commit = another_request_ends_first
+                assert await UserOperation(OperatorType.API).remove_user_by_id(db, victim, OWNER) == {}
+            monkeypatch.setattr(crud_removals, "mark_node_removals", real_mark)
+            await removals.drain_node_removals()
+            await drained(node)
+            statuses, grouped = await database_state(sessions, [victim, survivor])
+        finally:
+            await node.disconnect()
+
+    assert other.ended == [outcome for outcome in (after_dependencies, before_commit) if outcome is not None]
+    assert victim not in statuses and victim not in grouped, (
+        f"{tear}: the API reported user {victim} deleted, but the database kept "
+        f"its row={victim in statuses} and its group rows={victim in grouped}"
+    )
+    assert carried(node, [victim, survivor]) == serving(statuses) == {str(survivor)}
+
+
 async def test_deletes_losing_their_dispatch_at_random_converge_on_the_node_through_the_outbox(monkeypatch):
     quiet_side_effects(monkeypatch)
-    removals = importlib.import_module("app.fork.node_removals")
-    monkeypatch.setattr(removals, "GetDB", TestGetDB)
-    monkeypatch.setattr(node_sync, "GetDB", TestGetDB)
-    monkeypatch.setattr(node_bridge, "_refresh_handler", node_sync.refresh_node_users)
     real_dispatch = node_sync._dispatch_users_update
     operator = UserOperation(OperatorType.API)
     failures = []
-    for round_number in range(6):
-        rng = random.Random(round_number)
-        writers = asyncio.Lock()
-        monkeypatch.setattr(node_sync, "_current_state", ReaderBehindWriters(writers))
-        tag = f"outbox_{round_number}_{rng.randrange(10**6)}"
-        group_id = await seed_group(tag)
-        ids = [await seed_user(group_id) for _ in range(8)]
-        node = QueuedRecordingNode(3500 + round_number)
-        await node.connect("0.6.4", "26.3.27")
-        node.live.update({str(user_id): [tag] for user_id in ids})
-        isolate_node_manager(monkeypatch, node_manager, {3500 + round_number: node})
+    async with concurrent_sessions() as sessions:
+        removals = removal_outbox_reads_through(monkeypatch, sessions)
+        for round_number in range(6):
+            rng = random.Random(round_number)
+            writers = asyncio.Lock()
+            monkeypatch.setattr(node_sync, "_current_state", ReaderBehindWriters(writers))
+            tag = f"outbox_{round_number}_{rng.randrange(10**6)}"
+            group_id = await seed_group(tag, sessions=sessions)
+            ids = [await seed_user(group_id, sessions=sessions) for _ in range(8)]
+            node = QueuedRecordingNode(3500 + round_number)
+            await node.connect("0.6.4", "26.3.27")
+            node.live.update({str(user_id): [tag] for user_id in ids})
+            isolate_node_manager(monkeypatch, node_manager, {3500 + round_number: node})
 
-        async def flaky_dispatch(proto_users, rng=rng):
-            if rng.random() < 0.5:
-                return
-            await real_dispatch(proto_users)
+            async def flaky_dispatch(proto_users, rng=rng):
+                if rng.random() < 0.5:
+                    return
+                await real_dispatch(proto_users)
 
-        monkeypatch.setattr(node_sync, "_dispatch_users_update", flaky_dispatch)
-        victims = rng.sample(ids, 4)
-        survivors = [user_id for user_id in ids if user_id not in victims]
+            monkeypatch.setattr(node_sync, "_dispatch_users_update", flaky_dispatch)
+            victims = rng.sample(ids, 4)
+            survivors = [user_id for user_id in ids if user_id not in victims]
 
-        async def delete_one(user_id, delay, writers=writers):
-            await asyncio.sleep(delay)
-            async with writers, TestSession() as db:
-                await operator.remove_user_by_id(db, user_id, OWNER)
+            async def delete_one(user_id, delay, writers=writers):
+                await asyncio.sleep(delay)
+                async with writers, sessions() as db:
+                    await operator.remove_user_by_id(db, user_id, OWNER)
 
-        async def delete_bulk(user_ids, delay, writers=writers):
-            await asyncio.sleep(delay)
-            async with writers, TestSession() as db:
-                await operator.bulk_remove_users(db, BulkUsersSelection(ids=set(user_ids)), OWNER)
+            async def delete_bulk(user_ids, delay, writers=writers):
+                await asyncio.sleep(delay)
+                async with writers, sessions() as db:
+                    await operator.bulk_remove_users(db, BulkUsersSelection(ids=set(user_ids)), OWNER)
 
-        async def edit(user_id, delay, writers=writers, round_number=round_number):
-            await asyncio.sleep(delay)
-            async with writers, TestSession() as db:
-                await operator.modify_user_by_id(db, user_id, UserModify(note=f"r{round_number}"), OWNER)
+            async def edit(user_id, delay, writers=writers, round_number=round_number):
+                await asyncio.sleep(delay)
+                async with writers, sessions() as db:
+                    await operator.modify_user_by_id(db, user_id, UserModify(note=f"r{round_number}"), OWNER)
 
-        async def maintenance(delay):
-            await asyncio.sleep(delay)
-            await removals.drain_node_removals()
+            async def maintenance(delay):
+                await asyncio.sleep(delay)
+                await removals.drain_node_removals()
 
-        actions = [delete_one(victims[0], rng.choice((0, 0.02, 0.05))), delete_one(victims[1], rng.choice((0, 0.05)))]
-        actions.append(delete_bulk(victims[2:], rng.choice((0, 0.02, 0.05))))
-        actions += [edit(user_id, rng.choice((0, 0.01, 0.05))) for user_id in survivors]
-        actions += [maintenance(rng.choice((0, 0.03, 0.08))) for _ in range(2)]
-        rng.shuffle(actions)
-        try:
-            await asyncio.gather(*actions)
-            await removals.drain_node_removals()
-            await drained(node)
-            async with TestSession() as session:
-                rows = (await session.execute(select(User.id, User.status).where(User.id.in_(ids)))).all()
-            serving = {str(row.id) for row in rows if row.status in (UserStatus.active, UserStatus.on_hold)}
-            on_node = {email for email in node.live if email in {str(user_id) for user_id in ids}}
-            if on_node != serving:
-                failures.append(f"round {round_number}: node serves {sorted(on_node)}, database {sorted(serving)}")
-        finally:
-            monkeypatch.setattr(node_sync, "_dispatch_users_update", real_dispatch)
-            await node.disconnect()
-            await asyncio.sleep(0.5)
+            actions = [
+                delete_one(victims[0], rng.choice((0, 0.02, 0.05))),
+                delete_one(victims[1], rng.choice((0, 0.05))),
+            ]
+            actions.append(delete_bulk(victims[2:], rng.choice((0, 0.02, 0.05))))
+            actions += [edit(user_id, rng.choice((0, 0.01, 0.05))) for user_id in survivors]
+            actions += [maintenance(rng.choice((0, 0.03, 0.08))) for _ in range(2)]
+            rng.shuffle(actions)
+            try:
+                await asyncio.gather(*actions)
+                await removals.drain_node_removals()
+                await drained(node)
+                statuses, grouped = await database_state(sessions, ids)
+                kept = sorted(set(victims) & (set(statuses) | grouped))
+                if kept:
+                    failures.append(f"round {round_number}: deleted through the API but still in the database {kept}")
+                if carried(node, ids) != serving(statuses):
+                    failures.append(
+                        f"round {round_number}: node serves {sorted(carried(node, ids))}, "
+                        f"database {sorted(serving(statuses))}"
+                    )
+            finally:
+                monkeypatch.setattr(node_sync, "_dispatch_users_update", real_dispatch)
+                await node.disconnect()
+                await asyncio.sleep(0.5)
     assert failures == []

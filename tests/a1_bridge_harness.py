@@ -11,10 +11,12 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.storage import InMemoryNodeLifecycleCoordinator, InMemoryUserSyncStore
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Group, NodeStatus, ProxyInbound, User, UserStatus, users_groups_association
 from app.models.proxy import ProxyTable
-from tests.api import TestSession
+from tests.api import DATABASE_URL, IS_SQLITE, TestSession
 from tests.api.helpers import unique_name
 
 INFO = SimpleNamespace(started=True, node_version="0.6.4", core_version="26.3.27")
@@ -176,16 +178,16 @@ def db_node_for(node_id: int, status=NodeStatus.connected):
     )
 
 
-async def seed_group(tag: str) -> int:
-    async with TestSession() as session:
+async def seed_group(tag: str, *, sessions=TestSession) -> int:
+    async with sessions() as session:
         group = Group(name=unique_name("a1_group"), inbounds=[ProxyInbound(tag=tag)])
         session.add(group)
         await session.commit()
         return group.id
 
 
-async def seed_user(group_id: int, **fields) -> int:
-    async with TestSession() as session:
+async def seed_user(group_id: int, *, sessions=TestSession, **fields) -> int:
+    async with sessions() as session:
         user = User(
             username=unique_name("a1_user"), proxy_settings=ProxyTable().dict(no_obj=True), status=UserStatus.active
         )
@@ -199,8 +201,10 @@ async def seed_user(group_id: int, **fields) -> int:
 
 
 class TestGetDB:
+    sessions = TestSession
+
     def __init__(self):
-        self.db = TestSession()
+        self.db = self.sessions()
 
     async def __aenter__(self):
         return self.db
@@ -209,6 +213,33 @@ class TestGetDB:
         if exc_type is not None:
             await self.db.rollback()
         await self.db.close()
+
+
+def get_db_for(sessions) -> type[TestGetDB]:
+    return type("SessionsGetDB", (TestGetDB,), {"sessions": sessions})
+
+
+@asynccontextmanager
+async def concurrent_sessions():
+    if not IS_SQLITE:
+        yield TestSession
+        return
+    if ":memory:" in DATABASE_URL:
+        raise RuntimeError(f"concurrent sessions need a connection each, which {DATABASE_URL} cannot give")
+    engine = create_async_engine(DATABASE_URL, connect_args={"check_same_thread": False, "uri": True})
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _per_connection_pragmas(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    try:
+        yield async_sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
+    finally:
+        await engine.dispose()
 
 
 async def settle(predicate=None, timeout: float = 5.0):
