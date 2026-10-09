@@ -37,7 +37,7 @@ class _Observation:
         self.verdict = "over_limit"
         self.devices = 5
         self.limit_applied = 2
-        self.details = {"real_groups": ["5.115.21.0/24"]}
+        self.details = {"real_groups": ["1.2.3.4/32"]}
         self.reasons = [{"code": "allowance", "count": 2}]
 
 

@@ -332,7 +332,7 @@ async def test_replacing_a_node_object_keeps_a_delta_queued_on_the_replacement(i
 
         await old.connect("0.6.4", "1.0", tasks=[disable_during_replacement])
         await waiting.wait()
-        new = await manager.update_node(_replacement_node("127.0.0.2"))
+        new = await manager.update_node(_replacement_node("localhost"))
 
     assert issued.is_set() and new is not old
     claimed = await new._user_sync_store.claim_users(new.node_id, "probe", 100, 30)
