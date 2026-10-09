@@ -21,7 +21,7 @@ def git(repo, *args):
 def new_repo(path, branch="main"):
     path.mkdir(parents=True)
     git(path, "init", "-q", "-b", branch)
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
         git(path, "config", key, value)
     return path
 

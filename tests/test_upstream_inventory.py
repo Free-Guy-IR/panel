@@ -88,7 +88,7 @@ def repo(tmp_path_factory):
     git(path, "init", "-q", "-b", "up")
     for key, value in (
         ("user.name", "Test"),
-        ("user.email", "test@example.invalid"),
+        ("user.email", "test@example.com"),
         ("commit.gpgsign", "false"),
         ("tag.gpgsign", "false"),
     ):
@@ -445,7 +445,7 @@ def test_an_old_tag_whose_commits_are_already_in_the_base_is_covered(tmp_path):
     path = tmp_path / "old-tag"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
         git(path, "config", key, value)
     root = commit(path, "root", {"r.py": lines("r")})
     git(path, "checkout", "-q", "-b", "old", root)
@@ -489,7 +489,7 @@ def _snapshot_repo(tmp_path):
     path = tmp_path / "snapshot-repo"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
         git(path, "config", key, value)
     commit(path, "root", {"r.py": lines("r")})
     git(path, "tag", "v1.0")
@@ -776,7 +776,7 @@ def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path, sync_p
     path = tmp_path / "later"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
         git(path, "config", key, value)
     commit(path, "root", {"r.py": lines("r")})
     git(path, "tag", "v1.0")
