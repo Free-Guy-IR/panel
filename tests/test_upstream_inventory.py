@@ -800,6 +800,9 @@ def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_
             "is also decided differently",
         ),
         ("## Port queue\n\n- `{u3}` port it until: 2026-10-10\n", "needs exactly one security: yes|no classification"),
+        ("## Port queue\n\n- `{u3}` security: no until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` — security: yes. until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Waived\n\n- `{u3}` until: 2026-10-10\n", "`{u3}` has no reason"),
         (
             "## Port queue\n\n- `{u3}` port it security: yes security: no until: 2026-10-10\n",
             "needs exactly one security: yes|no classification",
@@ -811,7 +814,7 @@ def test_ledger_forms_that_must_not_count_as_a_decision(repo, tmp_path, text, me
     rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2")) + "\n"
     result = parity(repo, ledger(tmp_path, rest + text.format(u3=shas["u3"])), "--today", "2026-10-06")
     assert result.returncode == 1, result.stdout + result.stderr
-    assert message in result.stdout
+    assert message.format(u3=shas["u3"]) in result.stdout
 
 
 def security_repo(tmp_path):

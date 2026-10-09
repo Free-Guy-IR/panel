@@ -943,7 +943,7 @@ def parse_sync_ledger(path, today=None):
         if not SHA_TOKEN_RE.match(token):
             errors.append(f"{where}: `{entry.group(1)}` is not a commit sha of at least 9 hex characters")
             continue
-        if not reason:
+        if not SECURITY_FLAG_RE.sub("", UNTIL_RE.sub("", reason)).strip(REASON_STRIP + ".,;"):
             errors.append(f"{where}: `{token}` has no reason")
             continue
         dates = UNTIL_RE.findall(reason)
