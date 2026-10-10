@@ -76,6 +76,7 @@ SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s*(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
 SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
+REASON_WORD_RE = re.compile(r"[^\W_]")
 REASON_STRIP = " \t-:\u2013\u2014"
 GLOB_CHARS = frozenset("*?[")
 DWIM_PREFIXES = ("", "refs/", "refs/tags/", "refs/heads/", "refs/remotes/")
@@ -943,7 +944,7 @@ def parse_sync_ledger(path, today=None):
         if not SHA_TOKEN_RE.match(token):
             errors.append(f"{where}: `{entry.group(1)}` is not a commit sha of at least 9 hex characters")
             continue
-        if not SECURITY_FLAG_RE.sub("", UNTIL_RE.sub("", reason)).strip(REASON_STRIP + ".,;"):
+        if not REASON_WORD_RE.search(SECURITY_FLAG_RE.sub("", UNTIL_RE.sub("", reason))):
             errors.append(f"{where}: `{token}` has no reason")
             continue
         dates = UNTIL_RE.findall(reason)
