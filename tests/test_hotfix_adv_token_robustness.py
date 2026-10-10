@@ -151,6 +151,18 @@ def test_a_legacy_signed_link_with_a_wrong_signature_is_refused(secret, store, h
     assert _refused(forged)
 
 
+@pytest.mark.parametrize("stamp", ["100000000000000000", "-100000000000000000", "9000000000000000000"])
+@pytest.mark.parametrize("shape", ["v4,42,{},0", "v3,42,{}", "v2,42,{}", "user42,{}"])
+@pytest.mark.parametrize("legacy_signature", [False, True])
+def test_a_signed_token_whose_timestamp_overflows_the_platform_clock_is_refused_without_a_500(
+    secret, store, stamp, shape, legacy_signature
+):
+    payload = shape.format(stamp)
+    token = _legacy_signed(payload, hex_signature=False) if legacy_signature else _sign(payload)
+    assert asyncio.run(jwt_utils.get_subscription_payload(token)) is None
+    assert _refused(token)
+
+
 def test_a_two_part_legacy_token_of_an_active_user_still_resolves(secret, store):
     issued = datetime.now(UTC).replace(microsecond=0)
     store[42] = _User(user_id=42, created_at=issued - timedelta(days=1))
@@ -172,7 +184,7 @@ def test_a_legacy_jwt_with_an_out_of_range_iat_is_refused_without_a_500(secret, 
     assert _refused(token)
 
 
-@pytest.mark.parametrize("iat", [-99999999999999999999, -(10**15)])
+@pytest.mark.parametrize("iat", [-99999999999999999999, -(10**15), -(10**17), -9 * 10**18])
 def test_a_signed_legacy_jwt_whose_iat_is_out_of_range_is_refused_without_a_500(secret, store, iat):
     token = pyjwt.encode({"sub": "user42", "access": "subscription", "iat": iat}, SECRET, algorithm="HS256")
     assert asyncio.run(jwt_utils.get_subscription_payload(token)) is None
