@@ -111,6 +111,11 @@ ec74c933405c554dccf0dd5b6d0eab05ac5f78cc by comparing the final trees of the tou
 - `517f2bac48cdeb4f570a29b6ea94a3f5cd8158cf` upstream/dev rewrites .github/workflows/github-notifications-bot.yml, upstream's Telegram push and pull-request notifier that posts with upstream's TELEGRAM_BOT_TOKEN and TELEGRAM_TARGETS. The fork deleted that workflow on purpose in 535c1aa01 because it has neither secret nor channel, so the modify/delete conflict is resolved by keeping the deletion.
 - `ff6e596e090dd8901f073d32fefb4b96e2338ebd` upstream/dev (#980) escapes commit messages in .github/workflows/github-notifications-bot.yml, upstream's Telegram notifier, which the fork deleted on purpose in 535c1aa01 (see 517f2bac above); there is no file to apply it to.
 - `f8f4e0f7ddcc948de040f2c7ec24d58212e87814` upstream branch fix/telegram-notify-no-previews disables link previews and switches to a read-only token in .github/workflows/github-notifications-bot.yml, upstream's Telegram notifier, which the fork deleted on purpose in 535c1aa01 (see 517f2bac above); there is no file to apply it to.
+- `d94e157791ac1d098a48172e50a3689caaf2f46f` upstream/dev (#983) disables link previews and switches to a read-only token in .github/workflows/github-notifications-bot.yml, upstream's Telegram notifier, which the fork deleted on purpose in 535c1aa01 (see 517f2bac above); there is no file to apply it to.
+- `e85cb1bf1c7a5adb72767ba3be98e9182e83c35f` upstream branch fix/telegram-notify-no-previews drops the contents permission from the same deleted notifier workflow.
+- `6ad9a84135869c4a26525b23e691ba71a658cb72` UNMERGED-WIP: upstream branch fix/api-key-copy-insecure-context copies API keys on insecure (plain-HTTP) contexts in the API-key dialog and page (api-key-modal.tsx, _dashboard.api-keys.tsx), a clipboard fallback like the queued cf93b3f51; not merged into upstream dev or a tag. until: 2026-11-09
+- `e1376a5d10b5bcb7e1ced980b5fc4725429dbce6` UNMERGED-WIP: upstream branch fix/area-chart-theme makes the area chart use the app theme provider (area-costume-chart.tsx); not merged into upstream dev or a tag. until: 2026-11-09
+- `60fd57ea7b5c25be83ea088822e969df77df5613` UNMERGED-WIP: upstream branch fix/finalmask-udphop-version-hint shows the minimum Xray version for the udphop and exp FinalMask types (finalmask editors and locales), a follow-up to the queued 7f670cf30; not merged into upstream dev or a tag. until: 2026-11-09
 - `159e5cb7b5a05aeeceec50930060a2ec5978cc18` upstream branch fix/telegram-notify-escape, the pre-merge commit of #980 (ff6e596e0): the same change to the Telegram notifier workflow the fork deleted in 535c1aa01.
 - `9350d5967e563377a90889deb3c3626cb972eec4` UNMERGED-WIP: upstream branch deprecated-apis test fixups for dd088ef8f's switch from username to id routes. Upstream never merged it, and dev and the fork tests still call the /{username} routes.
 - `dd088ef8ff961db65d5851410f2ded8e0b26de00` UNMERGED-WIP: upstream branch deprecated-apis would replace the legacy /api/admin/{username}, /api/user/{username} and node online_stats/{username} routes with /{id}. upstream/dev (app/routers/admin.py:98) and the fork (:98) still serve /{username} alongside /by-username/ and /by-id/ from 71a739d4f (#410). If upstream ships it, that is a breaking API change for username-addressed clients of the fork.
@@ -154,7 +159,7 @@ review, or waive it for good if upstream abandons it.
 ## Port queue
 
 Upstream commits the fork must take and does not carry yet on this branch line. Checked on
-2026-10-09 09:34 UTC with `git ls-remote` against PasarGuard/panel dev 7f670cf30f62e30a4ab671bf3549fcbe768db703 and
+2026-10-10 15:37 UTC with `git ls-remote` against PasarGuard/panel dev d94e157791ac1d098a48172e50a3689caaf2f46f and
 main b56ffe369f542152c52c69733205baeaf3f6e4cd (= v5.4.1, the newest tag). The upstream dev commits up to
 6372404b8 are ported with `(cherry picked from commit ...)` trailers on the unmerged branch parity/c2-port
 (PG-C2-PORT, still being rewritten under review, so its pick shas are not recorded here); the first six are
