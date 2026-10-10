@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useDebouncedSearch } from '@/hooks/use-debounced-search'
-import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown, Check, Clock } from 'lucide-react'
+import { RefreshCw, SearchIcon, Filter, X, ArrowUpDown, User, Calendar, ChartPie, ChevronDown, Check, Clock, Fingerprint } from 'lucide-react'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +22,15 @@ import { statusColors } from '@/constants/UserSettings'
 
 // Compact sort configuration: one row per field
 const sortSections = [
+  {
+    key: 'hwidCount',
+    icon: Fingerprint,
+    label: 'hwids.count',
+    asc: 'hwid_count',
+    desc: '-hwid_count',
+    ascHintKey: 'sort.hints.lowToHigh',
+    descHintKey: 'sort.hints.highToLow',
+  },
   {
     key: 'username',
     icon: User,
@@ -115,6 +124,7 @@ interface FiltersProps {
     no_expire?: boolean
   }
   onFilterChange: (filters: Partial<FiltersProps['filters']>) => void
+  canSortByHwidCount?: boolean
   refetch?: (options?: RefetchOptions) => Promise<unknown>
   autoRefetch?: (options?: RefetchOptions) => Promise<unknown>
   advanceSearchOnOpen: (status: boolean) => void
@@ -145,9 +155,11 @@ const buildSubscriptionInfoUrl = (value: string) => {
   }
 }
 
-export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advanceSearchOnOpen, onClearAdvanceSearch, handleSort, viewControl }: FiltersProps) => {
+export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advanceSearchOnOpen, onClearAdvanceSearch, handleSort, viewControl, canSortByHwidCount = false }: FiltersProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
+  // The backend ignores the device count sort without hwids.read, so do not offer it
+  const visibleSortSections = canSortByHwidCount ? sortSections : sortSections.filter(section => section.key !== 'hwidCount')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(() => getUsersAutoRefreshIntervalSeconds())
   const { refetch: queryRefetch, isFetching } = useGetUsers(filters)
@@ -508,7 +520,7 @@ export const Filters = ({ filters, onFilterChange, refetch, autoRefetch, advance
             <DropdownMenuContent align="end" className="max-h-72 w-52 overflow-y-auto">
               <DropdownMenuLabel className="text-muted-foreground px-2 py-1 text-[10px]">{t('sortOptions', { defaultValue: 'Sort Options' })}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {sortSections.map(section => {
+              {visibleSortSections.map(section => {
                 const state = getSortState(section)
                 return (
                   <DropdownMenuItem key={section.key} onClick={() => handleCompactSort(section)} className={cn('flex items-center gap-1.5 px-2 py-1.5 text-[11px]', state !== 'none' && 'bg-accent')}>

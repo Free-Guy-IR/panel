@@ -1195,6 +1195,7 @@ const UsersTable = memo(() => {
         autoRefetch={handleAutoRefresh}
         handleSort={handleSort}
         onClearAdvanceSearch={handleClearAdvanceSearch}
+        canSortByHwidCount={canReadHwids}
       />
       {canBulkMutateUsers && (
         <BulkActionsBar
