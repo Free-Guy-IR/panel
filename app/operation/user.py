@@ -1159,6 +1159,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db,
             user_ids,
             load_admin_role=True,
+            load_group_inbounds=True,
             load_usage_logs=False,
             load_lifetime_used_traffic=True,
             populate_existing=True,

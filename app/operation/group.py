@@ -8,6 +8,7 @@ from app.db.crud.bulk import add_groups_to_users, count_bulk_group_scope, remove
 from app.db.crud.group import (
     create_group,
     get_group,
+    get_group_usernames,
     get_groups_by_ids,
     get_groups_simple,
     load_group_attrs,
@@ -16,7 +17,7 @@ from app.db.crud.group import (
     remove_groups,
 )
 from app.db.crud.user import get_users
-from app.db.models import Admin
+from app.db.models import Admin, User
 from app.fork.proxy_secrets import group_repair, resync_markers
 from app.fork.proxy_secrets.locks import (
     GROUP_LOCK_UNAVAILABLE_DETAIL,
@@ -104,6 +105,20 @@ class GroupOperation(BaseOperation):
         await group_repair.push_committed_users(db, user_ids, sync_users)
         await group_repair.clear_resync_markers(db, markers)
 
+    @staticmethod
+    async def _get_users_for_sync(db: AsyncSession, usernames: list[str]) -> list[User]:
+        """Load users for a node sync, 10k usernames per query (asyncpg caps a statement at 32767 bind params)."""
+        users: list[User] = []
+        for start in range(0, len(usernames), 10_000):
+            users += await get_users(
+                db,
+                query=UserListQuery(username=usernames[start : start + 10_000]),
+                load_admin_role=True,
+                load_usage_logs=False,
+                load_group_inbounds=True,
+            )
+        return users
+
     async def create_group(self, db: AsyncSession, new_group: GroupCreate, admin: Admin) -> Group:
         await self.check_inbound_tags(new_group.inbound_tags)
         db_group = await create_group(db, new_group)
@@ -143,6 +158,8 @@ class GroupOperation(BaseOperation):
             db,
             query=UserListQuery(group_ids=[db_group.id]),
             load_admin_role=True,
+            load_usage_logs=False,
+            load_group_inbounds=True,
         )
         await self._finish_group_change(db, users)
 
@@ -156,13 +173,12 @@ class GroupOperation(BaseOperation):
     async def remove_group(self, db: AsyncSession, group_id: int, admin: Admin) -> None:
         db_group = await self._get_group_with_access(db, group_id, admin)
 
-        users = await get_users(db, query=UserListQuery(group_ids=[db_group.id]))
-        username_list = [user.username for user in users]
+        username_list = await get_group_usernames(db, [db_group.id])
 
-        await self._mark_pending_resync(db, resync_markers.mark_users, [user.id for user in users])
+        await self._mark_pending_resync(db, resync_markers.mark_group_members, [db_group.id])
         await self._write_first_step(db, remove_group, db_group)
 
-        users = await get_users(db, query=UserListQuery(username=username_list), load_admin_role=True)
+        users = await self._get_users_for_sync(db, username_list)
         await self._finish_group_change(db, users)
 
         logger.info(f'Group "{db_group.name}" deleted by admin "{admin.username}"')
@@ -213,21 +229,15 @@ class GroupOperation(BaseOperation):
             if gid not in found_ids:
                 await self.raise_error("Group not found", 404)
 
-        all_affected_usernames = set()
-        for db_group in db_groups:
-            users = await get_users(db, query=UserListQuery(group_ids=[db_group.id]))
-            all_affected_usernames.update(user.username for user in users)
-
         group_ids = [g.id for g in db_groups]
         group_names = [g.name for g in db_groups]
+        all_affected_usernames = await get_group_usernames(db, group_ids)
 
         await self._mark_pending_resync(db, resync_markers.mark_group_members, group_ids)
         await self._write_first_step(db, remove_groups, group_ids)
 
         if all_affected_usernames:
-            users = await get_users(
-                db, query=UserListQuery(username=list(all_affected_usernames)), load_admin_role=True
-            )
+            users = await self._get_users_for_sync(db, all_affected_usernames)
             await self._finish_group_change(db, users)
 
         for name, group_id in zip(group_names, group_ids):
@@ -269,13 +279,15 @@ class GroupOperation(BaseOperation):
 
         for db_group in groups_to_update:
             await db.refresh(db_group)
-            await load_group_attrs(db_group)
+            await load_group_attrs(db, db_group)
 
         if groups_to_update:
             users = await get_users(
                 db,
                 query=UserListQuery(group_ids=[group.id for group in groups_to_update]),
                 load_admin_role=True,
+                load_usage_logs=False,
+                load_group_inbounds=True,
             )
             await self._finish_group_change(db, users)
 
