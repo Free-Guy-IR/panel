@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
+from sqlalchemy.orm import Session
 
 import app.settings as settings_module
 from app import notification
@@ -49,6 +51,20 @@ async def quiet(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(notification, name, AsyncMock())
     yield
     await settings_module.refresh_caches()
+
+
+@pytest.fixture(name="first_commits")
+def first_commits_fixture() -> dict[str, float]:
+    first: dict[str, float] = {}
+
+    def on_commit(session):
+        label = session.info.get("label")
+        if label is not None and label not in first:
+            first[label] = time.monotonic()
+
+    event.listen(Session, "after_commit", on_commit)
+    yield first
+    event.remove(Session, "after_commit", on_commit)
 
 
 @pytest.fixture(name="pushes")
@@ -131,9 +147,10 @@ async def _final(recorder_db, user_ids) -> dict[int, tuple[int, UserStatus, int]
     return {user_id: (admin_id, status, active.count(user_id)) for user_id, admin_id, status in rows}
 
 
-def _mover(recorder_db, mover: str, user_ids: tuple[int, ...], destination: str):
+def _mover(recorder_db, label: str, mover: str, user_ids: tuple[int, ...], destination: str):
     async def move():
         async with recorder_db() as db:
+            db.info["label"] = label
             operation = UserOperation(OperatorType.API)
             if mover == "set_owner":
                 await operation.set_owner_by_id(db, user_ids[0], destination, OWNER)
@@ -148,6 +165,7 @@ def _mover(recorder_db, mover: str, user_ids: tuple[int, ...], destination: str)
 def _admin_wide(recorder_db, admin_id: int, method: str):
     async def run():
         async with recorder_db() as db:
+            db.info["label"] = "admin-wide"
             db_admin = await get_admin_by_id(db, admin_id)
             await getattr(AdminOperation(OperatorType.API), method)(db, db_admin, OWNER)
 
@@ -221,7 +239,7 @@ async def test_an_admin_wide_change_pushes_a_user_moved_out_after_it_was_changed
 @pytest.mark.parametrize("mover", ["set_owner", "bulk_set_owner"])
 @pytest.mark.parametrize("action", list(ACTIONS))
 async def test_users_moved_into_or_out_of_the_admin_during_an_admin_wide_change_are_changed_whole_or_not_at_all(
-    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, action, mover, direction, first
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, first_commits, action, mover, direction, first
 ):
     method, before, after = ACTIONS[action]
     seed = await _seed(recorder_db, before)
@@ -230,9 +248,17 @@ async def test_users_moved_into_or_out_of_the_admin_during_an_admin_wide_change_
 
     moved = {}
     if direction in ("into", "into-and-out"):
-        moved["mover-into"] = (_mover(recorder_db, mover, seed.in_ids, seed.home_name), seed.in_ids, seed.home)
+        moved["mover-into"] = (
+            _mover(recorder_db, "mover-into", mover, seed.in_ids, seed.home_name),
+            seed.in_ids,
+            seed.home,
+        )
     if direction in ("out", "into-and-out"):
-        moved["mover-out"] = (_mover(recorder_db, mover, seed.out_ids, seed.away_name), seed.out_ids, seed.away)
+        moved["mover-out"] = (
+            _mover(recorder_db, "mover-out", mover, seed.out_ids, seed.away_name),
+            seed.out_ids,
+            seed.away,
+        )
     count = 1 if mover == "set_owner" else 2
     steps = {"admin-wide": _admin_wide(recorder_db, seed.home, method)} | {
         label: step for label, (step, _ids, _destination) in moved.items()
@@ -258,12 +284,19 @@ async def test_users_moved_into_or_out_of_the_admin_during_an_admin_wide_change_
     untouched = (before, 1 if restricted else 0)
     changed = (after, 0)
     assert final[seed.stay][1:] == changed, (final, outcomes)
-    for _step, ids, destination in moved.values():
+    for label, (_step, ids, destination) in moved.items():
+        admin_wide_first = first_commits["admin-wide"] < first_commits[label]
+        if destination == seed.away:
+            allowed = [changed] if admin_wide_first else [untouched]
+        else:
+            allowed = [untouched] if admin_wide_first else [untouched, changed]
         for user_id in ids[:count]:
             admin_id, status, active = final[user_id]
             assert admin_id == destination, (user_id, final, outcomes)
-            assert (status, active) in (untouched, changed), (
-                "a user moved during the admin-wide change was changed by half of it",
+            assert (status, active) in allowed, (
+                "a user moved during the admin-wide change was changed by half of it, or out of commit order",
+                label,
+                admin_wide_first,
                 user_id,
                 final,
                 outcomes,
