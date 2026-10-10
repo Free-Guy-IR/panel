@@ -224,11 +224,11 @@ class BaseSubscription(ForkSubscriptionHelpers):
         else:
             finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
         obfs_password = ""
-        quic_params: dict = finalmask_dict.get("quicParams", {})
+        quic_params: dict = finalmask_dict.get("quicParams") or {}
         if udp := finalmask_dict.get("udp"):
             for i in udp:
                 if i.get("type") == "salamander":
-                    obfs_password = i.get("settings", {}).get("password")
+                    obfs_password = (i.get("settings") or {}).get("password")
                     break
 
         return obfs_password, quic_params
