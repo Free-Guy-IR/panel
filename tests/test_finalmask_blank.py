@@ -11,7 +11,7 @@ That breaks every client using the host, not just the field that was cleared,
 so it is worth pinning down.
 """
 
-from app.models.host import FinalMask, prune_blank_values, to_xray_finalmask
+from app.models.host import FinalMask, dump_final_mask_for_xray, prune_blank_values
 
 
 def test_blank_max_split_is_not_emitted():
@@ -66,11 +66,10 @@ def test_fully_blank_prunes_to_none():
 
 
 def _emitted(stored: dict) -> dict:
-    dumped = FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json")
-    return to_xray_finalmask(dumped)["tcp"][0]["settings"]
+    return dump_final_mask_for_xray(FinalMask(**stored))["tcp"][0]["settings"]
 
 
-def test_several_lengths_collapse_to_the_span_they_cover():
+def test_several_lengths_emit_the_first_entry_next_to_the_lists():
     settings = _emitted(
         {
             "tcp": [
@@ -82,9 +81,10 @@ def test_several_lengths_collapse_to_the_span_they_cover():
         }
     )
 
-    assert settings["length"] == "3-20"
-    assert settings["delay"] == "1-2"
-    assert "lengths" not in settings and "delays" not in settings
+    assert settings["length"] == "3-5"
+    assert settings["delay"] == 1
+    assert settings["lengths"] == ["3-5", "6-8", "10-20"]
+    assert settings["delays"] == [1, 2]
 
 
 def test_a_single_length_is_carried_over_exactly():
@@ -109,6 +109,6 @@ def test_the_model_itself_keeps_the_shape_the_api_returns():
 def test_a_layer_without_fragment_lists_passes_through():
     stored = {"tcp": [{"type": "sudoku", "settings": {"packets": "tlshello"}}], "udp": []}
 
-    emitted = to_xray_finalmask(FinalMask(**stored).model_dump(exclude_none=True, by_alias=True, mode="json"))
+    emitted = dump_final_mask_for_xray(FinalMask(**stored))
 
     assert emitted["tcp"][0]["settings"] == {"packets": "tlshello"}

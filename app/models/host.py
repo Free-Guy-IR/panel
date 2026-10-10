@@ -1,3 +1,4 @@
+from copy import deepcopy
 from enum import Enum
 from ipaddress import ip_network
 from string import Formatter
@@ -96,43 +97,6 @@ class XrayNoiseSettings(BaseModel):
 
 class NoiseSettings(BaseModel):
     xray: list[XrayNoiseSettings] | None = Field(default=None)
-
-
-def _collapse_to_range(values: list[str | int]) -> str:
-    if len(values) == 1:
-        return str(values[0])
-
-    bounds = [int(part) for value in values for part in str(value).split("-") if part.strip().isdigit()]
-    if not bounds:
-        return str(values[0])
-    return f"{min(bounds)}-{max(bounds)}"
-
-
-def to_xray_finalmask(value: Any) -> Any:
-    if not isinstance(value, dict):
-        return value
-
-    converted = {}
-    for key, layers in value.items():
-        if key not in ("tcp", "udp") or not isinstance(layers, list):
-            converted[key] = layers
-            continue
-
-        rebuilt = []
-        for layer in layers:
-            settings = layer.get("settings") if isinstance(layer, dict) else None
-            if not isinstance(settings, dict):
-                rebuilt.append(layer)
-                continue
-
-            settings = dict(settings)
-            for plural, singular in (("lengths", "length"), ("delays", "delay")):
-                entries = settings.pop(plural, None)
-                if isinstance(entries, list) and entries:
-                    settings[singular] = _collapse_to_range(entries)
-            rebuilt.append({**layer, "settings": settings})
-        converted[key] = rebuilt
-    return converted
 
 
 def prune_blank_values(value: Any) -> Any:
@@ -442,6 +406,33 @@ class FinalMask(FinalMaskBaseModel):
     tcp: list[FinalMaskTcpLayer] | None = Field(default=None)
     udp: list[FinalMaskUdpLayer] | None = Field(default=None)
     quic_params: FinalMaskQuicParams | None = Field(default=None, alias="quicParams")
+
+
+def dump_final_mask_for_xray(final_mask: FinalMask | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(final_mask, FinalMask):
+        result = final_mask.model_dump(exclude_none=True, by_alias=True, mode="json")
+    else:
+        result = deepcopy(final_mask)
+
+    tcp_layers = result.get("tcp")
+    if not isinstance(tcp_layers, list):
+        return result
+
+    for layer in tcp_layers:
+        if not isinstance(layer, dict) or layer.get("type") != FinalMaskTcpType.fragment.value:
+            continue
+        settings = layer.get("settings")
+        if not isinstance(settings, dict):
+            continue
+
+        lengths = settings.get("lengths")
+        if settings.get("length") in (None, "") and isinstance(lengths, list) and lengths:
+            settings["length"] = lengths[0]
+        delays = settings.get("delays")
+        if settings.get("delay") in (None, "") and isinstance(delays, list) and delays:
+            settings["delay"] = delays[0]
+
+    return result
 
 
 class XMuxSettings(BaseModel):
