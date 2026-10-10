@@ -13,6 +13,7 @@ from fastapi import HTTPException
 import app.operation as operation_module
 from app.operation import BaseOperation, OperatorType
 from app.utils import jwt as jwt_utils
+from tests.release_jwt import load_release_jwt
 
 SECRET = "a-secret-that-only-the-server-knows"
 CREATED = datetime(2026, 1, 1, tzinfo=UTC)
@@ -90,6 +91,32 @@ def test_a_signed_v4_token_with_an_out_of_range_timestamp_does_not_500_the_route
     assert _refused(token)
 
 
+@pytest.mark.parametrize(
+    "error",
+    [ConnectionRefusedError(111, "Connect call failed"), OSError("db down"), ValueError("bad"), OverflowError("x")],
+)
+@pytest.mark.parametrize(
+    "token",
+    [
+        _sign("v4,42,1900000000,0"),
+        "djQsNDIsMTkwMDAwMDAwMCww" + "abcdefghij",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyNDIifQ.c2ln",
+    ],
+)
+def test_an_error_while_reading_the_secret_propagates_as_in_the_release(monkeypatch, token, error):
+    release = load_release_jwt("release_jwt_secret_errors")
+
+    async def _down():
+        raise error
+
+    monkeypatch.setattr(jwt_utils, "get_secret_key", _down)
+    monkeypatch.setattr(release, "get_secret_key", _down)
+    with pytest.raises(type(error)):
+        asyncio.run(release.get_subscription_payload(token))
+    with pytest.raises(type(error)):
+        asyncio.run(jwt_utils.get_subscription_payload(token))
+
+
 def test_a_signed_v3_token_with_an_out_of_range_timestamp_is_refused_without_a_500(secret):
     assert asyncio.run(jwt_utils.get_subscription_payload(_sign("v3,42,99999999999999999999"))) is None
 
@@ -142,6 +169,13 @@ def test_a_legacy_jwt_subscription_token_of_an_active_user_still_resolves(secret
 def test_a_legacy_jwt_with_an_out_of_range_iat_is_refused_without_a_500(secret, store):
     payload = {"sub": "user42", "access": "subscription", "iat": 99999999999999999999}
     token = pyjwt.encode(payload, SECRET, algorithm="HS256")
+    assert _refused(token)
+
+
+@pytest.mark.parametrize("iat", [-99999999999999999999, -(10**15)])
+def test_a_signed_legacy_jwt_whose_iat_is_out_of_range_is_refused_without_a_500(secret, store, iat):
+    token = pyjwt.encode({"sub": "user42", "access": "subscription", "iat": iat}, SECRET, algorithm="HS256")
+    assert asyncio.run(jwt_utils.get_subscription_payload(token)) is None
     assert _refused(token)
 
 

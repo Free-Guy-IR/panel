@@ -23,7 +23,7 @@ from tests.release_jwt import load_release_jwt
 
 ROOT = Path(__file__).resolve().parents[1]
 SECRET = "a-secret-that-only-the-server-knows"
-PREDICATE_COMMIT = "8b0387911609f6a583a703fe59f610b3eb14240c"
+PREDICATE_COMMIT = "334a4076d247146b954d33c3aa18227e0df55973"
 PREDICATE_FILE = ROOT / "tests" / "fixtures" / "v5_34_25_get_validated_sub_predicate.py.txt"
 PREDICATE_SHA256 = "e6dd43740a1a1d00dcb7bf690fc728d8b2488c7a74139e254345bd9d5aad7c88"
 B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
@@ -150,8 +150,8 @@ def _fuzz(tokens, count, seed):
 def _release_decision(release, token, user):
     try:
         sub = asyncio.run(release.get_subscription_payload(token))
-    except Exception:
-        return "error"
+    except Exception as exc:
+        return f"error:{type(exc).__name__}"
     db_user = None
     if sub and user is not None:
         if sub.get("user_id"):
@@ -247,8 +247,6 @@ def test_the_hotfix_refuses_exactly_what_the_release_refuses(secret, release, st
         for user in users:
             expected = _release_decision(release, token, user)
             got = _hotfix_decision(store, token, user)
-            if expected == "error":
-                expected = "refuse"
             if got != expected:
                 mismatches.append((process_tz, token[:40], vars(user) if user else None, expected, got))
     assert not mismatches, mismatches[:5]
@@ -262,4 +260,5 @@ def test_no_mutated_token_is_accepted_by_one_side_only_or_crashes_the_hotfix(sec
         expected = _release_decision(release, token, user)
         got = _hotfix_decision(store, token, user)
         assert got in ("accept", "refuse"), (token, got)
-        assert got == ("refuse" if expected == "error" else expected), (token, expected, got)
+        assert expected in ("accept", "refuse"), (token, expected)
+        assert got == expected, (token, expected, got)

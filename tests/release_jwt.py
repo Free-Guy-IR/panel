@@ -4,9 +4,9 @@ import importlib.machinery
 import importlib.util
 from pathlib import Path
 
-RELEASE_COMMIT = "833c8ca47ae5651db4cf5bb316382348b183d9ce"
+RELEASE_COMMIT = "334a4076d247146b954d33c3aa18227e0df55973"
 RELEASE_JWT = Path(__file__).resolve().parent / "fixtures" / "v5_34_25_app_utils_jwt.py.txt"
-RELEASE_JWT_SHA256 = "872298fffc630fec66d212d735e172f00055b1fc240ff8131d1988b3a08ca1ee"
+RELEASE_JWT_SHA256 = "354c5125589c1204328d1153e177d7ad1f77966c3be51aaccf82b96a2859323e"
 TOKEN_CONTRACT_FUNCTIONS = (
     "revocation_epoch",
     "next_revocation_instant",
@@ -16,7 +16,7 @@ TOKEN_CONTRACT_FUNCTIONS = (
     "_decode_b64_token",
     "get_subscription_payload",
 )
-TOKEN_CONTRACT_SHA256 = "21111c668beba9535c654a049fb63024ce82572925e61b8a85fefa14d261379f"
+TOKEN_CONTRACT_SHA256 = "706b4b2d1857d784c2ffaad3f200cc0302c9ce58dafef152ee131e0d3d092812"
 
 
 def token_contract_sha256(source: str) -> str:
