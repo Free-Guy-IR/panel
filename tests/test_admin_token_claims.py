@@ -63,7 +63,9 @@ async def test_an_expired_token_is_still_rejected(monkeypatch):
     assert await jwt_utils.get_admin_payload(token) is None
 
 
+@pytest.mark.parametrize("iat", [-(10**15), -(10**17), -9 * 10**18])
 @pytest.mark.asyncio
-async def test_an_out_of_range_iat_is_rejected_instead_of_crashing(monkeypatch):
+async def test_an_out_of_range_iat_is_rejected_instead_of_crashing(monkeypatch, iat):
     monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
-    assert await jwt_utils.get_admin_payload(_token(iat=-(10**15))) is None
+    assert jwt.decode(_token(iat=iat), SECRET, algorithms=["HS256"])["iat"] == iat
+    assert await jwt_utils.get_admin_payload(_token(iat=iat)) is None
