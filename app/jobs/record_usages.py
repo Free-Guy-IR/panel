@@ -64,6 +64,9 @@ USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT = {
     "sqlite": 400,
 }
 USER_ADMIN_LOOKUP_BATCH_SIZE = 1_000
+_pending_user_usage_history: defaultdict[tuple[dt, int, int | None, int], int] = defaultdict(int)
+_user_usage_history_lock = asyncio.Lock()
+_user_usage_history_last_flush: float | None = None
 MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
 ONLINE_AT_WRITE_INTERVAL = td(minutes=1)
 DEADLOCK_MAX_RETRIES = 5
@@ -201,6 +204,14 @@ async def _load_stat_acks(stat_type: int, nodes) -> dict[int, StatBatch]:
         return {}
     async with GetDB() as db:
         return await acks_for_request(db, stat_type, capable)
+
+
+def _monotonic_now() -> float:
+    return time.monotonic()
+
+
+def _history_is_coalesced(dialect: str) -> bool:
+    return sql_family(dialect) == "postgresql"
 
 
 def _chunked(items: list, size: int):
@@ -647,43 +658,37 @@ def _get_time_bucket(now: dt | None = None) -> dt:
     return now.replace(minute=(now.minute // 10) * 10, second=0, microsecond=0)
 
 
-async def record_user_stats_batched(all_node_params: dict, usage_coefficients: dict) -> list[dict]:
-    """
-    Record user statistics for ALL nodes in a single batched UPSERT operation.
-    This eliminates per-node write amplification and reduces lock contention.
-
-    Args:
-        all_node_params: Dict mapping node_id -> list of user stat params
-        usage_coefficients: Dict mapping node_id -> usage coefficient
-    """
-    if not all_node_params:
-        return []
-
-    # Aggregate all params across all nodes into single list
-    created_at = _get_time_bucket()
-
-    # Prepare parameters for all nodes in one batch
-    upsert_params = []
+def _prepare_node_user_usage_params(
+    all_node_params: dict,
+    usage_coefficients: dict,
+    created_at: dt,
+) -> list[dict]:
+    aggregated_params: defaultdict[tuple[int, int], int] = defaultdict(int)
     for node_id, params in all_node_params.items():
         if not params:
             continue
         coeff = usage_coefficients.get(node_id, 1.0)
         for p in params:
-            upsert_params.append(
-                {
-                    "uid": int(p["uid"]),
-                    "value": apply_usage_value(p["value"], coeff),
-                    "node_id": node_id,
-                    "created_at": created_at,
-                }
-            )
+            value = apply_usage_value(p["value"], coeff)
+            if value:
+                aggregated_params[(int(p["uid"]), node_id)] += value
 
-    if not upsert_params:
+    return [
+        {
+            "uid": uid,
+            "value": value,
+            "node_id": node_id,
+            "created_at": created_at,
+        }
+        for (uid, node_id), value in sorted(aggregated_params.items())
+        if value
+    ]
+
+
+async def record_user_stats_batched(all_node_params: dict, usage_coefficients: dict) -> list[dict]:
+    if not all_node_params:
         return []
-
-    # Consistent lock order reduces InnoDB deadlocks across overlapping writers
-    upsert_params.sort(key=lambda item: (item["uid"], item["node_id"]))
-    return upsert_params
+    return _prepare_node_user_usage_params(all_node_params, usage_coefficients, _get_time_bucket())
 
 
 async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict]) -> None:
@@ -701,6 +706,126 @@ async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict])
     for batch in batches:
         for stmt, stmt_params in build_node_user_usage_upsert(dialect, batch):
             await conn.execute(stmt, stmt_params)
+
+
+async def _write_node_user_usage_params(dialect: str, upsert_params: list[dict]) -> None:
+    if not upsert_params:
+        return
+    user_ids = sorted({int(row["uid"]) for row in upsert_params})
+    batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect)) or len(user_ids)
+
+    async def _write(conn) -> None:
+        committed_epochs: dict[int, int] = {}
+        for id_batch in _chunked(user_ids, batch_size):
+            locked = await conn.execute(
+                select(User.id, User.usage_epoch).where(User.id.in_(id_batch)).order_by(User.id).with_for_update()
+            )
+            for user_id, usage_epoch in locked.fetchall():
+                committed_epochs[int(user_id)] = int(usage_epoch or 0)
+        drop_stale_epochs = usage_settings.reset_user_usage_clean_chart_data
+        rows = [
+            {key: row[key] for key in ("uid", "value", "node_id", "created_at")}
+            for row in upsert_params
+            if int(row["uid"]) in committed_epochs
+            and not (drop_stale_epochs and committed_epochs[int(row["uid"])] != int(row.get("epoch", 0)))
+        ]
+        await write_node_user_usage_rows(conn, dialect, rows)
+
+    try:
+        await run_in_retried_transaction(_write)
+    except IntegrityError as err:
+        if not is_missing_parent_error(err):
+            raise
+        await run_in_retried_transaction(_write)
+
+
+async def _flush_pending_user_usage_history_locked(now_monotonic: float | None = None) -> int:
+    global _user_usage_history_last_flush
+
+    if not _pending_user_usage_history:
+        return 0
+
+    upsert_params = [
+        {
+            "uid": uid,
+            "value": value,
+            "node_id": node_id,
+            "created_at": created_at,
+            "epoch": epoch,
+        }
+        for (created_at, uid, node_id, epoch), value in sorted(
+            _pending_user_usage_history.items(), key=lambda item: (item[0][1], item[0][0], item[0][3], item[0][2] or 0)
+        )
+        if value
+    ]
+    if upsert_params:
+        await _write_node_user_usage_params(await get_dialect(), upsert_params)
+    _pending_user_usage_history.clear()
+    _user_usage_history_last_flush = now_monotonic if now_monotonic is not None else _monotonic_now()
+    return len(upsert_params)
+
+
+async def flush_user_usage_history_if_due(now_monotonic: float | None = None) -> int:
+    global _user_usage_history_last_flush
+
+    if not _pending_user_usage_history:
+        return 0
+
+    now_monotonic = now_monotonic if now_monotonic is not None else _monotonic_now()
+    async with _user_usage_history_lock:
+        if _user_usage_history_last_flush is None:
+            _user_usage_history_last_flush = now_monotonic
+            return 0
+        flush_due = now_monotonic - _user_usage_history_last_flush >= usage_settings.user_usage_history_flush_interval
+        if not flush_due:
+            return 0
+        return await _flush_pending_user_usage_history_locked(now_monotonic)
+
+
+def _buffer_history_rows(history_rows: list[dict]) -> None:
+    for row in history_rows:
+        key = (row["created_at"], int(row["uid"]), row["node_id"], int(row.get("epoch", 0)))
+        _pending_user_usage_history[key] += row["value"]
+
+
+async def record_user_stats(history_rows: list[dict]) -> None:
+    if not history_rows:
+        return
+
+    buckets = {row["created_at"] for row in history_rows}
+    now_monotonic = _monotonic_now()
+    async with _user_usage_history_lock:
+        bucket_changed = any(key[0] not in buckets for key in _pending_user_usage_history)
+        if bucket_changed:
+            try:
+                flushed_rows = await _flush_pending_user_usage_history_locked(now_monotonic)
+                logger.debug("Flushed %s node user usage history rows before bucket rollover", flushed_rows)
+            except Exception:
+                _buffer_history_rows(history_rows)
+                raise
+
+        _buffer_history_rows(history_rows)
+
+        if _user_usage_history_last_flush is None:
+            flushed_rows = await _flush_pending_user_usage_history_locked(now_monotonic)
+            logger.debug("Flushed %s initial node user usage history rows", flushed_rows)
+            return
+        flush_due = now_monotonic - _user_usage_history_last_flush >= usage_settings.user_usage_history_flush_interval
+        if flush_due:
+            flushed_rows = await _flush_pending_user_usage_history_locked(now_monotonic)
+            logger.debug("Flushed %s coalesced node user usage history rows", flushed_rows)
+
+
+@on_shutdown
+async def _flush_user_usage_history_on_shutdown() -> None:
+    async with _user_usage_history_lock:
+        if not _pending_user_usage_history:
+            return
+        try:
+            flushed_rows = await _flush_pending_user_usage_history_locked()
+            logger.info("Flushed %s pending node user usage history rows on shutdown", flushed_rows)
+        except Exception:
+            logger.exception("Failed to flush pending node user usage history during shutdown")
 
 
 async def record_node_stats_batched(all_node_params: dict):
@@ -1112,6 +1237,8 @@ async def apply_fenced_user_usage(
     dialect = await get_dialect()
     batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect)) or len(user_ids) or 1
     online_at = dt.now(UTC)
+    coalesce_history = _history_is_coalesced(dialect)
+    deferred_history: list[dict] = []
 
     admin_stmt = (
         update(Admin)
@@ -1121,6 +1248,7 @@ async def apply_fenced_user_usage(
     )
 
     async def _apply(conn) -> FencedUsageOutcome:
+        deferred_history.clear()
         await settle_batches(conn, StatType.UsersStat, stat_batches)
         committed_epochs: dict[int, int] = {}
         committed_admins: dict[int, int | None] = {}
@@ -1148,7 +1276,11 @@ async def apply_fenced_user_usage(
             if user_id not in fenced
         ]
 
-        await write_node_user_usage_rows(conn, dialect, [row for row in chart_rows if int(row["uid"]) not in fenced])
+        kept_chart_rows = [row for row in chart_rows if int(row["uid"]) not in fenced]
+        if coalesce_history:
+            deferred_history.extend({**row, "epoch": committed_epochs[int(row["uid"])]} for row in kept_chart_rows)
+        else:
+            await write_node_user_usage_rows(conn, dialect, kept_chart_rows)
 
         admin_totals = defaultdict(int)
         for item in billable:
@@ -1181,12 +1313,19 @@ async def apply_fenced_user_usage(
         )
 
     try:
-        return await run_in_retried_transaction(_apply)
+        outcome = await run_in_retried_transaction(_apply)
     except IntegrityError as err:
         if not is_missing_parent_error(err):
             raise
         logger.warning("A node was deleted while its usage was being written; writing the cohort again without it")
-        return await run_in_retried_transaction(_apply)
+        outcome = await run_in_retried_transaction(_apply)
+
+    if deferred_history:
+        try:
+            await record_user_stats(list(deferred_history))
+        except Exception:
+            logger.exception("Failed to flush coalesced node user usage history; pending rows will be retried")
+    return outcome
 
 
 def _report_unknown_uid_usage(
@@ -1538,6 +1677,13 @@ async def _record_user_usages_impl():
     Separated to allow timeout wrapper.
     """
     job_start_time = time.time()
+    try:
+        flushed_rows = await flush_user_usage_history_if_due()
+        if flushed_rows:
+            logger.debug("Flushed %s due node user usage history rows", flushed_rows)
+    except Exception:
+        logger.exception("Failed to flush due node user usage history; pending rows will be retried")
+
     nodes: tuple[int, PasarGuardNode] = await node_manager.get_healthy_nodes()
 
     if not nodes and not _retained_cohorts:
