@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { getGetUserHwidsQueryKey, useDeleteUserHwid, useGetUserHwids, useResetUserHwids, type UserHWIDResponse } from '@/service/api'
+import { getGetUserHwidsQueryKey, getGetUsersQueryKey, useDeleteUserHwid, useGetUserHwids, useResetUserHwids, type UserHWIDResponse } from '@/service/api'
 import { dateUtils } from '@/utils/dateFormatter'
 import { useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, Laptop, RefreshCw, Smartphone, Trash2 } from 'lucide-react'
@@ -51,6 +51,7 @@ export function UserHwidsModal({ isOpen, onOpenChange, userId, username }: UserH
 
   const invalidateHwids = () => {
     queryClient.invalidateQueries({ queryKey })
+    queryClient.invalidateQueries({ queryKey: getGetUsersQueryKey() })
     // The backend clears this user's device-review row on reset/delete; drop
     // the cached copies so the review and the users-table badge refetch it.
     queryClient.invalidateQueries({ queryKey: ['/api/connection-limit/states'] })
