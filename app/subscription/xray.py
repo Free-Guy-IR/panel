@@ -1,5 +1,4 @@
 import json
-from contextlib import suppress
 from random import choice
 
 from pydantic import BaseModel
@@ -804,8 +803,10 @@ class XrayConfiguration(BaseSubscription):
         if finalmask is not None:
             if isinstance(finalmask, BaseModel):
                 finalmask = finalmask.model_dump(exclude_none=True, by_alias=True, mode="json")
-            with suppress(TypeError, ValueError):
+            try:
                 finalmask = FinalMask.model_validate(finalmask)
+            except (TypeError, ValueError):
+                pass
             if isinstance(finalmask, (FinalMask, dict)):
                 finalmask = dump_fork_final_mask_for_xray(finalmask)
             # Blank optional fields must be dropped rather than emitted: Xray
