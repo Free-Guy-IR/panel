@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { ArrowDownToLine, ArrowUpFromLine, Braces, Cable, FlaskConical, Globe, Link2, ListTree, Scale, ScrollText, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, Braces, Cable, FlaskConical, Globe, Link2, ListTree, Scale, ScrollText, ShieldCheck, Waypoints, Webhook } from 'lucide-react'
 import type { L2tpCoreSection, MtCoreSection, OvCoreSection, SbCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 
 export type XraySectionNavItem = {
@@ -51,6 +51,7 @@ export const XRAY_CORE_SECTION_NAV: XraySectionNavItem[] = [
   { id: 'balancers', labelKey: 'coreEditor.section.balancers', defaultLabel: 'Balancers', icon: Scale },
   { id: 'dns', labelKey: 'coreEditor.section.dns', defaultLabel: 'DNS', icon: Globe },
   { id: 'bindings', labelKey: 'coreEditor.section.bindings', defaultLabel: 'Bindings', icon: Link2 },
+  { id: 'api', labelKey: 'coreEditor.section.api', defaultLabel: 'API', icon: Webhook },
   { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
 ]
 
