@@ -1772,12 +1772,15 @@ def _subscription_update_from_clause(
     if user_id is not None:
         conditions.append(UserSubscriptionUpdate.user_id == user_id)
         from_clause = UserSubscriptionUpdate.__table__
-    else:
+    elif admin_id is not None:
         from_clause = UserSubscriptionUpdate.__table__.join(User, UserSubscriptionUpdate.user_id == User.id)
-        if admin_id:
-            conditions.append(User.admin_id == admin_id)
-        if allowed_group_ids is not None:
-            conditions.append(user_in_allowed_groups(UserSubscriptionUpdate.user_id, allowed_group_ids))
+        conditions.append(User.admin_id == admin_id)
+    else:
+        # The owner-wide chart does not read any users columns. Keeping this
+        # history-only lets the created_at index drive the global time range.
+        from_clause = UserSubscriptionUpdate.__table__
+    if user_id is None and allowed_group_ids is not None:
+        conditions.append(user_in_allowed_groups(UserSubscriptionUpdate.user_id, allowed_group_ids))
     return from_clause, conditions
 
 
@@ -2056,7 +2059,7 @@ async def get_user_count_metric_stats(
     """Retrieves one distinct user count metric from node_user_usages."""
     validate_user_count_metric_scope(metric, node_id=node_id, group_by_node=group_by_node)
 
-    query_parts = _build_user_count_query_parts(db, admins, start, end, period, node_id)
+    query_parts = _build_user_count_query_parts(db, admins, start, end, period, metric, node_id)
     if allowed_group_ids is not None:
         query_parts["conditions"].append(user_in_allowed_groups(NodeUserUsage.user_id, allowed_group_ids))
     count_expr = _build_user_count_metric_expression(metric).label("count")
@@ -2121,6 +2124,7 @@ def _build_user_count_query_parts(
     start: datetime,
     end: datetime,
     period: Period,
+    metric: UserCountMetric,
     node_id: int | None,
 ) -> dict:
     admins_filter = admins or None
@@ -2141,7 +2145,11 @@ def _build_user_count_query_parts(
     else:
         stats_key = -1
 
-    from_clause = NodeUserUsage.__table__.join(User, User.id == NodeUserUsage.user_id)
+    # Online counts only read node_user_usages. Avoid joining every history row
+    # to users unless a status metric or an admin scope actually needs it.
+    from_clause = NodeUserUsage.__table__
+    if metric != UserCountMetric.online or admins_filter:
+        from_clause = from_clause.join(User, User.id == NodeUserUsage.user_id)
     if admins_filter:
         from_clause = from_clause.join(Admin, Admin.id == User.admin_id)
 
