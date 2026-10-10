@@ -20,12 +20,7 @@ from sqlalchemy.pool import NullPool
 
 from app.db import base
 from app.db.crud.hwid import register_user_hwid
-from app.db.crud.user import (
-    get_user as get_db_user,
-    get_users as get_db_users,
-    lock_admin_quota_row,
-    update_users_status,
-)
+from app.db.crud.user import get_user as get_db_user, get_users as get_db_users, update_users_status
 from app.db.models import Admin, NodeUserUsage, User, UserStatus, UserUsageResetLogs
 from app.models.settings import ConfigFormat, General, HeaderPlacement, SubRule, Subscription, UsageSettings
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
@@ -2769,6 +2764,8 @@ def test_lock_admin_quota_row_does_not_commit_the_caller(access_token):
             ).scalar_one()
 
     async def _traffic_after_rollback(admin_id: int) -> int:
+        from app.db.crud.user import lock_admin_quota_row
+
         async with TestSession() as session:
             await session.execute(update(Admin).where(Admin.id == admin_id).values(used_traffic=4242))
             await lock_admin_quota_row(session, admin_id)
