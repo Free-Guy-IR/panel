@@ -214,6 +214,7 @@ class NodeModify(NodeCreate):
 
 class NodeResponse(Node):
     id: int
+    sort_order: int = 0
     api_key: str | None
     core_config_id: int | None
     additional_core_config_ids: list[int] | None = None
