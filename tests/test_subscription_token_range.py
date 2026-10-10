@@ -13,7 +13,15 @@ from app.operation import BaseOperation, OperatorType
 from app.utils import jwt as jwt_utils
 
 SECRET = "a-secret-that-only-the-server-knows"
-OUT_OF_RANGE = ["99999999999999999999", "-99999999999999999999", "9999999999999", "253402300800"]
+OUT_OF_RANGE = [
+    "99999999999999999999",
+    "-99999999999999999999",
+    "9999999999999",
+    "253402300800",
+    "100000000000000000",
+    "-100000000000000000",
+    "9000000000000000000",
+]
 
 
 def _body(payload: str) -> str:
@@ -87,7 +95,7 @@ def _out_of_range_tokens():
             pytest.param(_legacy_token(f"v3,42,{ts}"), id=f"legacy-v3-{ts}"),
             pytest.param(_legacy_token(f"user42,{ts}"), id=f"legacy-two-part-{ts}"),
         ]
-    for iat in (-99999999999999999999, -(10**15)):
+    for iat in (-99999999999999999999, -(10**15), -(10**17), -9 * 10**18):
         token = pyjwt.encode({"sub": "user42", "access": "subscription", "iat": iat}, SECRET, algorithm="HS256")
         tokens.append(pytest.param(token, id=f"jwt-iat-{iat}"))
     return tokens
