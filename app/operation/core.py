@@ -18,10 +18,10 @@ from app.db.crud.core import (
 from app.db.crud.host import get_hosts
 from app.db.crud.user import get_users_by_ids
 from app.db.crud.wireguard import (
-    core_config_dict,
     ensure_wireguard_subnet_pools,
     get_wg_cores,
     reconcile_wireguard_subnets,
+    wg_core_interfaces,
     wg_core_subnets,
 )
 from app.fork.operation.core_extras import (
@@ -40,7 +40,6 @@ from app.models.core import (
     CoreSimple,
     CoreSimpleListQuery,
     CoresSimpleResponse,
-    CoreType,
     RemoveCoresResponse,
 )
 from app.models.reality_scan import RealityScanRequest, RealityScanResult
@@ -63,17 +62,33 @@ class CoreOperation(BaseOperation):
         db_hosts = await get_hosts(db=db)
         await host_manager.add_hosts(db, db_hosts)
 
-    async def _validate_wireguard_subnet(self, db: AsyncSession, config: dict, *, exclude_core_id: int | None) -> None:
+    async def _validate_wireguard_subnet(
+        self, db: AsyncSession, core: CoreCreate, *, exclude_core_id: int | None
+    ) -> None:
         """WG cores need at least one client subnet (v4 and/or v6). Overlapping subnets
         are rejected; identical CIDRs may be shared across cores (one allocation namespace)."""
-        subnets = wg_core_subnets(config)
-        if not subnets:
+        interfaces = wg_core_interfaces(core)
+        subnets = [subnet for config in interfaces for subnet in wg_core_subnets(config)]
+        if interfaces and not subnets:
             await self.raise_error(message="WireGuard core needs an IPv4 or IPv6 interface address", code=400, db=db)
+        previous_subnets = []
+        for config in interfaces:
+            for subnet in wg_core_subnets(config):
+                for other_subnet in previous_subnets:
+                    if subnet != other_subnet and subnet.overlaps(other_subnet):
+                        await self.raise_error(
+                            message=f"WireGuard subnet {subnet} overlaps {other_subnet} in the same core",
+                            code=400,
+                            db=db,
+                        )
+            previous_subnets.extend(wg_core_subnets(config))
+        if not subnets:
+            return
         for other in await get_wg_cores(db):
             if other.id == exclude_core_id:
                 continue
             for subnet in subnets:
-                for other_subnet in wg_core_subnets(core_config_dict(other)):
+                for other_subnet in (net for config in wg_core_interfaces(other) for net in wg_core_subnets(config)):
                     if other_subnet == subnet:
                         continue
                     if subnet.overlaps(other_subnet):
@@ -110,8 +125,6 @@ class CoreOperation(BaseOperation):
         return RealityScanResult.model_validate(result)
 
     async def create_core(self, db: AsyncSession, new_core: CoreCreate, admin: AdminDetails) -> CoreResponse:
-        if new_core.type == CoreType.wg:
-            await self._validate_wireguard_subnet(db, new_core.config, exclude_core_id=None)
         apply_l2tp_core_config(new_core)
         try:
             await guard_singbox_user_accounting(db, new_core)
@@ -121,6 +134,10 @@ class CoreOperation(BaseOperation):
                 new_core.fallbacks_inbound_tags,
                 new_core.type,
             )
+        except Exception as e:
+            await self.raise_error(message=e, code=400, db=db)
+        await self._validate_wireguard_subnet(db, new_core, exclude_core_id=None)
+        try:
             db_core = await create_core_config(db, new_core)
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
@@ -131,7 +148,7 @@ class CoreOperation(BaseOperation):
         core = CoreResponse.model_validate(db_core)
         asyncio.create_task(notification.create_core(core, admin.username))
 
-        if new_core.type == CoreType.wg:
+        if wg_core_interfaces(new_core):
             await self._ensure_wireguard_pools(db)
         await self._refresh_hosts_from_db(db)
         await grant_entitled_secrets_for_core(self, db, db_core)
@@ -154,9 +171,7 @@ class CoreOperation(BaseOperation):
         self, db: AsyncSession, core_id: int, modified_core: CoreCreate, admin: AdminDetails
     ) -> CoreModification:
         db_core = await self.get_validated_core_config(db, core_id)
-        was_wg = db_core.type == CoreType.wg
-        if modified_core.type == CoreType.wg:
-            await self._validate_wireguard_subnet(db, modified_core.config, exclude_core_id=db_core.id)
+        was_wg = bool(wg_core_interfaces(db_core))
         apply_l2tp_core_config(modified_core)
         # What nodes run now, read before update_core replaces it.
         before = node_facing(await core_manager.get_core(db_core.id))
@@ -168,6 +183,10 @@ class CoreOperation(BaseOperation):
                 modified_core.fallbacks_inbound_tags,
                 modified_core.type,
             )
+        except Exception as e:
+            await self.raise_error(message=e, code=400, db=db)
+        await self._validate_wireguard_subnet(db, modified_core, exclude_core_id=db_core.id)
+        try:
             db_core = await modify_core_config(db, db_core, modified_core)
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
@@ -179,7 +198,7 @@ class CoreOperation(BaseOperation):
         core = CoreResponse.model_validate(db_core)
         asyncio.create_task(notification.modify_core(core, admin.username))
 
-        if was_wg or modified_core.type == CoreType.wg:
+        if was_wg or wg_core_interfaces(modified_core):
             await self._reconcile_wireguard(db)
         await self._refresh_hosts_from_db(db)
         await grant_entitled_secrets_for_core(self, db, db_core)
@@ -191,7 +210,7 @@ class CoreOperation(BaseOperation):
             return await self.raise_error(message="Cannot delete default core config", code=403)
 
         db_core = await self.get_validated_core_config(db, core_id)
-        was_wg = db_core.type == CoreType.wg
+        was_wg = bool(wg_core_interfaces(db_core))
 
         in_use = await cores_in_use_message(db, [db_core])
         if in_use:
@@ -234,7 +253,7 @@ class CoreOperation(BaseOperation):
 
         core_ids = [c.id for c in db_cores_list]
         core_names = [c.name for c in db_cores_list]
-        any_wg = any(c.type == CoreType.wg for c in db_cores_list)
+        any_wg = any(wg_core_interfaces(c) for c in db_cores_list)
 
         # Batch delete using CRUD function
         await remove_cores(db, core_ids)
