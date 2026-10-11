@@ -72,7 +72,8 @@ SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
 PORT_QUEUE = "port-queue"
 DECISION_MAX_DAYS = 30
-SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s*(.*?)\s*#*\s*$")
+SYNC_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
+BARE_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})([^#\s].*?)[ \t]*#*[ \t]*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
 SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
@@ -920,8 +921,14 @@ def parse_sync_ledger(path, today=None):
     section_level = 0
     for lineno, line in enumerate(text.splitlines(), 1):
         heading = SYNC_HEADING_RE.match(line)
+        bare = None if heading else BARE_HEADING_RE.match(line)
+        if bare and bare.group(2).strip().lower() in SYNC_SECTIONS:
+            errors.append(
+                f"{path}:{lineno}: `{line.strip()}` is not a Markdown heading; put a space after the hashes"
+            )
+            heading = bare
         if heading:
-            name = heading.group(2).strip().lower()
+            name = (heading.group(2) or "").strip().lower()
             level = len(heading.group(1))
             if name in SYNC_SECTIONS:
                 section = SYNC_SECTIONS[name]

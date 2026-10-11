@@ -1257,3 +1257,52 @@ def test_a_pick_whose_lines_upstream_changed_later_still_counts(tmp_path, sync_p
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert tally(result.stdout, "ported via cherry-pick -x trailer") == 2
+
+
+@pytest.mark.parametrize("line", ["#waived", "##ported by design", "  #Waived  #"])
+def test_a_section_name_without_a_space_after_its_hashes_fails_the_gate(tmp_path, line):
+    path, shas = security_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["plain"])
+    ledger_text = (
+        "## Port queue\n\n"
+        f"- `{shas['auth']}` token invalidation security: no until: 2026-10-13\n"
+        f"{line}\n"
+        f"- `{shas['plain']}` bump the library security: yes until: 2026-10-13\n"
+    )
+    result = standalone_gate(path, ledger_text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{line.strip()}` is not a Markdown heading; put a space after the hashes" in result.stdout
+
+
+def test_a_hash_line_that_names_no_section_is_text_inside_the_port_queue(tmp_path):
+    path, shas = security_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["plain"])
+    ledger_text = (
+        "## Port queue\n\n"
+        f"- `{shas['auth']}` token invalidation security: no until: 2026-10-13\n"
+        "#Waived: moved from the queue\n"
+        f"- `{shas['plain']}` bump the library security: yes until: 2026-10-13\n"
+    )
+    result = standalone_gate(path, ledger_text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain'][:12]}` is classified security: yes; a security port gets no grace" in result.stdout
+    assert shas["plain"][:12] in unported_block(result.stdout)
+
+
+def test_a_wrapped_line_that_starts_with_an_issue_number_keeps_the_section_open(tmp_path):
+    path, shas = security_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["feature"])
+    queue = (
+        f"- `{shas['auth']}` token invalidation security: no until: 2026-10-13\n"
+        f"- `{shas['plain']}` bump the library security: no until: 2026-10-13\n"
+        f"- `{shas['feature']}` add a header option security: no until: 2026-10-13\n"
+    )
+    control = standalone_gate(path, "## Port queue\n\n" + queue)
+    assert control.returncode == 0, control.stdout + control.stderr
+    wrapped = standalone_gate(
+        path,
+        "## Port queue\n\nIntro text that wraps onto a line beginning with an issue number, like\n"
+        "#879 and #617, which is prose and not a heading.\n\n" + queue,
+    )
+    assert wrapped.returncode == 0, wrapped.stdout + wrapped.stderr
+    assert tally(wrapped.stdout, OWED_LABEL) == tally(control.stdout, OWED_LABEL) >= 3
