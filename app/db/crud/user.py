@@ -657,7 +657,7 @@ def _cleanup_target_user_conditions(
     expired_after: datetime | None = None,
     expired_before: datetime | None = None,
     admin_id: int | None = None,
-    target: Literal["expired", "limited", "on_hold", "disabled"] = "expired",
+    target: Literal["expired", "limited", "on_hold", "disabled", "inactive"] = "expired",
     allowed_group_ids: list[int] | None = None,
 ):
     if target == "expired":
@@ -667,6 +667,15 @@ def _cleanup_target_user_conditions(
             conditions.append(User.expire >= to_utc_for_filter(expired_after))
         if expired_before:
             conditions.append(User.expire <= to_utc_for_filter(expired_before))
+    elif target == "inactive":
+        # Fall back to account creation for users that have never connected,
+        # so newly created accounts are not treated as long-term inactive.
+        last_activity = func.coalesce(User.online_at, User.created_at)
+        conditions = []
+        if expired_after:
+            conditions.append(last_activity >= to_utc_for_filter(expired_after))
+        if expired_before:
+            conditions.append(last_activity <= to_utc_for_filter(expired_before))
     else:
         # For limited / on_hold / disabled: date range filters apply to
         # last_status_change (i.e. when the user entered that status).
@@ -694,7 +703,7 @@ async def remove_expired_users(
     expired_after: datetime | None = None,
     expired_before: datetime | None = None,
     admin_id: int | None = None,
-    target: Literal["expired", "limited", "on_hold", "disabled"] = "expired",
+    target: Literal["expired", "limited", "on_hold", "disabled", "inactive"] = "expired",
     dry_run: bool = False,
     *,
     on_chunk_deleted: UsersDeletedCallback | None = None,
