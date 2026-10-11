@@ -587,7 +587,7 @@ def mixed_origin_repo(tmp_path):
     path = tmp_path / "mixed"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
         git(path, "config", key, value)
     commit(path, "root", {"r.py": lines("r")})
     git(path, "tag", "v1.0")
@@ -681,7 +681,7 @@ def standalone_repo(tmp_path, name):
     path = tmp_path / name
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
         git(path, "config", key, value)
     commit(path, "root", {"r.py": lines("r"), "s.py": lines("s")})
     git(path, "tag", "v1.0")
