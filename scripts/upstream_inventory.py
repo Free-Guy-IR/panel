@@ -1248,7 +1248,7 @@ def parity_gate(
         for sha, name in unrecorded:
             print(f"  upstream head {name} at {sha[:12]} is not recorded in {snapshot_path}")
         if unrecorded:
-            print(f"  record the reviewed heads with --write-refs-snapshot {snapshot_path}")
+            print(f"  record the reviewed heads by re-running with --write-refs-snapshot, which writes {snapshot_path}")
     notes = stale + duplicates + copy_notes + sync_notes
     if notes:
         print()

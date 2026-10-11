@@ -979,6 +979,7 @@ def test_an_upstream_head_missing_from_the_snapshot_fails_the_gate(tmp_path):
     result = _gate(path)
     assert result.returncode == 1
     assert f"upstream head upstream/feature at {feature[:12]} is not recorded" in result.stdout
+    assert "record the reviewed heads by re-running with --write-refs-snapshot, which writes .upstream-refs" in result.stdout
     recorded = _gate(path, "--write-refs-snapshot")
     assert recorded.returncode == 0, recorded.stdout + recorded.stderr
     assert f"{feature} upstream/feature" in (path / ".upstream-refs").read_text()
