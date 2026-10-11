@@ -8,25 +8,34 @@ reason = "tracked by this repository's upstream parity gate against UPSTREAM_SYN
 
 [[repo]]
 name = "node"
+mode = "ledger"
+fork = "Free-Guy-IR/node"
+upstream = "PasarGuard/node"
+ported_ref = "main"
+ledger = "upstream-forks/node.md"
+snapshot = "upstream-forks/node.refs"
+reason = "every PasarGuard/node branch and tag is tracked here commit by commit against the published fork main, independent of the node repository's own drift check"
+
+[[repo]]
+name = "node-drift"
 mode = "workflow"
 fork = "Free-Guy-IR/node"
 upstream = "PasarGuard/node"
 tracker_branch = "main"
 tracker_path = ".github/workflows/upstream-drift.yml"
-pending_until = "2026-10-02"
-pending_reason = "the drift check (scripts/upstream_drift.sh with .github/upstream-waivers.txt, node commit ed5fd64) is on the node release/v0.6.21 and v0.6.22 branches and reaches main with the 0.6.21 release"
-reason = "the node repository tracks every PasarGuard/node branch, tag, release and advisory itself, plus Xray-core, sing-box, sing-quic and mtg"
+pending_until = "2026-10-20"
+pending_reason = "the drift check (scripts/upstream_drift.sh with .github/upstream-waivers.txt, first added in node commit ed5fd64) is only on unpublished node branches (release/v0.6.21 and release/v0.6.21-acct-drift6) and reaches main with the 0.6.21 release; until then Xray-core, sing-box and sing-quic releases and advisories are watched only by that unpublished check"
+reason = "the node drift check watches Xray-core, sing-box, sing-quic and mtg releases, security commits and advisories against the pins in the node go.mod and Dockerfile"
 
 [[repo]]
 name = "scripts"
-mode = "workflow"
+mode = "ledger"
 fork = "Free-Guy-IR/scripts"
 upstream = "PasarGuard/scripts"
-tracker_branch = "main"
-tracker_path = ".github/workflows/upstream-parity.yml"
-pending_until = "2026-10-02"
-pending_reason = "the parity check (tools/check-upstream-parity.sh with parity/ledger.tsv) is on owner S1's branch fix/pr32-pgbouncer and reaches main with that merge"
-reason = "the scripts repository tracks every PasarGuard/scripts branch, tag and pull request itself"
+ported_ref = "main"
+ledger = "upstream-forks/scripts.md"
+snapshot = "upstream-forks/scripts.refs"
+reason = "every PasarGuard/scripts branch and tag is tracked here commit by commit against the published fork main"
 
 [[repo]]
 name = "node_bridge_py"
@@ -70,19 +79,22 @@ reason = "no tracker of its own"
 
 [[repo]]
 name = "mtg"
-mode = "covered-by"
+mode = "ledger"
 fork = "Free-Guy-IR/mtg"
 upstream = "9seconds/mtg"
-covered_by = "node"
-reason = "the node drift check watches mtg releases, advisories and security commits against the pin in the node go.mod"
+ported_ref = "master"
+ledger = "upstream-forks/mtg.md"
+snapshot = "upstream-forks/mtg.refs"
+release_refs = ["refs/remotes/upstream/master", "refs/upstream-tags/*"]
+reason = "every 9seconds/mtg branch and tag is tracked here commit by commit against fork master, the commit the node go.mod pins; upstream releases from master"
 
 [[repo]]
 name = "sing-box"
 mode = "covered-by"
 fork = "Free-Guy-IR/sing-box"
 upstream = "SagerNet/sing-box"
-covered_by = "node"
-reason = "the node drift check watches sing-box and sing-quic releases, advisories and security commits against the pin in the node Dockerfile"
+covered_by = "node-drift"
+reason = "the fork is a patch branch (v1.13.14-hotreload) on a sing-box release, not a mirror of upstream development; the node drift check watches sing-box and sing-quic releases, advisories and security commits against the pin in the node Dockerfile"
 
 [[repo]]
 name = "singbox-config-kit"

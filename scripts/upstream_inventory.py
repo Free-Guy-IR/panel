@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -10,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
@@ -68,11 +69,14 @@ CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
 UPSTREAM_TRAILER_RE = re.compile(r"^Upstream:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
 UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
-SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived"}
-SYNC_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
+SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
+PORT_QUEUE = "port-queue"
+DECISION_MAX_DAYS = 30
+SYNC_HEADING_RE = re.compile(r"^(#{1,6})\s*(.*?)\s*#*\s*$")
 SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
 SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
+REASON_WORD_RE = re.compile(r"[^\W_]")
 REASON_STRIP = " \t-:\u2013\u2014"
 GLOB_CHARS = frozenset("*?[")
 DWIM_PREFIXES = ("", "refs/", "refs/tags/", "refs/heads/", "refs/remotes/")
@@ -81,11 +85,23 @@ COVERAGE_LABELS = {
     "trailer": "ported via cherry-pick -x trailer",
     "ported-by-design": "ported by design (ledger)",
     "waived": "waived (ledger)",
+    PORT_QUEUE: "owed: in the port queue until its deadline",
     "patch-id": "patch-id equivalent of a covered commit",
     "in-base": "patch-id equivalent already in the base",
     "empty": "changes no file",
 }
-CONDITIONAL_TAG_RE = re.compile(r"^(?:UNMERGED-WIP|pending)\b", re.IGNORECASE)
+CONDITIONAL_TAG_RE = re.compile(r"^[\W_]*(?:UNMERGED[\W_]*WIP|pending)\b", re.IGNORECASE)
+SECURITY_FLAG_RE = re.compile(r"\bsecurity:\s*(yes|no)\b", re.IGNORECASE)
+SECURITY_MARK_RE = re.compile(r"\(security\)|\[security\]", re.IGNORECASE)
+SECURITY_SUBJECT_RE = re.compile(
+    r"\b(?:security|cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3}|vulnerab\w*|exploit\w*|disclosur\w*"
+    r"|auth(?:n|z|entication|enticate|orization|orize|orized)?|permissions?|privileges?|api[ _-]?keys?"
+    r"|jwt|tokens?|sessions?|passkeys?|webauthn|credentials?|passwords?"
+    r"|inject\w*|xss|csrf|ssrf|escap\w*|sanitiz\w*|traversal|bypass\w*|spoof\w*|hijack\w*|forger\w*|rce)\b",
+    re.IGNORECASE,
+)
+UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
@@ -590,10 +606,15 @@ def upstream_commits(base, tracked, require_shared_history=True):
     active = []
     skipped = []
     heads = []
+    listed = []
     for ref, name in tracked:
         tip = resolve_ref(f"{ref}^{{commit}}")
         shas = git("rev-list", "--no-merges", tip, f"^{base}").split()
-        if shas and require_shared_history and not shares_history(base, tip):
+        related = not shas or not require_shared_history or shares_history(base, tip)
+        listed.append((ref, name, tip, shas, related))
+    upstream_related = any(related and shas for _, _, _, shas, related in listed)
+    for ref, name, tip, shas, related in listed:
+        if not related and not (upstream_related and ref.startswith(UPSTREAM_NAMESPACES)):
             skipped.append(name)
             continue
         heads.append((tip, name))
@@ -680,6 +701,36 @@ def commit_metadata(base, tips):
     return rows
 
 
+def merges_with_content(base, tips):
+    found = {}
+    for name, tip in sorted(tips.items()):
+        for sha in git("rev-list", "--merges", tip, f"^{base}").split():
+            found.setdefault(sha, []).append(name)
+    return {
+        sha: names
+        for sha, names in found.items()
+        if git("show", "--remerge-diff", "--format=", "--no-color", "--no-ext-diff", sha).strip()
+    }
+
+
+def merge_metadata(shas):
+    if not shas:
+        return []
+    out = git(
+        "log",
+        "--no-walk=unsorted",
+        "--stdin",
+        "--date=short",
+        "--format=%H%x00%T%x00%P%x00%ad%x00%s",
+        stdin="\n".join(shas) + "\n",
+    )
+    rows = []
+    for line in out.splitlines():
+        sha, tree, parents, day, subject = line.split("\0", 4)
+        rows.append({"sha": sha, "tree": tree, "parent": parents.split()[0], "date": day, "subject": subject})
+    return rows
+
+
 def empty_commits(rows):
     parents = sorted({row["parent"] for row in rows if row["parent"]})
     if not parents:
@@ -693,7 +744,7 @@ def commits_on_refs(base, refs):
     names = {}
     for ref, name in refs:
         tip = resolve_ref(f"{ref}^{{commit}}")
-        for sha in git("rev-list", "--no-merges", tip, f"^{base}").split():
+        for sha in git("rev-list", tip, f"^{base}").split():
             names.setdefault(sha, []).append(name)
     return names
 
@@ -747,19 +798,27 @@ def reverted_commits(head):
     return set(REVERT_RE.findall(git("log", "--format=%B", head)))
 
 
-def added_lines_by_file(sha):
-    files = {}
-    current = None
+def changed_lines_by_file(sha):
+    added = {}
+    removed = {}
+    old = new = None
     for line in git("show", "--format=", "--no-color", "--no-ext-diff", "-U0", "-M", sha).splitlines():
+        if line.startswith("--- "):
+            target = line[4:]
+            old = None if target == "/dev/null" else target.removeprefix("a/")
+            continue
         if line.startswith("+++ "):
             target = line[4:]
-            current = None if target == "/dev/null" else target.removeprefix("b/")
+            new = None if target == "/dev/null" else target.removeprefix("b/")
             continue
-        if current and line.startswith("+"):
-            text = line[1:].strip()
-            if text:
-                files.setdefault(current, set()).add(text)
-    return files
+        text = line[1:].strip()
+        if not text:
+            continue
+        if line.startswith("+") and new:
+            added.setdefault(new, set()).add(text)
+        elif line.startswith("-") and (new or old):
+            removed.setdefault(new or old, set()).add(text)
+    return added, removed
 
 
 def stripped_lines(ref, path):
@@ -770,15 +829,18 @@ def stripped_lines(ref, path):
 def missing_pick_lines(upstream_sha, reference, head):
     expected = 0
     missing = []
-    for path, added in sorted(added_lines_by_file(upstream_sha).items()):
+    added, removed = changed_lines_by_file(upstream_sha)
+    for path in sorted(set(added) | set(removed)):
         kept_upstream = stripped_lines(reference, path)
-        if kept_upstream is None:
-            continue
         present = stripped_lines(head, path) or set()
-        for text in sorted(added & kept_upstream):
+        for text in sorted(added.get(path, set()) & (kept_upstream or set())):
             expected += 1
             if text not in present:
                 missing.append((path, text))
+        for text in sorted(removed.get(path, set()) - (kept_upstream or set())):
+            expected += 1
+            if text in present:
+                missing.append((path, f"-{text}"))
     return expected, missing
 
 
@@ -805,7 +867,7 @@ def ineffective_picks(head, candidates, upstream, tips_for):
         if missing:
             path, text = missing[0]
             findings[sha] = (
-                f"{len(missing)} of {expected} upstream line(s) it adds are not in {head}, "
+                f"{len(missing)} of {expected} upstream line(s) it adds or removes are not reflected in {head}, "
                 f"for example in {path}: {text[:80]!r}"
             )
     return findings
@@ -824,12 +886,24 @@ def patch_ids(shas):
         "--format=commit %H",
         stdin="\n".join(shas) + "\n",
     )
-    out = git("patch-id", "--stable", stdin=log)
+    out = git("patch-id", "--verbatim", stdin=log)
     ids = {}
     for line in out.splitlines():
         patch_id, sha = line.split()
         ids[sha] = patch_id
     return ids
+
+
+def security_hint(reason, subject):
+    reason = SECURITY_FLAG_RE.sub("", reason)
+    if SECURITY_MARK_RE.search(reason):
+        return "its reason is marked (security)"
+    match = SECURITY_SUBJECT_RE.search(f"{subject}\n{reason}")
+    return f"it names {match.group(0)!r}" if match else None
+
+
+def workflow_command_escape(text):
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
 def parse_sync_ledger(path, today=None):
@@ -838,13 +912,22 @@ def parse_sync_ledger(path, today=None):
     except OSError as exc:
         sys.stderr.write(f"error: cannot read ledger {path}: {exc}\n")
         raise SystemExit(2)
+    text = HTML_COMMENT_RE.sub(lambda match: "\n" * match.group(0).count("\n"), text)
+    today = today or datetime.now(UTC).date()
     entries = []
     errors = []
     section = None
+    section_level = 0
     for lineno, line in enumerate(text.splitlines(), 1):
         heading = SYNC_HEADING_RE.match(line)
         if heading:
-            section = SYNC_SECTIONS.get(heading.group(1).strip().lower())
+            name = heading.group(2).strip().lower()
+            level = len(heading.group(1))
+            if name in SYNC_SECTIONS:
+                section = SYNC_SECTIONS[name]
+                section_level = level
+            elif section is None or level <= section_level:
+                section = None
             continue
         if section is None:
             continue
@@ -861,24 +944,58 @@ def parse_sync_ledger(path, today=None):
         if not SHA_TOKEN_RE.match(token):
             errors.append(f"{where}: `{entry.group(1)}` is not a commit sha of at least 9 hex characters")
             continue
-        if not reason:
+        if not REASON_WORD_RE.search(SECURITY_FLAG_RE.sub("", UNTIL_RE.sub("", reason))):
             errors.append(f"{where}: `{token}` has no reason")
             continue
+        dates = UNTIL_RE.findall(reason)
+        if len(dates) > 1:
+            errors.append(f"{where}: `{token}` names {len(dates)} until dates; keep exactly one")
+            continue
         until = UNTIL_RE.search(reason)
+        deadline = None
         if until:
             try:
                 deadline = date.fromisoformat(until.group(1))
             except ValueError:
                 errors.append(f"{where}: `{token}` has an invalid until date {until.group(1)}")
                 continue
-            if (today or datetime.now(UTC).date()) > deadline:
+            if today > deadline:
                 errors.append(
                     f"{where}: `{token}` was decided only until {deadline.isoformat()}; re-check it, then port it "
                     "or record a new decision"
                 )
                 continue
+            if (deadline - today).days > DECISION_MAX_DAYS:
+                errors.append(
+                    f"{where}: `{token}` is decided until {deadline.isoformat()}, more than {DECISION_MAX_DAYS} "
+                    "days ahead; a dated decision needs a nearer deadline"
+                )
+                continue
+        security = None
+        if section == PORT_QUEUE:
+            if deadline is None:
+                errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
+                continue
+            flags = SECURITY_FLAG_RE.findall(reason)
+            if len(flags) != 1:
+                errors.append(
+                    f"{where}: `{token}` in the port queue needs exactly one security: yes|no classification "
+                    f"with a reason (found {len(flags)})"
+                )
+                continue
+            security = flags[0].lower() == "yes"
         conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
-        entries.append({"token": token, "kind": section, "reason": reason, "where": where, "conditional": conditional})
+        entries.append(
+            {
+                "token": token,
+                "kind": section,
+                "reason": reason,
+                "where": where,
+                "conditional": conditional,
+                "deadline": deadline,
+                "security": security,
+            }
+        )
     return entries, errors
 
 
@@ -904,7 +1021,16 @@ def resolve_sync_entries(entries, in_range):
                 continue
             sha = matches[0]
         if sha in resolved:
-            duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {resolved[sha]['where']}")
+            earlier = resolved[sha]
+            kinds = {earlier["kind"], entry["kind"]}
+            if kinds == {PORT_QUEUE, "ported-by-design"}:
+                queued = earlier if earlier["kind"] == PORT_QUEUE else entry
+                resolved[sha] = earlier if earlier["kind"] == "ported-by-design" else entry
+                duplicates.append(f"{queued['where']}: `{sha[:12]}` is ported by design now; delete it from the port queue")
+            elif earlier["kind"] != entry["kind"] or earlier["conditional"] != entry["conditional"]:
+                errors.append(f"{entry['where']}: {sha[:12]} is also decided differently at {earlier['where']}; keep one")
+            else:
+                duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {earlier['where']}")
             continue
         resolved[sha] = entry
     return resolved, errors, stale, duplicates
@@ -951,6 +1077,16 @@ def parity_gate(
             "pass --unrelated-history when the fork does not share history with upstream\n"
         )
         raise SystemExit(2)
+    merge_tips = {name: tip for tip, name in heads}
+    merge_tips.update({name: tip for name, tip, _ in active})
+    if snapshot_path:
+        live = {sha for sha, _ in heads}
+        merge_tips.update(
+            {f"{name}@{sha[:12]} (snapshot)": sha for sha, name in pairs if sha not in live and commit_exists(sha)}
+        )
+    content_merges = merges_with_content(base, merge_tips)
+    for sha, names in content_merges.items():
+        containing.setdefault(sha, []).extend(names)
     in_range = set(containing)
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
@@ -973,7 +1109,7 @@ def parity_gate(
     tip_by_name.update({name: sha for sha, name in heads})
     ineffective = ineffective_picks(
         head,
-        in_range & trailer_shas(head),
+        (in_range & trailer_shas(head)) - set(content_merges),
         upstream,
         lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
     )
@@ -982,7 +1118,18 @@ def parity_gate(
         coverage[sha] = "trailer"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
+        if entry["kind"] == PORT_QUEUE and coverage[sha] == "trailer":
+            copy_notes.append(f"{entry['where']}: `{sha[:12]}` is ported now; delete it from the port queue")
     ids = patch_ids(sorted(in_range))
+    ported_ids = {ids[sha] for sha, kind in coverage.items() if kind == "trailer" and sha in ids}
+    for sha, entry in resolved.items():
+        if coverage[sha] == PORT_QUEUE and ids.get(sha) in ported_ids:
+            coverage[sha] = "patch-id"
+            copy_notes.append(
+                f"{entry['where']}: `{sha[:12]}` is ported now as a patch-identical copy; delete it from the port queue"
+            )
+    deadlines = {sha: entry["deadline"] for sha, entry in resolved.items() if coverage[sha] == PORT_QUEUE}
+    queue_origin = {}
     sources = {}
     for sha in coverage:
         if sha in ids:
@@ -991,22 +1138,47 @@ def parity_gate(
         origin = sources.get(ids.get(sha), [])
         if not origin:
             continue
-        if sha in on_release and all(s in conditional for s in origin):
+        queued = [s for s in origin if coverage[s] == PORT_QUEUE]
+        if any(coverage[s] != PORT_QUEUE and s not in conditional for s in origin):
+            coverage[sha] = "patch-id"
+        elif queued:
+            coverage[sha] = PORT_QUEUE
+            deadlines[sha] = min(deadlines[s] for s in queued)
+            queue_origin[sha] = queued[0]
+        elif sha in on_release:
             copy_notes.append(
                 f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
                 "which is waived only while unmerged, so the copy needs its own decision"
             )
-            continue
-        coverage[sha] = "patch-id"
+        else:
+            coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
         coverage[sha] = "in-base"
 
     sync_errors, sync_notes = sync_point_findings(upstream, tracked, release_refs) if upstream else ([], [])
     ledger_errors += sync_errors
 
-    rows = commit_metadata(base, [tip for _, tip, _ in active])
-    for sha in empty_commits([row for row in rows if row["sha"] not in coverage]):
+    rows = commit_metadata(base, [tip for _, tip, _ in active]) + merge_metadata(sorted(content_merges))
+    for sha in empty_commits([row for row in rows if row["sha"] not in coverage and row["sha"] not in content_merges]):
         coverage[sha] = "empty"
+    for row in rows:
+        sha = row["sha"]
+        if coverage.get(sha) != PORT_QUEUE:
+            continue
+        entry = resolved[queue_origin.get(sha, sha)]
+        if entry["security"]:
+            del coverage[sha]
+            deadlines.pop(sha)
+            ledger_errors.append(
+                f"{entry['where']}: `{sha[:12]}` is classified security: yes; a security port gets no grace: "
+                "port it now or record a Waived or Ported by design decision"
+            )
+        else:
+            hint = security_hint(entry["reason"], row["subject"])
+            if hint:
+                copy_notes.append(
+                    f"{entry['where']}: `{sha[:12]}` is classified security: no but {hint}; re-review the classification"
+                )
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
 
@@ -1025,7 +1197,7 @@ def parity_gate(
         for label in snapshot_kept:
             print(f"    {label}")
     print()
-    print(f"Upstream commits past base: {len(in_range)}")
+    print(f"Upstream commits past base: {len(in_range)}, of them merge commits with their own changes: {len(content_merges)}")
     for kind, label in COVERAGE_LABELS.items():
         print(f"  {label:<42} {counts[kind]}")
     print(f"  {'unported':<42} {len(uncovered)}")
@@ -1040,6 +1212,20 @@ def parity_gate(
             print(f"  on {', '.join(refs)} ({len(group)}):")
             for row in group:
                 print(f"    {row['sha'][:12]}  {row['date']}  {row['subject']}")
+
+    owed = sorted(
+        (row for row in rows if coverage.get(row["sha"]) == PORT_QUEUE),
+        key=lambda row: (deadlines[row["sha"]], row["date"], row["sha"]),
+    )
+    if owed:
+        print()
+        print(f"Owed upstream ports ({len(owed)}), each covered only until its port-queue deadline:")
+        for row in owed:
+            print(f"    {row['sha'][:12]}  until {deadlines[row['sha']].isoformat()}  {row['date']}  {row['subject']}")
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            for row in owed:
+                message = f"{row['sha'][:12]} {row['subject']} is owed until {deadlines[row['sha']].isoformat()}"
+                print(f"::warning title=Owed upstream port::{workflow_command_escape(message)}")
 
     unlisted_picks = {sha: why for sha, why in ineffective.items() if sha not in coverage}
     if ineffective:
@@ -1081,6 +1267,13 @@ def parity_gate(
             reasons.append(f"{len(snapshot_errors) + len(unrecorded)} refs snapshot error(s)")
         print(f"Upstream parity gate FAILED: {'; '.join(reasons)}")
         return 1
+    if owed:
+        print(
+            f"Upstream parity gate OK, NOT at parity: all {len(in_range)} upstream commit(s) are ported or decided in "
+            f"{ledger_path}, but {len(owed)} are owed ports; the gate fails on "
+            f"{(deadlines[owed[0]['sha']] + timedelta(days=1)).isoformat()} unless they are ported or re-decided"
+        )
+        return 0
     print(f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}")
     return 0
 

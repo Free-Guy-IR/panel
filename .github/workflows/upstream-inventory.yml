@@ -3,9 +3,10 @@ name: Upstream Inventory
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ["**"]
   schedule:
     - cron: "24 6 * * *"
+    - cron: "24 18 * * *"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install checker dependencies
-        run: python -m pip install "packaging==26.3"
+        run: python -m pip install "packaging==26.3" "pytest==9.1.1"
 
       - name: Fetch upstream
         id: fetch
@@ -34,14 +35,26 @@ jobs:
           git remote add upstream https://github.com/PasarGuard/panel.git 2>/dev/null || \
             git remote set-url upstream https://github.com/PasarGuard/panel.git
           git for-each-ref --format='%(objectname) %(refname)' refs/tags > "$RUNNER_TEMP/fork-tags-before"
-          git fetch --no-tags upstream "+refs/heads/*:refs/remotes/upstream/*"
+          git fetch --no-tags --prune upstream "+refs/heads/*:refs/remotes/upstream/*"
           git fetch --no-tags upstream "+refs/tags/*:refs/upstream-tags/*"
           git for-each-ref --format='%(objectname) %(refname)' refs/tags > "$RUNNER_TEMP/fork-tags-after"
           diff "$RUNNER_TEMP/fork-tags-before" "$RUNNER_TEMP/fork-tags-after"
+          live_dev=$(git rev-parse --verify refs/remotes/upstream/dev)
+          live_main=$(git rev-parse --verify refs/remotes/upstream/main)
           baseline=$(cat .upstream-baseline)
           sync_point=$(cat .upstream-sync-point)
+          [[ "$baseline" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$sync_point" =~ ^[0-9a-f]{40}$ ]]
           echo "BASELINE=$baseline" >> "$GITHUB_ENV"
           echo "SYNC_POINT=$sync_point" >> "$GITHUB_ENV"
+          {
+            echo "## Live upstream heads checked"
+            echo
+            echo "- PasarGuard/panel dev: \`$live_dev\`"
+            echo "- PasarGuard/panel main: \`$live_main\`"
+            echo "- branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Inventory report
         run: |
@@ -127,3 +140,9 @@ jobs:
         run: |
           python scripts/upstream_inventory.py \
             --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" --check-npm
+
+      - name: Gate self-test
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest --noconftest -o filterwarnings= -p no:cacheprovider -q \
+            tests/test_upstream_inventory.py tests/test_upstream_forks.py

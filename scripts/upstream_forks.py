@@ -17,9 +17,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import upstream_inventory
 
 MODES = {"self", "ledger", "workflow", "covered-by", "original"}
+TRACKING_MODES = {"self", "ledger", "workflow"}
+UPSTREAM_REF_PREFIXES = ("refs/remotes/upstream/", "refs/upstream-tags/")
 VERSION_TAG_RE = re.compile(r"^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)$")
 ARCH_SUFFIX_RE = re.compile(r"-(amd64|arm64|armv7|arm)$")
 HTTP_TIMEOUT = 20
+PENDING_MAX_DAYS = 30
 
 
 def run_git(cwd, *args, check=True):
@@ -64,10 +67,24 @@ def load_config(path):
         for field in required:
             if not entry.get(field):
                 errors.append(f"repo {name} ({mode}) needs {field}")
+        release_refs = entry.get("release_refs")
+        if release_refs is not None and mode != "ledger":
+            errors.append(f"repo {name} sets release_refs, which only a ledger repo uses")
+        elif release_refs is not None and (
+            not isinstance(release_refs, list)
+            or not release_refs
+            or not all(isinstance(ref, str) and ref.startswith(UPSTREAM_REF_PREFIXES) for ref in release_refs)
+        ):
+            errors.append(
+                f"repo {name} release_refs must be a non-empty list of patterns under {' or '.join(UPSTREAM_REF_PREFIXES)}"
+            )
+    modes = {entry.get("name"): entry.get("mode") for entry in repos}
     for entry in repos:
         target = entry.get("covered_by")
         if target and target not in names:
             errors.append(f"repo {entry['name']} is covered by {target}, which is not in the map")
+        elif target and modes[target] not in TRACKING_MODES:
+            errors.append(f"repo {entry['name']} is covered by {target}, which tracks nothing itself ({modes[target]})")
     for image in images:
         if not image.get("name") or not image.get("upstream"):
             errors.append(f"image entry {image!r} needs a name and an upstream repo")
@@ -121,6 +138,14 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
     try:
         print(f"\n=== {name}: {entry['upstream']} tracked against {entry['fork']} {entry['ported_ref']}")
         sys.stdout.flush()
+        missing_release = [
+            ref
+            for ref in entry.get("release_refs") or ()
+            if not upstream_inventory.GLOB_CHARS & set(ref) and not upstream_inventory.ref_exists(ref)
+        ]
+        if missing_release:
+            print(f"  release_refs {', '.join(missing_release)} name no upstream ref")
+            return 1
         return upstream_inventory.parity_gate(
             base,
             base,
@@ -130,6 +155,7 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
             write_snapshot,
             today,
             require_shared_history=False,
+            release_patterns=tuple(entry.get("release_refs") or upstream_inventory.DEFAULT_RELEASE_REFS),
         )
     finally:
         os.chdir(previous)
@@ -142,6 +168,8 @@ def pending_verdict(entry, today, missing):
     deadline = date.fromisoformat(str(until))
     if today > deadline:
         return 1, f"FAILED: {missing}; the pending decision expired on {deadline.isoformat()}"
+    if (deadline - today).days > PENDING_MAX_DAYS:
+        return 1, f"FAILED: {missing}; pending_until {deadline.isoformat()} is more than {PENDING_MAX_DAYS} days ahead"
     return 0, f"PENDING until {deadline.isoformat()}: {missing}; {entry.get('pending_reason', '').strip()}"
 
 

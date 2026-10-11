@@ -278,6 +278,8 @@ def parity(repo, ledger_path, *extra):
         "v1.*",
         "--fail-on-unported",
         ledger_path,
+        "--today",
+        "2026-10-06",
         *extra,
     )
 
@@ -485,6 +487,457 @@ def test_a_dated_decision_covers_only_until_its_date(repo, tmp_path, today, code
     assert message in result.stdout
 
 
+OWED_LABEL = "owed: in the port queue until its deadline"
+
+
+def queue_ledger(tmp_path, repo, queue, waived=("f1", "f2")):
+    shas = repo["shas"]
+
+    def line(key, reason):
+        if "security:" not in reason:
+            reason = f"{reason} security: no"
+        return f"- `{shas[key]}` {reason}\n"
+
+    return ledger(
+        tmp_path,
+        "## Waived\n\n"
+        + "".join(f"- `{shas[key]}` the fork does not take feature x\n" for key in waived)
+        + "\n## Port queue\n\n"
+        + "".join(line(key, reason) for key, reason in queue),
+    )
+
+
+@pytest.mark.parametrize(
+    ("today", "code", "message"),
+    [
+        ("2026-10-06", 0, "Upstream parity gate OK, NOT at parity"),
+        ("2026-10-13", 0, "the gate fails on 2026-10-14 unless they are ported or re-decided"),
+        ("2026-10-14", 1, "`{u5}` was decided only until 2026-10-13"),
+    ],
+)
+def test_a_queued_port_is_owed_and_covers_only_until_its_deadline(repo, tmp_path, today, code, message):
+    shas = repo["shas"]
+    queue = [("u3", "security fix, port after B1 until: 2026-10-20"), ("u5", "bridge floor, port until: 2026-10-13")]
+    result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", today)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message.format(u5=shas["u5"]) in result.stdout
+    if code == 0:
+        assert tally(result.stdout, OWED_LABEL) == 3
+        assert tally(result.stdout, "patch-id equivalent of a covered commit") == 1
+        owed = result.stdout.split("Owed upstream ports (3)", 1)[1].split("\n\n", 1)[0]
+        assert f"{shas['u5'][:12]}  until 2026-10-13" in owed
+        assert f"{shas['u3'][:12]}  until 2026-10-20" in owed
+        assert f"{shas['g'][:12]}  until 2026-10-20" in owed
+        assert "Upstream parity gate OK: all" not in result.stdout
+    else:
+        assert shas["u5"][:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize(
+    ("reason", "message"),
+    [
+        ("port it later", "is in the port queue without an until: YYYY-MM-DD deadline"),
+        ("port it later until: 2026-11-06", "more than 30 days ahead; a dated decision needs a nearer deadline"),
+        ("port it later until: 2026-13-01", "has an invalid until date 2026-13-01"),
+    ],
+)
+def test_a_queued_port_needs_a_near_deadline(repo, tmp_path, reason, message):
+    queue = [("u3", reason), ("u5", "port until: 2026-10-13")]
+    result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+    assert repo["shas"]["u3"][:12] in unported_block(result.stdout)
+
+
+def test_a_section_name_counts_at_any_heading_level(repo, tmp_path):
+    shas = repo["shas"]
+    text = (
+        "## Waived\n\n"
+        f"- `{shas['f1']}` the fork does not take feature x\n\n"
+        "### Feature x follow-ups\n\n"
+        f"- `{shas['f2']}` still waived inside a subsection\n\n"
+        "### Port queue\n\n"
+        f"- `{shas['u3']}` port it security: no until: 2026-11-30\n"
+        f"- `{shas['u5']}` port it security: no until: 2026-10-13\n"
+    )
+    result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "more than 30 days ahead; a dated decision needs a nearer deadline" in result.stdout
+    assert tally(result.stdout, "waived (ledger)") == 2
+    assert tally(result.stdout, OWED_LABEL) == 1
+
+
+def test_an_unknown_heading_at_the_same_level_closes_a_section(repo, tmp_path):
+    shas = repo["shas"]
+    text = (
+        "### Waived\n\n"
+        f"- `{shas['f1']}` the fork does not take feature x\n\n"
+        "### Release notes\n\n"
+        f"- `{shas['f2']}` not a decision, only a note\n"
+        f"- `{shas['u3']}` not a decision either\n"
+        f"- `{shas['u5']}` nor this\n"
+    )
+    result = parity(repo, ledger(tmp_path, text, adapted=False), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert tally(result.stdout, "waived (ledger)") == 1
+    assert shas["f2"][:12] in unported_block(result.stdout)
+
+
+def mixed_origin_repo(tmp_path):
+    path = tmp_path / "mixed"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r")})
+    git(path, "tag", "v1.0")
+    git(path, "checkout", "-q", "-b", "feat-a", "v1.0")
+    shas = {"a": commit(path, "feature", {"x.py": lines("x", 3)})}
+    for name in ("feat-b", "rel"):
+        git(path, "checkout", "-q", "-b", name, "v1.0")
+        git(path, "cherry-pick", shas["a"])
+        git(path, "commit", "-q", "--amend", "-m", f"feature copy on {name}")
+        shas[name] = git(path, "rev-parse", "HEAD")
+    for name in ("feat-a", "feat-b", "rel"):
+        git(path, "update-ref", f"refs/remotes/upstream/{name}", git(path, "rev-parse", name))
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    (path / "UPSTREAM_SYNC.md").write_text(
+        "## Waived\n\n"
+        f"- `{shas['a']}` UNMERGED-WIP: only on upstream feat-a\n\n"
+        "## Port queue\n\n"
+        f"- `{shas['feat-b']}` port it security: no until: 2026-10-13\n"
+    )
+    return path, shas
+
+
+@pytest.mark.parametrize(("today", "code"), [("2026-10-06", 0), ("2026-10-14", 1)])
+def test_a_release_copy_of_a_waived_and_a_queued_commit_is_owed(tmp_path, today, code):
+    path, shas = mixed_origin_repo(tmp_path)
+    result = run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--release-ref",
+        "refs/remotes/upstream/rel",
+        "--today",
+        today,
+    )
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert tally(result.stdout, OWED_LABEL) == 2
+        assert f"{shas['rel'][:12]}  until 2026-10-13" in result.stdout
+        assert tally(result.stdout, "patch-id equivalent of a covered commit") == 0
+    else:
+        assert shas["rel"][:12] in unported_block(result.stdout)
+
+
+def test_every_dated_decision_needs_a_near_deadline(repo, tmp_path):
+    shas = repo["shas"]
+    text = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u3", "u5", "f2"))
+    text += f"- `{shas['f1']}` UNMERGED-WIP: only on upstream feat/x until: 2026-11-30\n"
+    result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is decided until 2026-11-30, more than 30 days ahead" in result.stdout
+    assert shas["f1"][:12] in unported_block(result.stdout)
+
+
+def test_owed_ports_are_annotated_on_github_actions(repo, tmp_path):
+    queue = [("u3", "port until: 2026-10-20"), ("u5", "port until: 2026-10-13")]
+    args = [
+        sys.executable,
+        str(SCRIPT),
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--track",
+        "v1.*",
+        "--fail-on-unported",
+        queue_ledger(tmp_path, repo, queue),
+        "--today",
+        "2026-10-06",
+    ]
+    plain = subprocess.run(args, cwd=repo["path"], env=ENV, capture_output=True, text=True, check=False)
+    actions = subprocess.run(
+        args, cwd=repo["path"], env=ENV | {"GITHUB_ACTIONS": "true"}, capture_output=True, text=True, check=False
+    )
+    assert plain.returncode == actions.returncode == 0, actions.stdout + actions.stderr
+    assert "::warning" not in plain.stdout
+    annotations = [line for line in actions.stdout.splitlines() if line.startswith("::warning title=Owed upstream port::")]
+    assert len(annotations) == 3
+    assert any(repo["shas"]["u5"][:12] in line and "until 2026-10-13" in line for line in annotations)
+
+
+def standalone_repo(tmp_path, name):
+    path = tmp_path / name
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.invalid"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r"), "s.py": lines("s")})
+    git(path, "tag", "v1.0")
+    return path
+
+
+def standalone_gate(path, ledger_text, *extra):
+    (path / "UPSTREAM_SYNC.md").write_text(ledger_text)
+    return run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--today",
+        "2026-10-06",
+        *extra,
+    )
+
+
+def test_a_merge_commit_with_its_own_changes_needs_a_decision(tmp_path):
+    path = standalone_repo(tmp_path, "merges")
+    side = commit(path, "side change", {"s.py": lines("s", overrides={2: "S2"})})
+    git(path, "checkout", "-q", "-b", "dev", "v1.0")
+    main_change = commit(path, "dev change", {"r.py": lines("r", overrides={2: "R2"})})
+    commit(path, "clean tree", {"s.py": lines("s", overrides={2: "S2"})})
+    clean = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "clean")
+    commit(path, "evil tree", {"s.py": lines("s", overrides={2: "S2", 9: "EVIL"})})
+    evil = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "evil")
+    git(path, "update-ref", "refs/remotes/upstream/dev", evil)
+    git(path, "update-ref", "refs/remotes/upstream/clean", clean)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    decided = f"## Waived\n\n- `{side}` reason\n- `{main_change}` reason\n"
+    red = standalone_gate(path, decided)
+    assert red.returncode == 1, red.stdout + red.stderr
+    assert "of them merge commits with their own changes: 1" in red.stdout
+    assert evil[:12] in unported_block(red.stdout)
+    assert clean[:12] not in red.stdout
+    green = standalone_gate(path, decided + f"- `{evil}` the fork resolves this merge its own way\n")
+    assert green.returncode == 0, green.stdout + green.stderr
+
+
+def test_a_pick_that_keeps_the_lines_upstream_removed_is_not_a_port(tmp_path):
+    path = standalone_repo(tmp_path, "removal")
+    removal = commit(path, "drop the legacy path", {"r.py": lines("r", 6)})
+    git(path, "update-ref", "refs/remotes/upstream/dev", removal)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "commit", "-q", "--allow-empty", "-m", f"port\n\n(cherry picked from commit {removal})")
+    kept = standalone_gate(path, "## Waived\n")
+    assert kept.returncode == 1, kept.stdout + kept.stderr
+    assert f"{removal[:12]}: 4 of 4 upstream line(s) it adds or removes are not reflected in main" in kept.stdout
+    commit(path, f"really port\n\n(cherry picked from commit {removal})", {"r.py": lines("r", 6)})
+    ported = standalone_gate(path, "## Waived\n")
+    assert ported.returncode == 0, ported.stdout + ported.stderr
+
+
+def test_an_orphan_upstream_branch_is_tracked_when_the_base_is_upstream(tmp_path):
+    path = standalone_repo(tmp_path, "orphan")
+    fix = commit(path, "upstream fix", {"r.py": lines("r", overrides={1: "R1"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    orphan = git(path, "commit-tree", git(path, "rev-parse", f"{fix}^{{tree}}"), "-m", "v6 rewrite")
+    git(path, "update-ref", "refs/remotes/upstream/v6", orphan)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    result = standalone_gate(path, f"## Waived\n\n- `{fix}` reason\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert orphan[:12] in unported_block(result.stdout)
+    assert "warning: skipped upstream/v6" not in result.stdout
+
+
+def test_whitespace_changes_are_not_patch_identical_copies(tmp_path):
+    path = standalone_repo(tmp_path, "whitespace")
+    guarded = commit(path, "guarded call", {"g.py": "if allowed:\n    run()\n"})
+    git(path, "update-ref", "refs/remotes/upstream/guarded", guarded)
+    git(path, "checkout", "-q", "-b", "dev", "v1.0")
+    unguarded = commit(path, "unguarded call", {"g.py": "if allowed:\nrun()\n"})
+    git(path, "update-ref", "refs/remotes/upstream/dev", unguarded)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    result = standalone_gate(path, f"## Waived\n\n- `{guarded}` the fork never calls run\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert unguarded[:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize("reason", ["UNMERGED WIP: only on feat/x", "**UNMERGED-WIP**: only on feat/x", "Pending: feat/x"])
+def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_path, reason):
+    result = parity(
+        repo,
+        covering_ledger(tmp_path, repo, reason),
+        "--track",
+        "refs/upstream-release/merged",
+        "--release-ref",
+        "refs/upstream-release/merged",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is waived only while unmerged" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("##Port queue\n\n- `{u3}` port it security: no\n", "is in the port queue without an until"),
+        (
+            "## Port queue\n\n- `{u3}` until 2026-10-08 or so; security: no until: 2026-10-10\n",
+            "names 2 until dates; keep exactly one",
+        ),
+        ("## Waived\n\n<!--\n- `{u3}` hidden decision\n-->\n", ""),
+        (
+            "## Waived\n\n- `{u3}` reason\n\n## Port queue\n\n- `{u3}` port it security: no until: 2026-10-10\n",
+            "is also decided differently",
+        ),
+        ("## Port queue\n\n- `{u3}` port it until: 2026-10-10\n", "needs exactly one security: yes|no classification"),
+        ("## Port queue\n\n- `{u3}` security: no until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` — security: yes. until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Waived\n\n- `{u3}` until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` (security: no) until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` security: no (until: 2026-10-10)\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` **security: no** until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` security: no! until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` security: no until: 2026-10-10 ?\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` security: no / until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` security: no\u00a0until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Waived\n\n- `{u3}` (until: 2026-10-10)\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` _security: no_ until: 2026-10-10\n", "needs exactly one security: yes|no classification"),
+        (
+            "## Port queue\n\n- `{u3}` port it security: yes security: no until: 2026-10-10\n",
+            "needs exactly one security: yes|no classification",
+        ),
+    ],
+)
+def test_ledger_forms_that_must_not_count_as_a_decision(repo, tmp_path, text, message):
+    shas = repo["shas"]
+    rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2")) + "\n"
+    result = parity(repo, ledger(tmp_path, rest + text.format(u3=shas["u3"])), "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message.format(u3=shas["u3"]) in result.stdout
+
+
+def security_repo(tmp_path):
+    path = standalone_repo(tmp_path, "security")
+    shas = {
+        "auth": commit(path, "fix(auth): invalidate tokens for replaced admin accounts (#938)", {"r.py": lines("r", overrides={1: "R1"})}),
+        "plain": commit(path, "chore(deps): bump a library", {"s.py": lines("s", overrides={1: "S1"})}),
+        "feature": commit(path, "feat(subscription): add a header option", {"r.py": lines("r", overrides={1: "R1", 2: "R2"})}),
+    }
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["feature"])
+    git(path, "checkout", "-q", "-b", "copy", "v1.0")
+    git(path, "cherry-pick", shas["auth"])
+    git(path, "commit", "-q", "--amend", "-m", "fix(auth): the same token fix on a release branch")
+    shas["copy"] = git(path, "rev-parse", "HEAD")
+    git(path, "update-ref", "refs/remotes/upstream/release", shas["copy"])
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    return path, shas
+
+
+def test_an_unclassified_queue_entry_fails_the_gate(tmp_path):
+    path, shas = security_repo(tmp_path)
+    queued = (
+        "## Port queue\n\n"
+        f"- `{shas['auth']}` MUST-PORT: token invalidation security: yes until: 2026-10-13\n"
+        f"- `{shas['plain']}` port the bump until: 2026-10-13\n"
+        f"- `{shas['feature']}` port the option security: no until: 2026-10-13\n"
+    )
+    red = standalone_gate(path, queued)
+    assert red.returncode == 1, red.stdout + red.stderr
+    assert f"`{shas['plain']}` in the port queue needs exactly one security: yes|no classification" in red.stdout
+    assert shas["plain"][:12] in unported_block(red.stdout)
+
+
+def test_a_security_yes_entry_gets_no_grace_even_with_an_innocuous_subject(tmp_path):
+    path, shas = security_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["plain"])
+    queued = (
+        "## Port queue\n\n"
+        f"- `{shas['plain']}` port the bump; it ships an OpenSSL security release security: yes until: 2026-10-13\n"
+    )
+    red = standalone_gate(path, queued)
+    assert red.returncode == 1, red.stdout + red.stderr
+    assert f"`{shas['plain'][:12]}` is classified security: yes; a security port gets no grace" in red.stdout
+    assert shas["plain"][:12] in unported_block(red.stdout)
+
+
+def test_a_keyword_only_non_security_commit_keeps_grace_but_is_flagged(tmp_path):
+    path = standalone_repo(tmp_path, "session-tab")
+    ui = commit(path, "feat(ui): remember the last open session tab", {"r.py": lines("r", overrides={1: "R1"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", ui)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    green = standalone_gate(path, f"## Port queue\n\n- `{ui}` ships a UI tab, not security security: no until: 2026-10-13\n")
+    assert green.returncode == 0, green.stdout + green.stderr
+    assert tally(green.stdout, OWED_LABEL) == 1
+    assert f"`{ui[:12]}` is classified security: no but it names 'session'; re-review the classification" in green.stdout
+    assert "is classified security: yes" not in green.stdout
+
+
+def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
+    path, shas = security_repo(tmp_path)
+    queue = (
+        "## Port queue\n\n"
+        f"- `{shas['plain']}` port the bump security: no until: 2026-10-13\n"
+        f"- `{shas['feature']}` port it security: no until: 2026-10-13\n"
+    )
+    waived = standalone_gate(path, f"## Waived\n\n- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code\n\n" + queue)
+    assert waived.returncode == 0, waived.stdout + waived.stderr
+    assert tally(waived.stdout, OWED_LABEL) == 2
+    git(path, "cherry-pick", "-x", shas["auth"])
+    ported = standalone_gate(path, queue + f"- `{shas['auth']}` MUST-PORT: token invalidation security: yes until: 2026-10-13\n")
+    assert ported.returncode == 0, ported.stdout + ported.stderr
+    assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in ported.stdout
+
+
+@pytest.mark.parametrize("queue_first", [True, False])
+def test_a_port_queue_line_next_to_a_ported_by_design_line_is_stale(repo, tmp_path, queue_first):
+    shas = repo["shas"]
+    queue = f"## Port queue\n\n- `{shas['u3']}` port it security: no until: 2026-10-13\n\n"
+    design = f"## Ported by design\n\n- `{shas['u3']}` adapted by hand in the fork\n\n"
+    rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("u5", "f1", "f2")) + "\n"
+    text = rest + (queue + design if queue_first else design + queue)
+    result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"`{shas['u3'][:12]}` is ported by design now; delete it from the port queue" in result.stdout
+    assert tally(result.stdout, OWED_LABEL) == 0
+
+
+def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
+    queue = [(key, "port until: 2026-10-13") for key in ("u1", "dup", "u3", "u5")]
+    result = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"`{repo['shas']['u1'][:12]}` is ported now; delete it from the port queue" in result.stdout
+    assert f"`{repo['shas']['dup'][:12]}` is ported now as a patch-identical copy; delete it" in result.stdout
+    assert tally(result.stdout, "patch-id equivalent of a covered commit") == 1
+    assert tally(result.stdout, OWED_LABEL) == 3
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
+def test_removing_one_decision_turns_the_gate_red(repo, tmp_path):
+    shas = repo["shas"]
+    queue = [("u3", "port until: 2026-10-13"), ("u5", "port until: 2026-10-13")]
+    green = parity(repo, queue_ledger(tmp_path, repo, queue), "--today", "2026-10-06")
+    assert green.returncode == 0, green.stdout + green.stderr
+    for dropped_queue, dropped_waiver in ((queue[:1], ("f1", "f2")), (queue, ("f1",))):
+        red = parity(repo, queue_ledger(tmp_path, repo, dropped_queue, dropped_waiver), "--today", "2026-10-06")
+        assert red.returncode == 1, red.stdout + red.stderr
+        block = unported_block(red.stdout)
+        missing = {shas[key] for key in ("u5", "f2") if shas[key][:12] in block}
+        assert len(missing) == 1
+        assert "Upstream parity gate FAILED: 1 upstream commit(s) neither ported nor listed" in red.stdout
+
+
 def _snapshot_repo(tmp_path):
     path = tmp_path / "snapshot-repo"
     path.mkdir()
@@ -575,7 +1028,7 @@ def covering_ledger(tmp_path, repo, f1_reason="rewritten as fork code"):
 
 CONDITIONAL_REASONS = [
     "UNMERGED-WIP: only on upstream feat/x",
-    "pending: tracked feature branch upstream/feat/x, port it when it merges. until: 2099-01-01",
+    "pending: tracked feature branch upstream/feat/x, port it when it merges. until: 2026-10-25",
 ]
 
 
@@ -764,7 +1217,7 @@ def test_a_cherry_pick_the_fork_changed_needs_a_decision(repo, tmp_path):
     assert unlisted.returncode == 1
     block = unported_block(unlisted.stdout)
     assert {sha for sha in shas.values() if sha[:12] in block} == {shas["u2"], shas["u4"]}
-    assert f"{shas['u2'][:12]}: 1 of 2 upstream line(s) it adds are not in main" in unlisted.stdout
+    assert f"{shas['u2'][:12]}: 1 of 4 upstream line(s) it adds or removes are not reflected in main" in unlisted.stdout
     assert "needs a Ported by design or Waived entry" in unlisted.stdout
     listed = parity(repo, ledger(tmp_path, text))
     assert listed.returncode == 0, listed.stdout + listed.stderr
