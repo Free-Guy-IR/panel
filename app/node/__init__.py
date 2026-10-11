@@ -1,5 +1,6 @@
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any
 
 from aiorwlock import RWLock
 from PasarGuardNodeBridge import Health, NodeType, PasarGuardNode
@@ -145,7 +146,8 @@ class NodeManager:
             # Another update may have completed while this call was waiting.
             async with self._lock.reader_lock:
                 existing = self._nodes.get(node.id)
-            if existing is not None and self._node_signatures.get(node.id) == signature:
+                existing_signature = self._node_signatures.get(node.id)
+            if existing is not None and existing_signature == signature:
                 existing.name = node.name
                 (await existing.get_extra())["usage_coefficient"] = node.usage_coefficient
                 return existing
@@ -159,8 +161,9 @@ class NodeManager:
                 self._nodes[node.id] = new_node
                 self._node_signatures[node.id] = signature
 
-            # Stop the old node after releasing the lock.
-            await self._shutdown_node(old_node)
+            # Metadata-only changes require a fresh bridge object, but must not stop a
+            # healthy remote backend. The reconnect path will attach the replacement.
+            await self._shutdown_node(old_node, remote_stop=existing_signature != signature)
 
         return new_node
 
@@ -181,6 +184,15 @@ class NodeManager:
     async def get_node(self, id: int) -> PasarGuardNode | None:
         async with self._lock.reader_lock:
             return self._nodes.get(id, None)
+
+    async def stop_node_if_current(self, node_id: int, node: PasarGuardNode) -> bool:
+        """Stop a node only while it is still the manager's current connection."""
+        lock = self._user_sync_locks.setdefault(node_id, asyncio.Lock())
+        async with lock:
+            if await self.get_node(node_id) is not node:
+                return False
+            await node.stop()
+            return True
 
     async def get_nodes(self) -> dict[int, PasarGuardNode]:
         async with self._lock.reader_lock:
@@ -260,6 +272,18 @@ class NodeManager:
 
         return list(users_to_sync)
 
+    async def _sync_user_batches(
+        self, node_id: int, node: PasarGuardNode, users: list[ProtoUser], *, batch_size: int | None = None
+    ) -> None:
+        batch_size = max(1, batch_size or nats_settings.node_update_users_batch_size)
+        failed_count = 0
+
+        for batch in self._chunk_users(users, batch_size):
+            failed_count += len(await self._sync_user_batch_to_node(node, batch))
+
+        if failed_count:
+            raise RuntimeError(f"failed to sync {failed_count}/{len(users)} users to node {node_id}")
+
     async def _sync_users_to_node(self, node_id: int, node: PasarGuardNode | None, users: list[ProtoUser]):
         task = self._track_user_sync(node_id)
         try:
@@ -275,6 +299,51 @@ class NodeManager:
             await current_node.update_users(users)
         finally:
             self._untrack_user_sync(node_id, task)
+
+    async def _run_preemptible_sync(
+        self, node_id: int, sync: Coroutine[Any, Any, PasarGuardNode | None]
+    ) -> PasarGuardNode | None:
+        """Run a user sync in its own tracked task so lifecycle operations can preempt it.
+
+        A connection change or removal of the node cancels only that task, never the
+        caller (for example the admin's HTTP request); the caller gets
+        ``UserSyncPreemptedError`` instead. Cancelling the caller still cancels the sync.
+        """
+        task = asyncio.create_task(sync)
+        self._track_user_sync(node_id, task)
+        try:
+            return await task
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if task.cancelled() and (current is None or not current.cancelling()):
+                raise UserSyncPreemptedError(
+                    f"user sync to node {node_id} was cancelled by a connection change or removal of the node"
+                ) from None
+            raise
+        finally:
+            self._untrack_user_sync(node_id, task)
+
+    async def sync_users_batched(
+        self, node_id: int, node: PasarGuardNode, users: list[ProtoUser], *, batch_size: int | None = None
+    ) -> PasarGuardNode | None:
+        """Apply a large initial user set through bounded delta batches.
+
+        Holds the per-node lock for all batches, so a metadata-only edit waits for the
+        whole set; a connection change or removal preempts it like ``sync_full``.
+        """
+        return await self._run_preemptible_sync(
+            node_id, self._sync_users_batched(node_id, node, users, batch_size=batch_size)
+        )
+
+    async def _sync_users_batched(
+        self, node_id: int, node: PasarGuardNode, users: list[ProtoUser], *, batch_size: int | None
+    ) -> PasarGuardNode | None:
+        lock = self._user_sync_locks.setdefault(node_id, asyncio.Lock())
+        async with lock:
+            if await self.get_node(node_id) is not node:
+                return None
+            await self._sync_user_batches(node_id, node, users, batch_size=batch_size)
+        return node
 
     @staticmethod
     def _supports_shared_sync(node: PasarGuardNode) -> bool:
@@ -315,19 +384,7 @@ class NodeManager:
         the caller gets ``UserSyncPreemptedError`` instead. Cancelling the caller still
         cancels the sync.
         """
-        task = asyncio.create_task(self._sync_full(node_id, users, flush_pending=flush_pending))
-        self._track_user_sync(node_id, task)
-        try:
-            return await task
-        except asyncio.CancelledError:
-            current = asyncio.current_task()
-            if task.cancelled() and (current is None or not current.cancelling()):
-                raise UserSyncPreemptedError(
-                    f"user sync to node {node_id} was cancelled by a connection change or removal of the node"
-                ) from None
-            raise
-        finally:
-            self._untrack_user_sync(node_id, task)
+        return await self._run_preemptible_sync(node_id, self._sync_full(node_id, users, flush_pending=flush_pending))
 
     async def _sync_full(
         self,

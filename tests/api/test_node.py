@@ -1057,7 +1057,7 @@ def test_realtime_node_stats(access_token, node_operator_mock):
 
 
 @pytest.mark.asyncio
-async def test_node_create_and_modify_schedule_background_reconnect(monkeypatch: pytest.MonkeyPatch):
+async def test_node_metadata_modify_schedules_background_reconnect_without_force(monkeypatch: pytest.MonkeyPatch):
     operator = NodeOperation(operator_type=OperatorType.API)
     scheduled: list[tuple[int, bool]] = []
 

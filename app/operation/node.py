@@ -114,6 +114,9 @@ CONNECT_CONCURRENCY = 10
 ATTACH_SYNC_ATTEMPTS = 3
 ATTACH_SYNC_BACKOFF = 1.0
 FENCE_WAIT_SECONDS = 60.0
+NODE_RESTART_FIELDS = frozenset({"core_config_id", "keep_alive"})
+WIREGUARD_BATCHED_START_THRESHOLD = 1000
+WIREGUARD_START_BATCH_SIZE = 100
 type CoreUsers = list | Callable[[], Awaitable[list]]
 
 logger = get_logger("node-operation")
@@ -467,6 +470,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         users = await resolve_users(users)
         check_fence(held)
         await drain_node_usage(pg_node, db_node.id)
+        # Starting WireGuard with thousands of peers makes the lifecycle RPC exceed its
+        # short timeout. Bring up the interface first, then apply peers through the
+        # node's bounded delta-sync path below.
+        batch_wireguard_users = (
+            backend_type == service.BackendType.WIREGUARD and len(users) >= WIREGUARD_BATCHED_START_THRESHOLD
+        )
 
         if stop_first:
             try:
@@ -484,7 +493,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         start_kwargs = {
             "config": core.to_str(),
             "backend_type": backend_type,
-            "users": users,
+            "users": [] if batch_wireguard_users else users,
             "keep_alive": db_node.keep_alive,
         }
         if core.type == CoreType.xray:
@@ -492,7 +501,52 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
         log = logger.info if force_start else logger.debug
         log(f'Starting "{db_node.name}" node')
-        return await pg_node.start(**start_kwargs)
+        if batch_wireguard_users:
+            try:
+                info = await pg_node.start(**start_kwargs)
+            except asyncio.CancelledError:
+                await NodeOperation._cleanup_cancelled_batched_start(db_node.id, pg_node)
+                raise
+        else:
+            info = await pg_node.start(**start_kwargs)
+        if batch_wireguard_users:
+            try:
+                synced_node = await node_manager.sync_users_batched(
+                    db_node.id, pg_node, users, batch_size=WIREGUARD_START_BATCH_SIZE
+                )
+                if synced_node is None:
+                    raise RuntimeError("node connection changed during initial user sync")
+                check_fence(held)
+            except asyncio.CancelledError:
+                await NodeOperation._cleanup_cancelled_batched_start(db_node.id, pg_node)
+                raise
+            except UserSyncPreemptedError as exc:
+                # A connection change or removal of the node won. That operation decides
+                # whether the old backend is stopped and reconnects the node itself, so this
+                # start neither stops it nor reports an error (-4 makes connect_node skip).
+                raise NodeAPIError(-4, str(exc)) from exc
+            except Exception as exc:
+                try:
+                    await node_manager.stop_node_if_current(db_node.id, pg_node)
+                except Exception:
+                    pass
+                raise NodeAPIError(500, f"Failed to sync users after starting WireGuard: {exc}") from exc
+        return info
+
+    @staticmethod
+    async def _cleanup_cancelled_batched_start(node_id: int, pg_node: PasarGuardNode) -> None:
+        cleanup_task = asyncio.create_task(node_manager.stop_node_if_current(node_id, pg_node))
+        try:
+            await asyncio.shield(cleanup_task)
+        except asyncio.CancelledError:
+            # Keep waiting if shutdown requests cancellation again while the
+            # backend is being returned to a consistent stopped state.
+            try:
+                await cleanup_task
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     @staticmethod
     async def connect_node(
@@ -803,6 +857,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             )
 
         node_name = modified_node.name or db_node.name
+
+        updates = modified_node.model_dump(exclude_none=True)
+        force_start = any(
+            field in updates and updates[field] != getattr(db_node, field) for field in NODE_RESTART_FIELDS
+        )
 
         try:
             db_node = await modify_node(db, db_node, modified_node)
