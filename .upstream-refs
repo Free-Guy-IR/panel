@@ -10,9 +10,11 @@ d3fdded8243273e754f18b993dc3efdcec36d24a upstream/dependabot/uv/idna-3.15
 f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
 16ce46d8ad6d8a9e15d84bf25aebd580b7813115 upstream/dev
 26047f6b06e35366460288459f87e389eb924986 upstream/dev
+3ef603b347cf992a8096de3791dc58e83929049f upstream/dev
 61150ba4eb22504ca67eaa87e0071c506acb4ab7 upstream/dev
 6372404b8ed406fc536b987d78bbb88c1dcc1189 upstream/dev
 7f670cf30f62e30a4ab671bf3549fcbe768db703 upstream/dev
+83fe90e07d33d97ebe1ec221799e1e268faa6b6a upstream/dev
 d94e157791ac1d098a48172e50a3689caaf2f46f upstream/dev
 da871f475782da54ec547da1945d2478a35171b0 upstream/dev
 ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
@@ -20,8 +22,11 @@ ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
 1fadd9f55177479211d07645661a28f9299dd178 upstream/feat/on_hold_timeout_action
 6ad9a84135869c4a26525b23e691ba71a658cb72 upstream/fix/api-key-copy-insecure-context
 e1376a5d10b5bcb7e1ced980b5fc4725429dbce6 upstream/fix/area-chart-theme
+f4c78791b1b29e89b2dd35b72913cd2e8d17c50b upstream/fix/core-editor-api-section-followup
 9866707bc439b6ac272d02a0158cc530548dcd9f upstream/fix/core-version-v-prefix
 60fd57ea7b5c25be83ea088822e969df77df5613 upstream/fix/finalmask-udphop-version-hint
+79959fbeafd07446a82188e3cb7fa69564dce9a4 upstream/fix/hwid-count-test-cleanup
+07792849ed097253898a0b26dcebbdbd893238f2 upstream/fix/hysteria-finalmask-quic-only
 926f4274f85432e4126e510e9e5faf3fd8080926 upstream/fix/maintenance-rpc-timeout
 f5eb2c1889c59bf7037fb2e636cf14656971a884 upstream/fix/rbac-permission-leaks
 159e5cb7b5a05aeeceec50930060a2ec5978cc18 upstream/fix/telegram-notify-escape
@@ -38,6 +43,7 @@ dc988bfb3e1d666563a59b335935905939ac2591 upstream/node-online-users-count
 fbd57c75fae02e6c5610bffc4ba3758e7810181f upstream/pref-boost
 632b2f52b1b5f473f872b5ca9fc676a639ed4ffb upstream/ruff-format
 51e57e1471078391693db7b2a8679c0de929134d upstream/telegram/tests
+51faba0f4ae2eb0ca311d2f92110e174bc5d08d6 upstream/telegram/tests
 bc040c7d1593644bb2073541fc773060c967879a v1.0.0
 a088826f06d88f32aa1bdb78d3f2e5cc8f641b12 v1.0.0-beta-1
 289661990cf84c17aa40ce854f6e28ffb520f897 v1.0.0-rc-1
