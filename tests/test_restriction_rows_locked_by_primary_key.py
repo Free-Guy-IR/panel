@@ -153,6 +153,52 @@ async def test_forgetting_old_violations_deletes_their_rows_by_primary_key_only(
     assert sorted(left) == user_ids[2:]
 
 
+@pytest.mark.asyncio
+async def test_forgetting_old_violations_keeps_a_row_that_turned_active_or_recent_after_it_was_selected(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, restriction_targets
+):
+    _, user_ids = await _restricted(recorder_db, 3)
+    async with recorder_db() as session:
+        await session.execute(
+            update(ConnectionRestriction)
+            .where(ConnectionRestriction.user_id.in_(user_ids))
+            .values(active=False, created_at=datetime.now(UTC) - timedelta(days=40))
+        )
+        await session.commit()
+    turned_active, turned_recent, still_stale = user_ids
+    real_read = connection_enforcement.read_committed_rows
+
+    async def read_then_change_two_rows(db, statement):
+        rows = await real_read(db, statement)
+        async with recorder_db() as other:
+            raw = await other.connection()
+            await raw.execute(
+                update(ConnectionRestriction.__table__)
+                .where(ConnectionRestriction.__table__.c.user_id == turned_active)
+                .values(active=True)
+            )
+            await raw.execute(
+                update(ConnectionRestriction.__table__)
+                .where(ConnectionRestriction.__table__.c.user_id == turned_recent)
+                .values(created_at=datetime.now(UTC))
+            )
+            await other.commit()
+        return rows
+
+    monkeypatch.setattr(connection_enforcement, "read_committed_rows", read_then_change_two_rows)
+    restriction_targets.clear()
+
+    async with recorder_db() as db:
+        forgotten = await connection_enforcement.forget_old(db, 30)
+        await db.commit()
+
+    async with recorder_db() as session:
+        left = (await session.execute(select(ConnectionRestriction.user_id))).scalars().all()
+    assert sorted(left) == sorted([turned_active, turned_recent]), (left, still_stale)
+    assert forgotten == 1
+    assert restriction_targets and all(columns == {"id"} for _kind, columns in restriction_targets), restriction_targets
+
+
 async def _close_and_hold(recorder_db, user_id: int, holding: asyncio.Event, proceed: asyncio.Event) -> None:
     async with recorder_db() as db:
         await lock_user_rows(db, [user_id])

@@ -256,10 +256,19 @@ async def forget_old(db: AsyncSession, retention_days: int) -> int:
     )
     forgotten = 0
     for start in range(0, len(stale), RELEASE_LOCK_BATCH_SIZE):
-        result = await db.execute(
-            delete(ConnectionRestriction).where(
-                ConnectionRestriction.id.in_(stale[start : start + RELEASE_LOCK_BATCH_SIZE])
-            )
+        locked = await db.execute(
+            select(ConnectionRestriction.id, ConnectionRestriction.active, ConnectionRestriction.created_at)
+            .where(ConnectionRestriction.id.in_(stale[start : start + RELEASE_LOCK_BATCH_SIZE]))
+            .order_by(ConnectionRestriction.id)
+            .with_for_update()
         )
+        still_stale = [
+            restriction_id
+            for restriction_id, active, created_at in locked.all()
+            if not active and created_at is not None and _as_utc(created_at) < cutoff
+        ]
+        if not still_stale:
+            continue
+        result = await db.execute(delete(ConnectionRestriction).where(ConnectionRestriction.id.in_(still_stale)))
         forgotten += result.rowcount or 0
     return forgotten
