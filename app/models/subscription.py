@@ -5,6 +5,7 @@ Broken down into small, focused models - each transport/protocol gets only what 
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
@@ -354,3 +355,12 @@ class SubscriptionHeaders(BaseModel):
     x_device_model: str | None = Field(default=None, alias="X-Device-Model")
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("x_hwid")
+    @classmethod
+    def validate_hwid(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if len(value) > 256 or any(unicodedata.category(char) == "Cc" for char in value):
+            raise ValueError("X-HWID must be an ID of at most 256 characters without control characters")
+        return value

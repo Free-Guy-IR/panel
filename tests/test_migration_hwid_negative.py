@@ -78,16 +78,15 @@ def _new_device_outcome(monkeypatch, hwid_limit, policy, registered_devices, hea
     async def known_device(_db, _user_id, _value):
         return None
 
-    async def device_count(_db, _user_id):
-        return registered_devices
-
-    async def register(_db, _user_id, value, *_details):
+    async def register(_db, _user_id, value, *_details, limit=None):
+        if limit is not None and limit > 0 and registered_devices >= limit:
+            return False
         registrations.append(value)
+        return True
 
     monkeypatch.setattr(subscription_module, "hwid_settings", settings)
     monkeypatch.setattr(subscription_module, "hwid_covers_user", covers)
     monkeypatch.setattr(subscription_module, "get_user_hwid_by_value", known_device)
-    monkeypatch.setattr(subscription_module, "get_user_hwid_count", device_count)
     monkeypatch.setattr(subscription_module, "register_user_hwid", register)
     operation = SubscriptionOperation(OperatorType.API)
     try:
