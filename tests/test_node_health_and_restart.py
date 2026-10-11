@@ -132,6 +132,10 @@ async def test_a_hung_node_is_marked_broken_and_errored(monkeypatch, black_hole,
     monkeypatch.setattr(NodeOperation, "_update_single_node_status", staticmethod(record_status))
     monkeypatch.setattr(node_checker.node_operator, "connect_single_node", record_reconnect)
     monkeypatch.setattr(node_checker, "GetDB", _NullDB)
+    monkeypatch.setattr(node_checker, "_health_streaks", {})
+    monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
+    monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
+    monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
 
     db_node = Node(
         name="hung",

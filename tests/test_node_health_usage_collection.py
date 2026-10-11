@@ -136,6 +136,10 @@ def side_effects(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(node_checker.node_operator, "connect_single_node", connect_single_node)
     monkeypatch.setattr(node_checker, "after_healthy_node_check", after_healthy_node_check)
     monkeypatch.setattr(node_checker, "needs_shared_bridge_memory", lambda: False)
+    monkeypatch.setattr(node_checker, "_health_streaks", {})
+    monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
+    monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
+    monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
     return seen
 
 

@@ -871,6 +871,10 @@ async def test_a_node_recovered_after_a_failed_attach_push_gets_its_users(monkey
         monkeypatch.setattr(node_checker, "GetDB", GetTestDB)
         monkeypatch.setattr(node_checker, "after_healthy_node_check", AsyncMock())
         monkeypatch.setattr(node_checker.notification, "recovered_node", AsyncMock())
+        monkeypatch.setattr(node_checker, "_health_streaks", {})
+        monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
+        monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
+        monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
         statuses = []
 
         async def record_status(db, node_id, status, message="", **kwargs):
