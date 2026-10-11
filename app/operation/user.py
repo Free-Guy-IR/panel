@@ -1775,6 +1775,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             "data_limit_reset_strategy": template.data_limit_reset_strategy,
             "status": template.status,
             "hwid_limit": template.hwid_limit,
+            "next_plan": None,
         }
 
         if template.status == UserStatus.active:
