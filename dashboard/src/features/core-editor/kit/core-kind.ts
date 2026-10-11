@@ -1,7 +1,7 @@
 import type { CoreKind } from '@pasarguard/core-kit'
-import type { CoreResponseType } from '@/service/api'
+import type { CoreResponse } from '@/service/api'
 
-export function apiCoreTypeToKind(type: CoreResponseType | undefined): CoreKind {
+export function apiCoreTypeToKind(type: CoreResponse['type'] | undefined): CoreKind {
   if (type === 'wg') return 'wg'
   if (type === 'singbox') return 'singbox'
   if (type === 'openvpn') return 'openvpn'
@@ -9,7 +9,7 @@ export function apiCoreTypeToKind(type: CoreResponseType | undefined): CoreKind 
   return 'xray'
 }
 
-export function isSupportedCoreEditorKind(type: CoreResponseType | undefined): boolean {
+export function isSupportedCoreEditorKind(type: CoreResponse['type'] | undefined): boolean {
   return (
     type === 'wg' ||
     type === 'xray' ||
