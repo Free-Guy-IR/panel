@@ -190,3 +190,13 @@ def has_oversized_format_spec(value: str) -> bool:
             if len(digits) > len(str(MAX_FORMAT_SPEC_NUMBER)) or int(digits or "0") > MAX_FORMAT_SPEC_NUMBER:
                 return True
     return False
+
+
+# None of these belongs in a host address or URL prefix, and subscription pages print those values
+# inside HTML attributes and scripts, where any of them could break out of the markup.
+_MARKUP_UNSAFE_CHARS = frozenset("<>\"'`\\")
+
+
+def has_markup_unsafe_chars(value: str) -> bool:
+    """Returns True if value contains a quote, angle bracket, backtick, backslash, whitespace or control character."""
+    return any(char in _MARKUP_UNSAFE_CHARS or char.isspace() or not char.isprintable() for char in value)
