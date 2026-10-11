@@ -1,5 +1,5 @@
 from app import on_shutdown, scheduler
-from app.notification.client import process_queued_notification
+from app.notification.client import process_notification
 from app.notification.queue_manager import get_queue, shutdown_queues
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings
@@ -9,7 +9,7 @@ logger = get_logger("process-notification-queues")
 
 async def process_all_notification_queues():
     """
-    Drain queued notifications and process them.
+    Process a bounded number of queued notifications.
     """
     if not runtime_settings.role.runs_scheduler:
         return
@@ -17,11 +17,11 @@ async def process_all_notification_queues():
     logger.debug("Processing notification queues")
 
     queue = get_queue()
-    while True:
+    for _ in range(100):
         item = await queue.dequeue(timeout=0.1)
         if not item:
             break
-        await process_queued_notification(queue, item)
+        await process_notification(item)
 
 
 async def send_pending_notifications_before_shutdown():
