@@ -260,7 +260,11 @@ def ledger(tmp_path, text, adapted=True):
     path = tmp_path / "UPSTREAM_SYNC.md"
     extra = ""
     if adapted:
-        extra = "\n## Ported by design\n\n" + "".join(f"- `{sha}` {why}\n" for sha, why in ADAPTED_PICKS.items())
+        picks = "".join(f"- `{sha}` {why}\n" for sha, why in ADAPTED_PICKS.items())
+        if "## Ported by design\n\n" in text:
+            text = text.replace("## Ported by design\n\n", "## Ported by design\n\n" + picks, 1)
+        else:
+            extra = "\n## Ported by design\n\n" + picks
     path.write_text("# ledger\n\n    - `0000000000` example in the intro is ignored\n\n" + text + extra)
     return str(path)
 
