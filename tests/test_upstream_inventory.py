@@ -789,7 +789,7 @@ def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ("##Port queue\n\n- `{u3}` port it security: no\n", "is in the port queue without an until"),
+        ("##Port queue\n\n- `{u3}` port it security: no\n", "is not a Markdown heading; put a space after the hashes"),
         (
             "## Port queue\n\n- `{u3}` until 2026-10-08 or so; security: no until: 2026-10-10\n",
             "names 2 until dates; keep exactly one",
@@ -1306,3 +1306,142 @@ def test_a_wrapped_line_that_starts_with_an_issue_number_keeps_the_section_open(
     )
     assert wrapped.returncode == 0, wrapped.stdout + wrapped.stderr
     assert tally(wrapped.stdout, OWED_LABEL) == tally(control.stdout, OWED_LABEL) >= 3
+
+
+
+CRAFTED_WAIVED = "## Waived\n\n- `{auth}` the fork rejects tokens of replaced admins in its own code\n"
+CRAFTED_QUEUE = "\n## Port queue\n\n- `{feature}` add the header option security: no until: 2026-10-13\n"
+NOT_A_HEADING = "is not a Markdown heading; put a space after the hashes"
+NESTED_ENTRY = "an entry holds one paragraph only, with no nested block"
+REPEATED_SECTION = "section already starts at line"
+HTML_IN_LEDGER = "HTML is not allowed in a ledger"
+UNSUPPORTED_BLOCK = "block is not allowed in a ledger section"
+CRAFTED_LEDGER_LINES = {
+    "hash-waived": ("", "#waived\n- `{plain}` crafted waiver\n", NOT_A_HEADING),
+    "hash-hash-waived": ("", "##Waived\n- `{plain}` crafted waiver\n", NOT_A_HEADING),
+    "hash-hash-ported": ("", "##Ported by design\n- `{plain}` crafted port\n", NOT_A_HEADING),
+    "indented-heading-in-entry": ("", "  ## Waived\n- `{plain}` crafted waiver\n", NESTED_ENTRY),
+    "indented-ported-heading": ("", "   ### Ported by design\n- `{plain}` crafted port\n", NESTED_ENTRY),
+    "waived-again-after-queue": ("", "\n## Waived\n\n- `{plain}` crafted waiver\n", REPEATED_SECTION),
+    "waived-in-continuation": ("", "  wrapped reason of the entry above\n## Waived\n- `{plain}` crafted\n", REPEATED_SECTION),
+    "ported-phrase-prose": ("", "\nPorted by design: `{plain}` is carried by the fork\n", None),
+    "ported-phrase-ordered-list": ("", "\n1. `{plain}` ported by design\n", UNSUPPORTED_BLOCK),
+    "ported-phrase-nested-bullet": ("", "  - `{plain}` ported by design\n", NESTED_ENTRY),
+    "ported-phrase-before-sha": ("", "- Ported by design `{plain}`\n", "entry is not in the form"),
+    "backtick-fence": ("```\n- `{plain}` waived inside a fence\n```\n", "", UNSUPPORTED_BLOCK),
+    "tilde-fence": ("~~~text\n- `{plain}` waived inside a fence\n~~~\n", "", UNSUPPORTED_BLOCK),
+    "fence-hides-a-heading": ("", "```\n## Waived\n```\n- `{plain}` crafted waiver\n", UNSUPPORTED_BLOCK),
+    "html-comment": ("<!--\n- `{plain}` hidden waiver\n-->\n", "", HTML_IN_LEDGER),
+    "unclosed-html-comment": ("<!--\n- `{plain}` hidden waiver\n", "", HTML_IN_LEDGER),
+    "queue-and-waived": (
+        "- `{plain}` crafted waiver\n",
+        "- `{plain}` bump the library security: yes until: 2026-10-13\n",
+        "is also decided differently",
+    ),
+}
+
+
+def crafted_ledger(shas, in_waived, in_queue):
+    return (CRAFTED_WAIVED + in_waived + CRAFTED_QUEUE + in_queue).format(**shas)
+
+
+def test_the_crafted_ledger_baseline_is_green_once_the_commit_is_really_decided(tmp_path):
+    path, shas = security_repo(tmp_path)
+    decided = crafted_ledger(shas, "", "\n## Ported by design\n\n- `{plain}` the fork carries the bump in its own lock\n")
+    result = standalone_gate(path, decided)
+    assert result.returncode == 0, result.stdout + result.stderr
+    undecided = standalone_gate(path, crafted_ledger(shas, "", ""))
+    assert undecided.returncode == 1
+    assert shas["plain"][:12] in unported_block(undecided.stdout)
+
+
+@pytest.mark.parametrize("case", sorted(CRAFTED_LEDGER_LINES))
+def test_a_crafted_ledger_line_cannot_decide_an_unported_commit(tmp_path, case):
+    path, shas = security_repo(tmp_path)
+    in_waived, in_queue, error = CRAFTED_LEDGER_LINES[case]
+    result = standalone_gate(path, crafted_ledger(shas, in_waived, in_queue))
+    assert result.returncode == 1, result.stdout + result.stderr
+    if error:
+        assert error in result.stdout, result.stdout
+    else:
+        assert shas["plain"][:12] in unported_block(result.stdout), result.stdout
+
+
+def b7_adv_battery(shas):
+    a, b = shas["feature"], shas["plain"]
+    head = f"## Ported by design\n\n- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code\n\n"
+    qa = f"- `{a}` until: 2026-10-10 security: no: small tweak\n"
+    qb = f"- `{b}` until: 2026-10-10 security: yes: bump fix, port now\n"
+    wa = f"- `{a}` waived: fork does not use it\n"
+    return {
+        "control_queue": (head + "## Port queue\n\n" + qa + qb, "red"),
+        "hash_no_space": (head + "## Port queue\n\n" + qa + "#waived\n" + qb, NOT_A_HEADING),
+        "setext_port_queue": (head + "## Waived\n\n" + wa + "\nPort queue\n----------\n\n" + qb, "setext heading"),
+        "indented_1sp_atx": (head + "## Waived\n\n" + wa + "\n ## Port queue\n\n" + qb, "heading is indented"),
+        "blockquote_heading": (head + "## Waived\n\n" + wa + "\n> ## Port queue\n\n" + qb, UNSUPPORTED_BLOCK),
+        "fenced_heading": (head + "## Port queue\n\n" + qa + "\n~~~\n## Waived\n~~~\n\n" + qb, UNSUPPORTED_BLOCK),
+        "backtick_fence_heading": (head + "## Port queue\n\n" + qa + "\n```\n## Waived\n```\n\n" + qb, UNSUPPORTED_BLOCK),
+        "html_comment_in_code_span": (
+            head
+            + "## Waived\n\n"
+            + f"- `{a}` waived: it adds `<!--` markers to templates\n"
+            + "\n## Port queue\n\n`-->` closes such a marker\n\n"
+            + qb,
+            "red",
+        ),
+        "u2028_split": (head + "## Port queue\n\n" + qa + "\nSee the notes below.\u2028## Waived\n\n" + qb, "U+2028"),
+        "u0085_split": (head + "## Port queue\n\n" + qa + "\nSee the notes below.\u0085## Waived\n\n" + qb, "U+0085"),
+        "formfeed_split": (head + "## Port queue\n\n" + qa + "\nSee the notes below.\x0c## Waived\n\n" + qb, "U+000C"),
+        "nbsp_after_hashes": (head + "## Port queue\n\n" + qa + "##\u00a0Waived\n" + qb, "red"),
+        "zero_width_subheading": (head + "## Waived\n\n" + wa + "\n### Port\u200b queue\n\n" + qb, "U+200B"),
+        "homoglyph_subheading": (head + "## Waived\n\n" + wa + "\n### P\u043ert queue\n\n" + qb, "non-ASCII"),
+        "plain_subheading_named_like_queue": (
+            head + "## Waived\n\n" + wa + "\n### Port queue (security)\n\n" + qb,
+            "names a ledger section",
+        ),
+        "unterminated_html_comment": (head + "## Port queue\n\n" + qa + "\n<!--\n## Waived\n\n" + qb, HTML_IN_LEDGER),
+        "unterminated_comment_at_line_start": (
+            head + "## Port queue\n\n" + qa + "\n<!-- note\n## Waived\n" + qb,
+            HTML_IN_LEDGER,
+        ),
+        "script_block_heading": (head + "## Port queue\n\n" + qa + "\n<script>\n## Waived\n</script>\n\n" + qb, HTML_IN_LEDGER),
+        "style_block_heading": (head + "## Port queue\n\n" + qa + "\n<style>\n## Waived\n</style>\n\n" + qb, HTML_IN_LEDGER),
+        "pre_block_heading": (head + "## Port queue\n\n" + qa + "\n<pre>\n## Waived\n</pre>\n\n" + qb, HTML_IN_LEDGER),
+        "nbsp_list_marker": (head + "## Waived\n\n" + wa + "-\u00a0`" + b + "` waived: looks like prose\n", "unported"),
+        "crlf_control": ((head + "## Port queue\n\n" + qa + qb).replace("\n", "\r\n"), "red"),
+        "trailing_hash_close": (head + "## Waived\n\n" + wa + "\n## Port queue\n\n" + qb + "## Waived ##\n" + qb, REPEATED_SECTION),
+        "tab_after_hashes": (head + "## Waived\n\n" + wa + "\n## Port queue\n\n" + qb + "##\tWaived\n" + qb, REPEATED_SECTION),
+    }
+
+
+@pytest.mark.parametrize(
+    "case",
+    sorted(b7_adv_battery({"auth": "0" * 40, "plain": "1" * 40, "feature": "2" * 40})),
+)
+def test_every_construct_of_the_parser_battery_fails_closed(tmp_path, case):
+    path, shas = security_repo(tmp_path)
+    text, expected = b7_adv_battery(shas)[case]
+    result = standalone_gate(path, text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    if expected == "red":
+        assert f"`{shas['plain'][:12]}` is classified security: yes; a security port gets no grace" in result.stdout
+        assert shas["plain"][:12] in unported_block(result.stdout)
+    elif expected == "unported":
+        assert shas["plain"][:12] in unported_block(result.stdout), result.stdout
+    else:
+        assert expected in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize(
+    "ledger",
+    ["UPSTREAM_SYNC.md", *sorted(str(p.relative_to(SCRIPT.parent.parent)) for p in (SCRIPT.parent.parent / "upstream-forks").glob("*.md"))],
+)
+def test_the_real_ledgers_have_no_structural_errors(ledger):
+    sys.path.insert(0, str(SCRIPT.parent))
+    import upstream_inventory
+
+    root = SCRIPT.parent.parent
+    items, errors = upstream_inventory.ledger_items(ledger, (root / ledger).read_text())
+    assert errors == []
+    if ledger == "UPSTREAM_SYNC.md":
+        assert len(items) > 50

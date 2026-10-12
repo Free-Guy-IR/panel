@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tomllib
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,7 @@ from datetime import UTC, date, datetime, timedelta
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
+from markdown_it import MarkdownIt
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
@@ -72,9 +74,7 @@ SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
 PORT_QUEUE = "port-queue"
 DECISION_MAX_DAYS = 30
-SYNC_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
 BARE_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})([^#\s].*?)[ \t]*#*[ \t]*$")
-SYNC_ITEM_RE = re.compile(r"^[-*+]\s+(.*)$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
 SHA_TOKEN_RE = re.compile(r"^[0-9a-f]{9,40}$")
 REASON_WORD_RE = re.compile(r"[^\W_]")
@@ -102,7 +102,7 @@ SECURITY_SUBJECT_RE = re.compile(
     re.IGNORECASE,
 )
 UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
-HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+LEDGER_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
@@ -907,42 +907,103 @@ def workflow_command_escape(text):
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+def ledger_block_end(tokens, index):
+    token = tokens[index]
+    if token.nesting != 1:
+        return index
+    closing = token.type.removesuffix("_open") + "_close"
+    for end in range(index + 1, len(tokens)):
+        if tokens[end].type == closing and tokens[end].level == token.level:
+            return end
+    return len(tokens) - 1
+
+
+def ledger_items(path, text):
+    errors = []
+    for offset, char in enumerate(text):
+        if char not in "\t\n" and unicodedata.category(char) in LEDGER_FORBIDDEN_CATEGORIES:
+            errors.append(
+                f"{path}:{text.count(chr(10), 0, offset) + 1}: character U+{ord(char):04X} is not allowed in a ledger"
+            )
+    lines = text.split("\n")
+    tokens = MarkdownIt("commonmark").parse(text)
+    for token in tokens:
+        where = f"{path}:{token.map[0] + 1}" if token.map else path
+        if token.type == "html_block" or (
+            token.type == "inline" and any(child.type == "html_inline" for child in token.children or [])
+        ):
+            errors.append(f"{where}: HTML is not allowed in a ledger; it can hide text when rendered")
+        if token.type == "inline":
+            for offset, line in enumerate(token.content.split("\n")):
+                bare = BARE_HEADING_RE.match(line)
+                if bare and bare.group(2).strip().lower() in SYNC_SECTIONS:
+                    errors.append(
+                        f"{path}:{token.map[0] + 1 + offset}: `{line.strip()}` is not a Markdown heading; "
+                        "put a space after the hashes"
+                    )
+    items = []
+    section = None
+    section_level = 0
+    seen_sections = {}
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        end = ledger_block_end(tokens, index)
+        where = f"{path}:{token.map[0] + 1}" if token.map else path
+        if token.type == "heading_open":
+            name = tokens[index + 1].content.strip()
+            lower = name.lower()
+            level = int(token.tag[1:])
+            if token.markup != "#" * level:
+                errors.append(f"{where}: `{name}` is a setext heading; start a ledger heading with #")
+            if not name.isascii():
+                errors.append(f"{where}: heading `{name}` has non-ASCII characters")
+            if lower in SYNC_SECTIONS:
+                if lines[token.map[0]][:1].isspace():
+                    errors.append(f"{where}: the {name!r} heading is indented; start it at the beginning of the line")
+                if lower in seen_sections:
+                    errors.append(
+                        f"{where}: the {name!r} section already starts at line {seen_sections[lower]}; "
+                        "keep one heading per ledger section"
+                    )
+                seen_sections.setdefault(lower, token.map[0] + 1)
+                section = SYNC_SECTIONS[lower]
+                section_level = level
+            elif section is not None and level > section_level:
+                if any(known in lower for known in SYNC_SECTIONS):
+                    errors.append(f"{where}: subheading `{name}` names a ledger section inside another one")
+            else:
+                section = None
+        elif section is not None and token.type == "bullet_list_open":
+            for item_index in range(index + 1, end):
+                item = tokens[item_index]
+                if item.type != "list_item_open" or item.level != token.level + 1:
+                    continue
+                item_end = ledger_block_end(tokens, item_index)
+                inner = tokens[item_index + 1 : item_end]
+                item_where = f"{path}:{item.map[0] + 1}"
+                if [child.type for child in inner] != ["paragraph_open", "inline", "paragraph_close"]:
+                    errors.append(f"{item_where}: an entry holds one paragraph only, with no nested block")
+                    continue
+                items.append((item.map[0] + 1, section, inner[1].content.replace("\n", " ")))
+        elif section is not None and token.type != "paragraph_open":
+            errors.append(f"{where}: a {token.type.removesuffix('_open')} block is not allowed in a ledger section")
+        index = end + 1
+    return items, errors
+
+
 def parse_sync_ledger(path, today=None):
     try:
         text = Path(path).read_text()
     except OSError as exc:
         sys.stderr.write(f"error: cannot read ledger {path}: {exc}\n")
         raise SystemExit(2)
-    text = HTML_COMMENT_RE.sub(lambda match: "\n" * match.group(0).count("\n"), text)
     today = today or datetime.now(UTC).date()
     entries = []
-    errors = []
-    section = None
-    section_level = 0
-    for lineno, line in enumerate(text.splitlines(), 1):
-        heading = SYNC_HEADING_RE.match(line)
-        bare = None if heading else BARE_HEADING_RE.match(line)
-        if bare and bare.group(2).strip().lower() in SYNC_SECTIONS:
-            errors.append(
-                f"{path}:{lineno}: `{line.strip()}` is not a Markdown heading; put a space after the hashes"
-            )
-            heading = bare
-        if heading:
-            name = (heading.group(2) or "").strip().lower()
-            level = len(heading.group(1))
-            if name in SYNC_SECTIONS:
-                section = SYNC_SECTIONS[name]
-                section_level = level
-            elif section is None or level <= section_level:
-                section = None
-            continue
-        if section is None:
-            continue
-        item = SYNC_ITEM_RE.match(line)
-        if not item:
-            continue
+    items, errors = ledger_items(path, text)
+    for lineno, section, item_text in items:
         where = f"{path}:{lineno}"
-        entry = SYNC_ENTRY_RE.match(item.group(1).strip())
+        entry = SYNC_ENTRY_RE.match(item_text.strip())
         if not entry:
             errors.append(f"{where}: entry is not in the form - `<sha>` <reason>")
             continue
