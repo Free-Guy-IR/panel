@@ -70,6 +70,7 @@ SYNC_POINT_FILE = ".upstream-sync-point"
 CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
 UPSTREAM_TRAILER_RE = re.compile(r"^Upstream:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
 UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
+LOOSE_UNTIL_RE = re.compile(r"\buntil\b[\W_]{0,4}\d{4}[\W_]\d{1,2}[\W_]\d{1,2}", re.IGNORECASE)
 SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
 SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
 PORT_QUEUE = "port-queue"
@@ -1016,6 +1017,9 @@ def parse_sync_ledger(path, today=None):
             errors.append(f"{where}: `{token}` has no reason")
             continue
         dates = UNTIL_RE.findall(reason)
+        if len(LOOSE_UNTIL_RE.findall(reason)) != len(dates):
+            errors.append(f"{where}: `{token}` has an until date the gate cannot read; write it as until: YYYY-MM-DD")
+            continue
         if len(dates) > 1:
             errors.append(f"{where}: `{token}` names {len(dates)} until dates; keep exactly one")
             continue

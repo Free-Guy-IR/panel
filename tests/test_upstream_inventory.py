@@ -1505,3 +1505,27 @@ def test_a_trailer_alone_never_covers_a_merge_with_its_own_changes(tmp_path, tra
     assert evil[:12] in unported_block(result.stdout)
     green = standalone_gate(path, decided + f"- `{evil}` the fork resolves this merge its own way\n")
     assert green.returncode == 0, green.stdout + green.stderr
+
+
+
+@pytest.mark.parametrize(
+    "until",
+    ["until: **2026-10-20**", "until `2026-10-20`", "until 2026/10/20", "until: _2026-10-20_", "Until: 2026.10.20"],
+)
+@pytest.mark.parametrize("section", ["Waived", "Port queue"])
+def test_an_until_date_the_gate_cannot_read_fails_instead_of_becoming_permanent(tmp_path, until, section):
+    path, shas = security_repo(tmp_path)
+    flag = " security: no" if section == "Port queue" else ""
+    if section == "Waived":
+        text = crafted_ledger(shas, f"- `{shas['plain']}` the fork pins its own copy {until}\n", "")
+    else:
+        text = crafted_ledger(shas, "", f"- `{shas['plain']}` bump the library{flag} {until}\n")
+    result = standalone_gate(path, text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain']}` has an until date the gate cannot read" in result.stdout
+
+
+def test_a_readable_until_date_still_passes(tmp_path):
+    path, shas = security_repo(tmp_path)
+    text = crafted_ledger(shas, f"- `{shas['plain']}` the fork pins its own copy until: 2026-10-20\n", "")
+    assert standalone_gate(path, text).returncode == 0
