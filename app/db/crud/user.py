@@ -7,14 +7,16 @@ from typing import Literal
 from sqlalchemy import and_, bindparam, case, delete, desc, func, literal, not_, or_, select, update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload, with_expression
+from sqlalchemy.orm import joinedload, load_only, selectinload, with_expression
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.functions import coalesce
 
 from app.db.compiles_types import DateDiff
 from app.db.models import (
     Admin,
+    AdminStatus,
     DataLimitResetStrategy,
     Group,
     NextPlan,
@@ -382,6 +384,60 @@ async def get_users_with_proxy_settings(
 
 def _user_hwid_count_subquery():
     return select(func.count(UserHWID.id)).where(UserHWID.user_id == User.id).correlate(User).scalar_subquery()
+
+
+async def get_admin_users_for_node_sync(
+    db: AsyncSession,
+    admin_id: int,
+    *,
+    statuses: Sequence[UserStatus] | None = None,
+) -> list[User]:
+    """Load an admin's users for node dispatch, without response-only fields or history."""
+    return await _get_users_for_node_sync(db, User.admin_id == admin_id, statuses=statuses)
+
+
+async def get_role_users_for_node_sync(
+    db: AsyncSession,
+    role_id: int,
+    admin_statuses: Sequence[AdminStatus],
+    *,
+    after_user_id: int = 0,
+    limit: int = 500,
+) -> list[User]:
+    """Load one ID-ordered batch of connectable users of affected admins in a role."""
+    admin_ids = select(Admin.id).where(Admin.role_id == role_id, Admin.status.in_(admin_statuses))
+    return await _get_users_for_node_sync(
+        db,
+        User.admin_id.in_(admin_ids),
+        statuses=[UserStatus.active, UserStatus.on_hold],
+        after_user_id=after_user_id,
+        limit=limit,
+    )
+
+
+async def _get_users_for_node_sync(
+    db: AsyncSession,
+    admin_filter: ColumnElement[bool],
+    *,
+    statuses: Sequence[UserStatus] | None = None,
+    after_user_id: int = 0,
+    limit: int | None = None,
+) -> list[User]:
+    """Load node-dispatch state, optionally restricted to a bounded ID-ordered page."""
+    stmt = (
+        select(User)
+        .where(admin_filter)
+        .options(
+            load_only(User.id, User.admin_id, User.status, User.proxy_settings, User.hwid_limit),
+            joinedload(User.admin).joinedload(Admin.role),
+            selectinload(User.groups).selectinload(Group.inbounds),
+        )
+    )
+    if statuses is not None:
+        stmt = stmt.where(User.status.in_(statuses))
+    if limit is not None:
+        stmt = stmt.where(User.id > after_user_id).order_by(User.id).limit(limit)
+    return list((await db.scalars(stmt)).all())
 
 
 def _build_user_sort_clause(sort_option: UserSortOption):
