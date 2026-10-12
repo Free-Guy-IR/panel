@@ -1445,3 +1445,34 @@ def test_the_real_ledgers_have_no_structural_errors(ledger):
     assert errors == []
     if ledger == "UPSTREAM_SYNC.md":
         assert len(items) > 50
+
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("security: no until: 2026-10-13", "security: yes until: 2026-10-13"),
+        ("security: yes until: 2026-10-13", "security: no until: 2026-10-13"),
+        ("security: no until: 2026-10-13", "security: no until: 2026-10-20"),
+    ],
+)
+@pytest.mark.parametrize("short", [False, True])
+def test_two_queue_lines_for_one_commit_that_disagree_fail_the_gate(tmp_path, first, second, short):
+    path, shas = security_repo(tmp_path)
+    plain = shas["plain"]
+    ledger_text = crafted_ledger(
+        shas,
+        "",
+        f"- `{plain[:12] if short else plain}` bump the library {first}\n- `{plain}` bump the library {second}\n",
+    )
+    result = standalone_gate(path, ledger_text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{plain[:12]} is also decided differently" in result.stdout
+
+
+def test_two_identical_queue_lines_for_one_commit_are_only_a_warning(tmp_path):
+    path, shas = security_repo(tmp_path)
+    line = f"- `{shas['plain']}` bump the library security: no until: 2026-10-13\n"
+    result = standalone_gate(path, crafted_ledger(shas, "", line + line))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "is already listed at" in result.stdout

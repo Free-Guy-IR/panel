@@ -1095,7 +1095,9 @@ def resolve_sync_entries(entries, in_range):
                 queued = earlier if earlier["kind"] == PORT_QUEUE else entry
                 resolved[sha] = earlier if earlier["kind"] == "ported-by-design" else entry
                 duplicates.append(f"{queued['where']}: `{sha[:12]}` is ported by design now; delete it from the port queue")
-            elif earlier["kind"] != entry["kind"] or earlier["conditional"] != entry["conditional"]:
+            elif earlier["kind"] != entry["kind"] or any(
+                earlier[key] != entry[key] for key in ("conditional", "security", "deadline")
+            ):
                 errors.append(f"{entry['where']}: {sha[:12]} is also decided differently at {earlier['where']}; keep one")
             else:
                 duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {earlier['where']}")
