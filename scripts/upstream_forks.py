@@ -20,6 +20,7 @@ MODES = {"self", "ledger", "workflow", "covered-by", "original"}
 TRACKING_MODES = {"self", "ledger", "workflow"}
 UPSTREAM_REF_PREFIXES = ("refs/remotes/upstream/", "refs/upstream-tags/")
 VERSION_TAG_RE = re.compile(r"^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)$")
+FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ARCH_SUFFIX_RE = re.compile(r"-(amd64|arm64|armv7|arm)$")
 HTTP_TIMEOUT = 20
 PENDING_MAX_DAYS = 30
@@ -113,7 +114,7 @@ def fetch_snapshot_heads(mirror, snapshot, upstream_url):
         return
     for line in Path(snapshot).read_text().splitlines():
         sha = line.split(" ", 1)[0].strip()
-        if not sha:
+        if not FULL_SHA_RE.match(sha):
             continue
         if run_git(mirror, "cat-file", "-e", f"{sha}^{{commit}}", check=False).returncode != 0:
             run_git(mirror, "fetch", "-q", "--no-tags", upstream_url, sha, check=False)

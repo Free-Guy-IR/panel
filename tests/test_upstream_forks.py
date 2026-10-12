@@ -315,3 +315,17 @@ def test_release_refs_belong_only_to_a_ledger_repo(world):
     result = run(config)
     assert result.returncode == 1
     assert "repo node sets release_refs, which only a ledger repo uses" in result.stdout
+
+
+
+def test_a_refs_snapshot_line_is_never_passed_to_git_as_an_option(world, tmp_path):
+    shas = world["shas"]
+    ledger = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("bumped", "feature"))
+    config = write_map(world, ledger_map(world, 'snapshot = "upstream-forks/kit.refs"'), ledger)
+    marker = tmp_path / "PWNED"
+    (world["panel"] / "upstream-forks" / "kit.refs").write_text(
+        f"--upload-pack=touch${{IFS}}{marker} upstream/feature\n{shas['feature']} upstream/feature\n"
+    )
+    result = run(config)
+    assert not marker.exists()
+    assert result.returncode == 1, result.stdout + result.stderr

@@ -84,7 +84,7 @@ jobs:
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: |
           if [ -f .upstream-refs ]; then
-            awk '{print $1}' .upstream-refs | sort -u | while read -r sha; do
+            awk '$1 ~ /^[0-9a-f]{40}$/ {print $1}' .upstream-refs | sort -u | while read -r sha; do
               git cat-file -e "$sha^{commit}" 2>/dev/null || git fetch --no-tags upstream "$sha" || true
             done
           fi
