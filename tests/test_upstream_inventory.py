@@ -1480,3 +1480,28 @@ def test_two_identical_queue_lines_for_one_commit_are_only_a_warning(tmp_path):
     result = standalone_gate(path, crafted_ledger(shas, "", line + line))
     assert result.returncode == 0, result.stdout + result.stderr
     assert "is already listed at" in result.stdout
+
+
+
+@pytest.mark.parametrize("trailer", ["empty", "reverted"])
+def test_a_trailer_alone_never_covers_a_merge_with_its_own_changes(tmp_path, trailer):
+    path = standalone_repo(tmp_path, "merge-trailer")
+    side = commit(path, "side change", {"s.py": lines("s", overrides={2: "S2"})})
+    git(path, "checkout", "-q", "-b", "dev", "v1.0")
+    main_change = commit(path, "dev change", {"r.py": lines("r", overrides={2: "R2"})})
+    commit(path, "evil tree", {"s.py": lines("s", overrides={2: "S2", 9: "EVIL"})})
+    evil = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "evil")
+    git(path, "update-ref", "refs/remotes/upstream/dev", evil)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    if trailer == "empty":
+        git(path, "commit", "-q", "--allow-empty", "-m", f"port the merge\n\nUpstream: {evil}")
+    else:
+        commit(path, f"port the merge\n\nUpstream: {evil}", {"s.py": lines("s", overrides={9: "EVIL"})})
+        git(path, "revert", "--no-edit", "HEAD")
+    decided = f"## Waived\n\n- `{side}` reason\n- `{main_change}` reason\n"
+    result = standalone_gate(path, decided)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert evil[:12] in unported_block(result.stdout)
+    green = standalone_gate(path, decided + f"- `{evil}` the fork resolves this merge its own way\n")
+    assert green.returncode == 0, green.stdout + green.stderr

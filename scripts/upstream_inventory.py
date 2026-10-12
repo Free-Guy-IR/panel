@@ -1184,7 +1184,7 @@ def parity_gate(
         lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
     )
     coverage = {}
-    for sha in (in_range & trailer_shas(head)) - set(ineffective):
+    for sha in (in_range & trailer_shas(head)) - set(ineffective) - set(content_merges):
         coverage[sha] = "trailer"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
