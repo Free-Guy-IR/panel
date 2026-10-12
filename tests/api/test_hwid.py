@@ -358,6 +358,7 @@ async def test_hwid_with_control_characters_is_rejected(access_token):
 
     try:
         await _reset_user_hwids(user["id"])
+        # Raw header bytes: Starlette decodes them as latin-1, so 0x85 and 0x9f arrive as C1 controls.
         for hwid in (b"device\x01one", b"device\x7fone", b"device\x85one", b"device\x9fone"):
             response = client.get(user["subscription_url"], headers={"X-HWID": hwid})
             assert response.status_code == status.HTTP_400_BAD_REQUEST, hwid
@@ -401,6 +402,7 @@ async def test_concurrent_registrations_respect_device_limit(access_token):
         pytest.skip("needs a database that separate connections share")
 
     user = create_user(access_token)
+    # Independent connections, so the parent-row lock is really contended.
     racing_engine = create_async_engine(
         DATABASE_URL, poolclass=NullPool, connect_args={"timeout": 30} if IS_SQLITE else {}
     )

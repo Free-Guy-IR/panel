@@ -40,21 +40,28 @@ async def register_user_hwid(
     *,
     limit: int | None = None,
 ) -> bool:
+    """Commit an HWID insert/refresh, or return False if a new device exceeds the limit."""
     dialect = sql_family(db.bind.dialect.name)
     if limit is not None and limit > 0:
+        # Subscription validation may have established a read snapshot already.
+        # Start fresh so MySQL's REPEATABLE READ sees registrations committed
+        # before this request acquires the parent lock.
         await db.commit()
         if dialect == "sqlite":
+            # Acquire SQLite's write lock before reading the HWID set. A no-op
+            # write serializes even separate workers without upgrading a snapshot.
             user_table = cast(Table, User.__table__)
             await db.execute(
                 update(user_table).where(user_table.c.id == user_id).values(hwid_limit=user_table.c.hwid_limit)
             )
         else:
+            # Lock the parent: locking HWID rows alone cannot protect an empty set.
             await db.execute(select(User.id).where(User.id == user_id).with_for_update())
 
         existing_stmt = select(UserHWID.id).where(UserHWID.user_id == user_id, UserHWID.hwid == hwid)
         existing_id = (await db.execute(existing_stmt)).scalar_one_or_none()
         if existing_id is None and await get_user_hwid_count(db, user_id) >= limit:
-            await db.commit()
+            await db.commit()  # Release the lock on rejected registrations too.
             return False
 
     now = datetime.now(UTC)
