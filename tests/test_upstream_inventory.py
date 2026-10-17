@@ -1614,3 +1614,55 @@ def test_a_held_entry_without_any_release_tag_fails_closed(tmp_path):
     result = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE))
     assert result.returncode == 1, result.stdout + result.stderr
     assert "need at least one existing upstream release tag" in result.stdout
+
+
+FORMATTED_ENTRY = "an entry is plain text and code spans only"
+HIDDEN_QUEUE_LINES = {
+    "escaped-yes-title-no": '- `{plain}` security\\: yes: bump fix, [details](#port-queue "security: no") until: 2026-10-13\n',
+    "entity-yes-title-no": '- `{plain}` security&#58; yes: bump fix, [details](#port-queue "security: no") until: 2026-10-13\n',
+    "escaped-yes-image-alt-no": "- `{plain}` security\\: yes: bump fix ![security: no](p.png) until: 2026-10-13\n",
+    "escaped-yes-href-no": "- `{plain}` security\\: yes: bump fix, [details](security:no) until: 2026-10-13\n",
+    "entity-until-title-until": '- `{plain}` security: no tweak until 2026&#45;10&#45;10 [n](#q "until: 2026-11-01")\n',
+    "emphasis-flag": "- `{plain}` bump fix *security: no* until: 2026-10-13\n",
+}
+HIDDEN_WAIVED_UNTIL = {
+    "entity-dash": "- `{plain}` waived until 2026&#45;10&#45;20: re-check then\n",
+    "backslash-dash": "- `{plain}` waived until 2026\\-10\\-20: re-check then\n",
+    "emphasis-day": "- `{plain}` waived until 2026-10-*20*: re-check then\n",
+    "strong-month": "- `{plain}` waived until 2026-**10**-20: re-check then\n",
+    "entity-digit": "- `{plain}` waived until &#50;026-10-20: re-check then\n",
+}
+
+
+@pytest.mark.parametrize("case", sorted(HIDDEN_QUEUE_LINES))
+def test_a_queue_line_whose_source_hides_what_it_renders_is_a_ledger_error(tmp_path, case):
+    path, shas = security_repo(tmp_path)
+    result = standalone_gate(path, crafted_ledger(shas, "", HIDDEN_QUEUE_LINES[case]))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert FORMATTED_ENTRY in result.stdout
+    assert shas["plain"][:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize("case", sorted(HIDDEN_WAIVED_UNTIL))
+def test_a_waiver_date_written_with_markup_is_a_ledger_error_not_a_permanent_waiver(tmp_path, case):
+    path, shas = security_repo(tmp_path)
+    result = standalone_gate(path, crafted_ledger(shas, HIDDEN_WAIVED_UNTIL[case], ""))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert FORMATTED_ENTRY in result.stdout
+
+
+def test_a_code_span_inside_an_until_date_is_read_as_the_reviewer_sees_it(tmp_path):
+    path, shas = security_repo(tmp_path)
+    text = crafted_ledger(shas, "- `{plain}` waived until `2026`-10-20: re-check then\n", "")
+    assert standalone_gate(path, text).returncode == 0
+    expired = standalone_gate(path, text, "--today", "2026-10-21")
+    assert expired.returncode == 1, expired.stdout + expired.stderr
+    assert "was decided only until 2026-10-20" in expired.stdout
+
+
+def test_a_heading_with_markup_is_a_ledger_error(tmp_path):
+    path, shas = security_repo(tmp_path)
+    text = crafted_ledger(shas, "", "") + "\n## *Ported by design*\n\n- `{plain}` the fork carries it\n".format(**shas)
+    result = standalone_gate(path, text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "a ledger heading is plain text" in result.stdout

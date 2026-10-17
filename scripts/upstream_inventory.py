@@ -112,6 +112,7 @@ SECURITY_SUBJECT_RE = re.compile(
 )
 UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
 LEDGER_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+PLAIN_INLINE_TYPES = frozenset({"text", "code_inline", "softbreak"})
 DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
@@ -916,6 +917,13 @@ def workflow_command_escape(text):
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+def plain_inline_text(inline):
+    children = inline.children or []
+    if any(child.type not in PLAIN_INLINE_TYPES for child in children):
+        return None
+    return "".join(" " if child.type == "softbreak" else child.content for child in children)
+
+
 def ledger_block_end(tokens, index):
     token = tokens[index]
     if token.nesting != 1:
@@ -935,7 +943,7 @@ def ledger_items(path, text):
                 f"{path}:{text.count(chr(10), 0, offset) + 1}: character U+{ord(char):04X} is not allowed in a ledger"
             )
     lines = text.split("\n")
-    tokens = MarkdownIt("commonmark").parse(text)
+    tokens = MarkdownIt("commonmark").disable("text_join").parse(text)
     for token in tokens:
         where = f"{path}:{token.map[0] + 1}" if token.map else path
         if token.type == "html_block" or (
@@ -960,7 +968,10 @@ def ledger_items(path, text):
         end = ledger_block_end(tokens, index)
         where = f"{path}:{token.map[0] + 1}" if token.map else path
         if token.type == "heading_open":
-            name = tokens[index + 1].content.strip()
+            plain_name = plain_inline_text(tokens[index + 1])
+            if plain_name is None:
+                errors.append(f"{where}: a ledger heading is plain text, without links, emphasis, escapes or entities")
+            name = (plain_name if plain_name is not None else tokens[index + 1].content).strip()
             lower = name.lower()
             level = int(token.tag[1:])
             if token.markup != "#" * level:
@@ -994,7 +1005,17 @@ def ledger_items(path, text):
                 if [child.type for child in inner] != ["paragraph_open", "inline", "paragraph_close"]:
                     errors.append(f"{item_where}: an entry holds one paragraph only, with no nested block")
                     continue
-                items.append((item.map[0] + 1, section, inner[1].content.replace("\n", " ")))
+                children = inner[1].children or []
+                rendered = plain_inline_text(inner[1])
+                if rendered is None:
+                    errors.append(
+                        f"{item_where}: an entry is plain text and code spans only, without links, images, "
+                        "emphasis, HTML, escapes or entities, so the gate reads what a reviewer sees"
+                    )
+                    continue
+                if children and children[0].type == "code_inline":
+                    rendered = f"`{children[0].content}`" + rendered[len(children[0].content) :]
+                items.append((item.map[0] + 1, section, rendered))
         elif section is not None and token.type != "paragraph_open":
             errors.append(f"{where}: a {token.type.removesuffix('_open')} block is not allowed in a ledger section")
         index = end + 1
