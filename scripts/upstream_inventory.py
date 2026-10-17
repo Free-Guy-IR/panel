@@ -72,8 +72,15 @@ UPSTREAM_TRAILER_RE = re.compile(r"^Upstream:\s*([0-9a-f]{40})\s*$", re.MULTILIN
 UNTIL_RE = re.compile(r"\buntil:?\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 LOOSE_UNTIL_RE = re.compile(r"\buntil\b[\W_]{0,4}\d{4}[\W_]\d{1,2}[\W_]\d{1,2}", re.IGNORECASE)
 SNAPSHOT_LINE_RE = re.compile(r"^([0-9a-f]{40})\s+(\S+)$")
-SYNC_SECTIONS = {"ported by design": "ported-by-design", "waived": "waived", "port queue": "port-queue"}
+SYNC_SECTIONS = {
+    "ported by design": "ported-by-design",
+    "waived": "waived",
+    "port queue": "port-queue",
+    "held for an upstream release": "held",
+}
 PORT_QUEUE = "port-queue"
+HELD = "held"
+DEFAULT_HELD_RELEASE_REFS = ("refs/upstream-tags/*",)
 DECISION_MAX_DAYS = 30
 BARE_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})([^#\s].*?)[ \t]*#*[ \t]*$")
 SYNC_ENTRY_RE = re.compile(r"^`([^`]*)`(.*)$")
@@ -88,6 +95,7 @@ COVERAGE_LABELS = {
     "ported-by-design": "ported by design (ledger)",
     "waived": "waived (ledger)",
     PORT_QUEUE: "owed: in the port queue until its deadline",
+    HELD: "held until an upstream release (ledger)",
     "patch-id": "patch-id equivalent of a covered commit",
     "in-base": "patch-id equivalent already in the base",
     "empty": "changes no file",
@@ -1044,6 +1052,20 @@ def parse_sync_ledger(path, today=None):
                 )
                 continue
         security = None
+        if section == HELD:
+            if deadline is not None:
+                errors.append(
+                    f"{where}: `{token}` is held for an upstream release, which has no until date; remove it"
+                )
+                continue
+            flags = SECURITY_FLAG_RE.findall(reason)
+            if len(flags) != 1:
+                errors.append(
+                    f"{where}: `{token}` held for an upstream release needs exactly one security: yes|no "
+                    f"classification with a reason (found {len(flags)})"
+                )
+                continue
+            security = flags[0].lower() == "yes"
         if section == PORT_QUEUE:
             if deadline is None:
                 errors.append(f"{where}: `{token}` is in the port queue without an until: YYYY-MM-DD deadline")
@@ -1131,6 +1153,7 @@ def parity_gate(
     require_shared_history=True,
     release_patterns=(),
     upstream=None,
+    held_release_patterns=DEFAULT_HELD_RELEASE_REFS,
 ):
     tracked = expand_tracked(patterns)
     containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
@@ -1178,6 +1201,11 @@ def parity_gate(
             f"{entry['where']}: `{sha[:12]}` is waived only while unmerged, but upstream now carries it on "
             f"{', '.join(sorted(on_release[sha]))}; port it or record a new decision"
         )
+    held = {sha for sha, entry in resolved.items() if entry["kind"] == HELD}
+    held_release_refs = expand_tracked(held_release_patterns, option="--held-release-ref", strict=False)
+    if held and not held_release_refs:
+        ledger_errors.append("entries held for an upstream release need at least one existing upstream release tag")
+    on_final_release = commits_on_refs(base, held_release_refs)
 
     tip_by_name = {name: tip for name, tip, _ in active}
     tip_by_name.update({name: sha for sha, name in heads})
@@ -1192,15 +1220,17 @@ def parity_gate(
         coverage[sha] = "trailer"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
-        if entry["kind"] == PORT_QUEUE and coverage[sha] == "trailer":
-            copy_notes.append(f"{entry['where']}: `{sha[:12]}` is ported now; delete it from the port queue")
+        if entry["kind"] in (PORT_QUEUE, HELD) and coverage[sha] == "trailer":
+            place = "the port queue" if entry["kind"] == PORT_QUEUE else "the held list"
+            copy_notes.append(f"{entry['where']}: `{sha[:12]}` is ported now; delete it from {place}")
     ids = patch_ids(sorted(in_range))
     ported_ids = {ids[sha] for sha, kind in coverage.items() if kind == "trailer" and sha in ids}
     for sha, entry in resolved.items():
-        if coverage[sha] == PORT_QUEUE and ids.get(sha) in ported_ids:
+        if coverage[sha] in (PORT_QUEUE, HELD) and ids.get(sha) in ported_ids:
+            place = "the port queue" if coverage[sha] == PORT_QUEUE else "the held list"
             coverage[sha] = "patch-id"
             copy_notes.append(
-                f"{entry['where']}: `{sha[:12]}` is ported now as a patch-identical copy; delete it from the port queue"
+                f"{entry['where']}: `{sha[:12]}` is ported now as a patch-identical copy; delete it from {place}"
             )
     deadlines = {sha: entry["deadline"] for sha, entry in resolved.items() if coverage[sha] == PORT_QUEUE}
     queue_origin = {}
@@ -1213,13 +1243,18 @@ def parity_gate(
         if not origin:
             continue
         queued = [s for s in origin if coverage[s] == PORT_QUEUE]
-        if any(coverage[s] != PORT_QUEUE and s not in conditional for s in origin):
+        if any(coverage[s] != PORT_QUEUE and s not in conditional and s not in held for s in origin):
             coverage[sha] = "patch-id"
         elif queued:
             coverage[sha] = PORT_QUEUE
             deadlines[sha] = min(deadlines[s] for s in queued)
             queue_origin[sha] = queued[0]
-        elif sha in on_release:
+        elif sha in on_final_release and any(s in held for s in origin):
+            copy_notes.append(
+                f"{sha[:12]} in {', '.join(sorted(on_final_release[sha]))} is a copy of {origin[0][:12]}, "
+                "which is held for an upstream release, so the released copy needs its own decision"
+            )
+        elif sha in on_release and any(s in conditional for s in origin):
             copy_notes.append(
                 f"{sha[:12]} on {', '.join(sorted(on_release[sha]))} is a copy of {origin[0][:12]}, "
                 "which is waived only while unmerged, so the copy needs its own decision"
@@ -1228,6 +1263,14 @@ def parity_gate(
             coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
         coverage[sha] = "in-base"
+    for sha in sorted(held & set(on_final_release)):
+        entry = resolved[sha]
+        if coverage.get(sha) == HELD:
+            del coverage[sha]
+            ledger_errors.append(
+                f"{entry['where']}: `{sha[:12]}` is held for an upstream release, but upstream released it in "
+                f"{', '.join(sorted(on_final_release[sha]))}; port it or record a Waived or Ported by design decision"
+            )
 
     sync_errors, sync_notes = sync_point_findings(upstream, tracked, release_refs) if upstream else ([], [])
     ledger_errors += sync_errors
@@ -1786,6 +1829,14 @@ def main():
         + ")",
     )
     parser.add_argument(
+        "--held-release-ref",
+        metavar="REF_OR_GLOB",
+        action="append",
+        default=[],
+        help="upstream final releases that end a hold in the ledger's Held for an upstream release section "
+        "(repeatable; default: " + ", ".join(DEFAULT_HELD_RELEASE_REFS) + ")",
+    )
+    parser.add_argument(
         "--unrelated-history",
         action="store_true",
         help="the fork shares no history with upstream, so tracked refs unrelated to --base are not skipped",
@@ -1887,6 +1938,7 @@ def main():
                 require_shared_history=not args.unrelated_history,
                 release_patterns=args.release_ref,
                 upstream=upstream,
+                held_release_patterns=tuple(args.held_release_ref) or DEFAULT_HELD_RELEASE_REFS,
             )
         )
 

@@ -1529,3 +1529,88 @@ def test_a_readable_until_date_still_passes(tmp_path):
     path, shas = security_repo(tmp_path)
     text = crafted_ledger(shas, f"- `{shas['plain']}` the fork pins its own copy until: 2026-10-20\n", "")
     assert standalone_gate(path, text).returncode == 0
+
+
+HELD_LINE = "\n## Held for an upstream release\n\n- `{plain}` bump the library, waiting for upstream to release it security: yes\n"
+
+
+def held_repo(tmp_path):
+    path, shas = security_repo(tmp_path)
+    git(path, "update-ref", "refs/upstream-tags/v1.0", git(path, "rev-parse", "v1.0"))
+    return path, shas
+
+
+def test_a_held_dev_only_security_commit_keeps_the_gate_green(tmp_path):
+    path, shas = held_repo(tmp_path)
+    result = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "held until an upstream release (ledger)") == 1
+    assert "is classified security: yes" not in result.stdout
+
+
+def test_a_held_commit_fails_the_gate_the_moment_an_upstream_release_contains_it(tmp_path):
+    path, shas = held_repo(tmp_path)
+    ledger_text = crafted_ledger(shas, "", HELD_LINE)
+    assert standalone_gate(path, ledger_text).returncode == 0
+    git(path, "update-ref", "refs/upstream-tags/v1.1", shas["feature"])
+    released = standalone_gate(path, ledger_text)
+    assert released.returncode == 1, released.stdout + released.stderr
+    assert f"`{shas['plain'][:12]}` is held for an upstream release, but upstream released it in v1.1" in (
+        released.stdout
+    )
+    assert shas["plain"][:12] in unported_block(released.stdout)
+    waived = ledger_text.replace(
+        "## Waived\n\n", f"## Waived\n\n- `{shas['plain']}` the fork pins its own copy of the library\n"
+    ).replace(HELD_LINE.format(**shas), "")
+    assert standalone_gate(path, waived).returncode == 0
+    git(path, "cherry-pick", "-x", shas["plain"])
+    ported = standalone_gate(path, ledger_text)
+    assert ported.returncode == 0, ported.stdout + ported.stderr
+    assert "is ported now; delete it from the held list" in ported.stdout
+
+
+def test_a_held_entry_for_a_commit_that_is_already_released_is_a_ledger_error(tmp_path):
+    path, shas = held_repo(tmp_path)
+    git(path, "update-ref", "refs/upstream-tags/v1.1", shas["plain"])
+    result = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is held for an upstream release, but upstream released it in v1.1" in result.stdout
+
+
+def test_a_released_copy_of_a_held_commit_needs_its_own_decision(tmp_path):
+    path, shas = held_repo(tmp_path)
+    git(path, "checkout", "-q", "-b", "point", "v1.0")
+    git(path, "cherry-pick", shas["plain"])
+    git(path, "commit", "-q", "--amend", "-m", "chore(deps): the same bump on a point release")
+    copy = git(path, "rev-parse", "HEAD")
+    git(path, "update-ref", "refs/upstream-tags/v1.0.1", copy)
+    git(path, "checkout", "-q", "main")
+    ledger_text = crafted_ledger(shas, "", HELD_LINE)
+    assert standalone_gate(path, ledger_text).returncode == 0
+    result = standalone_gate(path, ledger_text, "--track", "refs/upstream-tags/*")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert copy[:12] in unported_block(result.stdout)
+    assert "which is held for an upstream release, so the released copy needs its own decision" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("- `{plain}` waiting for the release security: no until: 2026-10-20\n", "which has no until date"),
+        ("- `{plain}` waiting for the release\n", "needs exactly one security: yes|no classification"),
+        ("- `{plain}` security: yes\n", "has no reason"),
+    ],
+)
+def test_a_held_entry_needs_a_reason_and_a_classification_and_no_deadline(tmp_path, line, message):
+    path, shas = held_repo(tmp_path)
+    text = crafted_ledger(shas, "", "\n## Held for an upstream release\n\n" + line)
+    result = standalone_gate(path, text)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+
+
+def test_a_held_entry_without_any_release_tag_fails_closed(tmp_path):
+    path, shas = security_repo(tmp_path)
+    result = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "need at least one existing upstream release tag" in result.stdout
