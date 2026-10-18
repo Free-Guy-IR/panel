@@ -26,6 +26,7 @@ export const regenerateAllProxyCredentials = (current: ProxySettingsValues | und
     trojan: { ...sectionOf(current, 'trojan'), password: generate.password() },
     shadowsocks: { ...sectionOf(current, 'shadowsocks'), password: generate.password() },
     hysteria: { ...sectionOf(current, 'hysteria'), auth: generate.uuid() },
+    masque: { ...sectionOf(current, 'masque'), password: generate.password() },
     hysteria2: { ...sectionOf(current, 'hysteria2'), password: generate.password() },
     tuic: { ...sectionOf(current, 'tuic'), uuid: generate.uuid(), password: generate.password() },
     wireguard: { ...sectionOf(current, 'wireguard'), private_key: keyPair.privateKey, public_key: keyPair.publicKey },

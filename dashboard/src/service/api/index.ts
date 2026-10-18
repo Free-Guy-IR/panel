@@ -2320,6 +2320,11 @@ export interface WireGuardSettings {
   peer_ips?: string[];
 }
 
+export interface MasqueSettings {
+  /** @minLength 1 */
+  password?: string;
+}
+
 export interface TuicSettings {
   uuid?: string;
   password?: string;
@@ -2332,6 +2337,7 @@ export interface ProxyTable {
   shadowsocks?: ShadowsocksSettings;
   wireguard?: WireGuardSettings;
   hysteria?: HysteriaSettings;
+  masque?: MasqueSettings;
   hysteria2?: Hysteria2Settings;
   openvpn?: OpenVPNSettings;
   mtproto?: MTProtoSettings;
@@ -2354,6 +2360,7 @@ export interface ProxyTableInput {
   openvpn?: OpenVPNSettings;
   mtproto?: MTProtoSettings;
   tuic?: TuicSettings;
+  masque?: MasqueSettings;
   l2tp?: StrictL2TPSettings;
 }
 
