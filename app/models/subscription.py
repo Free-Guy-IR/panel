@@ -8,7 +8,7 @@ from __future__ import annotations
 import unicodedata
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.fork.subscription.usage_span import ensure_usage_span
 from app.models.host import FinalMask
@@ -79,6 +79,16 @@ class BaseTransportConfig(BaseModel):
     host: list[str] | str = Field(default_factory=list)
 
     model_config = {"validate_assignment": True}
+
+
+class MasqueTransportConfig(BaseTransportConfig):
+    """MASQUE transport settings used by Xray subscriptions."""
+
+    http_headers: dict[str, str] | None = Field(
+        None,
+        validation_alias=AliasChoices("headers", "http_headers"),
+        serialization_alias="headers",
+    )
 
 
 class GRPCTransportConfig(BaseTransportConfig):
@@ -207,6 +217,14 @@ class TCPTransportConfig(BaseTransportConfig):
 # ========== Protocol-Specific Models (Only protocol fields) ==========
 
 
+class MasqueProtocolData(BaseModel):
+    """MASQUE client authentication and DNS resolver settings."""
+
+    user: str = Field("")
+    password: str = Field("")
+    remote_dns: list[str] = Field(default_factory=list, serialization_alias="remoteDNS")
+
+
 class VMESSProtocolData(BaseModel):
     """VMess protocol - only vmess-specific fields"""
 
@@ -275,6 +293,7 @@ class SubscriptionInboundData(BaseModel):
     tls_config: TLSConfig
     transport_config: (
         GRPCTransportConfig
+        | MasqueTransportConfig
         | WebSocketTransportConfig
         | XHTTPTransportConfig
         | XDriveTransportConfig
@@ -304,6 +323,9 @@ class SubscriptionInboundData(BaseModel):
     wireguard_mtu: int | None = Field(default=None)
     wireguard_reserved: str | None = Field(default=None)
     wireguard_dns: list[str] | None = Field(default=None)
+
+    # MASQUE DNS comes from the host or its inbound, not the user.
+    masque_remote_dns: list[str] = Field(default_factory=list)
 
     # OpenVPN specific
     openvpn_dns_servers: list[str] | None = Field(default=None)

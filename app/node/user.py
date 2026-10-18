@@ -118,6 +118,12 @@ def _serialize_user_for_node(
     allowed_protocols: frozenset[ProxyProtocol] | None = None,
     hwid_limit: int | None = None,
 ) -> ProtoUser:
+    """Build a node user with the numeric ID as its email and supplied inbounds.
+
+    Include credentials only for ``allowed_protocols``; both ``None`` and an
+    empty set select all protocols. MASQUE uses the stored ``password`` as its
+    node credential. Bridge serialization errors propagate to the caller.
+    """
     allowed_protocols = allowed_protocols or _ALL_PROXY_PROTOCOLS
 
     proxy_kwargs = {}
@@ -155,6 +161,8 @@ def _serialize_user_for_node(
     if ProxyProtocol.l2tp in allowed_protocols:
         proxy_kwargs["l2tp_username"] = str(id)
         proxy_kwargs["l2tp_password"] = safe_l2tp_password(user_settings.get("l2tp", {}).get("password"), id)
+    if ProxyProtocol.masque in allowed_protocols:
+        proxy_kwargs["masque_pass"] = user_settings.get("masque", {}).get("password")
 
     return create_user(
         str(id),
