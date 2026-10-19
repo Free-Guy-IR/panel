@@ -42,14 +42,14 @@ export function WireGuardExtraSection({ form, openSection, onOpenSectionChange, 
                     <FormControl>
                       <Input
                         type="number"
-                        placeholder="1280"
+                        placeholder={t('default')}
                         min={576}
                         max={9000}
                         {...field}
                         value={field.value ?? ''}
                         onChange={e => {
                           const v = e.target.value
-                          field.onChange(v === '' ? undefined : Number.parseInt(v, 10))
+                          field.onChange(v === '' ? null : Number.parseInt(v, 10))
                         }}
                       />
                     </FormControl>
