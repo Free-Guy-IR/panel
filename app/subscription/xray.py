@@ -321,6 +321,7 @@ class XrayConfiguration(BaseSubscription):
                 "host": host,
                 "path": path or None,
                 "headers": config.http_headers or None,
+                "xmux": config.xmux or None,
             }
         )
 
