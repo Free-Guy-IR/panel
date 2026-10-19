@@ -1083,8 +1083,6 @@ export interface FinalMaskXdnsSettings {
 export interface FinalMaskXicmpSettings {
   dgram?: boolean | null;
   ips?: string[] | null;
-  listenIp?: string | null;
-  id?: number | null;
   [key: string]: unknown;
  }
 
