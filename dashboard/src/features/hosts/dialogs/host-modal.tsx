@@ -2407,7 +2407,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                                   <FormItem>
                                     <FormLabel>{t('hostsDialog.kcp.mtu')}</FormLabel>
                                     <FormControl>
-                                      <Input type="number" {...field} onChange={e => field.onChange(e.target.value ? Number(e.target.value) : 0)} value={field.value} />
+                                      <Input type="number" {...field} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} value={field.value ?? ''} />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
