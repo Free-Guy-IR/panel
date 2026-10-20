@@ -4,7 +4,7 @@ from ipaddress import ip_address, ip_network
 from string import Formatter
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from app.db.models import ProxyHostALPN, ProxyHostFingerprint, ProxyHostSecurity, UserStatus
 from app.fork.config_text import (
@@ -271,6 +271,10 @@ class FinalMaskXdnsDomain(FinalMaskBaseModel):
     label_limit: int | None = Field(default=None, alias="labelLimit")
     types: list[int] | None = Field(default=None)
     edns0: int | None = Field(default=None)
+
+    @model_serializer(mode="wrap")
+    def omit_unset_options(self, handler):
+        return {key: value for key, value in handler(self).items() if value is not None}
 
 
 class FinalMaskXdnsResolver(FinalMaskBaseModel):
