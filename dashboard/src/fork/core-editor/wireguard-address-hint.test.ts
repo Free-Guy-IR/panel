@@ -13,7 +13,7 @@ const loadPublicLocale = (language: string) =>
 const addressHintOf = (tree: Record<string, any>) => tree?.coreEditor?.inbound?.wireguard?.addressHint as string | undefined
 
 const inboundsSectionSource = readFileSync(
-  join(dashboardRoot, 'src', 'features', 'core-editor', 'components', 'xray', 'xray-inbounds-section.tsx'),
+  join(dashboardRoot, 'src', 'features', 'core-editor', 'components', 'xray', 'wireguard-inbound-fields.tsx'),
   'utf8',
 )
 
