@@ -30,12 +30,12 @@ const CREDENTIAL_PATHS = [
   ['hysteria2', 'password'],
   ['tuic', 'uuid'],
   ['tuic', 'password'],
-  ['wireguard', 'private_key'],
-  ['wireguard', 'public_key'],
   ['openvpn', 'password'],
   ['mtproto', 'secret'],
   ['l2tp', 'password'],
 ] as const
+
+const BACKEND_MANAGED_PROTOCOLS = ['wireguard'] as const
 
 const countingGenerators = (): CredentialGenerators => {
   let counter = 0
@@ -46,10 +46,6 @@ const countingGenerators = (): CredentialGenerators => {
   return {
     uuid: () => next('uuid'),
     password: () => next('password'),
-    wireguardKeyPair: () => {
-      const privateKey = next('wg-private')
-      return { privateKey, publicKey: `${privateKey}-public` }
-    },
     openvpnPassword: () => next('openvpn'),
     mtprotoSecret: () => next('mtproto'),
     l2tpPassword: () => next('l2tp'),
@@ -88,7 +84,24 @@ describe('regenerate all proxy credentials', () => {
     expect(regenerated.openvpn?.password).toStartWith('new-openvpn-')
     expect(regenerated.mtproto?.secret).toStartWith('new-mtproto-')
     expect(regenerated.l2tp?.password).toStartWith('new-l2tp-')
-    expect(regenerated.wireguard?.public_key).toBe(`${regenerated.wireguard?.private_key}-public`)
+  })
+
+  it('keeps the backend-managed WireGuard keys and peer IPs as they are', () => {
+    const stored = storedProxySettings()
+    const regenerated = regenerateAllProxyCredentials(stored, countingGenerators())
+    expect(regenerated.wireguard).toEqual(stored.wireguard)
+  })
+
+  it('leaves a user without WireGuard keys for the backend to issue them', () => {
+    const regenerated = regenerateAllProxyCredentials(undefined, countingGenerators())
+    expect(regenerated.wireguard).toBeUndefined()
+  })
+
+  it('keeps revoking the subscription as the way to rotate a leaked WireGuard key', () => {
+    const modal = readFileSync(new URL('../../features/users/dialogs/user-modal.tsx', import.meta.url), 'utf8')
+    expect(modal).toContain('revokeSubscriptionIntoForm(() => revokeUserSubscriptionMutation.mutateAsync({ userId: currentUserId }), form)')
+    expect(modal).not.toContain('generateWireGuardKeyPair')
+    expect(modal).not.toContain('name="proxy_settings.wireguard.private_key"')
   })
 
   it('keeps the settings that are not credentials', () => {
@@ -118,7 +131,7 @@ describe('regenerate all proxy credentials', () => {
     expect(proxyTable).not.toBeNull()
     const apiProtocols = [...(proxyTable?.[1] ?? '').matchAll(/^\s*(\w+)\?:/gm)].map(match => match[1]).sort()
     expect(apiProtocols.length).toBeGreaterThan(0)
-    expect([...new Set<string>(CREDENTIAL_PATHS.map(([protocol]) => protocol))].sort()).toEqual(apiProtocols)
+    expect([...new Set<string>([...CREDENTIAL_PATHS.map(([protocol]) => protocol), ...BACKEND_MANAGED_PROTOCOLS])].sort()).toEqual(apiProtocols)
     const regenerated = regenerateAllProxyCredentials(undefined, countingGenerators())
     for (const path of CREDENTIAL_PATHS) {
       const value = valueAt(regenerated, path)

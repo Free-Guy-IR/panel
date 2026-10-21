@@ -7,7 +7,6 @@ export type ProxySettingsValues = Record<string, ProxySettingsSection | undefine
 export type CredentialGenerators = {
   uuid: () => string
   password: () => string
-  wireguardKeyPair: () => { privateKey: string; publicKey: string }
   openvpnPassword: () => string
   mtprotoSecret: () => string
   l2tpPassword: () => string
@@ -18,7 +17,6 @@ export type ProxySettingsForm = Pick<UseFormReturn<UserFormValues>, 'setValue' |
 const sectionOf = (settings: ProxySettingsValues | undefined, protocol: string): ProxySettingsSection => ({ ...(settings?.[protocol] ?? {}) })
 
 export const regenerateAllProxyCredentials = (current: ProxySettingsValues | undefined, generate: CredentialGenerators): ProxySettingsValues => {
-  const keyPair = generate.wireguardKeyPair()
   return {
     ...current,
     vmess: { ...sectionOf(current, 'vmess'), id: generate.uuid() },
@@ -29,7 +27,6 @@ export const regenerateAllProxyCredentials = (current: ProxySettingsValues | und
     masque: { ...sectionOf(current, 'masque'), password: generate.password() },
     hysteria2: { ...sectionOf(current, 'hysteria2'), password: generate.password() },
     tuic: { ...sectionOf(current, 'tuic'), uuid: generate.uuid(), password: generate.password() },
-    wireguard: { ...sectionOf(current, 'wireguard'), private_key: keyPair.privateKey, public_key: keyPair.publicKey },
     openvpn: { ...sectionOf(current, 'openvpn'), password: generate.openvpnPassword() },
     mtproto: { ...sectionOf(current, 'mtproto'), secret: generate.mtprotoSecret() },
     l2tp: { ...sectionOf(current, 'l2tp'), password: generate.l2tpPassword() },
