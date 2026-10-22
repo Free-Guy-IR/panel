@@ -420,16 +420,17 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         backend_type,
         *,
         force_start: bool = False,
+        stop_first: bool = True,
         attach_users: CoreUsers | None = None,
         held=OWN_FENCE,
     ):
         if held is not OWN_FENCE:
             return await NodeOperation._start_or_attach_fenced(
-                pg_node, db_node, core, users, backend_type, force_start, attach_users, held
+                pg_node, db_node, core, users, backend_type, force_start, attach_users, stop_first, held
             )
         async with full_sync_fence(pg_node) as own:
             return await NodeOperation._start_or_attach_fenced(
-                pg_node, db_node, core, users, backend_type, force_start, attach_users, own
+                pg_node, db_node, core, users, backend_type, force_start, attach_users, stop_first, own
             )
 
     @staticmethod
@@ -441,9 +442,10 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         backend_type,
         force_start: bool,
         attach_users: CoreUsers | None,
+        stop_first: bool,
         held,
     ):
-        stop_first = force_start
+        needs_stop = force_start
         if not force_start:
             state = await pg_node.get_lifecycle_state()
             if state is not None and (
@@ -464,7 +466,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     # Skip; the next retry cycle will check again once it's done.
                     return
                 if attached is not None:
-                    stop_first = True
+                    needs_stop = True
                     logger.warning(f'Restarting "{db_node.name}" because its user list could not be refreshed')
 
         users = await resolve_users(users)
@@ -477,7 +479,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             backend_type == service.BackendType.WIREGUARD and len(users) >= WIREGUARD_BATCHED_START_THRESHOLD
         )
 
-        if stop_first:
+        if needs_stop and stop_first:
             try:
                 await pg_node.stop()
             except Exception as exc:
@@ -556,6 +558,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         extra_cores: list[tuple] | None = None,
         *,
         force_start: bool = False,
+        stop_first: bool = True,
         push_on_attach: bool = True,
     ) -> dict | None:
         """
@@ -568,6 +571,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             extra_cores: Additional cores to run alongside the primary one.
             force_start: Push a new Start RPC (and re-add running extra backends) even when
                 the node looks healthy, so a changed config actually reaches the daemon.
+            stop_first: With force_start, stop the core before Start. False lets the node apply
+                a changed config to the running core when it can.
 
         Returns:
             dict: {node_id, status, message, xray_version, node_version, old_status}
@@ -579,7 +584,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 logger.debug(f'Dropping a stale connect of "{db_node.name}" node, a newer config already reached it')
                 return None
             return await NodeOperation._connect_node_inner(
-                db_node, core, users, extra_cores, force_start, push_on_attach, snapshot
+                db_node, core, users, extra_cores, force_start, stop_first, push_on_attach, snapshot
             )
 
     @staticmethod
@@ -589,6 +594,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         users: CoreUsers,
         extra_cores: list[tuple] | None,
         force_start: bool,
+        stop_first: bool = True,
         push_on_attach: bool = True,
         snapshot: int = 0,
     ) -> dict | None:
@@ -662,7 +668,17 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             async with full_sync_fence(pg_node, wait=FENCE_WAIT_SECONDS) as held:
                 return await NodeOperation._connect_fenced(
-                    pg_node, db_node, core, users, extra_cores, type, force_start, old_status, held, push_on_attach
+                    pg_node,
+                    db_node,
+                    core,
+                    users,
+                    extra_cores,
+                    type,
+                    force_start,
+                    stop_first,
+                    old_status,
+                    held,
+                    push_on_attach,
                 )
         except NodeAPIError as e:
             if e.code != 409:
@@ -688,6 +704,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         extra_cores: list[tuple] | None,
         type,
         force_start: bool,
+        stop_first: bool,
         old_status: NodeStatus,
         held,
         push_on_attach: bool = True,
@@ -695,7 +712,15 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         attach_users = node_users_loader(users, extra_cores) if push_on_attach else NO_ATTACH_PUSH
         try:
             info = await NodeOperation._start_or_attach_node(
-                pg_node, db_node, core, users, type, force_start=force_start, attach_users=attach_users, held=held
+                pg_node,
+                db_node,
+                core,
+                users,
+                type,
+                force_start=force_start,
+                stop_first=stop_first,
+                attach_users=attach_users,
+                held=held,
             )
             if info is None:
                 return None
@@ -938,6 +963,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         nodes: list[Node],
         *,
         force_start: bool = False,
+        stop_first: bool = True,
     ) -> None:
         """
         Connect multiple nodes and bulk update their statuses.
@@ -946,8 +972,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             db (AsyncSession): Database session.
             nodes (list[Node]): List of nodes to connect.
             force_start: Push a new Start RPC even to healthy nodes (config apply / restart).
+            stop_first: With force_start, stop each core before Start.
         """
-        await self._connect_bulk_impl(db, nodes, force_start=force_start)
+        await self._connect_bulk_impl(db, nodes, force_start=force_start, stop_first=stop_first)
 
     async def connect_single_node(
         self, db: AsyncSession, node_id: int, *, force_start: bool = False, health_check: bool = False
@@ -987,8 +1014,10 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await self.connect_single_node(db, node_id, force_start=True)
         logger.info(f'Node "{node_id}" restarted by admin "{admin.username}"')
 
-    async def restart_all_node(self, db: AsyncSession, admin: AdminDetails, core_id: int | None = None) -> None:
-        await self._restart_all_impl(db, admin, core_id)
+    async def restart_all_node(
+        self, db: AsyncSession, admin: AdminDetails, core_id: int | None = None, *, stop_first: bool = True
+    ) -> None:
+        await self._restart_all_impl(db, admin, core_id, stop_first=stop_first)
         logger.info(f'All nodes restarted by admin "{admin.username}"')
 
     async def get_usage(
@@ -1160,7 +1189,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await node_nats_client.publish("remove_node", {"node_id": node_id})
 
     async def _connect_nodes_bulk_local(
-        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False
+        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False, stop_first: bool = True
     ) -> None:
         if not nodes:
             return
@@ -1214,6 +1243,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                         users_by_core.get(core_id, []),
                         self._extra_cores_for(node, cores_by_id, users_by_core),
                         force_start=force_start,
+                        stop_first=stop_first,
                     ),
                 )
 
@@ -1259,19 +1289,22 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             elif notif["status"] == NodeStatus.error and notif["old_status"] != NodeStatus.error:
                 asyncio.create_task(notification.error_node(notif["node"]))
 
-    async def _connect_nodes_bulk_sync(self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False) -> None:
-        await self._connect_nodes_bulk_local(db, nodes, force_start=force_start)
+    async def _connect_nodes_bulk_sync(
+        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False, stop_first: bool = True
+    ) -> None:
+        await self._connect_nodes_bulk_local(db, nodes, force_start=force_start, stop_first=stop_first)
         for node in nodes:
             if node is not None and node.status not in (NodeStatus.disabled, NodeStatus.limited):
                 await publish_node_sync("connect", node.id)
 
     async def _connect_nodes_bulk_remote(
-        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False
+        self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False, stop_first: bool = True
     ) -> None:
         if not nodes:
             return
         await node_nats_client.publish(
-            "connect_nodes_bulk", {"node_ids": [node.id for node in nodes], "force_start": force_start}
+            "connect_nodes_bulk",
+            {"node_ids": [node.id for node in nodes], "force_start": force_start, "stop_first": stop_first},
         )
 
     async def recover_node(self, db: AsyncSession, node_id: int) -> None:
@@ -1388,7 +1421,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     async def _disconnect_single_node_remote(self, node_id: int) -> None:
         await node_nats_client.publish("disconnect_node", {"node_id": node_id})
 
-    async def _restart_all_nodes_local(self, db: AsyncSession, admin: AdminDetails, core_id: int | None) -> None:
+    async def _restart_all_nodes_local(
+        self, db: AsyncSession, admin: AdminDetails, core_id: int | None, *, stop_first: bool = True
+    ) -> None:
         nodes, _ = await get_nodes(
             db,
             query=NodeListQuery(
@@ -1397,10 +1432,14 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             ),
             load_usage_logs=False,
         )
-        await self.connect_nodes_bulk(db, nodes, force_start=True)
+        await self.connect_nodes_bulk(db, nodes, force_start=True, stop_first=stop_first)
 
-    async def _restart_all_nodes_remote(self, db: AsyncSession, admin: AdminDetails, core_id: int | None) -> None:
-        await node_nats_client.publish("connect_nodes_bulk", {"core_id": core_id, "force_start": True})
+    async def _restart_all_nodes_remote(
+        self, db: AsyncSession, admin: AdminDetails, core_id: int | None, *, stop_first: bool = True
+    ) -> None:
+        await node_nats_client.publish(
+            "connect_nodes_bulk", {"core_id": core_id, "force_start": True, "stop_first": stop_first}
+        )
 
     async def _get_logs_local(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
         node = await node_manager.get_node(node_id)

@@ -289,6 +289,34 @@ async def test_connect_node_skips_when_already_healthy(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_force_start_without_stop_first_keeps_core_running(monkeypatch: pytest.MonkeyPatch):
+    started = SimpleNamespace(node_version="0.5.5", core_version="26.10.10")
+    pg_node = SimpleNamespace(
+        get_lifecycle_state=AsyncMock(),
+        start=AsyncMock(return_value=started),
+        stop=AsyncMock(),
+    )
+    attach = AsyncMock(return_value=object())
+    monkeypatch.setattr(NodeOperation, "_attach_if_running", attach)
+    db_node = SimpleNamespace(id=93, name="england", keep_alive=60)
+    core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    result = await NodeOperation._start_or_attach_node(
+        pg_node,
+        db_node,
+        core,
+        [],
+        object(),
+        force_start=True,
+        stop_first=False,
+    )
+
+    assert result is started
+    attach.assert_not_awaited()
+    pg_node.stop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_attach_that_cannot_refresh_users_falls_back_to_a_clean_start(monkeypatch: pytest.MonkeyPatch):
     state = SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
     started = SimpleNamespace(node_version="0.8.1", core_version="25.1.1")

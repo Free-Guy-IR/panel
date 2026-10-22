@@ -194,7 +194,13 @@ class NodeWorkerService(BaseRpcService):
                     ),
                     load_usage_logs=False,
                 )
-            await self._node_operator.connect_nodes_bulk(db, nodes, force_start=force_start)
+            await self._node_operator.connect_nodes_bulk(
+                db,
+                nodes,
+                force_start=force_start,
+                # A missing key comes from an API process that predates stop_first.
+                stop_first=bool(data.get("stop_first", True)),
+            )
 
     async def _disconnect_node(self, data: dict):
         node_id = data.get("node_id")

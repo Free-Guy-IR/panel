@@ -1,7 +1,9 @@
 import asyncio
+from typing import NamedTuple
 
 from app import notification
 from app.core.hosts import host_manager
+from app.core.live_update import node_facing, only_live_parts_changed
 from app.core.manager import core_manager
 from app.db import AsyncSession
 from app.db.crud.core import (
@@ -48,6 +50,12 @@ from app.utils.logger import get_logger
 from app.utils.reality_scan import RealityScanError, scan_reality_target
 
 logger = get_logger("core-operation")
+
+
+class CoreModification(NamedTuple):
+    core: CoreResponse
+    # Nodes can apply the edit to the running Xray without a restart.
+    live_on_nodes: bool
 
 
 class CoreOperation(BaseOperation):
@@ -144,12 +152,14 @@ class CoreOperation(BaseOperation):
 
     async def modify_core(
         self, db: AsyncSession, core_id: int, modified_core: CoreCreate, admin: AdminDetails
-    ) -> CoreResponse:
+    ) -> CoreModification:
         db_core = await self.get_validated_core_config(db, core_id)
         was_wg = db_core.type == CoreType.wg
         if modified_core.type == CoreType.wg:
             await self._validate_wireguard_subnet(db, modified_core.config, exclude_core_id=db_core.id)
         apply_l2tp_core_config(modified_core)
+        # What nodes run now, read before update_core replaces it.
+        before = node_facing(await core_manager.get_core(db_core.id))
         try:
             await guard_singbox_user_accounting(db, modified_core, db_core.id)
             validated_core = core_manager.validate_core(
@@ -174,7 +184,7 @@ class CoreOperation(BaseOperation):
         await self._refresh_hosts_from_db(db)
         await grant_entitled_secrets_for_core(self, db, db_core)
 
-        return core
+        return CoreModification(core, only_live_parts_changed(before, node_facing(validated_core)))
 
     async def delete_core(self, db: AsyncSession, core_id: int, admin: AdminDetails) -> list[int]:
         if core_id == 1:

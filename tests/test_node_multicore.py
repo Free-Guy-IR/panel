@@ -208,7 +208,7 @@ async def test_a_connected_node_with_failed_extras_still_raises_an_error_notific
 
     op = NodeOperation.__new__(NodeOperation)
 
-    async def _connect_node(db_node, core, users, extra_cores=None, *, force_start: bool = False):
+    async def _connect_node(db_node, core, users, extra_cores=None, *, force_start: bool = False, stop_first: bool = True):
         return {
             "node_id": db_node.id,
             "status": NodeStatus.connected,
@@ -249,7 +249,7 @@ async def test_a_cleanly_connected_node_raises_no_error_notification(monkeypatch
 
     op = NodeOperation.__new__(NodeOperation)
 
-    async def _connect_node(db_node, core, users, extra_cores=None, *, force_start: bool = False):
+    async def _connect_node(db_node, core, users, extra_cores=None, *, force_start: bool = False, stop_first: bool = True):
         return {
             "node_id": db_node.id,
             "status": NodeStatus.connected,
