@@ -2117,13 +2117,13 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 # The modify below allocates WireGuard IPs, which locks the pool rows before user rows everywhere
                 # else: take them before the reset locks the users, or a concurrent modify can deadlock with us
                 await ensure_wireguard_subnet_pools(db)
-                for db_user, *_ in prepared_updates:
-                    await reset_user_data_usage(
-                        db,
-                        db_user,
-                        clean_chart_data=clean_chart_data,
-                        commit=False,
-                    )
+                # One set-based reset for all users; it reloads them, so each one below is edited from fresh state
+                await bulk_reset_user_data_usage(
+                    db,
+                    [db_user for db_user, *_ in prepared_updates],
+                    clean_chart_data=clean_chart_data,
+                    commit=False,
+                )
 
             for db_user, modified_user_model, validated_groups, _, _ in prepared_updates:
                 self._apply_explicit_null_hwid_limit(db_user, modified_user_model)
