@@ -180,7 +180,7 @@ async def test_a_healthy_connected_node_still_reconciles_extra_cores(monkeypatch
     monkeypatch.setattr(node_checker.NodeOperation, "_reconcile_extra_cores", reconcile)
     monkeypatch.setattr(node_checker, "needs_shared_bridge_memory", lambda: False)
 
-    db_node = SimpleNamespace(id=7, name="de-1", status=NodeStatus.connected)
+    db_node = SimpleNamespace(id=7, name="de-1", status=NodeStatus.connected, default_timeout=10)
     await node_checker.process_node_health_check(db_node, HealthyNode())
 
     reconcile.assert_awaited_once()

@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.models.core import CoreType
 from app.models.proxy import ProxyTable
+from app.models.settings import NodeHealthSettings
 from app.node import manager_sync, node_manager, sync as node_sync
 from app.node.user import _serialize_user_for_node
 from app.operation import OperatorType, node as node_operation
@@ -46,6 +47,20 @@ BACKEND_TYPES = {
     CoreType.singbox: service.BackendType.SING_BOX,
 }
 _NODE_IDS = itertools.count(60000 + random.randrange(0, 30000) * 10)
+
+
+@pytest.fixture(autouse=True)
+def _serve_node_health_settings(monkeypatch: pytest.MonkeyPatch):
+    """The health check reads its thresholds from the stored settings; react to one probe."""
+    from app.jobs import node_checker as health_checker
+
+    node_health = NodeHealthSettings.model_construct(
+        fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
+    )
+    monkeypatch.setattr(health_checker, "_node_health_settings", AsyncMock(return_value=node_health))
+    monkeypatch.setattr(health_checker, "_health_streaks", {})
+    monkeypatch.setattr(health_checker, "_probe_backoffs", {})
+    return node_health
 
 
 @functools.cache
@@ -622,7 +637,7 @@ async def test_remote_bulk_connect_only_publishes(monkeypatch):
 
     await _operation()._connect_nodes_bulk_remote(None, nodes, force_start=True)
 
-    publish.assert_awaited_once_with("connect_nodes_bulk", {"node_ids": [5, 6], "force_start": True})
+    publish.assert_awaited_once_with("connect_nodes_bulk", {"node_ids": [5, 6], "force_start": True, "stop_first": True})
 
 
 async def test_reconcile_extra_cores_does_not_bury_a_delta(monkeypatch):
@@ -871,9 +886,6 @@ async def test_a_node_recovered_after_a_failed_attach_push_gets_its_users(monkey
         monkeypatch.setattr(node_checker, "GetDB", GetTestDB)
         monkeypatch.setattr(node_checker, "after_healthy_node_check", AsyncMock())
         monkeypatch.setattr(node_checker.notification, "recovered_node", AsyncMock())
-        monkeypatch.setattr(node_checker, "_health_streaks", {})
-        monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
-        monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
         monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
         statuses = []
 

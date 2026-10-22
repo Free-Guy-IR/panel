@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -14,6 +15,7 @@ from app.db.models import Node, NodeStatus
 from app.fork import node_health
 from app.fork.node_health import USAGE_STALLED_PREFIX, UsageCollectionTracker
 from app.jobs import node_checker, record_usages
+from app.models.settings import NodeHealthSettings
 
 FAILED_COLLECTION_CYCLES = 60
 STATS_TIMEOUT = NodeAPIError(code=-1, detail="Timeout error: stats query did not answer")
@@ -137,8 +139,10 @@ def side_effects(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(node_checker, "after_healthy_node_check", after_healthy_node_check)
     monkeypatch.setattr(node_checker, "needs_shared_bridge_memory", lambda: False)
     monkeypatch.setattr(node_checker, "_health_streaks", {})
-    monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
-    monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
+    node_health = NodeHealthSettings.model_construct(
+        fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
+    )
+    monkeypatch.setattr(node_checker, "_node_health_settings", AsyncMock(return_value=node_health))
     monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
     return seen
 

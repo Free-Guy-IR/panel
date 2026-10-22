@@ -128,7 +128,9 @@ async def test_the_checker_leaves_a_retired_object_to_the_operation_that_retired
         async def get_backend_stats(self, timeout=None):
             raise AssertionError("a retired object must not be probed")
 
-    db_node = type("DbNode", (), {"id": NODE_ID, "name": "tr-invalid", "status": NodeStatus.connected})()
+    db_node = type(
+        "DbNode", (), {"id": NODE_ID, "name": "tr-invalid", "status": NodeStatus.connected, "default_timeout": 10}
+    )()
     await node_checker.process_node_health_check(db_node, RetiredNode())
 
     status_writes.assert_not_awaited()

@@ -24,7 +24,7 @@ from app.fork.operation import node_extras as extras_operation
 from app.jobs import node_checker, record_usages
 from app.models.core import CoreType
 from app.models.node import NodeCreate
-from app.models.settings import General
+from app.models.settings import General, NodeHealthSettings
 from app.node import NodeManager
 from app.operation import OperatorType, node as node_operation
 from app.operation.node import NodeOperation
@@ -58,6 +58,18 @@ class _NullDB:
 
     async def __aexit__(self, *exc):
         return False
+
+
+@pytest.fixture(autouse=True)
+def _serve_node_health_settings(monkeypatch: pytest.MonkeyPatch):
+    """The health check reads its thresholds from the stored settings; react to one probe."""
+    node_health = NodeHealthSettings.model_construct(
+        fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
+    )
+    monkeypatch.setattr(node_checker, "_node_health_settings", AsyncMock(return_value=node_health))
+    monkeypatch.setattr(node_checker, "_health_streaks", {})
+    monkeypatch.setattr(node_checker, "_probe_backoffs", {})
+    return node_health
 
 
 @pytest.fixture
@@ -101,6 +113,8 @@ async def test_one_unreachable_node_does_not_stretch_the_fleet_health_round(monk
     monkeypatch.setattr(node_checker.node_manager, "get_nodes", AsyncMock(return_value={57: object(), 1: object()}))
     monkeypatch.setattr(node_checker, "process_node_health_check", fake_check)
     monkeypatch.setattr(node_checker, "NODE_CHECK_TIMEOUT", 3)
+    # A run now returns before the next tick instead of leaving every check unawaited.
+    monkeypatch.setattr(node_checker.job_settings, "core_health_check_interval", 0.25)
     monkeypatch.setattr(node_checker, "runtime_settings", SimpleNamespace(role=SimpleNamespace(runs_node=True)))
 
     started = time.monotonic()
@@ -117,9 +131,11 @@ async def test_one_unreachable_node_does_not_stretch_the_fleet_health_round(monk
 
 
 @pytest.mark.parametrize("probe_timeout, guard", [(0.5, 3), (10, 1)], ids=["probe_times_out", "guard_fires"])
-async def test_a_hung_node_is_marked_broken_and_errored(monkeypatch, black_hole, isolated_manager, probe_timeout, guard):
+async def test_a_hung_node_is_marked_broken_and_errored(
+    monkeypatch, black_hole, isolated_manager, probe_timeout, guard, _serve_node_health_settings
+):
     monkeypatch.setattr(node_checker, "NODE_CHECK_TIMEOUT", guard)
-    monkeypatch.setattr(node_checker, "HEALTH_PROBE_TIMEOUT", probe_timeout, raising=False)
+    monkeypatch.setattr(_serve_node_health_settings, "probe_timeout", probe_timeout)
     statuses = []
     reconnects = []
 
@@ -132,9 +148,6 @@ async def test_a_hung_node_is_marked_broken_and_errored(monkeypatch, black_hole,
     monkeypatch.setattr(NodeOperation, "_update_single_node_status", staticmethod(record_status))
     monkeypatch.setattr(node_checker.node_operator, "connect_single_node", record_reconnect)
     monkeypatch.setattr(node_checker, "GetDB", _NullDB)
-    monkeypatch.setattr(node_checker, "_health_streaks", {})
-    monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
-    monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
     monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
 
     db_node = Node(
@@ -317,6 +330,7 @@ def _replacement_node(address: str):
         internal_timeout=1,
         proxy_url=None,
         usage_coefficient=1,
+        keep_alive=0,
     )
 
 

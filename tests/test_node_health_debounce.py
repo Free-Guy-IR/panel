@@ -6,6 +6,7 @@ from PasarGuardNodeBridge import Health
 
 from app.db.models import NodeStatus
 from app.jobs import node_checker
+from app.models.settings import NodeHealthSettings
 from app.operation.node import NodeOperation
 
 TIMEOUT = (Health.BROKEN, -1, "Health check timeout")
@@ -35,8 +36,10 @@ def _make_node():
 @pytest.fixture
 def checker(monkeypatch):
     monkeypatch.setattr(node_checker, "_health_streaks", {})
-    monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 3)
-    monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 2)
+    node_health = NodeHealthSettings.model_construct(
+        fail_threshold=3, recover_threshold=2, probe_timeout=5, max_backoff=60
+    )
+    monkeypatch.setattr(node_checker, "_node_health_settings", AsyncMock(return_value=node_health))
     monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
     monkeypatch.setattr(node_checker, "needs_shared_bridge_memory", lambda: False)
     monkeypatch.setattr(node_checker, "GetDB", lambda: _FakeDB())
@@ -54,11 +57,13 @@ def checker(monkeypatch):
             probe.return_value = result
             await node_checker.process_node_health_check(db_node, node)
 
-    return SimpleNamespace(run=run, update_status=update_status, repair=repair, monkeypatch=monkeypatch)
+    return SimpleNamespace(
+        run=run, update_status=update_status, repair=repair, monkeypatch=monkeypatch, node_health=node_health
+    )
 
 
 def _db_node(status=NodeStatus.connected):
-    return SimpleNamespace(id=7, name="debounced", status=status, message="")
+    return SimpleNamespace(id=7, name="debounced", status=status, message="", default_timeout=10)
 
 
 def _written_statuses(update_status):
@@ -125,7 +130,10 @@ async def test_streak_restarts_when_the_stored_status_changes(checker):
 @pytest.mark.asyncio
 async def test_followers_never_write_status_or_repair(checker):
     checker.monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: False)
-    connected, errored = _db_node(), SimpleNamespace(id=8, name="errored", status=NodeStatus.error, message="")
+    connected, errored = (
+        _db_node(),
+        SimpleNamespace(id=8, name="errored", status=NodeStatus.error, message="", default_timeout=10),
+    )
 
     await checker.run(connected, _make_node(), *[DEAD_CORE] * 5)
     await checker.run(errored, _make_node(), *[HEALTHY] * 3)
@@ -147,8 +155,8 @@ async def test_dead_core_is_repaired_before_the_failure_threshold(checker):
 
 @pytest.mark.asyncio
 async def test_thresholds_of_one_react_to_a_single_probe(checker):
-    checker.monkeypatch.setattr(node_checker.job_settings, "node_health_fail_threshold", 1)
-    checker.monkeypatch.setattr(node_checker.job_settings, "node_health_recover_threshold", 1)
+    checker.monkeypatch.setattr(checker.node_health, "fail_threshold", 1)
+    checker.monkeypatch.setattr(checker.node_health, "recover_threshold", 1)
     db_node, node = _db_node(), _make_node()
 
     await checker.run(db_node, node, TIMEOUT)
