@@ -238,6 +238,8 @@ async def remove_user_templates(db: AsyncSession, template_ids: list[int]) -> No
     await db.execute(
         delete(template_group_association).where(template_group_association.c.user_template_id.in_(template_ids))
     )
+    # A template next plan keeps its limits in the template, so it cannot outlive it: delete it like the
+    # single delete's ORM cascade does (with the reference nulled it would renew to unlimited, never expiring).
     await db.execute(delete(NextPlan).where(NextPlan.user_template_id.in_(template_ids)))
     await db.execute(delete(UserTemplate).where(UserTemplate.id.in_(template_ids)))
     await db.commit()

@@ -151,21 +151,25 @@ async def activate_all_disabled_users(
         filters.append(user_in_allowed_groups(User.id, allowed_group_ids))
 
     status_type = User.__table__.c.status.type
+    back_on_hold = and_(~User.is_limited, User.expire.is_(None), User.on_hold_expire_duration.isnot(None))
     status_case = case(
         (User.is_expired, literal(UserStatus.expired, status_type)),
         (User.is_limited, literal(UserStatus.limited, status_type)),
-        (
-            and_(User.expire.is_(None), User.on_hold_expire_duration.isnot(None)),
-            literal(UserStatus.on_hold, status_type),
-        ),
+        (back_on_hold, literal(UserStatus.on_hold, status_type)),
         else_=literal(UserStatus.active, status_type),
     )
+    # Back on hold: like an edit, it makes earlier traffic not count as coming online.
+    now = dt.now(UTC)
 
     query = (
         update(User)
         .where(and_(*filters))
         .values(
-            {User.status: status_case, User.last_status_change: dt.now(UTC)},
+            {
+                User.status: status_case,
+                User.last_status_change: now,
+                User.edit_at: case((back_on_hold, literal(now, User.__table__.c.edit_at.type)), else_=User.edit_at),
+            },
         )
     )
     for statement in locked_targets(query, user_ids):
