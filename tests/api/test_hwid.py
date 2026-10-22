@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from fastapi import status
 from sqlalchemy import select
@@ -324,3 +326,28 @@ def test_hwid_override_mode_with_custom_limits(access_token):
             delete_user(access_token, user["username"])
         delete_admin(access_token, admin["username"])
         client.delete(f"/api/admin-role/{role['id']}", headers=auth_headers(access_token))
+
+
+@pytest.mark.parametrize("matched_target", [None, "block"])
+def test_unsupported_client_does_not_register_hwid(access_token, monkeypatch, matched_target):
+    from app.models.settings import ConfigFormat, SubRule
+    from app.operation import subscription as subscription_module
+
+    rule = SubRule(pattern="^BlockedApp", target=ConfigFormat(matched_target)) if matched_target else None
+    monkeypatch.setattr(
+        subscription_module.SubscriptionOperation,
+        "detect_client_rule",
+        staticmethod(lambda user_agent, rules: rule),
+    )
+    user = create_user(access_token)
+
+    try:
+        response = client.get(user["subscription_url"], headers={"X-HWID": "blocked-app-device"})
+        assert response.status_code == status.HTTP_406_NOT_ACCEPTABLE
+
+        response = client.get(f"/api/user/{user['id']}/hwids", headers=auth_headers(access_token))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["count"] == 0
+    finally:
+        asyncio.run(_reset_user_hwids(user["id"]))
+        delete_user(access_token, user["username"])
