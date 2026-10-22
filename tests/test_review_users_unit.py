@@ -8,10 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import event, inspect as sa_inspect
+from sqlalchemy import event, inspect as sa_inspect, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
-from sqlalchemy.sql import select
 
 from app.db import base
 from app.db.crud.user import (
