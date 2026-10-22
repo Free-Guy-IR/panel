@@ -133,7 +133,9 @@ async def _prepare_subscription_inbound_data(
 
     Return reusable TLS and transport settings, retaining address and port
     candidates for selection on each request. ``down_settings`` supplies a
-    prepared download host for an xHTTP host with xHTTP settings. For MASQUE,
+    prepared download host for an xHTTP host with xHTTP settings.
+    ``omit_download_settings`` serves the host without download settings, not
+    even the inbound's, for a host whose own download host is unusable. For MASQUE,
     absent or empty host DNS settings fall back to inbound DNS; entries are
     stripped and blank entries removed. Explicit host HTTP headers, including
     an empty mapping, override inbound headers for MASQUE and xHTTP.
