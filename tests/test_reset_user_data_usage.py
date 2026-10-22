@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import DateTime, func, literal, select, text
+from sqlalchemy import DateTime, event, func, literal, select, text
 
 from app.db.compiles_types import DateDiff
 from app.db.crud.user import (
@@ -275,9 +275,48 @@ async def test_bulk_reset_matches_the_per_user_reset(session_factory, clean_char
 
 
 @pytest.mark.asyncio
+async def test_bulk_reset_statement_count_does_not_grow_with_users(session_factory):  # noqa: F811
+    async def statements_for(count: int, prefix: str) -> int:
+        async with session_factory() as db:
+            users = [
+                _user(f"{prefix}{index}", used_traffic=10, data_limit=5, status=UserStatus.limited)
+                for index in range(count)
+            ]
+            db.add_all(users)
+            await db.flush()
+            for user in users:
+                db.add(NextPlan(user_id=user.id, user_template_id=None, data_limit=100))
+                db.add(UserUsageResetLogs(user_id=user.id, used_traffic_at_reset=1))
+                db.add(NotificationReminder(user_id=user.id, type=ReminderType.data_usage, threshold=80))
+            await db.commit()
+            user_ids = [user.id for user in users]
+
+        async with session_factory() as db:
+            users = [await get_user_by_id(db, user_id, load_usage_logs=False) for user_id in user_ids]
+            statements = []
+            sync_engine = db.bind.sync_engine
+
+            def count(_conn, _cursor, statement, *_args):
+                statements.append(statement)
+
+            event.listen(sync_engine, "before_cursor_execute", count)
+            try:
+                reset_users = await bulk_reset_user_data_usage(db, users, clean_chart_data=True)
+            finally:
+                event.remove(sync_engine, "before_cursor_execute", count)
+            assert {user.status for user in reset_users} == {UserStatus.active}
+            assert {user.lifetime_used_traffic for user in reset_users} == {11}
+        return len(statements)
+
+    few = await statements_for(3, "few")
+    many = await statements_for(40, "many")
+    assert many == few, f"{few} statements for 3 users, {many} for 40"
+
+
+@pytest.mark.asyncio
 async def test_reset_cycle_length_is_elapsed_time_on_every_database(session_factory):  # noqa: F811
     def at(*args):
-        return literal(datetime(*args), DateTime())  # noqa: DTZ001
+        return literal(datetime(*args), DateTime())
 
     async with session_factory() as db:
         across_midnight, within_one_date = (
@@ -346,13 +385,13 @@ async def test_apply_template_reset_locks_wireguard_pools_before_user_rows(sessi
 
     writers: list[asyncio.Task] = []
     writer_waited: list[bool] = []
-    single_reset = user_operation.reset_user_data_usage
+    bulk_reset = user_operation.bulk_reset_user_data_usage
 
-    async def reset_then_let_another_writer_in(db, db_user, **kwargs):
-        reset_user = await single_reset(db, db_user, **kwargs)
+    async def reset_then_let_another_writer_in(db, users, **kwargs):
+        reset_users = await bulk_reset(db, users, **kwargs)
         writers.append(asyncio.create_task(modify_groups_in_another_session()))
         writer_waited.append(await _wait_for_a_lock_wait(session_factory, writers[0]))
-        return reset_user
+        return reset_users
 
     async def no_op(*args, **kwargs):
         return None
@@ -360,7 +399,7 @@ async def test_apply_template_reset_locks_wireguard_pools_before_user_rows(sessi
     async def fake_url(user):
         return "https://sub.example/sub/token"
 
-    monkeypatch.setattr(user_operation, "reset_user_data_usage", reset_then_let_another_writer_in)
+    monkeypatch.setattr(user_operation, "bulk_reset_user_data_usage", reset_then_let_another_writer_in)
     monkeypatch.setattr(user_operation, "general_settings", AsyncMock(return_value=General()))
     monkeypatch.setattr(user_operation, "hwid_settings", AsyncMock(return_value=HWIDSettings()))
     monkeypatch.setattr(user_operation, "sync_users", no_op)
@@ -381,71 +420,6 @@ async def test_apply_template_reset_locks_wireguard_pools_before_user_rows(sessi
 
     applied = await asyncio.wait_for(asyncio.gather(apply_template(), return_exceptions=True), 30)
     modified = await asyncio.wait_for(asyncio.gather(*writers, return_exceptions=True), 30)
-    assert [result for result in applied + modified if isinstance(result, BaseException)] == []
     assert writer_waited == [True]
-    assert await _lifetime(session_factory, user_id) == (0, 3_000)
-
-
-@pytest.mark.asyncio
-async def test_apply_template_reset_takes_the_pool_locks_before_the_first_user_lock(session_factory, monkeypatch):  # noqa: F811
-    async with session_factory() as db:
-        inbound = ProxyInbound(tag="wg0")
-        template_group = Group(name="order_template", inbounds=[inbound])
-        template = UserTemplate(
-            name="order_reset",
-            username_prefix=None,
-            username_suffix=None,
-            extra_settings=None,
-            groups=[template_group],
-            data_limit=5_000,
-            reset_usages=True,
-        )
-        core = CoreConfig(
-            name="wg_order", config={"interface_name": "wg0", "address": ["10.78.0.1/24"]}, type=CoreType.wg
-        )
-        db_user = _user("order_applied", used_traffic=3_000, data_limit=1_000, status=UserStatus.limited)
-        db.add_all([inbound, template_group, template, core, db_user])
-        await db.flush()
-        await ensure_wireguard_subnet_pools(db)
-        await db.commit()
-        user_id, template_id = db_user.id, template.id
-
-    calls: list[str] = []
-    ensure_pools = user_operation.ensure_wireguard_subnet_pools
-    single_reset = user_operation.reset_user_data_usage
-
-    async def record_pools(db):
-        calls.append("pools")
-        return await ensure_pools(db)
-
-    async def record_reset(db, db_user, **kwargs):
-        calls.append("reset")
-        return await single_reset(db, db_user, **kwargs)
-
-    async def no_op(*args, **kwargs):
-        return None
-
-    async def fake_url(user):
-        return "https://sub.example/sub/token"
-
-    monkeypatch.setattr(user_operation, "ensure_wireguard_subnet_pools", record_pools)
-    monkeypatch.setattr(user_operation, "reset_user_data_usage", record_reset)
-    monkeypatch.setattr(user_operation, "general_settings", AsyncMock(return_value=General()))
-    monkeypatch.setattr(user_operation, "hwid_settings", AsyncMock(return_value=HWIDSettings()))
-    monkeypatch.setattr(user_operation, "sync_users", no_op)
-    monkeypatch.setattr(
-        user_operation,
-        "notification",
-        SimpleNamespace(modify_user=no_op, reset_user_data_usage=no_op, user_status_change=no_op),
-    )
-    monkeypatch.setattr(UserOperation, "generate_subscription_url", staticmethod(fake_url))
-
-    async with session_factory() as db:
-        await UserOperation(OperatorType.API).bulk_apply_template_to_users(
-            db,
-            BulkUsersApplyTemplate(ids={user_id}, user_template_id=template_id),
-            SimpleNamespace(is_owner=True, role=None, username="tester"),
-        )
-
-    assert calls[:2] == ["pools", "reset"]
+    assert [result for result in applied + modified if isinstance(result, BaseException)] == []
     assert await _lifetime(session_factory, user_id) == (0, 3_000)
