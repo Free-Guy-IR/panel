@@ -11,7 +11,7 @@ from typing import NamedTuple
 
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
-from sqlalchemy import BigInteger, DateTime, bindparam, func, or_, select, union_all, update
+from sqlalchemy import BigInteger, DateTime, bindparam, case, func, or_, select, union_all, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -335,14 +335,26 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
 
 
 def build_user_traffic_update(dialect: str, usage_params: list[dict]):
-    """Build a set-based user traffic update when the database supports arrays."""
-    if dialect == "postgresql":
+    """Build a set-based user traffic update on PostgreSQL and MySQL, an executemany one on SQLite."""
+    if dialect in ("postgresql", "mysql"):
         aggregated_usage = defaultdict(int)
         for param in usage_params:
             aggregated_usage[param["uid"]] += param["value"]
 
         aggregated_usage = dict(sorted(aggregated_usage.items()))
 
+    if dialect == "mysql":
+        # asyncmy runs an executemany UPDATE as one round trip per row, so add the
+        # deltas of the whole batch in one statement with a CASE on the primary key
+        stmt = (
+            update(User)
+            .where(User.id.in_(list(aggregated_usage)))
+            .values(used_traffic=User.used_traffic + case(aggregated_usage, value=User.id))
+            .execution_options(synchronize_session=False)
+        )
+        return stmt, None
+
+    if dialect == "postgresql":
         source = (
             func.unnest(
                 bindparam("uids", type_=ARRAY(BigInteger())),
@@ -415,15 +427,14 @@ async def update_users_traffic(usage_params: list[dict]) -> None:
 
     dialect = await get_dialect()
     ordered_params = sorted(usage_params, key=lambda item: int(item["uid"]))
-    stmt, params = build_user_traffic_update(dialect, ordered_params)
     async with JOB_SEM:
         if dialect == "postgresql":
-            await safe_execute(stmt, params)
+            await safe_execute(*build_user_traffic_update(dialect, ordered_params))
             return
 
         batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(dialect, len(ordered_params))
-        for batch in _chunked(params, batch_size):
-            await safe_execute(stmt, batch)
+        for batch in _chunked(ordered_params, batch_size):
+            await safe_execute(*build_user_traffic_update(dialect, batch))
 
 
 async def touch_users_online_at(user_ids: list[int], now: dt | None = None) -> None:
@@ -733,7 +744,10 @@ async def record_node_stats_batched(all_node_params: dict):
     # Execute all node stats with limited concurrency
     tasks = [_record_single_node(node_id, params) for node_id, params in all_node_params.items()]
     if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for node_id, result in zip(all_node_params, results):
+            if isinstance(result, Exception):
+                logger.error("Failed to record node usage history for node %s: %s", node_id, result)
 
 
 def _process_users_stats_response(stats_response):
