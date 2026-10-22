@@ -56,7 +56,10 @@ from app.db.crud.user import (
     revoke_user_sub,
     set_owner,
 )
-from app.db.crud.wireguard import tags_from_groups  # noqa: F401
+from app.db.crud.wireguard import (  # noqa: F401
+    ensure_wireguard_subnet_pools,
+    tags_from_groups,
+)
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, bulk_final_value, out_of_range_detail
 from app.fork.crud.creator_admin import (
@@ -2101,6 +2104,11 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             (await general_settings()).usage.reset_usage_clean_chart_data if user_template.reset_usages else False
         )
         try:
+            if user_template.reset_usages:
+                # The modify below allocates WireGuard IPs, which locks the pool rows before user rows everywhere
+                # else: take them before the reset locks the users, or a concurrent modify can deadlock with us
+                await ensure_wireguard_subnet_pools(db)
+
             for db_user, modified_user_model, validated_groups, _, _ in prepared_updates:
                 if user_template.reset_usages:
                     await reset_user_data_usage(
@@ -2110,6 +2118,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                         commit=False,
                     )
 
+            for db_user, modified_user_model, validated_groups, _, _ in prepared_updates:
                 self._apply_explicit_null_hwid_limit(db_user, modified_user_model)
                 await crud_modify_user(
                     db,
