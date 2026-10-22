@@ -43,10 +43,11 @@ import {
 import { dateUtils, useRelativeExpiryDate } from '@/utils/dateFormatter'
 import { normalizeDatePickerValueForSubmit, serializeDatePickerValue, toDatePickerDisplayDate } from '@/utils/datePickerUtils'
 import { parseDateInput } from '@/utils/dateTimeParsing'
-import { bytesToFormGigabytes, formatBytes, gbToBytes } from '@/utils/formatByte'
+import { bytesToFormGigabytes, formatBytes, formGigabytesToBytes, gbToBytes } from '@/utils/formatByte'
 import { invalidateUserMetricsQueries, upsertUserInUsersCache } from '@/utils/usersCache'
 import { type ProxySettingsValues, regenerateAllProxyCredentials, revokeSubscriptionIntoForm } from '@/fork/users/proxy-credentials'
 import { hasPermission, hasScopeAll } from '@/utils/rbac'
+import { toWholeSeconds } from '@/utils/timeUnitSeconds'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CalendarClock,
@@ -1067,7 +1068,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         // Prepare next plan data
         const sendValues: any = {
           ...preparedValues,
-          data_limit: gbToBytes(normalizedDataLimitGb as any),
+          data_limit: formGigabytesToBytes(normalizedDataLimitGb, editingUser ? editingUserData?.data_limit : undefined),
           hwid_limit: preparedValues.hwid_limit == null ? null : Number.isFinite(Number(preparedValues.hwid_limit)) ? Math.round(Number(preparedValues.hwid_limit)) : null,
           data_limit_reset_strategy: canUseResetStrategy && hasDataLimit ? preparedValues.data_limit_reset_strategy : 'no_reset',
           expire: preparedValues.expire,
@@ -1175,7 +1176,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         setLoading(false)
       }
     },
-    [canUseNextPlan, canUseResetStrategy, editingUser, editingUserId, form, handleTemplateMutation, onOpenChange, requireTemplateForCreate, selectedTemplateId, status, t, touchedFields],
+    [canUseNextPlan, canUseResetStrategy, editingUser, editingUserData, editingUserId, form, handleTemplateMutation, onOpenChange, requireTemplateForCreate, selectedTemplateId, status, t, touchedFields],
   )
 
   // Helper for cryptographically secure random integer
@@ -1684,7 +1685,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                               emptyValue={0}
                                               zeroValue={0}
                                               toDisplayValue={value => value / unitSeconds}
-                                              toValue={displayValue => displayValue * unitSeconds}
+                                              toValue={displayValue => toWholeSeconds(displayValue, unitSeconds)}
                                               onValueChange={value => {
                                                 const nextValue = value ?? 0
                                                 field.onChange(nextValue)
