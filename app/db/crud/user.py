@@ -848,7 +848,7 @@ async def reload_review_users(db: AsyncSession, user_ids: list[int]) -> None:
     """Load users picked by a review query again in place, e.g. after a rollback expired them."""
     if not user_ids:
         return
-    stmt = _review_user_select_stmt().where(User.id.in_(user_ids))
+    stmt = _review_user_select_stmt().where(_explicit_ids(User.id, user_ids))
     (await db.execute(stmt.execution_options(populate_existing=True))).unique().scalars().all()
 
 
