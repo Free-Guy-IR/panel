@@ -101,6 +101,7 @@ from app.models.stats import (
 from app.nats import needs_shared_bridge_memory
 from app.nats.node_rpc import node_nats_client
 from app.node import UserSyncPreemptedError, core_users, node_manager
+from app.node.bridge import FullSyncConflictError
 from app.node.manager_sync import publish_node_sync
 from app.node.nats_memory import clear_bridge_memory_for_node
 from app.operation import BaseOperation, OperatorType
@@ -114,7 +115,6 @@ CONNECT_CONCURRENCY = 10
 ATTACH_SYNC_ATTEMPTS = 3
 ATTACH_SYNC_BACKOFF = 1.0
 FENCE_WAIT_SECONDS = 60.0
-NODE_RESTART_FIELDS = frozenset({"core_config_id", "keep_alive"})
 WIREGUARD_BATCHED_START_THRESHOLD = 1000
 WIREGUARD_START_BATCH_SIZE = 100
 type CoreUsers = list | Callable[[], Awaitable[list]]
@@ -842,7 +842,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
     @staticmethod
     def _start_settings(db_node: Node) -> tuple:
-        return db_node.core_config_id, tuple(db_node.additional_core_config_ids or ()), db_node.keep_alive
+        # A node without a core runs the default core; sending it is not a core change.
+        return db_node.core_config_id or 1, tuple(db_node.additional_core_config_ids or ()), db_node.keep_alive
 
     async def modify_node(self, db: AsyncSession, node_id: int, modified_node: NodeModify, admin: AdminDetails) -> Node:
         db_node = await self.get_validated_node(db=db, node_id=node_id)
@@ -857,11 +858,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             )
 
         node_name = modified_node.name or db_node.name
-
-        updates = modified_node.model_dump(exclude_none=True)
-        force_start = any(
-            field in updates and updates[field] != getattr(db_node, field) for field in NODE_RESTART_FIELDS
-        )
 
         try:
             db_node = await modify_node(db, db_node, modified_node)
@@ -1616,9 +1612,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 message="User sync was interrupted by a change to the node's connection or its removal, retry",
                 code=409,
             )
+        except FullSyncConflictError as e:
+            # Another snapshot (a Start, a repair) holds the node's fence (409), or deliveries are
+            # still in flight past their lease (503); nothing reached the node.
+            await self.raise_error(message=e.detail, code=e.code)
         except NodeAPIError as e:
-            if e.code != 409:
-                await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
+            await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
             await self.raise_error(message=e.detail, code=e.code)
 
         return NodeResponse.model_validate(db_node)
