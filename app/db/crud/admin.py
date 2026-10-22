@@ -14,10 +14,12 @@ from app.db.crud.general import (
 from app.db.models import (
     Admin,
     AdminNotificationReminder,
+    AdminPasskey,
     AdminRole,
     AdminUsageLogs,
     APIKey,
     NodeUserUsage,
+    PasskeyChallenge,
     ReminderType,
     User,
 )
@@ -864,8 +866,14 @@ async def remove_admins(db: AsyncSession, admin_ids: list[int]) -> None:
     if not admin_ids:
         return
 
+    # SQLite runs without foreign key enforcement, so ON DELETE CASCADE never fires there, and it can hand
+    # a freed id to the next admin. Delete every admin-owned row here, or a leftover passkey signs in as
+    # whoever gets the id next.
     await detach_admin_users(db, admin_ids)
     await db.execute(delete(APIKey).where(APIKey.admin_id.in_(admin_ids)))
+    await db.execute(delete(AdminPasskey).where(AdminPasskey.admin_id.in_(admin_ids)))
+    await db.execute(delete(PasskeyChallenge).where(PasskeyChallenge.admin_id.in_(admin_ids)))
+    await db.execute(delete(AdminNotificationReminder).where(AdminNotificationReminder.admin_id.in_(admin_ids)))
     await db.execute(delete(AdminUsageLogs).where(AdminUsageLogs.admin_id.in_(admin_ids)))
     await db.execute(delete(Admin).where(Admin.id.in_(admin_ids)))
     await db.commit()
