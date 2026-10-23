@@ -1,4 +1,5 @@
 import logging
+from unittest.mock import AsyncMock
 
 import pytest
 from PasarGuardNodeBridge import controller as bridge_controller
@@ -68,6 +69,8 @@ async def _bridge_worst_case_waits(monkeypatch) -> dict:
             return bridge_node
 
         monkeypatch.setattr(node_operation_module.node_manager, "get_node", get_node)
+        # Only the RPC wait is measured here; the post-update write has its own session.
+        monkeypatch.setattr(NodeOperation, "_mark_node_reconnecting_after_update", AsyncMock())
         operation = NodeOperation(OperatorType.SYSTEM)
         await getattr(operation, local_impl)(1, *args)
         assert len(bridge_node.request_timeouts) >= 2, (action, bridge_node.request_timeouts)

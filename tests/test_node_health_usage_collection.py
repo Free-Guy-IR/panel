@@ -56,6 +56,12 @@ class StatsDeadNode:
     async def get_versions(self):
         return "0.9.1", "25.9.11"
 
+    async def info(self, timeout=None):
+        return service.BaseInfoResponse(started=True, node_version="0.9.1", core_version="25.9.11")
+
+    async def set_reported_versions(self, node_version, core_version):
+        pass
+
 
 class StoredNode:
     def __init__(self, sessions, node_id: int):

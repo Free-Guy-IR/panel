@@ -1718,6 +1718,22 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await node.set_reported_versions(info.node_version, info.core_version)
         return True
 
+    @staticmethod
+    async def _mark_node_reconnecting_after_update(db: AsyncSession, node_id: int, node: PasarGuardNode) -> None:
+        """Leave a restarted node for the health job to attach or start."""
+        db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
+        if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
+            return
+        await update_node_status(
+            db,
+            db_node,
+            NodeStatus.connecting,
+            message="",
+            xray_version="",
+            node_version="",
+        )
+        await node.set_health(Health.NOT_CONNECTED)
+
     async def _update_node_api_local(self, node_id: int) -> dict:
         node = await node_manager.get_node(node_id)
         if node is None:
@@ -1726,12 +1742,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             response = await node.update_node()
         except NodeAPIError as e:
             await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
-        try:
-            # The request's session was released before the RPC, so read in a fresh one.
-            async with GetDB() as fresh:
-                await self.refresh_node_versions(fresh, node_id, node)
-        except Exception as exc:
-            logger.warning("Could not refresh versions after updating node %s: %s", node_id, exc)
+        # The request's session was released before the RPC, so write in a fresh one.
+        async with GetDB() as fresh:
+            await self._mark_node_reconnecting_after_update(fresh, node_id, node)
         return response.json()
 
     async def _maintenance_request(self, action: str, payload: dict) -> dict:
@@ -1757,11 +1770,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             response = await node.update_core(node_core_update.model_dump(mode="json"))
         except NodeAPIError as e:
             await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
-        try:
-            async with GetDB() as fresh:
-                await self.refresh_node_versions(fresh, node_id, node)
-        except Exception as exc:
-            logger.warning("Could not refresh versions after updating core on node %s: %s", node_id, exc)
+        async with GetDB() as fresh:
+            await self._mark_node_reconnecting_after_update(fresh, node_id, node)
         return response.json()
 
     async def _update_core_remote(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
