@@ -1688,6 +1688,36 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         )
         return NodeResponse.model_validate(await self.get_validated_node(db, node_id))
 
+    @staticmethod
+    async def refresh_node_versions(
+        db: AsyncSession,
+        node_id: int,
+        node: PasarGuardNode,
+        timeout: int | None = None,
+        *,
+        persist: bool = True,
+    ) -> bool:
+        """Read live versions and persist them only for the current connected node."""
+        info = await node.info(timeout=timeout)
+        if info is None or not info.started or not info.node_version or not info.core_version:
+            return False
+        if await node_manager.get_node(node_id) is not node:
+            return False
+
+        if not persist:
+            await node.set_reported_versions(info.node_version, info.core_version)
+            return True
+
+        db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
+        if db_node is None or db_node.status != NodeStatus.connected:
+            return False
+        if db_node.node_version != info.node_version or db_node.xray_version != info.core_version:
+            db_node.node_version = info.node_version
+            db_node.xray_version = info.core_version
+            await db.commit()
+        await node.set_reported_versions(info.node_version, info.core_version)
+        return True
+
     async def _update_node_api_local(self, node_id: int) -> dict:
         node = await node_manager.get_node(node_id)
         if node is None:
@@ -1696,6 +1726,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             response = await node.update_node()
         except NodeAPIError as e:
             await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
+        try:
+            # The request's session was released before the RPC, so read in a fresh one.
+            async with GetDB() as fresh:
+                await self.refresh_node_versions(fresh, node_id, node)
+        except Exception as exc:
+            logger.warning("Could not refresh versions after updating node %s: %s", node_id, exc)
         return response.json()
 
     async def _maintenance_request(self, action: str, payload: dict) -> dict:
@@ -1721,6 +1757,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             response = await node.update_core(node_core_update.model_dump(mode="json"))
         except NodeAPIError as e:
             await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
+        try:
+            async with GetDB() as fresh:
+                await self.refresh_node_versions(fresh, node_id, node)
+        except Exception as exc:
+            logger.warning("Could not refresh versions after updating core on node %s: %s", node_id, exc)
         return response.json()
 
     async def _update_core_remote(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
