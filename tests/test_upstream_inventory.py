@@ -205,6 +205,16 @@ def repo(tmp_path_factory):
     commit(
         path,
         "waive bridge",
+        {
+            "upstream-bridge-waiver.toml": (
+                'upstream_version = "0.9.2"\nreason = "fork bridge carries sing-box"\nuntil = 2026-10-20\n'
+            )
+        },
+    )
+    git(path, "checkout", "-q", "-b", "waiver-undated", "main")
+    commit(
+        path,
+        "waive bridge for ever",
         {"upstream-bridge-waiver.toml": 'upstream_version = "0.9.2"\nreason = "fork bridge carries sing-box"\n'},
     )
     git(path, "checkout", "-q", "-b", "waiver-noreason", "main")
@@ -213,6 +223,17 @@ def repo(tmp_path_factory):
     commit(
         path,
         "waive xray kit",
+        {
+            "upstream-npm-waivers.toml": (
+                '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
+                'reason = "0.3.9 only changes docs"\nuntil = 2026-10-20\n'
+            )
+        },
+    )
+    git(path, "checkout", "-q", "-b", "npm-waiver-undated", "main")
+    commit(
+        path,
+        "waive xray kit for ever",
         {
             "upstream-npm-waivers.toml": (
                 '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
@@ -419,8 +440,11 @@ def test_track_usage_errors(repo, tmp_path):
         ("main", ["--bridge-latest", "0.9.1", "--upstream-head", "u4"], 0, "Bridge version gate OK"),
         ("main", ["--bridge-latest", "0.9.2", "--upstream-head", "u4"], 1, "0.9.2 (from --bridge-latest)"),
         ("main", ["--bridge-latest", "0.9.1"], 1, "upstream latest: 0.9.2 (from pyproject.toml on"),
-        ("waiver-ok", ["--bridge-latest", "0.9.1"], 0, "waived by upstream-bridge-waiver.toml for 0.9.2"),
+        ("waiver-ok", ["--bridge-latest", "0.9.1", "--today", "2026-10-06"], 0, "waived by upstream-bridge-waiver.toml"),
         ("waiver-ok", ["--bridge-latest", "0.9.3"], 1, "is stale: it waives 0.9.2 but upstream is now at 0.9.3"),
+        ("waiver-ok", ["--bridge-latest", "0.9.1", "--today", "2026-10-21"], 1, "expired on 2026-10-20; re-check it"),
+        ("waiver-ok", ["--bridge-latest", "0.9.1", "--today", "2026-09-15"], 1, "more than 30 days ahead"),
+        ("waiver-undated", ["--bridge-latest", "0.9.1", "--today", "2026-10-06"], 1, "has no until date"),
         ("waiver-noreason", ["--bridge-latest", "0.9.2", "--upstream-head", "none"], 1, "has no reason"),
         ("main", ["--bridge-latest", "not-a-version"], 2, "is not a version"),
     ],
@@ -1151,7 +1175,24 @@ def test_the_sync_point_must_be_upstream_history_on_a_tracked_ref(repo, tmp_path
             1,
             "(from '^0.3.9' in dashboard/package.json on refs/upstream-release/npm-floor)",
         ),
-        ("npm-waiver-ok", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9"], 0, "waived by upstream-npm-waivers"),
+        (
+            "npm-waiver-ok",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-06"],
+            0,
+            "waived by upstream-npm-waivers",
+        ),
+        (
+            "npm-waiver-undated",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-06"],
+            1,
+            "has no until date; a waiver needs a dated re-check",
+        ),
+        (
+            "npm-waiver-dated",
+            ["--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-09-20"],
+            1,
+            "more than 30 days ahead",
+        ),
         ("npm-waiver-ok", ["--npm-latest", "@pasarguard/xray-config-kit=0.3.10"], 1, "is stale: it waives 0.3.9"),
         (
             "main",

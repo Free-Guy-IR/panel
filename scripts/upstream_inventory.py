@@ -1481,7 +1481,17 @@ def upstream_bridge_floor(upstream):
     return best
 
 
-def bridge_waiver_verdict(head, latest):
+def waiver_deadline_problem(until, today, what):
+    if until is None:
+        return f"{what} has no until date; a waiver needs a dated re-check"
+    if today > until:
+        return f"{what} expired on {until.isoformat()}; re-check it"
+    if (until - today).days > DECISION_MAX_DAYS:
+        return f"{what} runs until {until.isoformat()}, more than {DECISION_MAX_DAYS} days ahead; pick a nearer date"
+    return None
+
+
+def bridge_waiver_verdict(head, latest, today):
     text = head_blob(head, BRIDGE_WAIVER_FILE)
     if text is None:
         return 1, f"no {BRIDGE_WAIVER_FILE} on {head}; bump the bridge or add a waiver for {latest}"
@@ -1501,10 +1511,16 @@ def bridge_waiver_verdict(head, latest):
         return 1, f"{BRIDGE_WAIVER_FILE} is stale: it waives {waived} but upstream is now at {latest}"
     if waived != latest:
         return 1, f"{BRIDGE_WAIVER_FILE} waives {waived}, which does not match upstream {latest}"
-    return 0, f"waived by {BRIDGE_WAIVER_FILE} for {latest}: {reason.strip()}"
+    until = waiver.get("until")
+    if until is not None and not isinstance(until, date):
+        return 1, f"{BRIDGE_WAIVER_FILE} until {until!r} is not a YYYY-MM-DD date"
+    problem = waiver_deadline_problem(until, today, f"{BRIDGE_WAIVER_FILE} for {latest}")
+    if problem:
+        return 1, problem
+    return 0, f"waived by {BRIDGE_WAIVER_FILE} for {latest} until {until.isoformat()}: {reason.strip()}"
 
 
-def bridge_gate(head, upstream, latest_override):
+def bridge_gate(head, upstream, latest_override, today):
     print()
     print("Bridge Version")
     raw_pinned = pinned_bridge_version(head)
@@ -1549,7 +1565,7 @@ def bridge_gate(head, upstream, latest_override):
             print(f"  note: {BRIDGE_WAIVER_FILE} is no longer needed")
         print(f"Bridge version gate OK: pinned {pinned} is not behind upstream {latest}")
         return 0
-    code, message = bridge_waiver_verdict(head, latest)
+    code, message = bridge_waiver_verdict(head, latest, today)
     if code:
         print(f"Bridge version gate FAILED: pinned {pinned} is behind upstream {latest}; {message}")
     else:
@@ -1695,8 +1711,9 @@ def npm_waiver_verdict(waivers, name, latest, today):
     for version, reason, until in listed:
         if version != latest:
             continue
-        if until is not None and today > until:
-            return 1, f"the waiver in {NPM_WAIVER_FILE} for {latest} expired on {until.isoformat()}; re-check it"
+        problem = waiver_deadline_problem(until, today, f"the waiver in {NPM_WAIVER_FILE} for {latest}")
+        if problem:
+            return 1, problem
         return 0, f"waived by {NPM_WAIVER_FILE} for {latest}: {reason}"
     if not listed:
         return 1, f"no waiver in {NPM_WAIVER_FILE}"
@@ -1964,7 +1981,7 @@ def main():
         )
 
     if args.check_bridge:
-        codes.append(bridge_gate(args.head, upstream, args.bridge_latest))
+        codes.append(bridge_gate(args.head, upstream, args.bridge_latest, today or datetime.now(UTC).date()))
 
     if args.check_npm:
         codes.append(
