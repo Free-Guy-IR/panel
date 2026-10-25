@@ -800,8 +800,15 @@ def test_whitespace_changes_are_not_patch_identical_copies(tmp_path):
     assert unguarded[:12] in unported_block(result.stdout)
 
 
-@pytest.mark.parametrize("reason", ["UNMERGED WIP: only on feat/x", "**UNMERGED-WIP**: only on feat/x", "Pending: feat/x"])
-def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_path, reason):
+@pytest.mark.parametrize(
+    ("reason", "message"),
+    [
+        ("UNMERGED WIP: only on feat/x", "is waived only while unmerged"),
+        ("Pending: feat/x", "is waived only while unmerged"),
+        ("**UNMERGED-WIP**: only on feat/x", "an entry is plain text and code spans only"),
+    ],
+)
+def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_path, reason, message):
     result = parity(
         repo,
         covering_ledger(tmp_path, repo, reason),
@@ -811,7 +818,7 @@ def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_
         "refs/upstream-release/merged",
     )
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "is waived only while unmerged" in result.stdout
+    assert message in result.stdout
 
 
 @pytest.mark.parametrize(
@@ -833,13 +840,13 @@ def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_
         ("## Waived\n\n- `{u3}` until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` (security: no) until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no (until: 2026-10-10)\n", "`{u3}` has no reason"),
-        ("## Port queue\n\n- `{u3}` **security: no** until: 2026-10-10\n", "`{u3}` has no reason"),
+        ("## Port queue\n\n- `{u3}` **security: no** until: 2026-10-10\n", "an entry is plain text and code spans only"),
         ("## Port queue\n\n- `{u3}` security: no! until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no until: 2026-10-10 ?\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no / until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no\u00a0until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Waived\n\n- `{u3}` (until: 2026-10-10)\n", "`{u3}` has no reason"),
-        ("## Port queue\n\n- `{u3}` _security: no_ until: 2026-10-10\n", "needs exactly one security: yes|no classification"),
+        ("## Port queue\n\n- `{u3}` _security: no_ until: 2026-10-10\n", "an entry is plain text and code spans only"),
         (
             "## Port queue\n\n- `{u3}` port it security: yes security: no until: 2026-10-10\n",
             "needs exactly one security: yes|no classification",
@@ -1550,11 +1557,16 @@ def test_a_trailer_alone_never_covers_a_merge_with_its_own_changes(tmp_path, tra
 
 
 @pytest.mark.parametrize(
-    "until",
-    ["until: **2026-10-20**", "until `2026-10-20`", "until 2026/10/20", "until: _2026-10-20_", "Until: 2026.10.20"],
+    ("until", "message"),
+    [
+        ("until 2026/10/20", "has an until date the gate cannot read"),
+        ("Until: 2026.10.20", "has an until date the gate cannot read"),
+        ("until: **2026-10-20**", "an entry is plain text and code spans only"),
+        ("until: _2026-10-20_", "an entry is plain text and code spans only"),
+    ],
 )
 @pytest.mark.parametrize("section", ["Waived", "Port queue"])
-def test_an_until_date_the_gate_cannot_read_fails_instead_of_becoming_permanent(tmp_path, until, section):
+def test_an_until_date_the_gate_cannot_read_fails_instead_of_becoming_permanent(tmp_path, until, message, section):
     path, shas = security_repo(tmp_path)
     flag = " security: no" if section == "Port queue" else ""
     if section == "Waived":
@@ -1563,7 +1575,21 @@ def test_an_until_date_the_gate_cannot_read_fails_instead_of_becoming_permanent(
         text = crafted_ledger(shas, "", f"- `{shas['plain']}` bump the library{flag} {until}\n")
     result = standalone_gate(path, text)
     assert result.returncode == 1, result.stdout + result.stderr
-    assert f"`{shas['plain']}` has an until date the gate cannot read" in result.stdout
+    assert message in result.stdout
+
+
+@pytest.mark.parametrize("section", ["Waived", "Port queue"])
+def test_an_until_date_in_a_code_span_is_honoured_as_a_real_deadline(tmp_path, section):
+    path, shas = security_repo(tmp_path)
+    if section == "Waived":
+        text = crafted_ledger(shas, f"- `{shas['plain']}` the fork pins its own copy until `2026-10-20`\n", "")
+    else:
+        text = crafted_ledger(shas, "", f"- `{shas['plain']}` bump the library security: no until `2026-10-20`\n")
+    before = standalone_gate(path, text)
+    assert before.returncode == 0, before.stdout + before.stderr
+    after = standalone_gate(path, text, "--today", "2026-10-21")
+    assert after.returncode == 1, after.stdout + after.stderr
+    assert "was decided only until 2026-10-20" in after.stdout
 
 
 def test_a_readable_until_date_still_passes(tmp_path):
