@@ -1707,3 +1707,95 @@ def test_a_heading_with_markup_is_a_ledger_error(tmp_path):
     result = standalone_gate(path, text)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "a ledger heading is plain text" in result.stdout
+
+
+def merge_repo(tmp_path):
+    path = standalone_repo(tmp_path, "merge")
+    shas = {
+        "fix": commit(path, "fix a check", {"r.py": lines("r", overrides={1: "R1"})}),
+        "bump": commit(path, "bump a library", {"s.py": lines("s", overrides={1: "S1"})}),
+    }
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["bump"])
+    git(path, "tag", "v1.1", shas["bump"])
+    git(path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(path, "fork root change", {"t.py": lines("t")})
+    git(path, "merge", "-q", "--no-ff", "-m", "merge upstream v1.1", "v1.1")
+    return path, shas
+
+
+def test_an_upstream_release_merged_into_the_head_counts_as_ported(tmp_path):
+    path, _ = merge_repo(tmp_path)
+    result = standalone_gate(path, "## Waived\n")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "merged into the head, every line present") == 2
+
+
+def test_a_merged_upstream_commit_whose_lines_the_fork_dropped_is_unported(tmp_path):
+    path, shas = merge_repo(tmp_path)
+    commit(path, "fork keeps its own s.py", {"s.py": lines("s")})
+    result = standalone_gate(path, "## Waived\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert shas["bump"][:12] in unported_block(result.stdout)
+    assert f"{shas['bump'][:12]}: merged into main, but 2 of 2 line(s)" in result.stdout
+    assert tally(result.stdout, "merged into the head, every line present") == 1
+    waived = standalone_gate(path, f"## Waived\n\n- `{shas['bump']}` the fork pins its own copy of the library\n")
+    assert waived.returncode == 0, waived.stdout + waived.stderr
+
+
+def test_the_baseline_must_be_a_release_the_fork_has_merged(tmp_path):
+    path, _ = merge_repo(tmp_path)
+    ok = standalone_gate(path, "## Waived\n", "--require-base-ancestor")
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    git(path, "checkout", "-q", "--orphan", "rebuilt", "v1.0")
+    git(path, "commit", "-q", "-m", "fork rebuilt without upstream history")
+    orphan = run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "rebuilt",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--today",
+        "2026-10-06",
+        "--require-base-ancestor",
+    )
+    assert orphan.returncode == 1, orphan.stdout + orphan.stderr
+    assert "the baseline v1.0" in orphan.stdout and "is not an ancestor of rebuilt" in orphan.stdout
+    grandfathered = run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "rebuilt",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--today",
+        "2026-10-06",
+        "--require-base-ancestor",
+        "--grandfathered-base",
+        "v1.0",
+    )
+    assert "is not an ancestor of rebuilt" not in grandfathered.stdout
+    bumped = run(
+        path,
+        "--base",
+        "v1.1",
+        "--head",
+        "rebuilt",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--today",
+        "2026-10-06",
+        "--require-base-ancestor",
+        "--grandfathered-base",
+        "v1.0",
+    )
+    assert bumped.returncode == 1, bumped.stdout + bumped.stderr
+    assert "the baseline v1.1" in bumped.stdout and "is not an ancestor of rebuilt" in bumped.stdout

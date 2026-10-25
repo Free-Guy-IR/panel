@@ -94,6 +94,7 @@ COVERAGE_LABELS = {
     "trailer": "ported via cherry-pick -x trailer",
     "ported-by-design": "ported by design (ledger)",
     "waived": "waived (ledger)",
+    "merged": "merged into the head, every line present",
     PORT_QUEUE: "owed: in the port queue until its deadline",
     HELD: "held until an upstream release (ledger)",
     "patch-id": "patch-id equivalent of a covered commit",
@@ -864,6 +865,25 @@ def pick_reference(sha, upstream, containing_tips):
     return sha
 
 
+def merged_into_head(head, candidates, upstream, tips_for):
+    if not candidates:
+        return set(), {}
+    ancestors = set(git("rev-list", head).split())
+    merged = set()
+    findings = {}
+    for sha in sorted(set(candidates) & ancestors):
+        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head)
+        if missing:
+            path, text = missing[0]
+            findings[sha] = (
+                f"merged into {head}, but {len(missing)} of {expected} line(s) it adds or removes are not "
+                f"reflected there, for example in {path}: {text[:80]!r}"
+            )
+        else:
+            merged.add(sha)
+    return merged, findings
+
+
 def ineffective_picks(head, candidates, upstream, tips_for):
     picks = trailer_picks(head)
     reverted = reverted_commits(head)
@@ -1175,6 +1195,8 @@ def parity_gate(
     release_patterns=(),
     upstream=None,
     held_release_patterns=DEFAULT_HELD_RELEASE_REFS,
+    base_must_be_ancestor=False,
+    grandfathered_bases=(),
 ):
     tracked = expand_tracked(patterns)
     containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
@@ -1236,12 +1258,28 @@ def parity_gate(
         upstream,
         lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
     )
+    if base_must_be_ancestor:
+        base_sha = resolve_ref(f"{base}^{{commit}}")
+        grandfathered = {resolve_ref(f"{ref}^{{commit}}") for ref in grandfathered_bases}
+        if base_sha not in grandfathered and not is_ancestor(base_sha, resolve_ref(f"{head}^{{commit}}")):
+            ledger_errors.append(
+                f"the baseline {base} ({base_sha[:12]}) is not an ancestor of {head}; a baseline may only name an "
+                "upstream release that the fork has merged, so every upstream commit before it is really in the fork"
+            )
     coverage = {}
     for sha in (in_range & trailer_shas(head)) - set(ineffective) - set(content_merges):
         coverage[sha] = "trailer"
+    merged, unmerged_lines = merged_into_head(
+        head,
+        in_range - set(coverage) - set(content_merges),
+        upstream,
+        lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
+    )
+    for sha in merged:
+        coverage[sha] = "merged"
     for sha, entry in resolved.items():
         coverage.setdefault(sha, entry["kind"])
-        if entry["kind"] in (PORT_QUEUE, HELD) and coverage[sha] == "trailer":
+        if entry["kind"] in (PORT_QUEUE, HELD) and coverage[sha] in ("trailer", "merged"):
             place = "the port queue" if entry["kind"] == PORT_QUEUE else "the held list"
             copy_notes.append(f"{entry['where']}: `{sha[:12]}` is ported now; delete it from {place}")
     ids = patch_ids(sorted(in_range))
@@ -1364,6 +1402,13 @@ def parity_gate(
             for row in owed:
                 message = f"{row['sha'][:12]} {row['subject']} is owed until {deadlines[row['sha']].isoformat()}"
                 print(f"::warning title=Owed upstream port::{workflow_command_escape(message)}")
+
+    if unmerged_lines:
+        print()
+        print(f"Upstream commits merged into {head} whose change is not all there ({len(unmerged_lines)}):")
+        for sha, why in sorted(unmerged_lines.items()):
+            state = "covered by its ledger entry" if sha in coverage else "needs a Ported by design or Waived entry"
+            print(f"  {sha[:12]}: {why}; {state}")
 
     unlisted_picks = {sha: why for sha, why in ineffective.items() if sha not in coverage}
     if ineffective:
@@ -1875,6 +1920,18 @@ def main():
         "(repeatable; default: " + ", ".join(DEFAULT_HELD_RELEASE_REFS) + ")",
     )
     parser.add_argument(
+        "--require-base-ancestor",
+        action="store_true",
+        help="fail unless --base is an ancestor of --head or one of the --grandfathered-base commits",
+    )
+    parser.add_argument(
+        "--grandfathered-base",
+        metavar="COMMIT",
+        action="append",
+        default=[],
+        help="a baseline accepted although it is not an ancestor of --head (repeatable)",
+    )
+    parser.add_argument(
         "--unrelated-history",
         action="store_true",
         help="the fork shares no history with upstream, so tracked refs unrelated to --base are not skipped",
@@ -1977,6 +2034,8 @@ def main():
                 release_patterns=args.release_ref,
                 upstream=upstream,
                 held_release_patterns=tuple(args.held_release_ref) or DEFAULT_HELD_RELEASE_REFS,
+                base_must_be_ancestor=args.require_base_ancestor,
+                grandfathered_bases=tuple(args.grandfathered_base),
             )
         )
 
