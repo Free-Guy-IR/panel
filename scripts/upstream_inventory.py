@@ -1203,6 +1203,7 @@ def parity_gate(
     snapshot_errors = []
     unrecorded = []
     snapshot_kept = []
+    pairs = []
     if snapshot_path:
         pairs, snapshot_errors = load_refs_snapshot(snapshot_path)
         if write_snapshot and not snapshot_errors:
@@ -1246,9 +1247,34 @@ def parity_gate(
         )
     held = {sha for sha, entry in resolved.items() if entry["kind"] == HELD}
     held_release_refs = expand_tracked(held_release_patterns, option="--held-release-ref", strict=False)
+    every_tag = {ref for ref, _ in expand_tracked(DEFAULT_HELD_RELEASE_REFS, strict=False)}
+    left_out = sorted(every_tag - {ref for ref, _ in held_release_refs})
+    if left_out:
+        ledger_errors.append(
+            f"--held-release-ref leaves out {len(left_out)} upstream release tag(s), for example {short_ref(left_out[0])}; "
+            "every refs/upstream-tags/* tag must count as a release for the held list"
+        )
     if held and not held_release_refs:
         ledger_errors.append("entries held for an upstream release need at least one existing upstream release tag")
-    on_final_release = commits_on_refs(base, held_release_refs)
+    live_tips = {name: resolve_ref(f"{ref}^{{commit}}") for ref, name in held_release_refs}
+    recorded_releases = [
+        (sha, f"{name} (recorded in {snapshot_path})")
+        for sha, name in pairs
+        if recorded_tag_ref(name)
+        and live_tips.get(name) != sha
+        and any(fnmatchcase(recorded_tag_ref(name), pattern) for pattern in held_release_patterns)
+        and commit_exists(sha)
+    ]
+    final_refs = [(ref, name) for ref, name in held_release_refs if not is_prerelease_tag(name)]
+    final_refs += [(sha, label) for sha, label in recorded_releases if not is_prerelease_tag(label.split(" ", 1)[0])]
+    prerelease_refs = [(ref, name) for ref, name in held_release_refs if is_prerelease_tag(name)]
+    on_final_release = commits_on_refs(base, final_refs)
+    for sha, names in sorted(commits_on_refs(base, prerelease_refs).items()):
+        if sha in held and sha not in on_final_release:
+            copy_notes.append(
+                f"`{sha[:12]}` is in upstream pre-release {', '.join(sorted(names))} only; "
+                "it stays held until a final release contains it"
+            )
 
     tip_by_name = {name: tip for name, tip, _ in active}
     tip_by_name.update({name: sha for sha, name in heads})
@@ -1536,6 +1562,22 @@ def waiver_deadline_problem(until, today, what):
     return None
 
 
+def recorded_tag_ref(name):
+    if name.startswith("refs/upstream-tags/"):
+        return name
+    if name.startswith(("upstream/", "refs/")):
+        return None
+    return f"refs/upstream-tags/{name}"
+
+
+def is_prerelease_tag(name):
+    text = re.sub(r"^v\.?", "", name.rsplit("/", 1)[-1], flags=re.IGNORECASE)
+    try:
+        return Version(text).is_prerelease
+    except InvalidVersion:
+        return bool(re.search(r"(?:^|[-._])(?:rc|beta|alpha|pre|preview|dev)\d*(?:$|[-._])", text, re.IGNORECASE))
+
+
 def bridge_waiver_verdict(head, latest, today):
     text = head_blob(head, BRIDGE_WAIVER_FILE)
     if text is None:
@@ -1557,7 +1599,7 @@ def bridge_waiver_verdict(head, latest, today):
     if waived != latest:
         return 1, f"{BRIDGE_WAIVER_FILE} waives {waived}, which does not match upstream {latest}"
     until = waiver.get("until")
-    if until is not None and not isinstance(until, date):
+    if until is not None and (isinstance(until, datetime) or not isinstance(until, date)):
         return 1, f"{BRIDGE_WAIVER_FILE} until {until!r} is not a YYYY-MM-DD date"
     problem = waiver_deadline_problem(until, today, f"{BRIDGE_WAIVER_FILE} for {latest}")
     if problem:
@@ -1741,6 +1783,9 @@ def load_npm_waivers(head):
             errors.append(f"{where} ({package}) upstream_version {waiver.get('upstream_version')!r} is not a version")
             continue
         until = waiver.get("until")
+        if isinstance(until, datetime):
+            errors.append(f"{where} ({package}) until {until!r} is a date-time; write a YYYY-MM-DD date")
+            continue
         if until is not None and not isinstance(until, date):
             try:
                 until = date.fromisoformat(str(until))

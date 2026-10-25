@@ -1799,3 +1799,90 @@ def test_the_baseline_must_be_a_release_the_fork_has_merged(tmp_path):
     )
     assert bumped.returncode == 1, bumped.stdout + bumped.stderr
     assert "the baseline v1.1" in bumped.stdout and "is not an ancestor of rebuilt" in bumped.stdout
+
+
+def held_gate(path, shas, *extra):
+    return standalone_gate(
+        path,
+        crafted_ledger(shas, "", HELD_LINE),
+        "--track",
+        "refs/upstream-tags/*",
+        "--refs-snapshot",
+        ".upstream-refs",
+        *extra,
+    )
+
+
+@pytest.mark.parametrize("change", ["delete", "move"])
+def test_a_release_once_recorded_keeps_its_held_commits_released(tmp_path, change):
+    path, shas = held_repo(tmp_path)
+    (path / ".upstream-refs").write_text("")
+    git(path, "update-ref", "refs/upstream-tags/v1.1", shas["feature"])
+    assert held_gate(path, shas, "--write-refs-snapshot").returncode == 1
+    assert f"{shas['feature']} v1.1" in (path / ".upstream-refs").read_text()
+    if change == "delete":
+        git(path, "update-ref", "-d", "refs/upstream-tags/v1.1")
+    else:
+        git(path, "update-ref", "refs/upstream-tags/v1.1", git(path, "rev-parse", "v1.0"))
+    result = held_gate(path, shas, "--write-refs-snapshot")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain'][:12]}` is held for an upstream release, but upstream released it in v1.1 (recorded in" in (
+        result.stdout
+    )
+
+
+def test_a_narrowed_held_release_set_is_refused(tmp_path):
+    path, shas = held_repo(tmp_path)
+    git(path, "update-ref", "refs/upstream-tags/v1.1", shas["feature"])
+    result = standalone_gate(
+        path, crafted_ledger(shas, "", HELD_LINE), "--held-release-ref", "refs/upstream-tags/v1.0"
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "--held-release-ref leaves out 1 upstream release tag(s), for example v1.1" in result.stdout
+
+
+@pytest.mark.parametrize("tag", ["v1.1-rc.1", "v1.1.0-beta-2", "v1.1rc1"])
+def test_a_prerelease_tag_keeps_a_commit_held_and_the_final_tag_releases_it(tmp_path, tag):
+    path, shas = held_repo(tmp_path)
+    git(path, "update-ref", f"refs/upstream-tags/{tag}", shas["feature"])
+    held = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE))
+    assert held.returncode == 0, held.stdout + held.stderr
+    assert f"`{shas['plain'][:12]}` is in upstream pre-release {tag} only; it stays held" in held.stdout
+    git(path, "update-ref", "refs/upstream-tags/v1.1", shas["feature"])
+    released = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE))
+    assert released.returncode == 1, released.stdout + released.stderr
+    assert "but upstream released it in v1.1" in released.stdout
+
+
+def test_a_waiver_until_written_as_a_date_time_is_refused_without_a_traceback(repo, tmp_path):
+    path = repo["path"]
+    git(path, "checkout", "-q", "-b", "waiver-datetime", "main")
+    commit(
+        path,
+        "waive with a date-time",
+        {
+            "upstream-bridge-waiver.toml": (
+                'upstream_version = "0.9.2"\nreason = "fork bridge carries sing-box"\nuntil = 2026-10-20T00:00:00\n'
+            ),
+            "upstream-npm-waivers.toml": (
+                '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\n'
+                'reason = "0.3.9 only changes docs"\nuntil = 2026-10-20T00:00:00\n'
+            ),
+        },
+    )
+    git(path, "checkout", "-q", "main")
+    bridge = run(path, "--head", "waiver-datetime", "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
+    assert bridge.returncode == 1, bridge.stdout + bridge.stderr
+    assert "is not a YYYY-MM-DD date" in bridge.stdout and "Traceback" not in bridge.stderr
+    npm = run(
+        path,
+        "--head",
+        "waiver-datetime",
+        "--check-npm",
+        "--npm-latest",
+        "@pasarguard/xray-config-kit=0.3.9",
+        "--today",
+        "2026-10-06",
+    )
+    assert npm.returncode != 0, npm.stdout + npm.stderr
+    assert "is a date-time; write a YYYY-MM-DD date" in npm.stdout + npm.stderr and "Traceback" not in npm.stderr
