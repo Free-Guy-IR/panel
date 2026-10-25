@@ -1,5 +1,5 @@
 [[waiver]]
 package = "@pasarguard/xray-config-kit"
-upstream_version = "0.3.9"
-until = 2026-10-20
-reason = "Decision: bump, not waive. Re-checked 2026-10-09: Free-Guy-IR/core-kit main 90701408 now carries xray-config-kit 0.3.9 (fork core-kit 0.3.1, 28d8bd2), and .github/config-kits.lock already pins that commit (28d8bd2), but the panel's dashboard/bun.lock still resolves @pasarguard/xray-config-kit 0.3.8 and the nested core-kit copy 0.3.7; the lock moves in the integration branch when the dashboard dependencies are reinstalled against the pinned kits, and this waiver is then deleted."
+upstream_version = "0.4.1"
+until = 2026-11-08
+reason = "Re-decided 2026-10-25, not extended: the 0.3.9 waiver expired on 2026-10-20 and upstream moved on to final npm releases xray-config-kit 0.3.10, 0.4.0 and 0.4.1, with core-kit 0.2.10 to 0.2.12 depending on them. Under the 2026-10-14 release-only rule this is an owed bump, not a waiver: main assigned it on 2026-10-25 to PUSH-GATE, which ports core-kit 0.2.12 and xray-config-kit 0.4.1 into Free-Guy-IR/core-kit, moves .github/config-kits.lock and reinstalls dashboard/bun.lock (today 0.3.8, nested 0.3.7). This entry only keeps the gate honest until that increment lands; PUSH-GATE deletes it in the same increment, and if the port is not on main by 2026-11-08 the gate fails again."
