@@ -59,6 +59,11 @@ removed lines are all gone) or decided here. Ancestry alone never proves a port,
 merge that is reverted later or a squashed sync that dropped a hunk all make upstream commits reachable while
 their lines are missing. A baseline that descends from no grandfathered release stops the gate with an error.
 
+Known limit: the gate tells a final upstream release from a pre-release by its tag name (PEP 440, or an `rc`,
+`beta`, `alpha`, `pre`, `preview` or `dev` part), not by the GitHub release flag, so it needs no network. A
+final GitHub release cut on an rc-named tag would be read as a pre-release; all 63 upstream panel tags of
+2026-10-25 follow the naming convention.
+
 A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date, and the date may be at
 most 30 days ahead, so every dated decision is looked at again within a month. After it the gate fails and the
 commit needs a new decision. Pending upstream feature branches are recorded this way.
