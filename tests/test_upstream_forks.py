@@ -111,8 +111,8 @@ def test_waived_upstream_commits_make_the_fork_green(world):
     shas = world["shas"]
     ledger = (
         "## Waived\n\n"
-        f"- `{shas['bumped']}` the fork versions itself\n"
-        f"- `{shas['feature']}` pending: tracked feature branch until: 2026-10-25\n"
+        f"- `{shas['bumped']}` the fork versions itself security: no\n"
+        f"- `{shas['feature']}` pending: tracked feature branch security: no until: 2026-10-25\n"
     )
     config = write_map(world, ledger_map(world), ledger)
     assert run(config, "--today", "2026-10-01").returncode == 0
@@ -123,7 +123,7 @@ def test_waived_upstream_commits_make_the_fork_green(world):
 
 def test_the_refs_snapshot_of_a_ledger_fork_is_written_and_enforced(world):
     shas = world["shas"]
-    ledger = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("bumped", "feature"))
+    ledger = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason security: no\n" for k in ("bumped", "feature"))
     config = write_map(world, ledger_map(world, 'snapshot = "upstream-forks/kit.refs"'), ledger)
     unrecorded = run(config)
     assert unrecorded.returncode == 1
@@ -213,7 +213,7 @@ def test_a_map_entry_without_a_reason_is_rejected(world):
 
 def covering_side_ledger(world, feature_reason):
     shas = world["shas"]
-    return f"## Waived\n\n- `{shas['bumped']}` the fork versions itself\n- `{shas['feature']}` {feature_reason}\n"
+    return f"## Waived\n\n- `{shas['bumped']}` the fork versions itself security: no\n- `{shas['feature']}` {feature_reason} security: no\n"
 
 
 def test_release_refs_decide_when_a_conditional_waiver_ends(world):
@@ -282,7 +282,7 @@ def test_a_pending_tracker_needs_a_near_date(world):
 def test_a_side_repo_port_queue_is_owed_until_its_deadline(world, today, code, message):
     shas = world["shas"]
     ledger = (
-        f"## Waived\n\n- `{shas['feature']}` UNMERGED-WIP: only on upstream feature until: 2026-10-25\n\n"
+        f"## Waived\n\n- `{shas['feature']}` UNMERGED-WIP: only on upstream feature security: no until: 2026-10-25\n\n"
         f"## Port queue\n\n- `{shas['bumped']}` the version bump lands with the next fork release security: no until: 2026-10-13\n"
     )
     result = run(write_map(world, ledger_map(world), ledger), "--today", today)
@@ -320,7 +320,7 @@ def test_release_refs_belong_only_to_a_ledger_repo(world):
 
 def test_a_refs_snapshot_line_is_never_passed_to_git_as_an_option(world, tmp_path):
     shas = world["shas"]
-    ledger = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason\n" for k in ("bumped", "feature"))
+    ledger = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason security: no\n" for k in ("bumped", "feature"))
     config = write_map(world, ledger_map(world, 'snapshot = "upstream-forks/kit.refs"'), ledger)
     marker = tmp_path / "PWNED"
     (world["panel"] / "upstream-forks" / "kit.refs").write_text(

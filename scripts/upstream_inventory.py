@@ -104,6 +104,14 @@ COVERAGE_LABELS = {
 CONDITIONAL_TAG_RE = re.compile(r"^[\W_]*(?:UNMERGED[\W_]*WIP|pending)\b", re.IGNORECASE)
 SECURITY_FLAG_RE = re.compile(r"\bsecurity:\s*(yes|no)\b", re.IGNORECASE)
 SECURITY_MARK_RE = re.compile(r"\(security\)|\[security\]", re.IGNORECASE)
+SECURITY_MARKER_RE = re.compile(
+    r"\b(?:cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3})\b|\(security\)|\[security\]", re.IGNORECASE
+)
+OWNER_DECISION_RE = re.compile(r"\bowner-decision:\s*(\S*)", re.IGNORECASE)
+DECISION_ID_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
+LEDGER_DECISION_SYNTAX = "owner-decision: YYYY-MM-DD-<name>"
+TOML_DECISION_SYNTAX = 'owner_decision = "YYYY-MM-DD-<name>"'
+WAIVER_SECURITY_VALUES = {"yes": True, "no": False}
 SECURITY_SUBJECT_RE = re.compile(
     r"\b(?:security|cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3}|vulnerab\w*|exploit\w*|disclosur\w*"
     r"|auth(?:n|z|entication|enticate|orization|orize|orized)?|permissions?|privileges?|api[ _-]?keys?"
@@ -933,6 +941,24 @@ def security_hint(reason, subject):
     return f"it names {match.group(0)!r}" if match else None
 
 
+def security_marker(*texts):
+    match = SECURITY_MARKER_RE.search("\n".join(texts))
+    return match.group(0) if match else None
+
+
+def owner_decision_problem(value, today, what, syntax):
+    match = DECISION_ID_RE.match(value or "")
+    if not match:
+        return f"{what} needs the owner's decision, written as {syntax}"
+    try:
+        decided = date.fromisoformat(match.group(1))
+    except ValueError:
+        return f"{what} names an owner decision with an invalid date {match.group(1)}"
+    if decided > today:
+        return f"{what} names an owner decision dated {decided.isoformat()}, after today"
+    return None
+
+
 def workflow_command_escape(text):
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
@@ -1093,6 +1119,33 @@ def parse_sync_ledger(path, today=None):
                 )
                 continue
         security = None
+        if section == "waived":
+            flags = SECURITY_FLAG_RE.findall(reason)
+            if len(flags) != 1:
+                errors.append(
+                    f"{where}: `{token}` waived needs exactly one security: yes|no classification with a reason "
+                    f"(found {len(flags)})"
+                )
+                continue
+            security = flags[0].lower() == "yes"
+            decisions = OWNER_DECISION_RE.findall(reason)
+            if security and len(decisions) > 1:
+                errors.append(f"{where}: `{token}` names {len(decisions)} owner decisions; keep exactly one")
+                continue
+            problem = security and owner_decision_problem(
+                decisions[0] if decisions else None, today, f"`{token}`: a waived security fix", LEDGER_DECISION_SYNTAX
+            )
+            if problem:
+                errors.append(f"{where}: {problem}")
+                continue
+        if section == "ported-by-design":
+            flags = SECURITY_FLAG_RE.findall(reason)
+            if len(flags) > 1:
+                errors.append(
+                    f"{where}: `{token}` ported by design names {len(flags)} security classifications; keep at most one"
+                )
+                continue
+            security = flags[0].lower() == "yes" if flags else None
         if section == HELD:
             if deadline is not None:
                 errors.append(
@@ -1396,6 +1449,29 @@ def parity_gate(
                 copy_notes.append(
                     f"{entry['where']}: `{sha[:12]}` is classified security: no but {hint}; re-review the classification"
                 )
+    for row in rows:
+        sha = row["sha"]
+        entry = resolved.get(sha)
+        if entry is None or coverage.get(sha) != entry["kind"]:
+            continue
+        marker = security_marker(row["subject"], SECURITY_FLAG_RE.sub("", entry["reason"]))
+        if entry["security"] is False and marker:
+            ledger_errors.append(
+                f"{entry['where']}: `{sha[:12]}` is classified security: no, but it names {marker!r}, which marks a "
+                "security fix; classify it security: yes"
+            )
+            continue
+        if entry["kind"] not in ("waived", "ported-by-design") or entry["security"]:
+            continue
+        hint = security_hint(entry["reason"], row["subject"])
+        if hint and entry["security"] is None:
+            ledger_errors.append(
+                f"{entry['where']}: `{sha[:12]}` is ported by design but {hint}; classify it security: yes|no"
+            )
+        elif hint:
+            copy_notes.append(
+                f"{entry['where']}: `{sha[:12]}` is classified security: no but {hint}; re-review the classification"
+            )
     uncovered = [row for row in rows if row["sha"] not in coverage]
     counts = Counter(coverage.values())
 
@@ -1598,6 +1674,25 @@ def is_prerelease_tag(name):
         return bool(re.search(r"(?:^|[-._])(?:rc|beta|alpha|pre|preview|dev)\d*(?:$|[-._])", text, re.IGNORECASE))
 
 
+def waiver_security_problem(waiver, reason, today, what):
+    value = waiver.get("security")
+    security = WAIVER_SECURITY_VALUES.get(value) if isinstance(value, str) else None
+    if security is None:
+        return f'{what} needs security = "yes" or "no"'
+    if security:
+        decision = waiver.get("owner_decision")
+        return owner_decision_problem(
+            decision if isinstance(decision, str) else None, today, f"{what}: a security waiver", TOML_DECISION_SYNTAX
+        )
+    marker = security_marker(reason)
+    if marker:
+        return (
+            f"{what} is classified security no, but it names {marker!r}, which marks a security fix; "
+            'set security = "yes"'
+        )
+    return None
+
+
 def bridge_waiver_verdict(head, latest, today):
     text = head_blob(head, BRIDGE_WAIVER_FILE)
     if text is None:
@@ -1621,7 +1716,9 @@ def bridge_waiver_verdict(head, latest, today):
     until = waiver.get("until")
     if until is not None and (isinstance(until, datetime) or not isinstance(until, date)):
         return 1, f"{BRIDGE_WAIVER_FILE} until {until!r} is not a YYYY-MM-DD date"
-    problem = waiver_deadline_problem(until, today, f"{BRIDGE_WAIVER_FILE} for {latest}")
+    problem = waiver_deadline_problem(until, today, f"{BRIDGE_WAIVER_FILE} for {latest}") or waiver_security_problem(
+        waiver, reason, today, BRIDGE_WAIVER_FILE
+    )
     if problem:
         return 1, problem
     return 0, f"waived by {BRIDGE_WAIVER_FILE} for {latest} until {until.isoformat()}: {reason.strip()}"
@@ -1777,7 +1874,7 @@ def npm_latest_version(name):
         return None
 
 
-def load_npm_waivers(head):
+def load_npm_waivers(head, today):
     text = head_blob(head, NPM_WAIVER_FILE)
     if text is None:
         return {}, []
@@ -1812,6 +1909,10 @@ def load_npm_waivers(head):
             except ValueError:
                 errors.append(f"{where} ({package}) until {until!r} is not a YYYY-MM-DD date")
                 continue
+        problem = waiver_security_problem(waiver, reason, today, f"{where} ({package})")
+        if problem:
+            errors.append(problem)
+            continue
         waivers.setdefault(package, []).append((version, reason.strip(), until))
     return waivers, errors
 
@@ -1871,7 +1972,7 @@ def npm_gate(head, upstream, lock_path, scope, overrides, today):
         print("  upstream floor: not checked (no upstream head)")
     elif not floors:
         print(f"  upstream floor: none found on {upstream} ({floor_origin})")
-    waivers, waiver_errors = load_npm_waivers(head)
+    waivers, waiver_errors = load_npm_waivers(head, today)
     latest_seen = {}
     behind = []
     for entry in entries:
