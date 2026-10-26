@@ -1,7 +1,11 @@
 ac167e4244f1c9fcaeab6ffaf37768832f24b469 upstream/amaziaWG
 1ad2a186348bb5913b2f873bd3684babb8598885 upstream/coderabbit/improve-changed-function-docstrings/1c06464e
+6fdcc389a2ad72eec1b044316e1ea2b957484623 upstream/dependabot/uv/certifi-2026.10.19
+3b836fd76eeff8b8656c2796a1347d223971c622 upstream/dependabot/uv/dev/asyncmy-0.2.17
 e2707d99064e75acd1ea4d8e1d9bb4542906c5e8 upstream/dependabot/uv/dev/cryptography-50.0.2
 b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.142.2
+6759a6e3db38103b4b8588b37931df4bc0018f48 upstream/dependabot/uv/dev/pydantic-settings-2.16.1
+19611f74522391cc2e8239591aaadc7ea8ebcb2a upstream/dependabot/uv/dev/python-dateutil-3.0.0
 59a347e6517ec9888ffb21102b954430d492b6b4 upstream/dependabot/uv/dev/ruff-0.16.10
 2f60c83098103ebf36d7b833f893309c883bc8d7 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.1
 75f3788a312ef593f5642466faa380154ce95e09 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.2
@@ -18,11 +22,13 @@ f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
 7f670cf30f62e30a4ab671bf3549fcbe768db703 upstream/dev
 83fe90e07d33d97ebe1ec221799e1e268faa6b6a upstream/dev
 a2fb3139b9bd038cbbb6f613d8c40c1f96fb8361 upstream/dev
+d4d2fd4238469f34d6d730544f15d7ab96907d4a upstream/dev
 d94e157791ac1d098a48172e50a3689caaf2f46f upstream/dev
 da871f475782da54ec547da1945d2478a35171b0 upstream/dev
 ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
 7ad4c7d3cee9bb479237eeb34198d61c554b4eb4 upstream/feat/apikey-request-limit
 58417f4f03de0c36b28ca43386ff460a6813f3d9 upstream/feat/live-core-apply
+87f3c16322b983c615822a28bcf05591d58c6b69 upstream/feat/mtproto
 1fadd9f55177479211d07645661a28f9299dd178 upstream/feat/on_hold_timeout_action
 6ad9a84135869c4a26525b23e691ba71a658cb72 upstream/fix/api-key-copy-insecure-context
 e1376a5d10b5bcb7e1ced980b5fc4725429dbce6 upstream/fix/area-chart-theme
@@ -40,12 +46,14 @@ eb73275ca80adc83be3ff44947de18472115fe82 upstream/fix/xray-wg-allocation-view
 29bc68f7e0cbdffdf88ea4c1561439ff99af63b9 upstream/free-threaded
 7b08b03960a12894b522565eed78b108402c4e83 upstream/hosts-group
 b56ffe369f542152c52c69733205baeaf3f6e4cd upstream/main
+eba70d68eaa5a89e34ffebb47c8fd5ce054d0e43 upstream/main
 127543598f9b4353ad5dca6c3a3446770a3c5f1c upstream/masque
 4e98af8aca1f4db16bf00286370dffd027d33a96 upstream/masque
 fa5dfc2c2bd88263339dc48c061c3bc19b2baf54 upstream/masque
 18a02ed066cba5581eb40a3be12004e3dff4ce4d upstream/mtp
 dc988bfb3e1d666563a59b335935905939ac2591 upstream/node-online-users-count
 0913d7b19bd5033b35c51e13d0c704bf9ff4b69a upstream/nodes-shared-storage
+b03959aae48d44c1b4023fe68a5fe583c2db7276 upstream/perf/online-count-single-pass
 175482516537f2ac14e68067f813dcff4f3356c4 upstream/pre-admin-UserTemplates
 fbd57c75fae02e6c5610bffc4ba3758e7810181f upstream/pref-boost
 632b2f52b1b5f473f872b5ca9fc676a639ed4ffb upstream/ruff-format
@@ -112,3 +120,5 @@ e81877c0df64e5f5235f4355b0490b6bb38e3adc v5.2.1
 aebf7256927710329d380d67ce96224f287ae5f6 v5.3.0
 44d3f00943a722ee08b1104469524b7320580d63 v5.4.0
 b56ffe369f542152c52c69733205baeaf3f6e4cd v5.4.1
+5eb8628cfe6db233ed2a6bbaf53f0ed497e797f9 v5.5.0
+eba70d68eaa5a89e34ffebb47c8fd5ce054d0e43 v5.5.1
