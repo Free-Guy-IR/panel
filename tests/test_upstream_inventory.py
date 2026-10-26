@@ -1768,63 +1768,12 @@ def test_a_merged_upstream_commit_whose_lines_the_fork_dropped_is_unported(tmp_p
     assert waived.returncode == 0, waived.stdout + waived.stderr
 
 
-def test_the_baseline_must_be_a_release_the_fork_has_merged(tmp_path):
+def test_a_grandfathered_baseline_is_trusted_as_it_is(tmp_path):
     path, _ = merge_repo(tmp_path)
-    ok = standalone_gate(path, "## Waived\n", "--require-base-ancestor")
-    assert ok.returncode == 0, ok.stdout + ok.stderr
-    git(path, "checkout", "-q", "--orphan", "rebuilt", "v1.0")
-    git(path, "commit", "-q", "-m", "fork rebuilt without upstream history")
-    orphan = run(
-        path,
-        "--base",
-        "v1.0",
-        "--head",
-        "rebuilt",
-        "--track",
-        "refs/remotes/upstream/*",
-        "--fail-on-unported",
-        "UPSTREAM_SYNC.md",
-        "--today",
-        "2026-10-06",
-        "--require-base-ancestor",
-    )
-    assert orphan.returncode == 1, orphan.stdout + orphan.stderr
-    assert "the baseline v1.0" in orphan.stdout and "is not an ancestor of rebuilt" in orphan.stdout
-    grandfathered = run(
-        path,
-        "--base",
-        "v1.0",
-        "--head",
-        "rebuilt",
-        "--track",
-        "refs/remotes/upstream/*",
-        "--fail-on-unported",
-        "UPSTREAM_SYNC.md",
-        "--today",
-        "2026-10-06",
-        "--require-base-ancestor",
-        "--grandfathered-base",
-        "v1.0",
-    )
-    assert "is not an ancestor of rebuilt" not in grandfathered.stdout
-    bumped = run(
-        path,
-        "--base",
-        "v1.1",
-        "--head",
-        "rebuilt",
-        "--track",
-        "refs/remotes/upstream/*",
-        "--fail-on-unported",
-        "UPSTREAM_SYNC.md",
-        "--today",
-        "2026-10-06",
-        "--require-base-ancestor",
-        "--grandfathered-base",
-        "v1.0",
-    )
-    assert bumped.returncode == 1, bumped.stdout + bumped.stderr
-    assert "the baseline v1.1" in bumped.stdout and "is not an ancestor of rebuilt" in bumped.stdout
+    result = standalone_gate(path, "## Waived\n", "--grandfathered-base", "v1.0")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "is not grandfathered" not in result.stdout
+    assert tally(result.stdout, "merged into the head, every line present") == 2
 
 
 def held_gate(path, shas, *extra):
@@ -1912,3 +1861,90 @@ def test_a_waiver_until_written_as_a_date_time_is_refused_without_a_traceback(re
     )
     assert npm.returncode != 0, npm.stdout + npm.stderr
     assert "is a date-time; write a YYYY-MM-DD date" in npm.stdout + npm.stderr and "Traceback" not in npm.stderr
+
+
+BASELINE_FROM_FLOOR = "the baseline v1.1 is not grandfathered, so the gate checks every upstream commit from v1.0"
+
+
+def floor_repo(tmp_path, name):
+    path = standalone_repo(tmp_path, name)
+    shas = {
+        "fix": commit(path, "fix a check", {"r.py": lines("r", overrides={1: "CHECK_TOKEN_STRICT"})}),
+        "bump": commit(path, "bump a library", {"s.py": lines("s", overrides={1: "S1"})}),
+    }
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["bump"])
+    git(path, "tag", "v1.1", shas["bump"])
+    git(path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(path, "fork feature", {"t.py": lines("t")})
+    return path, shas
+
+
+def bumped_gate(path, *extra):
+    return standalone_gate(path, "## Waived\n", "--base", "v1.1", "--grandfathered-base", "v1.0", *extra)
+
+
+def merge_with_ours(path, shas):
+    git(path, "merge", "-q", "-s", "ours", "--no-edit", "v1.1")
+
+
+def merge_then_revert(path, shas):
+    git(path, "merge", "-q", "--no-ff", "--no-edit", "v1.1")
+    git(path, "revert", "--no-edit", "-m", "1", "HEAD")
+
+
+def squash(path, shas, files):
+    git(path, "checkout", "-q", "v1.1", "--", *files)
+    trailers = "".join(f"Upstream: {shas[key]}\n" for key in ("fix", "bump"))
+    git(path, "commit", "-q", "-m", f"sync upstream v1.1\n\n{trailers}")
+
+
+@pytest.mark.parametrize("hide", [merge_with_ours, merge_then_revert])
+def test_a_baseline_bump_over_a_merge_that_dropped_upstream_lines_fails(tmp_path, hide):
+    path, shas = floor_repo(tmp_path, hide.__name__)
+    hide(path, shas)
+    assert "CHECK_TOKEN_STRICT" not in git(path, "show", "main:r.py")
+    result = bumped_gate(path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert BASELINE_FROM_FLOOR in result.stdout
+    assert {shas["fix"][:12], shas["bump"][:12]} <= set(unported_block(result.stdout).split())
+
+
+def test_a_squashed_sync_that_dropped_one_upstream_hunk_fails_after_a_baseline_bump(tmp_path):
+    path, shas = floor_repo(tmp_path, "squash-dropped")
+    squash(path, shas, ["r.py"])
+    result = bumped_gate(path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert BASELINE_FROM_FLOOR in result.stdout
+    unported = unported_block(result.stdout)
+    assert shas["bump"][:12] in unported and shas["fix"][:12] not in unported
+
+
+@pytest.mark.parametrize("sync", ["squash", "merge"])
+def test_a_baseline_bump_is_green_when_every_upstream_line_is_in_the_fork(tmp_path, sync):
+    path, shas = floor_repo(tmp_path, f"proven-{sync}")
+    if sync == "squash":
+        squash(path, shas, ["r.py", "s.py"])
+    else:
+        git(path, "merge", "-q", "--no-ff", "--no-edit", "v1.1")
+    result = bumped_gate(path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert BASELINE_FROM_FLOOR in result.stdout
+    assert "all 2 upstream commit(s) are ported" in result.stdout
+
+
+def test_a_baseline_unrelated_to_every_grandfathered_base_is_refused(tmp_path):
+    path, _ = floor_repo(tmp_path, "unrelated-base")
+    git(path, "checkout", "-q", "--orphan", "elsewhere")
+    commit(path, "unrelated root", {"u.py": lines("u")})
+    git(path, "tag", "v9.0")
+    git(path, "checkout", "-q", "main")
+    result = standalone_gate(path, "## Waived\n", "--base", "v9.0", "--grandfathered-base", "v1.0")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "the baseline v9.0" in result.stderr and "descends from no --grandfathered-base" in result.stderr
+
+
+def test_the_workflow_checks_the_baseline_from_the_grandfathered_release():
+    workflow = (SCRIPT.parent.parent / ".github" / "workflows" / "upstream-inventory.yml").read_text()
+    gate = workflow.split("name: Upstream parity gate", 1)[1].split("- name:", 1)[0]
+    assert "--grandfathered-base b56ffe369f542152c52c69733205baeaf3f6e4cd" in gate
+    assert "--require-base-ancestor" not in workflow

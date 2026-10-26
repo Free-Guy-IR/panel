@@ -42,6 +42,14 @@ traversal, bypass, spoof, hijack, disclosure, RCE, and a `(security)`/`[security
 never classifies on its own, but when a `security: no` entry matches it the gate prints a re-review note so
 a human confirms the `no`.
 
+The baseline in `.upstream-baseline` is trusted only when it is a grandfathered release: today v5.4.1
+b56ffe369f54, passed to the gate as `--grandfathered-base` in the workflow. A newer baseline does not shrink
+the checked range: the gate then checks every upstream commit from the newest grandfathered release below it,
+and each one must be ported by content (a merge or a pick whose added lines are all in the fork and whose
+removed lines are all gone) or decided here. Ancestry alone never proves a port, because an `-s ours` merge, a
+merge that is reverted later or a squashed sync that dropped a hunk all make upstream commits reachable while
+their lines are missing. A baseline that descends from no grandfathered release stops the gate with an error.
+
 A reason that contains `until: YYYY-MM-DD` covers its commit only up to that date, and the date may be at
 most 30 days ahead, so every dated decision is looked at again within a month. After it the gate fails and the
 commit needs a new decision. Pending upstream feature branches are recorded this way.

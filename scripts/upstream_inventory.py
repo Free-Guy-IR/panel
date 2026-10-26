@@ -1183,6 +1183,28 @@ def base_equivalents(base, tips):
     return equivalent
 
 
+def checked_base(base, grandfathered_bases):
+    if not grandfathered_bases:
+        return base
+    base_sha = resolve_ref(f"{base}^{{commit}}")
+    floors = {}
+    for ref in grandfathered_bases:
+        floors.setdefault(resolve_ref(f"{ref}^{{commit}}"), ref)
+    if base_sha in floors:
+        return base
+    below = [sha for sha in floors if is_ancestor(sha, base_sha)]
+    newest = [sha for sha in below if all(is_ancestor(other, sha) for other in below)]
+    if newest:
+        return floors[newest[0]]
+    if any(is_ancestor(base_sha, sha) for sha in floors):
+        return base
+    sys.stderr.write(
+        f"error: the baseline {base} ({base_sha[:12]}) descends from no --grandfathered-base "
+        f"({', '.join(sorted(floors.values()))}), so nothing proves the upstream commits before it are in the fork\n"
+    )
+    raise SystemExit(2)
+
+
 def parity_gate(
     base,
     head,
@@ -1195,9 +1217,10 @@ def parity_gate(
     release_patterns=(),
     upstream=None,
     held_release_patterns=DEFAULT_HELD_RELEASE_REFS,
-    base_must_be_ancestor=False,
     grandfathered_bases=(),
 ):
+    requested_base = base
+    base = checked_base(base, grandfathered_bases)
     tracked = expand_tracked(patterns)
     containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
     snapshot_errors = []
@@ -1284,14 +1307,6 @@ def parity_gate(
         upstream,
         lambda sha: [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name],
     )
-    if base_must_be_ancestor:
-        base_sha = resolve_ref(f"{base}^{{commit}}")
-        grandfathered = {resolve_ref(f"{ref}^{{commit}}") for ref in grandfathered_bases}
-        if base_sha not in grandfathered and not is_ancestor(base_sha, resolve_ref(f"{head}^{{commit}}")):
-            ledger_errors.append(
-                f"the baseline {base} ({base_sha[:12]}) is not an ancestor of {head}; a baseline may only name an "
-                "upstream release that the fork has merged, so every upstream commit before it is really in the fork"
-            )
     coverage = {}
     for sha in (in_range & trailer_shas(head)) - set(ineffective) - set(content_merges):
         coverage[sha] = "trailer"
@@ -1387,6 +1402,11 @@ def parity_gate(
     print()
     print("Upstream Parity")
     print(f"  base: {base} ({resolve_ref(base)[:12]})")
+    if requested_base != base:
+        print(
+            f"  the baseline {requested_base} is not grandfathered, so the gate checks every upstream commit from "
+            f"{base}: each one must be ported by content or decided in the ledger"
+        )
     print(f"  head: {head} ({resolve_ref(head)[:12]})")
     print(f"  ledger: {ledger_path}")
     print(f"  tracked refs: {len(tracked)}, with commits past base: {len(active)}")
@@ -1965,16 +1985,12 @@ def main():
         "(repeatable; default: " + ", ".join(DEFAULT_HELD_RELEASE_REFS) + ")",
     )
     parser.add_argument(
-        "--require-base-ancestor",
-        action="store_true",
-        help="fail unless --base is an ancestor of --head or one of the --grandfathered-base commits",
-    )
-    parser.add_argument(
         "--grandfathered-base",
         metavar="COMMIT",
         action="append",
         default=[],
-        help="a baseline accepted although it is not an ancestor of --head (repeatable)",
+        help="the only baselines trusted without proof (repeatable); any other --base is checked from the newest "
+        "grandfathered base it descends from, so every upstream commit after it must be ported by content or decided",
     )
     parser.add_argument(
         "--unrelated-history",
@@ -2079,7 +2095,6 @@ def main():
                 release_patterns=args.release_ref,
                 upstream=upstream,
                 held_release_patterns=tuple(args.held_release_ref) or DEFAULT_HELD_RELEASE_REFS,
-                base_must_be_ancestor=args.require_base_ancestor,
                 grandfathered_bases=tuple(args.grandfathered_base),
             )
         )
