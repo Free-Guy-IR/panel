@@ -2022,6 +2022,8 @@ export interface InboundSummary {
   tag: string;
   protocol: string;
   network?: string | null;
+  security?: string | null;
+  fingerprint?: string | null;
 }
 
 export interface InboundUsageStat {
