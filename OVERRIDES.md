@@ -215,6 +215,7 @@ Every file below changed for the A7 runtime findings. Most matter only with NATS
 
 ## Build & packaging
 
+- `Dockerfile` — fork change (GHSA-6q48-6c7w-9gw2): the image distrusts every emSign and eMudhra root. Upstream's ca-certificates step runs a plain update-ca-certificates; the fork adds a sed that prefixes each mozilla/emSign*.crt and mozilla/eMudhra*.crt line of /etc/ca-certificates.conf with `!` and runs update-ca-certificates --fresh instead.
 - `build_dashboard.sh` — dashboard build command change
 - `install_service.sh` — rewritten against systemd's own parsing, from open upstream PR #756 (reviewed 2026-09-25) but diverging from it: the PR's version breaks every unit (it keeps pwd's trailing newline), still lets a newline through (its control-character check is line-based) and quotes WorkingDirectory, which systemd never unquotes. The fork resolves the directory with pwd -P and a sentinel and refuses control characters, leading or trailing whitespace, quotes and backslashes, which systemd 249 refuses in an executable name. It doubles % in every directive and $ only in ExecStart's argument, because systemd expands variables in arguments but not in the executable path. Verified with systemd-analyze verify on systemd 249 on 2026-09-29, and pinned by tests/test_install_service_unit.py
 - `dashboard/package.json` — @pasarguard/core-kit version bump
