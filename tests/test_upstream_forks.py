@@ -396,3 +396,31 @@ def test_a_ledger_repo_needs_a_grandfathered_upstream_base(shared):
     result = run(shared_map(shared, grandfathered=False))
     assert result.returncode != 0
     assert "repo kit (ledger) needs grandfathered_base" in result.stdout + result.stderr
+
+
+@pytest.fixture
+def unshared(tmp_path):
+    upstream = new_repo(tmp_path / "upstream")
+    root = commit(upstream, "root", {"a.py": "one\ntwo\n"})
+    fix = commit(upstream, "fix: check the token", {"a.py": "one\nCHECK_TOKEN\ntwo\n"})
+    fork = new_repo(tmp_path / "fork")
+    commit(fork, "fork root", {"a.py": "one\ntwo\n"})
+    panel = new_repo(tmp_path / "panel")
+    (panel / "upstream-forks").mkdir()
+    return {"tmp": tmp_path, "upstream": upstream, "fork": fork, "panel": panel, "base": root, "fix": fix}
+
+
+@pytest.mark.parametrize(("later", "code"), [(None, 0), ("drop", 1)])
+def test_a_side_fork_without_shared_history_is_covered_by_a_full_copy_only(unshared, later, code):
+    fork = unshared["fork"]
+    commit(fork, "take the token check", {"a.py": "one\nCHECK_TOKEN\ntwo\n"})
+    if later == "drop":
+        commit(fork, "fork drops the check", {"a.py": "one\ntwo\n"})
+    result = run(shared_map(unshared), "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert "copied into the head, every line present   1" in result.stdout
+    else:
+        assert f"{unshared['fix'][:12]}: copied into refs/remotes/fork/main with the same patch-id, but 1 of 1" in (
+            result.stdout
+        )
