@@ -101,6 +101,7 @@ COVERAGE_LABELS = {
     HELD: "held until an upstream release (ledger)",
     "patch-id": "patch-id equivalent of a covered commit",
     "in-base": "patch-id equivalent already in the base",
+    "copied": "copied into the head, every line present",
     "empty": "changes no file",
 }
 CONDITIONAL_TAG_RE = re.compile(r"^[\W_]*(?:UNMERGED[\W_]*WIP|pending)\b", re.IGNORECASE)
@@ -1546,6 +1547,18 @@ def parity_gate(
             coverage[sha] = "patch-id"
     for sha in (in_range - set(coverage)) & base_equivalents(base, [tip for _, tip, _ in active]):
         coverage[sha] = "in-base"
+    copies = (in_range - set(coverage) - set(content_merges)) & base_equivalents(head, [tip for _, tip, _ in active])
+    for sha in sorted(copies):
+        tips = [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name]
+        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips), head)
+        if missing:
+            path, text = missing[0]
+            unmerged_lines[sha] = (
+                f"copied into {head} with the same patch-id, but {len(missing)} of {expected} line(s) it adds or "
+                f"removes are not reflected there, for example in {path}: {text[:80]!r}"
+            )
+        else:
+            coverage[sha] = "copied"
     for sha in sorted(held & set(on_final_release)):
         entry = resolved[sha]
         if coverage.get(sha) == HELD:
@@ -1662,7 +1675,7 @@ def parity_gate(
 
     if unmerged_lines:
         print()
-        print(f"Upstream commits merged into {head} whose change is not all there ({len(unmerged_lines)}):")
+        print(f"Upstream commits merged or copied into {head} whose change is not all there ({len(unmerged_lines)}):")
         for sha, why in sorted(unmerged_lines.items()):
             state = "covered by its ledger entry" if sha in coverage else "needs a Ported by design or Waived entry"
             print(f"  {sha[:12]}: {why}; {state}")
