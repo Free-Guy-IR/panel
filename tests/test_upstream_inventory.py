@@ -2140,3 +2140,165 @@ def test_an_npm_waiver_needs_a_security_classification(repo, name, fields, code,
     )
     assert result.returncode == code, result.stdout + result.stderr
     assert message in result.stdout + result.stderr
+
+
+DECISION_ID = "2026-10-27-owner-delegated"
+
+
+def decision_list(*rows):
+    lines = []
+    for row in rows:
+        ident, _, rest = row.partition(" ")
+        lines.append(f"- `{ident}` {rest}".rstrip() + "\n")
+    return "\n## Owner decisions\n\n" + "".join(lines)
+
+
+DELEGATED = f"{DECISION_ID} main chose to let the security ports wait for the sync until: 2026-11-26"
+
+
+def delegated_repo(tmp_path, name):
+    path, shas = security_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/dev", shas["feature"])
+    return path, shas
+
+
+def delegated_queue(shas, keys=("auth", "plain"), decision=DECISION_ID, until="2026-11-26"):
+    lines = "".join(
+        f"- `{shas[key]}` port it security: yes owner-decision: {decision} until: {until}\n" for key in keys
+    )
+    return "## Port queue\n\n" + lines + f"- `{shas['feature']}` port it security: no until: 2026-11-26\n"
+
+
+@pytest.mark.parametrize("today", ["2026-10-27", "2026-11-26"])
+def test_a_security_port_with_a_recorded_owner_decision_is_owed_until_its_date(tmp_path, today):
+    path, shas = delegated_repo(tmp_path, f"delegated-{today}")
+    result = standalone_gate(path, delegated_queue(shas) + decision_list(DELEGATED), "--today", today)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, OWED_LABEL) == 4
+    assert "a security port gets no grace" not in result.stdout
+
+
+def test_a_delegated_security_port_fails_the_day_after_its_date_on_exactly_what_is_unported(tmp_path):
+    path, shas = delegated_repo(tmp_path, "delegated-expiry")
+    git(path, "cherry-pick", "-x", shas["auth"])
+    ledger_text = delegated_queue(shas) + decision_list(DELEGATED)
+    last_day = standalone_gate(path, ledger_text, "--today", "2026-11-26")
+    assert last_day.returncode == 0, last_day.stdout + last_day.stderr
+    assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in last_day.stdout
+    pruned = ledger_text.replace(
+        f"- `{shas['auth']}` port it security: yes owner-decision: {DECISION_ID} until: 2026-11-26\n", ""
+    )
+    expired = standalone_gate(path, pruned, "--today", "2026-11-27")
+    assert expired.returncode == 1, expired.stdout + expired.stderr
+    assert f"`{shas['plain']}` was decided only until 2026-11-26" in expired.stdout
+    unported = unported_block(expired.stdout)
+    assert shas["plain"][:12] in unported and shas["auth"][:12] not in unported
+
+
+def test_a_security_port_without_an_owner_decision_still_gets_no_grace(tmp_path):
+    path, shas = delegated_repo(tmp_path, "delegated-control")
+    queue = (
+        "## Port queue\n\n"
+        f"- `{shas['plain']}` port it security: yes until: 2026-11-26\n"
+        f"- `{shas['auth']}` port it security: yes owner-decision: {DECISION_ID} until: 2026-11-26\n"
+        f"- `{shas['feature']}` port it security: no until: 2026-11-26\n"
+    )
+    result = standalone_gate(path, queue + decision_list(DELEGATED), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain'][:12]}` is classified security: yes; a security port gets no grace" in result.stdout
+    assert f"`{shas['auth'][:12]}` is classified security: yes; a security port gets no grace" not in result.stdout
+    assert shas["plain"][:12] in unported_block(result.stdout)
+
+
+@pytest.mark.parametrize(
+    ("queue_args", "decisions", "message"),
+    [
+        (
+            {"decision": "2026-10-28-early-bird", "until": "2026-11-20"},
+            ("2026-10-28-early-bird main decided ahead of time until: 2026-11-20",),
+            "names an owner decision dated 2026-10-28, after today",
+        ),
+        (
+            {"decision": "2026-10-01-long-window", "until": "2026-11-05"},
+            ("2026-10-01-long-window main gave a long window until: 2026-11-05",),
+            "grants grace until 2026-11-05, more than 30 days after its date 2026-10-01",
+        ),
+        (
+            {"decision": "2026-10-27-unrecorded"},
+            (DELEGATED,),
+            "is not recorded under Owner decisions",
+        ),
+        (
+            {"until": "2026-11-26"},
+            (f"{DECISION_ID} main chose a shorter window until: 2026-11-10",),
+            "is owed until 2026-11-26, after its owner decision 2026-10-27-owner-delegated ends on 2026-11-10",
+        ),
+        (
+            {"decision": "soon"},
+            (DELEGATED,),
+            "a delegated security port needs the owner's decision, written as owner-decision: YYYY-MM-DD-<name>",
+        ),
+    ],
+)
+def test_a_delegated_security_port_is_refused_when_its_decision_is_not_sound(tmp_path, queue_args, decisions, message):
+    path, shas = delegated_repo(tmp_path, "delegated-refused")
+    result = standalone_gate(
+        path, delegated_queue(shas, keys=("plain",), **queue_args) + decision_list(*decisions), "--today", "2026-10-27"
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+    assert shas["plain"][:12] in unported_block(result.stdout)
+
+
+def test_a_security_port_naming_two_owner_decisions_is_refused(tmp_path):
+    path, shas = delegated_repo(tmp_path, "delegated-two")
+    queue = (
+        "## Port queue\n\n"
+        f"- `{shas['plain']}` port it security: yes owner-decision: {DECISION_ID} "
+        f"owner-decision: 2026-10-26-other until: 2026-11-20\n"
+    )
+    other = "2026-10-26-other another decision until: 2026-11-20"
+    result = standalone_gate(path, queue + decision_list(DELEGATED, other), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain']}` names 2 owner decisions; keep exactly one" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("row", "message"),
+    [
+        ("not-a-decision some reason until: 2026-11-26", "is not an owner decision id"),
+        (f"{DECISION_ID}", "has no reason"),
+        (f"{DECISION_ID} no window given", "needs exactly one until: YYYY-MM-DD"),
+        (f"{DECISION_ID} too long until: 2026-11-27", "grants grace until 2026-11-27, more than 30 days after its date"),
+        ("2026-10-30-future main decides later until: 2026-11-20", "is dated 2026-10-30, after today"),
+        ("2026-02-30-impossible bad date until: 2026-03-01", "has an invalid date"),
+    ],
+)
+def test_a_malformed_owner_decision_record_is_a_ledger_error(tmp_path, row, message):
+    path, shas = delegated_repo(tmp_path, "decision-record")
+    queue = f"## Port queue\n\n- `{shas['feature']}` port it security: no until: 2026-11-26\n"
+    result = standalone_gate(path, queue + decision_list(row), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+
+
+def test_an_owner_decision_recorded_twice_is_a_ledger_error(tmp_path):
+    path, shas = delegated_repo(tmp_path, "decision-twice")
+    queue = f"## Port queue\n\n- `{shas['feature']}` port it security: no until: 2026-11-26\n"
+    result = standalone_gate(path, queue + decision_list(DELEGATED, DELEGATED), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{DECISION_ID}` is recorded more than once" in result.stdout
+
+
+def test_the_real_ledger_names_the_delegated_decision_on_exactly_its_security_ports():
+    text = (SCRIPT.parent.parent / "UPSTREAM_SYNC.md").read_text()
+    sys.path.insert(0, str(SCRIPT.parent))
+    import upstream_inventory
+
+    entries, _ = upstream_inventory.parse_sync_ledger(str(SCRIPT.parent.parent / "UPSTREAM_SYNC.md"))
+    carrying = [entry for entry in entries if DECISION_ID in entry["reason"]]
+    assert carrying
+    assert all(entry["kind"] == "port-queue" and entry["security"] for entry in carrying)
+    queued_yes = [entry for entry in entries if entry["kind"] == "port-queue" and entry["security"]]
+    assert len(carrying) == len(queued_yes)
+    assert text.count(f"`{DECISION_ID}`") == 1
