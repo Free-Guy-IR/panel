@@ -2427,7 +2427,7 @@ def test_the_ok_line_names_the_first_day_any_dated_decision_fails(tmp_path):
         f"- `{shas['feature']}` port it security: no, a header option until: 2026-11-26\n"
         f"- `{shas['auth']}` port it security: yes owner-decision: {DECISION_ID} until: 2026-11-26\n"
         "\n## Waived\n\n"
-        f"- `{shas['plain']}` pending: the bump waits for the sync security: no until: 2026-11-05\n"
+        f"- `{shas['plain']}` the bump waits for the sync security: no until: 2026-11-05\n"
     )
     result = standalone_gate(path, queue + decision_list(DELEGATED, shas=shas), "--today", "2026-10-27")
     assert result.returncode == 0, result.stdout + result.stderr
@@ -2438,7 +2438,7 @@ def test_the_ok_line_without_owed_ports_still_names_the_first_dated_decision(tmp
     path, shas = delegated_repo(tmp_path, "earliest-waived")
     text = (
         "## Waived\n\n"
-        f"- `{shas['plain']}` pending: the bump waits security: no until: 2026-11-05\n"
+        f"- `{shas['plain']}` the bump waits for the sync security: no until: 2026-11-05\n"
         f"- `{shas['feature']}` the fork has its own header option security: no\n"
         f"- `{shas['auth']}` the fork rejects such tokens itself security: yes owner-decision: {DECISION_ID}\n"
     )

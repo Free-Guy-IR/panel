@@ -110,7 +110,11 @@ SECURITY_MARKER_RE = re.compile(
     r"\b(?:cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3})\b|\(security\)|\[security\]", re.IGNORECASE
 )
 OWNER_DECISION_RE = re.compile(r"\bowner-decision:\s*(\S*)", re.IGNORECASE)
-DECISION_ID_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
+DECISION_ID_RE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})-[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
+COVERED_SHA_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])")
+COVERED_PACKAGE_RE = re.compile(r"(?:^|\s)(@?[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)?@[0-9][A-Za-z0-9.+-]*)(?=[\s,;.]|$)")
+SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
+SYNC_LEDGER_FILE = "UPSTREAM_SYNC.md"
 LEDGER_DECISION_SYNTAX = "owner-decision: YYYY-MM-DD-<name>"
 TOML_DECISION_SYNTAX = 'owner_decision = "YYYY-MM-DD-<name>"'
 WAIVER_SECURITY_VALUES = {"yes": True, "no": False}
@@ -992,25 +996,53 @@ def owner_decision_record(item_text, today, where):
             f"{where}: `{ident}` grants grace until {until.isoformat()}, more than {DECISION_MAX_DAYS} days after "
             f"its date {decided.isoformat()}"
         ), None
-    return None, {"id": ident, "date": decided, "until": until, "where": where}
+    covers = set(COVERED_SHA_RE.findall(reason)) | set(COVERED_PACKAGE_RE.findall(reason))
+    if not covers:
+        return f"{where}: `{ident}` lists no upstream commit or package@version it covers", None
+    return None, {"id": ident, "date": decided, "until": until, "where": where, "covers": covers}
 
 
-def delegated_problem(entry, records):
-    ident = entry["decision"]
+def decision_problem(label, ident, records, today, until, verb, item):
     record = records.get(ident)
     if record is None:
-        return f"`{entry['token']}` names owner decision {ident}, which is not recorded under Owner decisions"
-    if entry["deadline"] > record["until"]:
+        return f"{label} names owner decision {ident}, which is not recorded under Owner decisions"
+    if today > record["until"]:
+        return f"{label} names owner decision {ident}, which ended on {record['until'].isoformat()}"
+    if until is not None and until > record["until"]:
         return (
-            f"`{entry['token']}` is owed until {entry['deadline'].isoformat()}, after its owner decision {ident} "
-            f"ends on {record['until'].isoformat()}"
+            f"{label} {verb} until {until.isoformat()}, after its owner decision {ident} ends on "
+            f"{record['until'].isoformat()}"
         )
-    if (entry["deadline"] - record["date"]).days > DECISION_MAX_DAYS:
-        return (
-            f"`{entry['token']}` is owed until {entry['deadline'].isoformat()}, more than {DECISION_MAX_DAYS} days "
-            f"after its owner decision {ident}"
-        )
+    if until is not None and (until - record["date"]).days > DECISION_MAX_DAYS:
+        return f"{label} {verb} until {until.isoformat()}, more than {DECISION_MAX_DAYS} days after owner decision {ident}"
+    covered = record["covers"]
+    if item not in covered and not (len(item) >= 9 and any(sha.startswith(item) for sha in covered if len(sha) == 40)):
+        return f"{label} is not covered by owner decision {ident}"
     return None
+
+
+def ledger_decision_records(text, today, path=SYNC_LEDGER_FILE):
+    records = {}
+    errors = []
+    if text is None:
+        return records, errors
+    items, _ = ledger_items(path, text)
+    for lineno, section, item_text in items:
+        if section != OWNER_DECISIONS:
+            continue
+        problem, record = owner_decision_record(item_text, today, f"{path}:{lineno}")
+        if problem:
+            errors.append(problem)
+        elif record["id"] not in records:
+            records[record["id"]] = record
+    return records, errors
+
+
+def delegated_problem(entry, records, today):
+    verb = "is owed" if entry["kind"] == PORT_QUEUE else "is decided"
+    return decision_problem(
+        f"`{entry['token']}`", entry["decision"], records, today, entry["deadline"], verb, entry["token"]
+    )
 
 
 def workflow_command_escape(text):
@@ -1183,6 +1215,8 @@ def parse_sync_ledger(path, today=None):
                 )
                 continue
         security = None
+        decision = None
+        named = OWNER_DECISION_RE.findall(reason)
         if section == "waived":
             flags = SECURITY_FLAG_RE.findall(reason)
             if len(flags) != 1:
@@ -1202,6 +1236,7 @@ def parse_sync_ledger(path, today=None):
             if problem:
                 errors.append(f"{where}: {problem}")
                 continue
+            decision = decisions[0] if security else None
         if section == "ported-by-design":
             flags = SECURITY_FLAG_RE.findall(reason)
             if len(flags) > 1:
@@ -1236,17 +1271,22 @@ def parse_sync_ledger(path, today=None):
                 )
                 continue
             security = flags[0].lower() == "yes"
-            named = OWNER_DECISION_RE.findall(reason) if security else []
-            if len(named) > 1:
+            if security and len(named) > 1:
                 errors.append(f"{where}: `{token}` names {len(named)} owner decisions; keep exactly one")
                 continue
-            problem = named and owner_decision_problem(
+            problem = security and named and owner_decision_problem(
                 named[0], today, f"`{token}`: a delegated security port", LEDGER_DECISION_SYNTAX
             )
             if problem:
                 errors.append(f"{where}: {problem}")
                 continue
-            decision = named[0] if named else None
+            decision = named[0] if security and named else None
+        if named and decision is None:
+            errors.append(
+                f"{where}: `{token}` carries owner-decision: {named[0]} but needs none; only a security: yes Waived "
+                "or Port queue entry names a decision"
+            )
+            continue
         conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
         entries.append(
             {
@@ -1257,16 +1297,23 @@ def parse_sync_ledger(path, today=None):
                 "conditional": conditional,
                 "deadline": deadline,
                 "security": security,
-                "decision": decision if section == PORT_QUEUE else None,
+                "decision": decision,
+                "unreasoned_no": section == PORT_QUEUE
+                and security is False
+                and not SECURITY_NO_REASON_RE.search(reason),
             }
         )
     kept = []
     for entry in entries:
-        problem = entry["decision"] and delegated_problem(entry, records)
+        problem = entry["decision"] and delegated_problem(entry, records, today)
         if problem:
             errors.append(f"{entry['where']}: {problem}")
-        else:
-            kept.append(entry)
+            continue
+        ends = [day for day in (entry["deadline"],) if day is not None]
+        if entry["decision"]:
+            ends.append(records[entry["decision"]]["until"])
+        entry["expires"] = min(ends) if ends else None
+        kept.append(entry)
     return kept, errors
 
 
@@ -1642,6 +1689,12 @@ def parity_gate(
             print(f"  upstream head {name} at {sha[:12]} is not recorded in {snapshot_path}")
         if unrecorded:
             print(f"  record the reviewed heads by re-running with --write-refs-snapshot, which writes {snapshot_path}")
+    unreasoned = sum(1 for entry in entries if entry["unreasoned_no"])
+    if unreasoned:
+        copy_notes.append(
+            f"{unreasoned} port-queue entries classified security: no give no reason for the no; "
+            "write it as security: no, <reason>"
+        )
     notes = stale + duplicates + copy_notes + sync_notes
     if notes:
         print()
@@ -1660,11 +1713,21 @@ def parity_gate(
             reasons.append(f"{len(snapshot_errors) + len(unrecorded)} refs snapshot error(s)")
         print(f"Upstream parity gate FAILED: {'; '.join(reasons)}")
         return 1
+    ends = [entry["expires"] for entry in entries if entry["expires"] is not None]
+    ends += [deadlines[row["sha"]] for row in owed]
+    first_failure = (min(ends) + timedelta(days=1)).isoformat() if ends else None
     if owed:
         print(
             f"Upstream parity gate OK, NOT at parity: all {len(in_range)} upstream commit(s) are ported or decided in "
-            f"{ledger_path}, but {len(owed)} are owed ports; the gate fails on "
-            f"{(deadlines[owed[0]['sha']] + timedelta(days=1)).isoformat()} unless they are ported or re-decided"
+            f"{ledger_path}, but {len(owed)} are owed ports; the gate fails on {first_failure} unless they are "
+            "ported or re-decided"
+        )
+        return 0
+    if first_failure:
+        print(
+            f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}; "
+            f"the earliest dated decision ends on {min(ends).isoformat()}, so the gate fails on {first_failure} "
+            "unless it is re-decided"
         )
         return 0
     print(f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}")
@@ -1762,16 +1825,17 @@ def is_prerelease_tag(name):
         return bool(re.search(r"(?:^|[-._])(?:rc|beta|alpha|pre|preview|dev)\d*(?:$|[-._])", text, re.IGNORECASE))
 
 
-def waiver_security_problem(waiver, reason, today, what):
+def waiver_security_problem(waiver, reason, today, what, records, item, until):
     value = waiver.get("security")
     security = WAIVER_SECURITY_VALUES.get(value) if isinstance(value, str) else None
     if security is None:
         return f'{what} needs security = "yes" or "no"'
     if security:
         decision = waiver.get("owner_decision")
+        decision = decision if isinstance(decision, str) else None
         return owner_decision_problem(
-            decision if isinstance(decision, str) else None, today, f"{what}: a security waiver", TOML_DECISION_SYNTAX
-        )
+            decision, today, f"{what}: a security waiver", TOML_DECISION_SYNTAX
+        ) or decision_problem(what, decision, records, today, until, "runs", item)
     marker = security_marker(reason)
     if marker:
         return (
@@ -1804,8 +1868,9 @@ def bridge_waiver_verdict(head, latest, today):
     until = waiver.get("until")
     if until is not None and (isinstance(until, datetime) or not isinstance(until, date)):
         return 1, f"{BRIDGE_WAIVER_FILE} until {until!r} is not a YYYY-MM-DD date"
+    records, _ = ledger_decision_records(head_blob(head, SYNC_LEDGER_FILE), today)
     problem = waiver_deadline_problem(until, today, f"{BRIDGE_WAIVER_FILE} for {latest}") or waiver_security_problem(
-        waiver, reason, today, BRIDGE_WAIVER_FILE
+        waiver, reason, today, BRIDGE_WAIVER_FILE, records, f"{BRIDGE_PACKAGE}@{latest}", until
     )
     if problem:
         return 1, problem
@@ -1972,6 +2037,7 @@ def load_npm_waivers(head, today):
         return {}, [f"{NPM_WAIVER_FILE} is not valid TOML: {exc}"]
     waivers = {}
     errors = []
+    records, _ = ledger_decision_records(head_blob(head, SYNC_LEDGER_FILE), today)
     for index, waiver in enumerate(data.get("waiver", []), 1):
         where = f"{NPM_WAIVER_FILE} waiver {index}"
         package = waiver.get("package")
@@ -1997,7 +2063,9 @@ def load_npm_waivers(head, today):
             except ValueError:
                 errors.append(f"{where} ({package}) until {until!r} is not a YYYY-MM-DD date")
                 continue
-        problem = waiver_security_problem(waiver, reason, today, f"{where} ({package})")
+        problem = waiver_security_problem(
+            waiver, reason, today, f"{where} ({package})", records, f"{package}@{waiver.get('upstream_version')}", until
+        )
         if problem:
             errors.append(problem)
             continue
