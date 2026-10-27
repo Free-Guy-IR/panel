@@ -59,7 +59,7 @@ def load_config(path):
         if not str(entry.get("reason", "")).strip():
             errors.append(f"repo {name} has no reason")
         required = {
-            "ledger": ("fork", "upstream", "ported_ref", "ledger"),
+            "ledger": ("fork", "upstream", "ported_ref", "grandfathered_base", "ledger"),
             "workflow": ("fork", "upstream", "tracker_branch", "tracker_path"),
             "covered-by": ("covered_by",),
             "self": ("fork", "upstream", "tracker_path"),
@@ -68,6 +68,11 @@ def load_config(path):
         for field in required:
             if not entry.get(field):
                 errors.append(f"repo {name} ({mode}) needs {field}")
+        base = entry.get("grandfathered_base")
+        if base is not None and mode != "ledger":
+            errors.append(f"repo {name} sets grandfathered_base, which only a ledger repo uses")
+        elif base is not None and not (isinstance(base, str) and FULL_SHA_RE.match(base)):
+            errors.append(f"repo {name} grandfathered_base must be a full 40-character upstream commit sha")
         release_refs = entry.get("release_refs")
         if release_refs is not None and mode != "ledger":
             errors.append(f"repo {name} sets release_refs, which only a ledger repo uses")
@@ -128,7 +133,10 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
     snapshot = str((root / entry["snapshot"]).resolve()) if entry.get("snapshot") else None
     mirror = fetch_mirror(workdir, name, fork_url, upstream_url)
     fetch_snapshot_heads(mirror, snapshot, upstream_url)
-    base = f"refs/remotes/fork/{entry['ported_ref']}"
+    base = entry["grandfathered_base"]
+    if run_git(mirror, "cat-file", "-e", f"{base}^{{commit}}", check=False).returncode != 0:
+        run_git(mirror, "fetch", "-q", "--no-tags", upstream_url, base, check=False)
+    head = f"refs/remotes/fork/{entry['ported_ref']}"
     patterns = [
         pattern
         for pattern in ("refs/remotes/upstream/*", "refs/upstream-tags/*")
@@ -137,7 +145,10 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
     previous = Path.cwd()
     os.chdir(mirror)
     try:
-        print(f"\n=== {name}: {entry['upstream']} tracked against {entry['fork']} {entry['ported_ref']}")
+        print(
+            f"\n=== {name}: {entry['upstream']} tracked against {entry['fork']} {entry['ported_ref']} "
+            f"from grandfathered upstream base {base[:12]}"
+        )
         sys.stdout.flush()
         missing_release = [
             ref
@@ -147,9 +158,12 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
         if missing_release:
             print(f"  release_refs {', '.join(missing_release)} name no upstream ref")
             return 1
+        if run_git(mirror, "cat-file", "-e", f"{base}^{{commit}}", check=False).returncode != 0:
+            print(f"  grandfathered_base {base} is not an upstream commit in the mirror")
+            return 1
         return upstream_inventory.parity_gate(
             base,
-            base,
+            head,
             patterns,
             ledger,
             snapshot,
@@ -157,6 +171,7 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
             today,
             require_shared_history=False,
             release_patterns=tuple(entry.get("release_refs") or upstream_inventory.DEFAULT_RELEASE_REFS),
+            grandfathered_bases=(base,),
         )
     finally:
         os.chdir(previous)
