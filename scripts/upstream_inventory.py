@@ -77,9 +77,11 @@ SYNC_SECTIONS = {
     "waived": "waived",
     "port queue": "port-queue",
     "held for an upstream release": "held",
+    "owner decisions": "owner-decisions",
 }
 PORT_QUEUE = "port-queue"
 HELD = "held"
+OWNER_DECISIONS = "owner-decisions"
 DEFAULT_HELD_RELEASE_REFS = ("refs/upstream-tags/*",)
 DECISION_MAX_DAYS = 30
 BARE_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})([^#\s].*?)[ \t]*#*[ \t]*$")
@@ -959,6 +961,58 @@ def owner_decision_problem(value, today, what, syntax):
     return None
 
 
+def owner_decision_record(item_text, today, where):
+    entry = SYNC_ENTRY_RE.match(item_text.strip())
+    if not entry:
+        return f"{where}: an owner decision is not in the form - `YYYY-MM-DD-<name>` <reason> until: YYYY-MM-DD", None
+    ident = entry.group(1).strip()
+    reason = entry.group(2).strip(REASON_STRIP)
+    match = DECISION_ID_RE.match(ident)
+    if not match:
+        return f"{where}: `{ident}` is not an owner decision id; write it as YYYY-MM-DD-<name>", None
+    try:
+        decided = date.fromisoformat(match.group(1))
+    except ValueError:
+        return f"{where}: `{ident}` has an invalid date {match.group(1)}", None
+    if decided > today:
+        return f"{where}: `{ident}` is dated {decided.isoformat()}, after today", None
+    if not REASON_WORD_RE.search(UNTIL_RE.sub("", reason)):
+        return f"{where}: `{ident}` has no reason", None
+    dates = UNTIL_RE.findall(reason)
+    if len(dates) != 1 or len(LOOSE_UNTIL_RE.findall(reason)) != 1:
+        return f"{where}: `{ident}` needs exactly one until: YYYY-MM-DD (found {len(LOOSE_UNTIL_RE.findall(reason))})", None
+    try:
+        until = date.fromisoformat(dates[0])
+    except ValueError:
+        return f"{where}: `{ident}` has an invalid until date {dates[0]}", None
+    if until < decided:
+        return f"{where}: `{ident}` ends on {until.isoformat()}, before its date {decided.isoformat()}", None
+    if (until - decided).days > DECISION_MAX_DAYS:
+        return (
+            f"{where}: `{ident}` grants grace until {until.isoformat()}, more than {DECISION_MAX_DAYS} days after "
+            f"its date {decided.isoformat()}"
+        ), None
+    return None, {"id": ident, "date": decided, "until": until, "where": where}
+
+
+def delegated_problem(entry, records):
+    ident = entry["decision"]
+    record = records.get(ident)
+    if record is None:
+        return f"`{entry['token']}` names owner decision {ident}, which is not recorded under Owner decisions"
+    if entry["deadline"] > record["until"]:
+        return (
+            f"`{entry['token']}` is owed until {entry['deadline'].isoformat()}, after its owner decision {ident} "
+            f"ends on {record['until'].isoformat()}"
+        )
+    if (entry["deadline"] - record["date"]).days > DECISION_MAX_DAYS:
+        return (
+            f"`{entry['token']}` is owed until {entry['deadline'].isoformat()}, more than {DECISION_MAX_DAYS} days "
+            f"after its owner decision {ident}"
+        )
+    return None
+
+
 def workflow_command_escape(text):
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
@@ -1076,9 +1130,19 @@ def parse_sync_ledger(path, today=None):
         raise SystemExit(2)
     today = today or datetime.now(UTC).date()
     entries = []
+    records = {}
     items, errors = ledger_items(path, text)
     for lineno, section, item_text in items:
         where = f"{path}:{lineno}"
+        if section == OWNER_DECISIONS:
+            problem, record = owner_decision_record(item_text, today, where)
+            if problem:
+                errors.append(problem)
+            elif record["id"] in records:
+                errors.append(f"{where}: `{record['id']}` is recorded more than once (first at {records[record['id']]['where']})")
+            else:
+                records[record["id"]] = record
+            continue
         entry = SYNC_ENTRY_RE.match(item_text.strip())
         if not entry:
             errors.append(f"{where}: entry is not in the form - `<sha>` <reason>")
@@ -1172,6 +1236,17 @@ def parse_sync_ledger(path, today=None):
                 )
                 continue
             security = flags[0].lower() == "yes"
+            named = OWNER_DECISION_RE.findall(reason) if security else []
+            if len(named) > 1:
+                errors.append(f"{where}: `{token}` names {len(named)} owner decisions; keep exactly one")
+                continue
+            problem = named and owner_decision_problem(
+                named[0], today, f"`{token}`: a delegated security port", LEDGER_DECISION_SYNTAX
+            )
+            if problem:
+                errors.append(f"{where}: {problem}")
+                continue
+            decision = named[0] if named else None
         conditional = section == "waived" and bool(CONDITIONAL_TAG_RE.match(reason))
         entries.append(
             {
@@ -1182,9 +1257,17 @@ def parse_sync_ledger(path, today=None):
                 "conditional": conditional,
                 "deadline": deadline,
                 "security": security,
+                "decision": decision if section == PORT_QUEUE else None,
             }
         )
-    return entries, errors
+    kept = []
+    for entry in entries:
+        problem = entry["decision"] and delegated_problem(entry, records)
+        if problem:
+            errors.append(f"{entry['where']}: {problem}")
+        else:
+            kept.append(entry)
+    return kept, errors
 
 
 def resolve_sync_entries(entries, in_range):
@@ -1436,7 +1519,12 @@ def parity_gate(
         if coverage.get(sha) != PORT_QUEUE:
             continue
         entry = resolved[queue_origin.get(sha, sha)]
-        if entry["security"]:
+        if entry["security"] and entry["decision"]:
+            copy_notes.append(
+                f"{entry['where']}: `{sha[:12]}` is a security port owed under owner decision {entry['decision']} "
+                f"until {entry['deadline'].isoformat()}"
+            )
+        elif entry["security"]:
             del coverage[sha]
             deadlines.pop(sha)
             ledger_errors.append(
