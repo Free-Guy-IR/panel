@@ -926,8 +926,12 @@ def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
         f"- `{shas['plain']}` port the bump security: no until: 2026-10-13\n"
         f"- `{shas['feature']}` port it security: no until: 2026-10-13\n"
     )
-    waived = standalone_gate(path, f"## Waived\n\n- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code {TOKEN_DECISION}\n\n"
-        + queue)
+    waived = standalone_gate(
+        path,
+        f"## Waived\n\n- `{shas['auth']}` the fork rejects tokens of replaced admins in its own code {TOKEN_DECISION}\n\n"
+        + queue
+        + TOKEN_RECORD.format(**shas),
+    )
     assert waived.returncode == 0, waived.stdout + waived.stderr
     assert tally(waived.stdout, OWED_LABEL) == 2
     git(path, "cherry-pick", "-x", shas["auth"])
@@ -1363,6 +1367,10 @@ def test_a_wrapped_line_that_starts_with_an_issue_number_keeps_the_section_open(
 
 
 TOKEN_DECISION = "security: yes owner-decision: 2026-10-01-fork-token-check"
+TOKEN_RECORD = (
+    "\n## Owner decisions\n\n- `2026-10-01-fork-token-check` the fork rejects tokens of replaced admins in its own "
+    "code, covers {auth} until: 2026-10-31\n"
+)
 CRAFTED_WAIVED = f"## Waived\n\n- `{{auth}}` the fork rejects tokens of replaced admins in its own code {TOKEN_DECISION}\n"
 CRAFTED_QUEUE = "\n## Port queue\n\n- `{feature}` add the header option security: no until: 2026-10-13\n"
 NOT_A_HEADING = "is not a Markdown heading; put a space after the hashes"
@@ -1396,7 +1404,7 @@ CRAFTED_LEDGER_LINES = {
 
 
 def crafted_ledger(shas, in_waived, in_queue):
-    return (CRAFTED_WAIVED + in_waived + CRAFTED_QUEUE + in_queue).format(**shas)
+    return (CRAFTED_WAIVED + in_waived + CRAFTED_QUEUE + in_queue + TOKEN_RECORD).format(**shas)
 
 
 def test_the_crafted_ledger_baseline_is_green_once_the_commit_is_really_decided(tmp_path):
@@ -1997,8 +2005,9 @@ def test_a_waived_entry_without_a_security_classification_fails(tmp_path):
 )
 def test_a_waived_security_fix_needs_a_named_owner_decision(tmp_path, decision, code, message):
     path, shas = classified_repo(tmp_path, "waived-security")
+    record = decision_list("2026-10-05-fork-token-check the fork keeps its own check, covers {sec} until: 2026-11-04", shas=shas)
     result = standalone_gate(
-        path, classified_ledger(shas, "Waived", f"the fork rejects forged tokens itself security: yes {decision}")
+        path, classified_ledger(shas, "Waived", f"the fork rejects forged tokens itself security: yes {decision}") + record
     )
     assert result.returncode == code, result.stdout + result.stderr
     assert message in result.stdout
@@ -2064,6 +2073,14 @@ def test_a_waived_security_no_entry_with_a_keyword_is_flagged_for_review(tmp_pat
 
 BRIDGE_WAIVER = 'upstream_version = "0.9.2"\nuntil = 2026-10-20\n'
 NPM_WAIVER = '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_version = "0.3.9"\nuntil = 2026-10-20\n'
+BRIDGE_RECORD = (
+    "## Owner decisions\n\n- `2026-10-05-bridge-hold` the fork bridge stays one more release, covers "
+    "`pasarguard-node-bridge@0.9.2` until: 2026-11-04\n"
+)
+NPM_RECORD = (
+    "## Owner decisions\n\n- `2026-10-05-kit-hold` the kit waits for the dashboard rework, covers "
+    "`@pasarguard/xray-config-kit@0.3.9` until: 2026-11-04\n"
+)
 
 
 @pytest.mark.parametrize(
@@ -2098,7 +2115,10 @@ NPM_WAIVER = '[[waiver]]\npackage = "@pasarguard/xray-config-kit"\nupstream_vers
 def test_a_bridge_waiver_needs_a_security_classification(repo, name, fields, code, message):
     path = repo["path"]
     git(path, "checkout", "-q", "-b", name, "main")
-    commit(path, f"waive bridge: {name}", {"upstream-bridge-waiver.toml": BRIDGE_WAIVER + fields})
+    files = {"upstream-bridge-waiver.toml": BRIDGE_WAIVER + fields}
+    if name.endswith("-decided"):
+        files["UPSTREAM_SYNC.md"] = BRIDGE_RECORD
+    commit(path, f"waive bridge: {name}", files)
     git(path, "checkout", "-q", "main")
     result = run(path, "--head", name, "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
     assert result.returncode == code, result.stdout + result.stderr
@@ -2133,7 +2153,10 @@ def test_a_bridge_waiver_needs_a_security_classification(repo, name, fields, cod
 def test_an_npm_waiver_needs_a_security_classification(repo, name, fields, code, message):
     path = repo["path"]
     git(path, "checkout", "-q", "-b", name, "main")
-    commit(path, f"waive npm: {name}", {"upstream-npm-waivers.toml": NPM_WAIVER + fields})
+    files = {"upstream-npm-waivers.toml": NPM_WAIVER + fields}
+    if name.endswith("-decided"):
+        files["UPSTREAM_SYNC.md"] = NPM_RECORD
+    commit(path, f"waive npm: {name}", files)
     git(path, "checkout", "-q", "main")
     result = run(
         path, "--head", name, "--check-npm", "--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-06"
@@ -2145,15 +2168,16 @@ def test_an_npm_waiver_needs_a_security_classification(repo, name, fields, code,
 DECISION_ID = "2026-10-27-owner-delegated"
 
 
-def decision_list(*rows):
+def decision_list(*rows, shas=None):
     lines = []
     for row in rows:
+        row = row.format(**shas) if shas else row
         ident, _, rest = row.partition(" ")
         lines.append(f"- `{ident}` {rest}".rstrip() + "\n")
     return "\n## Owner decisions\n\n" + "".join(lines)
 
 
-DELEGATED = f"{DECISION_ID} main chose to let the security ports wait for the sync until: 2026-11-26"
+DELEGATED = f"{DECISION_ID} main chose to let the security ports {{auth}} and {{plain}} wait for the sync until: 2026-11-26"
 
 
 def delegated_repo(tmp_path, name):
@@ -2172,7 +2196,7 @@ def delegated_queue(shas, keys=("auth", "plain"), decision=DECISION_ID, until="2
 @pytest.mark.parametrize("today", ["2026-10-27", "2026-11-26"])
 def test_a_security_port_with_a_recorded_owner_decision_is_owed_until_its_date(tmp_path, today):
     path, shas = delegated_repo(tmp_path, f"delegated-{today}")
-    result = standalone_gate(path, delegated_queue(shas) + decision_list(DELEGATED), "--today", today)
+    result = standalone_gate(path, delegated_queue(shas) + decision_list(DELEGATED, shas=shas), "--today", today)
     assert result.returncode == 0, result.stdout + result.stderr
     assert tally(result.stdout, OWED_LABEL) == 4
     assert "a security port gets no grace" not in result.stdout
@@ -2181,7 +2205,7 @@ def test_a_security_port_with_a_recorded_owner_decision_is_owed_until_its_date(t
 def test_a_delegated_security_port_fails_the_day_after_its_date_on_exactly_what_is_unported(tmp_path):
     path, shas = delegated_repo(tmp_path, "delegated-expiry")
     git(path, "cherry-pick", "-x", shas["auth"])
-    ledger_text = delegated_queue(shas) + decision_list(DELEGATED)
+    ledger_text = delegated_queue(shas) + decision_list(DELEGATED, shas=shas)
     last_day = standalone_gate(path, ledger_text, "--today", "2026-11-26")
     assert last_day.returncode == 0, last_day.stdout + last_day.stderr
     assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in last_day.stdout
@@ -2203,7 +2227,7 @@ def test_a_security_port_without_an_owner_decision_still_gets_no_grace(tmp_path)
         f"- `{shas['auth']}` port it security: yes owner-decision: {DECISION_ID} until: 2026-11-26\n"
         f"- `{shas['feature']}` port it security: no until: 2026-11-26\n"
     )
-    result = standalone_gate(path, queue + decision_list(DELEGATED), "--today", "2026-10-27")
+    result = standalone_gate(path, queue + decision_list(DELEGATED, shas=shas), "--today", "2026-10-27")
     assert result.returncode == 1, result.stdout + result.stderr
     assert f"`{shas['plain'][:12]}` is classified security: yes; a security port gets no grace" in result.stdout
     assert f"`{shas['auth'][:12]}` is classified security: yes; a security port gets no grace" not in result.stdout
@@ -2215,12 +2239,12 @@ def test_a_security_port_without_an_owner_decision_still_gets_no_grace(tmp_path)
     [
         (
             {"decision": "2026-10-28-early-bird", "until": "2026-11-20"},
-            ("2026-10-28-early-bird main decided ahead of time until: 2026-11-20",),
+            ("2026-10-28-early-bird main decided ahead of time covers {plain} until: 2026-11-20",),
             "names an owner decision dated 2026-10-28, after today",
         ),
         (
             {"decision": "2026-10-01-long-window", "until": "2026-11-05"},
-            ("2026-10-01-long-window main gave a long window until: 2026-11-05",),
+            ("2026-10-01-long-window main gave a long window covers {plain} until: 2026-11-05",),
             "grants grace until 2026-11-05, more than 30 days after its date 2026-10-01",
         ),
         (
@@ -2230,7 +2254,7 @@ def test_a_security_port_without_an_owner_decision_still_gets_no_grace(tmp_path)
         ),
         (
             {"until": "2026-11-26"},
-            (f"{DECISION_ID} main chose a shorter window until: 2026-11-10",),
+            (f"{DECISION_ID} main chose a shorter window covers {{plain}} until: 2026-11-10",),
             "is owed until 2026-11-26, after its owner decision 2026-10-27-owner-delegated ends on 2026-11-10",
         ),
         (
@@ -2243,7 +2267,10 @@ def test_a_security_port_without_an_owner_decision_still_gets_no_grace(tmp_path)
 def test_a_delegated_security_port_is_refused_when_its_decision_is_not_sound(tmp_path, queue_args, decisions, message):
     path, shas = delegated_repo(tmp_path, "delegated-refused")
     result = standalone_gate(
-        path, delegated_queue(shas, keys=("plain",), **queue_args) + decision_list(*decisions), "--today", "2026-10-27"
+        path,
+        delegated_queue(shas, keys=("plain",), **queue_args) + decision_list(*decisions, shas=shas),
+        "--today",
+        "2026-10-27",
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert message in result.stdout
@@ -2257,8 +2284,8 @@ def test_a_security_port_naming_two_owner_decisions_is_refused(tmp_path):
         f"- `{shas['plain']}` port it security: yes owner-decision: {DECISION_ID} "
         f"owner-decision: 2026-10-26-other until: 2026-11-20\n"
     )
-    other = "2026-10-26-other another decision until: 2026-11-20"
-    result = standalone_gate(path, queue + decision_list(DELEGATED, other), "--today", "2026-10-27")
+    other = "2026-10-26-other another decision covers {plain} until: 2026-11-20"
+    result = standalone_gate(path, queue + decision_list(DELEGATED, other, shas=shas), "--today", "2026-10-27")
     assert result.returncode == 1, result.stdout + result.stderr
     assert f"`{shas['plain']}` names 2 owner decisions; keep exactly one" in result.stdout
 
@@ -2285,7 +2312,7 @@ def test_a_malformed_owner_decision_record_is_a_ledger_error(tmp_path, row, mess
 def test_an_owner_decision_recorded_twice_is_a_ledger_error(tmp_path):
     path, shas = delegated_repo(tmp_path, "decision-twice")
     queue = f"## Port queue\n\n- `{shas['feature']}` port it security: no until: 2026-11-26\n"
-    result = standalone_gate(path, queue + decision_list(DELEGATED, DELEGATED), "--today", "2026-10-27")
+    result = standalone_gate(path, queue + decision_list(DELEGATED, DELEGATED, shas=shas), "--today", "2026-10-27")
     assert result.returncode == 1, result.stdout + result.stderr
     assert f"`{DECISION_ID}` is recorded more than once" in result.stdout
 
@@ -2302,3 +2329,195 @@ def test_the_real_ledger_names_the_delegated_decision_on_exactly_its_security_po
     queued_yes = [entry for entry in entries if entry["kind"] == "port-queue" and entry["security"]]
     assert len(carrying) == len(queued_yes)
     assert text.count(f"`{DECISION_ID}`") == 1
+
+
+def waived_security(shas, decision, until=""):
+    dated = f" until: {until}" if until else ""
+    return (
+        "## Waived\n\n"
+        f"- `{shas['plain']}` the fork pins its own copy security: yes owner-decision: {decision}{dated}\n"
+        f"- `{shas['auth']}` the fork rejects such tokens itself security: yes owner-decision: {decision}{dated}\n"
+        f"\n## Port queue\n\n- `{shas['feature']}` port it security: no, a header option until: 2026-11-26\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("decision", "records", "today", "message"),
+    [
+        ("2026-10-27-made-up", (DELEGATED,), "2026-10-27", "names owner decision 2026-10-27-made-up, which is not recorded"),
+        ("2020-01-01-x", (), "2026-10-27", "names owner decision 2020-01-01-x, which is not recorded"),
+        (
+            "2026-09-01-old",
+            ("2026-09-01-old the fork kept it, covers {auth} {plain} until: 2026-09-30",),
+            "2026-10-27",
+            "names owner decision 2026-09-01-old, which ended on 2026-09-30",
+        ),
+        (DECISION_ID, (DELEGATED,), "2026-11-27", f"names owner decision {DECISION_ID}, which ended on 2026-11-26"),
+    ],
+)
+def test_a_waived_security_fix_needs_a_recorded_unexpired_owner_decision(tmp_path, decision, records, today, message):
+    path, shas = delegated_repo(tmp_path, "waived-recorded")
+    text = waived_security(shas, decision) + (decision_list(*records, shas=shas) if records else "")
+    result = standalone_gate(path, text, "--today", today)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+    unported = unported_block(result.stdout)
+    assert shas["plain"][:12] in unported and shas["auth"][:12] in unported
+
+
+def test_a_waived_security_fix_under_a_recorded_decision_lasts_as_long_as_the_decision(tmp_path):
+    path, shas = delegated_repo(tmp_path, "waived-decided")
+    text = waived_security(shas, DECISION_ID) + decision_list(DELEGATED, shas=shas)
+    green = standalone_gate(path, text, "--today", "2026-10-27")
+    assert green.returncode == 0, green.stdout + green.stderr
+    assert tally(green.stdout, "waived (ledger)") == 2
+    assert "the gate fails on 2026-11-27" in green.stdout
+    last_day = standalone_gate(path, text, "--today", "2026-11-26")
+    assert last_day.returncode == 0, last_day.stdout + last_day.stderr
+
+
+def test_a_dated_waiver_of_a_security_fix_may_not_outlast_its_decision(tmp_path):
+    path, shas = delegated_repo(tmp_path, "waived-outlasts")
+    record = f"{DECISION_ID} a short window, covers {{auth}} {{plain}} until: 2026-11-10"
+    text = waived_security(shas, DECISION_ID, until="2026-11-20") + decision_list(record, shas=shas)
+    result = standalone_gate(path, text, "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"is decided until 2026-11-20, after its owner decision {DECISION_ID} ends on 2026-11-10" in result.stdout
+
+
+def test_an_owner_decision_covers_only_the_commits_its_record_lists(tmp_path):
+    path, shas = delegated_repo(tmp_path, "decision-scope")
+    record = f"{DECISION_ID} only the token fix may wait, covers {{auth}} until: 2026-11-26"
+    result = standalone_gate(path, delegated_queue(shas) + decision_list(record, shas=shas), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain']}` is not covered by owner decision {DECISION_ID}" in result.stdout
+    unported = unported_block(result.stdout)
+    assert shas["plain"][:12] in unported and shas["auth"][:12] not in unported
+
+
+def test_an_owner_decision_record_must_list_what_it_covers(tmp_path):
+    path, shas = delegated_repo(tmp_path, "decision-empty")
+    record = f"{DECISION_ID} everything may wait until: 2026-11-26"
+    result = standalone_gate(path, delegated_queue(shas) + decision_list(record), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{DECISION_ID}` lists no upstream commit or package@version it covers" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("section", "line"),
+    [
+        ("Held for an upstream release", "- `{plain}` dev only security: yes owner-decision: " + DECISION_ID + "\n"),
+        ("Ported by design", "- `{plain}` the fork has it security: yes owner-decision: " + DECISION_ID + "\n"),
+        ("Port queue", "- `{plain}` port it security: no owner-decision: " + DECISION_ID + " until: 2026-11-26\n"),
+        ("Waived", "- `{plain}` not taken security: no owner-decision: " + DECISION_ID + "\n"),
+    ],
+)
+def test_an_owner_decision_on_an_entry_that_needs_none_is_refused(tmp_path, section, line):
+    path, shas = delegated_repo(tmp_path, "decision-misplaced")
+    text = f"## {section}\n\n" + line.format(**shas) + decision_list(DELEGATED, shas=shas)
+    result = standalone_gate(path, text, "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['plain']}` carries owner-decision: {DECISION_ID} but needs none" in result.stdout
+
+
+def test_the_ok_line_names_the_first_day_any_dated_decision_fails(tmp_path):
+    path, shas = delegated_repo(tmp_path, "earliest-date")
+    queue = (
+        "## Port queue\n\n"
+        f"- `{shas['feature']}` port it security: no, a header option until: 2026-11-26\n"
+        f"- `{shas['auth']}` port it security: yes owner-decision: {DECISION_ID} until: 2026-11-26\n"
+        "\n## Waived\n\n"
+        f"- `{shas['plain']}` pending: the bump waits for the sync security: no until: 2026-11-05\n"
+    )
+    result = standalone_gate(path, queue + decision_list(DELEGATED, shas=shas), "--today", "2026-10-27")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "the gate fails on 2026-11-06 unless they are ported or re-decided" in result.stdout
+
+
+def test_the_ok_line_without_owed_ports_still_names_the_first_dated_decision(tmp_path):
+    path, shas = delegated_repo(tmp_path, "earliest-waived")
+    text = (
+        "## Waived\n\n"
+        f"- `{shas['plain']}` pending: the bump waits security: no until: 2026-11-05\n"
+        f"- `{shas['feature']}` the fork has its own header option security: no\n"
+        f"- `{shas['auth']}` the fork rejects such tokens itself security: yes owner-decision: {DECISION_ID}\n"
+    )
+    result = standalone_gate(path, text + decision_list(DELEGATED, shas=shas), "--today", "2026-10-27")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Upstream parity gate OK:" in result.stdout
+    assert "the earliest dated decision ends on 2026-11-05, so the gate fails on 2026-11-06 unless it is re-decided" in (
+        result.stdout
+    )
+
+
+def test_a_queued_port_classified_security_no_without_a_reason_is_counted(tmp_path):
+    path, shas = delegated_repo(tmp_path, "no-reason")
+    queue = (
+        "## Port queue\n\n"
+        f"- `{shas['feature']}` port it security: no until: 2026-11-26\n"
+        f"- `{shas['plain']}` port it security: no, a version bump without an advisory until: 2026-11-26\n"
+        f"- `{shas['auth']}` port it security: no until: 2026-11-26\n"
+    )
+    result = standalone_gate(path, queue, "--today", "2026-10-27")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "2 port-queue entries classified security: no give no reason for the no" in result.stdout
+
+
+BRIDGE_SEC = 'reason = "0.9.2 closes an auth bypass; we defer it"\nsecurity = "yes"\n'
+
+
+@pytest.mark.parametrize(
+    ("name", "decision", "ledger", "message"),
+    [
+        ("bridge-unrecorded", "2020-01-01-made-up", None, "names owner decision 2020-01-01-made-up, which is not recorded"),
+        (
+            "bridge-uncovered",
+            "2026-10-05-bridge-hold",
+            BRIDGE_RECORD.replace("pasarguard-node-bridge@0.9.2", "pasarguard-node-bridge@0.9.0"),
+            "is not covered by owner decision 2026-10-05-bridge-hold",
+        ),
+        (
+            "bridge-expired",
+            "2026-10-01-bridge-hold",
+            BRIDGE_RECORD.replace("2026-10-05-bridge-hold", "2026-10-01-bridge-hold").replace("2026-11-04", "2026-10-05"),
+            "names owner decision 2026-10-01-bridge-hold, which ended on 2026-10-05",
+        ),
+        (
+            "bridge-outlasts",
+            "2026-10-05-bridge-hold",
+            BRIDGE_RECORD.replace("2026-11-04", "2026-10-10"),
+            "runs until 2026-10-20, after its owner decision 2026-10-05-bridge-hold ends on 2026-10-10",
+        ),
+    ],
+)
+def test_a_bridge_security_waiver_needs_a_recorded_covering_decision(repo, name, decision, ledger, message):
+    path = repo["path"]
+    git(path, "checkout", "-q", "-b", name, "main")
+    files = {"upstream-bridge-waiver.toml": BRIDGE_WAIVER + BRIDGE_SEC + f'owner_decision = "{decision}"\n'}
+    if ledger is not None:
+        files["UPSTREAM_SYNC.md"] = ledger
+    commit(path, f"waive bridge: {name}", files)
+    git(path, "checkout", "-q", "main")
+    result = run(path, "--head", name, "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert message in result.stdout
+
+
+def test_an_npm_security_waiver_needs_a_recorded_decision(repo):
+    path = repo["path"]
+    git(path, "checkout", "-q", "-b", "npm-unrecorded", "main")
+    fields = 'reason = "0.3.9 escapes remarks against XSS"\nsecurity = "yes"\nowner_decision = "2020-01-01-made-up"\n'
+    commit(path, "waive npm: unrecorded", {"upstream-npm-waivers.toml": NPM_WAIVER + fields})
+    git(path, "checkout", "-q", "main")
+    result = run(
+        path,
+        "--head",
+        "npm-unrecorded",
+        "--check-npm",
+        "--npm-latest",
+        "@pasarguard/xray-config-kit=0.3.9",
+        "--today",
+        "2026-10-06",
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "names owner decision 2020-01-01-made-up, which is not recorded" in result.stdout + result.stderr

@@ -81,6 +81,7 @@ upstream = "Up/kit"
 fork_url = "{world["fork"]}"
 upstream_url = "{world["upstream"]}"
 ported_ref = "main"
+grandfathered_base = "{world["shas"]["root"]}"
 ledger = "upstream-forks/kit.md"
 reason = "no tracker of its own"
 {extra}
@@ -329,3 +330,69 @@ def test_a_refs_snapshot_line_is_never_passed_to_git_as_an_option(world, tmp_pat
     result = run(config)
     assert not marker.exists()
     assert result.returncode == 1, result.stdout + result.stderr
+
+
+@pytest.fixture
+def shared(tmp_path):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {"a.py": "one\ntwo\n"})
+    git(upstream, "tag", "v1.0.0")
+    fix = commit(upstream, "fix: check the token", {"a.py": "one\nCHECK_TOKEN\ntwo\n"})
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    git(fork, "reset", "-q", "--hard", base)
+    commit(fork, "fork feature", {"f.py": "fork\n"})
+    panel = new_repo(tmp_path / "panel")
+    (panel / "upstream-forks").mkdir()
+    return {"tmp": tmp_path, "upstream": upstream, "fork": fork, "panel": panel, "base": base, "fix": fix}
+
+
+def shared_map(shared, grandfathered=True):
+    line = f'grandfathered_base = "{shared["base"]}"\n' if grandfathered else ""
+    text = f"""
+[[repo]]
+name = "kit"
+mode = "ledger"
+fork = "Owner/kit"
+upstream = "Up/kit"
+fork_url = "{shared["fork"]}"
+upstream_url = "{shared["upstream"]}"
+ported_ref = "main"
+{line}ledger = "upstream-forks/kit.md"
+reason = "no tracker of its own"
+"""
+    forks = shared["panel"] / "upstream-forks"
+    (forks / "forks.toml").write_text(text)
+    (forks / "kit.md").write_text("## Waived\n")
+    return forks / "forks.toml"
+
+
+@pytest.mark.parametrize("hide", ["ours", "revert"])
+def test_a_side_fork_that_merged_an_upstream_fix_without_its_lines_is_red(shared, hide):
+    fork = shared["fork"]
+    if hide == "ours":
+        git(fork, "merge", "-q", "-s", "ours", "--no-edit", "v1.1.0")
+    else:
+        git(fork, "merge", "-q", "--no-ff", "--no-edit", "v1.1.0")
+        git(fork, "revert", "--no-edit", "-m", "1", "HEAD")
+    assert "CHECK_TOKEN" not in (fork / "a.py").read_text()
+    result = run(shared_map(shared), "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert shared["fix"][:12] in result.stdout.split("Unported upstream commits", 1)[1]
+    assert f"{shared['fix'][:12]}: merged into refs/remotes/fork/main, but 1 of 1 line(s)" in result.stdout
+
+
+def test_a_side_fork_that_really_merged_the_fix_is_green(shared):
+    git(shared["fork"], "merge", "-q", "--no-ff", "--no-edit", "v1.1.0")
+    result = run(shared_map(shared), "--today", "2026-10-27")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "merged into the head, every line present   1" in result.stdout
+
+
+def test_a_ledger_repo_needs_a_grandfathered_upstream_base(shared):
+    result = run(shared_map(shared, grandfathered=False))
+    assert result.returncode != 0
+    assert "repo kit (ledger) needs grandfathered_base" in result.stdout + result.stderr
