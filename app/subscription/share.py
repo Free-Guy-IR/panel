@@ -193,10 +193,7 @@ def apply_custom_format_variables(format_variables: dict, custom_variables: list
         key, raw_value = _custom_variable_parts(variable)
         if not key:
             continue
-        try:
-            format_variables[key] = raw_value.format_map(base_variables)
-        except (ValueError, KeyError):
-            format_variables[key] = raw_value
+        format_variables[key] = _format_dynamic_value(raw_value, base_variables)
 
     return format_variables
 

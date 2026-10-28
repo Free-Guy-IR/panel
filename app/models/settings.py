@@ -14,6 +14,7 @@ from pydantic import (
 )
 
 from app.models.proxy import ShadowsocksMethods
+from app.utils.helpers import has_oversized_format_spec
 from app.utils.logger import get_logger
 
 from .notification_enable import NotificationEnable
@@ -358,9 +359,11 @@ class CustomVariable(BaseModel):
     @field_validator("value")
     @classmethod
     def validate_value_format(cls, value: str) -> str:
+        if has_oversized_format_spec(value):
+            raise ValueError("Invalid formatting variables")
         try:
             value.format_map({key: "" for key in BUILTIN_FORMAT_VARIABLES})
-        except ValueError:
+        except ValueError, AttributeError, IndexError, TypeError:
             raise ValueError("Invalid formatting variables")
         except KeyError:
             pass
