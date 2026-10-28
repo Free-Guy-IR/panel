@@ -828,6 +828,7 @@ def reverted_commits(head):
 
 HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 HUNK_CONTEXT = 3
+CONTEXT_SLACK = 2
 
 
 def commit_hunks(sha):
@@ -853,21 +854,34 @@ def commit_hunks(sha):
             continue
         kind, text = line[0], line[1:]
         if kind == " ":
-            current["pre"].append(text)
-            current["post"].append(text)
+            current["pre"].append((text, False))
+            current["post"].append((text, False))
         elif kind == "-":
-            current["pre"].append(text)
+            current["pre"].append((text, True))
             current["removed"] += 1
         elif kind == "+":
-            current["post"].append(text)
+            current["post"].append((text, True))
             current["added"] += 1
     return hunks
 
 
+def normalise_line(path, line):
+    return line.rstrip() if path.endswith(".py") else line.strip()
+
+
 def normalised(path, lines):
-    keep_indent = path.endswith(".py")
-    out = [line.rstrip() if keep_indent else line.strip() for line in lines]
-    return tuple(line for line in out if line)
+    return tuple(text for text in (normalise_line(path, line) for line in lines) if text)
+
+
+def hunk_side(path, side):
+    marked = [(normalise_line(path, text), changed) for text, changed in side]
+    marked = [(text, changed) for text, changed in marked if text]
+    changed_at = [i for i, (_, changed) in enumerate(marked) if changed]
+    if not changed_at:
+        return None
+    first, last = changed_at[0], changed_at[-1]
+    texts = [text for text, _ in marked]
+    return tuple(texts[:first]), tuple(texts[first : last + 1]), tuple(texts[last + 1 :])
 
 
 @functools.lru_cache(maxsize=4096)
@@ -876,14 +890,32 @@ def normalised_file(ref, path):
     return None if content is None else normalised(path, content.splitlines())
 
 
-def contains_block(haystack, needle):
-    if not needle:
-        return True
-    if haystack is None or len(needle) > len(haystack):
+def context_follows(lines, start, step, context):
+    slack = CONTEXT_SLACK
+    index = start
+    for expected in context:
+        while 0 <= index < len(lines) and lines[index] != expected:
+            if slack == 0:
+                return False
+            slack -= 1
+            index += step
+        if not 0 <= index < len(lines):
+            return False
+        index += step
+    return True
+
+
+def block_in_place(lines, side):
+    if lines is None:
         return False
-    first = needle[0]
-    size = len(needle)
-    return any(haystack[i] == first and haystack[i : i + size] == needle for i in range(len(haystack) - size + 1))
+    before, core, after = side
+    size = len(core)
+    for i in range(len(lines) - size + 1):
+        if lines[i : i + size] != core:
+            continue
+        if context_follows(lines, i - 1, -1, tuple(reversed(before))) and context_follows(lines, i + size, 1, after):
+            return True
+    return False
 
 
 def missing_pick_lines(upstream_sha, reference, head):
@@ -891,21 +923,19 @@ def missing_pick_lines(upstream_sha, reference, head):
     missing = []
     for hunk in commit_hunks(upstream_sha):
         path = hunk["new"] or hunk["old"]
-        pre = normalised(path, hunk["pre"])
-        post = normalised(path, hunk["post"])
+        post = hunk_side(path, hunk["post"])
+        pre = hunk_side(path, hunk["pre"])
         upstream_now = normalised_file(reference, path)
-        check_post = hunk["new"] is not None and hunk["added"] > 0 and bool(post) and contains_block(upstream_now, post)
-        check_pre = hunk["removed"] > 0 and bool(pre) and pre != post and not contains_block(upstream_now, pre)
+        check_post = hunk["new"] is not None and post is not None and block_in_place(upstream_now, post)
+        check_pre = pre is not None and pre != post and not block_in_place(upstream_now, pre)
         if not (check_post or check_pre):
             continue
         expected += 1
         here = normalised_file(head, path)
-        if check_post and not contains_block(here, post):
-            added = normalised(path, [text for text in hunk["post"] if text not in hunk["pre"]]) or post
-            missing.append((path, added[0].strip()))
-        elif check_pre and contains_block(here, pre):
-            removed = normalised(path, [text for text in hunk["pre"] if text not in hunk["post"]]) or pre
-            missing.append((path, f"-{removed[0].strip()}"))
+        if check_post and not block_in_place(here, post):
+            missing.append((path, post[1][0]))
+        elif check_pre and block_in_place(here, pre):
+            missing.append((path, f"-{pre[1][0]}"))
     return expected, missing
 
 

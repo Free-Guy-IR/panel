@@ -2646,3 +2646,26 @@ def test_a_real_merge_of_the_fix_is_still_ported(tmp_path):
     result = hunk_gate(repo_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert tally(result.stdout, "merged into the head, every line present") == 1
+
+
+IMPORTS = "import os\nimport sys\n\nfrom app.db.base import Base\nfrom app.db.types import Big, Binary, CredentialId\nfrom config import settings\n\nconfig = load()\n"
+IMPORTS_FIXED = IMPORTS.replace("Big, Binary, CredentialId", "Big, Binary, Challenge, CredentialId")
+
+
+@pytest.mark.parametrize(
+    ("fork_text", "code"),
+    [
+        (IMPORTS_FIXED.replace("from app.db.base import Base\n", "from app.db.base import Base\nimport app.db.models\n"), 0),
+        (IMPORTS_FIXED.replace("Challenge, CredentialId", "CredentialId") + "Challenge = None\n", 1),
+    ],
+)
+def test_a_fork_line_inside_a_hunks_context_keeps_the_pick_ported(tmp_path, fork_text, code):
+    repo_path, _, fix = hunk_repo(tmp_path, f"context-{code}", "env.py", IMPORTS, IMPORTS_FIXED, "feat(db): add a type")
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, f"port the type\n\nUpstream: {fix}\n", {"env.py": fork_text})
+    result = hunk_gate(repo_path)
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+    else:
+        assert f"{fix[:12]}: 1 of 1 upstream hunk(s) it changes are not reflected in main" in result.stdout
