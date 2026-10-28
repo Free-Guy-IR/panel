@@ -938,11 +938,13 @@ def block_in_place(lines, side):
     return False
 
 
-def missing_pick_lines(upstream_sha, reference, head):
+def missing_pick_lines(upstream_sha, reference, head, paths=None):
     expected = 0
     missing = []
     for hunk in commit_hunks(upstream_sha):
         path = hunk["new"] or hunk["old"]
+        if paths and path not in paths:
+            continue
         post = hunk_side(path, hunk["post"])
         pre = hunk_side(path, hunk["pre"])
         upstream_now = normalised_file(reference, path)
@@ -1047,7 +1049,9 @@ def design_fork_commit(reason, head, in_range):
         fork_sha = result.stdout.strip()
         if result.returncode != 0 or fork_sha in in_range or not is_ancestor(fork_sha, head):
             continue
-        expected, missing = missing_pick_lines(fork_sha, fork_sha, head)
+        touched = git("show", "--format=", "--name-only", "-M", fork_sha).split("\n")
+        named = {path for path in touched if path and re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
+        expected, missing = missing_pick_lines(fork_sha, fork_sha, head, named)
         if expected and not missing:
             return fork_sha
     return None
