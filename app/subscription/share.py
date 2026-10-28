@@ -21,6 +21,7 @@ from app.subscription.config_cache import (
     make_sub_config_key,
     put_sub_config,
 )
+from app.utils.helpers import has_oversized_format_spec
 from app.utils.system import readable_size
 
 from . import (
@@ -202,9 +203,13 @@ def apply_custom_format_variables(format_variables: dict, custom_variables: list
 
 def _format_dynamic_value(value, format_variables: dict):
     if isinstance(value, str):
+        if has_oversized_format_spec(value):
+            # Formatting would build the padded result first; a value saved before the size check stays raw text
+            return value
         try:
             return value.format_map(format_variables)
-        except (ValueError, KeyError):
+        except ValueError, KeyError, AttributeError, IndexError, TypeError:
+            # A value the variables cannot fill (stray brace, {0}, {X.y}) is kept as it is
             return value
     if isinstance(value, list):
         return [_format_dynamic_value(item, format_variables) for item in value]
@@ -338,14 +343,14 @@ async def process_host(
     if isinstance(inbound.tls_config.sni, list) and inbound.tls_config.sni:
         sni = random.choice(inbound.tls_config.sni)
     sni = sni.replace("*", salt)
-    sni = sni.format_map(format_variables) if sni else ""
+    sni = _format_dynamic_value(sni, format_variables) if sni else ""
 
     req_host = ""
     host_list = inbound.transport_config.host
     if isinstance(host_list, list) and host_list:
         req_host = random.choice(host_list)
     req_host = req_host.replace("*", salt)
-    req_host = req_host.format_map(format_variables) if req_host else ""
+    req_host = _format_dynamic_value(req_host, format_variables) if req_host else ""
 
     address = ""
     if inbound.address:
@@ -361,7 +366,9 @@ async def process_host(
         reality_sid = inbound.tls_config.reality_short_id
 
     # Format path with variables
-    path = inbound.transport_config.path.format_map(format_variables) if inbound.transport_config.path else ""
+    path = (
+        _format_dynamic_value(inbound.transport_config.path, format_variables) if inbound.transport_config.path else ""
+    )
 
     # Apply use_sni_as_host override
     if inbound.use_sni_as_host and sni:
@@ -418,7 +425,7 @@ async def _prepare_download_settings(
     download_copy, _ = result
 
     if isinstance(download_copy.address, str):
-        download_copy.address = download_copy.address.format_map(format_variables)
+        download_copy.address = _format_dynamic_value(download_copy.address, format_variables)
 
     if isinstance(conf, StandardLinks):
         xc = XrayConfiguration(
@@ -473,8 +480,8 @@ async def process_inbounds_and_tags(
         inbound_copy, settings = result
 
         # Format remark and address with user variables
-        remark = inbound_copy.remark.format_map(format_variables)
-        formatted_address = inbound_copy.address.format_map(format_variables)
+        remark = _format_dynamic_value(inbound_copy.remark, format_variables)
+        formatted_address = _format_dynamic_value(inbound_copy.address, format_variables)
 
         download_settings = getattr(inbound_copy.transport_config, "download_settings", None)
         if download_settings:

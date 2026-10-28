@@ -1,6 +1,7 @@
 import html
 import re
 from datetime import UTC, datetime as dt, timezone as tz
+from string import Formatter
 
 from pydantic import ValidationError
 
@@ -167,3 +168,26 @@ def escape_ds_markdown(text: str) -> str:
 def escape_ds_markdown_list(list: tuple[str]) -> tuple[str]:
     """Escapes markdown special characters for Discord."""
     return tuple(escape_ds_markdown(text) for text in list)
+
+
+# Largest width or precision a host format field may use. str.format_map builds the padded result before anything
+# can check its size, so "{USERNAME:>1000000000}" would allocate a gigabyte on save and on every subscription render.
+MAX_FORMAT_SPEC_NUMBER = 256
+
+
+def has_oversized_format_spec(value: str) -> bool:
+    """Returns True if a format field in value has a width or precision above MAX_FORMAT_SPEC_NUMBER, or a nested
+    field (``{USERNAME:>{PAD}}``) whose size is only known when it renders."""
+    try:
+        specs = [spec for _, field, spec, _ in Formatter().parse(value) if field is not None and spec]
+    except ValueError:
+        # Unbalanced braces: str.format_map rejects the value before it formats anything
+        return False
+    for spec in specs:
+        if "{" in spec:
+            return True
+        for number in re.findall(r"\d+", spec):
+            digits = number.lstrip("0")
+            if len(digits) > len(str(MAX_FORMAT_SPEC_NUMBER)) or int(digits or "0") > MAX_FORMAT_SPEC_NUMBER:
+                return True
+    return False
