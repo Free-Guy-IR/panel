@@ -215,7 +215,9 @@ def repo(tmp_path_factory):
     commit(
         path,
         "waive bridge for ever",
-        {"upstream-bridge-waiver.toml": 'upstream_version = "0.9.2"\nreason = "fork bridge carries sing-box"\nsecurity = "no"\n'},
+        {
+            "upstream-bridge-waiver.toml": 'upstream_version = "0.9.2"\nreason = "fork bridge carries sing-box"\nsecurity = "no"\n'
+        },
     )
     git(path, "checkout", "-q", "-b", "waiver-noreason", "main")
     commit(path, "waive bridge badly", {"upstream-bridge-waiver.toml": 'upstream_version = "0.9.2"\nreason = ""\n'})
@@ -440,7 +442,12 @@ def test_track_usage_errors(repo, tmp_path):
         ("main", ["--bridge-latest", "0.9.1", "--upstream-head", "u4"], 0, "Bridge version gate OK"),
         ("main", ["--bridge-latest", "0.9.2", "--upstream-head", "u4"], 1, "0.9.2 (from --bridge-latest)"),
         ("main", ["--bridge-latest", "0.9.1"], 1, "upstream latest: 0.9.2 (from pyproject.toml on"),
-        ("waiver-ok", ["--bridge-latest", "0.9.1", "--today", "2026-10-06"], 0, "waived by upstream-bridge-waiver.toml"),
+        (
+            "waiver-ok",
+            ["--bridge-latest", "0.9.1", "--today", "2026-10-06"],
+            0,
+            "waived by upstream-bridge-waiver.toml",
+        ),
         ("waiver-ok", ["--bridge-latest", "0.9.3"], 1, "is stale: it waives 0.9.2 but upstream is now at 0.9.3"),
         ("waiver-ok", ["--bridge-latest", "0.9.1", "--today", "2026-10-21"], 1, "expired on 2026-10-20; re-check it"),
         ("waiver-ok", ["--bridge-latest", "0.9.1", "--today", "2026-09-15"], 1, "more than 30 days ahead"),
@@ -507,8 +514,9 @@ def test_an_old_tag_whose_commits_are_already_in_the_base_is_covered(tmp_path):
 )
 def test_a_dated_decision_covers_only_until_its_date(repo, tmp_path, today, code, message):
     shas = repo["shas"]
-    text = f"## Waived\n\n- `{shas['f1']}` pending: tracked feature branch, re-check security: no until: 2026-10-25\n" + "".join(
-        f"- `{shas[k]}` reason security: no\n" for k in ("u3", "u5", "f2")
+    text = (
+        f"## Waived\n\n- `{shas['f1']}` pending: tracked feature branch, re-check security: no until: 2026-10-25\n"
+        + "".join(f"- `{shas[k]}` reason security: no\n" for k in ("u3", "u5", "f2"))
     )
     result = parity(repo, ledger(tmp_path, text), "--today", today)
     assert result.returncode == code, result.stdout + result.stderr
@@ -702,7 +710,9 @@ def test_owed_ports_are_annotated_on_github_actions(repo, tmp_path):
     )
     assert plain.returncode == actions.returncode == 0, actions.stdout + actions.stderr
     assert "::warning" not in plain.stdout
-    annotations = [line for line in actions.stdout.splitlines() if line.startswith("::warning title=Owed upstream port::")]
+    annotations = [
+        line for line in actions.stdout.splitlines() if line.startswith("::warning title=Owed upstream port::")
+    ]
     assert len(annotations) == 3
     assert any(repo["shas"]["u5"][:12] in line and "until 2026-10-13" in line for line in annotations)
 
@@ -742,7 +752,9 @@ def test_a_merge_commit_with_its_own_changes_needs_a_decision(tmp_path):
     git(path, "checkout", "-q", "-b", "dev", "v1.0")
     main_change = commit(path, "dev change", {"r.py": lines("r", overrides={2: "R2"})})
     commit(path, "clean tree", {"s.py": lines("s", overrides={2: "S2"})})
-    clean = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "clean")
+    clean = git(
+        path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "clean"
+    )
     commit(path, "evil tree", {"s.py": lines("s", overrides={2: "S2", 9: "EVIL"})})
     evil = git(path, "commit-tree", git(path, "rev-parse", "HEAD^{tree}"), "-p", main_change, "-p", side, "-m", "evil")
     git(path, "update-ref", "refs/remotes/upstream/dev", evil)
@@ -842,7 +854,10 @@ def test_a_misspelled_conditional_tag_still_ends_when_upstream_merges(repo, tmp_
         ("## Waived\n\n- `{u3}` until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` (security: no) until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no (until: 2026-10-10)\n", "`{u3}` has no reason"),
-        ("## Port queue\n\n- `{u3}` **security: no** until: 2026-10-10\n", "an entry is plain text and code spans only"),
+        (
+            "## Port queue\n\n- `{u3}` **security: no** until: 2026-10-10\n",
+            "an entry is plain text and code spans only",
+        ),
         ("## Port queue\n\n- `{u3}` security: no! until: 2026-10-10\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no until: 2026-10-10 ?\n", "`{u3}` has no reason"),
         ("## Port queue\n\n- `{u3}` security: no / until: 2026-10-10\n", "`{u3}` has no reason"),
@@ -866,9 +881,15 @@ def test_ledger_forms_that_must_not_count_as_a_decision(repo, tmp_path, text, me
 def security_repo(tmp_path):
     path = standalone_repo(tmp_path, "security")
     shas = {
-        "auth": commit(path, "fix(auth): invalidate tokens for replaced admin accounts (#938)", {"r.py": lines("r", overrides={1: "R1"})}),
+        "auth": commit(
+            path,
+            "fix(auth): invalidate tokens for replaced admin accounts (#938)",
+            {"r.py": lines("r", overrides={1: "R1"})},
+        ),
         "plain": commit(path, "chore(deps): bump a library", {"s.py": lines("s", overrides={1: "S1"})}),
-        "feature": commit(path, "feat(subscription): add a header option", {"r.py": lines("r", overrides={1: "R1", 2: "R2"})}),
+        "feature": commit(
+            path, "feat(subscription): add a header option", {"r.py": lines("r", overrides={1: "R1", 2: "R2"})}
+        ),
     }
     git(path, "update-ref", "refs/remotes/upstream/dev", shas["feature"])
     git(path, "checkout", "-q", "-b", "copy", "v1.0")
@@ -914,10 +935,14 @@ def test_a_keyword_only_non_security_commit_keeps_grace_but_is_flagged(tmp_path)
     git(path, "update-ref", "refs/remotes/upstream/dev", ui)
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
-    green = standalone_gate(path, f"## Port queue\n\n- `{ui}` ships a UI tab, not security security: no until: 2026-10-13\n")
+    green = standalone_gate(
+        path, f"## Port queue\n\n- `{ui}` ships a UI tab, not security security: no until: 2026-10-13\n"
+    )
     assert green.returncode == 0, green.stdout + green.stderr
     assert tally(green.stdout, OWED_LABEL) == 1
-    assert f"`{ui[:12]}` is classified security: no but it names 'session'; re-review the classification" in green.stdout
+    assert (
+        f"`{ui[:12]}` is classified security: no but it names 'session'; re-review the classification" in green.stdout
+    )
     assert "is classified security: yes" not in green.stdout
 
 
@@ -937,7 +962,9 @@ def test_a_security_commit_is_green_once_ported_or_waived(tmp_path):
     assert waived.returncode == 0, waived.stdout + waived.stderr
     assert tally(waived.stdout, OWED_LABEL) == 2
     git(path, "cherry-pick", "-x", shas["auth"])
-    ported = standalone_gate(path, queue + f"- `{shas['auth']}` MUST-PORT: token invalidation security: yes until: 2026-10-13\n")
+    ported = standalone_gate(
+        path, queue + f"- `{shas['auth']}` MUST-PORT: token invalidation security: yes until: 2026-10-13\n"
+    )
     assert ported.returncode == 0, ported.stdout + ported.stderr
     assert f"`{shas['auth'][:12]}` is ported now; delete it from the port queue" in ported.stdout
 
@@ -1020,7 +1047,10 @@ def test_an_upstream_head_missing_from_the_snapshot_fails_the_gate(tmp_path):
     result = _gate(path)
     assert result.returncode == 1
     assert f"upstream head upstream/feature at {feature[:12]} is not recorded" in result.stdout
-    assert "record the reviewed heads by re-running with --write-refs-snapshot, which writes .upstream-refs" in result.stdout
+    assert (
+        "record the reviewed heads by re-running with --write-refs-snapshot, which writes .upstream-refs"
+        in result.stdout
+    )
     recorded = _gate(path, "--write-refs-snapshot")
     assert recorded.returncode == 0, recorded.stdout + recorded.stderr
     assert f"{feature} upstream/feature" in (path / ".upstream-refs").read_text()
@@ -1366,13 +1396,14 @@ def test_a_wrapped_line_that_starts_with_an_issue_number_keeps_the_section_open(
     assert tally(wrapped.stdout, OWED_LABEL) == tally(control.stdout, OWED_LABEL) >= 3
 
 
-
 TOKEN_DECISION = "security: yes owner-decision: 2026-10-01-fork-token-check"
 TOKEN_RECORD = (
     "\n## Owner decisions\n\n- `2026-10-01-fork-token-check` the fork rejects tokens of replaced admins in its own "
     "code, covers {auth} until: 2026-10-31\n"
 )
-CRAFTED_WAIVED = f"## Waived\n\n- `{{auth}}` the fork rejects tokens of replaced admins in its own code {TOKEN_DECISION}\n"
+CRAFTED_WAIVED = (
+    f"## Waived\n\n- `{{auth}}` the fork rejects tokens of replaced admins in its own code {TOKEN_DECISION}\n"
+)
 CRAFTED_QUEUE = "\n## Port queue\n\n- `{feature}` add the header option security: no until: 2026-10-13\n"
 NOT_A_HEADING = "is not a Markdown heading; put a space after the hashes"
 NESTED_ENTRY = "an entry holds one paragraph only, with no nested block"
@@ -1386,7 +1417,11 @@ CRAFTED_LEDGER_LINES = {
     "indented-heading-in-entry": ("", "  ## Waived\n- `{plain}` crafted waiver\n", NESTED_ENTRY),
     "indented-ported-heading": ("", "   ### Ported by design\n- `{plain}` crafted port\n", NESTED_ENTRY),
     "waived-again-after-queue": ("", "\n## Waived\n\n- `{plain}` crafted waiver\n", REPEATED_SECTION),
-    "waived-in-continuation": ("", "  wrapped reason of the entry above\n## Waived\n- `{plain}` crafted\n", REPEATED_SECTION),
+    "waived-in-continuation": (
+        "",
+        "  wrapped reason of the entry above\n## Waived\n- `{plain}` crafted\n",
+        REPEATED_SECTION,
+    ),
     "ported-phrase-prose": ("", "\nPorted by design: `{plain}` is carried by the fork\n", None),
     "ported-phrase-ordered-list": ("", "\n1. `{plain}` ported by design\n", UNSUPPORTED_BLOCK),
     "ported-phrase-nested-bullet": ("", "  - `{plain}` ported by design\n", NESTED_ENTRY),
@@ -1410,7 +1445,9 @@ def crafted_ledger(shas, in_waived, in_queue):
 
 def test_the_crafted_ledger_baseline_is_green_once_the_commit_is_really_decided(tmp_path):
     path, shas = security_repo(tmp_path)
-    decided = crafted_ledger(shas, "", "\n## Ported by design\n\n- `{plain}` the fork carries the bump in its own lock\n")
+    decided = crafted_ledger(
+        shas, "", "\n## Ported by design\n\n- `{plain}` the fork carries the bump in its own lock\n"
+    )
     result = standalone_gate(path, decided)
     assert result.returncode == 0, result.stdout + result.stderr
     undecided = standalone_gate(path, crafted_ledger(shas, "", ""))
@@ -1443,7 +1480,10 @@ def b7_adv_battery(shas):
         "indented_1sp_atx": (head + "## Waived\n\n" + wa + "\n ## Port queue\n\n" + qb, "heading is indented"),
         "blockquote_heading": (head + "## Waived\n\n" + wa + "\n> ## Port queue\n\n" + qb, UNSUPPORTED_BLOCK),
         "fenced_heading": (head + "## Port queue\n\n" + qa + "\n~~~\n## Waived\n~~~\n\n" + qb, UNSUPPORTED_BLOCK),
-        "backtick_fence_heading": (head + "## Port queue\n\n" + qa + "\n```\n## Waived\n```\n\n" + qb, UNSUPPORTED_BLOCK),
+        "backtick_fence_heading": (
+            head + "## Port queue\n\n" + qa + "\n```\n## Waived\n```\n\n" + qb,
+            UNSUPPORTED_BLOCK,
+        ),
         "html_comment_in_code_span": (
             head
             + "## Waived\n\n"
@@ -1467,13 +1507,25 @@ def b7_adv_battery(shas):
             head + "## Port queue\n\n" + qa + "\n<!-- note\n## Waived\n" + qb,
             HTML_IN_LEDGER,
         ),
-        "script_block_heading": (head + "## Port queue\n\n" + qa + "\n<script>\n## Waived\n</script>\n\n" + qb, HTML_IN_LEDGER),
-        "style_block_heading": (head + "## Port queue\n\n" + qa + "\n<style>\n## Waived\n</style>\n\n" + qb, HTML_IN_LEDGER),
+        "script_block_heading": (
+            head + "## Port queue\n\n" + qa + "\n<script>\n## Waived\n</script>\n\n" + qb,
+            HTML_IN_LEDGER,
+        ),
+        "style_block_heading": (
+            head + "## Port queue\n\n" + qa + "\n<style>\n## Waived\n</style>\n\n" + qb,
+            HTML_IN_LEDGER,
+        ),
         "pre_block_heading": (head + "## Port queue\n\n" + qa + "\n<pre>\n## Waived\n</pre>\n\n" + qb, HTML_IN_LEDGER),
         "nbsp_list_marker": (head + "## Waived\n\n" + wa + "-\u00a0`" + b + "` waived: looks like prose\n", "unported"),
         "crlf_control": ((head + "## Port queue\n\n" + qa + qb).replace("\n", "\r\n"), "red"),
-        "trailing_hash_close": (head + "## Waived\n\n" + wa + "\n## Port queue\n\n" + qb + "## Waived ##\n" + qb, REPEATED_SECTION),
-        "tab_after_hashes": (head + "## Waived\n\n" + wa + "\n## Port queue\n\n" + qb + "##\tWaived\n" + qb, REPEATED_SECTION),
+        "trailing_hash_close": (
+            head + "## Waived\n\n" + wa + "\n## Port queue\n\n" + qb + "## Waived ##\n" + qb,
+            REPEATED_SECTION,
+        ),
+        "tab_after_hashes": (
+            head + "## Waived\n\n" + wa + "\n## Port queue\n\n" + qb + "##\tWaived\n" + qb,
+            REPEATED_SECTION,
+        ),
     }
 
 
@@ -1497,7 +1549,12 @@ def test_every_construct_of_the_parser_battery_fails_closed(tmp_path, case):
 
 @pytest.mark.parametrize(
     "ledger",
-    ["UPSTREAM_SYNC.md", *sorted(str(p.relative_to(SCRIPT.parent.parent)) for p in (SCRIPT.parent.parent / "upstream-forks").glob("*.md"))],
+    [
+        "UPSTREAM_SYNC.md",
+        *sorted(
+            str(p.relative_to(SCRIPT.parent.parent)) for p in (SCRIPT.parent.parent / "upstream-forks").glob("*.md")
+        ),
+    ],
 )
 def test_the_real_ledgers_have_no_structural_errors(ledger):
     sys.path.insert(0, str(SCRIPT.parent))
@@ -1510,7 +1567,6 @@ def test_the_real_ledgers_have_no_structural_errors(ledger):
         assert len(items) > 50
     _, entry_errors = upstream_inventory.parse_sync_ledger(str(root / ledger))
     assert [error for error in entry_errors if "security" in error or "owner decision" in error] == []
-
 
 
 @pytest.mark.parametrize(
@@ -1543,7 +1599,6 @@ def test_two_identical_queue_lines_for_one_commit_are_only_a_warning(tmp_path):
     assert "is already listed at" in result.stdout
 
 
-
 @pytest.mark.parametrize("trailer", ["empty", "reverted"])
 def test_a_trailer_alone_never_covers_a_merge_with_its_own_changes(tmp_path, trailer):
     path = standalone_repo(tmp_path, "merge-trailer")
@@ -1566,7 +1621,6 @@ def test_a_trailer_alone_never_covers_a_merge_with_its_own_changes(tmp_path, tra
     assert evil[:12] in unported_block(result.stdout)
     green = standalone_gate(path, decided + f"- `{evil}` the fork resolves this merge its own way security: no\n")
     assert green.returncode == 0, green.stdout + green.stderr
-
 
 
 @pytest.mark.parametrize(
@@ -1595,7 +1649,9 @@ def test_an_until_date_the_gate_cannot_read_fails_instead_of_becoming_permanent(
 def test_an_until_date_in_a_code_span_is_honoured_as_a_real_deadline(tmp_path, section):
     path, shas = security_repo(tmp_path)
     if section == "Waived":
-        text = crafted_ledger(shas, f"- `{shas['plain']}` the fork pins its own copy security: no until `2026-10-20`\n", "")
+        text = crafted_ledger(
+            shas, f"- `{shas['plain']}` the fork pins its own copy security: no until `2026-10-20`\n", ""
+        )
     else:
         text = crafted_ledger(shas, "", f"- `{shas['plain']}` bump the library security: no until `2026-10-20`\n")
     before = standalone_gate(path, text)
@@ -1777,7 +1833,9 @@ def test_a_merged_upstream_commit_whose_lines_the_fork_dropped_is_unported(tmp_p
     assert shas["bump"][:12] in unported_block(result.stdout)
     assert f"{shas['bump'][:12]}: merged into main, but 1 of 1 hunk(s)" in result.stdout
     assert tally(result.stdout, "merged into the head, every line present") == 1
-    waived = standalone_gate(path, f"## Waived\n\n- `{shas['bump']}` the fork pins its own copy of the library security: no\n")
+    waived = standalone_gate(
+        path, f"## Waived\n\n- `{shas['bump']}` the fork pins its own copy of the library security: no\n"
+    )
     assert waived.returncode == 0, waived.stdout + waived.stderr
 
 
@@ -1822,9 +1880,7 @@ def test_a_release_once_recorded_keeps_its_held_commits_released(tmp_path, chang
 def test_a_narrowed_held_release_set_is_refused(tmp_path):
     path, shas = held_repo(tmp_path)
     git(path, "update-ref", "refs/upstream-tags/v1.1", shas["feature"])
-    result = standalone_gate(
-        path, crafted_ledger(shas, "", HELD_LINE), "--held-release-ref", "refs/upstream-tags/v1.0"
-    )
+    result = standalone_gate(path, crafted_ledger(shas, "", HELD_LINE), "--held-release-ref", "refs/upstream-tags/v1.0")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "--held-release-ref leaves out 1 upstream release tag(s), for example v1.1" in result.stdout
 
@@ -1859,7 +1915,9 @@ def test_a_waiver_until_written_as_a_date_time_is_refused_without_a_traceback(re
         },
     )
     git(path, "checkout", "-q", "main")
-    bridge = run(path, "--head", "waiver-datetime", "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
+    bridge = run(
+        path, "--head", "waiver-datetime", "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06"
+    )
     assert bridge.returncode == 1, bridge.stdout + bridge.stderr
     assert "is not a YYYY-MM-DD date" in bridge.stdout and "Traceback" not in bridge.stderr
     npm = run(
@@ -2006,9 +2064,12 @@ def test_a_waived_entry_without_a_security_classification_fails(tmp_path):
 )
 def test_a_waived_security_fix_needs_a_named_owner_decision(tmp_path, decision, code, message):
     path, shas = classified_repo(tmp_path, "waived-security")
-    record = decision_list("2026-10-05-fork-token-check the fork keeps its own check, covers {sec} until: 2026-11-04", shas=shas)
+    record = decision_list(
+        "2026-10-05-fork-token-check the fork keeps its own check, covers {sec} until: 2026-11-04", shas=shas
+    )
     result = standalone_gate(
-        path, classified_ledger(shas, "Waived", f"the fork rejects forged tokens itself security: yes {decision}") + record
+        path,
+        classified_ledger(shas, "Waived", f"the fork rejects forged tokens itself security: yes {decision}") + record,
     )
     assert result.returncode == code, result.stdout + result.stderr
     assert message in result.stdout
@@ -2045,7 +2106,11 @@ def test_a_cve_named_only_in_the_reason_also_needs_security_yes(tmp_path):
 @pytest.mark.parametrize(
     ("reason", "code", "message"),
     [
-        ("the fork has its own token check", 1, "is ported by design but it names 'auth'; classify it security: yes|no"),
+        (
+            "the fork has its own token check",
+            1,
+            "is ported by design but it names 'auth'; classify it security: yes|no",
+        ),
         (
             "the fork has its own token check security: yes",
             1,
@@ -2071,8 +2136,9 @@ def test_a_waived_security_no_entry_with_a_keyword_needs_security_yes(tmp_path):
     path, shas = classified_repo(tmp_path, "waived-keyword", "feat(ui): remember the last open session tab")
     result = standalone_gate(path, classified_ledger(shas, "Waived", "the fork has no such tab security: no"))
     assert result.returncode == 1, result.stdout + result.stderr
-    assert f"`{shas['sec'][:12]}` is waived as security: no, but it names 'session'; a waiver of a security-looking" in (
-        result.stdout
+    assert (
+        f"`{shas['sec'][:12]}` is waived as security: no, but it names 'session'; a waiver of a security-looking"
+        in (result.stdout)
     )
 
 
@@ -2092,12 +2158,17 @@ NPM_RECORD = (
     ("name", "fields", "code", "message"),
     [
         ("bridge-unclassified", 'reason = "fork bridge carries sing-box"\n', 1, 'needs security = "yes" or "no"'),
-        ("bridge-bool", 'reason = "fork bridge carries sing-box"\nsecurity = false\n', 1, 'needs security = "yes" or "no"'),
+        (
+            "bridge-bool",
+            'reason = "fork bridge carries sing-box"\nsecurity = false\n',
+            1,
+            'needs security = "yes" or "no"',
+        ),
         (
             "bridge-sec-undecided",
             'reason = "0.9.2 closes an auth bypass; we defer it"\nsecurity = "yes"\n',
             1,
-            "a security waiver needs the owner's decision, written as owner_decision = \"YYYY-MM-DD-<name>\"",
+            'a security waiver needs the owner\'s decision, written as owner_decision = "YYYY-MM-DD-<name>"',
         ),
         (
             "bridge-sec-decided",
@@ -2114,7 +2185,12 @@ NPM_RECORD = (
             1,
             "is classified security no, but it names 'CVE-2026-99999', which marks a security fix",
         ),
-        ("bridge-classified", 'reason = "fork bridge carries sing-box"\nsecurity = "no"\n', 0, "waived by upstream-bridge"),
+        (
+            "bridge-classified",
+            'reason = "fork bridge carries sing-box"\nsecurity = "no"\n',
+            0,
+            "waived by upstream-bridge",
+        ),
     ],
 )
 def test_a_bridge_waiver_needs_a_security_classification(repo, name, fields, code, message):
@@ -2138,7 +2214,7 @@ def test_a_bridge_waiver_needs_a_security_classification(repo, name, fields, cod
             "npm-sec-undecided",
             'reason = "0.3.9 escapes remarks against XSS"\nsecurity = "yes"\n',
             1,
-            "a security waiver needs the owner's decision, written as owner_decision = \"YYYY-MM-DD-<name>\"",
+            'a security waiver needs the owner\'s decision, written as owner_decision = "YYYY-MM-DD-<name>"',
         ),
         (
             "npm-sec-decided",
@@ -2152,7 +2228,12 @@ def test_a_bridge_waiver_needs_a_security_classification(repo, name, fields, cod
             1,
             "is classified security no, but it names 'GHSA-abcd-efgh-ijkl', which marks a security fix",
         ),
-        ("npm-classified", 'reason = "0.3.9 only changes docs"\nsecurity = "no"\n', 0, "waived by upstream-npm-waivers"),
+        (
+            "npm-classified",
+            'reason = "0.3.9 only changes docs"\nsecurity = "no"\n',
+            0,
+            "waived by upstream-npm-waivers",
+        ),
     ],
 )
 def test_an_npm_waiver_needs_a_security_classification(repo, name, fields, code, message):
@@ -2164,7 +2245,14 @@ def test_an_npm_waiver_needs_a_security_classification(repo, name, fields, code,
     commit(path, f"waive npm: {name}", files)
     git(path, "checkout", "-q", "main")
     result = run(
-        path, "--head", name, "--check-npm", "--npm-latest", "@pasarguard/xray-config-kit=0.3.9", "--today", "2026-10-06"
+        path,
+        "--head",
+        name,
+        "--check-npm",
+        "--npm-latest",
+        "@pasarguard/xray-config-kit=0.3.9",
+        "--today",
+        "2026-10-06",
     )
     assert result.returncode == code, result.stdout + result.stderr
     assert message in result.stdout + result.stderr
@@ -2182,7 +2270,9 @@ def decision_list(*rows, shas=None):
     return "\n## Owner decisions\n\n" + "".join(lines)
 
 
-DELEGATED = f"{DECISION_ID} main chose to let the security ports {{auth}} and {{plain}} wait for the sync until: 2026-11-26"
+DELEGATED = (
+    f"{DECISION_ID} main chose to let the security ports {{auth}} and {{plain}} wait for the sync until: 2026-11-26"
+)
 
 
 def delegated_repo(tmp_path, name):
@@ -2301,7 +2391,10 @@ def test_a_security_port_naming_two_owner_decisions_is_refused(tmp_path):
         ("not-a-decision some reason until: 2026-11-26", "is not an owner decision id"),
         (f"{DECISION_ID}", "has no reason"),
         (f"{DECISION_ID} no window given", "needs exactly one until: YYYY-MM-DD"),
-        (f"{DECISION_ID} too long until: 2026-11-27", "grants grace until 2026-11-27, more than 30 days after its date"),
+        (
+            f"{DECISION_ID} too long until: 2026-11-27",
+            "grants grace until 2026-11-27, more than 30 days after its date",
+        ),
         ("2026-10-30-future main decides later until: 2026-11-20", "is dated 2026-10-30, after today"),
         ("2026-02-30-impossible bad date until: 2026-03-01", "has an invalid date"),
     ],
@@ -2349,7 +2442,12 @@ def waived_security(shas, decision, until=""):
 @pytest.mark.parametrize(
     ("decision", "records", "today", "message"),
     [
-        ("2026-10-27-made-up", (DELEGATED,), "2026-10-27", "names owner decision 2026-10-27-made-up, which is not recorded"),
+        (
+            "2026-10-27-made-up",
+            (DELEGATED,),
+            "2026-10-27",
+            "names owner decision 2026-10-27-made-up, which is not recorded",
+        ),
         ("2020-01-01-x", (), "2026-10-27", "names owner decision 2020-01-01-x, which is not recorded"),
         (
             "2026-09-01-old",
@@ -2450,8 +2548,9 @@ def test_the_ok_line_without_owed_ports_still_names_the_first_dated_decision(tmp
     result = standalone_gate(path, text + decision_list(DELEGATED, shas=shas), "--today", "2026-10-27")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Upstream parity gate OK:" in result.stdout
-    assert "the earliest dated decision ends on 2026-11-05, so the gate fails on 2026-11-06 unless it is re-decided" in (
-        result.stdout
+    assert (
+        "the earliest dated decision ends on 2026-11-05, so the gate fails on 2026-11-06 unless it is re-decided"
+        in (result.stdout)
     )
 
 
@@ -2474,7 +2573,12 @@ BRIDGE_SEC = 'reason = "0.9.2 closes an auth bypass; we defer it"\nsecurity = "y
 @pytest.mark.parametrize(
     ("name", "decision", "ledger", "message"),
     [
-        ("bridge-unrecorded", "2020-01-01-made-up", None, "names owner decision 2020-01-01-made-up, which is not recorded"),
+        (
+            "bridge-unrecorded",
+            "2020-01-01-made-up",
+            None,
+            "names owner decision 2020-01-01-made-up, which is not recorded",
+        ),
         (
             "bridge-uncovered",
             "2026-10-05-bridge-hold",
@@ -2484,7 +2588,9 @@ BRIDGE_SEC = 'reason = "0.9.2 closes an auth bypass; we defer it"\nsecurity = "y
         (
             "bridge-expired",
             "2026-10-01-bridge-hold",
-            BRIDGE_RECORD.replace("2026-10-05-bridge-hold", "2026-10-01-bridge-hold").replace("2026-11-04", "2026-10-05"),
+            BRIDGE_RECORD.replace("2026-10-05-bridge-hold", "2026-10-01-bridge-hold").replace(
+                "2026-11-04", "2026-10-05"
+            ),
             "names owner decision 2026-10-01-bridge-hold, which ended on 2026-10-05",
         ),
         (
@@ -2561,8 +2667,12 @@ ROUTER_FIXED = ROUTER.replace(
     'Depends(require_permission("admins", "update")),\n):\n    return await crud.remove',
 )
 GRANT = "def grant(user, token):\n    if not verify(token):\n        log(user)\n    return issue(user)\n"
-GRANT_INDENT_FIXED = "def grant(user, token):\n    if not verify(token):\n        log(user)\n        return issue(user)\n"
-GRANT_BANNED = GRANT.replace("    return issue(user)", "    if user.banned:\n        raise Forbidden()\n    audit(user)\n    return issue(user)")
+GRANT_INDENT_FIXED = (
+    "def grant(user, token):\n    if not verify(token):\n        log(user)\n        return issue(user)\n"
+)
+GRANT_BANNED = GRANT.replace(
+    "    return issue(user)", "    if user.banned:\n        raise Forbidden()\n    audit(user)\n    return issue(user)"
+)
 HUNK_LEDGER = "## Waived\n"
 
 
@@ -2631,7 +2741,10 @@ def test_a_copy_without_shared_history_counts_only_while_its_hunks_are_in_place(
     if undo == "back-to-read":
         commit(repo_path, "fork: relax delete again", {path: before})
     elif undo == "raise-moved":
-        moved = GRANT_BANNED.replace("        raise Forbidden()\n", "        pass\n") + "def other():\n    raise Forbidden()\n"
+        moved = (
+            GRANT_BANNED.replace("        raise Forbidden()\n", "        pass\n")
+            + "def other():\n    raise Forbidden()\n"
+        )
         commit(repo_path, "fork moves the raise", {path: moved})
     result = hunk_gate(repo_path, "--unrelated-history")
     assert result.returncode == code, result.stdout + result.stderr
@@ -2658,7 +2771,12 @@ IMPORTS_FIXED = IMPORTS.replace("Big, Binary, CredentialId", "Big, Binary, Chall
 @pytest.mark.parametrize(
     ("fork_text", "code"),
     [
-        (IMPORTS_FIXED.replace("from app.db.base import Base\n", "from app.db.base import Base\nimport app.db.models\n"), 0),
+        (
+            IMPORTS_FIXED.replace(
+                "from app.db.base import Base\n", "from app.db.base import Base\nimport app.db.models\n"
+            ),
+            0,
+        ),
         (IMPORTS_FIXED.replace("Challenge, CredentialId", "CredentialId") + "Challenge = None\n", 1),
     ],
 )
@@ -2696,6 +2814,33 @@ def test_a_security_fix_ported_by_design_needs_a_fork_commit_still_in_place(tmp_
     repo_path, fix, fork_fix = design_repo(tmp_path, f"design-{cite}-{undo}", undo)
     named = f" fork commit {fork_fix}" if cite else ""
     text = f"## Ported by design\n\n- `{fix}` the fork guards delete itself{named} security: yes\n"
+    result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
+            result.stdout
+        )
+
+
+@pytest.mark.parametrize(
+    ("named_path", "undo_guard", "code"),
+    [(" in guard.py:2", False, 0), ("", False, 1), (" in guard.py:2", True, 1), (" in NOTES.md", False, 1)],
+)
+def test_a_fork_commit_cited_with_its_files_is_checked_in_those_files(tmp_path, named_path, undo_guard, code):
+    repo_path, _, fix = hunk_repo(
+        tmp_path, f"design-paths-{bool(named_path)}-{undo_guard}", "router.py", ROUTER, ROUTER_FIXED
+    )
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork guard", {"guard.py": GUARD, "NOTES.md": "guard notes\n\nthe guard checks update\n"})
+    fork_fix = commit(
+        repo_path,
+        "fork: delete needs update in the guard",
+        {"guard.py": GUARD_FIXED, "NOTES.md": "guard notes\n\nthe guard checks update and delete\n"},
+    )
+    commit(repo_path, "fork: rewrite the notes", {"NOTES.md": "guard notes\n\nsee guard.py\n"})
+    if undo_guard:
+        commit(repo_path, "fork: drop the guard rule", {"guard.py": GUARD})
+    text = f"## Ported by design\n\n- `{fix}` the fork guards delete itself, fork commit {fork_fix}{named_path} security: yes\n"
     result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0")
     assert result.returncode == code, result.stdout + result.stderr
     if code:
@@ -2771,9 +2916,15 @@ def test_a_package_cover_matches_exactly_and_ignores_a_closing_dot(repo, covers,
     path = repo["path"]
     name = f"bridge-cover-{abs(hash(covers))}"
     git(path, "checkout", "-q", "-b", name, "main")
-    ledger_text = f"## Owner decisions\n\n- `2026-10-05-bridge-hold` the bridge waits, covers {covers} until: 2026-11-04\n"
+    ledger_text = (
+        f"## Owner decisions\n\n- `2026-10-05-bridge-hold` the bridge waits, covers {covers} until: 2026-11-04\n"
+    )
     fields = BRIDGE_SEC + 'owner_decision = "2026-10-05-bridge-hold"\n'
-    commit(path, f"waive bridge: {name}", {"upstream-bridge-waiver.toml": BRIDGE_WAIVER + fields, "UPSTREAM_SYNC.md": ledger_text})
+    commit(
+        path,
+        f"waive bridge: {name}",
+        {"upstream-bridge-waiver.toml": BRIDGE_WAIVER + fields, "UPSTREAM_SYNC.md": ledger_text},
+    )
     git(path, "checkout", "-q", "main")
     result = run(path, "--head", name, "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
     assert result.returncode == code, result.stdout + result.stderr
