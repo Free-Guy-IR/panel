@@ -2523,3 +2523,126 @@ def test_an_npm_security_waiver_needs_a_recorded_decision(repo):
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "names owner decision 2020-01-01-made-up, which is not recorded" in result.stdout + result.stderr
+
+
+ROUTER = """from fastapi import Depends
+
+
+@router.get("/admins")
+async def list_admins(
+    db=Depends(get_db),
+    current_admin: AdminDetails = Depends(require_permission("admins", "read")),
+):
+    return await crud.list(db)
+
+
+@router.put("/admin/{name}")
+async def modify_admin(
+    name: str,
+    db=Depends(get_db),
+    current_admin: AdminDetails = Depends(require_permission("admins", "update")),
+):
+    return await crud.modify(db, name)
+
+
+@router.delete("/admin/{name}")
+async def remove_admin(
+    name: str,
+    db=Depends(get_db),
+    current_admin: AdminDetails = Depends(require_permission("admins", "read")),
+):
+    return await crud.remove(db, name)
+"""
+ROUTER_FIXED = ROUTER.replace(
+    'Depends(require_permission("admins", "read")),\n):\n    return await crud.remove',
+    'Depends(require_permission("admins", "update")),\n):\n    return await crud.remove',
+)
+GRANT = "def grant(user, token):\n    if not verify(token):\n        log(user)\n    return issue(user)\n"
+GRANT_INDENT_FIXED = "def grant(user, token):\n    if not verify(token):\n        log(user)\n        return issue(user)\n"
+GRANT_BANNED = GRANT.replace("    return issue(user)", "    if user.banned:\n        raise Forbidden()\n    audit(user)\n    return issue(user)")
+HUNK_LEDGER = "## Waived\n"
+
+
+def hunk_repo(tmp_path, name, path, before, after, subject="fix(admin): require update permission to delete admins"):
+    repo_path = tmp_path / name
+    repo_path.mkdir()
+    git(repo_path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(repo_path, "config", key, value)
+    base = commit(repo_path, "upstream base", {path: before})
+    git(repo_path, "tag", "v1.0")
+    fix = commit(repo_path, subject, {path: after})
+    git(repo_path, "tag", "v1.1")
+    git(repo_path, "update-ref", "refs/remotes/upstream/dev", fix)
+    return repo_path, base, fix
+
+
+def hunk_gate(repo_path, *extra):
+    return standalone_gate(repo_path, HUNK_LEDGER, "--grandfathered-base", "v1.0", *extra)
+
+
+@pytest.mark.parametrize(
+    ("name", "path", "before", "after"),
+    [
+        ("swap-ours", "router.py", ROUTER, ROUTER_FIXED),
+        ("indent-ours", "grant.py", GRANT, GRANT_INDENT_FIXED),
+    ],
+)
+def test_an_ours_merge_of_a_fix_whose_lines_exist_elsewhere_is_not_ported(tmp_path, name, path, before, after):
+    repo_path, _, fix = hunk_repo(tmp_path, name, path, before, after)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork feature", {"fork.py": "fork\n"})
+    git(repo_path, "merge", "-q", "-s", "ours", "--no-edit", "v1.1")
+    assert (repo_path / path).read_text() == before
+    result = hunk_gate(repo_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert fix[:12] in unported_block(result.stdout)
+    assert f"{fix[:12]}: merged into main, but 1 of 1 hunk(s)" in result.stdout
+
+
+def test_a_trailer_whose_pick_dropped_the_hunk_is_not_ported(tmp_path):
+    repo_path, _, fix = hunk_repo(tmp_path, "swap-trailer", "router.py", ROUTER, ROUTER_FIXED)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, f"port the admin fix\n\nUpstream: {fix}\n", {"other.py": "x\n"})
+    result = hunk_gate(repo_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert fix[:12] in unported_block(result.stdout)
+    assert f"{fix[:12]}: 1 of 1 upstream hunk(s) it changes are not reflected in main" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("undo", "code"),
+    [
+        (None, 0),
+        ("back-to-read", 1),
+        ("raise-moved", 1),
+    ],
+)
+def test_a_copy_without_shared_history_counts_only_while_its_hunks_are_in_place(tmp_path, undo, code):
+    path = "router.py" if undo == "back-to-read" else "grant.py"
+    before, after = (ROUTER, ROUTER_FIXED) if path == "router.py" else (GRANT, GRANT_BANNED)
+    repo_path, _, fix = hunk_repo(tmp_path, f"copy-{undo}", path, before, after)
+    git(repo_path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(repo_path, "commit", "-q", "-m", "fork root")
+    git(repo_path, "cherry-pick", fix)
+    if undo == "back-to-read":
+        commit(repo_path, "fork: relax delete again", {path: before})
+    elif undo == "raise-moved":
+        moved = GRANT_BANNED.replace("        raise Forbidden()\n", "        pass\n") + "def other():\n    raise Forbidden()\n"
+        commit(repo_path, "fork moves the raise", {path: moved})
+    result = hunk_gate(repo_path, "--unrelated-history")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"{fix[:12]}: copied into main with the same patch-id, but 1 of 1 hunk(s)" in result.stdout
+    else:
+        assert tally(result.stdout, "copied into the head, every line present") == 1
+
+
+def test_a_real_merge_of_the_fix_is_still_ported(tmp_path):
+    repo_path, _, _ = hunk_repo(tmp_path, "swap-merge", "router.py", ROUTER, ROUTER_FIXED)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork feature", {"fork.py": "fork\n"})
+    git(repo_path, "merge", "-q", "--no-ff", "--no-edit", "v1.1")
+    result = hunk_gate(repo_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "merged into the head, every line present") == 1
