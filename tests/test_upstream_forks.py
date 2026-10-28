@@ -382,7 +382,7 @@ def test_a_side_fork_that_merged_an_upstream_fix_without_its_lines_is_red(shared
     result = run(shared_map(shared), "--today", "2026-10-27")
     assert result.returncode == 1, result.stdout + result.stderr
     assert shared["fix"][:12] in result.stdout.split("Unported upstream commits", 1)[1]
-    assert f"{shared['fix'][:12]}: merged into refs/remotes/fork/main, but 1 of 1 line(s)" in result.stdout
+    assert f"{shared['fix'][:12]}: merged into refs/remotes/fork/main, but 1 of 1 hunk(s)" in result.stdout
 
 
 def test_a_side_fork_that_really_merged_the_fix_is_green(shared):

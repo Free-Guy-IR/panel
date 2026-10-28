@@ -768,7 +768,7 @@ def test_a_pick_that_keeps_the_lines_upstream_removed_is_not_a_port(tmp_path):
     git(path, "commit", "-q", "--allow-empty", "-m", f"port\n\n(cherry picked from commit {removal})")
     kept = standalone_gate(path, "## Waived\n")
     assert kept.returncode == 1, kept.stdout + kept.stderr
-    assert f"{removal[:12]}: 4 of 4 upstream line(s) it adds or removes are not reflected in main" in kept.stdout
+    assert f"{removal[:12]}: 1 of 1 upstream hunk(s) it changes are not reflected in main" in kept.stdout
     commit(path, f"really port\n\n(cherry picked from commit {removal})", {"r.py": lines("r", 6)})
     ported = standalone_gate(path, "## Waived\n")
     assert ported.returncode == 0, ported.stdout + ported.stderr
@@ -1277,7 +1277,7 @@ def test_a_cherry_pick_the_fork_changed_needs_a_decision(repo, tmp_path):
     assert unlisted.returncode == 1
     block = unported_block(unlisted.stdout)
     assert {sha for sha in shas.values() if sha[:12] in block} == {shas["u2"], shas["u4"]}
-    assert f"{shas['u2'][:12]}: 1 of 4 upstream line(s) it adds or removes are not reflected in main" in unlisted.stdout
+    assert f"{shas['u2'][:12]}: 2 of 2 upstream hunk(s) it changes are not reflected in main" in unlisted.stdout
     assert "needs a Ported by design or Waived entry" in unlisted.stdout
     listed = parity(repo, ledger(tmp_path, text))
     assert listed.returncode == 0, listed.stdout + listed.stderr
@@ -1776,7 +1776,7 @@ def test_a_merged_upstream_commit_whose_lines_the_fork_dropped_is_unported(tmp_p
     result = standalone_gate(path, "## Waived\n")
     assert result.returncode == 1, result.stdout + result.stderr
     assert shas["bump"][:12] in unported_block(result.stdout)
-    assert f"{shas['bump'][:12]}: merged into main, but 2 of 2 line(s)" in result.stdout
+    assert f"{shas['bump'][:12]}: merged into main, but 1 of 1 hunk(s)" in result.stdout
     assert tally(result.stdout, "merged into the head, every line present") == 1
     waived = standalone_gate(path, f"## Waived\n\n- `{shas['bump']}` the fork pins its own copy of the library security: no\n")
     assert waived.returncode == 0, waived.stdout + waived.stderr

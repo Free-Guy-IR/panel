@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -825,49 +826,86 @@ def reverted_commits(head):
     return set(REVERT_RE.findall(git("log", "--format=%B", head)))
 
 
-def changed_lines_by_file(sha):
-    added = {}
-    removed = {}
+HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
+HUNK_CONTEXT = 3
+
+
+def commit_hunks(sha):
+    hunks = []
     old = new = None
-    for line in git("show", "--format=", "--no-color", "--no-ext-diff", "-U0", "-M", sha).splitlines():
-        if line.startswith("--- "):
-            target = line[4:]
-            old = None if target == "/dev/null" else target.removeprefix("a/")
+    current = None
+    diff = git("show", "--format=", "--no-color", "--no-ext-diff", f"-U{HUNK_CONTEXT}", "-M", sha)
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            old = new = current = None
             continue
-        if line.startswith("+++ "):
-            target = line[4:]
-            new = None if target == "/dev/null" else target.removeprefix("b/")
+        if current is None and line.startswith("--- "):
+            old = None if line[4:] == "/dev/null" else line[4:].removeprefix("a/")
             continue
-        text = line[1:].strip()
-        if not text:
+        if current is None and line.startswith("+++ "):
+            new = None if line[4:] == "/dev/null" else line[4:].removeprefix("b/")
             continue
-        if line.startswith("+") and new:
-            added.setdefault(new, set()).add(text)
-        elif line.startswith("-") and (new or old):
-            removed.setdefault(new or old, set()).add(text)
-    return added, removed
+        if HUNK_HEADER_RE.match(line):
+            current = {"old": old, "new": new, "pre": [], "post": [], "added": 0, "removed": 0}
+            hunks.append(current)
+            continue
+        if current is None or not line or line.startswith("\\"):
+            continue
+        kind, text = line[0], line[1:]
+        if kind == " ":
+            current["pre"].append(text)
+            current["post"].append(text)
+        elif kind == "-":
+            current["pre"].append(text)
+            current["removed"] += 1
+        elif kind == "+":
+            current["post"].append(text)
+            current["added"] += 1
+    return hunks
 
 
-def stripped_lines(ref, path):
+def normalised(path, lines):
+    keep_indent = path.endswith(".py")
+    out = [line.rstrip() if keep_indent else line.strip() for line in lines]
+    return tuple(line for line in out if line)
+
+
+@functools.lru_cache(maxsize=4096)
+def normalised_file(ref, path):
     content = head_blob(ref, path)
-    return None if content is None else {line.strip() for line in content.splitlines()}
+    return None if content is None else normalised(path, content.splitlines())
+
+
+def contains_block(haystack, needle):
+    if not needle:
+        return True
+    if haystack is None or len(needle) > len(haystack):
+        return False
+    first = needle[0]
+    size = len(needle)
+    return any(haystack[i] == first and haystack[i : i + size] == needle for i in range(len(haystack) - size + 1))
 
 
 def missing_pick_lines(upstream_sha, reference, head):
     expected = 0
     missing = []
-    added, removed = changed_lines_by_file(upstream_sha)
-    for path in sorted(set(added) | set(removed)):
-        kept_upstream = stripped_lines(reference, path)
-        present = stripped_lines(head, path) or set()
-        for text in sorted(added.get(path, set()) & (kept_upstream or set())):
-            expected += 1
-            if text not in present:
-                missing.append((path, text))
-        for text in sorted(removed.get(path, set()) - (kept_upstream or set())):
-            expected += 1
-            if text in present:
-                missing.append((path, f"-{text}"))
+    for hunk in commit_hunks(upstream_sha):
+        path = hunk["new"] or hunk["old"]
+        pre = normalised(path, hunk["pre"])
+        post = normalised(path, hunk["post"])
+        upstream_now = normalised_file(reference, path)
+        check_post = hunk["new"] is not None and hunk["added"] > 0 and bool(post) and contains_block(upstream_now, post)
+        check_pre = hunk["removed"] > 0 and bool(pre) and pre != post and not contains_block(upstream_now, pre)
+        if not (check_post or check_pre):
+            continue
+        expected += 1
+        here = normalised_file(head, path)
+        if check_post and not contains_block(here, post):
+            added = normalised(path, [text for text in hunk["post"] if text not in hunk["pre"]]) or post
+            missing.append((path, added[0].strip()))
+        elif check_pre and contains_block(here, pre):
+            removed = normalised(path, [text for text in hunk["pre"] if text not in hunk["post"]]) or pre
+            missing.append((path, f"-{removed[0].strip()}"))
     return expected, missing
 
 
@@ -891,7 +929,7 @@ def merged_into_head(head, candidates, upstream, tips_for):
         if missing:
             path, text = missing[0]
             findings[sha] = (
-                f"merged into {head}, but {len(missing)} of {expected} line(s) it adds or removes are not "
+                f"merged into {head}, but {len(missing)} of {expected} hunk(s) it changes are not "
                 f"reflected there, for example in {path}: {text[:80]!r}"
             )
         else:
@@ -913,7 +951,7 @@ def ineffective_picks(head, candidates, upstream, tips_for):
         if missing:
             path, text = missing[0]
             findings[sha] = (
-                f"{len(missing)} of {expected} upstream line(s) it adds or removes are not reflected in {head}, "
+                f"{len(missing)} of {expected} upstream hunk(s) it changes are not reflected in {head}, "
                 f"for example in {path}: {text[:80]!r}"
             )
     return findings
@@ -1554,8 +1592,8 @@ def parity_gate(
         if missing:
             path, text = missing[0]
             unmerged_lines[sha] = (
-                f"copied into {head} with the same patch-id, but {len(missing)} of {expected} line(s) it adds or "
-                f"removes are not reflected there, for example in {path}: {text[:80]!r}"
+                f"copied into {head} with the same patch-id, but {len(missing)} of {expected} hunk(s) it changes "
+                f"are not reflected there, for example in {path}: {text[:80]!r}"
             )
         else:
             coverage[sha] = "copied"
