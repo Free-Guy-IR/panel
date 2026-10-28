@@ -41,10 +41,12 @@ async def send_to_all_webhooks(client: aiohttp.ClientSession, notifications, web
             r = await client.post(webhook.url, data=body, headers=webhook_headers)
             if r.status in (200, 201, 202, 204):
                 return True
-            else:
-                logger.error(f"Webhook {webhook.url} failed: {r.status} - {await r.text()}")
+            r.release()
+            logger.warning("Webhook delivery failed with HTTP %s", r.status)
+        except aiohttp.ClientError, TimeoutError:
+            logger.warning("Webhook delivery failed due to a connection error or timeout")
         except Exception as err:
-            logger.error(f"Webhook {webhook.url} exception: {err}")
+            logger.warning("Webhook delivery failed: %s", type(err).__name__)
         return False
 
     results = await asyncio.gather(*(send_one(webhook) for webhook in webhooks))
@@ -89,8 +91,8 @@ async def send_notifications():
                 unsettled.append(item)
                 try:
                     notification = WebhookNotification(**item)
-                except Exception as err:
-                    logger.error(f"Dropping an unreadable webhook notification: {err}")
+                except Exception:
+                    logger.error("Discarding malformed webhook notification")
                     await _settle(webhook_queue, unsettled, [item])
                     continue
 
