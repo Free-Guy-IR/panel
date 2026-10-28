@@ -114,7 +114,10 @@ SECURITY_MARKER_RE = re.compile(
 OWNER_DECISION_RE = re.compile(r"\bowner-decision:\s*(\S*)", re.IGNORECASE)
 DECISION_ID_RE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})-[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
 COVERED_SHA_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])")
-COVERED_PACKAGE_RE = re.compile(r"(?:^|\s)(@?[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)?@[0-9][A-Za-z0-9.+-]*)(?=[\s,;.]|$)")
+COVERED_PACKAGE_RE = re.compile(
+    r"(?:^|\s)(@?[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)?@[0-9](?:[A-Za-z0-9.+-]*[A-Za-z0-9])?)(?=[\s,;.)]|$)"
+)
+FORK_COMMIT_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{9,40}(?![0-9a-f])")
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
 SYNC_LEDGER_FILE = "UPSTREAM_SYNC.md"
 LEDGER_DECISION_SYNTAX = "owner-decision: YYYY-MM-DD-<name>"
@@ -717,15 +720,20 @@ def commit_metadata(base, tips):
         "--topo-order",
         "--reverse",
         "--date=short",
-        "--format=%H%x00%T%x00%P%x00%ad%x00%s",
+        "--format=%H%x00%T%x00%P%x00%ad%x00%s%x00%b%x1e",
         *sorted(set(tips)),
         f"^{base}",
     )
     rows = []
-    for line in out.splitlines():
-        sha, tree, parents, day, subject = line.split("\0", 4)
+    for record in out.split("\x1e"):
+        record = record.strip("\n")
+        if not record:
+            continue
+        sha, tree, parents, day, subject, body = record.split("\0", 5)
         parent = parents.split()[0] if parents else None
-        rows.append({"sha": sha, "tree": tree, "parent": parent, "date": day, "subject": subject})
+        rows.append(
+            {"sha": sha, "tree": tree, "parent": parent, "date": day, "subject": subject, "text": f"{subject}\n{body}"}
+        )
     return rows
 
 
@@ -749,13 +757,25 @@ def merge_metadata(shas):
         "--no-walk=unsorted",
         "--stdin",
         "--date=short",
-        "--format=%H%x00%T%x00%P%x00%ad%x00%s",
+        "--format=%H%x00%T%x00%P%x00%ad%x00%s%x00%b%x1e",
         stdin="\n".join(shas) + "\n",
     )
     rows = []
-    for line in out.splitlines():
-        sha, tree, parents, day, subject = line.split("\0", 4)
-        rows.append({"sha": sha, "tree": tree, "parent": parents.split()[0], "date": day, "subject": subject})
+    for record in out.split("\x1e"):
+        record = record.strip("\n")
+        if not record:
+            continue
+        sha, tree, parents, day, subject, body = record.split("\0", 5)
+        rows.append(
+            {
+                "sha": sha,
+                "tree": tree,
+                "parent": parents.split()[0],
+                "date": day,
+                "subject": subject,
+                "text": f"{subject}\n{body}",
+            }
+        )
     return rows
 
 
@@ -1016,6 +1036,23 @@ def security_hint(reason, subject):
     return f"it names {match.group(0)!r}" if match else None
 
 
+def design_fork_commit(reason, head, in_range):
+    for token in FORK_COMMIT_RE.findall(SECURITY_FLAG_RE.sub("", reason)):
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{token}^{{commit}}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        fork_sha = result.stdout.strip()
+        if result.returncode != 0 or fork_sha in in_range or not is_ancestor(fork_sha, head):
+            continue
+        expected, missing = missing_pick_lines(fork_sha, fork_sha, head)
+        if expected and not missing:
+            return fork_sha
+    return None
+
+
 def security_marker(*texts):
     match = SECURITY_MARKER_RE.search("\n".join(texts))
     return match.group(0) if match else None
@@ -1084,8 +1121,7 @@ def decision_problem(label, ident, records, today, until, verb, item):
         )
     if until is not None and (until - record["date"]).days > DECISION_MAX_DAYS:
         return f"{label} {verb} until {until.isoformat()}, more than {DECISION_MAX_DAYS} days after owner decision {ident}"
-    covered = record["covers"]
-    if item not in covered and not (len(item) >= 9 and any(sha.startswith(item) for sha in covered if len(sha) == 40)):
+    if item is not None and item not in record["covers"]:
         return f"{label} is not covered by owner decision {ident}"
     return None
 
@@ -1109,9 +1145,7 @@ def ledger_decision_records(text, today, path=SYNC_LEDGER_FILE):
 
 def delegated_problem(entry, records, today):
     verb = "is owed" if entry["kind"] == PORT_QUEUE else "is decided"
-    return decision_problem(
-        f"`{entry['token']}`", entry["decision"], records, today, entry["deadline"], verb, entry["token"]
-    )
+    return decision_problem(f"`{entry['token']}`", entry["decision"], records, today, entry["deadline"], verb, None)
 
 
 def workflow_command_escape(text):
@@ -1367,7 +1401,7 @@ def parse_sync_ledger(path, today=None):
                 "deadline": deadline,
                 "security": security,
                 "decision": decision,
-                "unreasoned_no": section == PORT_QUEUE
+                "unreasoned_no": section in (PORT_QUEUE, HELD, "waived")
                 and security is False
                 and not SECURITY_NO_REASON_RE.search(reason),
             }
@@ -1379,6 +1413,7 @@ def parse_sync_ledger(path, today=None):
             errors.append(f"{entry['where']}: {problem}")
             continue
         ends = [day for day in (entry["deadline"],) if day is not None]
+        entry["covers"] = records[entry["decision"]]["covers"] if entry["decision"] else frozenset()
         if entry["decision"]:
             ends.append(records[entry["decision"]]["until"])
         entry["expires"] = min(ends) if ends else None
@@ -1411,9 +1446,10 @@ def resolve_sync_entries(entries, in_range):
             earlier = resolved[sha]
             kinds = {earlier["kind"], entry["kind"]}
             if kinds == {PORT_QUEUE, "ported-by-design"}:
-                queued = earlier if earlier["kind"] == PORT_QUEUE else entry
-                resolved[sha] = earlier if earlier["kind"] == "ported-by-design" else entry
-                duplicates.append(f"{queued['where']}: `{sha[:12]}` is ported by design now; delete it from the port queue")
+                errors.append(
+                    f"{entry['where']}: {sha[:12]} is both owed in the port queue and ported by design at "
+                    f"{earlier['where']}; keep one"
+                )
             elif earlier["kind"] != entry["kind"] or any(
                 earlier[key] != entry[key] for key in ("conditional", "security", "deadline")
             ):
@@ -1507,6 +1543,12 @@ def parity_gate(
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
     ledger_errors += resolve_errors
+    for sha, entry in sorted(resolved.items()):
+        if entry["decision"] and sha not in entry["covers"]:
+            del resolved[sha]
+            ledger_errors.append(
+                f"{entry['where']}: `{entry['token']}` is not covered by owner decision {entry['decision']}"
+            )
     release_refs = expand_tracked(release_patterns or DEFAULT_RELEASE_REFS, option="--release-ref", strict=False)
     on_release = commits_on_refs(base, release_refs)
     copy_notes = []
@@ -1633,7 +1675,7 @@ def parity_gate(
             del coverage[sha]
             ledger_errors.append(
                 f"{entry['where']}: `{sha[:12]}` is held for an upstream release, but upstream released it in "
-                f"{', '.join(sorted(on_final_release[sha]))}; port it or record a Waived or Ported by design decision"
+                f"{', '.join(sorted(on_final_release[sha]))}; port it, or record a Waived entry under an owner decision"
             )
 
     sync_errors, sync_notes = sync_point_findings(upstream, tracked, release_refs) if upstream else ([], [])
@@ -1657,10 +1699,10 @@ def parity_gate(
             deadlines.pop(sha)
             ledger_errors.append(
                 f"{entry['where']}: `{sha[:12]}` is classified security: yes; a security port gets no grace: "
-                "port it now or record a Waived or Ported by design decision"
+                "port it, or record a Waived entry under an owner decision"
             )
         else:
-            hint = security_hint(entry["reason"], row["subject"])
+            hint = security_hint(entry["reason"], row["text"])
             if hint:
                 copy_notes.append(
                     f"{entry['where']}: `{sha[:12]}` is classified security: no but {hint}; re-review the classification"
@@ -1670,17 +1712,32 @@ def parity_gate(
         entry = resolved.get(sha)
         if entry is None or coverage.get(sha) != entry["kind"]:
             continue
-        marker = security_marker(row["subject"], SECURITY_FLAG_RE.sub("", entry["reason"]))
+        marker = security_marker(row["text"], SECURITY_FLAG_RE.sub("", entry["reason"]))
         if entry["security"] is False and marker:
             ledger_errors.append(
                 f"{entry['where']}: `{sha[:12]}` is classified security: no, but it names {marker!r}, which marks a "
                 "security fix; classify it security: yes"
             )
             continue
+        if entry["kind"] == "ported-by-design" and entry["security"]:
+            if not design_fork_commit(entry["reason"], head, in_range):
+                del coverage[sha]
+                ledger_errors.append(
+                    f"{entry['where']}: `{sha[:12]}` is ported by design as a security fix, but its reason names no "
+                    f"fork commit on {head} whose change is still there; name that fork commit, or record a Waived "
+                    "entry under an owner decision"
+                )
+            continue
         if entry["kind"] not in ("waived", "ported-by-design") or entry["security"]:
             continue
-        hint = security_hint(entry["reason"], row["subject"])
-        if hint and entry["security"] is None:
+        hint = security_hint(entry["reason"], row["text"])
+        if hint and entry["kind"] == "waived":
+            del coverage[sha]
+            ledger_errors.append(
+                f"{entry['where']}: `{sha[:12]}` is waived as security: no, but {hint}; a waiver of a security-looking "
+                "commit needs security: yes and an owner decision"
+            )
+        elif hint and entry["security"] is None:
             ledger_errors.append(
                 f"{entry['where']}: `{sha[:12]}` is ported by design but {hint}; classify it security: yes|no"
             )
@@ -1773,7 +1830,7 @@ def parity_gate(
     unreasoned = sum(1 for entry in entries if entry["unreasoned_no"])
     if unreasoned:
         copy_notes.append(
-            f"{unreasoned} port-queue entries classified security: no give no reason for the no; "
+            f"{unreasoned} port-queue, Held or Waived entries classified security: no give no reason for the no; "
             "write it as security: no, <reason>"
         )
     notes = stale + duplicates + copy_notes + sync_notes

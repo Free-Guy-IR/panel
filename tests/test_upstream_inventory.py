@@ -389,9 +389,9 @@ def test_ledger_entries_and_patch_id_copies_cover(repo, tmp_path):
         f"- `{shas['f1']}` rewritten as fork code\n"
         f"- `{shas['f2'][:12]}` — folded into the fork feature\n\n"
         "## Waived\n\n"
-        f"- `{shas['u3']}` the fork keeps c as it is security: no\n"
-        f"- `{shas['u5'][:10]}` the fork bridge has its own floor security: no\n"
-        f"- `{shas['base']}` older than the base security: no\n"
+        f"- `{shas['u3']}` the fork keeps c as it is security: no, a plain file\n"
+        f"- `{shas['u5'][:10]}` the fork bridge has its own floor security: no, a version floor\n"
+        f"- `{shas['base']}` older than the base security: no, a stale line\n"
     )
     result = parity(repo, ledger(tmp_path, text))
     assert result.returncode == 0, result.stdout + result.stderr
@@ -2046,7 +2046,11 @@ def test_a_cve_named_only_in_the_reason_also_needs_security_yes(tmp_path):
     ("reason", "code", "message"),
     [
         ("the fork has its own token check", 1, "is ported by design but it names 'auth'; classify it security: yes|no"),
-        ("the fork has its own token check security: yes", 0, "Upstream parity gate OK"),
+        (
+            "the fork has its own token check security: yes",
+            1,
+            "is ported by design as a security fix, but its reason names no fork commit on main",
+        ),
         ("the fork has its own token check security: no", 0, "is classified security: no but it names 'auth'"),
     ],
 )
@@ -2063,11 +2067,11 @@ def test_a_ported_by_design_entry_without_any_security_hint_needs_no_classificat
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_a_waived_security_no_entry_with_a_keyword_is_flagged_for_review(tmp_path):
+def test_a_waived_security_no_entry_with_a_keyword_needs_security_yes(tmp_path):
     path, shas = classified_repo(tmp_path, "waived-keyword", "feat(ui): remember the last open session tab")
     result = standalone_gate(path, classified_ledger(shas, "Waived", "the fork has no such tab security: no"))
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert f"`{shas['sec'][:12]}` is classified security: no but it names 'session'; re-review the classification" in (
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{shas['sec'][:12]}` is waived as security: no, but it names 'session'; a waiver of a security-looking" in (
         result.stdout
     )
 
