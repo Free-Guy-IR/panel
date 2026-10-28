@@ -694,7 +694,9 @@ def test_owed_ports_are_annotated_on_github_actions(repo, tmp_path):
         "--today",
         "2026-10-06",
     ]
-    plain = subprocess.run(args, cwd=repo["path"], env=ENV, capture_output=True, text=True, check=False)
+    plain = subprocess.run(
+        args, cwd=repo["path"], env=ENV | {"GITHUB_ACTIONS": "false"}, capture_output=True, text=True, check=False
+    )
     actions = subprocess.run(
         args, cwd=repo["path"], env=ENV | {"GITHUB_ACTIONS": "true"}, capture_output=True, text=True, check=False
     )
