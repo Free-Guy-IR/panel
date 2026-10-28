@@ -950,9 +950,8 @@ def test_a_port_queue_line_next_to_a_ported_by_design_line_is_stale(repo, tmp_pa
     rest = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason security: no\n" for k in ("u5", "f1", "f2")) + "\n"
     text = rest + (queue + design if queue_first else design + queue)
     result = parity(repo, ledger(tmp_path, text), "--today", "2026-10-06")
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert f"`{shas['u3'][:12]}` is ported by design now; delete it from the port queue" in result.stdout
-    assert tally(result.stdout, OWED_LABEL) == 0
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{shas['u3'][:12]} is both owed in the port queue and ported by design" in result.stdout
 
 
 def test_a_queued_port_that_landed_is_flagged_for_deletion(repo, tmp_path):
@@ -2462,7 +2461,7 @@ def test_a_queued_port_classified_security_no_without_a_reason_is_counted(tmp_pa
     )
     result = standalone_gate(path, queue, "--today", "2026-10-27")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "2 port-queue entries classified security: no give no reason for the no" in result.stdout
+    assert "2 port-queue, Held or Waived entries classified security: no give no reason for the no" in result.stdout
 
 
 BRIDGE_SEC = 'reason = "0.9.2 closes an auth bypass; we defer it"\nsecurity = "yes"\n'
@@ -2669,3 +2668,108 @@ def test_a_fork_line_inside_a_hunks_context_keeps_the_pick_ported(tmp_path, fork
         assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
     else:
         assert f"{fix[:12]}: 1 of 1 upstream hunk(s) it changes are not reflected in main" in result.stdout
+
+
+GUARD = "def allowed(admin, action):\n    return admin.can(action)\n"
+GUARD_FIXED = "def allowed(admin, action):\n    if action == 'delete':\n        return admin.can('update')\n    return admin.can(action)\n"
+
+
+def design_repo(tmp_path, name, undo=False):
+    repo_path, _, fix = hunk_repo(tmp_path, name, "router.py", ROUTER, ROUTER_FIXED)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork guard", {"guard.py": GUARD})
+    fork_fix = commit(repo_path, "fork: delete needs update in the guard", {"guard.py": GUARD_FIXED})
+    if undo:
+        commit(repo_path, "fork: drop the guard rule", {"guard.py": GUARD})
+    return repo_path, fix, fork_fix
+
+
+@pytest.mark.parametrize(
+    ("cite", "undo", "code"),
+    [(True, False, 0), (False, False, 1), (True, True, 1)],
+)
+def test_a_security_fix_ported_by_design_needs_a_fork_commit_still_in_place(tmp_path, cite, undo, code):
+    repo_path, fix, fork_fix = design_repo(tmp_path, f"design-{cite}-{undo}", undo)
+    named = f" fork commit {fork_fix}" if cite else ""
+    text = f"## Ported by design\n\n- `{fix}` the fork guards delete itself{named} security: yes\n"
+    result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
+            result.stdout
+        )
+
+
+def test_a_waiver_of_a_security_looking_commit_must_be_security_yes(tmp_path):
+    repo_path, _, fix = hunk_repo(tmp_path, "waived-hint", "router.py", ROUTER, ROUTER_FIXED)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork feature", {"fork.py": "fork\n"})
+    result = standalone_gate(
+        repo_path, f"## Waived\n\n- `{fix}` the fork does not take it security: no\n", "--grandfathered-base", "v1.0"
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{fix[:12]}` is waived as security: no, but it names 'permission'" in result.stdout
+    assert "a waiver of a security-looking commit needs security: yes and an owner decision" in result.stdout
+
+
+def test_the_security_hint_reads_the_commit_body(tmp_path):
+    repo_path = tmp_path / "body-hint"
+    repo_path.mkdir()
+    git(repo_path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(repo_path, "config", key, value)
+    commit(repo_path, "upstream base", {"hosts.py": "a\n"})
+    git(repo_path, "tag", "v1.0")
+    fix = commit(
+        repo_path,
+        "fix(hosts): isolate broken hosts\n\nA remark like {USERNAME:>1000000000} was an injection into format_map.",
+        {"hosts.py": "b\n"},
+    )
+    git(repo_path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork feature", {"fork.py": "fork\n"})
+    queue = f"## Port queue\n\n- `{fix}` port it security: no, a host rebuild fix until: 2026-11-20\n"
+    result = standalone_gate(repo_path, queue, "--grandfathered-base", "v1.0", "--today", "2026-10-28")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"`{fix[:12]}` is classified security: no but it names 'injection'; re-review the classification" in (
+        result.stdout
+    )
+
+
+def test_a_security_port_error_points_at_a_waiver_under_a_decision(tmp_path):
+    path, shas = delegated_repo(tmp_path, "no-grace-wording")
+    queue = f"## Port queue\n\n- `{shas['plain']}` port it security: yes until: 2026-11-20\n"
+    result = standalone_gate(path, queue, "--today", "2026-10-28")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "a security port gets no grace: port it, or record a Waived entry under an owner decision" in result.stdout
+
+
+def test_a_short_token_is_checked_against_the_record_by_its_full_sha(tmp_path):
+    path, shas = delegated_repo(tmp_path, "short-token")
+    plain = shas["plain"]
+    other = plain[:12] + ("0" * 28 if plain[12] != "0" else "1" * 28)
+    record = decision_list(f"{DECISION_ID} grace for another commit {other} until: 2026-11-20")
+    text = f"## Waived\n\n- `{plain[:12]}` deferred security: yes owner-decision: {DECISION_ID}\n" + record
+    result = standalone_gate(path, text, "--today", "2026-10-28")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{plain[:12]}` is not covered by owner decision {DECISION_ID}" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("covers", "code"),
+    [
+        ("`pasarguard-node-bridge@0.9.2`.", 0),
+        ("pasarguard-node-bridge@0.9.2.", 0),
+        ("pasarguard-node-bridge@0.9.20", 1),
+    ],
+)
+def test_a_package_cover_matches_exactly_and_ignores_a_closing_dot(repo, covers, code):
+    path = repo["path"]
+    name = f"bridge-cover-{abs(hash(covers))}"
+    git(path, "checkout", "-q", "-b", name, "main")
+    ledger_text = f"## Owner decisions\n\n- `2026-10-05-bridge-hold` the bridge waits, covers {covers} until: 2026-11-04\n"
+    fields = BRIDGE_SEC + 'owner_decision = "2026-10-05-bridge-hold"\n'
+    commit(path, f"waive bridge: {name}", {"upstream-bridge-waiver.toml": BRIDGE_WAIVER + fields, "UPSTREAM_SYNC.md": ledger_text})
+    git(path, "checkout", "-q", "main")
+    result = run(path, "--head", name, "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
+    assert result.returncode == code, result.stdout + result.stderr
