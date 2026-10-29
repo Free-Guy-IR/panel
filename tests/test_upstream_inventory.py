@@ -2415,7 +2415,7 @@ def test_an_owner_decision_recorded_twice_is_a_ledger_error(tmp_path):
     assert f"`{DECISION_ID}` is recorded more than once" in result.stdout
 
 
-def test_the_real_ledger_names_the_delegated_decision_on_exactly_its_security_ports():
+def test_the_real_ledger_names_a_recorded_decision_on_exactly_its_security_ports():
     text = (SCRIPT.parent.parent / "UPSTREAM_SYNC.md").read_text()
     sys.path.insert(0, str(SCRIPT.parent))
     import upstream_inventory
@@ -2425,8 +2425,11 @@ def test_the_real_ledger_names_the_delegated_decision_on_exactly_its_security_po
     assert carrying
     assert all(entry["kind"] == "port-queue" and entry["security"] for entry in carrying)
     queued_yes = [entry for entry in entries if entry["kind"] == "port-queue" and entry["security"]]
-    assert len(carrying) == len(queued_yes)
-    assert text.count(f"`{DECISION_ID}`") == 1
+    assert all(entry["decision"] and entry["token"] in entry["covers"] for entry in queued_yes)
+    decided = [entry for entry in entries if entry["decision"]]
+    assert all(entry["security"] and entry["kind"] in ("port-queue", "waived") for entry in decided)
+    for ident in {entry["decision"] for entry in decided}:
+        assert text.count(f"`{ident}`") == 1
 
 
 def waived_security(shas, decision, until=""):
