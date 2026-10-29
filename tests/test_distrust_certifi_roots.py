@@ -11,11 +11,13 @@ from cryptography import x509
 
 from tests.emsign_support import (
     DEBIAN_EMSIGN_FIXTURE,
+    build_image_tree,
     clean_roots,
     der,
     distrusted_roots,
     embedding_module,
     entry,
+    excluded_for,
     load,
     make_root,
     pem,
@@ -323,3 +325,30 @@ def test_image_mode_never_rewrites_python_source_or_bytecode(tmp_path, monkeypat
     assert (package / "__init__.py").read_bytes() == source
     assert compiled.read_bytes() == compiled_before
     assert certifi_path.read_bytes() == certifi_before
+
+
+def test_the_image_mode_strips_every_discovered_bundle_without_a_base_pip(tmp_path, monkeypatch):
+    image_tree = build_image_tree(tmp_path)
+    root = image_tree["root"]
+    monkeypatch.setitem(sys.modules, "certifi", types.SimpleNamespace(where=lambda: str(image_tree["certifi"])))
+    monkeypatch.setattr(distrust, "DISCOVERY_ROOT", root)
+    monkeypatch.setattr(distrust, "EXCLUDED_FROM_DISCOVERY", excluded_for(root))
+    monkeypatch.setenv("PG_IMAGE_BUILD", "1")
+    assert not (root / "usr/local/lib/python3.14/site-packages/pip").exists()
+
+    assert set(distrust.image_targets()) == {image_tree["certifi"], image_tree["venv-pip"], image_tree["unusual"]}
+    assert distrust.main(["--image"]) == 0
+
+    for name in ("certifi", "venv-pip", "unusual", "clean"):
+        assert not emsign_roots.holds_distrusted(image_tree[name].read_bytes())
+    assert emsign_roots.holds_distrusted(image_tree["excluded"].read_bytes())
+    assert emsign_roots.holds_distrusted(image_tree["proc"].read_bytes())
+
+
+def test_the_image_mode_still_fails_without_certifi(tmp_path, monkeypatch):
+    image_tree = build_image_tree(tmp_path)
+    monkeypatch.setitem(sys.modules, "certifi", None)
+    monkeypatch.setattr(distrust, "DISCOVERY_ROOT", image_tree["root"])
+    monkeypatch.setenv("PG_IMAGE_BUILD", "1")
+
+    assert distrust.main(["--image"]) == 1
