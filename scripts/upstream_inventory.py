@@ -118,6 +118,11 @@ COVERED_PACKAGE_RE = re.compile(
     r"(?:^|\s)(@?[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)?@[0-9](?:[A-Za-z0-9.+-]*[A-Za-z0-9])?)(?=[\s,;.)]|$)"
 )
 FORK_COMMIT_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{9,40}(?![0-9a-f])")
+SCOPED_COVER_RE = re.compile(
+    r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])\s+touching\s+only\s+([^\s,;]+(?:(?:\s*,\s*|\s+and\s+)[^\s,;]+)*)",
+    re.IGNORECASE,
+)
+SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
 SYNC_LEDGER_FILE = "UPSTREAM_SYNC.md"
 LEDGER_DECISION_SYNTAX = "owner-decision: YYYY-MM-DD-<name>"
@@ -1040,6 +1045,14 @@ def security_hint(reason, subject):
     return f"it names {match.group(0)!r}" if match else None
 
 
+def commit_paths(sha):
+    return [
+        path
+        for path in git("diff-tree", "-r", "-m", "--root", "--no-commit-id", "--name-only", sha).split("\n")
+        if path
+    ]
+
+
 def design_fork_commit(reason, head, in_range):
     for token in FORK_COMMIT_RE.findall(SECURITY_FLAG_RE.sub("", reason)):
         result = subprocess.run(
@@ -1114,7 +1127,11 @@ def owner_decision_record(item_text, today, where):
     covers = set(COVERED_SHA_RE.findall(reason)) | set(COVERED_PACKAGE_RE.findall(reason))
     if not covers:
         return f"{where}: `{ident}` lists no upstream commit or package@version it covers", None
-    return None, {"id": ident, "date": decided, "until": until, "where": where, "covers": covers}
+    scopes = {}
+    for sha, paths in SCOPED_COVER_RE.findall(reason):
+        named = {path.rstrip(".") for path in SCOPED_PATH_SPLIT_RE.split(paths) if path.rstrip(".")}
+        scopes[sha] = scopes.get(sha, frozenset()) | frozenset(named)
+    return None, {"id": ident, "date": decided, "until": until, "where": where, "covers": covers, "scopes": scopes}
 
 
 def decision_problem(label, ident, records, today, until, verb, item):
@@ -1429,6 +1446,7 @@ def parse_sync_ledger(path, today=None):
             continue
         ends = [day for day in (entry["deadline"],) if day is not None]
         entry["covers"] = records[entry["decision"]]["covers"] if entry["decision"] else frozenset()
+        entry["scopes"] = records[entry["decision"]]["scopes"] if entry["decision"] else {}
         if entry["decision"]:
             ends.append(records[entry["decision"]]["until"])
         entry["expires"] = min(ends) if ends else None
@@ -1565,6 +1583,15 @@ def parity_gate(
             del resolved[sha]
             ledger_errors.append(
                 f"{entry['where']}: `{entry['token']}` is not covered by owner decision {entry['decision']}"
+            )
+            continue
+        scope = entry.get("scopes", {}).get(sha) if entry["decision"] else None
+        outside = sorted(set(commit_paths(sha)) - scope) if scope is not None else []
+        if outside:
+            del resolved[sha]
+            ledger_errors.append(
+                f"{entry['where']}: `{entry['token']}` is not covered by owner decision {entry['decision']}: it "
+                f"touches {outside[0]}, outside the files the record names"
             )
     release_refs = expand_tracked(release_patterns or DEFAULT_RELEASE_REFS, option="--release-ref", strict=False)
     on_release = commits_on_refs(base, release_refs)
