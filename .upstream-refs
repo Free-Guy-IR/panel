@@ -10,6 +10,7 @@ b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.14
 59a347e6517ec9888ffb21102b954430d492b6b4 upstream/dependabot/uv/dev/ruff-0.16.10
 2f60c83098103ebf36d7b833f893309c883bc8d7 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.1
 75f3788a312ef593f5642466faa380154ce95e09 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.2
+3de496c0129d72440d9d59b0756e119b3b649629 upstream/dependabot/uv/dev/sse-starlette-3.6.0
 30b9f2d176cdaf3713493c8520ffaa386d96ba93 upstream/dependabot/uv/dev/uvloop-0.23.0
 d3fdded8243273e754f18b993dc3efdcec36d24a upstream/dependabot/uv/idna-3.15
 f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
@@ -29,6 +30,7 @@ a2fb3139b9bd038cbbb6f613d8c40c1f96fb8361 upstream/dev
 d4d2fd4238469f34d6d730544f15d7ab96907d4a upstream/dev
 d94e157791ac1d098a48172e50a3689caaf2f46f upstream/dev
 da871f475782da54ec547da1945d2478a35171b0 upstream/dev
+de75b25f55817990a16508566de741c215d0375f upstream/dev
 ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
 7ad4c7d3cee9bb479237eeb34198d61c554b4eb4 upstream/feat/apikey-request-limit
 420d094a1b508fc4792acef96b7883668da9befa upstream/feat/gzip-compression
