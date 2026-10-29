@@ -51,4 +51,4 @@
 
 ## Phase 7: Delivery re-cut
 
-- [ ] T030 Re-cut the reviewed change (fix/certifi-ghsa-6q48 at dd49b9f9c) into single commits on 3b10bde7f that each fit the gate view, with a minimal four-root Debian fixture, the test file split, and the mechanism check described as failing on a stock image (C4-3, C4-4)
+- [X] T030 Re-cut the reviewed change (fix/certifi-ghsa-6q48 at dd49b9f9c) into single commits on 3b10bde7f that each fit the gate view, with a minimal four-root Debian fixture, the test file split, and the mechanism check described as failing on a stock image (C4-3, C4-4)
