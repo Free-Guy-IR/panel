@@ -577,3 +577,99 @@ def _extra_adder(node_id: int, core_id: int):
 
 def _status(outcome) -> int | None:
     return outcome[1].status_code if outcome[0] == "http" else None
+
+
+@pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
+@pytest.mark.parametrize("policy", sorted(POLICIES))
+async def test_a_core_delete_racing_a_node_moving_onto_it_never_strands_the_node(
+    tmp_path, quiet_side_effects, policy, bulk
+):
+    engine = await _race_engine(tmp_path)
+    rows = await _seed(engine, CoreType.xray)
+    try:
+        outcomes, trace = await _race(
+            engine,
+            POLICIES[policy](),
+            _deleter(bulk, rows["target"]),
+            _primary_mover(rows["node"], rows["target"]),
+        )
+        primary, extras, alive = await _final(engine, rows)
+        deleted, moved = outcomes["delete"], outcomes["modify"]
+        context = f"policy={policy} trace={trace} delete={deleted} modify={moved} primary={primary} alive={alive}"
+
+        assert deleted[0] != "crash" and moved[0] != "crash", context
+        assert primary is not None, context
+        assert primary in alive, context
+        assert extras == [], context
+        if deleted[0] == "ok":
+            assert rows["target"] not in alive, context
+            assert moved[0] == "http", context
+            assert primary == rows["home"], context
+        else:
+            assert _status(deleted) == status.HTTP_409_CONFLICT, context
+            assert rows["target"] in alive, context
+        if moved[0] == "ok":
+            assert primary == rows["target"], context
+        else:
+            assert primary == rows["home"], context
+    finally:
+        await _cleanup(engine, rows)
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
+@pytest.mark.parametrize("policy", sorted(POLICIES))
+async def test_a_core_delete_racing_a_node_adding_it_as_an_extra_never_drops_it_silently(
+    tmp_path, quiet_side_effects, policy, bulk
+):
+    engine = await _race_engine(tmp_path)
+    rows = await _seed(engine, CoreType.mtproto)
+    try:
+        outcomes, trace = await _race(
+            engine,
+            POLICIES[policy](),
+            _deleter(bulk, rows["target"]),
+            _extra_adder(rows["node"], rows["target"]),
+        )
+        primary, extras, alive = await _final(engine, rows)
+        deleted, added = outcomes["delete"], outcomes["modify"]
+        context = f"policy={policy} trace={trace} delete={deleted} modify={added} extras={extras} alive={alive}"
+
+        assert deleted[0] != "crash" and added[0] != "crash", context
+        assert primary == rows["home"], context
+        assert set(extras) <= alive, context
+        if deleted[0] == "ok":
+            assert rows["target"] not in alive, context
+            assert added[0] == "http", context
+        else:
+            assert _status(deleted) == status.HTTP_409_CONFLICT, context
+        if added[0] == "ok":
+            assert extras == [rows["target"]], context
+            assert added[1].additional_core_config_ids == [rows["target"]], context
+        else:
+            assert extras == [], context
+    finally:
+        await _cleanup(engine, rows)
+        await engine.dispose()
+
+
+async def test_a_node_modify_that_loses_its_core_to_a_delete_does_not_blame_the_node_name(tmp_path, quiet_side_effects):
+    engine = await _race_engine(tmp_path)
+    rows = await _seed(engine, CoreType.xray)
+    try:
+        outcomes, trace = await _race(
+            engine,
+            modify_waits_after_core_reads(1),
+            _deleter(False, rows["target"]),
+            _primary_mover(rows["node"], rows["target"]),
+        )
+        deleted, moved = outcomes["delete"], outcomes["modify"]
+        context = f"trace={trace} delete={deleted} modify={moved}"
+
+        assert deleted[0] == "ok", context
+        assert moved[0] == "http", context
+        assert "already exists" not in str(moved[1].detail), context
+        assert moved[1].status_code in (status.HTTP_404_NOT_FOUND, status.HTTP_409_CONFLICT), context
+    finally:
+        await _cleanup(engine, rows)
+        await engine.dispose()
